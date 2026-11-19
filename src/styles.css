@@ -462,3 +462,51 @@ aside.aa-side button {
     }
   }
 }
+
+/* medaglie: riflesso che passa */
+.aa-medal { border-radius: 9999px; }
+.aa-medal-shine {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  overflow: hidden;
+  pointer-events: none;
+  -webkit-mask: radial-gradient(circle, #000 68%, transparent 70%);
+  mask: radial-gradient(circle, #000 68%, transparent 70%);
+}
+.aa-medal-shine::before {
+  content: "";
+  position: absolute;
+  top: -20%;
+  left: -60%;
+  width: 40%;
+  height: 140%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+  transform: rotate(18deg);
+  animation: aa-shine 3.6s ease-in-out infinite;
+}
+@keyframes aa-shine {
+  0%, 55% { left: -60%; }
+  85%, 100% { left: 130%; }
+}
+
+/* podio a gradini */
+@keyframes aa-step-up {
+  from { transform: scaleY(0.2); opacity: 0; }
+  to { transform: scaleY(1); opacity: 1; }
+}
+@keyframes aa-pop {
+  0% { transform: translateY(14px) scale(0.6); opacity: 0; }
+  70% { transform: translateY(-4px) scale(1.06); opacity: 1; }
+  100% { transform: translateY(0) scale(1); }
+}
+@keyframes aa-twinkle {
+  0%, 100% { opacity: 0; transform: scale(0.4) rotate(0deg); }
+  50% { opacity: 1; transform: scale(1) rotate(45deg); }
+}
+.aa-step { transform-origin: bottom; animation: aa-step-up 0.7s cubic-bezier(0.2, 0.9, 0.3, 1.2) both; }
+.aa-pop { animation: aa-pop 0.6s 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.2) both; }
+.aa-twinkle { animation: aa-twinkle 2.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .aa-step, .aa-pop, .aa-twinkle, .aa-medal-shine::before { animation: none; }
+}
