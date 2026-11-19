@@ -780,7 +780,7 @@ function Setup({
 
   return (
     <div className="grid gap-3">
-      <h1 className="font-display text-4xl">{past ? "Allenamento già fatto" : "Nuovo allenamento"}</h1>
+      <h1 className="font-display text-[2.1rem] tracking-tight">{past ? "Allenamento già fatto" : "Nuovo allenamento"}</h1>
       <div className="grid grid-cols-2 gap-2">
         {QUICK.map((q) => (
           <button key={q.label} type="button" className="min-h-14 rounded-2xl border border-line bg-surface px-3 text-left font-semibold" onClick={() => apply(q)}>
@@ -945,7 +945,7 @@ function ProgramPick({
     <div className="grid gap-5">
       <header className="aa-rise">
         <p className="text-xs uppercase tracking-wide text-muted">Arco istintivo · 18 metri</p>
-        <h1 className="font-display text-4xl leading-none">Cosa alleni oggi</h1>
+        <h1 className="font-display text-[2.1rem] tracking-tight leading-none">Cosa alleni oggi</h1>
         <p className="mt-2 max-w-prose text-sm text-muted">Il percorso segue te: stato, errori, risultati. Il numero di frecce non sale da solo.</p>
       </header>
       <section className="grid gap-2">
@@ -1141,7 +1141,7 @@ function History({ onNew }: { onNew: () => void }) {
   if (loading) return <Loading />;
   return (
     <div className="grid gap-3">
-      <h1 className="font-display text-4xl">Storico</h1>
+      <h1 className="font-display text-[2.1rem] tracking-tight">Storico</h1>
       <p className="text-sm text-muted">Tutti gli allenamenti. Aprilo per cambiare data, orari, arco, distanza, bersaglio e frecce: le statistiche si aggiornano da questi dati.</p>
       <Button onClick={onNew}>Nuovo allenamento</Button>
       {error ? <ErrorNote text={error} /> : null}
