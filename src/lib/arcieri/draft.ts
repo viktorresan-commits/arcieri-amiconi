@@ -66,7 +66,6 @@ function metaOf(raw: Partial<DraftMeta> | undefined): DraftMeta {
     stringNote: "",
     gearSnapshot: "",
     startedAt: new Date().toISOString(),
-    endedAt: "",
     arrowsChosen: Number(base.arrowsChosen) || 0,
     dispersion: String(base.dispersion ?? ""),
     errors: String(base.errors ?? ""),
