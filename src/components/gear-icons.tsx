@@ -1,3 +1,4 @@
+import { ArrowArt, FLETCH_SHAPES, POINT_TYPES } from "./arrow-art";
 /** Disegni dell'attrezzatura: archi per tipo, frecce con i loro colori, icone per categoria. */
 
 export const BOW_TYPES = [
@@ -17,11 +18,8 @@ export const SHAFT_MATERIALS = [
   { id: "bambu", label: "Bambù", color: "#c9b46a" },
 ] as const;
 
-export const FLETCH_TYPES = [
-  { id: "penne", label: "Penne naturali" },
-  { id: "alette", label: "Alette in plastica" },
-  { id: "spin", label: "Spin wing" },
-] as const;
+export const FLETCH_TYPES = FLETCH_SHAPES;
+export { POINT_TYPES };
 
 export const ARROW_USE = [
   { id: "entrambi", label: "Gara e allenamento" },
@@ -77,54 +75,24 @@ export function BowIcon({ type, className = "h-16 w-16", color = "currentColor" 
   );
 }
 
-/** Freccia orizzontale con asta, alette (la terza è la penna guida), cocca e numero. */
+/** Freccia orizzontale con asta, impennaggio, cocca, punta e numero (stesso disegno della Home). */
 export function ArrowIcon({
-  material = "carbonio",
-  fletch = "#d63a2f",
-  cock = "#e6b325",
-  nock = "#f4f1ea",
-  wrap = "",
   number,
-  fletchType = "alette",
   className = "h-10 w-full",
+  ...look
 }: {
   material?: string;
+  shaft?: string;
   fletch?: string;
   cock?: string;
   nock?: string;
   wrap?: string;
   number?: string | number;
   fletchType?: string;
+  point?: string;
   className?: string;
 }) {
-  const shaft = SHAFT_MATERIALS.find((m) => m.id === material)?.color ?? "#2a2d31";
-  const vane = fletchType === "penne"
-    ? (y: number, dir: number) => `M28 ${y} C34 ${y + dir * 14} 50 ${y + dir * 15} 66 ${y + dir * 4} L68 ${y} Z`
-    : fletchType === "spin"
-      ? (y: number, dir: number) => `M40 ${y} C46 ${y + dir * 12} 58 ${y + dir * 12} 62 ${y} Z`
-      : (y: number, dir: number) => `M32 ${y} L56 ${y + dir * 13} L66 ${y + dir * 13} L66 ${y} Z`;
-  return (
-    <svg viewBox="0 0 240 40" className={className} aria-hidden preserveAspectRatio="xMidYMid meet">
-      {/* punta */}
-      <path d="M220 20 L236 20 L228 15 Z M220 20 L236 20 L228 25 Z" fill="#9aa7b2" />
-      {/* asta */}
-      <rect x="18" y="17.5" width="204" height="5" rx="2.5" fill={shaft} stroke="rgba(0,0,0,0.35)" strokeWidth="0.6" />
-      {material === "legno" || material === "bambu" ? <path d="M40 19 L210 19" stroke="rgba(90,60,20,0.35)" strokeWidth="0.8" /> : null}
-      {wrap ? <rect x="26" y="16.5" width="44" height="7" fill={wrap} opacity="0.9" /> : null}
-      {/* alette: due uguali e la guida */}
-      <path d={vane(17.5, -1)} fill={fletch} stroke="rgba(0,0,0,0.3)" strokeWidth="0.6" />
-      <path d={vane(22.5, 1)} fill={fletch} stroke="rgba(0,0,0,0.3)" strokeWidth="0.6" />
-      <path d={vane(20, -0.45)} fill={cock} opacity="0.95" stroke="rgba(0,0,0,0.3)" strokeWidth="0.6" />
-      {/* cocca */}
-      <path d="M8 14 L20 17 L20 23 L8 26 L13 20 Z" fill={nock} stroke="rgba(0,0,0,0.4)" strokeWidth="0.6" />
-      {number != null && number !== "" ? (
-        <g>
-          <rect x={155 - (6 + String(number).length * 4.6)} y="9" width={12 + String(number).length * 9.2} height="22" rx="6" fill="#14181c" stroke="#f4f1ea" strokeWidth="1.2" />
-          <text x="155" y="25" textAnchor="middle" fontSize="15" fontWeight="700" fill="#f4f1ea" fontFamily="system-ui, sans-serif">{number}</text>
-        </g>
-      ) : null}
-    </svg>
-  );
+  return <ArrowArt {...look} number={number != null && number !== "" ? `${number}` : undefined} className={className} />;
 }
 
 export function CategoryIcon({ category, className = "h-8 w-8" }: { category: string; className?: string }) {

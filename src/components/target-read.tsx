@@ -30,7 +30,23 @@ const SIZES = [40, 60, 80, 122];
  */
 type Shape = { cx: number; cy: number; A: number; B: number; angle: number };
 
-export function TargetRead({ face, onApply, known = [], expected }: { face: Face; onApply: Apply; known?: { x: number; y: number }[]; expected?: number }) {
+export function TargetRead({
+  face,
+  onApply,
+  known = [],
+  expected,
+  volleyLabel,
+  compact = false,
+}: {
+  face: Face;
+  onApply: Apply;
+  known?: { x: number; y: number }[];
+  expected?: number;
+  /** es. "volée 3": dove finiscono le frecce della foto */
+  volleyLabel?: string;
+  /** senza titolo e spiegazione (quando la scheda intorno li dà già) */
+  compact?: boolean;
+}) {
   const [mode, setMode] = useState<"foto" | "video">("foto");
   const [url, setUrl] = useState("");
   const [image, setImage] = useState<HTMLImageElement | null>(null);
@@ -477,9 +493,13 @@ export function TargetRead({ face, onApply, known = [], expected }: { face: Face
   const has = Boolean(url);
 
   return (
-    <div className="grid gap-2 border-t border-line pt-3">
-      <p className="text-sm font-semibold">Leggi il bersaglio da foto o video</p>
-      <p className="text-xs text-muted">Foto: scattala adesso o prendila dall'album. Video: telefono fermo (appoggiato o sul cavalletto) mentre tiri, e trovo ogni freccia nell'ordine in cui arriva.</p>
+    <div className={compact ? "grid gap-2" : "grid gap-2 border-t border-line pt-3"}>
+      {compact ? null : (
+        <>
+          <p className="text-sm font-semibold">Leggi il bersaglio da foto o video</p>
+          <p className="text-xs text-muted">Foto: scattala adesso o prendila dall'album. Video: telefono fermo (appoggiato o sul cavalletto) mentre tiri, e trovo ogni freccia nell'ordine in cui arriva.</p>
+        </>
+      )}
       <MediaPick kind="image" onFile={onPhoto} />
       <MediaPick kind="video" onFile={(file) => void onVideo(file)} shootLabel="🎥 Video del bersaglio" albumLabel="🎞️ Video dalla galleria" />
       <label className="flex items-center gap-2 text-xs text-muted">
@@ -592,12 +612,19 @@ export function TargetRead({ face, onApply, known = [], expected }: { face: Face
         </div>
       ) : null}
 
-      {hits.length ? (
+      {hits.length && !applied ? (
         <div className="grid grid-cols-[1fr_auto] gap-2">
-          <button type="button" disabled={applied} className="min-h-11 rounded-full bg-primary px-3 text-sm font-semibold text-primary-fg disabled:opacity-60" onClick={() => { onApply(hits.slice(0, expected && expected > 0 ? expected : hits.length).map(({ nx, ny, score, isX, miss }) => ({ nx, ny, score, isX, miss }))); setApplied(true); }}>
-            {applied ? "Frecce aggiunte" : `Metti ${expected && expected > 0 ? Math.min(expected, hits.length) : hits.length} frecce nella volée`}
+          <button type="button" className="min-h-11 rounded-full bg-primary px-3 text-sm font-semibold text-primary-fg" onClick={() => { onApply(hits.slice(0, expected && expected > 0 ? expected : hits.length).map(({ nx, ny, score, isX, miss }) => ({ nx, ny, score, isX, miss }))); setApplied(true); }}>
+            💾 Salva {expected && expected > 0 ? Math.min(expected, hits.length) : hits.length} frecce {volleyLabel ? `nella ${volleyLabel}` : "nella volée"}
           </button>
           <button type="button" className="min-h-11 rounded-full border border-line px-3 text-sm" onClick={() => { setHits([]); setApplied(false); }}>Svuota</button>
+        </div>
+      ) : null}
+      {applied ? (
+        <div className="aa-rise grid gap-2 rounded-2xl border border-primary/40 bg-primary/10 p-3">
+          <p className="text-sm font-semibold">✅ Volée salvata. Avanti con la prossima:</p>
+          <p className="text-xs text-muted">Togli le frecce, tira, poi fotografa di nuovo il bersaglio. Le volée e le frecce si sommano da sole.</p>
+          <MediaPick kind="image" onFile={onPhoto} shootLabel={`📷 Foto ${volleyLabel ?? "volée dopo"}`} albumLabel="🖼️ Dall'album" />
         </div>
       ) : null}
     </div>

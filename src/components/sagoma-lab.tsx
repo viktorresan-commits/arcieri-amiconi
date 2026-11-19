@@ -9,9 +9,9 @@ type SagomaShot = { score: number; miss?: boolean; nx: number | null; ny: number
  * Sagome 3D come il padiglione: mappa termica sopra l'animale e vista 3D animata con le frecce
  * che arrivano. Va bene sia per la sintesi della gara (bersaglio riassuntivo) sia per ogni piazzola.
  */
-export function SagomaLab({ animal, shots, title }: { animal: string; shots: SagomaShot[]; title?: string }) {
+export function SagomaLab({ animal, shots, title, initial = "mappa" }: { animal: string; shots: SagomaShot[]; title?: string; initial?: "mappa" | "tre" }) {
   const face = animalByLabel(animal);
-  const [view, setView] = useState<"mappa" | "tre">("mappa");
+  const [view, setView] = useState<"mappa" | "tre">(initial);
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   useEffect(() => {
     let gone = false;

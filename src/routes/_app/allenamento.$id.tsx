@@ -121,7 +121,7 @@ function Volleys({
     groups.set(key, [...(groups.get(key) ?? []), shot]);
   }
 
-  async function commit(next: Shot[]) {
+  async function commit(next: Shot[], plan?: { endsPlanned: number; blocksPlanned: number }) {
     if (busy) return;
     const previous = shots;
     setShots(next);
@@ -141,8 +141,8 @@ function Volleys({
           face: session.face,
           setupId: session.setupId,
           arrowsPerEnd: session.arrowsPerEnd,
-          endsPlanned: session.endsPlanned,
-          blocksPlanned: session.blocksPlanned,
+          endsPlanned: plan?.endsPlanned ?? session.endsPlanned,
+          blocksPlanned: plan?.blocksPlanned ?? session.blocksPlanned,
           weather: session.weather,
           feeling: session.feeling,
           rating: session.rating,
@@ -223,14 +223,20 @@ function Volleys({
       {sagoma ? null : <ShotLab
         face={face}
         shots={shots}
-        expected={freeSlots(shots, session).length || session.arrowsPerEnd}
+        volleyLabel={(() => { const first = freeSlots(shots, session)[0]; return `volée ${first ? first.block * session.endsPlanned + first.end + 1 : session.endsPlanned * session.blocksPlanned + 1}`; })()}
+        expected={(() => { const free = freeSlots(shots, session); const first = free[0]; return first ? free.filter((x) => x.block === first.block && x.end === first.end).length : session.arrowsPerEnd; })()}
         onPhoto={sagoma ? undefined : (hits) => {
-          // le frecce della foto vanno nei posti liberi del piano, non in volée nuove in più
-          const free = freeSlots(shots, session);
+          // le frecce della foto vanno nei posti liberi del piano; se è pieno, la foto diventa una volée in più
+          let free = freeSlots(shots, session);
+          let plan: { endsPlanned: number; blocksPlanned: number } | undefined;
           if (!free.length) {
-            setErr("Il piano è già pieno: aumenta le volée nella scheda «Modifica» per aggiungere frecce.");
-            return;
+            plan = session.endsPlanned < 60
+              ? { endsPlanned: session.endsPlanned + 1, blocksPlanned: session.blocksPlanned }
+              : { endsPlanned: session.endsPlanned, blocksPlanned: session.blocksPlanned + 1 };
+            free = freeSlots(shots, { ...session, ...plan });
           }
+          const first = free[0];
+          if (first) free = free.filter((slot) => slot.block === first.block && slot.end === first.end);
           const added = hits.slice(0, free.length).map((hit, index) => ({
             ...free[index],
             score: hit.miss ? 0 : hit.score,
@@ -239,7 +245,7 @@ function Volleys({
             nx: hit.nx,
             ny: hit.ny,
           }));
-          void commit([...shots, ...added]);
+          void commit([...shots, ...added], plan);
         }}
       />}
       <Card>

@@ -6,6 +6,7 @@ import { fmtWhen } from "@/lib/arcieri/time";
 import { programById } from "@/lib/arcieri/program";
 import { useLoad } from "@/lib/arcieri/use-load";
 import { HeroTarget } from "@/components/hero-target";
+import { ArrowArt } from "@/components/arrow-art";
 import { Button, Card, Empty, ErrorNote, HoldDelete, Loading, cx } from "@/components/kit";
 
 export const Route = createFileRoute("/_app/")({ component: Home });
@@ -97,12 +98,18 @@ function Home() {
         <Rise i={7}><Link to="/statistiche" className="block"><Meter label="Miglior distanza" value={data.bestDistance} suffix=" m" color="#e07a72" /></Link></Rise>
       </div>
       <Rise i={8}>
-        <Link to="/statistiche" className="block">
-          <Card>
-            <p className="text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted">Ultimi tiri</p>
-            {trend.length ? <Trend values={trend} /> : null}
-          </Card>
-        </Link>
+        <Card>
+          <div className="mb-1 flex items-baseline justify-between gap-2">
+            <p className="aa-section-title">Ultime frecce</p>
+            <Link to="/attrezzatura" className="text-[0.68rem] font-semibold text-muted underline-offset-2 hover:underline">🎨 Personalizza frecce</Link>
+          </div>
+          {data.lastShots.length ? <LastArrows shots={data.lastShots} /> : <p className="text-xs text-muted">Le frecce che tiri compaiono qui.</p>}
+          {trend.length > 8 ? (
+            <Link to="/statistiche" className="mt-2 block">
+              <Trend values={trend} />
+            </Link>
+          ) : null}
+        </Card>
       </Rise>
       <Rise i={9}>
         <Link to="/classifiche" className="block">
@@ -237,6 +244,55 @@ function Meter({ label, value, digits = 0, suffix = "", color }: { label: string
       <p className="truncate text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted">{label}</p>
       <p className="mt-1 font-display text-[1.65rem] tabular-nums leading-none">{value == null ? "—" : <Count value={value} digits={digits} suffix={suffix} />}</p>
     </div>
+  );
+}
+
+type LastShot = { score: number; n: number; distance: number; miss: boolean; isX: boolean; day: string; specs: string };
+
+function specsOf(raw: string): Record<string, string> {
+  try {
+    const v = JSON.parse(raw || "{}") as unknown;
+    return v && typeof v === "object" ? (v as Record<string, string>) : {};
+  } catch {
+    return {};
+  }
+}
+
+/** Le ultime frecce, disegnate come sono davvero (colori, penne, punta) con numero e distanza. */
+function LastArrows({ shots }: { shots: LastShot[] }) {
+  return (
+    <ul className="grid gap-0.5">
+      {shots.map((shot, i) => {
+        const sp = specsOf(shot.specs);
+        const from = Number(sp.numFrom) || 1;
+        const num = shot.n + from - 1;
+        const left = i % 2 === 0;
+        const tone = shot.miss ? "bg-rose-500/20 text-rose-300" : shot.score >= 9 || shot.isX ? "bg-amber-400/20 text-amber-200" : "bg-white/8 text-fg";
+        return (
+          <li key={`${shot.day}-${i}`} className={`aa-rise flex items-center gap-1.5 ${left ? "" : "flex-row-reverse"}`} style={{ animationDelay: `${120 + i * 70}ms` }}>
+            <span className={`grid w-12 shrink-0 gap-0.5 text-[0.62rem] font-semibold leading-none ${left ? "text-left" : "text-right"}`}>
+              <span className="text-white/90">n.{num}</span>
+              <span className="text-muted">{shot.distance ? `${shot.distance} m` : "—"}</span>
+              <span className={`w-fit rounded px-1 py-0.5 tabular-nums ${left ? "" : "justify-self-end"} ${tone}`}>{shot.miss ? "M" : shot.isX ? "X" : shot.score}</span>
+            </span>
+            <div className="aa-arrow-in min-w-0 flex-1" style={{ animationDelay: `${120 + i * 70}ms` }}>
+              <ArrowArt
+                material={sp.material || "carbonio"}
+                shaft={sp.shaft}
+                fletch={sp.fletch || "#d63a2f"}
+                cock={sp.cock || "#e6b325"}
+                nock={sp.nock || "#f4f1ea"}
+                wrap={sp.wrap}
+                fletchType={sp.fletchType || "alette"}
+                point={sp.pointType || "ogiva"}
+                number={num}
+                className="h-9 w-full"
+              />
+            </div>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 

@@ -649,3 +649,12 @@ aside.aa-side button {
 @media (prefers-reduced-motion: reduce) {
   .aa-hero::after { animation: none; }
 }
+
+/* freccia che entra in scena (Home · ultime frecce) */
+.aa-arrow-in { animation: aa-arrow-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes aa-arrow-in {
+  from { opacity: 0; transform: translateX(-28%); }
+  60% { opacity: 1; }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) { .aa-arrow-in { animation: none; } }

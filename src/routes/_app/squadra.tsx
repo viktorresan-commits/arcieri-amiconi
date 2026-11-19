@@ -7,8 +7,12 @@ import { useLoad } from "@/lib/arcieri/use-load";
 import { ANIMALS, animalByLabel } from "@/lib/arcieri/sagome";
 import { DistBars, MultiBars, useThemeInk } from "@/components/charts";
 import { SagomaLab } from "@/components/sagoma-lab";
+import { Target3D } from "@/components/target-3d";
+import { faceById } from "@/lib/arcieri/scoring";
+
+const TEAM_FACE = faceById("wa10");
 import { GroupBestPosture } from "@/components/gesture-gallery";
-import { Avatar, Button, Card, Empty, ErrorNote, Field, Loading, PageHead, Select, TextInput } from "@/components/kit";
+import { Avatar, Button, Card, Empty, ErrorNote, Field, Loading, PageHead, Segmented, Select, TextInput } from "@/components/kit";
 import { useMember } from "@/components/shell";
 import { PrizeMark, prizeTier } from "@/components/prize-mark";
 
@@ -50,6 +54,7 @@ function Page() {
   const { me } = useMember();
   const { data, error, loading } = useLoad("squad-board", () => squadBoard());
   const [board, setBoard] = useState<"padiglione" | "sagoma">("padiglione");
+  const [look, setLook] = useState<"tre" | "mappa">("tre");
   const [face, setFace] = useState("io");
   const [picked, setPicked] = useState<string[]>([]);
   const [pick, setPick] = useState<string[]>([]);
@@ -130,14 +135,22 @@ function Page() {
           </div>
         ) : null}
         {board === "sagoma" ? (
-          sagomaShots.length ? <SagomaLab animal="sagome-3d" shots={sagomaShots} /> : <p className="text-sm text-muted">Nessun tiro di sagoma, per ora.</p>
+          sagomaShots.length ? <SagomaLab animal="sagome-3d" shots={sagomaShots} initial="tre" /> : <p className="text-sm text-muted">Nessun tiro di sagoma, per ora.</p>
+        ) : look === "tre" && dots.length ? (
+          <div className="grid gap-2">
+            <Segmented value={look} onChange={setLook} options={[{ id: "tre", label: "🎯 3D animato" }, { id: "mappa", label: "Mappa" }]} />
+            <Target3D face={TEAM_FACE} shots={dots.slice(-180).map((d) => ({ x: d.nx, y: d.ny, color: d.color }))} />
+          </div>
         ) : (
+          <>
+          {dots.length ? <Segmented value={look} onChange={setLook} options={[{ id: "tre", label: "🎯 3D animato" }, { id: "mappa", label: "Mappa" }]} /> : null}
           <svg viewBox="-1.12 -1.12 2.24 2.24" className="mx-auto aspect-square w-full max-w-sm" role="img" aria-label="Minimappa dei tiri">
             <circle cx="0" cy="0" r="1.08" fill="var(--elev)" />
             {RINGS.map((ring) => <circle key={ring.r} cx="0" cy="0" r={ring.r} fill={ring.fill} />)}
             <circle cx="0" cy="0" r="0.04" fill="#14181c" />
             {dots.map((shot, index) => <circle key={index} cx={shot.nx} cy={shot.ny} r="0.03" fill={shot.color} stroke="#14181c" strokeWidth="0.008" />)}
           </svg>
+          </>
         )}
         {board === "padiglione" && dots.length === 0 ? <p className="mt-2 text-sm text-muted">Nessun punto sul bersaglio, per ora.</p> : null}
         <ul className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs">

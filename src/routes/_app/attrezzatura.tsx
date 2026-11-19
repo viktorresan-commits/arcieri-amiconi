@@ -5,7 +5,7 @@ import { CATEGORIES, categoryLabel, euro, parseEuro } from "@/lib/arcieri/labels
 import { useLoad } from "@/lib/arcieri/use-load";
 import { Button, Card, Empty, ErrorNote, Field, Loading, PageHead, Select, TextArea, TextInput } from "@/components/kit";
 import { FlightSim } from "@/components/flight-sim";
-import { ARROW_USE, BOW_TYPES, FLETCH_TYPES, SHAFT_MATERIALS, SWATCHES, ArrowIcon, BowIcon, CategoryIcon } from "@/components/gear-icons";
+import { ARROW_USE, BOW_TYPES, FLETCH_TYPES, POINT_TYPES, SHAFT_MATERIALS, SWATCHES, ArrowIcon, BowIcon, CategoryIcon } from "@/components/gear-icons";
 
 export const Route = createFileRoute("/_app/attrezzatura")({ component: Page });
 
@@ -120,7 +120,7 @@ function Page() {
         {form.category === "freccia" ? (
           <>
             <div className="rounded-xl border border-line bg-elev p-2">
-              <ArrowIcon material={spec("material")} fletch={spec("fletch")} cock={spec("cock")} nock={spec("nock")} wrap={spec("wrap")} fletchType={spec("fletchType")} number={spec("numFrom") || undefined} />
+              <ArrowIcon material={spec("material")} shaft={spec("shaft")} fletch={spec("fletch")} cock={spec("cock")} nock={spec("nock")} wrap={spec("wrap")} fletchType={spec("fletchType")} point={spec("pointType") || "ogiva"} number={spec("numFrom") || undefined} className="h-14 w-full" />
             </div>
             <div className="grid grid-cols-3 gap-2">
               <Field label="Quante"><TextInput inputMode="numeric" value={spec("qty")} onChange={(e) => setSpec("qty", e.target.value)} placeholder="12" /></Field>
@@ -133,8 +133,10 @@ function Page() {
             <Chips label="Uso" value={spec("use")} options={ARROW_USE} onPick={(v) => setSpec("use", v)} />
             <Chips label="Materiale" value={spec("material")} options={SHAFT_MATERIALS} onPick={(v) => setSpec("material", v)} />
             <Chips label="Impennaggio" value={spec("fletchType")} options={FLETCH_TYPES} onPick={(v) => setSpec("fletchType", v)} />
+            <Chips label="Punta" value={spec("pointType") || "ogiva"} options={POINT_TYPES} onPick={(v) => setSpec("pointType", v)} />
+            <Swatches label="Colore asta (vuoto = colore del materiale)" value={spec("shaft")} onPick={(v) => setSpec("shaft", v)} allowNone />
             <Swatches label="Colore penne / alette" value={spec("fletch")} onPick={(v) => setSpec("fletch", v)} />
-            <Swatches label="Penna guida" value={spec("cock")} onPick={(v) => setSpec("cock", v)} />
+            <Swatches label="Penna indice (guida)" value={spec("cock")} onPick={(v) => setSpec("cock", v)} />
             <Swatches label="Cocca" value={spec("nock")} onPick={(v) => setSpec("nock", v)} />
             <Swatches label="Fascia (cresting)" value={spec("wrap")} onPick={(v) => setSpec("wrap", v)} allowNone />
           </>
@@ -198,7 +200,7 @@ function Page() {
               </div>
               {isArrow ? (
                 <>
-                  <ArrowIcon material={sp.material} fletch={sp.fletch} cock={sp.cock} nock={sp.nock} wrap={sp.wrap} fletchType={sp.fletchType} number={qty ? `${from}–${from + qty - 1}` : sp.numFrom} className="h-9 w-full" />
+                  <ArrowIcon material={sp.material} shaft={sp.shaft} fletch={sp.fletch} cock={sp.cock} nock={sp.nock} wrap={sp.wrap} fletchType={sp.fletchType} point={sp.pointType} number={qty ? `${from}–${from + qty - 1}` : sp.numFrom} className="h-9 w-full" />
                   <div className="flex flex-wrap gap-1 text-[11px]">
                     {sp.use ? <span className={`rounded-full px-2 py-0.5 ${sp.use === "gara" ? "bg-accent text-accent-fg" : "border border-line"}`}>{ARROW_USE.find((u) => u.id === sp.use)?.label}</span> : null}
                     {sp.material ? <span className="rounded-full border border-line px-2 py-0.5">{SHAFT_MATERIALS.find((m) => m.id === sp.material)?.label ?? sp.material}</span> : null}

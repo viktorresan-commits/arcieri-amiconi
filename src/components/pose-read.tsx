@@ -94,6 +94,7 @@ export function PoseRead() {
   const [size, setSize] = useState({ w: 9, h: 16 });
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
   const [now, setNow] = useState<Metrics | null>(null);
   const [gear, setGear] = useState<Gear | null>(null);
   const gearRef = useRef<Gear | null>(null);
@@ -575,27 +576,52 @@ export function PoseRead() {
       data = fresh;
     }
     const canvas = document.createElement("canvas");
-    const k = Math.min(1, 720 / Math.max(size.w, size.h));
-    canvas.width = Math.round(size.w * k);
-    canvas.height = Math.round(size.h * k);
-    const ctx = canvas.getContext("2d");
+    // 640 px sul lato lungo: abbastanza nitido e leggero da disegnare a ogni fotogramma sul telefono
+    const k = Math.min(1, 640 / Math.max(size.w, size.h));
+    canvas.width = Math.round((size.w * k) / 2) * 2;
+    canvas.height = Math.round((size.h * k) / 2) * 2;
+    const ctx = canvas.getContext("2d", { alpha: false });
     if (!ctx) return;
+    // le ombre sfocate (shadowBlur) sul telefono costano decine di ms a fotogramma: in registrazione niente ombre
+    Object.defineProperty(ctx, "shadowBlur", { configurable: true, get: () => 0, set: () => undefined });
     const stream = (canvas as HTMLCanvasElement & { captureStream: (fps: number) => MediaStream }).captureStream(30);
-    const type = ["video/mp4;codecs=avc1", "video/mp4", "video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"].find((t) => MediaRecorder.isTypeSupported(t)) ?? "";
-    const rec = new MediaRecorder(stream, { ...(type ? { mimeType: type } : {}), videoBitsPerSecond: 4_000_000 });
+    const type = ["video/mp4;codecs=avc1", "video/webm;codecs=vp8", "video/webm", "video/mp4"].find((t) => MediaRecorder.isTypeSupported(t)) ?? "";
+    let rec: MediaRecorder;
+    try {
+      rec = new MediaRecorder(stream, { ...(type ? { mimeType: type } : {}), videoBitsPerSecond: 2_500_000 });
+    } catch {
+      setError("Questo telefono non riesce a registrare il video: salva i fotogrammi con ⬇.");
+      return;
+    }
     const chunks: Blob[] = [];
     rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
     const kind = lookRef.current;
     const name = kind === "scheletro" ? "scheletro" : "sagoma";
+    const wasMuted = video.muted;
+    let watchdog = 0;
     rec.onstop = () => {
-      void saveFile(new Blob(chunks, { type: rec.mimeType || "video/webm" }), `gesto-${name}.${(rec.mimeType || "").includes("mp4") ? "mp4" : "webm"}`);
+      window.clearInterval(watchdog);
+      stream.getTracks().forEach((t) => t.stop());
+      video.muted = wasMuted;
       recRef.current = null;
       setRecording(false);
       setProgress(null);
+      const blob = new Blob(chunks, { type: rec.mimeType || "video/webm" });
+      if (!blob.size) {
+        setError("Il video registrato è vuoto: riprova con una parte più corta (⟦ Inizio qui / Fine qui ⟧).");
+        return;
+      }
+      setInfo("Video pronto: lo salvo…");
+      saveFile(blob, `gesto-${name}.${(rec.mimeType || "").includes("mp4") ? "mp4" : "webm"}`)
+        .then(() => setInfo("Video salvato."))
+        .catch(() => setError("Video registrato ma non salvato: riprova."));
     };
     recRef.current = { rec, canvas };
     setRecording(true);
+    setProgress(0);
     video.pause();
+    // muto: così il telefono lascia partire il video anche senza un nuovo tocco
+    video.muted = true;
     video.playbackRate = 0.5;
     await seekTo(video, from);
     const paint = () => {
@@ -605,7 +631,7 @@ export function PoseRead() {
       else if (lm) drawPose(ctx, canvas.width, canvas.height, lm, handRef.current, null);
     };
     paint();
-    rec.start(500);
+    rec.start(1000);
     let done = false;
     const stop = () => {
       if (done) return;
@@ -616,21 +642,43 @@ export function PoseRead() {
     };
     const withFrame = "requestVideoFrameCallback" in video;
     cancel.current = false;
-    const loop = () => {
+    let lastUi = 0;
+    let lastT = -1;
+    let stuckSince = performance.now();
+    const step = () => {
       if (done) return;
       if (cancel.current) {
         stop();
         return;
       }
       paint();
-      setProgress(Math.min(1, (video.currentTime - from) / Math.max(0.01, to - from)));
-      if (video.currentTime >= to - 0.01 || video.ended) {
-        stop();
-        return;
+      const now = performance.now();
+      // aggiorna la barra 4 volte al secondo, non a ogni fotogramma (ridisegnare la pagina rallenta il video)
+      if (now - lastUi > 250) {
+        lastUi = now;
+        setProgress(Math.min(1, (video.currentTime - from) / Math.max(0.01, to - from)));
       }
+      if (video.currentTime >= to - 0.01 || video.ended) stop();
+    };
+    const loop = () => {
+      step();
+      if (done) return;
       if (withFrame) (video as HTMLVideoElement & { requestVideoFrameCallback: (cb: () => void) => number }).requestVideoFrameCallback(loop);
       else requestAnimationFrame(loop);
     };
+    // guardia: se il video si ferma (buffer, schermo, permessi) lo riavvio; se non riparte chiudo comunque il file
+    watchdog = window.setInterval(() => {
+      if (done) return;
+      const t = video.currentTime;
+      if (Math.abs(t - lastT) > 1e-3) {
+        lastT = t;
+        stuckSince = performance.now();
+        return;
+      }
+      step();
+      if (video.paused && !done) void video.play().catch(() => undefined);
+      if (performance.now() - stuckSince > 6000) stop();
+    }, 400);
     video.addEventListener("ended", stop, { once: true });
     try {
       await video.play();
@@ -720,6 +768,7 @@ export function PoseRead() {
       </div>
       {busy ? <p className="text-sm">{busy}</p> : null}
       {error ? <p className="text-sm text-danger">{error}</p> : null}
+      {info && !error ? <p className="text-sm text-muted">{info}</p> : null}
 
       {kind !== "none" && src ? (
         <div className="grid gap-2">

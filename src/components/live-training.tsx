@@ -19,7 +19,7 @@ import {
   type BodyId,
   type ProgramId,
 } from "@/lib/arcieri/program";
-import { cursor, endPoints, faceById, fmtAvg, scoreAtRadius, summarize, sagomaMaxOf, aimAngleLabel, aimTargetLabel } from "@/lib/arcieri/scoring";
+import { cursor, endPoints, faceById, fmtAvg, scoreAtRadius, summarize, sagomaMaxOf, aimAngleLabel, aimTargetLabel, type Face } from "@/lib/arcieri/scoring";
 import { AimPick } from "./aim-pick";
 import { BoarTarget } from "./boar-target";
 import { fmtClock } from "@/lib/arcieri/time";
@@ -27,6 +27,7 @@ import { getSession, listSessions, saveSession, trainingBootstrap } from "@/lib/
 import { Button, Card, ErrorNote, Field, Loading, Select, TextArea, TextInput } from "./kit";
 import { TargetFace } from "./target-face";
 import { ShotLab } from "./shot-lab";
+import { TargetRead } from "./target-read";
 import { SagomaLab } from "./sagoma-lab";
 import { MediaPick } from "./media-pick";
 import { PoseRead } from "./pose-read";
@@ -284,6 +285,35 @@ export function LiveTraining({ sessionId, openHistory = false }: { sessionId?: n
     endBeeped.current = false;
   }
 
+  /** Una foto = una volée: riempie quella in corso e, se il piano è finito, lo allunga di una volée. */
+  function addVolley(hits: { nx: number; ny: number; score: number; isX: boolean; miss: boolean }[]) {
+    if (!hits.length) return;
+    if (navigator.vibrate) navigator.vibrate(12);
+    setDraft((current) => {
+      if (!current) return current;
+      const plan = { ...current.meta };
+      let shots = current.shots;
+      let here = cursor(shots, plan.arrowsPerEnd, plan.endsPlanned, plan.blocksPlanned);
+      if (here.done) {
+        if (plan.endsPlanned < 60) plan.endsPlanned += 1;
+        else plan.blocksPlanned = clampCount(plan.blocksPlanned + 1, 1, 40);
+        here = cursor(shots, plan.arrowsPerEnd, plan.endsPlanned, plan.blocksPlanned);
+        if (here.done) return current;
+      }
+      const room = plan.arrowsPerEnd - shots.filter((x) => x.block === here.block && x.end === here.end).length;
+      let seq = shots.reduce((max, item) => Math.max(max, item.seq), 0);
+      for (const hit of hits.slice(0, Math.max(1, room))) {
+        const at = cursor(shots, plan.arrowsPerEnd, plan.endsPlanned, plan.blocksPlanned);
+        if (at.done || at.end !== here.end || at.block !== here.block) break;
+        seq += 1;
+        const miss = hit.miss;
+        shots = [...shots, { block: at.block, end: at.end, arrow: at.arrow, score: miss ? 0 : hit.score, isX: miss ? false : hit.isX, miss, nx: miss ? null : hit.nx, ny: miss ? null : hit.ny, seq }];
+      }
+      return { ...current, meta: plan, shots, selected: null, endClock: startClock({ running: false, startedAt: null, accumulatedMs: 0 }, Date.now()) };
+    });
+    endBeeped.current = false;
+  }
+
   function moveShot(seq: number, score: number, isX: boolean, miss: boolean, nx: number, ny: number) {
     setDraft((current) => {
       if (!current) return current;
@@ -440,6 +470,17 @@ export function LiveTraining({ sessionId, openHistory = false }: { sessionId?: n
           <button key={side} type="button" onClick={() => setDraft({ ...draft, meta: { ...meta, aimAngle: side } })} className={`min-h-11 rounded-xl text-sm font-semibold ${meta.aimAngle === side ? "bg-accent text-accent-fg" : "border border-line"}`}>{label}</button>
         ))}
       </div>
+      {face.id.startsWith("sagoma") ? null : (
+        <PhotoVolley
+          face={face}
+          shots={draft.shots}
+          volley={spot.done ? meta.blocksPlanned * meta.endsPlanned + 1 : spot.block * meta.endsPlanned + spot.end + 1}
+          room={spot.done ? meta.arrowsPerEnd : meta.arrowsPerEnd - endArrows.length}
+          arrows={tally.arrows}
+          points={tally.points}
+          onApply={addVolley}
+        />
+      )}
       {face.id.startsWith("sagoma") ? (
         <BoarTarget
           max={sagomaMaxOf(face.id)}
@@ -467,16 +508,7 @@ export function LiveTraining({ sessionId, openHistory = false }: { sessionId?: n
       {face.id.startsWith("sagoma") ? (
         <Card><SagomaLab animal="cinghiale" shots={draft.shots.map((sh) => ({ score: sh.score, miss: sh.miss, nx: sh.nx, ny: sh.ny, end: sh.end }))} /></Card>
       ) : null}
-      {face.id.startsWith("sagoma") ? null : <ShotLab
-        face={face}
-        shots={draft.shots}
-        expected={meta.arrowsPerEnd - endArrows.length > 0 ? meta.arrowsPerEnd - endArrows.length : meta.arrowsPerEnd}
-        onPhoto={face.id.startsWith("sagoma") ? undefined : (hits) => {
-          // solo le frecce che stanno nella volée: le altre non devono finire nella volée dopo
-          const room = meta.arrowsPerEnd - endArrows.length > 0 ? meta.arrowsPerEnd - endArrows.length : meta.arrowsPerEnd;
-          for (const hit of hits.slice(0, room)) add(hit.miss ? 0 : hit.score, hit.isX, hit.miss, hit.nx, hit.ny);
-        }}
-      />}
+      {face.id.startsWith("sagoma") ? null : <ShotLab face={face} shots={draft.shots} />}
       <div className="flex gap-2 overflow-x-auto pb-1">
         {Array.from({ length: Math.max(3, meta.arrowsPerEnd) }, (_, index) => {
           const shot = endArrows.find((item) => item.arrow === index);
@@ -618,6 +650,45 @@ function timeOf(iso: string) {
 function clampCount(value: number, min: number, max: number) {
   if (!Number.isFinite(value)) return min;
   return Math.min(max, Math.max(min, Math.round(value)));
+}
+
+function PhotoVolley({
+  face,
+  shots,
+  volley,
+  room,
+  arrows,
+  points,
+  onApply,
+}: {
+  face: Face;
+  shots: DraftShot[];
+  volley: number;
+  room: number;
+  arrows: number;
+  points: number;
+  onApply: (hits: { nx: number; ny: number; score: number; isX: boolean; miss: boolean }[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ends = new Set(shots.map((s) => `${s.block}:${s.end}`)).size;
+  const known = shots.filter((s) => s.nx != null && s.ny != null).map((s) => ({ x: s.nx as number, y: s.ny as number }));
+  return (
+    <Card className="grid gap-2">
+      <button type="button" onClick={() => setOpen((v) => !v)} className="flex items-center justify-between gap-3 text-left">
+        <span className="min-w-0">
+          <span className="aa-section-title block">📷 Volée da foto</span>
+          <span className="text-xs text-muted">Foto → salva → foto della volée dopo: frecce e volée si contano da sole.</span>
+        </span>
+        <span className="aa-chip shrink-0">{open ? "Chiudi" : "Apri"}</span>
+      </button>
+      <div className="grid grid-cols-3 gap-1.5 text-center">
+        <span className="aa-kpi !px-2 !py-1.5"><span className="block text-[0.62rem] uppercase tracking-wider text-muted">Volée</span><b className="font-display text-xl tabular-nums">{ends}</b></span>
+        <span className="aa-kpi !px-2 !py-1.5"><span className="block text-[0.62rem] uppercase tracking-wider text-muted">Frecce</span><b className="font-display text-xl tabular-nums">{arrows}</b></span>
+        <span className="aa-kpi !px-2 !py-1.5"><span className="block text-[0.62rem] uppercase tracking-wider text-muted">Punti</span><b className="font-display text-xl tabular-nums">{points}</b></span>
+      </div>
+      {open ? <TargetRead face={face} onApply={onApply} expected={Math.max(1, room)} known={known} volleyLabel={`volée ${volley}`} compact /> : null}
+    </Card>
+  );
 }
 
 function ScoreLine({ k, v }: { k: string; v: string }) {

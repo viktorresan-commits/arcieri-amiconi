@@ -7,7 +7,7 @@ import type { Face } from "@/lib/arcieri/scoring";
  * Tutto lo stato della camera vive in ref: niente render React a ogni movimento.
  */
 
-type Shot = { x: number; y: number; end?: number; score?: number; miss?: boolean };
+type Shot = { x: number; y: number; end?: number; score?: number; miss?: boolean; color?: string };
 /** Immagine da mettere sulla faccia (sagoma 3D): mezza larghezza e mezza altezza in unità faccia. */
 export type Picture = { img: HTMLImageElement; halfW: number; halfH: number };
 type V3 = [number, number, number];
@@ -269,7 +269,7 @@ function arrowOf(shot: Shot, index: number): Arrow {
   return {
     hit: [shot.x, -shot.y, 0],
     dir,
-    color: VANES[index % VANES.length],
+    color: shot.color ?? VANES[index % VANES.length],
     roll: r3 * Math.PI * 2,
     start: [shot.x * 0.15 + (r1 - 0.5) * 0.6, 0.5 + r2 * 0.4, 26],
     arc: 1.1 + r3 * 0.5,

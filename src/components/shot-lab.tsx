@@ -12,7 +12,9 @@ export function ShotLab({
   shots,
   onPhoto,
   expected,
+  volleyLabel,
 }: {
+  volleyLabel?: string;
   face: Face;
   shots: Point[];
   /** quante frecce aspettarsi nella foto (quelle che mancano alla volée) */
@@ -65,7 +67,7 @@ export function ShotLab({
       </div>
       </>
       )}
-      {onPhoto && view !== "corpo" ? <TargetRead face={face} onApply={onPhoto} expected={expected} known={placed.map((p) => ({ x: p.x, y: p.y }))} /> : null}
+      {onPhoto && view !== "corpo" ? <TargetRead face={face} onApply={onPhoto} expected={expected} volleyLabel={volleyLabel} known={placed.map((p) => ({ x: p.x, y: p.y }))} /> : null}
     </Card>
   );
 }

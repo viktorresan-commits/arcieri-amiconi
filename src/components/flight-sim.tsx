@@ -501,7 +501,7 @@ function FlightPath({ input, round, sighted, mode, title, onGold, trueScale = fa
       {/* traiettoria pulita */}
       <path d={line(clean)} fill="none" stroke="#e6b325" strokeWidth="2.4" />
       <circle cx={X(peak.x)} cy={Y(v(peak.x, peak.z))} r="2.2" fill="#e6b325" />
-      <text x={X(peak.x)} y={Y(v(peak.x, peak.z)) + 13} fill="#f4f1ea" fontSize="9" textAnchor="middle" opacity="0.85">culmine {fmtM(peak.z)} a {peak.x.toFixed(0)} m</text>
+      <text x={X(peak.x)} y={Math.max(pad.t + 8, Y(v(peak.x, peak.z)) - 6)} fill="#e6b325" fontSize="9" textAnchor="middle" opacity="0.95">culmine {fmtM(peak.z)} a {peak.x.toFixed(0)} m</text>
       {/* paglione in fondo: cavalletto, paglia, faccia */}
       <line x1={tx + 5} y1={Y(bottom)} x2={tx - 8} y2={Y(groundAtTarget)} stroke="#8a6a3c" strokeWidth="2" />
       <line x1={tx + 5} y1={Y(bottom)} x2={tx + 18} y2={Y(groundAtTarget)} stroke="#8a6a3c" strokeWidth="2" />
@@ -518,50 +518,138 @@ function FlightPath({ input, round, sighted, mode, title, onGold, trueScale = fa
   );
 }
 
-/** Il bersaglio come si vede dalla linea di tiro: frecce, centro del gruppo, cerchio di dispersione e punto di mira. */
-function FaceFront({ input, round, sighted }: { input: FlightInput; round: RoundView; sighted: boolean }) {
+/**
+ * Il bersaglio come si vede dalla linea di tiro, con lo stesso linguaggio del grafico di fianco:
+ * riquadro largo, griglia in centimetri, linea dell'oro, cavalletto e terreno, occhio, mira e frecce.
+ * Stessa scala in orizzontale e in verticale (i cerchi restano tondi).
+ */
+function FaceFront({ input, round, sighted, title }: { input: FlightInput; round: RoundView; sighted: boolean; title?: string }) {
   const GOLD_HEIGHT = goldOf(input);
   const R = input.faceCm / 200;
   const boss = R + 0.14;
   const gap = sighted ? 0 : round.gap;
-  const view = boss * 1.18;
-  const toPt = (y: number, z: number) => ({ x: y, y: -(z - GOLD_HEIGHT) });
-  const inView = Math.abs(gap) <= view * 0.92;
-  const aim = toPt(0, GOLD_HEIGHT + (inView ? gap : Math.sign(gap) * view * 0.92));
-  const centre = toPt(round.my, round.mz);
+  const eye = eyePoint(input);
+  const W = 380;
+  const H = 236;
+  const pad = { l: 38, r: 14, t: 22, b: 30 };
+  const iw = W - pad.l - pad.r;
+  const ih = H - pad.t - pad.b;
+  // finestra verticale: paglione + mira + gruppo, con un po' di margine
+  const zs = [GOLD_HEIGHT + boss, GOLD_HEIGHT - boss, GOLD_HEIGHT + gap, ...round.hits.map((h) => h.z)];
+  let lo = Math.min(...zs);
+  let hi = Math.max(...zs);
+  const m = Math.max(0.08, (hi - lo) * 0.12);
+  lo -= m;
+  hi += m * 1.3;
+  // se il terreno è vicino lo includo: si vede il paglione appoggiato
+  if (lo < 0.45) lo = Math.min(lo, -0.05);
+  const spanZ = hi - lo;
+  const spanY = (spanZ * iw) / ih;
+  const cy = Math.max(-spanY / 2, Math.min(spanY / 2, round.my * 0.5));
+  const left = cy - spanY / 2;
+  const X = (y: number) => pad.l + ((y - left) / spanY) * iw;
+  const Y = (z: number) => pad.t + ((hi - z) / spanZ) * ih;
+  const k = iw / spanY; // px per metro
+  const step = niceStep(spanZ / 5);
+  const zTicks: number[] = [];
+  for (let z = Math.ceil(lo / step) * step; z <= hi + 1e-9; z += step) zTicks.push(Number(z.toFixed(3)));
+  const yTicks: number[] = [];
+  for (let y = Math.ceil(left / step) * step; y <= left + spanY + 1e-9; y += step) yTicks.push(Number(y.toFixed(3)));
   const zones = input.zones === 5 ? 5 : 10;
   const rings = Array.from({ length: zones }, (_, i) => ({ r: R * (1 - i / zones), color: RING_COLORS[Math.floor((i * 5) / zones)] }));
-  const dot = Math.max(R * 0.025, input.diameterMm / 2000);
+  const dot = Math.max(2.2, (input.diameterMm / 2000) * k);
+  const gx = X(0);
+  const gy = Y(GOLD_HEIGHT);
+  const aimZ = GOLD_HEIGHT + gap;
+  const aimIn = aimZ <= hi && aimZ >= lo;
+  const aimY = Y(Math.max(lo + spanZ * 0.04, Math.min(hi - spanZ * 0.04, aimZ)));
   const size = angularSize(input.faceCm, input.distanceM);
   const fmtScore = round.hits.map((hit) => (hit.miss ? "M" : hit.zone)).join(" ");
+  const centreX = X(round.my);
+  const centreY = Y(round.mz);
+  const legTop = Y(GOLD_HEIGHT - boss * 0.6);
+  const ground = Y(0);
+  const eyeIn = eye.z <= hi && eye.z >= lo;
   return (
     <div className="grid gap-1">
-      <svg viewBox={`${-view} ${-view} ${view * 2} ${view * 2}`} className="mx-auto aspect-square w-full max-w-xs rounded-xl border border-line" style={{ background: "#0f1a14" }} role="img" aria-label="Bersaglio visto di fronte">
-        <rect x={-boss} y={-boss} width={boss * 2} height={boss * 2} rx={boss * 0.05} fill="#c9a46a" stroke="#6b4a2b" strokeWidth={boss * 0.01} />
-        {rings.map((ring, i) => (
-          <circle key={i} r={ring.r} fill={ring.color} stroke={ring.color === "#1a1c1e" ? "rgba(244,241,234,0.5)" : "rgba(20,24,28,0.45)"} strokeWidth={R * 0.004} />
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full rounded-xl border border-line" style={{ background: "#0f1a14" }} role="img" aria-label="Bersaglio visto di fronte">
+        <defs>
+          <clipPath id="ff-clip"><rect x={pad.l} y={pad.t} width={iw} height={ih} /></clipPath>
+          <radialGradient id="ff-sheen" cx="35%" cy="30%" r="80%">
+            <stop offset="0%" stopColor="#fff" stopOpacity="0.16" />
+            <stop offset="70%" stopColor="#fff" stopOpacity="0" />
+          </radialGradient>
+        </defs>
+        <text x={pad.l} y={14} fill="var(--muted)" fontSize="10.5">{title ?? `Di fronte, dalla linea di tiro · ${input.distanceM} m`}</text>
+        {/* griglia in cm, come nel grafico di fianco */}
+        {zTicks.map((z) => (
+          <g key={`z${z}`}>
+            <line x1={pad.l} x2={W - pad.r} y1={Y(z)} y2={Y(z)} stroke="rgba(244,241,234,0.08)" />
+            <text x={pad.l - 4} y={Y(z) + 3} fill="var(--muted)" fontSize="9" textAnchor="end">{fmtM(z)}</text>
+          </g>
         ))}
-        <path d={`M${-R * 0.03} 0 H${R * 0.03} M0 ${-R * 0.03} V${R * 0.03}`} stroke="#14181c" strokeWidth={R * 0.006} />
-        <circle cx={centre.x} cy={centre.y} r={Math.max(round.rms, dot)} fill="rgba(224,122,47,0.12)" stroke="#e07a2f" strokeWidth={R * 0.008} strokeDasharray={`${R * 0.03} ${R * 0.02}`} />
-        {round.hits.map((hit, i) => {
-          const p = toPt(hit.y, hit.z);
-          return <circle key={i} cx={p.x} cy={p.y} r={dot} fill="#14181c" stroke="#f4f1ea" strokeWidth={dot * 0.35} />;
-        })}
-        <path d={`M${centre.x - R * 0.07} ${centre.y} H${centre.x + R * 0.07} M${centre.x} ${centre.y - R * 0.07} V${centre.y + R * 0.07}`} stroke="#e07a2f" strokeWidth={R * 0.014} />
-        <path d={`M${aim.x} ${aim.y - R * 0.06} l${R * 0.06} ${R * 0.06} l${-R * 0.06} ${R * 0.06} l${-R * 0.06} ${-R * 0.06} Z`} fill="#f4f1ea" stroke="#14181c" strokeWidth={R * 0.008} />
-        {!inView ? (
-          <text x={0} y={aim.y + (gap > 0 ? R * 0.2 : -R * 0.12)} fill="#f4f1ea" fontSize={R * 0.09} textAnchor="middle">
-            {gap > 0 ? "▲" : "▼"} mira {Math.abs(gap * 100).toFixed(0)} cm {gap > 0 ? "sopra" : "sotto"}
+        {yTicks.map((y) => (
+          <g key={`y${y}`}>
+            <line x1={X(y)} x2={X(y)} y1={pad.t} y2={H - pad.b} stroke="rgba(244,241,234,0.06)" />
+            <text x={X(y)} y={H - pad.b + 11} fill="var(--muted)" fontSize="9" textAnchor="middle">{y === 0 ? "0" : `${y > 0 ? "→" : "←"}${Math.abs(Math.round(y * 100))}`}</text>
+          </g>
+        ))}
+        <text x={W / 2} y={H - 4} fill="var(--muted)" fontSize="9" textAnchor="middle">quota da terra · cm a sinistra/destra del centro · scala reale</text>
+        <g clipPath="url(#ff-clip)">
+          {/* terreno */}
+          {ground <= H - pad.b + 2 ? (
+            <>
+              <rect x={pad.l} y={ground} width={iw} height={H - pad.b - ground + 2} fill="rgba(122,164,82,0.12)" />
+              <line x1={pad.l} x2={W - pad.r} y1={ground} y2={ground} stroke="#7aa452" strokeWidth="2" />
+            </>
+          ) : null}
+          {/* cavalletto */}
+          <line x1={gx - boss * k * 0.55} y1={legTop} x2={gx - boss * k * 0.95} y2={Math.max(ground, H)} stroke="#8a6a3c" strokeWidth="3" />
+          <line x1={gx + boss * k * 0.55} y1={legTop} x2={gx + boss * k * 0.95} y2={Math.max(ground, H)} stroke="#8a6a3c" strokeWidth="3" />
+          {/* paglione con spessore */}
+          <rect x={X(-boss) + 3} y={Y(GOLD_HEIGHT + boss) + 3} width={boss * 2 * k} height={boss * 2 * k} rx={4} fill="#6b4a2b" />
+          <rect x={X(-boss)} y={Y(GOLD_HEIGHT + boss)} width={boss * 2 * k} height={boss * 2 * k} rx={4} fill="#c9a46a" stroke="#6b4a2b" strokeWidth="0.8" />
+          {/* linea dell'oro */}
+          <line x1={pad.l} x2={W - pad.r} y1={gy} y2={gy} stroke="#e6b325" strokeWidth="1.2" strokeDasharray="6 4" opacity="0.9" />
+          <text x={pad.l + 4} y={gy - 4} fill="#e6b325" fontSize="9.5">oro {fmtM(GOLD_HEIGHT)}</text>
+          {/* faccia */}
+          {rings.map((ring, i) => (
+            <circle key={i} cx={gx} cy={gy} r={ring.r * k} fill={ring.color} stroke={ring.color === "#1a1c1e" ? "rgba(244,241,234,0.5)" : "rgba(20,24,28,0.45)"} strokeWidth="0.5" />
+          ))}
+          <circle cx={gx} cy={gy} r={R * k} fill="url(#ff-sheen)" />
+          <path d={`M${gx - 3} ${gy} H${gx + 3} M${gx} ${gy - 3} V${gy + 3}`} stroke="#14181c" strokeWidth="0.7" />
+          {/* occhio: a che quota guarda */}
+          {eyeIn ? (
+            <>
+              <line x1={pad.l} x2={W - pad.r} y1={Y(eye.z)} y2={Y(eye.z)} stroke="#f4f1ea" strokeWidth="0.8" strokeDasharray="2 4" opacity="0.55" />
+              <text x={W - pad.r - 4} y={Y(eye.z) - 4} fill="#f4f1ea" fontSize="9" textAnchor="end" opacity="0.9">👁 occhio {fmtM(eye.z)}</text>
+            </>
+          ) : (
+            <text x={W - pad.r - 4} y={eye.z > hi ? pad.t + 10 : H - pad.b - 4} fill="#f4f1ea" fontSize="9" textAnchor="end" opacity="0.8">👁 occhio {fmtM(eye.z)} {eye.z > hi ? "↑" : "↓"}</text>
+          )}
+          {/* dispersione e centro del gruppo */}
+          <circle cx={centreX} cy={centreY} r={Math.max(round.rms * k, dot)} fill="rgba(224,122,47,0.14)" stroke="#e07a2f" strokeWidth="1" strokeDasharray="4 3" />
+          {round.hits.map((hit, i) => (
+            <g key={i} className="aa-rise" style={{ animationDelay: `${i * 70}ms` }}>
+              <circle cx={X(hit.y)} cy={Y(hit.z)} r={dot} fill="#14181c" stroke="#f4f1ea" strokeWidth="0.9" />
+            </g>
+          ))}
+          <path d={`M${centreX - 6} ${centreY} H${centreX + 6} M${centreX} ${centreY - 6} V${centreY + 6}`} stroke="#e07a2f" strokeWidth="1.6" />
+          {/* punto di mira */}
+          <path d={`M${gx} ${aimY - 6} l6 6 l-6 6 l-6 -6 Z`} fill="#f4f1ea" stroke="#14181c" strokeWidth="0.8" />
+          <line x1={gx + 7} y1={aimY} x2={Math.min(X(boss) + 4, W - pad.r - 95)} y2={aimY} stroke="#f4f1ea" strokeWidth="0.7" strokeDasharray="2 2" opacity="0.7" />
+          <text x={Math.min(X(boss) + 7, W - pad.r - 92)} y={aimY + 3} fill="#f4f1ea" fontSize="9.5" style={{ paintOrder: "stroke" }} stroke="#0f1a14" strokeWidth="3">
+            {sighted ? "mira: oro" : `mira ${Math.abs(gap * 100).toFixed(0)} cm ${gap >= 0 ? "sopra" : "sotto"}${aimIn ? "" : gap > 0 ? " ↑" : " ↓"}`}
           </text>
-        ) : null}
+        </g>
+        {/* cornice dell'area */}
+        <rect x={pad.l} y={pad.t} width={iw} height={ih} fill="none" stroke="rgba(244,241,234,0.08)" />
       </svg>
-      <p className="text-center text-xs text-muted">
-        Di fronte, come dalla linea di tiro · {fmtScore}
+      <p className="text-center text-[0.7rem] text-muted">
+        Frecce: {fmtScore}
         {size ? ` · la faccia copre ${size.moa.toFixed(0)} MOA (${size.inchesAt20yd.toFixed(1)} in/20 yd)` : ""}
-      </p>
-      <p className="text-center text-xs text-muted">
-        <span style={{ color: "#e07a2f" }}>✚</span> centro del gruppo · <span style={{ color: "#e07a2f" }}>◌</span> dispersione · ◆ punto di mira
-        {!sighted && !inView ? " (fuori vista, segnato sul bordo)" : ""}
+        {" · "}
+        <span style={{ color: "#e07a2f" }}>✚</span> centro gruppo · <span style={{ color: "#e07a2f" }}>◌</span> dispersione · ◆ mira
       </p>
     </div>
   );

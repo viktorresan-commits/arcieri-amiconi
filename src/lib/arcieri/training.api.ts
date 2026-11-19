@@ -697,12 +697,20 @@ export const dashboard = createServerFn({ method: "GET" })
     const fromDay = (month.from ?? "0000").slice(0, 10);
     const toDay = (month.to ?? "9999").slice(0, 10);
     const inMonth = (day: string) => day >= fromDay && day < toDay;
-    const trainShots = await sql<{ score: number; miss: boolean; is_x: boolean; max_arrow: number; started_at: string; distance_m: number; session_id: number; shot_id: number }>`
-      select sh.score, sh.miss, sh.is_x, s.max_arrow, s.started_at::text as started_at, s.distance_m, s.id as session_id, sh.id as shot_id
+    const trainShots = await sql<{ score: number; miss: boolean; is_x: boolean; max_arrow: number; started_at: string; distance_m: number; session_id: number; shot_id: number; arrow_index: number; arrow_specs: string | null }>`
+      select sh.score, sh.miss, sh.is_x, s.max_arrow, s.started_at::text as started_at, s.distance_m, s.id as session_id, sh.id as shot_id,
+        sh.arrow_index, eq.specs as arrow_specs
       from shots sh
       join sessions s on s.id = sh.session_id
+      left join setups su on su.id = s.setup_id
+      left join equipment eq on eq.id = su.arrow_id and eq.category = 'freccia'
       where s.user_id = ${context.userId}
       order by s.started_at, sh.id`;
+    // la freccia "di casa": l'ultima in uso, se nella seduta non c'è un assetto con le frecce
+    const homeArrow = await sql<{ specs: string }>`
+      select specs from equipment
+      where user_id = ${context.userId} and category = 'freccia' and status = 'in_use'
+      order by id desc limit 1`;
     const laneRows = await sql<{ n: number; score: number; arrows: string; distance_m: number | null; target_kind: string; starts_on: string; comp_distance: number | null; competition_id: number }>`
       select p.n, p.score, p.arrows, p.distance_m, e.target_kind, c.starts_on::text as starts_on,
         c.distance_m as comp_distance, p.competition_id
@@ -722,7 +730,7 @@ export const dashboard = createServerFn({ method: "GET" })
     let highN = 0;
     let zeroN = 0;
     const bySession = new Map<number, { arrows: number; points: number; day: string }>();
-    const shotMarks: { day: string; seq: number; score: number }[] = [];
+    const shotMarks: { day: string; seq: number; score: number; n: number; distance: number; miss: boolean; isX: boolean; specs: string }[] = [];
     let bestDistance = 0;
     const noteDistance = (value: number) => {
       if (value > bestDistance) bestDistance = value;
@@ -756,7 +764,7 @@ export const dashboard = createServerFn({ method: "GET" })
       addShot(day, score, asNum(shot.session_id));
       mark(!miss && (asBool(shot.is_x) || score >= maxArrow - 1), miss);
       noteDistance(asNum(shot.distance_m));
-      shotMarks.push({ day, seq: asNum(shot.shot_id), score });
+      shotMarks.push({ day, seq: asNum(shot.shot_id), score, n: asNum(shot.arrow_index) + 1, distance: asNum(shot.distance_m), miss, isX: asBool(shot.is_x), specs: shot.arrow_specs ?? "" });
     }
     const compsWithArrows = new Set<number>();
     for (const row of laneRows) {
@@ -774,7 +782,7 @@ export const dashboard = createServerFn({ method: "GET" })
         addShot(day, score, null);
         mark(padiglione ? score >= 9 : score >= 8, score <= 0);
       }
-      parts.forEach((score, index) => shotMarks.push({ day, seq: 1_000_000 + asNum(row.n) * 20 + index, score }));
+      parts.forEach((score, index) => shotMarks.push({ day, seq: 1_000_000 + asNum(row.n) * 20 + index, score, n: index + 1, distance: laneDistance || compDistance, miss: score <= 0, isX: false, specs: "" }));
     }
     let monthEvents = monthCards.filter((session) => session.arrows > 0).length;
     const seenMonth = new Set<number>();
@@ -854,10 +862,19 @@ export const dashboard = createServerFn({ method: "GET" })
       if (row.arrows >= 6) averages.push(row.points / row.arrows);
     }
     const best = averages.reduce((max, value) => Math.max(max, value), 0);
-    const trend = shotMarks
-      .sort((a, b) => a.day.localeCompare(b.day) || a.seq - b.seq)
-      .slice(-60)
-      .map((row) => row.score);
+    const ordered = shotMarks.sort((a, b) => a.day.localeCompare(b.day) || a.seq - b.seq);
+    const trend = ordered.slice(-60).map((row) => row.score);
+    const fallbackSpecs = homeArrow[0]?.specs ?? "";
+    // le ultime frecce tirate, con numero, distanza e l'aspetto della freccia (specs come testo JSON)
+    const lastShots = ordered.slice(-8).reverse().map((row) => ({
+      score: row.score,
+      n: row.n,
+      distance: row.distance,
+      miss: row.miss,
+      isX: row.isX,
+      day: row.day,
+      specs: row.specs || fallbackSpecs,
+    }));
     let lastMs = 0;
     for (const session of cards) {
       if (session.arrows <= 0) continue;
@@ -882,6 +899,7 @@ export const dashboard = createServerFn({ method: "GET" })
       bestDistance: bestDistance || null,
       since,
       trend,
+      lastShots,
       last: cards[0] ?? null,
       recent: cards.slice(0, 12).map((s) => ({
         id: s.id,

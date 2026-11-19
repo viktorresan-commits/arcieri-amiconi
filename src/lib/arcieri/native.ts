@@ -41,20 +41,40 @@ function toBase64(blob: Blob) {
 /** Salva un file: nel browser lo scarica, nell'app apre "Condividi" (Galleria, Drive, WhatsApp…). */
 export async function saveFile(blob: Blob, name: string) {
   if (isNativeApp()) {
-    const fs = plugin("Filesystem") as unknown as { writeFile: (o: { path: string; data: string; directory: string }) => Promise<{ uri: string }> } | undefined;
+    type Fs = {
+      writeFile: (o: { path: string; data: string; directory: string }) => Promise<{ uri: string }>;
+      appendFile?: (o: { path: string; data: string; directory: string }) => Promise<void>;
+      getUri?: (o: { path: string; directory: string }) => Promise<{ uri: string }>;
+    };
+    const fs = plugin("Filesystem") as unknown as Fs | undefined;
     const share = plugin("Share") as unknown as { share: (o: { title: string; files: string[] }) => Promise<unknown> } | undefined;
     if (fs && share) {
-      const data = await toBase64(blob);
-      const res = await fs.writeFile({ path: name, data, directory: "CACHE" });
-      await share.share({ title: name, files: [res.uri] });
+      let uri: string;
+      // un video di qualche MB in base64 in un colpo solo blocca l'app: lo scrivo a pezzi (multipli di 3 byte)
+      const CHUNK = 3 * 256 * 1024;
+      if (blob.size > CHUNK && fs.appendFile) {
+        uri = (await fs.writeFile({ path: name, data: await toBase64(blob.slice(0, CHUNK)), directory: "CACHE" })).uri;
+        for (let at = CHUNK; at < blob.size; at += CHUNK) {
+          await fs.appendFile({ path: name, data: await toBase64(blob.slice(at, at + CHUNK)), directory: "CACHE" });
+        }
+      } else {
+        uri = (await fs.writeFile({ path: name, data: await toBase64(blob), directory: "CACHE" })).uri;
+      }
+      try {
+        await share.share({ title: name, files: [uri] });
+      } catch {
+        /* condivisione annullata: il file resta comunque nella cache */
+      }
       return;
     }
   }
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = name;
+  document.body.appendChild(a);
   a.click();
-  window.setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  a.remove();
+  window.setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
 }
 
 let started = false;
