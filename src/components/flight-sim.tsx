@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { GOLD_HEIGHT, angularSize, compensatedDistance, describeRound, eyePoint, launchSpeed, releasePoint, type Fletch, type FlightInput } from "@/lib/arcieri/flight";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { angularSize, goldOf, compensatedDistance, describeRound, eyePoint, launchSpeed, releasePoint, type Fletch, type FlightInput } from "@/lib/arcieri/flight";
 import { Card, Field, Select } from "@/components/kit";
 
 const ROUNDS = [
@@ -42,6 +42,7 @@ const START: FlightInput = {
   faceCm: 40,
   zones: 10,
   slopeDeg: 0,
+  goldM: 1.3,
 };
 
 const SAVE_KEY = "aa-flight-v1";
@@ -247,7 +248,27 @@ export function FlightSim() {
           <button type="button" onClick={() => setPathMode("linea")} className={`min-h-9 rounded-full px-3 text-xs ${pathMode === "linea" ? "bg-primary text-primary-fg" : "border border-line"}`}>Sulla linea all'oro</button>
         </div>
       </div>
-      <FlightPath input={{ ...form, sighted: setup.sighted }} round={primary} sighted={setup.sighted} mode={pathMode} title={`${form.distanceM} m · faccia ${form.faceCm} cm${form.slopeDeg ? ` · pendenza ${form.slopeDeg > 0 ? "+" : ""}${form.slopeDeg}°` : ""} · gruppo ${primary.total}/${n * (form.zones === 5 ? 9 : 10)}`} />
+      <div className="flex items-stretch gap-2">
+      <div className="min-w-0 flex-1">
+      <FlightPath onGold={(goldM) => patch({ goldM })} input={{ ...form, sighted: setup.sighted }} round={primary} sighted={setup.sighted} mode={pathMode} title={`${form.distanceM} m · faccia ${form.faceCm} cm${form.slopeDeg ? ` · pendenza ${form.slopeDeg > 0 ? "+" : ""}${form.slopeDeg}°` : ""} · gruppo ${primary.total}/${n * (form.zones === 5 ? 9 : 10)}`} />
+      </div>
+      <label className="flex w-12 shrink-0 flex-col items-center gap-1 text-center text-[10px] leading-tight text-muted">
+        <span>🎯 oro</span>
+        <input
+          type="range"
+          min={0.3}
+          max={3}
+          step={0.01}
+          value={goldOf(form)}
+          onChange={(e) => patch({ goldM: Number(e.target.value) })}
+          aria-label="Altezza del centro del bersaglio"
+          className="min-h-0 flex-1 accent-[var(--accent)]"
+          style={{ writingMode: "vertical-lr", direction: "rtl" }}
+        />
+        <span className="font-display text-sm text-fg tabular-nums">{goldOf(form).toFixed(2).replace(".", ",")} m</span>
+        <button type="button" onClick={() => patch({ goldM: 1.3 })} className="rounded-full border border-line px-1.5 py-0.5">1,30</button>
+      </label>
+      </div>
       <FaceFront input={{ ...form, sighted: setup.sighted }} round={primary} sighted={setup.sighted} />
       <div className="flex flex-wrap gap-2">
         {[3, 6, 12].map((count) => (
@@ -340,7 +361,10 @@ type RoundView = ReturnType<typeof describeRound>;
 const RING_COLORS = ["#f4f1ea", "#1a1c1e", "#2a6294", "#c4473d", "#e6b325"];
 
 /** Traiettoria di fianco: tiratore, linea di mira, parabola, linea dell'oro e il paglione in fondo. */
-function FlightPath({ input, round, sighted, mode, title }: { input: FlightInput; round: RoundView; sighted: boolean; mode: "reale" | "linea"; title: string }) {
+function FlightPath({ input, round, sighted, mode, title, onGold }: { input: FlightInput; round: RoundView; sighted: boolean; mode: "reale" | "linea"; title: string; onGold?: (m: number) => void }) {
+  const GOLD_HEIGHT = goldOf(input);
+  const svgRef = useRef<SVGSVGElement>(null);
+  const dragging = useRef(false);
   const W = 380;
   const H = 236;
   const pad = { l: 38, r: 30, t: 22, b: 30 };
@@ -393,7 +417,31 @@ function FlightPath({ input, round, sighted, mode, title }: { input: FlightInput
     ? "mira: oro (mirino)"
     : `mira: ${Math.abs(gap * 100).toFixed(0)} cm ${gap >= 0 ? "sopra" : "sotto"} l'oro${offFace ? " · fuori faccia" : ""}`;
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full rounded-xl border border-line" style={{ background: "#0f1a14" }} role="img" aria-label={`Traiettoria a ${D} metri`}>
+    <svg
+      ref={svgRef}
+      viewBox={`0 0 ${W} ${H}`}
+      className={`w-full rounded-xl border border-line ${onGold ? "touch-pan-x" : ""}`}
+      style={{ background: "#0f1a14" }}
+      role="img"
+      aria-label={`Traiettoria a ${D} metri`}
+      onPointerDown={(e) => {
+        if (!onGold || mode !== "reale") return;
+        const r = e.currentTarget.getBoundingClientRect();
+        const px = ((e.clientX - r.left) / r.width) * W;
+        if (px < tx - 30) return; // si trascina solo il bersaglio, a destra
+        e.currentTarget.setPointerCapture(e.pointerId);
+        dragging.current = true;
+      }}
+      onPointerMove={(e) => {
+        if (!dragging.current || !onGold) return;
+        const r = e.currentTarget.getBoundingClientRect();
+        const py = ((e.clientY - r.top) / r.height) * H;
+        const z = hi - ((py - pad.t) / (H - pad.t - pad.b)) * (hi - lo);
+        onGold(Math.round(Math.max(0.3, Math.min(3, z)) * 100) / 100);
+      }}
+      onPointerUp={() => { dragging.current = false; }}
+      onPointerCancel={() => { dragging.current = false; }}
+    >
       <text x={pad.l} y={14} fill="var(--muted)" fontSize="10.5">{title}</text>
       {/* griglia */}
       {zTicks.map((z) => (
@@ -418,7 +466,7 @@ function FlightPath({ input, round, sighted, mode, title }: { input: FlightInput
       {mode === "reale" ? (
         <>
           <line x1={X(-1)} x2={tx} y1={Y(GOLD_HEIGHT)} y2={Y(GOLD_HEIGHT)} stroke="#e6b325" strokeWidth="1.2" strokeDasharray="6 4" opacity="0.9" />
-          <text x={X(0) + 2} y={Y(GOLD_HEIGHT) - 4} fill="#e6b325" fontSize="9.5">oro 1,30 m</text>
+          <text x={X(0) + 12} y={Y(GOLD_HEIGHT) - 4} fill="#e6b325" fontSize="9.5">oro {fmtM(GOLD_HEIGHT)}</text>
         </>
       ) : (
         <>
@@ -426,9 +474,14 @@ function FlightPath({ input, round, sighted, mode, title }: { input: FlightInput
           <text x={X(0) + 2} y={Y(0) + 11} fill="#e6b325" fontSize="9.5">linea verso l'oro</text>
         </>
       )}
-      {/* tiratore */}
-      <line x1={X(-0.3)} x2={X(-0.3)} y1={Y(v(-0.3, 0))} y2={Y(v(eye.x, eye.z)) + 6} stroke="#c9c0ae" strokeWidth="2" />
-      <circle cx={X(eye.x)} cy={Y(v(eye.x, eye.z))} r="4" fill="#c9c0ae" />
+      {/* tiratore: l'occhio dice a che altezza guarda */}
+      <line x1={X(-0.3)} x2={X(-0.3)} y1={Y(v(-0.3, 0))} y2={Y(v(eye.x, eye.z)) + 7} stroke="#c9c0ae" strokeWidth="2" />
+      <g transform={`translate(${X(eye.x)} ${Y(v(eye.x, eye.z))})`}>
+        <path d="M-8 0 Q0 -7 8 0 Q0 7 -8 0 Z" fill="#f4f1ea" stroke="#14181c" strokeWidth="0.8" />
+        <circle r="3" fill="#2f7fd1" />
+        <circle r="1.3" fill="#0b0f12" />
+      </g>
+      <text x={X(eye.x) + 11} y={Y(v(eye.x, eye.z)) + 13} fill="#f4f1ea" fontSize="9" opacity="0.9">👁 occhio {fmtM(eye.z)}</text>
       {/* linea di mira */}
       <line x1={X(eye.x)} y1={Y(v(eye.x, eye.z))} x2={X(D)} y2={Y(v(D, aim.z))} stroke="#f4f1ea" strokeWidth="1" strokeDasharray="3 3" opacity="0.75" />
       {/* dispersione del gruppo */}
@@ -455,6 +508,7 @@ function FlightPath({ input, round, sighted, mode, title }: { input: FlightInput
 
 /** Il bersaglio come si vede dalla linea di tiro: frecce, centro del gruppo, cerchio di dispersione e punto di mira. */
 function FaceFront({ input, round, sighted }: { input: FlightInput; round: RoundView; sighted: boolean }) {
+  const GOLD_HEIGHT = goldOf(input);
   const R = input.faceCm / 200;
   const boss = R + 0.14;
   const gap = sighted ? 0 : round.gap;

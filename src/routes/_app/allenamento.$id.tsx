@@ -212,15 +212,25 @@ function Volleys({
       ) : (
         <TargetFace face={face} shots={shots} onMove={relocate} color="#e07a2f" numbers />
       )}
+      {shots.length > session.arrowsPerEnd * session.endsPlanned * session.blocksPlanned ? (
+        <div className="grid gap-2 rounded-xl border border-danger/40 bg-danger/10 p-3 text-sm">
+          <p>⚠️ Ci sono {shots.length} frecce ma il piano ne prevede {session.arrowsPerEnd * session.endsPlanned * session.blocksPlanned} ({session.arrowsPerEnd} × {session.endsPlanned} volée × {session.blocksPlanned} bersagli).</p>
+          <Button disabled={busy} onClick={() => void commit(fitToPlan(shots, session.arrowsPerEnd, session.endsPlanned, session.blocksPlanned))}>Tieni solo le prime {session.arrowsPerEnd * session.endsPlanned * session.blocksPlanned}</Button>
+        </div>
+      ) : null}
       <ShotLab
         face={face}
         shots={shots}
+        expected={freeSlots(shots, session).length || session.arrowsPerEnd}
         onPhoto={sagoma ? undefined : (hits) => {
-          const end = shots.reduce((max, shot) => Math.max(max, shot.end), -1) + 1;
-          const added = hits.map((hit, index) => ({
-            block: 0,
-            end,
-            arrow: index,
+          // le frecce della foto vanno nei posti liberi del piano, non in volée nuove in più
+          const free = freeSlots(shots, session);
+          if (!free.length) {
+            setErr("Il piano è già pieno: aumenta le volée nella scheda «Modifica» per aggiungere frecce.");
+            return;
+          }
+          const added = hits.slice(0, free.length).map((hit, index) => ({
+            ...free[index],
             score: hit.miss ? 0 : hit.score,
             isX: hit.isX,
             miss: hit.miss,
@@ -298,6 +308,24 @@ function countOf(raw: string, fallback: number, max: number) {
   const n = Number(raw);
   if (!Number.isInteger(n) || n < 1) return fallback;
   return Math.min(max, n);
+}
+
+/** Posti liberi del piano (bersaglio, volée, freccia), in ordine. */
+function freeSlots(shots: Shot[], session: { arrowsPerEnd: number; endsPlanned: number; blocksPlanned: number }) {
+  const used = new Set(shots.map((s) => `${s.block}:${s.end}:${s.arrow}`));
+  const out: { block: number; end: number; arrow: number }[] = [];
+  for (let block = 0; block < Math.max(1, session.blocksPlanned); block += 1)
+    for (let end = 0; end < Math.max(1, session.endsPlanned); end += 1)
+      for (let arrow = 0; arrow < Math.max(1, session.arrowsPerEnd); arrow += 1)
+        if (!used.has(`${block}:${end}:${arrow}`)) out.push({ block, end, arrow });
+  return out;
+}
+
+/** Rimette le frecce in fila nel piano nuovo; quelle oltre il piano vengono tolte. */
+function fitToPlan(shots: Shot[], per: number, ends: number, blocks: number) {
+  const ordered = [...shots].sort((a, b) => a.block - b.block || a.end - b.end || a.arrow - b.arrow);
+  const perBlock = per * ends;
+  return ordered.slice(0, perBlock * blocks).map((shot, i) => ({ ...shot, block: Math.floor(i / perBlock), end: Math.floor((i % perBlock) / per), arrow: i % per }));
 }
 
 function Editor({
@@ -397,7 +425,7 @@ function Editor({
           targetPhoto: session.targetPhoto,
           aimTarget,
           aimAngle,
-          shots,
+          shots: fitToPlan(shots, countOf(arrowsPerEnd, session.arrowsPerEnd, 24), countOf(endsPlanned, session.endsPlanned, 60), countOf(blocksPlanned, session.blocksPlanned, 40)),
         },
       });
       onSaved();
@@ -447,7 +475,10 @@ function Editor({
         <Field label="Volée"><TextInput inputMode="numeric" value={endsPlanned} onChange={(e) => setEndsPlanned(e.target.value)} /></Field>
         <Field label="Bersagli"><TextInput inputMode="numeric" value={blocksPlanned} onChange={(e) => setBlocksPlanned(e.target.value)} /></Field>
       </div>
-      <p className="text-sm text-muted">Totale previsto: {countOf(arrowsPerEnd, session.arrowsPerEnd, 24) * countOf(endsPlanned, session.endsPlanned, 60) * countOf(blocksPlanned, session.blocksPlanned, 40)} frecce. Quelle già segnate restano; se aumenti i numeri, aggiungile da Correggi frecce.</p>
+      <p className="text-sm text-muted">Totale previsto: {countOf(arrowsPerEnd, session.arrowsPerEnd, 24) * countOf(endsPlanned, session.endsPlanned, 60) * countOf(blocksPlanned, session.blocksPlanned, 40)} frecce. Le frecce segnate si rimettono in fila nel piano nuovo; se aumenti i numeri, aggiungile da Correggi frecce.</p>
+      {shots.length > countOf(arrowsPerEnd, session.arrowsPerEnd, 24) * countOf(endsPlanned, session.endsPlanned, 60) * countOf(blocksPlanned, session.blocksPlanned, 40) ? (
+        <p className="rounded-xl border border-danger/50 bg-danger/10 p-2 text-sm">⚠️ Hai {shots.length} frecce segnate: salvando, restano solo le prime {countOf(arrowsPerEnd, session.arrowsPerEnd, 24) * countOf(endsPlanned, session.endsPlanned, 60) * countOf(blocksPlanned, session.blocksPlanned, 40)} e le altre vengono tolte.</p>
+      ) : null}
       <Field label="Obiettivo">
         <Select value={program} onChange={(e) => setProgram(e.target.value)}>
           <option value="">Nessuno</option>

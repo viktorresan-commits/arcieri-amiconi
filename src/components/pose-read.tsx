@@ -104,6 +104,10 @@ export function PoseRead() {
   const [showPose, setShowPose] = useState(true);
   const showRef = useRef(showPose);
   showRef.current = showPose;
+  /** come si vede: video con scheletro, sagoma luminosa su fondo scuro, o sagoma sopra il video */
+  const [look, setLook] = useState<"scheletro" | "sagoma" | "mista">("scheletro");
+  const lookRef = useRef(look);
+  lookRef.current = look;
   const [samples, setSamples] = useState<Sample[]>([]);
   const [progress, setProgress] = useState<number | null>(null);
   const [crop, setCropState] = useState<Rect | null>(null);
@@ -238,7 +242,8 @@ export function PoseRead() {
       ctx.strokeRect(region.x * w, region.y * h, region.w * w, region.h * h);
       ctx.setLineDash([]);
     }
-    if (lm && showRef.current) drawPose(ctx, w, h, lm, handRef.current, gearRef.current);
+    if (lookRef.current !== "scheletro") drawSagoma(ctx, w, h, lm, handRef.current, gearRef.current, lookRef.current === "sagoma");
+    else if (lm && showRef.current) drawPose(ctx, w, h, lm, handRef.current, gearRef.current);
     if (draft) {
       ctx.strokeStyle = "#e6b325";
       ctx.lineWidth = 3 * dpr;
@@ -294,7 +299,7 @@ export function PoseRead() {
     paintOverlay(lastLm.current);
     if (lastLm.current) setNow(metricsOf(lastLm.current, hand, size.w / size.h, size.h));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hand, showPose, size, crop, gear]);
+  }, [hand, showPose, size, crop, gear, look]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -534,7 +539,8 @@ export function PoseRead() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     ctx.drawImage(media, 0, 0, size.w, size.h);
-    if (lastLm.current) drawPose(ctx, size.w, size.h, lastLm.current, hand, gear);
+    if (look !== "scheletro") drawSagoma(ctx, size.w, size.h, lastLm.current, hand, gear, look === "sagoma");
+    else if (lastLm.current) drawPose(ctx, size.w, size.h, lastLm.current, hand, gear);
     canvas.toBlob((blob) => {
       if (blob) void saveFile(blob, `gesto-${fmt(time).replace(":", "m")}s.png`);
     }, "image/png");
@@ -647,9 +653,14 @@ export function PoseRead() {
               onPointerUp={cropUp}
               onPointerCancel={() => { cropStart.current = null; draftRef.current = null; paintOverlay(lastLm.current); }}
             />
-            <button type="button" onClick={() => setShowPose((v) => !v)} className="absolute right-2 top-2 min-h-9 rounded-full bg-[#14181c]/75 px-3 text-xs font-semibold text-[#f4f1ea]">
-              {showPose ? "👁 Scheletro" : "Scheletro spento"}
-            </button>
+            <div className="absolute right-2 top-2 flex gap-1 rounded-full bg-[#14181c]/75 p-1 text-xs font-semibold text-[#f4f1ea]">
+              {([["scheletro", "Scheletro"], ["sagoma", "Sagoma"], ["mista", "Mista"]] as const).map(([k, label]) => (
+                <button key={k} type="button" onClick={() => { setLook(k); if (k === "scheletro") setShowPose(true); }} className={`min-h-8 rounded-full px-2.5 ${look === k ? "bg-[#3ee08f] text-[#04140c]" : ""}`}>{label}</button>
+              ))}
+              {look === "scheletro" ? (
+                <button type="button" onClick={() => setShowPose((v) => !v)} className="min-h-8 rounded-full px-2" aria-label="Mostra o nascondi lo scheletro">{showPose ? "👁" : "🚫"}</button>
+              ) : null}
+            </div>
             {progress != null ? (
               <div className="absolute inset-x-0 bottom-0 bg-[#14181c]/80 p-2 text-xs text-[#f4f1ea]">
                 Analizzo il video… {Math.round(progress * 100)}%
@@ -973,6 +984,224 @@ function drawPose(ctx: CanvasRenderingContext2D, w: number, h: number, lm: Landm
     if (m.handFace < 0.85) label("Ancorato", at(draw[2]).x - 30 * s, at(draw[2]).y + 26 * s, "#e6b325");
   }
   if (gear?.bow) label(`Cant ${Math.abs(gear.bow.cant).toFixed(1)}°`, gear.bow.x1 * w + 8 * s, gear.bow.y1 * h + 16 * s, "#bef264");
+}
+
+/**
+ * Sagoma "a raggi X": corpo verde trasparente con le ossa chiare e gli angoli principali sugli archi
+ * (spalla, gomiti, anca), su fondo scuro o sopra il video.
+ */
+export function drawSagoma(ctx: CanvasRenderingContext2D, w: number, h: number, lm: Landmark[] | null, hand: Hand, gear: Gear | null, dark: boolean) {
+  const s = Math.max(1, Math.min(w, h) / 360);
+  if (dark) {
+    const g = ctx.createRadialGradient(w / 2, h * 0.45, 0, w / 2, h * 0.45, Math.max(w, h) * 0.75);
+    g.addColorStop(0, "#0d2a1f");
+    g.addColorStop(1, "#030807");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = "rgba(62,224,143,0.06)";
+    ctx.lineWidth = 1;
+    const step = 28 * s;
+    for (let x = 0; x < w; x += step) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); }
+    for (let y = 0; y < h; y += step) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
+  } else {
+    ctx.fillStyle = "rgba(3,8,7,0.45)";
+    ctx.fillRect(0, 0, w, h);
+  }
+  if (!lm) {
+    ctx.fillStyle = "rgba(244,241,234,0.7)";
+    ctx.font = `600 ${Math.round(14 * s)}px system-ui, sans-serif`;
+    ctx.textAlign = "center";
+    ctx.fillText("Nessuna figura trovata", w / 2, h / 2);
+    ctx.textAlign = "start";
+    return;
+  }
+  const P = (i: number) => ({ x: lm[i].x * w, y: lm[i].y * h, v: lm[i].visibility ?? 1 });
+  const ok = (...ids: number[]) => ids.every((i) => lm[i] && (lm[i].visibility ?? 1) > 0.35);
+  const mid = (a: { x: number; y: number }, b: { x: number; y: number }) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+  const sw = Math.max(12 * s, Math.hypot(P(11).x - P(12).x, P(11).y - P(12).y));
+  const GREEN = "#3ee08f";
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  // carne: arti spessi e trasparenti con alone
+  ctx.shadowColor = GREEN;
+  ctx.shadowBlur = 18 * s;
+  const limb = (a: number, b: number, width: number) => {
+    if (!ok(a, b)) return;
+    const p = P(a);
+    const q = P(b);
+    ctx.strokeStyle = "rgba(62,224,143,0.28)";
+    ctx.lineWidth = width;
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    ctx.lineTo(q.x, q.y);
+    ctx.stroke();
+  };
+  // busto
+  if (ok(11, 12)) {
+    const ls = P(11);
+    const rs = P(12);
+    const hipsOk = ok(23, 24);
+    const lh = hipsOk ? P(23) : { x: ls.x, y: ls.y + sw * 1.4 };
+    const rh = hipsOk ? P(24) : { x: rs.x, y: rs.y + sw * 1.4 };
+    ctx.fillStyle = "rgba(62,224,143,0.18)";
+    ctx.strokeStyle = "rgba(62,224,143,0.55)";
+    ctx.lineWidth = 2 * s;
+    ctx.beginPath();
+    ctx.moveTo(ls.x, ls.y);
+    ctx.quadraticCurveTo((ls.x + rs.x) / 2, Math.min(ls.y, rs.y) - sw * 0.08, rs.x, rs.y);
+    ctx.lineTo(rh.x, rh.y);
+    ctx.lineTo(lh.x, lh.y);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
+  limb(11, 13, sw * 0.3);
+  limb(13, 15, sw * 0.24);
+  limb(12, 14, sw * 0.3);
+  limb(14, 16, sw * 0.24);
+  limb(23, 25, sw * 0.38);
+  limb(25, 27, sw * 0.28);
+  limb(24, 26, sw * 0.38);
+  limb(26, 28, sw * 0.28);
+  // testa e collo
+  if (ok(0)) {
+    const nose = P(0);
+    const ears = ok(7, 8) ? mid(P(7), P(8)) : nose;
+    const c = { x: (nose.x + ears.x) / 2, y: (nose.y + ears.y) / 2 - sw * 0.05 };
+    const r = sw * 0.32;
+    ctx.fillStyle = "rgba(62,224,143,0.2)";
+    ctx.strokeStyle = "rgba(62,224,143,0.7)";
+    ctx.lineWidth = 2 * s;
+    ctx.beginPath();
+    ctx.ellipse(c.x, c.y, r, r * 1.22, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    if (ok(11, 12)) {
+      const n = mid(P(11), P(12));
+      ctx.strokeStyle = "rgba(62,224,143,0.3)";
+      ctx.lineWidth = sw * 0.18;
+      ctx.beginPath();
+      ctx.moveTo(n.x, n.y);
+      ctx.lineTo(c.x, c.y + r);
+      ctx.stroke();
+    }
+  }
+  // ossa: linee chiare dentro la sagoma
+  ctx.shadowBlur = 8 * s;
+  ctx.shadowColor = "#b9ffd9";
+  ctx.strokeStyle = "rgba(225,255,238,0.9)";
+  ctx.lineWidth = 2.2 * s;
+  const bone = (a: { x: number; y: number }, b: { x: number; y: number }) => {
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+  };
+  for (const [a, b] of [[11, 13], [13, 15], [12, 14], [14, 16], [23, 25], [25, 27], [24, 26], [26, 28], [11, 12], [23, 24]] as const) {
+    if (ok(a, b)) bone(P(a), P(b));
+  }
+  if (ok(11, 12)) {
+    const neck = mid(P(11), P(12));
+    const pelvis = ok(23, 24) ? mid(P(23), P(24)) : { x: neck.x, y: neck.y + sw * 1.4 };
+    bone(neck, pelvis); // colonna
+    ctx.lineWidth = 1.3 * s;
+    for (let k = 1; k <= 4; k += 1) {
+      // costole
+      const t = k / 6;
+      const c = { x: neck.x + (pelvis.x - neck.x) * t, y: neck.y + (pelvis.y - neck.y) * t };
+      const span = sw * (0.42 - k * 0.04);
+      ctx.beginPath();
+      ctx.moveTo(c.x - span, c.y + sw * 0.06);
+      ctx.quadraticCurveTo(c.x, c.y - sw * 0.06, c.x + span, c.y + sw * 0.06);
+      ctx.stroke();
+    }
+  }
+  ctx.shadowBlur = 0;
+  // articolazioni
+  for (const i of [11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28]) {
+    if (!ok(i)) continue;
+    const p = P(i);
+    ctx.fillStyle = "#e9fff3";
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 3.2 * s, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // arco
+  if (gear?.bow) {
+    ctx.strokeStyle = "rgba(233,255,243,0.85)";
+    ctx.lineWidth = 2.4 * s;
+    const a = { x: gear.bow.x1 * w, y: gear.bow.y1 * h };
+    const b = { x: gear.bow.x2 * w, y: gear.bow.y2 * h };
+    const m = mid(a, b);
+    const nx = -(b.y - a.y);
+    const ny = b.x - a.x;
+    const len = Math.hypot(nx, ny) || 1;
+    const bend = Math.hypot(b.x - a.x, b.y - a.y) * 0.12;
+    const { bow: bowSide } = sides(hand);
+    const grip = P(bowSide[2]);
+    const dir = (grip.x - m.x) * nx + (grip.y - m.y) * ny > 0 ? 1 : -1;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.quadraticCurveTo(m.x + (nx / len) * bend * dir, m.y + (ny / len) * bend * dir, b.x, b.y);
+    ctx.stroke();
+  }
+  if (gear?.arrow) {
+    ctx.strokeStyle = "rgba(233,255,243,0.7)";
+    ctx.lineWidth = 1.6 * s;
+    bone({ x: gear.arrow.x1 * w, y: gear.arrow.y1 * h }, { x: gear.arrow.x2 * w, y: gear.arrow.y2 * h });
+  }
+  // angoli sugli archi
+  const angleAt = (a: number, b: number, c: number) => {
+    const A = P(a);
+    const B = P(b);
+    const C = P(c);
+    const u = Math.atan2(A.y - B.y, A.x - B.x);
+    const v = Math.atan2(C.y - B.y, C.x - B.x);
+    let d = v - u;
+    while (d > Math.PI) d -= Math.PI * 2;
+    while (d < -Math.PI) d += Math.PI * 2;
+    return { B, u, d, deg: Math.abs((d * 180) / Math.PI) };
+  };
+  const { bow: bw, draw: dw } = sides(hand);
+  const marks: { ids: [number, number, number]; label: string }[] = [
+    { ids: [bw[0] === 11 ? 23 : 24, bw[0], bw[1]], label: "SPALLA" },
+    { ids: [bw[0], bw[1], bw[2]], label: "GOMITO ARCO" },
+    { ids: [dw[0], dw[1], dw[2]], label: "GOMITO CORDA" },
+    { ids: [bw[0], bw[0] === 11 ? 23 : 24, bw[0] === 11 ? 25 : 26], label: "ANCA" },
+  ];
+  ctx.font = `700 ${Math.round(11 * s)}px system-ui, sans-serif`;
+  for (const mk of marks) {
+    if (!ok(...mk.ids)) continue;
+    const { B, u, d, deg } = angleAt(...mk.ids);
+    const r = sw * 0.32;
+    ctx.shadowColor = GREEN;
+    ctx.shadowBlur = 10 * s;
+    ctx.strokeStyle = GREEN;
+    ctx.lineWidth = 3 * s;
+    ctx.beginPath();
+    ctx.arc(B.x, B.y, r, u, u + d, d < 0);
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(62,224,143,0.35)";
+    ctx.lineWidth = 1.5 * s;
+    ctx.beginPath();
+    ctx.arc(B.x, B.y, r * 1.45, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    const text = `${mk.label}: ${deg.toFixed(0)}°`;
+    const tw = ctx.measureText(text).width;
+    // l'etichetta va dalla parte opposta all'arco
+    const away = u + d / 2 + Math.PI;
+    let tx = B.x + Math.cos(away) * r * 2.1 - tw / 2;
+    let ty = B.y + Math.sin(away) * r * 2.1 + 4 * s;
+    tx = Math.max(4 * s, Math.min(w - tw - 4 * s, tx));
+    ty = Math.max(14 * s, Math.min(h - 6 * s, ty));
+    ctx.fillStyle = "rgba(3,12,9,0.75)";
+    ctx.fillRect(tx - 4 * s, ty - 12 * s, tw + 8 * s, 16 * s);
+    ctx.fillStyle = "#b9ffd9";
+    ctx.fillText(text, tx, ty);
+  }
+  ctx.restore();
 }
 
 function fmt(t: number) {

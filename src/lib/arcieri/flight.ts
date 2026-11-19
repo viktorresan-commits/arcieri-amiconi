@@ -22,6 +22,8 @@ export type FlightInput = {
   zones: 5 | 10;
   /** Pendenza della linea di tiro in gradi: + in salita, − in discesa. */
   slopeDeg?: number;
+  /** Altezza del centro (oro) da terra in metri: 1,30 m da regolamento. */
+  goldM?: number;
 };
 
 export type FlightHit = {
@@ -55,6 +57,12 @@ export function launchSpeed(input: FlightInput) {
 }
 
 export const GOLD_HEIGHT = GOLD;
+
+/** Altezza dell'oro di questo bersaglio (regolabile: campagna, 3D, paglioni bassi). */
+export function goldOf(input: FlightInput) {
+  const g = input.goldM;
+  return typeof g === "number" && Number.isFinite(g) && g > 0.2 && g < 4 ? g : GOLD;
+}
 
 /** Distanza "compensata" da usare sul mirino in pendenza (LoS × cos θ). */
 export function compensatedDistance(input: FlightInput) {
@@ -144,7 +152,7 @@ export function solveAngle(input: FlightInput) {
   for (let i = 0; i < 26; i += 1) {
     const mid = (lo + hi) / 2;
     const hit = fly(still, mid, 0);
-    if (hit.z > GOLD) hi = mid;
+    if (hit.z > goldOf(input)) hi = mid;
     else lo = mid;
   }
   return (lo + hi) / 2;
@@ -158,11 +166,11 @@ export function aimGap(input: FlightInput, theta: number) {
   const back = input.eyeBackCm / 100;
   const slope = (length * Math.tan(theta) - (eye + diameter / 2)) / (length + back);
   const aim = releaseHeight(input) + length * Math.tan(theta) + slope * (input.distanceM - length);
-  return aim - GOLD;
+  return aim - goldOf(input);
 }
 
 export function scoreImpact(input: FlightInput, y: number, z: number) {
-  const radius = Math.hypot(y, z - GOLD);
+  const radius = Math.hypot(y, z - goldOf(input));
   const shaft = input.diameterMm / 2000;
   const inner = Math.max(0, radius - shaft);
   const face = input.faceCm / 100;
