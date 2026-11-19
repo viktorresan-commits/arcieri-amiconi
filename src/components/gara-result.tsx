@@ -1,6 +1,6 @@
 import { memberLabel, divisionOf, type NameBits } from "@/lib/arcieri/labels";
 import { aimSpot } from "@/lib/arcieri/scoring";
-import { BoarTarget } from "@/components/boar-target";
+import { SagomaLab } from "@/components/sagoma-lab";
 
 type Lane = { n: number; score: number; arrows?: number[]; label?: string; distanceM?: number | null; aimAngle?: string };
 export type GaraPerson = NameBits & {
@@ -91,7 +91,7 @@ export function GaraResult({ title, entry, peers }: { title: string; entry: Gara
             <div>
               <h3 className="mb-1 font-display text-xl">Sagome 3D</h3>
               <p className="mb-2 text-xs text-muted">Sintesi della gara. Rosso e giallo sono lo spot (8), blu e nero sono il corpo (5), fuori dalla sagoma è 0.</p>
-              {boarShots.length ? <BoarTarget animal="sagome-3d" shots={boarShots} /> : <p className="text-xs text-muted">Segna le frecce, per esempio 8+5+0, per vederle sulla sintesi.</p>}
+              {boarShots.length ? <SagomaLab animal="sagome-3d" shots={boarShots} /> : <p className="text-xs text-muted">Segna le frecce, per esempio 8+5+0, per vederle sulla sintesi.</p>}
             </div>
           ) : (
             <div>

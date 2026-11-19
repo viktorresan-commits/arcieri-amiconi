@@ -9,6 +9,7 @@ import { useLoad } from "@/lib/arcieri/use-load";
 import { Button, Card, ErrorNote, Field, Loading, PageHead, Select, TextArea, TextInput } from "@/components/kit";
 import { TargetFace } from "@/components/target-face";
 import { ShotLab } from "@/components/shot-lab";
+import { SagomaLab } from "@/components/sagoma-lab";
 import { BoarTarget } from "@/components/boar-target";
 import { AimPick } from "@/components/aim-pick";
 
@@ -218,7 +219,8 @@ function Volleys({
           <Button disabled={busy} onClick={() => void commit(fitToPlan(shots, session.arrowsPerEnd, session.endsPlanned, session.blocksPlanned))}>Tieni solo le prime {session.arrowsPerEnd * session.endsPlanned * session.blocksPlanned}</Button>
         </div>
       ) : null}
-      <ShotLab
+      {sagoma ? <Card><SagomaLab animal="cinghiale" shots={shots} /></Card> : null}
+      {sagoma ? null : <ShotLab
         face={face}
         shots={shots}
         expected={freeSlots(shots, session).length || session.arrowsPerEnd}
@@ -239,7 +241,7 @@ function Volleys({
           }));
           void commit([...shots, ...added]);
         }}
-      />
+      />}
       <Card>
         <div data-hold-actions="">
           <p className="mb-2 text-sm text-muted">Tocca una volée per correggere le frecce. Il punteggio e le statistiche si aggiornano subito.</p>

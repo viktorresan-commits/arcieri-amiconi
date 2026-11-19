@@ -8,6 +8,8 @@ import type { Face } from "@/lib/arcieri/scoring";
  */
 
 type Shot = { x: number; y: number; end?: number; score?: number; miss?: boolean };
+/** Immagine da mettere sulla faccia (sagoma 3D): mezza larghezza e mezza altezza in unità faccia. */
+export type Picture = { img: HTMLImageElement; halfW: number; halfH: number };
 type V3 = [number, number, number];
 type Cam = { yaw: number; pitch: number; dist: number };
 
@@ -25,7 +27,7 @@ const VANES = ["#e07a2f", "#f4f1ea", "#3d9b74", "#e6b325", "#c084fc", "#7ec8e3"]
 const FLY = 0.62;
 const ARROW = 1.3;
 
-export function Target3D({ face, shots }: { face: Face; shots: Shot[] }) {
+export function Target3D({ face, shots, picture }: { face: Face; shots: Shot[]; picture?: Picture | null }) {
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const cam = useRef<Cam>({ ...HOME });
@@ -45,8 +47,11 @@ export function Target3D({ face, shots }: { face: Face; shots: Shot[] }) {
   const ends = useMemo(() => [...new Set(shots.map((s) => s.end ?? 0))].sort((a, b) => a - b), [shots]);
   const shown = useMemo(() => (end === "tutte" ? shots : shots.filter((s) => (s.end ?? 0) === end)), [shots, end]);
   const arrows = useMemo(() => shown.map((shot, index) => arrowOf(shot, index)), [shown]);
-  const sceneRef = useRef({ face, arrows });
-  sceneRef.current = { face, arrows };
+  const sceneRef = useRef({ face, arrows, picture });
+  sceneRef.current = { face, arrows, picture };
+  useEffect(() => {
+    dirty.current = true;
+  }, [picture]);
 
   function replay() {
     startedAt.current = performance.now();
@@ -137,7 +142,7 @@ export function Target3D({ face, shots }: { face: Face; shots: Shot[] }) {
       const animating = t < total;
       if (moving || animating || dirty.current) {
         dirty.current = false;
-        draw(canvas.current, sceneRef.current.face, list, c, t);
+        draw(canvas.current, sceneRef.current.face, list, c, t, sceneRef.current.picture ?? null);
       }
       if (!animating && flyingRef.current) {
         flyingRef.current = false;
@@ -282,7 +287,7 @@ function flightEnd(n: number) {
 
 type Prim = { depth: number; paint: (ctx: CanvasRenderingContext2D) => void };
 
-function draw(el: HTMLCanvasElement | null, face: Face, arrows: Arrow[], c: Cam, t: number) {
+function draw(el: HTMLCanvasElement | null, face: Face, arrows: Arrow[], c: Cam, t: number, picture: Picture | null = null) {
   if (!el) return;
   const ctx = el.getContext("2d");
   if (!ctx) return;
@@ -404,6 +409,39 @@ function draw(el: HTMLCanvasElement | null, face: Face, arrows: Arrow[], c: Cam,
     prims.push({
       depth: depthOf(center) - 0.001,
       paint: (g) => {
+        if (picture) {
+          // sagoma: l'immagine sulla faccia del paglione, a tasselli (ognuno con la sua trasformazione affine)
+          const N = 8;
+          const { img, halfW, halfH } = picture;
+          const P = (u: number, v: number) => screen(view([-halfW + 2 * halfW * u, halfH - 2 * halfH * v, 0.003]));
+          const ok = [P(0, 0), P(1, 0), P(0, 1), P(1, 1)].every((q) => Number.isFinite(q.x) && Number.isFinite(q.y));
+          if (ok && img.complete && img.naturalWidth) {
+            for (let j = 0; j < N; j += 1) for (let i = 0; i < N; i += 1) {
+              const u0 = i / N;
+              const v0 = j / N;
+              const u1 = (i + 1) / N;
+              const v1 = (j + 1) / N;
+              const a = P(u0, v0);
+              const b = P(u1, v0);
+              const c2 = P(u0, v1);
+              const d = P(u1, v1);
+              const sw = img.naturalWidth / N;
+              const sh = img.naturalHeight / N;
+              g.save();
+              g.beginPath();
+              // un pelo più grande per non vedere le cuciture
+              const cx = (a.x + b.x + c2.x + d.x) / 4;
+              const cy = (a.y + b.y + c2.y + d.y) / 4;
+              const grow = (q: { x: number; y: number }) => ({ x: q.x + (q.x - cx) * 0.02, y: q.y + (q.y - cy) * 0.02 });
+              [grow(a), grow(b), grow(d), grow(c2)].forEach((q, k) => (k ? g.lineTo(q.x, q.y) : g.moveTo(q.x, q.y)));
+              g.closePath();
+              g.clip();
+              g.setTransform((b.x - a.x) / sw, (b.y - a.y) / sw, (c2.x - a.x) / sh, (c2.y - a.y) / sh, a.x, a.y);
+              g.drawImage(img, i * sw, j * sh, sw, sh, 0, 0, sw, sh);
+              g.restore();
+            }
+          }
+        } else {
         const rings = [...face.rings].sort((a, b) => b.outer - a.outer);
         for (const ring of rings) {
           const pts: V3[] = [];
@@ -416,6 +454,7 @@ function draw(el: HTMLCanvasElement | null, face: Face, arrows: Arrow[], c: Cam,
         // croce centrale
         line(g, view([-0.03, 0, 0.003]), view([0.03, 0, 0.003]), "#14181c", 0.004, F, NEAR, w, h);
         line(g, view([0, -0.03, 0.003]), view([0, 0.03, 0.003]), "#14181c", 0.004, F, NEAR, w, h);
+        }
         // lampi d'impatto
         for (const arrow of arrows) {
           const s0 = arrow.index * stagger(arrows.length);

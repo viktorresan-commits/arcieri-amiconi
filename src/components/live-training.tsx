@@ -27,6 +27,7 @@ import { getSession, listSessions, saveSession, trainingBootstrap } from "@/lib/
 import { Button, Card, ErrorNote, Field, Loading, Select, TextArea, TextInput } from "./kit";
 import { TargetFace } from "./target-face";
 import { ShotLab } from "./shot-lab";
+import { SagomaLab } from "./sagoma-lab";
 import { MediaPick } from "./media-pick";
 import { PoseRead } from "./pose-read";
 
@@ -463,7 +464,10 @@ export function LiveTraining({ sessionId, openHistory = false }: { sessionId?: n
           }}
         />
       )}
-      <ShotLab
+      {face.id.startsWith("sagoma") ? (
+        <Card><SagomaLab animal="cinghiale" shots={draft.shots.map((sh) => ({ score: sh.score, miss: sh.miss, nx: sh.nx, ny: sh.ny, end: sh.end }))} /></Card>
+      ) : null}
+      {face.id.startsWith("sagoma") ? null : <ShotLab
         face={face}
         shots={draft.shots}
         expected={meta.arrowsPerEnd - endArrows.length > 0 ? meta.arrowsPerEnd - endArrows.length : meta.arrowsPerEnd}
@@ -472,7 +476,7 @@ export function LiveTraining({ sessionId, openHistory = false }: { sessionId?: n
           const room = meta.arrowsPerEnd - endArrows.length > 0 ? meta.arrowsPerEnd - endArrows.length : meta.arrowsPerEnd;
           for (const hit of hits.slice(0, room)) add(hit.miss ? 0 : hit.score, hit.isX, hit.miss, hit.nx, hit.ny);
         }}
-      />
+      />}
       <div className="flex gap-2 overflow-x-auto pb-1">
         {Array.from({ length: Math.max(3, meta.arrowsPerEnd) }, (_, index) => {
           const shot = endArrows.find((item) => item.arrow === index);

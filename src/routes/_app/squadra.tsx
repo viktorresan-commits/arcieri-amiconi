@@ -6,7 +6,7 @@ import { fmtAvg } from "@/lib/arcieri/scoring";
 import { useLoad } from "@/lib/arcieri/use-load";
 import { ANIMALS, animalByLabel } from "@/lib/arcieri/sagome";
 import { DistBars, MultiBars, useThemeInk } from "@/components/charts";
-import { BoarTarget } from "@/components/boar-target";
+import { SagomaLab } from "@/components/sagoma-lab";
 import { Avatar, Button, Card, Empty, ErrorNote, Field, Loading, PageHead, Select, TextInput } from "@/components/kit";
 import { useMember } from "@/components/shell";
 import { PrizeMark, prizeTier } from "@/components/prize-mark";
@@ -127,7 +127,7 @@ function Page() {
           </div>
         ) : null}
         {board === "sagoma" ? (
-          sagomaShots.length ? <BoarTarget animal="sagome-3d" shots={sagomaShots} /> : <p className="text-sm text-muted">Nessun tiro di sagoma, per ora.</p>
+          sagomaShots.length ? <SagomaLab animal="sagome-3d" shots={sagomaShots} /> : <p className="text-sm text-muted">Nessun tiro di sagoma, per ora.</p>
         ) : (
           <svg viewBox="-1.12 -1.12 2.24 2.24" className="mx-auto aspect-square w-full max-w-sm" role="img" aria-label="Minimappa dei tiri">
             <circle cx="0" cy="0" r="1.08" fill="var(--elev)" />

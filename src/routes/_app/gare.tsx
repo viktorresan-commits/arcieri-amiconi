@@ -6,6 +6,7 @@ import { romeDayKey } from "@/lib/arcieri/time";
 import { PADIGLIONE_SCORES, faceById, scoreAtRadius } from "@/lib/arcieri/scoring";
 import { ANIMALS, animalByLabel } from "@/lib/arcieri/sagome";
 import { BoarTarget } from "@/components/boar-target";
+import { SagomaLab } from "@/components/sagoma-lab";
 import { TargetFace } from "@/components/target-face";
 import { ShotLab } from "@/components/shot-lab";
 import { useLoad } from "@/lib/arcieri/use-load";
@@ -696,6 +697,12 @@ function LaneEditor({ compId, mine, onDone, onSaved }: { compId: number; mine: E
                     onScore={(score, _miss, nx, ny) => placeArrow(score, nx, ny)}
                     onMove={(index, score, _miss, nx, ny, done) => moveArrow(index, score, nx, ny, done)}
                   />
+                  {previewShots.some((s) => s.nx != null) ? (
+                    <details className="mt-2 rounded-xl border border-line p-2">
+                      <summary className="cursor-pointer text-sm font-semibold">🎯 Mappa e 3D della piazzola {active + 1}</summary>
+                      <div className="mt-2"><SagomaLab animal={knownAnimal(laneName)?.id ?? "sagome-3d"} shots={previewShots} /></div>
+                    </details>
+                  ) : null}
                   <Field label="Nota di questa piazzola">
                     <TextArea value={laneNote} placeholder="Cosa correggere, cosa è andato male" onChange={(e) => {
                       const note = e.target.value;
