@@ -128,6 +128,9 @@ export function PoseRead() {
   const recRef = useRef<{ rec: MediaRecorder; canvas: HTMLCanvasElement } | null>(null);
   const [recording, setRecording] = useState(false);
   const [shotIndex, setShotIndex] = useState(0);
+  /** parte del video da analizzare e salvare (null = tutto) */
+  const [range, setRange] = useState<{ from: number; to: number } | null>(null);
+  const span = () => ({ from: range?.from ?? 0, to: range?.to ?? duration });
 
   useEffect(() => {
     try {
@@ -271,14 +274,6 @@ export function PoseRead() {
       gearRef.current = g;
       paintOverlay(lm);
       setNow(m);
-      const rec = recRef.current;
-      if (rec) {
-        const ctx = rec.canvas.getContext("2d");
-        if (ctx) {
-          ctx.drawImage(video, 0, 0, rec.canvas.width, rec.canvas.height);
-          if (lm) drawPose(ctx, rec.canvas.width, rec.canvas.height, lm, handRef.current, null);
-        }
-      }
     } catch {
       /* il fotogramma dopo riprova */
     } finally {
@@ -310,7 +305,7 @@ export function PoseRead() {
     const tick = () => {
       if (stop) return;
       setTime(video.currentTime);
-      if (!video.paused) void detectFrame();
+      if (!video.paused && !recRef.current) void detectFrame();
       handle = withFrame
         ? (video as HTMLVideoElement & { requestVideoFrameCallback: (cb: () => void) => number }).requestVideoFrameCallback(tick)
         : requestAnimationFrame(tick);
@@ -318,7 +313,7 @@ export function PoseRead() {
     tick();
     const onSeeked = () => {
       setTime(video.currentTime);
-      if (!scanning.current) void detectFrame();
+      if (!scanning.current && !recRef.current) void detectFrame();
     };
     const onMeta = () => {
       setDuration(Number.isFinite(video.duration) ? video.duration : 0);
@@ -327,7 +322,7 @@ export function PoseRead() {
     const onPlay = () => setPlaying(true);
     const onPause = () => {
       setPlaying(false);
-      if (!scanning.current) void detectFrame();
+      if (!scanning.current && !recRef.current) void detectFrame();
     };
     video.addEventListener("seeked", onSeeked);
     video.addEventListener("loadedmetadata", onMeta);
@@ -435,9 +430,11 @@ export function PoseRead() {
     } else video.pause();
   }
 
-  async function scanAll() {
+  async function scanAll(): Promise<Sample[] | null> {
     const video = videoRef.current;
-    if (!video || !duration) return;
+    if (!video || !duration) return null;
+    const { from, to } = span();
+    let result: Sample[] | null = null;
     cancel.current = false;
     scanning.current = true;
     video.pause();
@@ -453,10 +450,10 @@ export function PoseRead() {
       }
       const W = video.videoWidth;
       const H = video.videoHeight;
-      const step = Math.max(1 / 15, duration / 240);
+      const step = Math.max(1 / 15, (to - from) / 240);
       const out: Sample[] = [];
       let prev: Landmark[] | null = null;
-      for (let t = 0; t <= duration + 1e-6; t += step) {
+      for (let t = from; t <= to + 1e-6; t += step) {
         if (cancel.current) break;
         await seekTo(video, Math.min(t, Math.max(0, duration - 0.02)));
         let lm = await detectOn(video, W, H);
@@ -466,9 +463,10 @@ export function PoseRead() {
         lastLm.current = lm;
         paintOverlay(lm);
         setTime(video.currentTime);
-        setProgress(Math.min(1, t / duration));
+        setProgress(Math.min(1, (t - from) / Math.max(0.01, to - from)));
       }
       if (!cancel.current) {
+        result = out;
         setSamples(out);
         setShotIndex(0);
         const found = analyzeShots(out, handRef.current).shots[0];
@@ -483,6 +481,7 @@ export function PoseRead() {
       setProgress(null);
       void detectFrame();
     }
+    return result;
   }
 
   /* ---------- riquadro ---------- */
@@ -563,33 +562,80 @@ export function PoseRead() {
       setError("Questo telefono non sa registrare video dal browser.");
       return;
     }
+    const { from, to } = span();
+    // prima l'analisi (una volta sola): così in registrazione si disegna ogni fotogramma senza aspettare il modello
+    let data = samples;
+    const covers = data.length > 0 && data[0].t <= from + 0.2 && data[data.length - 1].t >= to - 0.2;
+    if (!covers) {
+      const fresh = await scanAll();
+      if (!fresh) return;
+      data = fresh;
+    }
     const canvas = document.createElement("canvas");
     const k = Math.min(1, 720 / Math.max(size.w, size.h));
     canvas.width = Math.round(size.w * k);
     canvas.height = Math.round(size.h * k);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
     const stream = (canvas as HTMLCanvasElement & { captureStream: (fps: number) => MediaStream }).captureStream(30);
-    const type = ["video/mp4", "video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"].find((t) => MediaRecorder.isTypeSupported(t)) ?? "";
-    const rec = new MediaRecorder(stream, type ? { mimeType: type } : undefined);
+    const type = ["video/mp4;codecs=avc1", "video/mp4", "video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"].find((t) => MediaRecorder.isTypeSupported(t)) ?? "";
+    const rec = new MediaRecorder(stream, { ...(type ? { mimeType: type } : {}), videoBitsPerSecond: 4_000_000 });
     const chunks: Blob[] = [];
     rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+    const kind = lookRef.current;
+    const name = kind === "scheletro" ? "scheletro" : "sagoma";
     rec.onstop = () => {
-      void saveFile(new Blob(chunks, { type: rec.mimeType || "video/webm" }), `gesto-con-scheletro.${(rec.mimeType || "").includes("mp4") ? "mp4" : "webm"}`);
+      void saveFile(new Blob(chunks, { type: rec.mimeType || "video/webm" }), `gesto-${name}.${(rec.mimeType || "").includes("mp4") ? "mp4" : "webm"}`);
       recRef.current = null;
       setRecording(false);
+      setProgress(null);
     };
     recRef.current = { rec, canvas };
     setRecording(true);
     video.pause();
-    setRate(0.5);
     video.playbackRate = 0.5;
-    await seekTo(video, 0);
-    rec.start(250);
+    await seekTo(video, from);
+    const paint = () => {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const lm = lmAt(data, video.currentTime);
+      if (kind !== "scheletro") drawSagoma(ctx, canvas.width, canvas.height, lm, handRef.current, null, kind === "sagoma");
+      else if (lm) drawPose(ctx, canvas.width, canvas.height, lm, handRef.current, null);
+    };
+    paint();
+    rec.start(500);
+    let done = false;
     const stop = () => {
-      video.removeEventListener("ended", stop);
+      if (done) return;
+      done = true;
+      video.pause();
+      video.playbackRate = rate;
       if (rec.state !== "inactive") rec.stop();
     };
-    video.addEventListener("ended", stop);
-    void video.play();
+    const withFrame = "requestVideoFrameCallback" in video;
+    cancel.current = false;
+    const loop = () => {
+      if (done) return;
+      if (cancel.current) {
+        stop();
+        return;
+      }
+      paint();
+      setProgress(Math.min(1, (video.currentTime - from) / Math.max(0.01, to - from)));
+      if (video.currentTime >= to - 0.01 || video.ended) {
+        stop();
+        return;
+      }
+      if (withFrame) (video as HTMLVideoElement & { requestVideoFrameCallback: (cb: () => void) => number }).requestVideoFrameCallback(loop);
+      else requestAnimationFrame(loop);
+    };
+    video.addEventListener("ended", stop, { once: true });
+    try {
+      await video.play();
+    } catch {
+      stop();
+      return;
+    }
+    loop();
   }
 
   const ratio = size.w / size.h;
@@ -663,7 +709,7 @@ export function PoseRead() {
             </div>
             {progress != null ? (
               <div className="absolute inset-x-0 bottom-0 bg-[#14181c]/80 p-2 text-xs text-[#f4f1ea]">
-                Analizzo il video… {Math.round(progress * 100)}%
+                {recording ? "Registro il video…" : "Analizzo il video…"} {Math.round(progress * 100)}%
                 <div className="mt-1 h-1.5 rounded-full bg-white/20"><div className="h-1.5 rounded-full bg-[#e6b325]" style={{ width: `${progress * 100}%` }} /></div>
               </div>
             ) : null}
@@ -675,6 +721,16 @@ export function PoseRead() {
                 <span className="w-12">{fmt(time)}</span>
                 <input type="range" min={0} max={duration || 0} step={0.01} value={Math.min(time, duration || 0)} onChange={(e) => seek(Number(e.target.value))} className="h-11 flex-1 accent-[var(--primary)]" aria-label="Posizione nel video" />
                 <span className="w-12 text-right">{fmt(duration)}</span>
+              </div>
+              <div className="relative -mt-2 h-2 rounded-full bg-line/30" aria-hidden>
+                {range ? <div className="absolute inset-y-0 rounded-full bg-[#3ee08f]" style={{ left: `${(range.from / Math.max(0.01, duration)) * 100}%`, width: `${((range.to - range.from) / Math.max(0.01, duration)) * 100}%` }} /> : null}
+              </div>
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <span className="text-xs text-muted">✂ Parte:</span>
+                <button type="button" onClick={() => { const to = range?.to ?? duration; setRange({ from: Math.min(time, to - 0.2), to }); setSamples([]); }} className="min-h-9 rounded-full border border-line px-3">⟦ Inizio qui</button>
+                <button type="button" onClick={() => { const from = range?.from ?? 0; setRange({ from, to: Math.max(time, from + 0.2) }); setSamples([]); }} className="min-h-9 rounded-full border border-line px-3">Fine qui ⟧</button>
+                {range ? <button type="button" onClick={() => { setRange(null); setSamples([]); }} className="min-h-9 rounded-full border border-line px-3">Tutto</button> : null}
+                <span className="text-xs tabular-nums text-muted">{range ? `${fmt(range.from)} → ${fmt(range.to)} (${(range.to - range.from).toFixed(1)} s)` : "tutto il video"}</span>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <button type="button" onClick={() => seek(time - frameStep)} className="min-h-11 min-w-11 rounded-full border border-line px-3 text-sm" aria-label="Fotogramma indietro">⏮</button>
@@ -688,10 +744,10 @@ export function PoseRead() {
                 {progress != null ? (
                   <button type="button" onClick={() => { cancel.current = true; }} className="min-h-11 rounded-xl border border-line px-3 text-sm font-semibold">Ferma l'analisi</button>
                 ) : (
-                  <button type="button" disabled={!duration || Boolean(busy)} onClick={() => void scanAll()} className="min-h-11 rounded-xl bg-accent px-3 text-sm font-semibold text-accent-fg disabled:opacity-60">🔍 Analizza tutto il video</button>
+                  <button type="button" disabled={!duration || Boolean(busy)} onClick={() => void scanAll()} className="min-h-11 rounded-xl bg-accent px-3 text-sm font-semibold text-accent-fg disabled:opacity-60">🔍 {range ? "Analizza la parte" : "Analizza tutto il video"}</button>
                 )}
                 <button type="button" onClick={snapshot} className="min-h-11 rounded-xl border border-line px-3 text-sm font-semibold">⬇ Salva fotogramma</button>
-                <button type="button" disabled={recording || progress != null} onClick={() => void recordAnnotated()} className="min-h-11 rounded-xl border border-line px-3 text-sm font-semibold disabled:opacity-60">{recording ? "⏺ Registro…" : "⏺ Video con scheletro"}</button>
+                <button type="button" disabled={recording || progress != null} onClick={() => void recordAnnotated()} className="min-h-11 rounded-xl border border-line px-3 text-sm font-semibold disabled:opacity-60">{recording ? "⏺ Registro…" : look === "scheletro" ? "⏺ Salva video con scheletro" : "⏺ Salva video con sagoma"}</button>
                 <button type="button" disabled={!samples.length} onClick={exportCsv} className="min-h-11 rounded-xl border border-line px-3 text-sm font-semibold disabled:opacity-60">⬇ Dati CSV</button>
               </div>
             </div>
@@ -1217,6 +1273,26 @@ export function drawSagoma(ctx: CanvasRenderingContext2D, w: number, h: number, 
     ctx.fillText(text, tx, ty);
   }
   ctx.restore();
+}
+
+/** Punti del corpo al tempo t, interpolati fra i due campioni vicini (registrazione fluida). */
+function lmAt(samples: Sample[], t: number): Landmark[] | null {
+  let lo = -1;
+  let hi = -1;
+  for (let i = 0; i < samples.length; i += 1) {
+    if (!samples[i].lm) continue;
+    if (samples[i].t <= t) lo = i;
+    else { hi = i; break; }
+  }
+  const a = lo >= 0 ? samples[lo] : null;
+  const b = hi >= 0 ? samples[hi] : null;
+  if (a && b && a.lm && b.lm && b.t - a.t < 0.6) {
+    const f = (t - a.t) / Math.max(1e-6, b.t - a.t);
+    return a.lm.map((p, i) => ({ x: p.x + (b.lm![i].x - p.x) * f, y: p.y + (b.lm![i].y - p.y) * f, visibility: Math.min(p.visibility ?? 1, b.lm![i].visibility ?? 1) }));
+  }
+  if (a?.lm && t - a.t < 0.4) return a.lm;
+  if (b?.lm && b.t - t < 0.4) return b.lm;
+  return null;
 }
 
 function fmt(t: number) {

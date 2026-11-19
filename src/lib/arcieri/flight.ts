@@ -24,6 +24,8 @@ export type FlightInput = {
   slopeDeg?: number;
   /** Altezza del centro (oro) da terra in metri: 1,30 m da regolamento. */
   goldM?: number;
+  /** Libbre segnate sull'arco a 28″ (archi senza camme): al tuo allungo cambiano di circa 2 lb per pollice. */
+  lbAt28?: boolean;
 };
 
 export type FlightHit = {
@@ -47,8 +49,15 @@ const RHO = 1.2;
 const G = 9.81;
 const GOLD = 1.3;
 
+/** Libbre reali al tuo allungo. */
+export function effectiveLb(input: FlightInput) {
+  if (!input.lbAt28) return input.drawLb;
+  const inches = input.drawCm / 2.54;
+  return Math.max(5, input.drawLb + 2 * (inches - 28));
+}
+
 export function launchSpeed(input: FlightInput) {
-  const force = input.drawLb * 4.448221615;
+  const force = effectiveLb(input) * 4.448221615;
   const stroke = Math.max(0.05, (input.drawCm - input.braceCm) / 100);
   const energy = input.eta * input.k * force * stroke;
   const mass = input.grains * 6.479891e-5;

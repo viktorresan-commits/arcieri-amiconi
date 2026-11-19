@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { angularSize, goldOf, compensatedDistance, describeRound, eyePoint, launchSpeed, releasePoint, type Fletch, type FlightInput } from "@/lib/arcieri/flight";
+import { angularSize, effectiveLb, goldOf, compensatedDistance, describeRound, eyePoint, launchSpeed, releasePoint, type Fletch, type FlightInput } from "@/lib/arcieri/flight";
 import { Card, Field, Select } from "@/components/kit";
 
 const ROUNDS = [
@@ -43,6 +43,7 @@ const START: FlightInput = {
   zones: 10,
   slopeDeg: 0,
   goldM: 1.3,
+  lbAt28: true,
 };
 
 const SAVE_KEY = "aa-flight-v1";
@@ -74,6 +75,7 @@ function readSaved(): Saved | null {
     if (given.fletch === "spin" || given.fletch === "vane3" || given.fletch === "feather3" || given.fletch === "feather4") form.fletch = given.fletch;
     form.zones = given.zones === 5 ? 5 : 10;
     const bow = BOWS.find((item) => item.id === raw.bow)?.id ?? "recurve";
+    form.lbAt28 = bow !== "compound";
     const release = RELEASES.find((item) => item.id === raw.release)?.id ?? "dita";
     const round = typeof raw.round === "string" && (raw.round === "" || ROUNDS.some((item) => item.id === raw.round)) ? raw.round : "18";
     const other = typeof raw.other === "string" && ROUNDS.some((item) => item.id === raw.other) ? raw.other : "50";
@@ -182,7 +184,7 @@ export function FlightSim() {
       </div>
       <div className="flex gap-2 overflow-x-auto pb-1">
         {BOWS.map((item) => (
-          <button key={item.id} type="button" onClick={() => { setBow(item.id); patch({ eta: item.eta, k: item.k, sighted: item.sighted, eyeCm: item.sighted ? 2 : (RELEASES.find((r) => r.id === release) ?? RELEASES[0]).eyeCm }); }} className={`min-h-11 shrink-0 rounded-full px-3 text-sm ${bow === item.id ? "bg-primary text-primary-fg" : "border border-line"}`}>
+          <button key={item.id} type="button" onClick={() => { setBow(item.id); patch({ lbAt28: item.id !== "compound", eta: item.eta, k: item.k, sighted: item.sighted, eyeCm: item.sighted ? 2 : (RELEASES.find((r) => r.id === release) ?? RELEASES[0]).eyeCm }); }} className={`min-h-11 shrink-0 rounded-full px-3 text-sm ${bow === item.id ? "bg-primary text-primary-fg" : "border border-line"}`}>
             {item.name}
           </button>
         ))}
@@ -195,8 +197,8 @@ export function FlightSim() {
         ))}
       </div>
       <div className="grid gap-2">
-        <Slider label="Libbre" value={form.drawLb} min={16} max={70} step={1} onChange={(drawLb) => patch({ drawLb, grains: Math.round(gpp * drawLb) })} />
-        <Slider label="Allungo cm" value={form.drawCm} min={58} max={84} step={1} onChange={(drawCm) => patch({ drawCm })} />
+        <Slider label={form.lbAt28 ? "Libbre segnate sull'arco (a 28″)" : "Libbre"} value={form.drawLb} min={16} max={70} step={1} onChange={(drawLb) => patch({ drawLb, grains: Math.round(gpp * drawLb) })} />
+        <Slider label={`Allungo cm (${(form.drawCm / 2.54).toFixed(1).replace(".", ",")}″ · ${effectiveLb(form).toFixed(1).replace(".", ",")} lb)`} value={form.drawCm} min={58} max={84} step={1} onChange={(drawCm) => patch({ drawCm })} />
         <Slider label="Brace cm" value={form.braceCm} min={14} max={28} step={0.5} onChange={(braceCm) => patch({ braceCm })} />
         <Slider label="Grani per libbra" value={Number(gpp.toFixed(1))} min={5} max={16} step={0.1} onChange={(next) => patch({ grains: Math.round(next * form.drawLb) })} />
         <Slider label="Lunghezza freccia cm" value={form.lengthCm} min={55} max={86} step={0.5} onChange={(lengthCm) => patch({ lengthCm })} />
