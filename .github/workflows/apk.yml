@@ -51,6 +51,9 @@ jobs:
           npx capacitor-assets generate --android --iconBackgroundColor '#0C1210' --iconBackgroundColorDark '#0C1210' --splashBackgroundColor '#0C1210' --splashBackgroundColorDark '#0C1210'
           # fotocamera per "Scatta foto" e "Registra video"
           sed -i 's#<uses-permission android:name="android.permission.INTERNET" />#&\n    <uses-permission android:name="android.permission.CAMERA" />#' android/app/src/main/AndroidManifest.xml
+          # ritorno dal login Google fatto nel browser: arcieriamiconi://accesso?ott=…
+          sed -i '0,/<\/activity>/s##            <intent-filter android:autoVerify="false">\n                <action android:name="android.intent.action.VIEW" />\n                <category android:name="android.intent.category.DEFAULT" />\n                <category android:name="android.intent.category.BROWSABLE" />\n                <data android:scheme="arcieriamiconi" />\n            </intent-filter>\n        </activity>#' android/app/src/main/AndroidManifest.xml
+          grep -q 'android:scheme="arcieriamiconi"' android/app/src/main/AndroidManifest.xml
           # numero di versione = numero di build, così il telefono accetta l'aggiornamento
           sed -i "s/versionCode 1$/versionCode ${{ github.run_number }}/; s/versionName \"1.0\"/versionName \"1.0.${{ github.run_number }}\"/" android/app/build.gradle
           npx cap sync android

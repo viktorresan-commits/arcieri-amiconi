@@ -31,6 +31,7 @@
  */
 import { betterAuth } from "better-auth";
 import { bearer, genericOAuth } from "better-auth/plugins";
+import { oneTimeToken } from "better-auth/plugins/one-time-token";
 import { tanstackStartCookies } from "better-auth/tanstack-start";
 import { getCookie } from "@tanstack/react-start/server";
 import { randomBytes } from "node:crypto";
@@ -86,6 +87,7 @@ const grokClientSecret = env("GROK_AUTH_CLIENT_SECRET") ?? PREVIEW_CLIENT_SECRET
 /** True when federated sign-in is active (real auth is enforced). */
 // Utente e password funzionano ovunque; il login Google/X passa dal servizio di Grok e c'è solo lì.
 export const authConfigured = !authDisabled;
+export const googleLogin = !authDisabled && Boolean(env("GOOGLE_CLIENT_ID") && env("GOOGLE_CLIENT_SECRET"));
 const grokOAuthAvailable = onGrokPlatform() && Boolean(grokClientId && grokClientSecret);
 
 // This app's own Better Auth origin. When deployed the deployer injects the
@@ -206,6 +208,8 @@ export const auth = betterAuth({
       trustedProviders: [
         ...GROK_PROVIDERS.map((p) => p.providerId),
         GATE_PROVIDER_ID,
+        // Google proprio: chi entrava con Google su Grok ritrova il suo account (stessa email)
+        "google",
       ],
       // X's synthetic email is never "verified", so don't gate linking on the
       // local user's email-verified state.
@@ -217,6 +221,18 @@ export const auth = betterAuth({
   // (incl. the client's `/get-session`) skip the DB — this shrinks the "loading"
   // window and reduces auth flicker. See the `auth` skill for the full
   // flicker-prevention guidance (gate on `isPending`; SSR the session).
+  // Login con Google diretto (fuori da Grok), attivo quando su Vercel ci sono le due chiavi.
+  ...(googleLogin
+    ? {
+        socialProviders: {
+          google: {
+            clientId: env("GOOGLE_CLIENT_ID") as string,
+            clientSecret: env("GOOGLE_CLIENT_SECRET") as string,
+            prompt: "select_account" as const,
+          },
+        },
+      }
+    : {}),
   session: { cookieCache: { enabled: true, maxAge: 300 } },
 
   // Local email/password — toggled only via `./email-password` (not a plugin).
@@ -246,6 +262,8 @@ export const auth = betterAuth({
     // One genericOAuth provider per upstream (when auth is on), all federating
     // to the broker with the SAME client and differing only by the `idp` hint.
     ...(grokOAuthPlugin ? [grokOAuthPlugin] : []),
+    // gettone monouso: l'APK fa il login Google nel browser e lo riporta nell'app
+    oneTimeToken({ expiresIn: 5 }),
 
     // Accept `Authorization: Bearer <session-token>` as an alternative to the
     // cookie. Needed for the LIVE PREVIEW: the app runs in an embedded iframe

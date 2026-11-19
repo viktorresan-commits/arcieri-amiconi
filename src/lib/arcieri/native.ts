@@ -6,7 +6,7 @@
 
 type Listener = { remove: () => Promise<void> | void };
 type Plugin = Record<string, (...args: never[]) => Promise<unknown>> & {
-  addListener?: (event: string, cb: (data: { canGoBack: boolean }) => void) => Promise<Listener> | Listener;
+  addListener?: (event: string, cb: (data: { canGoBack: boolean; url?: string }) => void) => Promise<Listener> | Listener;
 };
 type Capacitor = {
   isNativePlatform?: () => boolean;
@@ -59,12 +59,53 @@ export async function saveFile(blob: Blob, name: string) {
 
 let started = false;
 
+/** Login con Google dall'app: si apre il browser del telefono sulla pagina di passaggio. */
+export async function googleViaBrowser() {
+  const browser = plugin("Browser") as unknown as { open: (o: { url: string }) => Promise<void> } | undefined;
+  const url = `${window.location.origin}/accesso-google`;
+  try {
+    if (browser) await browser.open({ url });
+    else window.open(url, "_system");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Il browser ha finito con Google e rimanda qui: scambio il gettone con la sessione dell'app. */
+async function finishGoogle(link: string) {
+  let token = "";
+  try {
+    token = new URL(link).searchParams.get("ott") ?? "";
+  } catch {
+    return;
+  }
+  if (!token) return;
+  const browser = plugin("Browser") as unknown as { close: () => Promise<void> } | undefined;
+  try {
+    await browser?.close();
+  } catch {
+    /* già chiuso */
+  }
+  const res = await fetch("/api/auth/one-time-token/verify", {
+    method: "POST",
+    credentials: "include",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ token }),
+  });
+  window.location.href = res.ok ? "/" : "/login";
+}
+
 /** Tasto indietro di Android: torna alla pagina precedente, e chiude l'app solo dalla prima. */
 export function initNativeApp() {
   if (started || !isNativeApp()) return;
   started = true;
   const app = plugin("App");
   if (!app?.addListener) return;
+  void app.addListener("appUrlOpen", (data) => {
+    const url = (data as unknown as { url?: string }).url ?? "";
+    if (url.startsWith("arcieriamiconi://")) void finishGoogle(url);
+  });
   void app.addListener("backButton", ({ canGoBack }) => {
     if (canGoBack && window.history.length > 1) window.history.back();
     else void (app.exitApp as unknown as () => Promise<void>)?.();

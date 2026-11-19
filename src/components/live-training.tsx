@@ -323,7 +323,20 @@ export function LiveTraining({ sessionId, openHistory = false }: { sessionId?: n
       next.arrowsPerEnd = clampCount(next.arrowsPerEnd, 1, 24);
       next.endsPlanned = clampCount(next.endsPlanned, 1, 60);
       next.blocksPlanned = clampCount(next.blocksPlanned, 1, 40);
-      return { ...current, meta: next };
+      // Le frecce già segnate si rimettono in fila nel piano nuovo: altrimenti restano nelle
+      // volée del piano vecchio e quelle nuove si aggiungono, contando il doppio.
+      const ordered = [...current.shots].sort((a, b) => a.block - b.block || a.end - b.end || a.arrow - b.arrow || a.seq - b.seq);
+      const perBlock = next.arrowsPerEnd * next.endsPlanned;
+      const shots = ordered.map((shot, i) => ({
+        ...shot,
+        block: Math.floor(i / perBlock),
+        end: Math.floor((i % perBlock) / next.arrowsPerEnd),
+        arrow: i % next.arrowsPerEnd,
+      }));
+      // se le frecce già tirate sono più del piano, il piano si allarga invece di perderle
+      const needBlocks = Math.ceil(shots.length / perBlock);
+      if (needBlocks > next.blocksPlanned) next.blocksPlanned = clampCount(needBlocks, 1, 40);
+      return { ...current, meta: next, shots, selected: null };
     });
   }
 

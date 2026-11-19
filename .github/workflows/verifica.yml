@@ -15,7 +15,8 @@ jobs:
         with:
           node-version: 22
       - run: npm install --no-audit --no-fund
-      - name: Tipi
-        run: npx tsc --noEmit --pretty false
+      # la build rigenera l'elenco delle pagine (routeTree), poi si controllano i tipi
       - name: Build
         run: npm run build
+      - name: Tipi
+        run: npx tsc --noEmit --pretty false

@@ -1,7 +1,9 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { authClient, authEnabled, signIn } from "@/lib/auth/client";
 import { useOauthProviders } from "@/lib/auth/use-oauth-providers";
+import { loginOptions } from "@/lib/auth/login-options";
+import { googleViaBrowser, isNativeApp } from "@/lib/arcieri/native";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { rememberAccount } from "@/lib/arcieri/accounts";
 import { Button, ErrorNote, Field, Mark, TextInput } from "@/components/kit";
@@ -33,6 +35,21 @@ function Login() {
   const [mode, setMode] = useState<"in" | "up">(modo);
   const [name, setName] = useState("");
   const providers = useOauthProviders();
+  const [google, setGoogle] = useState(false);
+  useEffect(() => {
+    loginOptions().then((o) => setGoogle(o.google)).catch(() => setGoogle(false));
+  }, []);
+  async function withGoogle() {
+    setError("");
+    // nell'app Android Google non accetta l'accesso dentro l'app: si passa dal browser del telefono
+    if (isNativeApp()) {
+      const ok = await googleViaBrowser();
+      if (!ok) setError("Non riesco ad aprire il browser per Google.");
+      return;
+    }
+    const res = await authClient.signIn.social({ provider: "google", callbackURL: "/" });
+    if (res?.error) setError(res.error.message || "Accesso con Google non riuscito");
+  }
   const [email, setEmail] = useState(utente);
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -99,6 +116,12 @@ function Login() {
           <Button disabled={busy || !authEnabled}>{busy ? "Attendi" : mode === "up" ? "Crea account" : "Entra"}</Button>
           {authEnabled ? (
             <div className="grid gap-2">
+              {google ? (
+                <Button type="button" variant="ghost" onClick={() => void withGoogle()}>
+                  <span className="mr-2 inline-grid h-6 w-6 place-items-center rounded-full bg-white text-sm font-bold text-[#4285f4]">G</span>
+                  Continua con Google
+                </Button>
+              ) : null}
               {providers.map((p) => (
                 <Button key={p.providerId} type="button" variant="ghost" onClick={() => signIn(p.providerId, { callbackURL: "/" })}>
                   Continua con {p.label}
