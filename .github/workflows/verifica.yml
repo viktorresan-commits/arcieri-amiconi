@@ -1,0 +1,21 @@
+name: Verifica codice
+
+# Controlla che il sito compili (tipi TypeScript e build) a ogni modifica.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  verifica:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - name: Tipi
+        run: npx tsc --noEmit --pretty false
+      - name: Build
+        run: npm run build

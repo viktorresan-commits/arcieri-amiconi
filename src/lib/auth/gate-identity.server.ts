@@ -4,7 +4,7 @@ import {
   type JWK,
   type JWTVerifyGetKey,
 } from "jose";
-import { env, isWorkspacePreview } from "../env.server.ts";
+import { env, isWorkspacePreview, onGrokPlatform } from "../env.server.ts";
 
 export const GATE_IDENTITY_HEADER = "x-grok-identity";
 export const GATE_JWKS_PATH = "/__gate/identity-key";
@@ -27,7 +27,8 @@ export type GateJwks = { keys: JWK[] };
 export type JwksFetch = (url: string) => Promise<GateJwks | null>;
 
 export function gateIdentityEnabled(): boolean {
-  return env("VITE_AUTH_ENABLED") !== "false";
+  // il "gate" è un servizio di Grok: fuori da Grok non c'è
+  return env("VITE_AUTH_ENABLED") !== "false" && onGrokPlatform();
 }
 
 export function gateTokenAudience(): string {

@@ -1,6 +1,7 @@
 import { useState, useSyncExternalStore, type ReactNode } from "react";
 import { Navigate } from "@tanstack/react-router";
-import { GROK_PROVIDERS, authEnabled, signIn, signOut } from "./client";
+import { authEnabled, signIn, signOut } from "./client";
+import { useOauthProviders } from "./use-oauth-providers";
 import { hasGateSessionMarker } from "./gate-session-marker";
 import { resolveSignInGateState } from "./sign-in-gate";
 import { useCurrentUser, useCurrentUserState } from "./use-current-user";
@@ -64,9 +65,11 @@ export function SignInGate({
 }
 
 export function SignInButtons() {
+  const providers = useOauthProviders();
   return (
     <div className="flex w-full max-w-sm flex-col gap-2">
-      {GROK_PROVIDERS.map((p) => (
+      <a href="/login" className="w-full rounded-md border border-neutral-300 px-4 py-2 text-center dark:border-neutral-700">Entra con utente e password</a>
+      {providers.map((p) => (
         <button
           key={p.providerId}
           type="button"

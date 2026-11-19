@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { createFileRoute, Navigate } from "@tanstack/react-router";
-import { authClient, authEnabled, GROK_PROVIDERS, signIn } from "@/lib/auth/client";
+import { authClient, authEnabled, signIn } from "@/lib/auth/client";
+import { useOauthProviders } from "@/lib/auth/use-oauth-providers";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { rememberAccount } from "@/lib/arcieri/accounts";
 import { Button, ErrorNote, Field, Mark, TextInput } from "@/components/kit";
@@ -31,6 +32,7 @@ function Login() {
   const { user, isPending } = useCurrentUserState();
   const [mode, setMode] = useState<"in" | "up">(modo);
   const [name, setName] = useState("");
+  const providers = useOauthProviders();
   const [email, setEmail] = useState(utente);
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -97,7 +99,7 @@ function Login() {
           <Button disabled={busy || !authEnabled}>{busy ? "Attendi" : mode === "up" ? "Crea account" : "Entra"}</Button>
           {authEnabled ? (
             <div className="grid gap-2">
-              {GROK_PROVIDERS.map((p) => (
+              {providers.map((p) => (
                 <Button key={p.providerId} type="button" variant="ghost" onClick={() => signIn(p.providerId, { callbackURL: "/" })}>
                   Continua con {p.label}
                 </Button>

@@ -10,5 +10,10 @@ export function env(key: string): string | undefined {
  * key off this predicate.
  */
 export function isWorkspacePreview(): boolean {
-  return !env("GROK_PROJECT_ID");
+  return !env("GROK_PROJECT_ID") && !env("VERCEL");
+}
+
+/** L'app gira sulla piattaforma Grok (pubblicata o in anteprima)? Fuori da Grok niente gate né login Grok. */
+export function onGrokPlatform(): boolean {
+  return Boolean(env("GROK_PROJECT_ID")) || isWorkspacePreview();
 }

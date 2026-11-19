@@ -19,6 +19,13 @@ import pg from "pg";
 import { pendingMigrations } from "./migration-plan.mjs";
 
 const databaseUrl = process.env.DATABASE_URL;
+if (!databaseUrl && process.env.VERCEL) {
+  // Su Vercel senza database l'app userebbe un database temporaneo e perderebbe tutto: meglio fermarsi.
+  console.error(
+    "[migrate] Database non collegato. Su Vercel: progetto → Storage → Create Database → Neon (Postgres) → Connect, poi Redeploy.",
+  );
+  process.exit(1);
+}
 if (!databaseUrl) {
   console.log(
     "[migrate] DATABASE_URL not set — skipping (the PGLite fallback migrates itself).",

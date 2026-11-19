@@ -2,8 +2,6 @@
 
 App della squadra: allenamenti, gare, sagome 3D, statistiche, simulatore di volo, lettura del bersaglio da foto e video, analisi del gesto.
 
-Sito pubblicato: https://arcieriamiconi.grok.me
-
 ## Com'è fatta
 
 - **Sito** (cartella `src/`): TanStack Start + React, database Postgres, accesso con utente e password.
@@ -28,6 +26,17 @@ Con una chiave fissa gli aggiornamenti si installano sopra. In **Secrets** aggiu
 Una chiave si crea con:
 `keytool -genkeypair -v -keystore arcieri.keystore -alias arcieri -keyalg RSA -keysize 2048 -validity 10000`
 e poi `base64 -w0 arcieri.keystore`. Conservala: senza la stessa chiave non si può più aggiornare l'app.
+
+## Pubblicare il sito su Vercel
+
+1. vercel.com → **Add New → Project** → importa `arcieri-amiconi` da GitHub → **Deploy**
+   (la prima volta si ferma con «Database non collegato»: è voluto).
+2. Nel progetto Vercel: **Storage → Create Database → Neon (Postgres)** → collega al progetto.
+3. **Deployments → … → Redeploy**. Le tabelle si creano da sole. Il primo che si registra diventa amministratore.
+4. Su GitHub metti in `APP_URL` l'indirizzo Vercel (es. `https://arcieri-amiconi.vercel.app`) e rilancia l'APK.
+
+Variabili facoltative su Vercel: `BETTER_AUTH_SECRET` (altrimenti ricavato dal database),
+`APP_HOSTS` (altri domini, separati da virgola, se colleghi un dominio tuo).
 
 ## Sviluppo del sito
 
