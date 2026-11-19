@@ -2,6 +2,8 @@
 
 App della squadra: allenamenti, gare, sagome 3D, statistiche, simulatore di volo, lettura del bersaglio da foto e video, analisi del gesto.
 
+Sito pubblicato: https://arcieriamiconi.grok.me
+
 ## Com'è fatta
 
 - **Sito** (cartella `src/`): TanStack Start + React, database Postgres, accesso con utente e password.
