@@ -39,7 +39,6 @@ const MORE = [
   ["/bacheca", "Bacheca"],
   ["/confronta", "Confronta"],
   ["/gioco", "Giochiamo"],
-  ["/guida", "Guida"],
 ] as const;
 
 const INKS = [

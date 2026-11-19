@@ -17,11 +17,16 @@ function Page() {
   useEffect(() => {
     let dead = false;
     (async () => {
+      if (new URLSearchParams(window.location.search).get("error")) {
+        setNote("Google non ha completato l'accesso. Torna all'app ed entra con utente e password.");
+        setLink(APP_LINK);
+        return;
+      }
       const session = await authClient.getSession().catch(() => null);
       if (dead) return;
       if (!session?.data?.user) {
         setNote("Apro Google…");
-        const res = await authClient.signIn.social({ provider: "google", callbackURL: "/accesso-google" });
+        const res = await authClient.signIn.social({ provider: "google", callbackURL: "/accesso-google", errorCallbackURL: "/accesso-google" });
         if (res?.error) setNote(res.error.message || "Accesso con Google non riuscito.");
         return;
       }

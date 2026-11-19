@@ -131,3 +131,37 @@ export function initNativeApp() {
     else void (app.exitApp as unknown as () => Promise<void>)?.();
   });
 }
+
+/** Apre un link fuori dall'app (WhatsApp, siti): nell'app Android passa dal browser di sistema. */
+export async function openExternal(url: string) {
+  const browser = plugin("Browser") as unknown as { open: (o: { url: string }) => Promise<void> } | undefined;
+  if (isNativeApp() && browser) {
+    try {
+      await browser.open({ url });
+      return;
+    } catch {
+      /* si prova col metodo del browser */
+    }
+  }
+  const win = window.open(url, "_blank", "noopener");
+  if (!win) window.location.href = url;
+}
+
+export const SITE_URL = "https://arcieri-amiconi.vercel.app";
+export const APK_URL = "https://github.com/viktorresan-commits/arcieri-amiconi/releases/latest/download/arcieri-amiconi.apk";
+
+/** Messaggio di invito per WhatsApp. */
+export function inviteText(name?: string, code?: string) {
+  return [
+    `Ciao${name ? ` ${name}` : ""}! Ti invito negli *Arcieri Amiconi* 🏹`,
+    "",
+    `Apri l'app: ${SITE_URL}`,
+    `Android (APK): ${APK_URL}`,
+    "",
+    code ? `Registrati con nome utente e password, poi nel profilo usa il codice *${code}* per prendere il tuo posto in squadra.` : "Registrati con nome utente e password e sei subito in squadra.",
+  ].join("\n");
+}
+
+export function whatsappLink(text: string) {
+  return `https://wa.me/?text=${encodeURIComponent(text)}`;
+}

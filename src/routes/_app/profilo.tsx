@@ -14,6 +14,8 @@ import { PrizeMark, prizeTier } from "@/components/prize-mark";
 import { saveFile } from "@/lib/arcieri/native";
 import { Trasloco } from "@/components/trasloco";
 import { GestureGallery } from "@/components/gesture-gallery";
+import { Migrazione } from "@/components/migrazione";
+import { ClaimCard, InviteCard, ResetCard, TeamAdmin } from "@/components/profile-tools";
 
 export const Route = createFileRoute("/_app/profilo")({ component: Page });
 
@@ -197,8 +199,18 @@ function Page() {
         <Button variant="ghost" onClick={() => void downloadPdf()}>Scarica report PDF</Button>
         <div className="pt-2"><UserButton /></div>
       </Card>
+      <Migrazione myEmail={me.email} />
+      <InviteCard />
+      <ClaimCard onDone={reload} />
       <GestureGallery />
-      {me.role === "admin" ? <Trasloco /> : null}
+      <TeamAdmin />
+      <ResetCard onDone={reload} />
+      {me.role === "admin" ? (
+        <details className="rounded-2xl border border-hair p-3">
+          <summary className="cursor-pointer text-sm font-semibold text-muted">Avanzate: trasloco dell'intero database (amministratore)</summary>
+          <div className="mt-2"><Trasloco /></div>
+        </details>
+      ) : null}
       <Card className="grid gap-2">
         <h2 className="font-display text-2xl">Profili</h2>
         <p className="text-sm text-muted">Un profilo creato entra in squadra. Toglierlo da qui lo leva solo da questo telefono: l'account resta.</p>

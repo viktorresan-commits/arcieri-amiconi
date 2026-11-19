@@ -25,12 +25,13 @@ export const Route = createFileRoute("/login")({
   validateSearch: (search: Record<string, unknown>) => ({
     utente: typeof search.utente === "string" ? search.utente : "",
     modo: search.modo === "up" ? "up" as const : "in" as const,
+    error: typeof search.error === "string" ? search.error : "",
   }),
   component: Login,
 });
 
 function Login() {
-  const { utente, modo } = Route.useSearch();
+  const { utente, modo, error: oauthError } = Route.useSearch();
   const { user, isPending } = useCurrentUserState();
   const [mode, setMode] = useState<"in" | "up">(modo);
   const [name, setName] = useState("");
@@ -47,12 +48,16 @@ function Login() {
       if (!ok) setError("Non riesco ad aprire il browser per Google.");
       return;
     }
-    const res = await authClient.signIn.social({ provider: "google", callbackURL: "/" });
+    const res = await authClient.signIn.social({ provider: "google", callbackURL: "/", errorCallbackURL: "/login" });
     if (res?.error) setError(res.error.message || "Accesso con Google non riuscito");
   }
   const [email, setEmail] = useState(utente);
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  const [error, setError] = useState(
+    oauthError
+      ? "Google non ha completato l'accesso (il collegamento Google del sito va sistemato). Intanto entra o registrati con utente e password: dal Profilo puoi caricare i dati della vecchia app."
+      : "",
+  );
   const [busy, setBusy] = useState(false);
 
   if (isPending) return <main className="grid min-h-dvh place-items-center text-sm text-muted">Caricamento…</main>;
