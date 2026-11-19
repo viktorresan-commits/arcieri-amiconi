@@ -53,6 +53,8 @@ export function TargetRead({ face, onApply, known = [], expected }: { face: Face
   const rectCanvas = useRef<HTMLCanvasElement>(null);
   const drag = useRef<{ index: number; moved: boolean; x: number; y: number } | null>(null);
   const [showFace, setShowFace] = useState(true);
+  /** calibrazione a tocchi: 4 punti sul bordo, oppure centro + bordo */
+  const [tapKind, setTapKind] = useState<4 | 2>(4);
   const [adjust, setAdjust] = useState<Shape | null>(null);
   const adjustBase = useRef<Shape | null>(null);
   const moveFace = useRef<{ x: number; y: number; cx: number; cy: number } | null>(null);
@@ -62,7 +64,7 @@ export function TargetRead({ face, onApply, known = [], expected }: { face: Face
   useEffect(() => {
     try {
       const saved = Number(localStorage.getItem("aa-face-cm"));
-      if (SIZES.includes(saved)) setFaceCm(saved);
+      if (saved >= 5 && saved <= 250) setFaceCm(saved);
     } catch {
       /* niente */
     }
@@ -382,7 +384,20 @@ export function TargetRead({ face, onApply, known = [], expected }: { face: Face
     if (taps && view === "foto" && pix) {
       const { u, v } = pointOf(event);
       const next = [...taps, { x: u * pix.w, y: v * pix.h }];
-      if (next.length === 4) {
+      if (tapKind === 2 && next.length === 2) {
+        const r = Math.hypot(next[1].x - next[0].x, next[1].y - next[0].y);
+        setTaps(null);
+        if (r > 3 && image) {
+          const manual = ellipseCalib(next[0].x, next[0].y, r, r, 0);
+          runPhoto(image, manual);
+          // subito i cursori per schiacciare o ruotare se la foto è di sbieco
+          adjustBase.current = { cx: next[0].x, cy: next[0].y, A: r, B: r, angle: 0 };
+          setAdjust({ cx: next[0].x, cy: next[0].y, A: r, B: r, angle: 0 });
+          setNote("Se la foto è di sbieco, usa «Schiacciamento» e «Rotazione» finché il padiglione combacia, poi «Applica».");
+        }
+        return;
+      }
+      if (tapKind === 4 && next.length === 4) {
         const manual = calibFromTaps(next);
         setTaps(null);
         if (manual && image) runPhoto(image, manual);
@@ -486,7 +501,10 @@ export function TargetRead({ face, onApply, known = [], expected }: { face: Face
             <button type="button" onClick={() => { setView("foto"); setTaps(null); }} className={`min-h-10 rounded-full px-3 text-sm ${view === "foto" ? "bg-primary text-primary-fg" : "border border-line"}`}>Foto</button>
             <button type="button" disabled={!calib} onClick={() => { setView("dritta"); setTaps(null); }} className={`min-h-10 rounded-full px-3 text-sm disabled:opacity-50 ${view === "dritta" ? "bg-primary text-primary-fg" : "border border-line"}`}>Bersaglio raddrizzato</button>
             {image ? (
-              <button type="button" onClick={() => { setView("foto"); setAdjust(null); setTaps([]); setNote("Tocca il bordo esterno della faccia: in alto, a destra, in basso, a sinistra. Tieni il dito giù e guarda la lente: il punto si mette quando lo alzi."); }} className={`min-h-10 rounded-full px-3 text-sm ${taps ? "bg-accent text-accent-fg" : "border border-line"}`}>📐 Calibra con 4 tocchi</button>
+              <>
+              <button type="button" onClick={() => { setView("foto"); setAdjust(null); setTapKind(2); setTaps([]); setNote("Tocca il CENTRO del bersaglio, poi un punto del BORDO esterno. Tieni il dito giù e guarda la lente: il punto si mette quando lo alzi."); }} className={`min-h-10 rounded-full px-3 text-sm ${taps && tapKind === 2 ? "bg-accent text-accent-fg" : "border border-line"}`}>⊙ Centro + bordo</button>
+              <button type="button" onClick={() => { setView("foto"); setAdjust(null); setTapKind(4); setTaps([]); setNote("Tocca il bordo esterno della faccia: in alto, a destra, in basso, a sinistra. Tieni il dito giù e guarda la lente: il punto si mette quando lo alzi."); }} className={`min-h-10 rounded-full px-3 text-sm ${taps && tapKind === 4 ? "bg-accent text-accent-fg" : "border border-line"}`}>📐 4 tocchi (foto storta)</button>
+              </>
             ) : null}
             {image && calib ? (
               <button type="button" onClick={() => (adjust ? applyAdjust() : startAdjust())} className={`min-h-10 rounded-full px-3 text-sm ${adjust ? "bg-accent text-accent-fg" : "border border-line"}`}>{adjust ? "✅ Applica" : "🎯 Regola il padiglione"}</button>
@@ -535,6 +553,23 @@ export function TargetRead({ face, onApply, known = [], expected }: { face: Face
             {SIZES.map((size) => (
               <button key={size} type="button" onClick={() => pickSize(size)} className={`min-h-8 rounded-full px-2 ${faceCm === size ? "bg-accent text-accent-fg" : "border border-line"}`}>{size} cm</button>
             ))}
+            <label className={`flex min-h-8 items-center gap-1 rounded-full px-2 ${SIZES.includes(faceCm) ? "border border-line" : "bg-accent text-accent-fg"}`}>
+              altra
+              <input
+                type="number"
+                inputMode="decimal"
+                min={5}
+                max={250}
+                defaultValue={SIZES.includes(faceCm) ? "" : faceCm}
+                key={faceCm}
+                placeholder="…"
+                onBlur={(e) => { const v = Number(e.target.value.replace(",", ".")); if (v >= 5 && v <= 250) pickSize(Math.round(v * 10) / 10); }}
+                onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                className="w-14 rounded bg-transparent text-center outline-none"
+                aria-label="Diametro del bersaglio in cm"
+              />
+              cm
+            </label>
           </div>
           {hits.length ? (
             <>

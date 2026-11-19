@@ -909,17 +909,33 @@ export function findPaperFace(pix: Pix): Calib | null {
     const frac = pos / n;
     return (sum / n) * frac * frac * (inside / n > 120 ? 1 : 0.4);
   };
-  let best = { score: 0, cx: 0, cy: 0, r: 0 };
+  // candidati: i cerchi migliori, poi scelgo tenendo conto di grandezza e posizione
+  // (un bersaglio è grande e verso il centro della foto; la cocca sfocata vicino all'obiettivo no)
+  type Cand = { score: number; cx: number; cy: number; r: number };
+  const cands: Cand[] = [];
   const rMin = Math.max(5, Math.min(sw, sh) * 0.05);
   const rMax = Math.max(sw, sh) * 0.42;
   for (let r = rMin; r <= rMax; r *= 1.06) {
     const step = Math.max(1, r * 0.12);
     for (let cy = r * 0.5; cy < sh - r * 0.5; cy += step) for (let cx = r * 0.5; cx < sw - r * 0.5; cx += step) {
       const sc = ring(cx, cy, r);
-      if (sc > best.score) best = { score: sc, cx, cy, r };
+      if (sc < 8) continue;
+      const near = cands.findIndex((c) => Math.hypot(c.cx - cx, c.cy - cy) < Math.max(c.r, r) * 0.6);
+      if (near >= 0) {
+        if (sc > cands[near].score) cands[near] = { score: sc, cx, cy, r };
+      } else cands.push({ score: sc, cx, cy, r });
     }
   }
-  if (best.score < 8) return null;
+  if (!cands.length) return null;
+  const diag = Math.hypot(sw, sh);
+  const top = Math.max(...cands.map((c) => c.score));
+  const rank = (c: Cand) => {
+    const central = 1 - Math.min(1, Math.hypot(c.cx - sw / 2, c.cy - sh / 2) / (diag / 2));
+    const big = Math.min(1, c.r / (Math.min(sw, sh) * 0.18));
+    const edge = Math.min(c.cx - c.r, c.cy - c.r, sw - c.cx - c.r, sh - c.cy - c.r) < 0 ? 0.6 : 1;
+    return c.score * (0.55 + 0.45 * central) * (0.6 + 0.4 * big) * edge;
+  };
+  let best = cands.filter((c) => c.score > top * 0.35).sort((a, b) => rank(b) - rank(a))[0];
   // affino centro e raggio
   for (let pass = 0; pass < 3; pass += 1) {
     const st = Math.max(0.5, best.r * 0.04) / (pass + 1);
@@ -1000,7 +1016,7 @@ function rgbAt(pix: Pix, x: number, y: number, out: number[]) {
   return true;
 }
 
-export type Shaft = { tip: { x: number; y: number }; tail: { x: number; y: number }; strength: number };
+export type Shaft = { tip: { x: number; y: number }; tail: { x: number; y: number }; strength: number; img?: { x: number; y: number; ux: number; uy: number } };
 
 /**
  * Aste viste da dietro o di sbieco (foto dalla linea di tiro): le alette colorate sono fuori dalla
@@ -1177,14 +1193,26 @@ export function findShafts(pix: Pix, calib: Calib): Shaft[] {
       const tip = toFace(calib, p.tip.x, p.tip.y);
       if (Math.hypot(tip.x, tip.y) > 1.25) continue;
       const back = Math.min(L, p.run + R * 0.5);
-      shafts.push({ tip, tail: toFace(calib, p.tip.x - p.ux * back, p.tip.y - p.uy * back), strength: Math.min(1, (p.run / L) * p.cover) });
+      shafts.push({ tip, tail: toFace(calib, p.tip.x - p.ux * back, p.tip.y - p.uy * back), strength: Math.min(1, (p.run / L) * p.cover), img: { x: p.tip.x, y: p.tip.y, ux: p.ux, uy: p.uy } });
     }
   }
-  // stessa punta trovata da due macchie: una sola freccia
+  // stessa asta trovata più volte (da macchie o rette vicine): resta quella che arriva più avanti,
+  // perché la punta vera è dove l'asta finisce dentro il bersaglio
+  const reach = (a: Shaft) => (a.img ? a.img.x * a.img.ux + a.img.y * a.img.uy : 0);
+  // la punta più corta sta sulla retta di quella più lunga: è un pezzo della stessa asta
+  const sameShaft = (a: Shaft, b: Shaft) => {
+    if (!a.img || !b.img) return Math.hypot(a.tip.x - b.tip.x, a.tip.y - b.tip.y) < 0.1;
+    const cos = a.img.ux * b.img.ux + a.img.uy * b.img.uy;
+    if (cos < Math.cos((10 * Math.PI) / 180)) return Math.hypot(a.tip.x - b.tip.x, a.tip.y - b.tip.y) < 0.1;
+    const [long, short] = reach(a) >= reach(b) ? [a.img, b.img] : [b.img, a.img];
+    const g = Math.abs((short.x - long.x) * -long.uy + (short.y - long.y) * long.ux);
+    return g < R * 0.09;
+  };
   const out: Shaft[] = [];
-  for (const s of shafts.sort((a, b) => b.strength - a.strength)) {
-    if (out.some((q) => Math.hypot(q.tip.x - s.tip.x, q.tip.y - s.tip.y) < 0.1)) continue;
-    out.push(s);
+  for (const sh of shafts.sort((a, b) => b.strength - a.strength)) {
+    const k = out.findIndex((q) => sameShaft(q, sh));
+    if (k < 0) out.push(sh);
+    else if (reach(sh) > reach(out[k]) && sh.strength > out[k].strength * 0.6) out[k] = { ...sh, strength: Math.max(sh.strength, out[k].strength) };
   }
   return out;
 }
