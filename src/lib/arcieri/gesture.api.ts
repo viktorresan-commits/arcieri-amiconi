@@ -20,7 +20,8 @@ export type GestureRow = {
   shoulderDeg: number | null;
   jitter: number | null;
   distanceM: number | null;
-  data: Record<string, unknown>;
+  /** JSON con i dettagli (controlli, angoli in più) */
+  data: string;
   thumb: string;
   createdAt: string;
 };
@@ -28,12 +29,7 @@ export type GestureRow = {
 type Raw = Record<string, unknown>;
 
 function rowOf(r: Raw): GestureRow {
-  let data: Record<string, unknown> = {};
-  try {
-    data = typeof r.data === "string" ? (JSON.parse(r.data) as Record<string, unknown>) : ((r.data as Record<string, unknown>) ?? {});
-  } catch {
-    data = {};
-  }
+  const data = typeof r.data === "string" ? r.data : JSON.stringify(r.data ?? {});
   return {
     id: asNum(r.id),
     memberId: asNum(r.member_id),

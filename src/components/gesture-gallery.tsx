@@ -7,6 +7,15 @@ const fmtDate = (iso: string) => {
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString("it-IT", { day: "numeric", month: "short", year: "2-digit" });
 };
+function checksOf(r: GestureRow): string[] {
+  try {
+    const d = JSON.parse(r.data) as { checks?: unknown };
+    return Array.isArray(d.checks) ? d.checks.map(String) : [];
+  } catch {
+    return [];
+  }
+}
+
 const deg = (v: number | null, d = 0) => (v == null ? "—" : `${v.toFixed(d)}°`);
 
 function ScoreBadge({ value }: { value: number | null }) {
@@ -52,7 +61,7 @@ export function GestureGallery() {
                 <p>Ancoraggio {r.anchorS == null ? "—" : `${r.anchorS.toFixed(1)} s`} · trazione {r.drawS == null ? "—" : `${r.drawS.toFixed(1)} s`}</p>
                 <p>Linea gomito {deg(r.lineDeg)} · braccio arco {deg(r.bowDeg)} · spalle {deg(r.shoulderDeg, 1)}</p>
                 {r.distanceM ? <p>Ripresa a {r.distanceM.toFixed(1)} m</p> : null}
-                {Array.isArray(r.data.checks) ? (r.data.checks as string[]).map((c) => <p key={c} className="text-muted">{c.startsWith("ok") ? "✅" : c.startsWith("attenzione") ? "⚠️" : "❌"} {c.replace(/^[^:]+: /, "")}</p>) : null}
+                {checksOf(r).map((c) => <p key={c} className="text-muted">{c.startsWith("ok") ? "✅" : c.startsWith("attenzione") ? "⚠️" : "❌"} {c.replace(/^[^:]+: /, "")}</p>)}
                 <button type="button" className="mt-1 w-fit text-danger" onClick={() => deleteGesture({ data: { id: r.id } }).then(() => setNonce((n) => n + 1))}>Elimina</button>
               </div>
             ) : null}
