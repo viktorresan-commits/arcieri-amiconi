@@ -781,9 +781,7 @@ function ShotCard({ shot, onSeek }: { shot: Shot; onSeek: (t: number) => void })
     <div className="grid gap-2 rounded-xl border border-line bg-elev p-3">
       <div className="flex items-baseline justify-between gap-2">
         <p className="text-sm font-semibold">Lettura del tiro</p>
-        <p className="font-display text-2xl tabular-nums" style={{ color: shot.score >= 70 ? "#3d9b74" : shot.score >= 50 ? "#e6b325" : "#d15c56" }}>
-          {shot.score}/100 <span className="text-xs text-muted">{shot.score >= 70 ? "buono" : "da sistemare"}</span>
-        </p>
+        <ScoreRing value={shot.score} />
       </div>
       <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-5">
         {shot.phases.map((p) => (
@@ -817,6 +815,22 @@ function ShotCard({ shot, onSeek }: { shot: Shot; onSeek: (t: number) => void })
       </p>
       <Notes lines={shot.notes} />
       <p className="text-xs text-muted">Stime da una ripresa 2D: confronta video girati sempre dallo stesso posto.</p>
+    </div>
+  );
+}
+
+function ScoreRing({ value }: { value: number }) {
+  const color = value >= 70 ? "#3ee08f" : value >= 50 ? "#e6b325" : "#d15c56";
+  const r = 26;
+  const c = 2 * Math.PI * r;
+  return (
+    <div className="flex items-center gap-2">
+      <svg viewBox="0 0 64 64" className="h-16 w-16 -rotate-90">
+        <circle cx="32" cy="32" r={r} fill="none" stroke="var(--line)" strokeWidth="6" />
+        <circle cx="32" cy="32" r={r} fill="none" stroke={color} strokeWidth="6" strokeLinecap="round" strokeDasharray={`${(c * value) / 100} ${c}`} />
+        <text x="32" y="38" textAnchor="middle" transform="rotate(90 32 32)" fill="var(--fg)" fontSize="18" fontWeight="700">{value}</text>
+      </svg>
+      <span className="text-xs text-muted">{value >= 70 ? "buono" : value >= 50 ? "discreto" : "da sistemare"}</span>
     </div>
   );
 }
@@ -978,10 +992,11 @@ function drawPose(ctx: CanvasRenderingContext2D, w: number, h: number, lm: Landm
   if (m) {
     const de = at(draw[1]);
     const be = at(bow[1]);
-    label(`Linea ${m.line.toFixed(0)}°`, de.x + 16 * s, de.y - 6 * s, "#d8b4fe");
-    label(`Arco ${m.bow.toFixed(0)}°`, be.x + 16 * s, be.y + 22 * s, "#fdba74");
-    label(`Spalle ${Math.abs(m.shoulder).toFixed(1)}°`, (l.x + r.x) / 2 - 30 * s, Math.min(l.y, r.y) - 12 * s, "#fde68a");
-    if (m.handFace < 0.85) label("Ancorato", at(draw[2]).x - 30 * s, at(draw[2]).y + 26 * s, "#e6b325");
+    const mark = (good: boolean) => (good ? "✅ " : "⚠️ ");
+    label(`${mark(m.line >= 168)}Gomito in linea ${m.line.toFixed(0)}°`, de.x + 16 * s, de.y - 6 * s, m.line >= 168 ? "#b9ffd9" : "#fde68a");
+    label(`${mark(m.bow >= 165)}Braccio arco ${m.bow.toFixed(0)}°`, be.x + 16 * s, be.y + 22 * s, m.bow >= 165 ? "#b9ffd9" : "#fde68a");
+    label(`${mark(Math.abs(m.shoulder) <= 4)}Spalle ${Math.abs(m.shoulder).toFixed(1)}°`, (l.x + r.x) / 2 - 30 * s, Math.min(l.y, r.y) - 12 * s, Math.abs(m.shoulder) <= 4 ? "#b9ffd9" : "#fde68a");
+    if (m.handFace < 0.85) label("✅ Ancorato", at(draw[2]).x - 30 * s, at(draw[2]).y + 26 * s, "#b9ffd9");
   }
   if (gear?.bow) label(`Cant ${Math.abs(gear.bow.cant).toFixed(1)}°`, gear.bow.x1 * w + 8 * s, gear.bow.y1 * h + 16 * s, "#bef264");
 }

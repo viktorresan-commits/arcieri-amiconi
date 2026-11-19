@@ -4,7 +4,9 @@ import {
   CalendarDays,
   House,
   Menu,
+  Plus,
   Target,
+  Trophy,
   Users,
   X,
 } from "lucide-react";
@@ -27,6 +29,7 @@ export function useMember() {
 
 const MORE = [
   ["/profilo", "Profilo"],
+  ["/calendario", "Calendario"],
   ["/classifiche", "Classifiche"],
   ["/statistiche", "Statistiche"],
   ["/sfide", "Sfide"],
@@ -53,6 +56,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const [error, setError] = useState("");
   const [nonce, setNonce] = useState(0);
   const [menu, setMenu] = useState(false);
+  const [quick, setQuick] = useState(false);
   const [ink, setInk] = useState("verde");
   const [offline, setOffline] = useState(false);
   const path = useRouterState({ select: (s) => s.location.pathname });
@@ -141,7 +145,6 @@ export function Shell({ children }: { children: ReactNode }) {
     { to: "/", label: "Casa", icon: House },
     { to: "/allenamento", label: "Tiro", icon: Target },
     { to: "/squadra", label: "Squadra", icon: Users },
-    { to: "/calendario", label: "Calendario", icon: CalendarDays },
   ] as const;
 
   return (
@@ -170,46 +173,59 @@ export function Shell({ children }: { children: ReactNode }) {
           </Link>
         </aside>
         <div className="aa-main relative z-0 min-w-0 md:ml-60">
-          <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-line bg-bg/95 px-4 backdrop-blur">
+          <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-line/60 bg-bg/85 px-4 backdrop-blur-md">
             <Link to="/profilo" className="flex min-w-0 items-center gap-3">
-              <Avatar label={initials(label)} color={me.avatarColor} photo={me.photoUrl} size="lg" className="aa-pin shrink-0" />
+              <Avatar label={initials(label)} color={me.avatarColor} photo={me.photoUrl} className="aa-pin shrink-0" />
               <span className="min-w-0">
-                <p className="truncate text-xs text-muted">{hour}</p>
-                <p className="truncate font-display text-2xl leading-none">{label}</p>
+                <p className="truncate text-[11px] leading-tight text-muted">{hour}</p>
+                <p className="truncate font-display text-xl leading-none">{label}</p>
               </span>
             </Link>
-            <div className="flex items-center gap-1.5" role="group" aria-label="Colore">
-              {INKS.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  aria-label={item.id}
-                  aria-pressed={ink === item.id}
-                  onClick={() => pickInk(item.id)}
-                  className={cx("h-6 w-6 rounded-full border-2", ink === item.id ? "border-fg" : "border-transparent")}
-                  style={{ background: item.color }}
-                />
-              ))}
-            </div>
+            <Link to="/allenamento" className="hidden h-10 items-center gap-1.5 rounded-full bg-primary px-4 text-sm font-semibold text-primary-fg md:flex">
+              <Plus className="h-4 w-4" /> Nuovo tiro
+            </Link>
           </header>
           {offline ? <p className="bg-accent px-4 py-2 text-sm text-accent-fg">Sei offline. Il tiro resta sul telefono e si sincronizza al ritorno della rete.</p> : null}
           <main key={path} className="aa-rise mx-auto w-full min-w-0 max-w-3xl overflow-x-clip px-4 py-6 pb-28 md:pb-10">{children}</main>
-          <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-elev pb-[env(safe-area-inset-bottom)] md:hidden">
-            {nav.map((item) => {
-              const Icon = item.icon;
-              const active = item.to === "/squadra" ? path === "/squadra" || path.startsWith("/arciere/") : path === item.to || (item.to !== "/" && path.startsWith(item.to));
-              return (
-                <Link key={item.to} to={item.to} className={cx("flex min-h-16 flex-col items-center justify-center gap-0.5 text-xs", active ? "text-primary" : "text-muted")}>
-                  <Icon className="h-5 w-5" />
-                  {item.label}
-                </Link>
-              );
-            })}
-            <button type="button" className="flex min-h-16 flex-col items-center justify-center gap-0.5 text-xs text-muted" onClick={() => setMenu(true)}>
+          <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 items-end border-t border-line/60 bg-elev/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden">
+            {[nav[0], nav[1]].map((item) => <BottomLink key={item.to} item={item} active={path === item.to || (item.to !== "/" && path.startsWith(item.to))} />)}
+            <div className="flex justify-center">
+              <button
+                type="button"
+                onClick={() => setQuick(true)}
+                aria-label="Nuovo tiro"
+                className="-mt-7 mb-2 grid h-16 w-16 place-items-center rounded-full border-4 border-bg bg-primary text-primary-fg shadow-[0_8px_24px_-6px_rgba(0,0,0,0.6)] active:scale-95"
+              >
+                <Plus className="h-8 w-8" strokeWidth={2.6} />
+              </button>
+            </div>
+            <BottomLink item={nav[2]} active={path === "/squadra" || path.startsWith("/arciere/")} />
+            <button type="button" className="flex min-h-16 flex-col items-center justify-center gap-0.5 text-[11px] text-muted" onClick={() => setMenu(true)}>
               <Menu className="h-5 w-5" />
               Menu
             </button>
           </nav>
+          {quick ? (
+            <div className="fixed inset-0 z-40 flex items-end bg-black/50 md:hidden" onClick={() => setQuick(false)}>
+              <div className="aa-rise grid w-full gap-2 rounded-t-3xl border-t border-line bg-elev p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)]" onClick={(e) => e.stopPropagation()}>
+                <div className="mx-auto mb-1 h-1.5 w-10 rounded-full bg-line" />
+                <p className="font-display text-2xl">Cosa fai?</p>
+                {([
+                  ["/allenamento", "Allenamento", "Volée, foto del bersaglio, gesto", Target],
+                  ["/gare", "Gara", "Iscrizioni e risultati", Trophy],
+                  ["/calendario", "Calendario", "Allenamenti e gare in programma", CalendarDays],
+                ] as const).map(([to, title, sub, Icon]) => (
+                  <Link key={to} to={to} onClick={() => setQuick(false)} className="flex min-h-16 items-center gap-3 rounded-2xl border border-line bg-surface px-4">
+                    <span className="grid h-11 w-11 place-items-center rounded-xl bg-primary/15 text-primary"><Icon className="h-6 w-6" /></span>
+                    <span className="min-w-0">
+                      <span className="block font-semibold">{title}</span>
+                      <span className="block truncate text-xs text-muted">{sub}</span>
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          ) : null}
           {menu ? (
             <div className="fixed inset-0 z-40 bg-bg md:hidden">
               <div className="flex h-14 items-center justify-between px-4">
@@ -219,6 +235,22 @@ export function Shell({ children }: { children: ReactNode }) {
                 </button>
               </div>
               <div className="grid gap-2 px-4">
+                <div className="flex items-center justify-between rounded-xl border border-line px-4 py-3">
+                  <span className="text-sm font-semibold">Colore dell'app</span>
+                  <span className="flex items-center gap-2" role="group" aria-label="Colore">
+                    {INKS.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        aria-label={item.id}
+                        aria-pressed={ink === item.id}
+                        onClick={() => pickInk(item.id)}
+                        className={cx("h-7 w-7 rounded-full border-2", ink === item.id ? "border-fg" : "border-transparent")}
+                        style={{ background: item.color }}
+                      />
+                    ))}
+                  </span>
+                </div>
                 {MORE.map(([to, text]) => (
                   <Link key={to} to={to} onClick={() => setMenu(false)} className="flex min-h-12 items-center gap-3 rounded-xl border border-line px-4 font-semibold">
                     {to === "/gioco" ? <Mark className="h-8 w-8" /> : null}
@@ -231,6 +263,17 @@ export function Shell({ children }: { children: ReactNode }) {
         </div>
       </div>
     </MemberCtx.Provider>
+  );
+}
+
+function BottomLink({ item, active }: { item: { to: string; label: string; icon: typeof House }; active: boolean }) {
+  const Icon = item.icon;
+  return (
+    <Link to={item.to} className={cx("flex min-h-16 flex-col items-center justify-center gap-0.5 text-[11px]", active ? "text-primary" : "text-muted")}>
+      <Icon className="h-5 w-5" strokeWidth={active ? 2.6 : 2} />
+      {item.label}
+      <span className={cx("mt-0.5 h-1 w-1 rounded-full", active ? "bg-primary" : "bg-transparent")} />
+    </Link>
   );
 }
 

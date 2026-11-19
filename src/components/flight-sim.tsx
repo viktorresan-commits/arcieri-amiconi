@@ -209,6 +209,7 @@ export function FlightSim() {
         <Slider label="Altezza cm" value={form.heightCm} min={140} max={210} step={1} onChange={(heightCm) => patch({ heightCm })} />
         <Slider label="Vento m/s" value={form.wind} min={-8} max={8} step={0.5} onChange={(wind) => patch({ wind })} />
         <Slider label="Pendenza ° (+ salita, − discesa)" value={form.slopeDeg ?? 0} min={-35} max={35} step={1} onChange={(slopeDeg) => patch({ slopeDeg })} />
+        <Inclinometer onUse={(slopeDeg) => patch({ slopeDeg })} />
         {form.slopeDeg ? (
           <p className="text-xs text-muted">In pendenza la distanza da usare sul mirino è circa {compensatedDistance(form).toFixed(1)} m (linea di tiro × coseno dell'angolo); la parabola sopra tiene già conto della gravità inclinata.</p>
         ) : null}
@@ -565,4 +566,61 @@ function fmtM(m: number) {
   const a = Math.abs(m);
   if (a < 1) return `${(m * 100).toFixed(0)} cm`;
   return `${m.toFixed(a < 10 ? 2 : 1).replace(".", ",")} m`;
+}
+
+/**
+ * Pendenza misurata con il telefono: tienilo dritto in verticale, con la fotocamera verso il bersaglio
+ * (come per fare una foto). In piano segna 0°, puntando in su è positivo.
+ */
+function Inclinometer({ onUse }: { onUse: (deg: number) => void }) {
+  const [on, setOn] = useState(false);
+  const [deg, setDeg] = useState<number | null>(null);
+  const [note, setNote] = useState("");
+  useEffect(() => {
+    if (!on) return;
+    let smooth: number | null = null;
+    const read = (e: DeviceOrientationEvent) => {
+      if (e.beta == null) return;
+      const raw = e.beta - 90; // in verticale beta = 90
+      const value = Math.max(-60, Math.min(60, -raw));
+      smooth = smooth == null ? value : smooth * 0.8 + value * 0.2;
+      setDeg(smooth);
+    };
+    window.addEventListener("deviceorientation", read);
+    const t = window.setTimeout(() => setNote((n) => n || "Se il numero non si muove, questo telefono o browser non dà l'inclinazione."), 2500);
+    return () => {
+      window.removeEventListener("deviceorientation", read);
+      window.clearTimeout(t);
+    };
+  }, [on]);
+  async function start() {
+    setNote("");
+    const D = DeviceOrientationEvent as unknown as { requestPermission?: () => Promise<string> };
+    if (typeof D.requestPermission === "function") {
+      try {
+        if ((await D.requestPermission()) !== "granted") {
+          setNote("Permesso ai sensori negato.");
+          return;
+        }
+      } catch {
+        setNote("Permesso ai sensori non disponibile.");
+        return;
+      }
+    }
+    setOn(true);
+  }
+  if (!on) {
+    return (
+      <button type="button" onClick={() => void start()} className="min-h-10 w-fit rounded-full border border-line px-3 text-sm">📐 Misura la pendenza con il telefono</button>
+    );
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-line px-3 py-2 text-sm">
+      <span className="text-xs text-muted">Telefono dritto, fotocamera verso il bersaglio:</span>
+      <span className="font-display text-2xl tabular-nums">{deg == null ? "—" : `${deg >= 0 ? "+" : ""}${deg.toFixed(0)}°`}</span>
+      <button type="button" disabled={deg == null} onClick={() => { if (deg != null) onUse(Math.max(-35, Math.min(35, Math.round(deg)))); setOn(false); }} className="min-h-9 rounded-full bg-accent px-3 font-semibold text-accent-fg disabled:opacity-50">Usa</button>
+      <button type="button" onClick={() => setOn(false)} className="min-h-9 rounded-full border border-line px-3">Chiudi</button>
+      {note ? <span className="w-full text-xs text-muted">{note}</span> : null}
+    </div>
+  );
 }
