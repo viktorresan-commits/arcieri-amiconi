@@ -1,0 +1,20 @@
+node_modules/
+.vercel/
+.tanstack/
+.node_modules.lock
+.grok/preview.log
+.grok/status
+dist/
+.output/
+# file di lavoro di Grok (immagini caricate, prove): restano nello zip, non servono all'app
+attachments/
+artifacts/
+screenshots/
+# APK: il progetto Android si genera su GitHub a ogni build
+apk/node_modules/
+apk/android/
+apk/capacitor.config.json
+apk/*.keystore
+*.apk
+.env
+.env.*
