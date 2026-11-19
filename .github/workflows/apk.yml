@@ -22,7 +22,8 @@ jobs:
       run:
         working-directory: apk
     env:
-      APP_URL: ${{ vars.APP_URL }}
+      # sito pubblicato su Vercel (si può cambiare con la variabile APP_URL_NUOVO del repository)
+      APP_URL: ${{ vars.APP_URL_NUOVO || 'https://arcieri-amiconi.vercel.app' }}
       KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
       KEYSTORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}

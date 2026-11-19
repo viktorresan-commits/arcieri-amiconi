@@ -1,5 +1,7 @@
 # Arcieri Amiconi
 
+Sito: https://arcieri-amiconi.vercel.app
+
 App della squadra: allenamenti, gare, sagome 3D, statistiche, simulatore di volo, lettura del bersaglio da foto e video, analisi del gesto.
 
 ## Com'è fatta
