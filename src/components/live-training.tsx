@@ -419,9 +419,9 @@ export function LiveTraining({ sessionId, openHistory = false }: { sessionId?: n
             <Field label="Alle"><TextInput type="time" value={timeOf(meta.endedAt)} onChange={(e) => shiftWhen(dayOf(meta.startedAt), timeOf(meta.startedAt), e.target.value)} /></Field>
           </div>
           <div className="grid grid-cols-3 gap-2">
-            <Field label="Frecce per volée"><TextInput inputMode="numeric" value={meta.arrowsPerEnd} onChange={(e) => setPlan({ arrowsPerEnd: Number(e.target.value) })} /></Field>
-            <Field label="Volée"><TextInput inputMode="numeric" value={meta.endsPlanned} onChange={(e) => setPlan({ endsPlanned: Number(e.target.value) })} /></Field>
-            <Field label="Bersagli"><TextInput inputMode="numeric" value={meta.blocksPlanned} onChange={(e) => setPlan({ blocksPlanned: Number(e.target.value) })} /></Field>
+            <Field label="Frecce per volée"><PlanNumber value={meta.arrowsPerEnd} onCommit={(v) => setPlan({ arrowsPerEnd: v })} /></Field>
+            <Field label="Volée"><PlanNumber value={meta.endsPlanned} onCommit={(v) => setPlan({ endsPlanned: v })} /></Field>
+            <Field label="Bersagli"><PlanNumber value={meta.blocksPlanned} onCommit={(v) => setPlan({ blocksPlanned: v })} /></Field>
           </div>
         </Card>
       ) : null}
@@ -466,8 +466,11 @@ export function LiveTraining({ sessionId, openHistory = false }: { sessionId?: n
       <ShotLab
         face={face}
         shots={draft.shots}
+        expected={meta.arrowsPerEnd - endArrows.length > 0 ? meta.arrowsPerEnd - endArrows.length : meta.arrowsPerEnd}
         onPhoto={face.id.startsWith("sagoma") ? undefined : (hits) => {
-          for (const hit of hits) add(hit.miss ? 0 : hit.score, hit.isX, hit.miss, hit.nx, hit.ny);
+          // solo le frecce che stanno nella volée: le altre non devono finire nella volée dopo
+          const room = meta.arrowsPerEnd - endArrows.length > 0 ? meta.arrowsPerEnd - endArrows.length : meta.arrowsPerEnd;
+          for (const hit of hits.slice(0, room)) add(hit.miss ? 0 : hit.score, hit.isX, hit.miss, hit.nx, hit.ny);
         }}
       />
       <div className="flex gap-2 overflow-x-auto pb-1">
@@ -619,6 +622,27 @@ function ScoreLine({ k, v }: { k: string; v: string }) {
       <p className="text-xs uppercase tracking-wide text-muted">{k}</p>
       <p className="font-display text-3xl tabular-nums leading-none">{v}</p>
     </div>
+  );
+}
+
+/** Numero del piano: si applica quando esci dal campo, non a ogni cifra (altrimenti mentre scrivi "12" il piano passa da 1). */
+function PlanNumber({ value, onCommit }: { value: number; onCommit: (v: number) => void }) {
+  const [text, setText] = useState(String(value));
+  useEffect(() => setText(String(value)), [value]);
+  const commit = () => {
+    const n = Number(text);
+    if (Number.isFinite(n) && n >= 1) {
+      if (n !== value) onCommit(Math.round(n));
+    } else setText(String(value));
+  };
+  return (
+    <TextInput
+      inputMode="numeric"
+      value={text}
+      onChange={(e) => setText(e.target.value.replace(/[^0-9]/g, ""))}
+      onBlur={commit}
+      onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+    />
   );
 }
 
@@ -825,9 +849,9 @@ function Setup({
           </Select>
         </Field>
         <div className="grid grid-cols-3 gap-2">
-          <Field label="Frecce/volée"><TextInput inputMode="numeric" value={meta.arrowsPerEnd} onChange={(e) => apply({ arrowsPerEnd: Number(e.target.value) })} /></Field>
-          <Field label="Volée"><TextInput inputMode="numeric" value={meta.endsPlanned} onChange={(e) => apply({ endsPlanned: Number(e.target.value) })} /></Field>
-          <Field label="Sessioni"><TextInput inputMode="numeric" value={meta.blocksPlanned} onChange={(e) => apply({ blocksPlanned: Number(e.target.value) })} /></Field>
+          <Field label="Frecce/volée"><PlanNumber value={meta.arrowsPerEnd} onCommit={(v) => apply({ arrowsPerEnd: Math.min(24, v) })} /></Field>
+          <Field label="Volée"><PlanNumber value={meta.endsPlanned} onCommit={(v) => apply({ endsPlanned: Math.min(60, v) })} /></Field>
+          <Field label="Sessioni"><PlanNumber value={meta.blocksPlanned} onCommit={(v) => apply({ blocksPlanned: Math.min(40, v) })} /></Field>
         </div>
         {past ? null : (
         <div className="grid grid-cols-2 gap-2">

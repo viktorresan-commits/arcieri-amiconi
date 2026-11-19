@@ -784,33 +784,473 @@ export function readHits(rect: Pix, face: Face, opts: { reference?: Pix | null; 
   };
 }
 
+/* ---------------- faccia di carta e aste con le alette ---------------- */
+
+/** Calibrazione a ellisse da centro, semiassi (pixel) e direzione dell'asse maggiore. */
+export function ellipseCalib(cx: number, cy: number, A: number, B: number, angle: number): Calib {
+  const c = Math.cos(angle);
+  const s = Math.sin(angle);
+  const r1 = [c / A, s / A];
+  const r2 = [-s / B, c / B];
+  const m: Mat2 = [c * r1[0] - s * r2[0], c * r1[1] - s * r2[1], s * r1[0] + c * r2[0], s * r1[1] + c * r2[1]];
+  return { kind: "ellisse", cx, cy, m, inv: invert2(m), ax: A, bx: B, angle };
+}
+
+/** Ellisse del bordo esterno (raggio 1) di una calibrazione qualsiasi, per regolarla a mano. */
+export function calibEllipse(calib: Calib) {
+  if (calib.kind === "ellisse") return { cx: calib.cx, cy: calib.cy, A: calib.ax, B: calib.bx, angle: calib.angle };
+  const pts: { x: number; y: number }[] = [];
+  for (let k = 0; k < 36; k += 1) pts.push(toImage(calib, Math.cos((k / 36) * Math.PI * 2), Math.sin((k / 36) * Math.PI * 2)));
+  const o = toImage(calib, 0, 0);
+  const e = fitEllipse(pts, o.x, o.y);
+  if (!e) {
+    const r = pts.reduce((acc, p) => acc + Math.hypot(p.x - o.x, p.y - o.y), 0) / pts.length;
+    return { cx: o.x, cy: o.y, A: r, B: r, angle: 0 };
+  }
+  return { cx: e.cx, cy: e.cy, A: e.major, B: e.minor, angle: e.angle };
+}
+
+function otsu(hist: Uint32Array) {
+  let total = 0;
+  let sum = 0;
+  for (let i = 0; i < 256; i += 1) { total += hist[i]; sum += i * hist[i]; }
+  let wB = 0;
+  let sB = 0;
+  let best = 0;
+  let t = 128;
+  for (let i = 0; i < 256; i += 1) {
+    wB += hist[i];
+    if (!wB) continue;
+    const wF = total - wB;
+    if (!wF) break;
+    sB += i * hist[i];
+    const mB = sB / wB;
+    const mF = (sum - sB) / wF;
+    const between = wB * wF * (mB - mF) ** 2;
+    if (between > best) { best = between; t = i; }
+  }
+  return t;
+}
+
+function integral(mask: Uint8Array, w: number, h: number) {
+  const I = new Uint32Array((w + 1) * (h + 1));
+  for (let y = 0; y < h; y += 1) {
+    let row = 0;
+    for (let x = 0; x < w; x += 1) {
+      row += mask[y * w + x];
+      I[(y + 1) * (w + 1) + x + 1] = I[y * (w + 1) + x + 1] + row;
+    }
+  }
+  return (x0: number, y0: number, x1: number, y1: number) => {
+    // somma nel rettangolo [x0,x1) × [y0,y1), già dentro l'immagine
+    const W = w + 1;
+    return I[y1 * W + x1] - I[y0 * W + x1] - I[y1 * W + x0] + I[y0 * W + x0];
+  };
+}
+
+/**
+ * Faccia di carta chiara, anche senza colori (bianca con righe sottili, come le facce da campagna
+ * o le stampe di allenamento): la zona chiara e poco colorata più "tonda" e grande della foto.
+ * 1) chiaro = minimo dei canali meno la saturazione, soglia di Otsu;
+ * 2) il quadrato più grande quasi tutto chiaro dà il centro (le strisce di nastro sono strette);
+ * 3) 72 raggi dal centro trovano il bordo; ellisse robusta (via le frecce e il nastro che toccano).
+ */
+export function findPaperFace(pix: Pix): Calib | null {
+  // 1) voto per cerchi su un'immagine piccola: lungo il cerchio giusto dentro è chiaro e fuori scuro
+  //    quasi dappertutto (i buchi nella carta e la trama del paglione no, il nastro è dritto)
+  const k = Math.min(1, 200 / Math.max(pix.w, pix.h));
+  const sw = Math.max(16, Math.round(pix.w * k));
+  const sh = Math.max(16, Math.round(pix.h * k));
+  const small = new Float32Array(sw * sh);
+  for (let y = 0; y < sh; y += 1) for (let x = 0; x < sw; x += 1) {
+    let acc = 0;
+    let n = 0;
+    const x0 = Math.floor(x / k);
+    const y0 = Math.floor(y / k);
+    const x1 = Math.min(pix.w, Math.floor((x + 1) / k));
+    const y1 = Math.min(pix.h, Math.floor((y + 1) / k));
+    for (let yy = y0; yy < Math.max(y1, y0 + 1); yy += 1) for (let xx = x0; xx < Math.max(x1, x0 + 1); xx += 1) {
+      const o = (Math.min(pix.h - 1, yy) * pix.w + Math.min(pix.w - 1, xx)) * 4;
+      acc += Math.max(pix.data[o], pix.data[o + 1], pix.data[o + 2]);
+      n += 1;
+    }
+    small[y * sw + x] = acc / n;
+  }
+  const L = (x: number, y: number) => {
+    if (x < 0 || y < 0 || x > sw - 1 || y > sh - 1) return -1;
+    const x0 = Math.floor(x);
+    const y0 = Math.floor(y);
+    const x1 = Math.min(sw - 1, x0 + 1);
+    const y1 = Math.min(sh - 1, y0 + 1);
+    const fx = x - x0;
+    const fy = y - y0;
+    return small[y0 * sw + x0] * (1 - fx) * (1 - fy) + small[y0 * sw + x1] * fx * (1 - fy) + small[y1 * sw + x0] * (1 - fx) * fy + small[y1 * sw + x1] * fx * fy;
+  };
+  const NA = 36;
+  const cs = Array.from({ length: NA }, (_, i) => Math.cos((i / NA) * Math.PI * 2));
+  const sn = Array.from({ length: NA }, (_, i) => Math.sin((i / NA) * Math.PI * 2));
+  const ring = (cx: number, cy: number, r: number) => {
+    const d = Math.max(1.2, r * 0.07);
+    let sum = 0;
+    let pos = 0;
+    let n = 0;
+    let inside = 0;
+    for (let i = 0; i < NA; i += 1) {
+      const a = L(cx + cs[i] * (r - d), cy + sn[i] * (r - d));
+      const b = L(cx + cs[i] * (r + d), cy + sn[i] * (r + d));
+      if (a < 0 || b < 0) continue;
+      const diff = a - b;
+      sum += Math.max(-60, Math.min(60, diff));
+      if (diff > 14) pos += 1;
+      inside += a;
+      n += 1;
+    }
+    if (n < NA * 0.7) return 0;
+    const frac = pos / n;
+    return (sum / n) * frac * frac * (inside / n > 120 ? 1 : 0.4);
+  };
+  let best = { score: 0, cx: 0, cy: 0, r: 0 };
+  const rMin = Math.max(5, Math.min(sw, sh) * 0.05);
+  const rMax = Math.max(sw, sh) * 0.42;
+  for (let r = rMin; r <= rMax; r *= 1.06) {
+    const step = Math.max(1, r * 0.12);
+    for (let cy = r * 0.5; cy < sh - r * 0.5; cy += step) for (let cx = r * 0.5; cx < sw - r * 0.5; cx += step) {
+      const sc = ring(cx, cy, r);
+      if (sc > best.score) best = { score: sc, cx, cy, r };
+    }
+  }
+  if (best.score < 8) return null;
+  // affino centro e raggio
+  for (let pass = 0; pass < 3; pass += 1) {
+    const st = Math.max(0.5, best.r * 0.04) / (pass + 1);
+    for (let dy = -3; dy <= 3; dy += 1) for (let dx = -3; dx <= 3; dx += 1) for (const f of [0.96, 0.98, 1, 1.02, 1.04]) {
+      const sc = ring(best.cx + dx * st, best.cy + dy * st, best.r * f);
+      if (sc > best.score) best = { score: sc, cx: best.cx + dx * st, cy: best.cy + dy * st, r: best.r * f };
+    }
+  }
+  // 2) ellisse (la foto è di sbieco) dai bordi veri lungo 72 raggi, a piena risoluzione
+  const cx = best.cx / k;
+  const cy = best.cy / k;
+  const r0 = best.r / k;
+  const d = Math.max(1.5, r0 * 0.04);
+  const pts: { x: number; y: number }[] = [];
+  for (let i = 0; i < 72; i += 1) {
+    const ux = Math.cos((i / 72) * Math.PI * 2);
+    const uy = Math.sin((i / 72) * Math.PI * 2);
+    let top = 22;
+    let at = -1;
+    for (let r = r0 * 0.7; r < r0 * 1.45; r += 0.5) {
+      const a = lumaAt(pix, cx + ux * (r - d), cy + uy * (r - d));
+      const b = lumaAt(pix, cx + ux * (r + d), cy + uy * (r + d));
+      if (a < 0 || b < 0) break;
+      if (a - b > top) { top = a - b; at = r; }
+    }
+    if (at > 0) pts.push({ x: cx + ux * at, y: cy + uy * at });
+  }
+  let e = pts.length >= 20 ? fitEllipse(pts, cx, cy) : null;
+  for (let it = 0; it < 3 && e; it += 1) {
+    const resid = pts.map((p) => ellipseResidual(e!, p));
+    const med = [...resid].sort((a, b) => a - b)[resid.length >> 1] || 1;
+    const keep = pts.filter((_, i) => resid[i] <= Math.max(1.2, med * 2.2));
+    if (keep.length < 16) break;
+    e = fitEllipse(keep, cx, cy) ?? e;
+  }
+  const ok = e && e.minor > 6 && e.major / e.minor < 2.6 && Math.hypot(e.cx - cx, e.cy - cy) < r0 * 0.3 && Math.abs(Math.sqrt(e.major * e.minor) / r0 - 1) < 0.3;
+  return ok && e ? ellipseCalib(e.cx, e.cy, e.major, e.minor, e.angle) : ellipseCalib(cx, cy, r0, r0, 0);
+}
+
+/** Quanto la calibrazione a colori sembra davvero una faccia: oro al centro, rosso intorno. */
+function colorEvidence(pix: Pix, calib: Calib) {
+  let gold = 0;
+  let gn = 0;
+  let red = 0;
+  let rn = 0;
+  for (let k = 0; k < 300; k += 1) {
+    const a = k * 2.399963;
+    const inner = Math.sqrt((k + 0.5) / 300) * 0.17;
+    const p = toImage(calib, inner * Math.cos(a), inner * Math.sin(a));
+    const q = toImage(calib, (0.24 + 0.12 * ((k * 7) % 10) / 10) * Math.cos(a), (0.24 + 0.12 * ((k * 7) % 10) / 10) * Math.sin(a));
+    for (const [pt, isGold] of [[p, true], [q, false]] as const) {
+      const xi = Math.round(pt.x);
+      const yi = Math.round(pt.y);
+      if (xi < 0 || yi < 0 || xi >= pix.w || yi >= pix.h) continue;
+      const o = (yi * pix.w + xi) * 4;
+      const c = ringColor(pix.data[o], pix.data[o + 1], pix.data[o + 2]);
+      if (isGold) { gn += 1; if (c === 1) gold += 1; } else { rn += 1; if (c === 2) red += 1; }
+    }
+  }
+  return gn && rn ? Math.min(gold / gn, red / rn) : 0;
+}
+
+function rgbAt(pix: Pix, x: number, y: number, out: number[]) {
+  if (x < 0 || y < 0 || x > pix.w - 1 || y > pix.h - 1) return false;
+  const x0 = Math.floor(x);
+  const y0 = Math.floor(y);
+  const x1 = Math.min(pix.w - 1, x0 + 1);
+  const y1 = Math.min(pix.h - 1, y0 + 1);
+  const fx = x - x0;
+  const fy = y - y0;
+  for (let k = 0; k < 3; k += 1) {
+    const a = pix.data[(y0 * pix.w + x0) * 4 + k];
+    const b = pix.data[(y0 * pix.w + x1) * 4 + k];
+    const c = pix.data[(y1 * pix.w + x0) * 4 + k];
+    const d = pix.data[(y1 * pix.w + x1) * 4 + k];
+    out[k] = a * (1 - fx) * (1 - fy) + b * fx * (1 - fy) + c * (1 - fx) * fy + d * fx * fy;
+  }
+  return true;
+}
+
+export type Shaft = { tip: { x: number; y: number }; tail: { x: number; y: number }; strength: number };
+
+/**
+ * Aste viste da dietro o di sbieco (foto dalla linea di tiro): le alette colorate sono fuori dalla
+ * faccia, l'asta va da loro verso il bersaglio. Per ogni macchia di alette provo le rette verso la
+ * faccia e tengo quelle lungo cui c'è una "striscia" dello stesso colore (l'asta) diversa da
+ * entrambi i lati; la punta è dove la striscia finisce, cioè dove la freccia entra.
+ * Restituisce punta e cocca in coordinate faccia.
+ */
+export function findShafts(pix: Pix, calib: Calib): Shaft[] {
+  const { w, h, data } = pix;
+  const o = toImage(calib, 0, 0);
+  let R = 0;
+  for (let k = 0; k < 8; k += 1) {
+    const p = toImage(calib, Math.cos((k / 8) * Math.PI * 2), Math.sin((k / 8) * Math.PI * 2));
+    R += Math.hypot(p.x - o.x, p.y - o.y) / 8;
+  }
+  if (!(R > 4)) return [];
+  // alette: colori vivi fuori dalla faccia
+  const vivid = new Uint8Array(w * h);
+  for (let y = 0; y < h; y += 1) for (let x = 0; x < w; x += 1) {
+    const i = y * w + x;
+    const { s, v } = hsv(data[i * 4], data[i * 4 + 1], data[i * 4 + 2]);
+    if (s < 0.5 || v < 0.3) continue;
+    const f = toFace(calib, x, y);
+    if (Math.hypot(f.x, f.y) < 1.08) continue;
+    vivid[i] = 1;
+  }
+  const label = new Int32Array(w * h).fill(-1);
+  const fletch: { cx: number; cy: number; n: number; size: number; id: number }[] = [];
+  const minArea = Math.max(25, 0.012 * Math.PI * R * R);
+  const stack: number[] = [];
+  for (let start = 0; start < w * h; start += 1) {
+    if (!vivid[start] || label[start] >= 0) continue;
+    const id = start; // id unico della macchia
+    let n = 0;
+    let sx = 0;
+    let sy = 0;
+    let far = 0;
+    stack.push(start);
+    label[start] = id;
+    const members: number[] = [];
+    while (stack.length) {
+      const k = stack.pop()!;
+      members.push(k);
+      const x = k % w;
+      const y = (k / w) | 0;
+      n += 1; sx += x; sy += y;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const xx = x + dx;
+        const yy = y + dy;
+        if (xx < 0 || yy < 0 || xx >= w || yy >= h) continue;
+        const q = yy * w + xx;
+        if (vivid[q] && label[q] < 0) { label[q] = id; stack.push(q); }
+      }
+    }
+    if (n < minArea) continue;
+    const cx = sx / n;
+    const cy = sy / n;
+    for (const k of members) far = Math.max(far, Math.hypot((k % w) - cx, ((k / w) | 0) - cy));
+    const d = Math.hypot(cx - o.x, cy - o.y);
+    if (d < R * 1.1 || d > R * 12) continue;
+    fletch.push({ cx, cy, n, size: far, id });
+  }
+  fletch.sort((a, b) => b.n - a.n);
+  const shafts: Shaft[] = [];
+  const sides = [2, 5, 9];
+  // legno chiaro: "giallo" = (R+G)/2 − B alto e luminoso; carta, nastro e paglia scura no
+  const Y = new Float32Array(w * h);
+  const Lu = new Float32Array(w * h);
+  for (let i = 0; i < w * h; i += 1) {
+    const rr = data[i * 4];
+    const gg = data[i * 4 + 1];
+    const bb = data[i * 4 + 2];
+    Y[i] = (rr + gg) / 2 - bb;
+    Lu[i] = 0.3 * rr + 0.55 * gg + 0.15 * bb;
+  }
+  const idx = (x: number, y: number) => {
+    const xi = Math.round(x);
+    const yi = Math.round(y);
+    return xi < 0 || yi < 0 || xi >= w || yi >= h ? -1 : yi * w + xi;
+  };
+  // quanto è "gialla" la carta (luce calda): il legno deve esserlo di più
+  const faceY: number[] = [];
+  for (let k = 0; k < 200; k += 1) {
+    const rr = Math.sqrt((k + 0.5) / 200) * 0.95;
+    const q = toImage(calib, rr * Math.cos(k * 2.4), rr * Math.sin(k * 2.4));
+    const xi = Math.round(q.x);
+    const yi = Math.round(q.y);
+    if (xi >= 0 && yi >= 0 && xi < w && yi < h) faceY.push((data[(yi * w + xi) * 4] + data[(yi * w + xi) * 4 + 1]) / 2 - data[(yi * w + xi) * 4 + 2]);
+  }
+  faceY.sort((p, q) => p - q);
+  const yBase = Math.max(0, faceY.length ? faceY[faceY.length >> 1] : 0);
+  type Line = { th: number; run: number; tip: { x: number; y: number }; ox: number; oy: number; ux: number; uy: number; cover: number };
+  for (const f of fletch.slice(0, 6)) {
+    const toC = Math.atan2(o.y - f.cy, o.x - f.cx);
+    const L = Math.hypot(o.x - f.cx, o.y - f.cy);
+    const cone = Math.atan((1.3 * R) / L) + (4 * Math.PI) / 180;
+    const stepA = (0.7 * Math.PI) / 180;
+    const span = Math.min(f.size, R * 0.8);
+    const lines: Line[] = [];
+    for (let th = toC - cone; th <= toC + cone; th += stepA) {
+      const ux = Math.cos(th);
+      const uy = Math.sin(th);
+      for (let off = -span; off <= span; off += 3) {
+        const ox = f.cx - uy * off;
+        const oy = f.cy + ux * off;
+        const along = (o.x - ox) * ux + (o.y - oy) * uy;
+        const miss = Math.abs((o.x - ox) * -uy + (o.y - oy) * ux);
+        if (along < R * 0.5 || miss > 1.3 * R) continue;
+        let t0 = 0;
+        while (t0 < f.size * 1.6) {
+          const q = idx(ox + ux * t0, oy + uy * t0);
+          if (q < 0 || label[q] !== f.id) break;
+          t0 += 1;
+        }
+        const marks: number[] = [];
+        const end = Math.min(along + 1.25 * R, L * 3);
+        for (let t = t0; t < end; t += 1) {
+          const px = ox + ux * t;
+          const py = oy + uy * t;
+          const q = idx(px, py);
+          if (q < 0) break;
+          let mark = 0;
+          if (Y[q] > yBase + 14 && Lu[q] > 105) {
+            for (const d of sides) {
+              const ql = idx(px - uy * d, py + ux * d);
+              const qr = idx(px + uy * d, py - ux * d);
+              if (ql < 0 || qr < 0) continue;
+              const dy = Math.min(Y[q] - Y[ql], Y[q] - Y[qr]);
+              const dl = Math.min(Lu[q] - Lu[ql], Lu[q] - Lu[qr]);
+              if (dy > 10 || dl > 35) { mark = 1; break; }
+              mark = 0.4; // legno, ma uguale ai lati (nastro o asta larga)
+            }
+          }
+          marks.push(mark);
+        }
+        // punta: l'ultimo punto pieno dove la finestra precedente è ancora "asta"
+        const W = Math.max(6, Math.round(L * 0.12));
+        let acc = 0;
+        let tipAt = -1;
+        for (let i = 0; i < marks.length; i += 1) {
+          acc += marks[i];
+          if (i >= W) acc -= marks[i - W];
+          if (marks[i] === 1 && acc / Math.min(W, i + 1) >= 0.5) tipAt = i;
+        }
+        if (tipAt < 0) continue;
+        let covered = 0;
+        for (let i = 0; i <= tipAt; i += 1) covered += marks[i];
+        const cover = covered / (tipAt + 1);
+        if (cover < 0.55) continue;
+        const t = t0 + tipAt;
+        lines.push({ th, run: tipAt * cover, tip: { x: ox + ux * t, y: oy + uy * t }, ox, oy, ux, uy, cover });
+      }
+    }
+    // le aste vere: le rette migliori, una per asta (rette quasi uguali = stessa asta)
+    const need = Math.max(R * 0.6, (L - R) * 0.4);
+    lines.sort((p, q) => q.run - p.run);
+    const kept: Line[] = [];
+    for (const p of lines) {
+      if (p.run < need) break;
+      // stessa asta: ognuna delle due punte sta sulla retta dell'altra
+      const same = kept.some((q) => {
+        const g1 = Math.abs((p.tip.x - q.ox) * -q.uy + (p.tip.y - q.oy) * q.ux);
+        const g2 = Math.abs((q.tip.x - p.ox) * -p.uy + (q.tip.y - p.oy) * p.ux);
+        return (g1 < R * 0.11 && g2 < R * 0.11) || Math.hypot(p.tip.x - q.tip.x, p.tip.y - q.tip.y) < R * 0.08;
+      });
+      if (same) continue;
+      // una retta molto più debole della migliore è rumore
+      if (kept.length && p.run < kept[0].run * 0.45) break;
+      kept.push(p);
+      if (kept.length >= 4) break;
+    }
+    for (const p of kept) {
+      const tip = toFace(calib, p.tip.x, p.tip.y);
+      if (Math.hypot(tip.x, tip.y) > 1.25) continue;
+      const back = Math.min(L, p.run + R * 0.5);
+      shafts.push({ tip, tail: toFace(calib, p.tip.x - p.ux * back, p.tip.y - p.uy * back), strength: Math.min(1, (p.run / L) * p.cover) });
+    }
+  }
+  // stessa punta trovata da due macchie: una sola freccia
+  const out: Shaft[] = [];
+  for (const s of shafts.sort((a, b) => b.strength - a.strength)) {
+    if (out.some((q) => Math.hypot(q.tip.x - s.tip.x, q.tip.y - s.tip.y) < 0.1)) continue;
+    out.push(s);
+  }
+  return out;
+}
+
 /** Lettura completa di una foto. */
-export function readPhoto(source: CanvasImageSource, srcW: number, srcH: number, face: Face, opts: { calib?: Calib | null; known?: { x: number; y: number }[] } = {}): Vision & { rect: Pix | null; pix: Pix | null } {
-  const pix = pixelsOf(source, srcW, srcH);
-  if (!pix) return { calib: null, found: false, hits: [], focus: null, facePx: 0, imageW: srcW, imageH: srcH, note: "Foto non leggibile.", rect: null, pix: null };
-  const rough = opts.calib ? null : findFace(pix);
-  const auto = rough ? refineCalib(pix, rough, face) : null;
-  const calib = opts.calib ?? auto;
+export function readPhoto(
+  source: CanvasImageSource,
+  srcW: number,
+  srcH: number,
+  face: Face,
+  opts: { calib?: Calib | null; known?: { x: number; y: number }[]; max?: number; keepHoles?: boolean } = {},
+): Vision & { rect: Pix | null; pix: Pix | null; paper: boolean; shafts: number } {
+  const pix = pixelsOf(source, srcW, srcH, 560);
+  const empty = { found: false, hits: [], focus: null, facePx: 0, imageW: srcW, imageH: srcH, rect: null, paper: false, shafts: 0 };
+  if (!pix) return { ...empty, calib: null, pix: null, note: "Foto non leggibile." };
+  // 1) faccia a colori (oro, rosso, blu) se c'è davvero; 2) altrimenti la faccia di carta chiara
+  let calib = opts.calib ?? null;
+  let paper = false;
   if (!calib) {
-    return { calib: null, found: false, hits: [], focus: null, facePx: 0, imageW: srcW, imageH: srcH, rect: null, pix, note: "Non trovo i colori della faccia. Calibra a mano: 4 tocchi sul bordo esterno." };
+    const rough = findFace(pix);
+    const colored = rough ? refineCalib(pix, rough, face) : null;
+    if (colored && colorEvidence(pix, colored) > 0.3) calib = colored;
+    else {
+      const sheet = findPaperFace(pix);
+      if (sheet) {
+        calib = sheet;
+        paper = true;
+      } else calib = colored;
+    }
+  }
+  if (!calib) {
+    return { ...empty, calib: null, pix, note: "Non trovo la faccia. Calibra a mano: 4 tocchi sul bordo esterno, poi regola il padiglione." };
   }
   const rect = rectify(pix, calib);
-  const read = readHits(rect, face, { known: opts.known });
-  const hits: VisionHit[] = read.hits.map((h) => {
-    const p = toImage(calib, h.x, h.y);
-    const t = h.tail ? toImage(calib, h.tail.x, h.tail.y) : null;
+  const read = readHits(rect, face, { known: opts.known, max: 24 });
+  // aste con le alette fuori dalla faccia: sono le frecce di questa volée, i fori sono vecchi
+  const shafts = findShafts(pix, calib);
+  type Raw = { x: number; y: number; tail?: { x: number; y: number }; kind: "asta" | "foro"; confidence: number; score: number; isX: boolean; miss: boolean };
+  let list: Raw[] = read.hits;
+  if (shafts.length) {
+    const fromShafts: Raw[] = shafts.map((sh) => {
+      const s = scoreAtRadius(face, Math.max(0, Math.hypot(sh.tip.x, sh.tip.y) - 0.012));
+      return { x: sh.tip.x, y: sh.tip.y, tail: sh.tail, kind: "asta", confidence: 0.6 + 0.4 * sh.strength, score: s.score, isX: s.isX, miss: s.miss };
+    });
+    const others = read.hits.filter((hh) => (opts.keepHoles || (hh.kind === "asta" && fromShafts.length < 2)) && !fromShafts.some((q) => Math.hypot(q.x - hh.x, q.y - hh.y) < 0.1));
+    list = [...fromShafts, ...others.map((hh) => ({ ...hh, confidence: hh.confidence * 0.7 }))];
+  }
+  const known = opts.known ?? [];
+  list = list.filter((hh) => !known.some((k) => Math.hypot(k.x - hh.x, k.y - hh.y) < 0.05));
+  list.sort((a, b) => b.confidence - a.confidence);
+  list = list.slice(0, opts.max ?? 12);
+  const hits: VisionHit[] = list.map((hh) => {
+    const p = toImage(calib!, hh.x, hh.y);
+    const t = hh.tail ? toImage(calib!, hh.tail.x, hh.tail.y) : null;
     return {
-      nx: h.x,
-      ny: h.y,
-      score: h.score,
-      isX: h.isX,
-      miss: h.miss,
+      nx: hh.x,
+      ny: hh.y,
+      score: hh.score,
+      isX: hh.isX,
+      miss: hh.miss,
       px: p.x / pix.w,
       py: p.y / pix.h,
-      kind: h.kind,
+      kind: hh.kind,
       tailPx: t ? t.x / pix.w : undefined,
       tailPy: t ? t.y / pix.h : undefined,
-      confidence: h.confidence,
+      confidence: hh.confidence,
     };
   });
   // diametro della faccia in pixel originali (asse maggiore)
@@ -821,7 +1261,7 @@ export function readPhoto(source: CanvasImageSource, srcW: number, srcH: number,
     const q = toImage(calib, -Math.cos(a), -Math.sin(a));
     facePx = Math.max(facePx, Math.hypot(p.x - q.x, p.y - q.y) * scale);
   }
-  return { calib, found: true, hits, focus: read.focus, facePx, imageW: srcW, imageH: srcH, rect, pix, note: "" };
+  return { calib, found: true, hits, focus: read.focus, facePx, imageW: srcW, imageH: srcH, rect, pix, note: "", paper, shafts: shafts.length };
 }
 
 /** Distanza stimata con il foro stenopeico (Miraglio): focale da un angolo di campo diagonale di 67°. */

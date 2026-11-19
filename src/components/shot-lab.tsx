@@ -11,9 +11,12 @@ export function ShotLab({
   face,
   shots,
   onPhoto,
+  expected,
 }: {
   face: Face;
   shots: Point[];
+  /** quante frecce aspettarsi nella foto (quelle che mancano alla volée) */
+  expected?: number;
   onPhoto?: (hits: { nx: number; ny: number; score: number; isX: boolean; miss: boolean }[]) => void;
 }) {
   const placed = shots
@@ -62,7 +65,7 @@ export function ShotLab({
       </div>
       </>
       )}
-      {onPhoto && view !== "corpo" ? <TargetRead face={face} onApply={onPhoto} known={placed.map((p) => ({ x: p.x, y: p.y }))} /> : null}
+      {onPhoto && view !== "corpo" ? <TargetRead face={face} onApply={onPhoto} expected={expected} known={placed.map((p) => ({ x: p.x, y: p.y }))} /> : null}
     </Card>
   );
 }
