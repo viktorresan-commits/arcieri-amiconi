@@ -11,9 +11,9 @@ const ROUNDS = [
 ] as const;
 
 const BOWS = [
-  { id: "recurve", name: "Olimpico", eta: 0.78, k: 0.5, sighted: true, scatter: 1.8, speed: 0.01 },
+  { id: "recurve", name: "Olimpico", eta: 0.78, k: 0.55, sighted: true, scatter: 1.8, speed: 0.01 },
   { id: "compound", name: "Compound", eta: 0.84, k: 0.7, sighted: true, scatter: 1.1, speed: 0.006 },
-  { id: "barebow", name: "Nudo", eta: 0.74, k: 0.5, sighted: false, scatter: 3.2, speed: 0.014 },
+  { id: "barebow", name: "Nudo", eta: 0.74, k: 0.55, sighted: false, scatter: 3.2, speed: 0.014 },
   { id: "longbow", name: "Longbow", eta: 0.68, k: 0.48, sighted: false, scatter: 4.2, speed: 0.018 },
 ] as const;
 
@@ -28,7 +28,7 @@ const START: FlightInput = {
   drawCm: 71,
   braceCm: 22,
   eta: 0.78,
-  k: 0.5,
+  k: 0.55,
   grains: 360,
   diameterMm: 4.2,
   lengthCm: 76,
@@ -100,6 +100,7 @@ export function FlightSim() {
   const [seed, setSeed] = useState(4);
   const [ready, setReady] = useState(false);
   const [pathMode, setPathMode] = useState<"reale" | "linea">("reale");
+  const [trueScale, setTrueScale] = useState(false);
   const [savedNote, setSavedNote] = useState("");
   const patch = (part: Partial<FlightInput>) => setForm((current) => ({ ...current, ...part }));
 
@@ -249,11 +250,12 @@ export function FlightSim() {
         <div className="ml-auto flex gap-1">
           <button type="button" onClick={() => setPathMode("reale")} className={`min-h-9 rounded-full px-3 text-xs ${pathMode === "reale" ? "bg-primary text-primary-fg" : "border border-line"}`}>Quota da terra</button>
           <button type="button" onClick={() => setPathMode("linea")} className={`min-h-9 rounded-full px-3 text-xs ${pathMode === "linea" ? "bg-primary text-primary-fg" : "border border-line"}`}>Sulla linea all'oro</button>
+          <button type="button" onClick={() => setTrueScale((v) => !v)} className={`min-h-9 rounded-full px-3 text-xs ${trueScale ? "bg-accent text-accent-fg" : "border border-line"}`}>{trueScale ? "Proporzioni vere ✓" : "Proporzioni vere"}</button>
         </div>
       </div>
       <div className="flex items-stretch gap-2">
       <div className="min-w-0 flex-1">
-      <FlightPath onGold={(goldM) => patch({ goldM })} input={{ ...form, sighted: setup.sighted }} round={primary} sighted={setup.sighted} mode={pathMode} title={`${form.distanceM} m · faccia ${form.faceCm} cm${form.slopeDeg ? ` · pendenza ${form.slopeDeg > 0 ? "+" : ""}${form.slopeDeg}°` : ""} · gruppo ${primary.total}/${n * (form.zones === 5 ? 9 : 10)}`} />
+      <FlightPath trueScale={trueScale} onGold={(goldM) => patch({ goldM })} input={{ ...form, sighted: setup.sighted }} round={primary} sighted={setup.sighted} mode={pathMode} title={`${form.distanceM} m · faccia ${form.faceCm} cm${form.slopeDeg ? ` · pendenza ${form.slopeDeg > 0 ? "+" : ""}${form.slopeDeg}°` : ""} · gruppo ${primary.total}/${n * (form.zones === 5 ? 9 : 10)}`} />
       </div>
       <label className="flex w-12 shrink-0 flex-col items-center gap-1 text-center text-[10px] leading-tight text-muted">
         <span>🎯 oro</span>
@@ -305,7 +307,7 @@ export function FlightSim() {
             <Stat k="Centro" v={side(second.my)} hint={up(second.mz)} />
             <Stat k="Gruppo" v={`${second.total}`} hint={`atteso ${Math.round(second.expected * n)}`} />
           </div>
-          <FlightPath input={secondInput} round={second} sighted={setup.sighted} mode={pathMode} title={`${secondInput.distanceM} m · faccia ${secondInput.faceCm} cm · gruppo ${second.total}/${n * (secondInput.zones === 5 ? 9 : 10)}`} />
+          <FlightPath trueScale={trueScale} input={secondInput} round={second} sighted={setup.sighted} mode={pathMode} title={`${secondInput.distanceM} m · faccia ${secondInput.faceCm} cm · gruppo ${second.total}/${n * (secondInput.zones === 5 ? 9 : 10)}`} />
           <FaceFront input={secondInput} round={second} sighted={setup.sighted} />
         </div>
       ) : null}
@@ -364,7 +366,7 @@ type RoundView = ReturnType<typeof describeRound>;
 const RING_COLORS = ["#f4f1ea", "#1a1c1e", "#2a6294", "#c4473d", "#e6b325"];
 
 /** Traiettoria di fianco: tiratore, linea di mira, parabola, linea dell'oro e il paglione in fondo. */
-function FlightPath({ input, round, sighted, mode, title, onGold }: { input: FlightInput; round: RoundView; sighted: boolean; mode: "reale" | "linea"; title: string; onGold?: (m: number) => void }) {
+function FlightPath({ input, round, sighted, mode, title, onGold, trueScale = false }: { input: FlightInput; round: RoundView; sighted: boolean; mode: "reale" | "linea"; title: string; onGold?: (m: number) => void; trueScale?: boolean }) {
   const GOLD_HEIGHT = goldOf(input);
   const svgRef = useRef<SVGSVGElement>(null);
   const dragging = useRef(false);
@@ -397,6 +399,13 @@ function FlightPath({ input, round, sighted, mode, title, onGold }: { input: Fli
   const span = Math.max(0.6, hi - lo);
   lo -= span * 0.08;
   hi += span * 0.12;
+  if (trueScale) {
+    // stessi metri in orizzontale e in verticale: la parabola com'è davvero
+    const need = ((H - pad.t - pad.b) / (W - pad.l - pad.r)) * (D + 1);
+    const mid = mode === "reale" ? Math.max(need / 2 - 0.3, (lo + hi) / 2) : (lo + hi) / 2;
+    lo = mid - need / 2;
+    hi = mid + need / 2;
+  }
   const X = (x: number) => pad.l + ((x + 1) / (D + 1)) * (W - pad.l - pad.r);
   const Y = (z: number) => pad.t + ((hi - z) / (hi - lo)) * (H - pad.t - pad.b);
   const P = (x: number, z: number) => `${X(x).toFixed(1)} ${Y(v(x, z)).toFixed(1)}`;

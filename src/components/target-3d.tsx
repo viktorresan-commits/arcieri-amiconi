@@ -326,6 +326,41 @@ function draw(el: HTMLCanvasElement | null, face: Face, arrows: Arrow[], c: Cam,
     }
   };
   const depthOf = (p: V3) => view(p)[2];
+  /** L'immagine della sagoma sul piano z, a tasselli (ognuno con la sua trasformazione affine). */
+  const paintPicture = (g: CanvasRenderingContext2D, pic: Picture, z: number, filter: string) => {
+    const N = 8;
+    const { img, halfW, halfH } = pic;
+    if (!img.complete || !img.naturalWidth) return;
+    const P = (u: number, v: number) => screen(view([-halfW + 2 * halfW * u, halfH - 2 * halfH * v, z]));
+    if (![P(0, 0), P(1, 0), P(0, 1), P(1, 1)].every((q) => Number.isFinite(q.x) && Number.isFinite(q.y))) return;
+    const sw = img.naturalWidth / N;
+    const sh = img.naturalHeight / N;
+    for (let j = 0; j < N; j += 1) for (let i = 0; i < N; i += 1) {
+      const a = P(i / N, j / N);
+      const b = P((i + 1) / N, j / N);
+      const c2 = P(i / N, (j + 1) / N);
+      const d = P((i + 1) / N, (j + 1) / N);
+      g.save();
+      if (filter) g.filter = filter;
+      g.beginPath();
+      // un pelo più grande per non vedere le cuciture
+      const cx = (a.x + b.x + c2.x + d.x) / 4;
+      const cy = (a.y + b.y + c2.y + d.y) / 4;
+      const grow = (q: { x: number; y: number }) => {
+        const l = Math.hypot(q.x - cx, q.y - cy) || 1;
+        return { x: q.x + ((q.x - cx) / l) * 1.6, y: q.y + ((q.y - cy) / l) * 1.6 };
+      };
+      [grow(a), grow(b), grow(d), grow(c2)].forEach((q, k) => (k ? g.lineTo(q.x, q.y) : g.moveTo(q.x, q.y)));
+      g.closePath();
+      g.clip();
+      g.setTransform((b.x - a.x) / sw, (b.y - a.y) / sw, (c2.x - a.x) / sh, (c2.y - a.y) / sh, a.x, a.y);
+      // il tassello sorgente sborda di 1 px per coprire le cuciture
+      const sx0 = Math.max(0, i * sw - 1);
+      const sy0 = Math.max(0, j * sh - 1);
+      g.drawImage(img, sx0, sy0, Math.min(img.naturalWidth - sx0, sw + 2), Math.min(img.naturalHeight - sy0, sh + 2), sx0 - i * sw, sy0 - j * sh, Math.min(img.naturalWidth - sx0, sw + 2), Math.min(img.naturalHeight - sy0, sh + 2));
+      g.restore();
+    }
+  };
 
   // cielo
   const sky = ctx.createLinearGradient(0, 0, 0, h);
@@ -335,26 +370,28 @@ function draw(el: HTMLCanvasElement | null, face: Face, arrows: Arrow[], c: Cam,
   ctx.fillStyle = sky;
   ctx.fillRect(0, 0, w, h);
 
+  // con una sagoma il terreno è ai suoi piedi (niente paglione né cavalletto)
+  const G = picture ? -picture.halfH - 0.015 : GROUND;
   // prato a strisce
   for (let i = -6; i < 16; i += 1) {
     const z0 = i * 2;
     const z1 = z0 + 2;
-    fillPoly(poly([[-30, GROUND, z0], [30, GROUND, z0], [30, GROUND, z1], [-30, GROUND, z1]]), i % 2 ? "#7aa452" : "#71994b");
+    fillPoly(poly([[-30, G, z0], [30, G, z0], [30, G, z1], [-30, G, z1]]), i % 2 ? "#7aa452" : "#71994b");
   }
   // linea di tiro
-  fillPoly(poly([[-6, GROUND + 0.002, 18], [6, GROUND + 0.002, 18], [6, GROUND + 0.002, 18.12], [-6, GROUND + 0.002, 18.12]]), "#f4f1ea");
+  fillPoly(poly([[-6, G + 0.002, 18], [6, G + 0.002, 18], [6, G + 0.002, 18.12], [-6, G + 0.002, 18.12]]), "#f4f1ea");
   // ombra del paglione
   const shadow: V3[] = [];
   for (let i = 0; i < 28; i += 1) {
     const a = (i / 28) * Math.PI * 2;
-    shadow.push([Math.cos(a) * 1.5, GROUND + 0.003, -0.25 + Math.sin(a) * 0.75]);
+    shadow.push(picture ? [Math.cos(a) * picture.halfW * 0.95, G + 0.003, -0.05 + Math.sin(a) * 0.35] : [Math.cos(a) * 1.5, G + 0.003, -0.25 + Math.sin(a) * 0.75]);
   }
   fillPoly(poly(shadow), "rgba(20,30,15,0.28)");
 
   const prims: Prim[] = [];
 
   // cavalletto: due gambe davanti, una dietro
-  const legs: [V3, V3][] = [
+  const legs: [V3, V3][] = picture ? [] : [
     [[-0.95, -1.05, -0.2], [-1.15, GROUND, 0.25]],
     [[0.95, -1.05, -0.2], [1.15, GROUND, 0.25]],
     [[0, 0.9, -0.48], [0, GROUND, -1.55]],
@@ -380,7 +417,7 @@ function draw(el: HTMLCanvasElement | null, face: Face, arrows: Arrow[], c: Cam,
     { n: [0, -1, 0], pts: [[-B, -B, Z0], [-B, -B, Z1], [B, -B, Z1], [B, -B, Z0]], color: "#8a6a3c" },
     { n: [0, 0, 1], pts: [[-B, -B, Z1], [B, -B, Z1], [B, B, Z1], [-B, B, Z1]], color: "#cdb07e" },
   ];
-  for (const side of box) {
+  for (const side of picture ? [] : box) {
     const mid = avg3(side.pts);
     if (dot(side.n, sub(eye, mid)) <= 0) continue;
     prims.push({
@@ -402,45 +439,25 @@ function draw(el: HTMLCanvasElement | null, face: Face, arrows: Arrow[], c: Cam,
     });
   }
 
-  // faccia del bersaglio
+  // faccia del bersaglio (la sagoma si vede anche da dietro, scura)
   const facing = eye[2] > 0.01;
+  if (picture && !facing) {
+    prims.push({
+      depth: depthOf([0, 0, -0.03]),
+      paint: (g) => {
+        for (const z of [0.003, -0.02, -0.04]) paintPicture(g, picture, z, "brightness(0.12)");
+      },
+    });
+  }
   if (facing) {
     const center: V3 = [0, 0, 0.002];
     prims.push({
       depth: depthOf(center) - 0.001,
       paint: (g) => {
         if (picture) {
-          // sagoma: l'immagine sulla faccia del paglione, a tasselli (ognuno con la sua trasformazione affine)
-          const N = 8;
-          const { img, halfW, halfH } = picture;
-          const P = (u: number, v: number) => screen(view([-halfW + 2 * halfW * u, halfH - 2 * halfH * v, 0.003]));
-          const ok = [P(0, 0), P(1, 0), P(0, 1), P(1, 1)].every((q) => Number.isFinite(q.x) && Number.isFinite(q.y));
-          if (ok && img.complete && img.naturalWidth) {
-            for (let j = 0; j < N; j += 1) for (let i = 0; i < N; i += 1) {
-              const u0 = i / N;
-              const v0 = j / N;
-              const u1 = (i + 1) / N;
-              const v1 = (j + 1) / N;
-              const a = P(u0, v0);
-              const b = P(u1, v0);
-              const c2 = P(u0, v1);
-              const d = P(u1, v1);
-              const sw = img.naturalWidth / N;
-              const sh = img.naturalHeight / N;
-              g.save();
-              g.beginPath();
-              // un pelo più grande per non vedere le cuciture
-              const cx = (a.x + b.x + c2.x + d.x) / 4;
-              const cy = (a.y + b.y + c2.y + d.y) / 4;
-              const grow = (q: { x: number; y: number }) => ({ x: q.x + (q.x - cx) * 0.02, y: q.y + (q.y - cy) * 0.02 });
-              [grow(a), grow(b), grow(d), grow(c2)].forEach((q, k) => (k ? g.lineTo(q.x, q.y) : g.moveTo(q.x, q.y)));
-              g.closePath();
-              g.clip();
-              g.setTransform((b.x - a.x) / sw, (b.y - a.y) / sw, (c2.x - a.x) / sh, (c2.y - a.y) / sh, a.x, a.y);
-              g.drawImage(img, i * sw, j * sh, sw, sh, 0, 0, sw, sh);
-              g.restore();
-            }
-          }
+          // sagoma ritagliata in piedi sul prato: spessore (3 strati scuri dietro) e poi la faccia
+          for (const z of [-0.06, -0.04, -0.02]) paintPicture(g, picture, z, "brightness(0.22)");
+          paintPicture(g, picture, 0.003, "");
         } else {
         const rings = [...face.rings].sort((a, b) => b.outer - a.outer);
         for (const ring of rings) {

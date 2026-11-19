@@ -20,7 +20,7 @@ export const SAGOME_3D = animal(
   { cx: 0.5753, cy: 0.4795, rx: 0.0438, ry: 0.0567 },
   { cx: 0.5725, cy: 0.4791, rx: 0.1055, ry: 0.1346 },
   { cx: 0.5652, cy: 0.4828, rx: 0.1788, ry: 0.2293 },
-  "/sagome-3d-v3.png",
+  "/sagome-3d-v4.png",
 );
 
 export const ANIMALS: Animal[] = [
