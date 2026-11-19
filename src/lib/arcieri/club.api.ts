@@ -20,7 +20,8 @@ function optionalInt(value: unknown, min: number, max: number, message: string) 
 function specsOf(raw: unknown) {
   const src = (raw ?? {}) as Record<string, unknown>;
   const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(src)) out[clip(k, 40)] = clip(v, 200);
+  // "flight" tiene le impostazioni del simulatore di volo (JSON): serve più spazio
+  for (const [k, v] of Object.entries(src)) out[clip(k, 40)] = clip(v, k === "flight" ? 2400 : 200);
   return JSON.stringify(out).slice(0, 4000);
 }
 

@@ -37,7 +37,10 @@ export function TargetRead({
   expected,
   volleyLabel,
   compact = false,
+  onApplyBatch,
 }: {
+  /** più foto insieme: una volée per foto, salvate in un colpo solo */
+  onApplyBatch?: (volleys: { nx: number; ny: number; score: number; isX: boolean; miss: boolean }[][]) => void;
   face: Face;
   onApply: Apply;
   known?: { x: number; y: number }[];
@@ -60,6 +63,11 @@ export function TargetRead({
   const [taps, setTaps] = useState<{ x: number; y: number }[] | null>(null);
   const [note, setNote] = useState("");
   const [applied, setApplied] = useState(false);
+  // coda di foto scelte insieme: una volée ciascuna, nell'ordine in cui sono state scattate
+  const [queue, setQueue] = useState<File[]>([]);
+  const [batch, setBatch] = useState<{ at: number; total: number } | null>(null);
+  const manyRef = useRef<HTMLInputElement>(null);
+  const [busyBatch, setBusyBatch] = useState(false);
   const [ignoreKnown, setIgnoreKnown] = useState(false);
   const [faceCm, setFaceCm] = useState(40);
   const [progress, setProgress] = useState<number | null>(null);
@@ -75,6 +83,12 @@ export function TargetRead({
   const adjustBase = useRef<Shape | null>(null);
   const moveFace = useRef<{ x: number; y: number; cx: number; cy: number } | null>(null);
   const [loupe, setLoupe] = useState<{ u: number; v: number } | null>(null);
+  // due dita sulla foto: sposto, ingrandisco e ruoto il padiglione di riferimento
+  const pointers = useRef(new Map<number, { u: number; v: number }>());
+  const pinch = useRef<{ d0: number; a0: number; mu: number; mv: number; base: { cx: number; cy: number; A: number; B: number; angle: number } } | null>(null);
+  // dito fermo su una freccia: cambio il suo numero
+  const press = useRef<number | null>(null);
+  const [renumber, setRenumber] = useState<number | null>(null);
   const loupeCanvas = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -119,6 +133,56 @@ export function TargetRead({
         ? `${where}${how} ${res.hits.length} frecce stimate: controlla. Se il padiglione non combacia, «Regola il padiglione». Trascina un punto per spostarlo, toccalo per toglierlo, tocca un punto vuoto per aggiungere.`
         : `${where} Frecce non abbastanza nette: tocca dove sono entrate (meglio sul bersaglio raddrizzato).`);
     }
+  }
+
+  function onMany(list: FileList | null) {
+    const files = [...(list ?? [])].filter((f) => f.type.startsWith("image/") || /\.(jpe?g|png|heic|webp)$/i.test(f.name));
+    if (!files.length) return;
+    files.sort((a, b) => a.lastModified - b.lastModified || a.name.localeCompare(b.name));
+    setQueue(files.slice(1));
+    setBatch(files.length > 1 ? { at: 1, total: files.length } : null);
+    onPhoto(files[0]);
+  }
+
+  function nextInQueue() {
+    const [next, ...rest] = queue;
+    if (!next) {
+      setBatch(null);
+      return false;
+    }
+    setQueue(rest);
+    setBatch((b) => (b ? { ...b, at: b.at + 1 } : b));
+    setRenumber(null);
+    onPhoto(next);
+    return true;
+  }
+
+  function currentHits() {
+    return hits.slice(0, expected && expected > 0 ? expected : hits.length).map(({ nx, ny, score, isX, miss }) => ({ nx, ny, score, isX, miss }));
+  }
+
+  function save() {
+    onApply(currentHits());
+    if (!nextInQueue()) setApplied(true);
+  }
+
+  /** Salva questa e tutte le foto rimaste senza fermarsi a controllarle. */
+  async function saveAll() {
+    if (!onApplyBatch) return;
+    setBusyBatch(true);
+    const volleys = [currentHits()];
+    for (const file of queue) {
+      const img = await loadImage(file).catch(() => null);
+      if (!img) continue;
+      const res = readPhoto(img, img.naturalWidth, img.naturalHeight, face, { calib: null, known: [], max: expected && expected > 0 ? expected : 12 });
+      volleys.push(res.hits.slice(0, expected && expected > 0 ? expected : res.hits.length).map(({ nx, ny, score, isX, miss }) => ({ nx, ny, score, isX, miss })));
+    }
+    onApplyBatch(volleys.filter((v) => v.length));
+    setQueue([]);
+    setBatch(null);
+    setBusyBatch(false);
+    setApplied(true);
+    setNote(`${volleys.length} volée salvate: controllale nella lista delle frecce.`);
   }
 
   function onPhoto(file: File) {
@@ -350,9 +414,35 @@ export function TargetRead({
     return { x: (p.x / pix.w) * box.width, y: (p.y / pix.h) * box.height };
   }
 
+  function startPinch() {
+    if (!pix || pointers.current.size < 2) return;
+    const [a, b] = [...pointers.current.values()];
+    let base = adjust;
+    if (!base) {
+      if (!calib || !image) return;
+      base = calibEllipse(calib);
+      adjustBase.current = base;
+      setAdjust(base);
+      setTaps(null);
+      setNote("Due dita: sposti, ingrandisci e ruoti il padiglione. Un dito: lo trascini. Poi «Applica».");
+    }
+    const dx = (b.u - a.u) * pix.w;
+    const dy = (b.v - a.v) * pix.h;
+    pinch.current = { d0: Math.max(1, Math.hypot(dx, dy)), a0: Math.atan2(dy, dx), mu: ((a.u + b.u) / 2) * pix.w, mv: ((a.v + b.v) / 2) * pix.h, base };
+    moveFace.current = null;
+    drag.current = null;
+    if (press.current) window.clearTimeout(press.current);
+    setLoupe(null);
+  }
+
   function down(event: RPointerEvent<HTMLCanvasElement>) {
     const { u, v, box } = pointOf(event);
     event.currentTarget.setPointerCapture(event.pointerId);
+    pointers.current.set(event.pointerId, { u, v });
+    if (view === "foto" && pointers.current.size >= 2) {
+      startPinch();
+      return;
+    }
     if (adjust && view === "foto" && pix) {
       moveFace.current = { x: u * pix.w, y: v * pix.h, cx: adjust.cx, cy: adjust.cy };
       return;
@@ -367,10 +457,38 @@ export function TargetRead({
       return Math.hypot(s.x - u * box.width, s.y - v * box.height) < 22;
     });
     drag.current = { index, moved: false, x: event.clientX, y: event.clientY };
+    if (press.current) window.clearTimeout(press.current);
+    if (index >= 0) {
+      press.current = window.setTimeout(() => {
+        const d = drag.current;
+        if (!d || d.moved || d.index !== index) return;
+        drag.current = null;
+        if (navigator.vibrate) navigator.vibrate(18);
+        setRenumber(index);
+      }, 520);
+    }
   }
 
   function move(event: RPointerEvent<HTMLCanvasElement>) {
     const { u, v } = pointOf(event);
+    if (pointers.current.has(event.pointerId)) pointers.current.set(event.pointerId, { u, v });
+    const pz = pinch.current;
+    if (pz && pix && pointers.current.size >= 2) {
+      const [a, b] = [...pointers.current.values()];
+      const dx = (b.u - a.u) * pix.w;
+      const dy = (b.v - a.v) * pix.h;
+      const k = Math.max(0.2, Math.min(5, Math.hypot(dx, dy) / pz.d0));
+      const mu = ((a.u + b.u) / 2) * pix.w;
+      const mv = ((a.v + b.v) / 2) * pix.h;
+      setAdjust({
+        cx: pz.base.cx + (mu - pz.mu),
+        cy: pz.base.cy + (mv - pz.mv),
+        A: pz.base.A * k,
+        B: pz.base.B * k,
+        angle: pz.base.angle + (Math.atan2(dy, dx) - pz.a0),
+      });
+      return;
+    }
     const mf = moveFace.current;
     if (mf && adjust && pix) {
       setAdjust({ ...adjust, cx: mf.cx + (u * pix.w - mf.x), cy: mf.cy + (v * pix.h - mf.y) });
@@ -384,6 +502,7 @@ export function TargetRead({
     if (!d || d.index < 0) return;
     if (!d.moved && Math.hypot(event.clientX - d.x, event.clientY - d.y) < 6) return;
     d.moved = true;
+    if (press.current) window.clearTimeout(press.current);
     if (view === "foto") setLoupe({ u, v });
     const f = faceAt(u, v);
     if (!f) return;
@@ -392,6 +511,14 @@ export function TargetRead({
   }
 
   function up(event: RPointerEvent<HTMLCanvasElement>) {
+    pointers.current.delete(event.pointerId);
+    if (press.current) window.clearTimeout(press.current);
+    if (pinch.current) {
+      // finché resta un dito giù non è un tocco: il gesto a due dita finisce qui
+      if (pointers.current.size === 0) pinch.current = null;
+      drag.current = null;
+      return;
+    }
     setLoupe(null);
     if (moveFace.current) {
       moveFace.current = null;
@@ -500,7 +627,17 @@ export function TargetRead({
           <p className="text-xs text-muted">Foto: scattala adesso o prendila dall'album. Video: telefono fermo (appoggiato o sul cavalletto) mentre tiri, e trovo ogni freccia nell'ordine in cui arriva.</p>
         </>
       )}
-      <MediaPick kind="image" onFile={onPhoto} />
+      <MediaPick kind="image" onFile={(file) => { setQueue([]); setBatch(null); onPhoto(file); }} />
+      <button type="button" onClick={() => manyRef.current?.click()} className="min-h-11 rounded-xl border border-dashed border-accent/60 bg-accent/10 px-3 text-sm font-semibold">
+        📚 Più foto insieme (una per volée)
+      </button>
+      <input ref={manyRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { onMany(e.currentTarget.files); e.currentTarget.value = ""; }} />
+      {batch ? (
+        <div className="flex items-center gap-2 rounded-xl bg-white/5 px-3 py-2 text-xs">
+          <span className="font-semibold">Foto {batch.at} di {batch.total}</span>
+          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-accent transition-all" style={{ width: `${(batch.at / batch.total) * 100}%` }} /></div>
+        </div>
+      ) : null}
       <MediaPick kind="video" onFile={(file) => void onVideo(file)} shootLabel="🎥 Video del bersaglio" albumLabel="🎞️ Video dalla galleria" />
       <label className="flex items-center gap-2 text-xs text-muted">
         <input type="checkbox" checked={ignoreKnown} onChange={(e) => setIgnoreKnown(e.target.checked)} />
@@ -527,7 +664,7 @@ export function TargetRead({
               </>
             ) : null}
             {image && calib ? (
-              <button type="button" onClick={() => (adjust ? applyAdjust() : startAdjust())} className={`min-h-10 rounded-full px-3 text-sm ${adjust ? "bg-accent text-accent-fg" : "border border-line"}`}>{adjust ? "✅ Applica" : "🎯 Regola il padiglione"}</button>
+              <button type="button" onClick={() => (adjust ? applyAdjust() : startAdjust())} className={`min-h-10 rounded-full px-3 text-sm ${adjust ? "bg-accent text-accent-fg" : "border border-line"}`}>{adjust ? "✅ Applica" : "✋ Sposta e ingrandisci il padiglione"}</button>
             ) : null}
             {calib && view === "foto" && !adjust ? (
               <button type="button" onClick={() => setShowFace((v) => !v)} className="min-h-10 rounded-full border border-line px-3 text-sm">{showFace ? "Padiglione: sì" : "Padiglione: no"}</button>
@@ -535,7 +672,15 @@ export function TargetRead({
           </div>
           {adjust ? (
             <div className="grid gap-2 rounded-xl border border-line p-3 text-sm">
-              <Slider label="Grandezza" min={0.6} max={1.5} step={0.005} value={adjust.A / (adjustBase.current?.A || adjust.A)} onChange={(k) => {
+              <div className="flex flex-wrap gap-1.5">
+                {([["−", 1 / 1.04], ["+", 1.04]] as const).map(([label, k]) => (
+                  <button key={label} type="button" className="aa-chip min-w-10 justify-center text-base" onClick={() => setAdjust({ ...adjust, A: adjust.A * k, B: adjust.B * k })}>{label}</button>
+                ))}
+                {([["←", -1, 0], ["→", 1, 0], ["↑", 0, -1], ["↓", 0, 1]] as const).map(([label, x, y]) => (
+                  <button key={label} type="button" className="aa-chip min-w-10 justify-center text-base" onClick={() => setAdjust({ ...adjust, cx: adjust.cx + x * adjust.A * 0.02, cy: adjust.cy + y * adjust.A * 0.02 })}>{label}</button>
+                ))}
+              </div>
+              <Slider label="Grandezza" min={0.4} max={2} step={0.005} value={adjust.A / (adjustBase.current?.A || adjust.A)} onChange={(k) => {
                 const base = adjustBase.current ?? adjust;
                 const ratio = adjust.B / adjust.A;
                 setAdjust({ ...adjust, A: base.A * k, B: base.A * k * ratio });
@@ -550,7 +695,7 @@ export function TargetRead({
           ) : null}
           {view === "foto" ? (
             <div className="relative">
-              <canvas ref={photoCanvas} className="w-full touch-none rounded-xl" onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={() => { drag.current = null; moveFace.current = null; setLoupe(null); }} />
+              <canvas ref={photoCanvas} className="w-full touch-none rounded-xl" onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={(e) => { pointers.current.delete(e.pointerId); if (!pointers.current.size) pinch.current = null; drag.current = null; moveFace.current = null; setLoupe(null); }} />
               {loupe ? (
                 <canvas
                   ref={loupeCanvas}
@@ -560,11 +705,43 @@ export function TargetRead({
               ) : null}
             </div>
           ) : (
-            <canvas ref={rectCanvas} className="mx-auto aspect-square w-full max-w-md touch-none rounded-xl" onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={() => { drag.current = null; }} />
+            <canvas ref={rectCanvas} className="mx-auto aspect-square w-full max-w-md touch-none rounded-xl" onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={(e) => { pointers.current.delete(e.pointerId); drag.current = null; }} />
           )}
         </>
       ) : null}
+      {renumber != null && hits[renumber] ? (
+        <div className="aa-rise grid gap-2 rounded-2xl border border-accent/50 bg-accent/10 p-3">
+          <p className="text-sm font-semibold">Freccia n. {renumber + 1} ({hits[renumber].miss ? "M" : hits[renumber].isX ? "X" : hits[renumber].score}): che numero è?</p>
+          <div className="flex flex-wrap gap-1.5">
+            {hits.map((_, i) => (
+              <button
+                key={i}
+                type="button"
+                aria-pressed={i === renumber}
+                className="aa-chip min-w-10 justify-center"
+                onClick={() => {
+                  const from = renumber;
+                  setHits((list) => {
+                    const next = [...list];
+                    [next[from], next[i]] = [next[i], next[from]];
+                    return next;
+                  });
+                  setApplied(false);
+                  setRenumber(null);
+                }}
+              >
+                {i + 1}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <button type="button" className="min-h-9 rounded-full border border-line px-3 text-xs" onClick={() => { const from = renumber; setHits((list) => list.filter((_, i) => i !== from)); setApplied(false); setRenumber(null); }}>🗑 Togli questa freccia</button>
+            <button type="button" className="min-h-9 rounded-full border border-line px-3 text-xs" onClick={() => setRenumber(null)}>Annulla</button>
+          </div>
+        </div>
+      ) : null}
       {note ? <p className="text-sm">{note}</p> : null}
+      {hits.length && !adjust ? <p className="text-[0.7rem] text-muted">Tocca un punto per toglierlo, trascinalo per spostarlo, tienilo premuto per cambiare il numero della freccia. Con due dita sposti e ingrandisci il padiglione.</p> : null}
 
       {has ? (
         <div className="grid gap-2 rounded-xl border border-line p-3 text-sm">
@@ -614,11 +791,16 @@ export function TargetRead({
 
       {hits.length && !applied ? (
         <div className="grid grid-cols-[1fr_auto] gap-2">
-          <button type="button" className="min-h-11 rounded-full bg-primary px-3 text-sm font-semibold text-primary-fg" onClick={() => { onApply(hits.slice(0, expected && expected > 0 ? expected : hits.length).map(({ nx, ny, score, isX, miss }) => ({ nx, ny, score, isX, miss }))); setApplied(true); }}>
-            💾 Salva {expected && expected > 0 ? Math.min(expected, hits.length) : hits.length} frecce {volleyLabel ? `nella ${volleyLabel}` : "nella volée"}
+          <button type="button" className="min-h-11 rounded-full bg-primary px-3 text-sm font-semibold text-primary-fg" onClick={save}>
+            💾 Salva {expected && expected > 0 ? Math.min(expected, hits.length) : hits.length} frecce {volleyLabel ? `nella ${volleyLabel}` : "nella volée"}{queue.length ? " → foto dopo" : ""}
           </button>
           <button type="button" className="min-h-11 rounded-full border border-line px-3 text-sm" onClick={() => { setHits([]); setApplied(false); }}>Svuota</button>
         </div>
+      ) : null}
+      {queue.length && onApplyBatch && hits.length && !applied ? (
+        <button type="button" disabled={busyBatch} onClick={() => void saveAll()} className="min-h-10 rounded-full border border-accent/60 px-3 text-xs font-semibold">
+          {busyBatch ? "Leggo le foto…" : `⚡ Salva questa e le altre ${queue.length} senza controllarle`}
+        </button>
       ) : null}
       {applied ? (
         <div className="aa-rise grid gap-2 rounded-2xl border border-primary/40 bg-primary/10 p-3">
@@ -638,6 +820,15 @@ function Slider({ label, min, max, step, value, onChange, show }: { label: strin
       <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} className="h-9 w-full accent-[var(--primary)]" />
     </label>
   );
+}
+
+function loadImage(file: File) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("foto non letta"));
+    img.src = URL.createObjectURL(file);
+  });
 }
 
 function mark(ctx: CanvasRenderingContext2D, x: number, y: number, index: number, hit: Hit, r: number) {

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { angularSize, effectiveLb, goldOf, compensatedDistance, describeRound, eyePoint, launchSpeed, releasePoint, type Fletch, type FlightInput } from "@/lib/arcieri/flight";
-import { Card, Field, Select } from "@/components/kit";
+import { Button, Card, Chips, Field, Segmented, Select, TextInput } from "@/components/kit";
+import { listEquipment, saveEquipment } from "@/lib/arcieri/club.api";
 
 const ROUNDS = [
   { id: "18", name: "Indoor 18 m", distanceM: 18, faceCm: 40 },
@@ -102,6 +103,7 @@ export function FlightSim() {
   const [pathMode, setPathMode] = useState<"reale" | "linea">("reale");
   const [trueScale, setTrueScale] = useState(false);
   const [savedNote, setSavedNote] = useState("");
+  const [tab, setTab] = useState<"arco" | "freccia" | "tiro" | "meteo">("arco");
   const patch = (part: Partial<FlightInput>) => setForm((current) => ({ ...current, ...part }));
 
   // I dati balistici restano sul telefono: si ricaricano all'apertura e si salvano a ogni modifica.
@@ -176,63 +178,78 @@ export function FlightSim() {
           <button type="button" onClick={resetAll} className="min-h-9 rounded-full border border-line px-3 text-xs">Ripristina valori iniziali</button>
         </div>
       </div>
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {ROUNDS.map((item) => (
-          <button key={item.id} type="button" onClick={() => { setRound(item.id); patch({ distanceM: item.distanceM, faceCm: item.faceCm }); }} className={`min-h-11 shrink-0 rounded-full px-3 text-sm ${round === item.id ? "bg-primary text-primary-fg" : "border border-line"}`}>
-            {item.name}
-          </button>
-        ))}
-      </div>
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {BOWS.map((item) => (
-          <button key={item.id} type="button" onClick={() => { setBow(item.id); patch({ lbAt28: item.id !== "compound", eta: item.eta, k: item.k, sighted: item.sighted, eyeCm: item.sighted ? 2 : (RELEASES.find((r) => r.id === release) ?? RELEASES[0]).eyeCm }); }} className={`min-h-11 shrink-0 rounded-full px-3 text-sm ${bow === item.id ? "bg-primary text-primary-fg" : "border border-line"}`}>
-            {item.name}
-          </button>
-        ))}
-      </div>
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {RELEASES.map((item) => (
-          <button key={item.id} type="button" onClick={() => { setRelease(item.id); if (!setup.sighted) patch({ eyeCm: item.eyeCm }); }} className={`min-h-11 shrink-0 rounded-full px-3 text-sm ${release === item.id ? "bg-accent text-accent-fg" : "border border-line"}`}>
-            {item.name}
-          </button>
-        ))}
-      </div>
-      <div className="grid gap-2">
-        <Slider label={form.lbAt28 ? "Libbre segnate sull'arco (a 28″)" : "Libbre"} value={form.drawLb} min={16} max={70} step={1} onChange={(drawLb) => patch({ drawLb, grains: Math.round(gpp * drawLb) })} />
-        <Slider label={`Allungo cm (${(form.drawCm / 2.54).toFixed(1).replace(".", ",")}″ · ${effectiveLb(form).toFixed(1).replace(".", ",")} lb)`} value={form.drawCm} min={58} max={84} step={1} onChange={(drawCm) => patch({ drawCm })} />
-        <Slider label="Brace cm" value={form.braceCm} min={14} max={28} step={0.5} onChange={(braceCm) => patch({ braceCm })} />
-        <Slider label="Grani per libbra" value={Number(gpp.toFixed(1))} min={5} max={16} step={0.1} onChange={(next) => patch({ grains: Math.round(next * form.drawLb) })} />
-        <Slider label="Lunghezza freccia cm" value={form.lengthCm} min={55} max={86} step={0.5} onChange={(lengthCm) => patch({ lengthCm })} />
-        {!setup.sighted ? (
-          <Slider label="Occhio sopra la freccia cm (aggancio)" value={form.eyeCm} min={2} max={16} step={0.5} onChange={(eyeCm) => patch({ eyeCm })} />
-        ) : null}
-        <Slider label="Diametro mm" value={form.diameterMm} min={3.2} max={9} step={0.1} onChange={(diameterMm) => patch({ diameterMm })} />
-        <Slider label="Distanza m" value={form.distanceM} min={10} max={90} step={1} onChange={(distanceM) => { setRound(""); patch({ distanceM }); }} />
-        <Slider label="Bersaglio cm" value={form.faceCm} min={20} max={122} step={1} onChange={(faceCm) => patch({ faceCm })} />
-        <Slider label="Altezza cm" value={form.heightCm} min={140} max={210} step={1} onChange={(heightCm) => patch({ heightCm })} />
-        <Slider label="Vento m/s" value={form.wind} min={-8} max={8} step={0.5} onChange={(wind) => patch({ wind })} />
-        <Slider label="Pendenza ° (+ salita, − discesa)" value={form.slopeDeg ?? 0} min={-35} max={35} step={1} onChange={(slopeDeg) => patch({ slopeDeg })} />
-        <Inclinometer onUse={(slopeDeg) => patch({ slopeDeg })} />
-        {form.slopeDeg ? (
-          <p className="text-xs text-muted">In pendenza la distanza da usare sul mirino è circa {compensatedDistance(form).toFixed(1)} m (linea di tiro × coseno dell'angolo); la parabola sopra tiene già conto della gravità inclinata.</p>
-        ) : null}
-      </div>
-      <div className="grid grid-cols-2 gap-2">
-        <Field label="Penne">
-          <Select value={form.fletch} onChange={(e) => patch({ fletch: e.target.value as Fletch })}>
-            <option value="spin">Spin wing</option>
-            <option value="vane3">3 alette</option>
-            <option value="feather3">3 piume</option>
-            <option value="feather4">4 piume</option>
-          </Select>
-        </Field>
-        <Field label="Zone">
-          <Select value={String(form.zones)} onChange={(e) => patch({ zones: Number(e.target.value) === 5 ? 5 : 10 })}>
-            <option value="10">10 zone</option>
-            <option value="5">5 zone</option>
-          </Select>
-        </Field>
-      </div>
+      <SaveFlight
+        snapshot={{ form, bow, release, round }}
+        onLoad={(saved) => {
+          setForm({ ...START, ...saved.form });
+          if (BOWS.some((b) => b.id === saved.bow)) setBow(saved.bow as (typeof BOWS)[number]["id"]);
+          if (RELEASES.some((r) => r.id === saved.release)) setRelease(saved.release as (typeof RELEASES)[number]["id"]);
+          setRound(saved.round ?? "");
+          setSavedNote("Caricato dall'attrezzatura.");
+        }}
+      />
+      <Segmented
+        value={tab}
+        onChange={setTab}
+        options={[
+          { id: "arco", label: "🏹 Arco" },
+          { id: "freccia", label: "➶ Freccia" },
+          { id: "tiro", label: "🎯 Tiro" },
+          { id: "meteo", label: "🌬️ Vento" },
+        ]}
+      />
+      {tab === "arco" ? (
+        <div className="grid gap-2.5">
+          <Chips value={bow} onChange={(id) => { const item = BOWS.find((b) => b.id === id) ?? BOWS[0]; setBow(item.id); patch({ lbAt28: item.id !== "compound", eta: item.eta, k: item.k, sighted: item.sighted, eyeCm: item.sighted ? 2 : (RELEASES.find((r) => r.id === release) ?? RELEASES[0]).eyeCm }); }} options={BOWS.map((b) => ({ id: b.id, label: b.name }))} />
+          <Chips value={release} onChange={(id) => { const item = RELEASES.find((r) => r.id === id) ?? RELEASES[0]; setRelease(item.id); if (!setup.sighted) patch({ eyeCm: item.eyeCm }); }} options={RELEASES.map((r) => ({ id: r.id, label: r.name }))} />
+          <Slider label={form.lbAt28 ? "Libbre segnate (a 28″)" : "Libbre"} unit="lb" value={form.drawLb} min={16} max={70} step={1} onChange={(drawLb) => patch({ drawLb, grains: Math.round(gpp * drawLb) })} />
+          <Slider label={`Allungo (${(form.drawCm / 2.54).toFixed(1).replace(".", ",")}″ · ${effectiveLb(form).toFixed(1).replace(".", ",")} lb reali)`} unit="cm" value={form.drawCm} min={58} max={84} step={0.5} onChange={(drawCm) => patch({ drawCm })} />
+          <Slider label="Brace (corda–impugnatura)" unit="cm" value={form.braceCm} min={14} max={28} step={0.5} onChange={(braceCm) => patch({ braceCm })} />
+        </div>
+      ) : null}
+      {tab === "freccia" ? (
+        <div className="grid gap-2.5">
+          <Slider label={`Peso totale (${gpp.toFixed(1).replace(".", ",")} grani per libbra)`} unit="gr" value={form.grains} min={150} max={900} step={1} onChange={(grains) => patch({ grains })} />
+          <Slider label="Lunghezza" unit="cm" value={form.lengthCm} min={55} max={86} step={0.5} onChange={(lengthCm) => patch({ lengthCm })} />
+          <Slider label="Diametro" unit="mm" value={form.diameterMm} min={3.2} max={9} step={0.1} onChange={(diameterMm) => patch({ diameterMm })} />
+          <Field label="Penne">
+            <Select value={form.fletch} onChange={(e) => patch({ fletch: e.target.value as Fletch })}>
+              <option value="spin">Spin wing</option>
+              <option value="vane3">3 alette</option>
+              <option value="feather3">3 piume</option>
+              <option value="feather4">4 piume</option>
+            </Select>
+          </Field>
+        </div>
+      ) : null}
+      {tab === "tiro" ? (
+        <div className="grid gap-2.5">
+          <Chips value={round} onChange={(id) => { const item = ROUNDS.find((r) => r.id === id); if (!item) return; setRound(item.id); patch({ distanceM: item.distanceM, faceCm: item.faceCm }); }} options={ROUNDS.map((r) => ({ id: r.id, label: r.name }))} />
+          <Slider label="Distanza" unit="m" value={form.distanceM} min={5} max={90} step={0.5} onChange={(distanceM) => { setRound(""); patch({ distanceM }); }} />
+          <Slider label="Diametro della faccia" unit="cm" value={form.faceCm} min={10} max={122} step={1} onChange={(faceCm) => patch({ faceCm })} />
+          <Slider label="Altezza dell'oro da terra" unit="m" value={goldOf(form)} min={0.3} max={3} step={0.01} onChange={(goldM) => patch({ goldM })} />
+          <Slider label="La tua altezza" unit="cm" value={form.heightCm} min={120} max={210} step={1} onChange={(heightCm) => patch({ heightCm })} />
+          {!setup.sighted ? (
+            <Slider label="Occhio sopra la freccia (aggancio)" unit="cm" value={form.eyeCm} min={2} max={16} step={0.5} onChange={(eyeCm) => patch({ eyeCm })} />
+          ) : null}
+          <Field label="Zone">
+            <Select value={String(form.zones)} onChange={(e) => patch({ zones: Number(e.target.value) === 5 ? 5 : 10 })}>
+              <option value="10">10 zone</option>
+              <option value="5">5 zone</option>
+            </Select>
+          </Field>
+        </div>
+      ) : null}
+      {tab === "meteo" ? (
+        <div className="grid gap-2.5">
+          <Slider label="Vento (+ da sinistra, − da destra)" unit="m/s" value={form.wind} min={-8} max={8} step={0.5} onChange={(wind) => patch({ wind })} />
+          <Slider label="Pendenza (+ salita, − discesa)" unit="°" value={form.slopeDeg ?? 0} min={-35} max={35} step={1} onChange={(slopeDeg) => patch({ slopeDeg })} />
+          <Inclinometer onUse={(slopeDeg) => patch({ slopeDeg })} />
+          {form.slopeDeg ? (
+            <p className="text-xs text-muted">In pendenza la distanza da usare sul mirino è circa {compensatedDistance(form).toFixed(1)} m (linea di tiro × coseno dell'angolo); la parabola tiene già conto della gravità inclinata.</p>
+          ) : null}
+        </div>
+      ) : null}
       {bad ? <p className="text-sm text-danger">Controlla brace, libbre e peso della freccia: con questi numeri il volo non sta in piedi.</p> : null}
       <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
         <Stat k="Velocità" v={`${primary.clean.v0.toFixed(1)} m/s`} hint={`${Math.round(primary.clean.v0 * 3.28084)} fps`} />
@@ -342,12 +359,38 @@ function up(metres: number) {
   return `${Math.abs(cm).toFixed(1)} cm ${cm > 0 ? "sopra" : "sotto"}`;
 }
 
-function Slider({ label, value, min, max, step, onChange }: { label: string; value: number; min: number; max: number; step: number; onChange: (value: number) => void }) {
+function Slider({ label, value, min, max, step, unit, onChange }: { label: string; value: number; min: number; max: number; step: number; unit?: string; onChange: (value: number) => void }) {
+  const [text, setText] = useState<string | null>(null);
+  const digits = step < 0.1 ? 2 : step < 1 ? 1 : 0;
+  const shown = Number(value.toFixed(digits));
+  const clamp = (v: number) => Math.min(max, Math.max(min, Math.round(v / step) * step));
+  const commit = (raw: string) => {
+    const v = Number(raw.replace(",", "."));
+    if (Number.isFinite(v)) onChange(Number(clamp(v).toFixed(digits)));
+    setText(null);
+  };
+  const nudge = (dir: 1 | -1) => onChange(Number(clamp(value + dir * step).toFixed(digits)));
   return (
-    <label className="grid gap-1 text-sm">
-      <span className="flex justify-between text-muted"><span>{label}</span><span className="tabular-nums text-fg">{value}</span></span>
-      <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} className="h-11 w-full accent-[var(--primary)]" />
-    </label>
+    <div className="grid gap-1">
+      <div className="flex items-center gap-2">
+        <span className="min-w-0 flex-1 text-[0.78rem] leading-tight text-muted">{label}</span>
+        <button type="button" onClick={() => nudge(-1)} className="grid h-8 w-8 place-items-center rounded-full border border-hair bg-white/5 text-base" aria-label={`${label}: meno`}>−</button>
+        <label className="flex h-8 items-center gap-1 rounded-lg border border-hair bg-black/25 px-2">
+          <input
+            inputMode="decimal"
+            value={text ?? String(shown).replace(".", ",")}
+            onChange={(e) => setText(e.target.value)}
+            onBlur={(e) => commit(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+            className="w-12 bg-transparent text-right text-sm font-semibold tabular-nums outline-none"
+            aria-label={label}
+          />
+          {unit ? <span className="text-[0.7rem] text-muted">{unit}</span> : null}
+        </label>
+        <button type="button" onClick={() => nudge(1)} className="grid h-8 w-8 place-items-center rounded-full border border-hair bg-white/5 text-base" aria-label={`${label}: più`}>+</button>
+      </div>
+      <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} className="h-6 w-full accent-[var(--primary)]" />
+    </div>
   );
 }
 
@@ -535,7 +578,10 @@ function FaceFront({ input, round, sighted, title }: { input: FlightInput; round
   const iw = W - pad.l - pad.r;
   const ih = H - pad.t - pad.b;
   // finestra verticale: paglione + mira + gruppo, con un po' di margine
-  const zs = [GOLD_HEIGHT + boss, GOLD_HEIGHT - boss, GOLD_HEIGHT + gap, ...round.hits.map((h) => h.z)];
+  // mira corretta: sposto la mira al contrario dello scarto del gruppo, così il centro gruppo va sull'oro
+  const fixY = -round.my;
+  const fixZ = GOLD_HEIGHT + gap - (round.mz - GOLD_HEIGHT);
+  const zs = [GOLD_HEIGHT + boss, GOLD_HEIGHT - boss, GOLD_HEIGHT + gap, fixZ, ...round.hits.map((h) => h.z)];
   let lo = Math.min(...zs);
   let hi = Math.max(...zs);
   const m = Math.max(0.08, (hi - lo) * 0.12);
@@ -561,7 +607,6 @@ function FaceFront({ input, round, sighted, title }: { input: FlightInput; round
   const gx = X(0);
   const gy = Y(GOLD_HEIGHT);
   const aimZ = GOLD_HEIGHT + gap;
-  const aimIn = aimZ <= hi && aimZ >= lo;
   const aimY = Y(Math.max(lo + spanZ * 0.04, Math.min(hi - spanZ * 0.04, aimZ)));
   const size = angularSize(input.faceCm, input.distanceM);
   const fmtScore = round.hits.map((hit) => (hit.miss ? "M" : hit.zone)).join(" ");
@@ -635,22 +680,90 @@ function FaceFront({ input, round, sighted, title }: { input: FlightInput; round
             </g>
           ))}
           <path d={`M${centreX - 6} ${centreY} H${centreX + 6} M${centreX} ${centreY - 6} V${centreY + 6}`} stroke="#e07a2f" strokeWidth="1.6" />
-          {/* punto di mira */}
-          <path d={`M${gx} ${aimY - 6} l6 6 l-6 6 l-6 -6 Z`} fill="#f4f1ea" stroke="#14181c" strokeWidth="0.8" />
-          <line x1={gx + 7} y1={aimY} x2={Math.min(X(boss) + 4, W - pad.r - 95)} y2={aimY} stroke="#f4f1ea" strokeWidth="0.7" strokeDasharray="2 2" opacity="0.7" />
-          <text x={Math.min(X(boss) + 7, W - pad.r - 92)} y={aimY + 3} fill="#f4f1ea" fontSize="9.5" style={{ paintOrder: "stroke" }} stroke="#0f1a14" strokeWidth="3">
-            {sighted ? "mira: oro" : `mira ${Math.abs(gap * 100).toFixed(0)} cm ${gap >= 0 ? "sopra" : "sotto"}${aimIn ? "" : gap > 0 ? " ↑" : " ↓"}`}
-          </text>
+          {/* mira usata (rombo) → dove arriva (centro gruppo) */}
+          <path d={`M${gx} ${aimY - 5} l5 5 l-5 5 l-5 -5 Z`} fill="#f4f1ea" stroke="#14181c" strokeWidth="0.8" opacity="0.85" />
+          {/* MIRA QUI: mirino che porta il centro del gruppo sull'oro */}
+          {(() => {
+            const fx = X(fixY);
+            const fy = Y(Math.max(lo, Math.min(hi, fixZ)));
+            const rr = 9;
+            const far = Math.hypot(fx - gx, fy - gy) > 4;
+            return (
+              <g>
+                {far ? (
+                  <line x1={fx} y1={fy} x2={gx} y2={gy} stroke="#7cf0a8" strokeWidth="1" strokeDasharray="3 3" opacity="0.8" />
+                ) : null}
+                <circle cx={fx} cy={fy} r={rr} fill="none" stroke="#7cf0a8" strokeWidth="1.8" className="aa-pulse" />
+                <path d={`M${fx - rr - 5} ${fy} H${fx - 3} M${fx + 3} ${fy} H${fx + rr + 5} M${fx} ${fy - rr - 5} V${fy - 3} M${fx} ${fy + 3} V${fy + rr + 5}`} stroke="#7cf0a8" strokeWidth="1.6" />
+                <text x={Math.min(fx + rr + 8, W - pad.r - 52)} y={fy - rr} fill="#7cf0a8" fontSize="10" fontWeight="700" style={{ paintOrder: "stroke" }} stroke="#0f1a14" strokeWidth="3">MIRA QUI</text>
+              </g>
+            );
+          })()}
         </g>
         {/* cornice dell'area */}
         <rect x={pad.l} y={pad.t} width={iw} height={ih} fill="none" stroke="rgba(244,241,234,0.08)" />
       </svg>
-      <p className="text-center text-[0.7rem] text-muted">
+      <AimHelp input={input} round={round} sighted={sighted} fixY={fixY} fixZ={fixZ} gold={GOLD_HEIGHT} R={R} />
+      <p className="text-center text-[0.68rem] text-muted">
         Frecce: {fmtScore}
-        {size ? ` · la faccia copre ${size.moa.toFixed(0)} MOA (${size.inchesAt20yd.toFixed(1)} in/20 yd)` : ""}
-        {" · "}
-        <span style={{ color: "#e07a2f" }}>✚</span> centro gruppo · <span style={{ color: "#e07a2f" }}>◌</span> dispersione · ◆ mira
+        {size ? ` · la faccia copre ${size.moa.toFixed(0)} MOA` : ""}
+        {" · "}◆ mira usata · <span style={{ color: "#e07a2f" }}>✚</span> dove arrivano · <span style={{ color: "#7cf0a8" }}>⊕</span> mira giusta
       </p>
+    </div>
+  );
+}
+
+/** Dove mirare, detto a parole: zona e ore del bersaglio, centimetri, e per il mirino di quanto spostarlo. */
+function AimHelp({ input, round, sighted, fixY, fixZ, gold, R }: { input: FlightInput; round: RoundView; sighted: boolean; fixY: number; fixZ: number; gold: number; R: number }) {
+  const dy = fixY;
+  const dz = fixZ - gold;
+  const dist = Math.hypot(dy, dz);
+  const zones = input.zones === 5 ? 5 : 10;
+  const zone = dist >= R ? null : Math.max(1, zones - Math.floor((dist / R) * zones));
+  const hour = (() => {
+    const deg = (Math.atan2(dy, dz) * 180) / Math.PI;
+    return Math.round(((deg + 360) % 360) / 30) % 12 || 12;
+  })();
+  const where = dist < 0.01
+    ? "proprio al centro (sull'oro)"
+    : zone != null
+      ? `nel ${zones === 5 ? ["", "bianco", "nero", "blu", "rosso", "oro"][zone] ?? zone : zone} a ore ${hour}`
+      : `${((dist - R) * 100).toFixed(0)} cm fuori dalla faccia, a ore ${hour}`;
+  const cm = (m: number) => `${Math.abs(m * 100).toFixed(0)} cm`;
+  // mirino: lo sposti dalla parte in cui vuoi che vadano le frecce; la distanza occhio-mirino ~ 85 cm
+  const sightMm = (m: number) => Math.abs((m / Math.max(1, input.distanceM)) * 850).toFixed(1).replace(".", ",");
+  const offY = round.my;
+  const offZ = round.mz - gold;
+  return (
+    <div className="grid gap-1.5 rounded-xl border border-[#7cf0a8]/30 bg-[#7cf0a8]/[0.06] p-2.5 text-[0.78rem] leading-snug">
+      <p className="font-semibold text-[#7cf0a8]">🎯 Dove mirare</p>
+      {sighted ? (
+        <>
+          <p>
+            Con il mirino sull'oro il gruppo arriva {Math.abs(offZ) < 0.005 ? "in quota" : `${cm(offZ)} ${offZ > 0 ? "alto" : "basso"}`}
+            {Math.abs(offY) < 0.005 ? "" : ` e ${cm(offY)} a ${offY > 0 ? "destra" : "sinistra"}`}.
+          </p>
+          <p>
+            Per centrare: <b>mira {where}</b>, oppure sposta il mirino di circa{" "}
+            {Math.abs(offZ) >= 0.005 ? <b>{sightMm(offZ)} mm {offZ > 0 ? "in su" : "in giù"}</b> : null}
+            {Math.abs(offZ) >= 0.005 && Math.abs(offY) >= 0.005 ? " e " : null}
+            {Math.abs(offY) >= 0.005 ? <b>{sightMm(offY)} mm a {offY > 0 ? "destra" : "sinistra"}</b> : null}
+            {Math.abs(offZ) < 0.005 && Math.abs(offY) < 0.005 ? <b>niente: sei già centrato</b> : null}
+            {" "}(il mirino va dalla stessa parte in cui vanno le frecce).
+          </p>
+        </>
+      ) : (
+        <>
+          <p>
+            Senza mirino tieni la punta della freccia <b>{Math.abs(round.gap) < 0.01 ? "sull'oro" : `${cm(round.gap)} ${round.gap >= 0 ? "sopra" : "sotto"} l'oro`}</b>
+            {round.gap > R ? " (sopra la faccia)" : round.gap < -R ? " (sotto la faccia)" : ""}.
+          </p>
+          <p>
+            Con vento e dispersione il gruppo arriva {Math.abs(offZ) < 0.005 ? "in quota" : `${cm(offZ)} ${offZ > 0 ? "alto" : "basso"}`}
+            {Math.abs(offY) < 0.005 ? "" : ` e ${cm(offY)} a ${offY > 0 ? "destra" : "sinistra"}`}: per centrare <b>mira {where}</b>.
+          </p>
+        </>
+      )}
     </div>
   );
 }
@@ -720,6 +833,114 @@ function Inclinometer({ onUse }: { onUse: (deg: number) => void }) {
       <button type="button" disabled={deg == null} onClick={() => { if (deg != null) onUse(Math.max(-35, Math.min(35, Math.round(deg)))); setOn(false); }} className="min-h-9 rounded-full bg-accent px-3 font-semibold text-accent-fg disabled:opacity-50">Usa</button>
       <button type="button" onClick={() => setOn(false)} className="min-h-9 rounded-full border border-line px-3">Chiudi</button>
       {note ? <span className="w-full text-xs text-muted">{note}</span> : null}
+    </div>
+  );
+}
+
+type FlightSnapshot = { form: FlightInput; bow: string; release: string; round: string };
+
+const FLETCH_TO_GEAR: Record<string, string> = { spin: "spin", vane3: "alette", feather3: "penne", feather4: "penne" };
+
+/** Salva le impostazioni di volo nell'Attrezzatura (gara, allenamento o entrambi) e le ricarica. */
+function SaveFlight({ snapshot, onLoad }: { snapshot: FlightSnapshot; onLoad: (saved: FlightSnapshot) => void }) {
+  const [open, setOpen] = useState(false);
+  const [use, setUse] = useState<"gara" | "allenamento" | "entrambi">("gara");
+  const [name, setName] = useState("");
+  const [msg, setMsg] = useState("");
+  const [list, setList] = useState<{ id: number; name: string; use: string; snap: FlightSnapshot }[]>([]);
+  const [busy, setBusy] = useState(false);
+
+  async function refresh() {
+    try {
+      const rows = await listEquipment();
+      const out: { id: number; name: string; use: string; snap: FlightSnapshot }[] = [];
+      for (const row of rows) {
+        if (!row.mine || !row.specs.flight) continue;
+        try {
+          out.push({ id: row.id, name: row.name, use: row.specs.use || "entrambi", snap: JSON.parse(row.specs.flight) as FlightSnapshot });
+        } catch {
+          /* voce rovinata: la salto */
+        }
+      }
+      setList(out);
+    } catch {
+      setList([]);
+    }
+  }
+
+  useEffect(() => {
+    if (open) void refresh();
+  }, [open]);
+
+  async function save(existing?: number) {
+    const f = snapshot.form;
+    const label = name.trim() || `Balistica ${use === "gara" ? "gara" : use === "allenamento" ? "allenamento" : ""} ${f.distanceM} m`.replace(/\s+/g, " ").trim();
+    setBusy(true);
+    setMsg("");
+    try {
+      await saveEquipment({
+        data: {
+          id: existing ?? null,
+          category: "freccia",
+          name: label,
+          status: "in_use",
+          visibility: "personal",
+          notes: `Dal simulatore di volo: ${f.drawLb} lb, allungo ${f.drawCm} cm, ${f.grains} gr, ${f.distanceM} m.`,
+          specs: {
+            use,
+            weight: String(f.grains),
+            length: (f.lengthCm / 2.54).toFixed(1),
+            draw: String(f.drawLb),
+            drawLen: (f.drawCm / 2.54).toFixed(1),
+            diameter: String(f.diameterMm),
+            fletchType: FLETCH_TO_GEAR[f.fletch] ?? "alette",
+            material: "carbonio",
+            flight: JSON.stringify(snapshot),
+          },
+        },
+      });
+      setMsg(existing ? "Aggiornato in Attrezzatura." : `Salvato in Attrezzatura come «${label}» (${use}).`);
+      setName("");
+      void refresh();
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "Non salvato");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="min-w-0 rounded-2xl border border-hair bg-white/[0.03] p-2.5">
+      <button type="button" onClick={() => setOpen((v) => !v)} className="flex w-full items-center justify-between gap-2 text-left">
+        <span className="text-sm font-semibold">💾 Salva o carica dall'Attrezzatura</span>
+        <span className="aa-chip">{open ? "Chiudi" : "Apri"}</span>
+      </button>
+      {open ? (
+        <div className="mt-2 grid min-w-0 gap-2">
+          <Chips value={use} onChange={setUse} options={[{ id: "gara", label: "🏆 Da gara" }, { id: "allenamento", label: "🏹 Allenamento" }, { id: "entrambi", label: "Entrambi" }]} />
+          <div className="grid grid-cols-[1fr_auto] gap-2">
+            <TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder={`Nome (es. Frecce gara ${snapshot.form.distanceM} m)`} />
+            <Button disabled={busy} onClick={() => void save()}>Salva</Button>
+          </div>
+          {list.length ? (
+            <ul className="grid min-w-0 gap-1.5">
+              {list.map((item) => (
+                <li key={item.id} className="flex min-w-0 items-center gap-2 rounded-xl border border-hair px-2.5 py-1.5 text-sm">
+                  <span className="min-w-0 flex-1 truncate">
+                    {item.name}
+                    <span className="ml-1 text-[0.68rem] text-muted">· {item.use} · {item.snap.form?.drawLb} lb · {item.snap.form?.distanceM} m</span>
+                  </span>
+                  <button type="button" className="aa-chip" onClick={() => { onLoad(item.snap); setMsg(`Caricato «${item.name}».`); }}>Carica</button>
+                  <button type="button" className="aa-chip" disabled={busy} onClick={() => void save(item.id)}>Aggiorna</button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-xs text-muted">Nessuna impostazione salvata, per ora.</p>
+          )}
+          {msg ? <p className="text-xs text-muted">{msg}</p> : null}
+        </div>
+      ) : null}
     </div>
   );
 }

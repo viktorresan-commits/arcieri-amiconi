@@ -658,3 +658,7 @@ aside.aa-side button {
   to { opacity: 1; transform: none; }
 }
 @media (prefers-reduced-motion: reduce) { .aa-arrow-in { animation: none; } }
+
+.aa-pulse { animation: aa-pulse 1.6s ease-in-out infinite; }
+@keyframes aa-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+@media (prefers-reduced-motion: reduce) { .aa-pulse { animation: none; } }

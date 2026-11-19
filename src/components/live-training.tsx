@@ -285,31 +285,54 @@ export function LiveTraining({ sessionId, openHistory = false }: { sessionId?: n
     endBeeped.current = false;
   }
 
-  /** Una foto = una volée: riempie quella in corso e, se il piano è finito, lo allunga di una volée. */
-  function addVolley(hits: { nx: number; ny: number; score: number; isX: boolean; miss: boolean }[]) {
+  /**
+   * Una foto = una volée: riempie quella in corso (o, con «fresh», la prossima vuota) e,
+   * se il piano è finito, lo allunga. Con più foto insieme le volée si mettono una dopo l'altra.
+   */
+  function placeVolley(current: Draft, hits: PhotoHit[], fresh: boolean): Draft {
+    const plan = { ...current.meta };
+    let shots = current.shots;
+    const here = cursor(shots, plan.arrowsPerEnd, plan.endsPlanned, plan.blocksPlanned);
+    const inEnd = (b: number, e: number) => shots.filter((x) => x.block === b && x.end === e);
+    let block = here.done ? Math.max(0, plan.blocksPlanned - 1) : here.block;
+    let end = here.done ? plan.endsPlanned : here.end;
+    if (!here.done && fresh && inEnd(block, end).length) end += 1;
+    if (end >= plan.endsPlanned) {
+      if (plan.endsPlanned < 60) plan.endsPlanned = end + 1;
+      else {
+        block += 1;
+        end = 0;
+        plan.blocksPlanned = clampCount(Math.max(plan.blocksPlanned, block + 1), 1, 40);
+      }
+    }
+    const used = new Set(inEnd(block, end).map((x) => x.arrow));
+    const free = Array.from({ length: plan.arrowsPerEnd }, (_, i) => i).filter((i) => !used.has(i));
+    let seq = shots.reduce((max, item) => Math.max(max, item.seq), 0);
+    hits.slice(0, free.length).forEach((hit, k) => {
+      seq += 1;
+      const miss = hit.miss;
+      shots = [...shots, { block, end, arrow: free[k], score: miss ? 0 : hit.score, isX: miss ? false : hit.isX, miss, nx: miss ? null : hit.nx, ny: miss ? null : hit.ny, seq }];
+    });
+    return { ...current, meta: plan, shots, selected: null, endClock: startClock({ running: false, startedAt: null, accumulatedMs: 0 }, Date.now()) };
+  }
+
+  function addVolley(hits: PhotoHit[]) {
     if (!hits.length) return;
     if (navigator.vibrate) navigator.vibrate(12);
+    setDraft((current) => (current ? placeVolley(current, hits, false) : current));
+    endBeeped.current = false;
+  }
+
+  function addVolleys(volleys: PhotoHit[][]) {
+    if (!volleys.length) return;
+    if (navigator.vibrate) navigator.vibrate([12, 40, 12]);
     setDraft((current) => {
       if (!current) return current;
-      const plan = { ...current.meta };
-      let shots = current.shots;
-      let here = cursor(shots, plan.arrowsPerEnd, plan.endsPlanned, plan.blocksPlanned);
-      if (here.done) {
-        if (plan.endsPlanned < 60) plan.endsPlanned += 1;
-        else plan.blocksPlanned = clampCount(plan.blocksPlanned + 1, 1, 40);
-        here = cursor(shots, plan.arrowsPerEnd, plan.endsPlanned, plan.blocksPlanned);
-        if (here.done) return current;
-      }
-      const room = plan.arrowsPerEnd - shots.filter((x) => x.block === here.block && x.end === here.end).length;
-      let seq = shots.reduce((max, item) => Math.max(max, item.seq), 0);
-      for (const hit of hits.slice(0, Math.max(1, room))) {
-        const at = cursor(shots, plan.arrowsPerEnd, plan.endsPlanned, plan.blocksPlanned);
-        if (at.done || at.end !== here.end || at.block !== here.block) break;
-        seq += 1;
-        const miss = hit.miss;
-        shots = [...shots, { block: at.block, end: at.end, arrow: at.arrow, score: miss ? 0 : hit.score, isX: miss ? false : hit.isX, miss, nx: miss ? null : hit.nx, ny: miss ? null : hit.ny, seq }];
-      }
-      return { ...current, meta: plan, shots, selected: null, endClock: startClock({ running: false, startedAt: null, accumulatedMs: 0 }, Date.now()) };
+      let next = current;
+      volleys.forEach((hits, i) => {
+        if (hits.length) next = placeVolley(next, hits, i > 0);
+      });
+      return next;
     });
     endBeeped.current = false;
   }
@@ -479,6 +502,7 @@ export function LiveTraining({ sessionId, openHistory = false }: { sessionId?: n
           arrows={tally.arrows}
           points={tally.points}
           onApply={addVolley}
+          onApplyBatch={addVolleys}
         />
       )}
       {face.id.startsWith("sagoma") ? (
@@ -652,6 +676,8 @@ function clampCount(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, Math.round(value)));
 }
 
+type PhotoHit = { nx: number; ny: number; score: number; isX: boolean; miss: boolean };
+
 function PhotoVolley({
   face,
   shots,
@@ -660,6 +686,7 @@ function PhotoVolley({
   arrows,
   points,
   onApply,
+  onApplyBatch,
 }: {
   face: Face;
   shots: DraftShot[];
@@ -667,9 +694,10 @@ function PhotoVolley({
   room: number;
   arrows: number;
   points: number;
-  onApply: (hits: { nx: number; ny: number; score: number; isX: boolean; miss: boolean }[]) => void;
+  onApply: (hits: PhotoHit[]) => void;
+  onApplyBatch: (volleys: PhotoHit[][]) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(shots.length === 0);
   const ends = new Set(shots.map((s) => `${s.block}:${s.end}`)).size;
   const known = shots.filter((s) => s.nx != null && s.ny != null).map((s) => ({ x: s.nx as number, y: s.ny as number }));
   return (
@@ -686,7 +714,7 @@ function PhotoVolley({
         <span className="aa-kpi !px-2 !py-1.5"><span className="block text-[0.62rem] uppercase tracking-wider text-muted">Frecce</span><b className="font-display text-xl tabular-nums">{arrows}</b></span>
         <span className="aa-kpi !px-2 !py-1.5"><span className="block text-[0.62rem] uppercase tracking-wider text-muted">Punti</span><b className="font-display text-xl tabular-nums">{points}</b></span>
       </div>
-      {open ? <TargetRead face={face} onApply={onApply} expected={Math.max(1, room)} known={known} volleyLabel={`volée ${volley}`} compact /> : null}
+      {open ? <TargetRead face={face} onApply={onApply} onApplyBatch={onApplyBatch} expected={Math.max(1, room)} known={known} volleyLabel={`volée ${volley}`} compact /> : null}
     </Card>
   );
 }

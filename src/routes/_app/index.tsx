@@ -104,11 +104,6 @@ function Home() {
             <Link to="/attrezzatura" className="text-[0.68rem] font-semibold text-muted underline-offset-2 hover:underline">🎨 Personalizza frecce</Link>
           </div>
           {data.lastShots.length ? <LastArrows shots={data.lastShots} /> : <p className="text-xs text-muted">Le frecce che tiri compaiono qui.</p>}
-          {trend.length > 8 ? (
-            <Link to="/statistiche" className="mt-2 block">
-              <Trend values={trend} />
-            </Link>
-          ) : null}
         </Card>
       </Rise>
       <Rise i={9}>
@@ -293,34 +288,6 @@ function LastArrows({ shots }: { shots: LastShot[] }) {
         );
       })}
     </ul>
-  );
-}
-
-function Trend({ values }: { values: number[] }) {
-  const count = Math.max(values.length, 1);
-  const height = 160;
-  const reachMax = height;
-  const width = 480;
-  const pitch = (width - 8) / count;
-  return (
-    <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" className="aa-shots" role="img" aria-label="Ultimi tiri">
-      {values.map((score, index) => {
-        const color = score <= 0 ? "#d64545" : score >= 8 ? "#2f9e5b" : "#e07a2f";
-        const t = count === 1 ? 1 : index / (count - 1);
-        const reach = reachMax * (0.2 + t * 0.8);
-        const x = 4 + index * pitch + pitch * 0.5;
-        const y0 = height;
-        const y1 = y0 - reach;
-        const head = 7 + t * 4;
-        const wing = Math.min(2.2 + t, pitch * 0.34);
-        return (
-          <g key={index}>
-            <line x1={x} y1={y0} x2={x} y2={y1 + head} stroke={color} strokeWidth={1.6 + t * 0.8} strokeLinecap="round" />
-            <path d={`M${x} ${y1} L${x - wing} ${y1 + head} L${x + wing} ${y1 + head} Z`} fill={color} />
-          </g>
-        );
-      })}
-    </svg>
   );
 }
 

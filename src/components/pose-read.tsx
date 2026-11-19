@@ -1073,13 +1073,13 @@ function Timeline({ samples, shots, time, duration, onSeek }: { samples: Sample[
 }
 
 function drawPose(ctx: CanvasRenderingContext2D, w: number, h: number, lm: Landmark[], hand: Hand, gear: Gear | null) {
-  const s = Math.max(1, Math.min(w, h) / 360);
+  const s = Math.max(0.6, Math.min(w, h) / 520);
   const at = (i: number) => ({ x: lm[i].x * w, y: lm[i].y * h, v: lm[i].visibility ?? 1 });
   const { bow, draw } = sides(hand);
   ctx.lineCap = "round";
   if (gear?.arrow) {
     ctx.strokeStyle = "#f97316";
-    ctx.lineWidth = 3 * s;
+    ctx.lineWidth = 1.8 * s;
     ctx.beginPath();
     ctx.moveTo(gear.arrow.x1 * w, gear.arrow.y1 * h);
     ctx.lineTo(gear.arrow.x2 * w, gear.arrow.y2 * h);
@@ -1090,7 +1090,7 @@ function drawPose(ctx: CanvasRenderingContext2D, w: number, h: number, lm: Landm
     if (bw.v > 0.3 && dw.v > 0.3) {
       ctx.setLineDash([8 * s, 6 * s]);
       ctx.strokeStyle = "rgba(244,241,234,0.8)";
-      ctx.lineWidth = 2 * s;
+      ctx.lineWidth = 1.2 * s;
       ctx.beginPath();
       ctx.moveTo(bw.x, bw.y);
       ctx.lineTo(dw.x, dw.y);
@@ -1100,14 +1100,14 @@ function drawPose(ctx: CanvasRenderingContext2D, w: number, h: number, lm: Landm
   }
   if (gear?.bow) {
     ctx.strokeStyle = "#a3e635";
-    ctx.lineWidth = 3 * s;
+    ctx.lineWidth = 1.8 * s;
     ctx.beginPath();
     ctx.moveTo(gear.bow.x1 * w, gear.bow.y1 * h);
     ctx.lineTo(gear.bow.x2 * w, gear.bow.y2 * h);
     ctx.stroke();
   }
   ctx.strokeStyle = "#4aa3ff";
-  ctx.lineWidth = 3 * s;
+  ctx.lineWidth = 1.6 * s;
   for (const [a, b] of LINKS) {
     if (!lm[a] || !lm[b]) continue;
     const p = at(a);
@@ -1121,7 +1121,7 @@ function drawPose(ctx: CanvasRenderingContext2D, w: number, h: number, lm: Landm
   const l = at(11);
   const r = at(12);
   ctx.strokeStyle = "#e6b325";
-  ctx.lineWidth = 3.5 * s;
+  ctx.lineWidth = 1.8 * s;
   ctx.beginPath();
   ctx.moveTo(l.x, l.y);
   ctx.lineTo(r.x, r.y);
@@ -1132,7 +1132,7 @@ function drawPose(ctx: CanvasRenderingContext2D, w: number, h: number, lm: Landm
     if (p.v < 0.4) continue;
     ctx.beginPath();
     ctx.fillStyle = i === draw[1] || i === bow[1] ? "#ef4444" : "#4aa3ff";
-    ctx.arc(p.x, p.y, 4.5 * s, 0, Math.PI * 2);
+    ctx.arc(p.x, p.y, 2.6 * s, 0, Math.PI * 2);
     ctx.fill();
   }
   const m = metricsOf(lm, hand, w / h, h);

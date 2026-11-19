@@ -697,12 +697,6 @@ function LaneEditor({ compId, mine, onDone, onSaved }: { compId: number; mine: E
                     onScore={(score, _miss, nx, ny) => placeArrow(score, nx, ny)}
                     onMove={(index, score, _miss, nx, ny, done) => moveArrow(index, score, nx, ny, done)}
                   />
-                  {previewShots.some((s) => s.nx != null) ? (
-                    <details className="mt-2 rounded-xl border border-line p-2">
-                      <summary className="cursor-pointer text-sm font-semibold">🎯 Mappa e 3D della piazzola {active + 1}</summary>
-                      <div className="mt-2"><SagomaLab animal={knownAnimal(laneName)?.id ?? "sagome-3d"} shots={previewShots} /></div>
-                    </details>
-                  ) : null}
                   <Field label="Nota di questa piazzola">
                     <TextArea value={laneNote} placeholder="Cosa correggere, cosa è andato male" onChange={(e) => {
                       const note = e.target.value;
@@ -736,18 +730,22 @@ function LaneEditor({ compId, mine, onDone, onSaved }: { compId: number; mine: E
               }}
             />
           ) : null}
-          <ShotLab
-            face={kind === "padiglione" ? faceById("wa10") : faceById("sagoma8")}
-            shots={(kind === "padiglione" ? previewShots : previewShots).map((shot, index) => ({
-              score: shot.score,
-              nx: shot.nx,
-              ny: shot.ny,
-              arrow: index,
-              end: active,
-              miss: shot.score === 0,
-            }))}
-            onPhoto={kind === "padiglione" ? (hits) => placeMany(hits) : undefined}
-          />
+          {kind === "padiglione" ? (
+            <ShotLab
+              face={faceById("wa10")}
+              shots={previewShots.map((shot, index) => ({
+                score: shot.score,
+                nx: shot.nx,
+                ny: shot.ny,
+                arrow: index,
+                end: active,
+                miss: shot.score === 0,
+              }))}
+              onPhoto={(hits) => placeMany(hits)}
+            />
+          ) : (
+            <SagomaLab animal={knownAnimal(laneName)?.id ?? "sagome-3d"} shots={previewShots} initial="tre" />
+          )}
           <Field label="Distanza stimata (m)">
             <TextInput inputMode="decimal" value={laneMeters} placeholder="15" onChange={(e) => rememberPlace(e.target.value, laneSide)} />
           </Field>
