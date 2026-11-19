@@ -7,6 +7,7 @@ import { useLoad } from "@/lib/arcieri/use-load";
 import { ANIMALS, animalByLabel } from "@/lib/arcieri/sagome";
 import { DistBars, MultiBars, useThemeInk } from "@/components/charts";
 import { SagomaLab } from "@/components/sagoma-lab";
+import { GroupBestPosture } from "@/components/gesture-gallery";
 import { Avatar, Button, Card, Empty, ErrorNote, Field, Loading, PageHead, Select, TextInput } from "@/components/kit";
 import { useMember } from "@/components/shell";
 import { PrizeMark, prizeTier } from "@/components/prize-mark";
@@ -100,6 +101,8 @@ function Page() {
         <Podium title="Generale" rows={podium("")} />
         {DIVISIONS.map((name) => <Podium key={name} title={name} rows={podium(name)} />)}
       </div>
+
+      <GroupBestPosture />
 
       <Card>
         <h2 className="font-display text-2xl">Bersaglio</h2>

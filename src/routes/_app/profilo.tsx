@@ -13,6 +13,7 @@ import { Button, Card, ErrorNote, Field, PageHead, Select, TextArea, TextInput }
 import { PrizeMark, prizeTier } from "@/components/prize-mark";
 import { saveFile } from "@/lib/arcieri/native";
 import { Trasloco } from "@/components/trasloco";
+import { GestureGallery } from "@/components/gesture-gallery";
 
 export const Route = createFileRoute("/_app/profilo")({ component: Page });
 
@@ -196,6 +197,7 @@ function Page() {
         <Button variant="ghost" onClick={() => void downloadPdf()}>Scarica report PDF</Button>
         <div className="pt-2"><UserButton /></div>
       </Card>
+      <GestureGallery />
       {me.role === "admin" ? <Trasloco /> : null}
       <Card className="grid gap-2">
         <h2 className="font-display text-2xl">Profili</h2>

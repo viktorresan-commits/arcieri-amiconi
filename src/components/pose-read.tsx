@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from "react";
 import { MediaPick } from "@/components/media-pick";
 import { saveFile } from "@/lib/arcieri/native";
+import { saveGesture } from "@/lib/arcieri/gesture.api";
 import {
   PHASE_COLORS,
   PHASE_LABEL,
@@ -128,6 +129,8 @@ export function PoseRead() {
   const recRef = useRef<{ rec: MediaRecorder; canvas: HTMLCanvasElement } | null>(null);
   const [recording, setRecording] = useState(false);
   const [shotIndex, setShotIndex] = useState(0);
+  const [saveTitle, setSaveTitle] = useState("");
+  const [saveState, setSaveState] = useState<"" | "busy" | "ok" | string>("");
   /** parte del video da analizzare e salvare (null = tutto) */
   const [range, setRange] = useState<{ from: number; to: number } | null>(null);
   const span = () => ({ from: range?.from ?? 0, to: range?.to ?? duration });
@@ -638,6 +641,57 @@ export function PoseRead() {
     loop();
   }
 
+  /** Salva numeri e miniatura dell'analisi nel profilo, per i confronti nel tempo e nel gruppo. */
+  async function storeAnalysis() {
+    const media = kind === "video" ? videoRef.current : imageRef.current;
+    if (!media) return;
+    setSaveState("busy");
+    try {
+      const k = 360 / Math.max(size.w, size.h);
+      const c = document.createElement("canvas");
+      c.width = Math.round(size.w * k);
+      c.height = Math.round(size.h * k);
+      const ctx = c.getContext("2d");
+      if (!ctx) throw new Error("Miniatura non riuscita.");
+      ctx.drawImage(media, 0, 0, c.width, c.height);
+      if (look !== "scheletro") drawSagoma(ctx, c.width, c.height, lastLm.current, hand, null, look === "sagoma");
+      else if (lastLm.current) drawPose(ctx, c.width, c.height, lastLm.current, hand, null);
+      const thumb = c.toDataURL("image/jpeg", 0.72);
+      const m = shot?.at ?? now;
+      await saveGesture({
+        data: {
+          title: saveTitle.trim() || (kind === "video" ? "Video del gesto" : "Foto del gesto"),
+          kind: kind === "video" ? "video" : "foto",
+          hand,
+          score: shot?.score ?? null,
+          shots: analysis.shots.length,
+          anchorS: shot?.anchorTime ?? null,
+          drawS: shot?.drawTime ?? null,
+          lineDeg: m?.line ?? null,
+          bowDeg: m?.bow ?? null,
+          shoulderDeg: m?.shoulder ?? null,
+          jitter: shot?.jitter ?? null,
+          distanceM: distance,
+          data: {
+            shoulderSide: m?.bowSh ?? null,
+            draw: m?.draw ?? null,
+            trunk: m?.trunk ?? null,
+            handFace: m?.handFace ?? null,
+            arrowTilt: gear?.arrow?.tilt ?? m?.arrowTilt ?? null,
+            cant: gear?.bow?.cant ?? null,
+            checks: shot?.checks.map((ch) => `${ch.ok ? "ok" : ch.warn ? "attenzione" : "no"}: ${ch.text}`) ?? [],
+            spread: analysis.spread,
+          },
+          thumb,
+        },
+      });
+      setSaveState("ok");
+      setSaveTitle("");
+    } catch (e) {
+      setSaveState(e instanceof Error ? e.message : "Salvataggio non riuscito.");
+    }
+  }
+
   const ratio = size.w / size.h;
   const frameStep = 1 / 30;
 
@@ -756,6 +810,18 @@ export function PoseRead() {
           )}
 
           <Readout m={now} gear={gear} distance={distance} />
+
+          {now ? (
+            <div className="grid gap-2 rounded-xl border border-line bg-elev p-3">
+              <p className="text-sm font-semibold">💾 Salva questa analisi nel tuo profilo</p>
+              <p className="text-xs text-muted">Restano i numeri e una miniatura (il video resta sul telefono): così vedi i progressi nel tempo e la postura migliore del gruppo.{kind === "video" && !samples.length ? " Per tempi e punteggio premi prima «Analizza»." : ""}</p>
+              <div className="flex gap-2">
+                <input value={saveTitle} onChange={(e) => setSaveTitle(e.target.value)} placeholder="Titolo, es. 18 m sera" className="min-h-11 min-w-0 flex-1 rounded-xl border border-line bg-transparent px-3 text-sm" />
+                <button type="button" disabled={saveState === "busy"} onClick={() => void storeAnalysis()} className="min-h-11 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-fg disabled:opacity-60">{saveState === "busy" ? "Salvo…" : "Salva"}</button>
+              </div>
+              {saveState === "ok" ? <p className="text-xs text-primary">Salvata ✅ La trovi nel Profilo, in «Le mie analisi del gesto».</p> : saveState && saveState !== "busy" ? <p className="text-xs text-danger">{saveState}</p> : null}
+            </div>
+          ) : null}
 
           {kind === "video" && samples.length ? <Timeline samples={samples} shots={analysis.shots} time={time} duration={duration} onSeek={seek} /> : null}
 
