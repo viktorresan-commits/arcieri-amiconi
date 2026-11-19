@@ -1264,29 +1264,75 @@ export function drawSagoma(ctx: CanvasRenderingContext2D, w: number, h: number, 
     ctx.arc(p.x, p.y, 3.2 * s, 0, Math.PI * 2);
     ctx.fill();
   }
-  // arco
-  if (gear?.bow) {
-    ctx.strokeStyle = "rgba(233,255,243,0.85)";
-    ctx.lineWidth = 2.4 * s;
-    const a = { x: gear.bow.x1 * w, y: gear.bow.y1 * h };
-    const b = { x: gear.bow.x2 * w, y: gear.bow.y2 * h };
-    const m = mid(a, b);
-    const nx = -(b.y - a.y);
-    const ny = b.x - a.x;
-    const len = Math.hypot(nx, ny) || 1;
-    const bend = Math.hypot(b.x - a.x, b.y - a.y) * 0.12;
-    const { bow: bowSide } = sides(hand);
-    const grip = P(bowSide[2]);
-    const dir = (grip.x - m.x) * nx + (grip.y - m.y) * ny > 0 ? 1 : -1;
+  // arco, corda e freccia ricostruiti dalle mani, in scala con il corpo
+  const kit = archeryKit(lm, w, h, hand, gear);
+  if (kit) {
+    const { grip, nock, u, n, tipUp, tipDown, recUp, recDown, ctrlUp, ctrlDown, arrowTip, drawn } = kit;
+    ctx.shadowColor = "#b9ffd9";
+    ctx.shadowBlur = 6 * s;
+    // flettenti
+    ctx.strokeStyle = "rgba(233,255,243,0.92)";
+    ctx.lineWidth = 3.2 * s;
     ctx.beginPath();
-    ctx.moveTo(a.x, a.y);
-    ctx.quadraticCurveTo(m.x + (nx / len) * bend * dir, m.y + (ny / len) * bend * dir, b.x, b.y);
+    ctx.moveTo(recUp.x, recUp.y);
+    ctx.lineTo(tipUp.x, tipUp.y);
+    ctx.quadraticCurveTo(ctrlUp.x, ctrlUp.y, grip.x, grip.y);
+    ctx.quadraticCurveTo(ctrlDown.x, ctrlDown.y, tipDown.x, tipDown.y);
+    ctx.lineTo(recDown.x, recDown.y);
     ctx.stroke();
-  }
-  if (gear?.arrow) {
-    ctx.strokeStyle = "rgba(233,255,243,0.7)";
-    ctx.lineWidth = 1.6 * s;
-    bone({ x: gear.arrow.x1 * w, y: gear.arrow.y1 * h }, { x: gear.arrow.x2 * w, y: gear.arrow.y2 * h });
+    // impugnatura
+    ctx.lineWidth = 6 * s;
+    ctx.beginPath();
+    ctx.moveTo(grip.x + n.x * kit.px * 0.06, grip.y + n.y * kit.px * 0.06);
+    ctx.lineTo(grip.x - n.x * kit.px * 0.06, grip.y - n.y * kit.px * 0.06);
+    ctx.stroke();
+    // corda: dalle punte alla cocca se è in trazione
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = "rgba(233,255,243,0.75)";
+    ctx.lineWidth = 1.2 * s;
+    ctx.beginPath();
+    ctx.moveTo(tipUp.x, tipUp.y);
+    if (drawn) ctx.lineTo(nock.x, nock.y);
+    ctx.lineTo(tipDown.x, tipDown.y);
+    ctx.stroke();
+    // freccia: asta, penne verso la cocca, punta oltre l'arco
+    ctx.strokeStyle = "#ffd36b";
+    ctx.lineWidth = 2 * s;
+    ctx.beginPath();
+    ctx.moveTo(nock.x, nock.y);
+    ctx.lineTo(arrowTip.x, arrowTip.y);
+    ctx.stroke();
+    ctx.fillStyle = "#ffd36b";
+    ctx.beginPath();
+    ctx.moveTo(arrowTip.x + u.x * 8 * s, arrowTip.y + u.y * 8 * s);
+    ctx.lineTo(arrowTip.x + n.x * 3 * s, arrowTip.y + n.y * 3 * s);
+    ctx.lineTo(arrowTip.x - n.x * 3 * s, arrowTip.y - n.y * 3 * s);
+    ctx.closePath();
+    ctx.fill();
+    for (const side of [1, -1]) {
+      const f0 = { x: nock.x + u.x * kit.px * 0.03, y: nock.y + u.y * kit.px * 0.03 };
+      const f1 = { x: nock.x + u.x * kit.px * 0.11, y: nock.y + u.y * kit.px * 0.11 };
+      ctx.fillStyle = "rgba(255,90,90,0.85)";
+      ctx.beginPath();
+      ctx.moveTo(f0.x, f0.y);
+      ctx.lineTo(f0.x + n.x * side * kit.px * 0.025, f0.y + n.y * side * kit.px * 0.025);
+      ctx.lineTo(f1.x, f1.y);
+      ctx.closePath();
+      ctx.fill();
+    }
+    // misure in cm
+    const rows = kit.measures;
+    ctx.font = `600 ${Math.round(11 * s)}px system-ui, sans-serif`;
+    const tw = Math.max(...rows.map((r) => ctx.measureText(r).width));
+    const bx = 8 * s;
+    const by = h - (rows.length * 15 + 14) * s;
+    ctx.fillStyle = "rgba(3,12,9,0.78)";
+    ctx.beginPath();
+    if (typeof ctx.roundRect === "function") ctx.roundRect(bx, by, tw + 16 * s, (rows.length * 15 + 8) * s, 8 * s);
+    else ctx.rect(bx, by, tw + 16 * s, (rows.length * 15 + 8) * s);
+    ctx.fill();
+    ctx.fillStyle = "#b9ffd9";
+    rows.forEach((r, i) => ctx.fillText(r, bx + 8 * s, by + (15 + i * 15) * s));
   }
   // angoli sugli archi
   const angleAt = (a: number, b: number, c: number) => {
@@ -1339,6 +1385,81 @@ export function drawSagoma(ctx: CanvasRenderingContext2D, w: number, h: number, 
     ctx.fillText(text, tx, ty);
   }
   ctx.restore();
+}
+
+/**
+ * Arco, corda e freccia ricostruiti dal corpo: impugnatura alla mano dell'arco, cocca alle dita della
+ * corda, scala in pixel per metro da spalle, busto e altezza, arco da 1,70 m.
+ * Dà anche le misure in cm: allungo, ancoraggio (dita–bocca), occhio–freccia, corda–naso.
+ */
+export function archeryKit(lm: Landmark[], w: number, h: number, hand: Hand, gear: Gear | null, bowM = 1.7) {
+  const ok = (...ids: number[]) => ids.every((i) => lm[i] && (lm[i].visibility ?? 1) > 0.3);
+  const P = (i: number) => ({ x: lm[i].x * w, y: lm[i].y * h });
+  const sd = sides(hand);
+  if (!ok(sd.bow[2], sd.draw[2], 11, 12)) return null;
+  // pixel per metro: mediana delle stime disponibili (spalle, busto, spalla–caviglia), perché
+  // ognuna sbaglia quando quella parte è di scorcio
+  const mid2 = (a: number, b: number, c: number, d: number) => ({ x: (P(a).x + P(b).x) / 2 - (P(c).x + P(d).x) / 2, y: (P(a).y + P(b).y) / 2 - (P(c).y + P(d).y) / 2 });
+  const est: number[] = [Math.hypot(P(11).x - P(12).x, P(11).y - P(12).y) / 0.36];
+  if (ok(23, 24)) {
+    const t = mid2(11, 12, 23, 24);
+    est.push(Math.hypot(t.x, t.y) / 0.5);
+  }
+  if (ok(23, 24, 27, 28)) {
+    const t = mid2(11, 12, 27, 28);
+    est.push(Math.hypot(t.x, t.y) / 1.38);
+  }
+  est.sort((a, b) => a - b);
+  const px = Math.max(1, est.length === 2 ? Math.max(...est) : est[est.length >> 1]);
+  const bowFinger = sd.bow[2] + 4; // 15 → 19, 16 → 20
+  const grip = ok(bowFinger) ? { x: (P(sd.bow[2]).x * 2 + P(bowFinger).x) / 3, y: (P(sd.bow[2]).y * 2 + P(bowFinger).y) / 3 } : P(sd.bow[2]);
+  const nock = ok(sd.drawFinger) ? { x: (P(sd.draw[2]).x + P(sd.drawFinger).x * 2) / 3, y: (P(sd.draw[2]).y + P(sd.drawFinger).y * 2) / 3 } : P(sd.draw[2]);
+  const span = Math.hypot(grip.x - nock.x, grip.y - nock.y);
+  if (span < 4) return null;
+  const u = { x: (grip.x - nock.x) / span, y: (grip.y - nock.y) / span };
+  let n = { x: -u.y, y: u.x };
+  if (n.y > 0) n = { x: -n.x, y: -n.y }; // verso l'alto
+  // inclinazione dell'arco vista nella foto (se trovata), altrimenti perpendicolare alla freccia
+  if (gear?.bow) {
+    const a = (gear.bow.cant * Math.PI) / 180;
+    n = { x: n.x * Math.cos(a) - n.y * Math.sin(a), y: n.x * Math.sin(a) + n.y * Math.cos(a) };
+  }
+  const drawLenM = span / px + 0.044;
+  const drawn = drawLenM > 0.45;
+  const half = (bowM / 2) * px;
+  const depth = (drawn ? 0.17 : 0.09) * bowM * px; // le punte vanno verso l'arciere quando l'arco è aperto
+  const at = (along: number, back: number) => ({ x: grip.x + n.x * along - u.x * back, y: grip.y + n.y * along - u.y * back });
+  const tipUp = at(half * 0.9, depth);
+  const tipDown = at(-half * 0.9, depth);
+  const recUp = at(half, depth * 0.72);
+  const recDown = at(-half, depth * 0.72);
+  const ctrlUp = at(half * 0.55, depth * 0.05);
+  const ctrlDown = at(-half * 0.55, depth * 0.05);
+  const arrowTip = { x: grip.x + u.x * 0.05 * px, y: grip.y + u.y * 0.05 * px };
+  const cm = (d: number) => (d / px) * 100;
+  const measures = [`Allungo ≈ ${(drawLenM * 100).toFixed(0)} cm (${(drawLenM / 0.0254).toFixed(1)}″)`];
+  if (ok(9, 10)) {
+    const mouth = { x: (P(9).x + P(10).x) / 2, y: (P(9).y + P(10).y) / 2 };
+    const d = cm(Math.hypot(nock.x - mouth.x, nock.y - mouth.y));
+    const below = cm(nock.y - mouth.y);
+    measures.push(`Ancoraggio: dita a ${d.toFixed(0)} cm dalla bocca${Math.abs(below) > 1 ? ` (${below > 0 ? "sotto" : "sopra"} ${Math.abs(below).toFixed(0)})` : ""}`);
+  }
+  const eyeId = hand === "destro" ? 5 : 2; // occhio dal lato della corda
+  if (ok(eyeId)) {
+    const e = P(eyeId);
+    const off = cm(Math.abs((e.x - nock.x) * -u.y + (e.y - nock.y) * u.x));
+    measures.push(`Occhio–freccia ${off.toFixed(1)} cm`);
+  }
+  if (ok(0) && drawn) {
+    const nose = P(0);
+    // distanza del naso dal tratto di corda fra cocca e punta alta
+    const sx = tipUp.x - nock.x;
+    const sy = tipUp.y - nock.y;
+    const t = Math.max(0, Math.min(1, ((nose.x - nock.x) * sx + (nose.y - nock.y) * sy) / (sx * sx + sy * sy || 1)));
+    const d = cm(Math.hypot(nose.x - (nock.x + sx * t), nose.y - (nock.y + sy * t)));
+    measures.push(`Corda–naso ${d.toFixed(1)} cm${d < 1.5 ? " (tocca)" : ""}`);
+  }
+  return { grip, nock, u, n, tipUp, tipDown, recUp, recDown, ctrlUp, ctrlDown, arrowTip, drawn, px, drawLenM, measures };
 }
 
 /** Punti del corpo al tempo t, interpolati fra i due campioni vicini (registrazione fluida). */
