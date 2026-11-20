@@ -115,7 +115,7 @@ export function FocBalanceGL({ L, B, foc, look = {} }: { L: number; B: number; f
     }
   }, { autoYaw: false });
   if (failed) return <FocBalance3D L={L} B={B} foc={foc} look={look} />;
-  return <GLStage glRef={glRef} overlayRef={ref} view={view} className="h-56 w-full" label="Animazione 3D del punto di equilibrio" />;
+  return <GLStage glRef={glRef} overlayRef={ref} view={view} className="h-[22rem] w-full sm:h-64" label="Animazione 3D del punto di equilibrio" />;
 }
 
 /**
@@ -198,5 +198,5 @@ export function FocFlightGL({ distance, speed, foc, look = {} }: { distance: num
     }
   });
   if (failed) return <FocFlight3D distance={distance} speed={speed} foc={foc} look={look} />;
-  return <GLStage glRef={glRef} overlayRef={ref} view={view} className="h-64 w-full" label="Gittata in 3D con il tuo arciere" />;
+  return <GLStage glRef={glRef} overlayRef={ref} view={view} className="h-[28rem] w-full sm:h-72" label="Gittata in 3D con il tuo arciere" />;
 }

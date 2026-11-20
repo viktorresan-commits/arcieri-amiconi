@@ -61,12 +61,17 @@ export function Flight3D({ input, round, sighted, look = {}, height = "h-72" }: 
     } else if (p === "alto") {
       eye = [-(D * 0.12 + 2), D * 0.75 + 4, D * 0.5];
       tgt = [0, 0, D * 0.5];
+    } else if (h > w * 1.1) {
+      // telefono in verticale: si arretra e si alza un po', l'arciere in primo piano e il paglione in fondo
+      eye = [-(D * 0.1 + 2.6) * Math.max(1, big * 0.8), 1.9 * big + D * 0.06, -(4.2 * big + D * 0.12)];
+      tgt = [0.2 * big, gH * 0.75, D * 0.42];
     } else {
       eye = [-(D * 0.3 + 4), 2.2 + D * 0.05, -(3 + D * 0.15)];
       tgt = [0, gH * 0.7, D * 0.32];
     }
     const cam = orbit(eye, tgt, v);
-    g.begin(cam.eye as Vec3, cam.target as Vec3, p === "bersaglio" ? 44 : 50, envOf(sky));
+    const portrait = h > w * 1.1;
+    g.begin(cam.eye as Vec3, cam.target as Vec3, (p === "bersaglio" ? 44 : 50) + (portrait ? 12 : 0), envOf(sky));
     const P2 = (q: Vec3) => project(g.vp, q, w, h);
 
     drawWorld(g, [0, 0, D / 2], 900, sky, time);

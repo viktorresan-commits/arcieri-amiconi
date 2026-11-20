@@ -23,7 +23,7 @@ export function lookOf(specs: string | null | undefined): ArrowLook | undefined 
   }
 }
 /** Immagine da mettere sulla faccia (sagoma 3D): mezza larghezza e mezza altezza in unità faccia. */
-export type Picture = { img: HTMLImageElement; halfW: number; halfH: number };
+export type Picture = { img: HTMLImageElement; halfW: number; halfH: number; skin?: HTMLCanvasElement | null; skinKey?: string };
 type V3 = [number, number, number];
 type Cam = { yaw: number; pitch: number; dist: number };
 

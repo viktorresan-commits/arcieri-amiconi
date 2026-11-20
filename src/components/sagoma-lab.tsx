@@ -12,7 +12,7 @@ type SagomaShot = { score: number; miss?: boolean; nx: number | null; ny: number
  */
 export function SagomaLab({ animal, shots, title, initial = "mappa" }: { animal: string; shots: SagomaShot[]; title?: string; initial?: "mappa" | "tre" }) {
   const face = animalByLabel(animal);
-  const [view, setView] = useState<"mappa" | "tre">(initial);
+  const [view, setView] = useState<"mappa" | "tre" | "piana">(initial);
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   useEffect(() => {
     let gone = false;
@@ -33,6 +33,14 @@ export function SagomaLab({ animal, shots, title, initial = "mappa" }: { animal:
     const max = 1.1;
     return aspect >= 1 ? { img, halfW: max, halfH: max / aspect } : { img, halfW: max * aspect, halfH: max };
   }, [img]);
+  const heatKey = placed.map((s) => `${s.nx.toFixed(3)},${s.ny.toFixed(3)},${s.score}`).join(";");
+  const heatPicture: Picture | null = useMemo(() => {
+    if (!picture || !img || typeof document === "undefined") return picture;
+    const c = document.createElement("canvas");
+    paintHeat(c, img, placed, false);
+    return { ...picture, skin: c, skinKey: `${face.src}-${heatKey}` };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [picture, img, heatKey]);
   const shots3d = picture ? placed.map((s) => ({ x: s.nx * picture.halfW, y: s.ny * picture.halfH, end: s.end, score: s.score, miss: s.miss })) : [];
 
   const total = shots.reduce((sum, s) => sum + (s.miss ? 0 : s.score), 0);
@@ -44,10 +52,11 @@ export function SagomaLab({ animal, shots, title, initial = "mappa" }: { animal:
     <div className="grid gap-2">
       {title ? <p className="text-sm font-semibold">{title}</p> : null}
       <div className="flex gap-2">
-        <button type="button" onClick={() => setView("mappa")} className={`min-h-10 rounded-full px-3 text-sm ${view === "mappa" ? "bg-primary text-primary-fg" : "border border-line"}`}>Mappa termica</button>
+        <button type="button" onClick={() => setView("mappa")} className={`min-h-10 rounded-full px-3 text-sm ${view === "mappa" ? "bg-primary text-primary-fg" : "border border-line"}`}>Termica 3D</button>
         <button type="button" onClick={() => setView("tre")} className={`min-h-10 rounded-full px-3 text-sm ${view === "tre" ? "bg-primary text-primary-fg" : "border border-line"}`}>Vista 3D</button>
+        <button type="button" onClick={() => setView("piana")} className={`min-h-10 rounded-full px-3 text-sm ${view === "piana" ? "bg-primary text-primary-fg" : "border border-line"}`}>Piana</button>
       </div>
-      {view === "mappa" ? <SagomaHeat img={img} shots={placed} /> : picture ? <TargetGL face={faceById("sagoma11")} shots={shots3d} picture={picture} /> : <p className="text-sm text-muted">Carico la sagoma…</p>}
+      {view === "piana" ? <SagomaHeat img={img} shots={placed} /> : picture ? <TargetGL face={faceById("sagoma11")} shots={shots3d} picture={view === "mappa" ? heatPicture : picture} /> : <p className="text-sm text-muted">Carico la sagoma…</p>}
       <div className="grid grid-cols-3 gap-2 text-center">
         <Stat k="Frecce" v={String(shots.length)} />
         <Stat k="Punti" v={String(total)} />
@@ -75,74 +84,91 @@ function Stat({ k, v }: { k: string; v: string }) {
   );
 }
 
-function SagomaHeat({ img, shots }: { img: HTMLImageElement | null; shots: { nx: number; ny: number; score: number; miss?: boolean }[] }) {
-  const ref = useRef<HTMLCanvasElement>(null);
-  useEffect(() => {
-    const canvas = ref.current;
-    if (!canvas || !img) return;
-    const W = 720;
-    const H = Math.round((W * img.naturalHeight) / Math.max(1, img.naturalWidth));
-    canvas.width = W;
-    canvas.height = H;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    const bg = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, Math.max(W, H) * 0.7);
-    bg.addColorStop(0, "#1b2a22");
-    bg.addColorStop(1, "#0b120e");
-    ctx.fillStyle = bg;
+type HeatShot = { nx: number; ny: number; score: number; miss?: boolean };
+
+/** Disegna l'animale con la mappa termica dei tiri; con `bg` aggiunge lo sfondo scuro (vista piana). */
+function paintHeat(canvas: HTMLCanvasElement, img: HTMLImageElement, shots: HeatShot[], bg: boolean) {
+  const W = 720;
+  const H = Math.round((W * img.naturalHeight) / Math.max(1, img.naturalWidth));
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  if (bg) {
+    const grad = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, Math.max(W, H) * 0.7);
+    grad.addColorStop(0, "#1b2a22");
+    grad.addColorStop(1, "#0b120e");
+    ctx.fillStyle = grad;
     ctx.fillRect(0, 0, W, H);
-    ctx.drawImage(img, 0, 0, W, H);
-    if (shots.length) {
-      // densità su una griglia piccola, poi colori dal blu al bianco
-      const gw = 96;
-      const gh = Math.max(8, Math.round((gw * H) / W));
-      const dens = new Float32Array(gw * gh);
-      const sigma = 0.045;
-      for (const s of shots) {
-        const px = ((s.nx + 1) / 2) * gw;
-        const py = ((s.ny + 1) / 2) * gh;
-        const r = sigma * gw * 3;
-        for (let y = Math.max(0, Math.floor(py - r)); y < Math.min(gh, Math.ceil(py + r)); y += 1) {
-          for (let x = Math.max(0, Math.floor(px - r)); x < Math.min(gw, Math.ceil(px + r)); x += 1) {
-            const dx = (x + 0.5 - px) / (sigma * gw);
-            const dy = ((y + 0.5 - py) / (sigma * gw));
-            dens[y * gw + x] += Math.exp(-(dx * dx + dy * dy) / 2);
-          }
-        }
-      }
-      const top = Math.max(...dens) || 1;
-      const layer = document.createElement("canvas");
-      layer.width = gw;
-      layer.height = gh;
-      const lc = layer.getContext("2d");
-      if (lc) {
-        const data = lc.createImageData(gw, gh);
-        const stops: [number, number, number][] = [[40, 90, 220], [40, 200, 220], [120, 220, 90], [250, 210, 40], [240, 90, 40], [255, 245, 235]];
-        for (let i = 0; i < gw * gh; i += 1) {
-          const v = dens[i] / top;
-          if (v < 0.04) continue;
-          const t = Math.min(0.999, v) * (stops.length - 1);
-          const k = Math.floor(t);
-          const f = t - k;
-          for (let c = 0; c < 3; c += 1) data.data[i * 4 + c] = stops[k][c] + (stops[k + 1][c] - stops[k][c]) * f;
-          data.data[i * 4 + 3] = Math.round(Math.min(1, v * 1.4) * 200);
-        }
-        lc.putImageData(data, 0, 0);
-        ctx.imageSmoothingEnabled = true;
-        ctx.drawImage(layer, 0, 0, W, H);
-      }
-      for (const s of shots) {
-        const x = ((s.nx + 1) / 2) * W;
-        const y = ((s.ny + 1) / 2) * H;
-        ctx.beginPath();
-        ctx.arc(x, y, 6, 0, Math.PI * 2);
-        ctx.fillStyle = s.miss || s.score === 0 ? "#d64545" : s.score >= 8 ? "#f4f1ea" : "#e07a2f";
-        ctx.fill();
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = "#14181c";
-        ctx.stroke();
+  }
+  ctx.drawImage(img, 0, 0, W, H);
+  if (!bg) {
+    // sul volume l'animale si scurisce, così i colori della mappa risaltano
+    ctx.globalCompositeOperation = "source-atop";
+    ctx.fillStyle = "rgba(8,16,26,0.5)";
+    ctx.fillRect(0, 0, W, H);
+    ctx.globalCompositeOperation = "source-over";
+  }
+  if (!shots.length) return;
+  // densità su una griglia piccola, poi colori dal blu al bianco
+  const gw = 96;
+  const gh = Math.max(8, Math.round((gw * H) / W));
+  const dens = new Float32Array(gw * gh);
+  const sigma = 0.045;
+  for (const s of shots) {
+    const px = ((s.nx + 1) / 2) * gw;
+    const py = ((s.ny + 1) / 2) * gh;
+    const r = sigma * gw * 3;
+    for (let y = Math.max(0, Math.floor(py - r)); y < Math.min(gh, Math.ceil(py + r)); y += 1) {
+      for (let x = Math.max(0, Math.floor(px - r)); x < Math.min(gw, Math.ceil(px + r)); x += 1) {
+        const dx = (x + 0.5 - px) / (sigma * gw);
+        const dy = (y + 0.5 - py) / (sigma * gw);
+        dens[y * gw + x] += Math.exp(-(dx * dx + dy * dy) / 2);
       }
     }
+  }
+  const top = Math.max(...dens) || 1;
+  const layer = document.createElement("canvas");
+  layer.width = gw;
+  layer.height = gh;
+  const lc = layer.getContext("2d");
+  if (lc) {
+    const data = lc.createImageData(gw, gh);
+    const stops: [number, number, number][] = [[40, 90, 220], [40, 200, 220], [120, 220, 90], [250, 210, 40], [240, 90, 40], [255, 245, 235]];
+    for (let i = 0; i < gw * gh; i += 1) {
+      const v = dens[i] / top;
+      if (v < 0.04) continue;
+      const t = Math.min(0.999, v) * (stops.length - 1);
+      const k = Math.floor(t);
+      const f = t - k;
+      for (let c = 0; c < 3; c += 1) data.data[i * 4 + c] = stops[k][c] + (stops[k + 1][c] - stops[k][c]) * f;
+      data.data[i * 4 + 3] = Math.round(Math.min(1, v * 1.4) * 200);
+    }
+    lc.putImageData(data, 0, 0);
+    ctx.imageSmoothingEnabled = true;
+    // sulla sagoma in volume il colore resta dentro il contorno dell'animale
+    ctx.globalCompositeOperation = bg ? "source-over" : "source-atop";
+    ctx.drawImage(layer, 0, 0, W, H);
+    ctx.globalCompositeOperation = "source-over";
+  }
+  if (!bg) return;
+  for (const s of shots) {
+    const x = ((s.nx + 1) / 2) * W;
+    const y = ((s.ny + 1) / 2) * H;
+    ctx.beginPath();
+    ctx.arc(x, y, 6, 0, Math.PI * 2);
+    ctx.fillStyle = s.miss || s.score === 0 ? "#d64545" : s.score >= 8 ? "#f4f1ea" : "#e07a2f";
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "#14181c";
+    ctx.stroke();
+  }
+}
+
+function SagomaHeat({ img, shots }: { img: HTMLImageElement | null; shots: HeatShot[] }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    if (ref.current && img) paintHeat(ref.current, img, shots, true);
   }, [img, shots]);
   return <canvas ref={ref} className="w-full rounded-xl border border-line" />;
 }

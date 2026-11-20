@@ -45,7 +45,8 @@ export type FlightHit = {
   v0: number;
   energy: number;
   theta: number;
-  path: { x: number; z: number }[];
+  /** punti del volo: distanza, quota e (se presenti) deriva laterale, velocità e tempo */
+  path: { x: number; z: number; y?: number; v?: number; t?: number }[];
 };
 
 const AF: Record<Fletch, number> = {
@@ -148,7 +149,7 @@ export function fly(input: FlightInput, theta: number, psi: number, speedScale =
   const slope = ((input.slopeDeg ?? 0) * Math.PI) / 180;
   const gAlong = G * Math.sin(slope);
   const gDown = G * Math.cos(slope);
-  const path: { x: number; z: number }[] = [{ x, z }];
+  const path: FlightHit["path"] = [{ x, z, y: 0, v: v0, t: 0 }];
   const plane = input.distanceM;
   let t = 0;
   for (let step = 0; step < 8000; step += 1) {
@@ -166,12 +167,12 @@ export function fly(input: FlightInput, theta: number, psi: number, speedScale =
     y += vy * dt;
     z += vz * dt;
     t += dt;
-    if (step % 8 === 0) path.push({ x, z });
+    if (step % 8 === 0) path.push({ x, z, y, v: Math.hypot(vx, vy, vz), t });
     if (x >= plane) {
       const span = x - px || 1e-6;
       const f = (plane - px) / span;
       const end = { x: plane, y: py + (y - py) * f, z: pz + (z - pz) * f };
-      path.push({ x: end.x, z: end.z });
+      path.push({ x: end.x, z: end.z, y: end.y, v: Math.hypot(vx, vy, vz), t });
       return { y: end.y, z: end.z, t, v0, energy, theta, path };
     }
     if (z < -1) break;

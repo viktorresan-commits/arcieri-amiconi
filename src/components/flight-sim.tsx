@@ -5,6 +5,8 @@ import { Button, Card, Chips, Field, Segmented, Select, TextInput } from "@/comp
 import { listEquipment, saveEquipment } from "@/lib/arcieri/club.api";
 import { Zoomable } from "./zoomable";
 import { Flight3D } from "./flight-gl";
+import { FlightCurves } from "./flight-curves";
+import { useNarrow } from "@/lib/arcieri/use-narrow";
 import { readMainGear, useMainArrowLook } from "@/lib/arcieri/main-gear";
 import { useArcherSetup, type ArcherSetup } from "@/lib/arcieri/setup";
 
@@ -313,7 +315,7 @@ export function FlightSim() {
       {view3d ? (
         <>
           <Expand title="Tiro in 3D" onReplay={() => setReplay((r) => r + 1)}>
-            <Flight3D key={`f3-${replay}`} input={flightInput} round={primary} sighted={setup.sighted} look={arrowLook} />
+            <Flight3D key={`f3-${replay}`} input={flightInput} round={primary} sighted={setup.sighted} look={arrowLook} height="h-[30rem] sm:h-80" />
           </Expand>
           <AimHelp input={flightInput} round={primary} sighted={setup.sighted} fixY={-primary.my} fixZ={goldOf(form) + (setup.sighted ? 0 : primary.gap) - (primary.mz - goldOf(form))} gold={goldOf(form)} R={form.faceCm / 200} />
         </>
@@ -330,6 +332,7 @@ export function FlightSim() {
           <Expand title="Bersaglio" onReplay={() => setReplay((r) => r + 1)}>
             <FaceFront key={`ff-${replay}`} input={flightInput} round={primary} sighted={setup.sighted} />
           </Expand>
+          <FlightCurves hit={primary.clean} distance={form.distanceM} replay={replay} />
         </>
       )}
       {Math.abs(form.targetSpeed ?? 0) > 0.01 ? (
@@ -493,8 +496,9 @@ function FlightPath({ input, round, sighted, mode, title, trueScale = false, rep
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
   }, [replay, input.distanceM, flightS, mode]);
+  const narrow = useNarrow();
   const W = 380;
-  const H = 236;
+  const H = narrow ? 330 : 236;
   const pad = { l: 38, r: 30, t: 22, b: 30 };
   const D = input.distanceM;
   const R = input.faceCm / 200;
@@ -669,8 +673,9 @@ function FaceFront({ input, round, sighted, title }: { input: FlightInput; round
   const boss = R + 0.14;
   const gap = sighted ? 0 : round.gap;
   const eye = eyePoint(input);
+  const narrow = useNarrow();
   const W = 380;
-  const H = 236;
+  const H = narrow ? 380 : 236;
   const pad = { l: 38, r: 14, t: 22, b: 30 };
   const iw = W - pad.l - pad.r;
   const ih = H - pad.t - pad.b;

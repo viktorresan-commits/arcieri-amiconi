@@ -7,7 +7,7 @@ import { programById } from "@/lib/arcieri/program";
 import { useLoad } from "@/lib/arcieri/use-load";
 import { useAvatar } from "@/components/avatar-hero";
 import { SkyPicker } from "@/components/archer-3d";
-import { ArcheryGame } from "@/components/archery-game";
+import { HomeGame } from "@/components/home-game";
 import { MainGearCard } from "@/components/main-gear";
 import { ShortcutRow, TipCard } from "@/components/shortcuts";
 import { JourneyCard } from "@/components/journey";
@@ -88,14 +88,14 @@ function Home() {
             </div>
             {data.streak > 1 ? <p className="shrink-0 rounded-full bg-[var(--accent-soft,rgba(255,210,122,0.18))] px-2.5 py-1 text-[0.7rem] font-semibold">{data.streak} giorni di fila</p> : null}
           </div>
-          <ArcheryGame look={avatar.shown}>
+          <HomeGame look={avatar.shown}>
             <div data-ui className="absolute left-3 top-[5.6rem] grid gap-2" onPointerDown={(e) => e.stopPropagation()}>
               <SkyPicker />
               <Link to="/avatar" aria-label="Personalizza l'arciere" className="grid h-10 w-10 place-items-center rounded-full bg-black/45 text-white backdrop-blur">
                 <Glyph name="palette" size={18} />
               </Link>
             </div>
-          </ArcheryGame>
+          </HomeGame>
           <div className="grid grid-cols-[1.4fr_1fr] gap-2">
             <Link to="/allenamento" search={{ avvia: "rapido" }} className="block">
               <Button className="aa-glow w-full"><Glyph name="bolt" size={18} /> Tiro rapido</Button>
