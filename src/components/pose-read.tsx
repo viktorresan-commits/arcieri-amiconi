@@ -1,3 +1,4 @@
+import { Glyph, IconLabel, StatusMark } from "./icons";
 import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from "react";
 import { MediaPick } from "@/components/media-pick";
 import { saveFile } from "@/lib/arcieri/native";
@@ -380,7 +381,7 @@ export function PoseRead() {
       gearRef.current = g;
       requestAnimationFrame(() => paintOverlay(lm));
       setNow(lm ? metricsOf(lm, handRef.current, W / H, H) : null);
-      setError(lm ? "" : "Non vedo una persona. Inquadra l'arciere con il riquadro ✂ e riprova.");
+      setError(lm ? "" : "Non vedo una persona. Inquadra l'arciere con il riquadro «Inquadra l'arciere» e riprova.");
     } catch {
       setError("Non riesco a caricare il modello del corpo. Controlla la rete e riprova.");
     } finally {
@@ -475,8 +476,8 @@ export function PoseRead() {
         setShotIndex(0);
         const found = analyzeShots(out, handRef.current).shots[0];
         if (found) await seekTo(video, (found.anchorFrom + (found.release ?? found.anchorTo)) / 2);
-        else if (!out.some((s) => s.m)) setError("Non vedo l'arciere nel video. Inquadralo con il riquadro ✂ e riprova.");
-        else setError("Non trovo un tiro completo (mano della corda al viso e braccio dell'arco alzato). Controlla destro/mancino o inquadra l'arciere con ✂.");
+        else if (!out.some((s) => s.m)) setError("Non vedo l'arciere nel video. Inquadralo con il riquadro «Inquadra l'arciere» e riprova.");
+        else setError("Non trovo un tiro completo (mano della corda al viso e braccio dell'arco alzato). Controlla destro/mancino o inquadra l'arciere con il riquadro.");
       }
     } catch {
       setError("Analisi interrotta: il modello del corpo non risponde.");
@@ -590,7 +591,7 @@ export function PoseRead() {
     try {
       rec = new MediaRecorder(stream, { ...(type ? { mimeType: type } : {}), videoBitsPerSecond: 2_500_000 });
     } catch {
-      setError("Questo telefono non riesce a registrare il video: salva i fotogrammi con ⬇.");
+      setError("Questo telefono non riesce a registrare il video: salva i fotogrammi uno per volta.");
       return;
     }
     const chunks: Blob[] = [];
@@ -774,7 +775,7 @@ export function PoseRead() {
         <div className="grid gap-2">
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={() => { setCropMode((v) => !v); draftRef.current = null; }} className={`min-h-10 rounded-full px-3 text-sm ${cropMode ? "bg-accent text-accent-fg" : "border border-line"}`}>
-              ✂ {cropMode ? "Trascina un rettangolo sull'arciere…" : crop ? "Rifai il riquadro" : "Inquadra l'arciere"}
+              <Glyph name="scan" size={15} className="mr-1 inline -translate-y-px" />{cropMode ? "Trascina un rettangolo sull'arciere…" : crop ? "Rifai il riquadro" : "Inquadra l'arciere"}
             </button>
             {crop ? (
               <button type="button" onClick={() => applyCrop(null)} className="min-h-10 rounded-full border border-line px-3 text-sm">Togli riquadro</button>
@@ -807,7 +808,7 @@ export function PoseRead() {
                 <button key={k} type="button" onClick={() => { setLook(k); if (k === "scheletro") setShowPose(true); }} className={`min-h-8 rounded-full px-2.5 ${look === k ? "bg-[#3ee08f] text-[#04140c]" : ""}`}>{label}</button>
               ))}
               {look === "scheletro" ? (
-                <button type="button" onClick={() => setShowPose((v) => !v)} className="min-h-8 rounded-full px-2" aria-label="Mostra o nascondi lo scheletro">{showPose ? "👁" : "🚫"}</button>
+                <button type="button" onClick={() => setShowPose((v) => !v)} className="min-h-8 rounded-full px-2" aria-label="Mostra o nascondi lo scheletro"><Glyph name="eye" size={15} className={showPose ? "" : "opacity-40"} /></button>
               ) : null}
             </div>
             {progress != null ? (
@@ -829,7 +830,7 @@ export function PoseRead() {
                 {range ? <div className="absolute inset-y-0 rounded-full bg-[#3ee08f]" style={{ left: `${(range.from / Math.max(0.01, duration)) * 100}%`, width: `${((range.to - range.from) / Math.max(0.01, duration)) * 100}%` }} /> : null}
               </div>
               <div className="flex flex-wrap items-center gap-2 text-sm">
-                <span className="text-xs text-muted">✂ Parte:</span>
+                <span className="text-xs text-muted">Parte:</span>
                 <button type="button" onClick={() => { const to = range?.to ?? duration; setRange({ from: Math.min(time, to - 0.2), to }); setSamples([]); }} className="min-h-9 rounded-full border border-line px-3">⟦ Inizio qui</button>
                 <button type="button" onClick={() => { const from = range?.from ?? 0; setRange({ from, to: Math.max(time, from + 0.2) }); setSamples([]); }} className="min-h-9 rounded-full border border-line px-3">Fine qui ⟧</button>
                 {range ? <button type="button" onClick={() => { setRange(null); setSamples([]); }} className="min-h-9 rounded-full border border-line px-3">Tutto</button> : null}
@@ -847,28 +848,28 @@ export function PoseRead() {
                 {progress != null ? (
                   <button type="button" onClick={() => { cancel.current = true; }} className="min-h-11 rounded-xl border border-line px-3 text-sm font-semibold">Ferma l'analisi</button>
                 ) : (
-                  <button type="button" disabled={!duration || Boolean(busy)} onClick={() => void scanAll()} className="min-h-11 rounded-xl bg-accent px-3 text-sm font-semibold text-accent-fg disabled:opacity-60">🔍 {range ? "Analizza la parte" : "Analizza tutto il video"}</button>
+                  <button type="button" disabled={!duration || Boolean(busy)} onClick={() => void scanAll()} className="min-h-11 rounded-xl bg-accent px-3 text-sm font-semibold text-accent-fg disabled:opacity-60"><Glyph name="scan" size={15} className="mr-1 inline -translate-y-px" />{range ? "Analizza la parte" : "Analizza tutto il video"}</button>
                 )}
-                <button type="button" onClick={snapshot} className="min-h-11 rounded-xl border border-line px-3 text-sm font-semibold">⬇ Salva fotogramma</button>
-                <button type="button" disabled={recording || progress != null} onClick={() => void recordAnnotated()} className="min-h-11 rounded-xl border border-line px-3 text-sm font-semibold disabled:opacity-60">{recording ? "⏺ Registro…" : look === "scheletro" ? "⏺ Salva video con scheletro" : "⏺ Salva video con sagoma"}</button>
-                <button type="button" disabled={!samples.length} onClick={exportCsv} className="min-h-11 rounded-xl border border-line px-3 text-sm font-semibold disabled:opacity-60">⬇ Dati CSV</button>
+                <button type="button" onClick={snapshot} className="min-h-11 rounded-xl border border-line px-3 text-sm font-semibold"><IconLabel icon="download" size={15}>Salva fotogramma</IconLabel></button>
+                <button type="button" disabled={recording || progress != null} onClick={() => void recordAnnotated()} className="min-h-11 rounded-xl border border-line px-3 text-sm font-semibold disabled:opacity-60">{recording ? "● Registro…" : look === "scheletro" ? "⏺ Salva video con scheletro" : "⏺ Salva video con sagoma"}</button>
+                <button type="button" disabled={!samples.length} onClick={exportCsv} className="min-h-11 rounded-xl border border-line px-3 text-sm font-semibold disabled:opacity-60"><IconLabel icon="download" size={15}>Dati CSV</IconLabel></button>
               </div>
             </div>
           ) : (
-            <button type="button" onClick={snapshot} className="min-h-11 rounded-xl border border-line px-3 text-sm font-semibold">⬇ Salva l'immagine con lo scheletro</button>
+            <button type="button" onClick={snapshot} className="min-h-11 rounded-xl border border-line px-3 text-sm font-semibold"><IconLabel icon="download" size={15}>Salva l'immagine con lo scheletro</IconLabel></button>
           )}
 
           <Readout m={now} gear={gear} distance={distance} />
 
           {now ? (
             <div className="grid gap-2 rounded-xl border border-line bg-elev p-3">
-              <p className="text-sm font-semibold">💾 Salva questa analisi nel tuo profilo</p>
+              <p className="flex items-center gap-1.5 text-sm font-semibold"><Glyph name="save" size={16} />Salva questa analisi nel tuo profilo</p>
               <p className="text-xs text-muted">Restano i numeri e una miniatura (il video resta sul telefono): così vedi i progressi nel tempo e la postura migliore del gruppo.{kind === "video" && !samples.length ? " Per tempi e punteggio premi prima «Analizza»." : ""}</p>
               <div className="flex gap-2">
                 <input value={saveTitle} onChange={(e) => setSaveTitle(e.target.value)} placeholder="Titolo, es. 18 m sera" className="min-h-11 min-w-0 flex-1 rounded-xl border border-line bg-transparent px-3 text-sm" />
                 <button type="button" disabled={saveState === "busy"} onClick={() => void storeAnalysis()} className="min-h-11 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-fg disabled:opacity-60">{saveState === "busy" ? "Salvo…" : "Salva"}</button>
               </div>
-              {saveState === "ok" ? <p className="text-xs text-primary">Salvata ✅ La trovi nel Profilo, in «Le mie analisi del gesto».</p> : saveState && saveState !== "busy" ? <p className="text-xs text-danger">{saveState}</p> : null}
+              {saveState === "ok" ? <p className="text-xs text-primary"><StatusMark state="ok" />Salvata. La trovi nel Profilo, in «Le mie analisi del gesto».</p> : saveState && saveState !== "busy" ? <p className="text-xs text-danger">{saveState}</p> : null}
             </div>
           ) : null}
 
@@ -931,8 +932,8 @@ function Readout({ m, gear, distance }: { m: Metrics | null; gear: Gear | null; 
       </div>
       {distance ? (
         <p className="text-xs text-muted">
-          📏 Ripresa a circa {distance.toFixed(1)} m dall'arciere (stima dalle spalle)
-          {distance < 2.5 ? ": un po' vicino, allontanati" : distance > 8 ? ": lontano, avvicinati o usa il riquadro ✂" : ": distanza giusta"}.
+          Ripresa a circa {distance.toFixed(1)} m dall'arciere (stima dalle spalle)
+          {distance < 2.5 ? ": un po' vicino, allontanati" : distance > 8 ? ": lontano, avvicinati o usa il riquadro" : ": distanza giusta"}.
         </p>
       ) : null}
     </div>
@@ -969,7 +970,7 @@ function ShotCard({ shot, onSeek }: { shot: Shot; onSeek: (t: number) => void })
       </div>
       <ul className="grid gap-1 text-sm">
         {shot.checks.map((c) => (
-          <li key={c.text}>{c.ok ? "✅" : c.warn ? "⚠️" : "❌"} {c.text}</li>
+          <li key={c.text}><StatusMark state={c.ok ? "ok" : c.warn ? "warn" : "bad"} />{c.text}</li>
         ))}
       </ul>
       <div className="grid gap-1">
@@ -1163,11 +1164,11 @@ function drawPose(ctx: CanvasRenderingContext2D, w: number, h: number, lm: Landm
   if (m) {
     const de = at(draw[1]);
     const be = at(bow[1]);
-    const mark = (good: boolean) => (good ? "✅ " : "⚠️ ");
+    const mark = (good: boolean) => (good ? "✓ " : "! ");
     label(`${mark(m.line >= 168)}Gomito in linea ${m.line.toFixed(0)}°`, de.x + 16 * s, de.y - 6 * s, m.line >= 168 ? "#b9ffd9" : "#fde68a");
     label(`${mark(m.bow >= 165)}Braccio arco ${m.bow.toFixed(0)}°`, be.x + 16 * s, be.y + 22 * s, m.bow >= 165 ? "#b9ffd9" : "#fde68a");
     label(`${mark(Math.abs(m.shoulder) <= 4)}Spalle ${Math.abs(m.shoulder).toFixed(1)}°`, (l.x + r.x) / 2 - 30 * s, Math.min(l.y, r.y) - 12 * s, Math.abs(m.shoulder) <= 4 ? "#b9ffd9" : "#fde68a");
-    if (m.handFace < 0.85) label("✅ Ancorato", at(draw[2]).x - 30 * s, at(draw[2]).y + 26 * s, "#b9ffd9");
+    if (m.handFace < 0.85) label("✓ Ancorato", at(draw[2]).x - 30 * s, at(draw[2]).y + 26 * s, "#b9ffd9");
   }
   if (gear?.bow) label(`Cant ${Math.abs(gear.bow.cant).toFixed(1)}°`, gear.bow.x1 * w + 8 * s, gear.bow.y1 * h + 16 * s, "#bef264");
 }

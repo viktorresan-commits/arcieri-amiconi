@@ -192,7 +192,7 @@ function Page() {
                     {sp.draw ? ` · ${sp.draw} lb` : ""}
                   </p>
                   <p className="text-xs text-muted">
-                    {item.status === "in_use" ? "in uso" : item.status === "replace" ? "⚠️ da sostituire" : "fermo"}
+                    {item.status === "in_use" ? "in uso" : item.status === "replace" ? "da sostituire" : "fermo"}
                     {item.priceCents != null ? ` · ${euro(item.priceCents)}` : ""}
                     {item.visibility === "group" ? " · gruppo" : ""}
                   </p>

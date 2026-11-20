@@ -28,6 +28,7 @@ import { Button, Card, ErrorNote, Field, Loading, Select, TextArea, TextInput } 
 import { TargetFace } from "./target-face";
 import { ShotLab } from "./shot-lab";
 import { TargetRead } from "./target-read";
+import { AppIcon, Glyph } from "./icons";
 import { SagomaLab } from "./sagoma-lab";
 import { MediaPick } from "./media-pick";
 import { PoseRead } from "./pose-read";
@@ -767,7 +768,7 @@ function PhotoVolley({
     <Card className="grid gap-2">
       <button type="button" onClick={() => setOpen((v) => !v)} className="flex items-center justify-between gap-3 text-left">
         <span className="min-w-0">
-          <span className="aa-section-title block">📷 Volée da foto</span>
+          <span className="flex items-center gap-2.5"><AppIcon name="camera" color="#2b74c9" size={34} /><span className="aa-section-title block">Volée da foto</span></span>
           <span className="text-xs text-muted">Foto → salva → foto della volée dopo: frecce e volée si contano da sole.</span>
         </span>
         <span className="aa-chip shrink-0">{open ? "Chiudi" : "Apri"}</span>
@@ -1112,20 +1113,20 @@ function ProgramPick({
         <h1 className="font-display text-[2.1rem] leading-none tracking-tight">Cosa alleni oggi</h1>
         <p className="mt-1 text-xs text-white/70">Un tocco per ripartire, oppure scegli qui sotto obiettivo e frecce.</p>
         <Link to="/allenamento" search={{ avvia: "rapido" }} className="mt-3 block">
-          <Button className="aa-glow w-full">⚡ Riparti come l'ultima volta</Button>
+          <Button className="aa-glow w-full"><Glyph name="bolt" size={18} /> Riparti come l'ultima volta</Button>
         </Link>
         <div className="mt-2 grid grid-cols-4 gap-1.5 text-center text-[0.68rem] font-semibold">
           <Link to="/allenamento" search={{ avvia: "foto" }} className="aa-press grid gap-0.5 rounded-xl border border-white/10 bg-white/[0.06] py-2">
-            <span className="text-lg leading-none">📷</span>
+            <Glyph name="camera" size={20} className="mx-auto" />
             Da foto
           </Link>
           {([
-            ["🎥", "Gesto", onGesture],
-            ["📝", "Già fatto", onPast],
-            ["🗂️", "Storico", onHistory],
-          ] as const).map(([emoji, label, go]) => (
+            ["archer", "Gesto", onGesture],
+            ["notebook", "Già fatto", onPast],
+            ["history", "Storico", onHistory],
+          ] as const).map(([icon, label, go]) => (
             <button key={label} type="button" onClick={go} className="aa-press grid gap-0.5 rounded-xl border border-white/10 bg-white/[0.06] py-2">
-              <span className="text-lg leading-none">{emoji}</span>
+              <Glyph name={icon} size={20} className="mx-auto" />
               {label}
             </button>
           ))}
@@ -1212,7 +1213,7 @@ function ProgramPick({
       </Field>
       <div className="sticky bottom-[calc(env(safe-area-inset-bottom)+4.6rem)] z-10 grid gap-2 md:bottom-4">
         <Button disabled={!program || !body} onClick={prepare} className="shadow-[0_10px_30px_-10px_rgba(0,0,0,0.8)]">
-          {program && body ? `🏹 Inizia · ${volume} frecce` : "Scegli l'obiettivo per iniziare"}
+          {program && body ? `Inizia · ${volume} frecce` : "Scegli l'obiettivo per iniziare"}
         </Button>
       </div>
       <Button variant="ghost" onClick={onOther}>Altro formato (distanza, volée, arco)</Button>

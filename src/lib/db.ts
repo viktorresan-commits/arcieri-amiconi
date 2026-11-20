@@ -93,7 +93,9 @@ function createNeonSql(): Promise<Sql> {
     types.setTypeParser(OID_INT8, Number);
     types.setTypeParser(OID_DATE, identity);
     types.setTypeParser(OID_INTERVAL, identity);
-    const pool = new Pool({ connectionString: databaseUrl });
+    // sslmode=require oggi vale già come verify-full: lo scrivo esplicito, così pg non avvisa a ogni avvio
+    const url = (databaseUrl ?? "").replace(/([?&])sslmode=(prefer|require|verify-ca)\b/, "$1sslmode=verify-full");
+    const pool = new Pool({ connectionString: url });
     return toSql(async <T>(text: string, params: unknown[]) => {
       const res = await pool.query(text, params);
       return res.rows as T[];

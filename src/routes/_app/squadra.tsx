@@ -138,12 +138,12 @@ function Page() {
           sagomaShots.length ? <SagomaLab animal="sagome-3d" shots={sagomaShots} initial="tre" /> : <p className="text-sm text-muted">Nessun tiro di sagoma, per ora.</p>
         ) : look === "tre" && dots.length ? (
           <div className="grid gap-2">
-            <Segmented value={look} onChange={setLook} options={[{ id: "tre", label: "🎯 3D animato" }, { id: "mappa", label: "Mappa" }]} />
+            <Segmented value={look} onChange={setLook} options={[{ id: "tre", label: "3D animato" }, { id: "mappa", label: "Mappa" }]} />
             <Target3D face={TEAM_FACE} shots={dots.slice(-180).map((d) => ({ x: d.nx, y: d.ny, color: d.color }))} />
           </div>
         ) : (
           <>
-          {dots.length ? <Segmented value={look} onChange={setLook} options={[{ id: "tre", label: "🎯 3D animato" }, { id: "mappa", label: "Mappa" }]} /> : null}
+          {dots.length ? <Segmented value={look} onChange={setLook} options={[{ id: "tre", label: "3D animato" }, { id: "mappa", label: "Mappa" }]} /> : null}
           <svg viewBox="-1.12 -1.12 2.24 2.24" className="mx-auto aspect-square w-full max-w-sm" role="img" aria-label="Minimappa dei tiri">
             <circle cx="0" cy="0" r="1.08" fill="var(--elev)" />
             {RINGS.map((ring) => <circle key={ring.r} cx="0" cy="0" r={ring.r} fill={ring.fill} />)}

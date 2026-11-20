@@ -2,6 +2,7 @@ import { useState, type CSSProperties } from "react";
 import { Link } from "@tanstack/react-router";
 import { SHORTCUTS, TIPS, shortcutById, usePinned, type Shortcut } from "@/lib/arcieri/shortcuts";
 import { cx } from "./kit";
+import { AppIcon, Glyph } from "./icons";
 
 /** Una scorciatoia: icona colorata che rimbalza al tocco. */
 export function ShortcutTile({ s, size = "md", onClick, index = 0 }: { s: Shortcut; size?: "md" | "lg"; onClick?: () => void; index?: number }) {
@@ -17,9 +18,7 @@ export function ShortcutTile({ s, size = "md", onClick, index = 0 }: { s: Shortc
       className={cx("aa-short group flex flex-col items-center gap-1.5 text-center", size === "lg" ? "min-w-0" : "w-[4.6rem] shrink-0")}
       style={{ "--c": s.color, animationDelay: `${index * 40}ms` } as CSSProperties}
     >
-      <span className={cx("aa-short-icon grid place-items-center rounded-[1.15rem]", size === "lg" ? "h-14 w-14 text-[1.7rem]" : "h-[3.4rem] w-[3.4rem] text-[1.55rem]")}>
-        <span className="aa-short-emoji">{s.emoji}</span>
-      </span>
+      <AppIcon name={s.icon} color={s.color} size={size === "lg" ? 56 : 54} className="aa-short-icon" />
       <span className="w-full truncate text-[0.7rem] font-semibold leading-tight">{s.label}</span>
       {size === "lg" ? <span className="-mt-1 line-clamp-2 text-[0.62rem] leading-tight text-muted">{s.hint}</span> : null}
     </Link>
@@ -34,7 +33,7 @@ export function ShortcutRow() {
     <section className="grid gap-2">
       <div className="flex items-center justify-between">
         <h2 className="aa-section-title">In un tocco</h2>
-        <button type="button" className="aa-chip" onClick={() => setEdit(true)}>✎ Personalizza</button>
+        <button type="button" className="aa-chip" onClick={() => setEdit(true)}><Glyph name="edit" size={14} /> Personalizza</button>
       </div>
       <div className="-mx-4 flex gap-2.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none]">
         {pinned.map((id, i) => {
@@ -42,7 +41,7 @@ export function ShortcutRow() {
           return s ? <ShortcutTile key={id} s={s} index={i} /> : null;
         })}
         <button type="button" onClick={() => setEdit(true)} className="aa-short flex w-[4.6rem] shrink-0 flex-col items-center gap-1.5" style={{ "--c": "#8a8f98" } as CSSProperties}>
-          <span className="aa-short-icon grid h-[3.4rem] w-[3.4rem] place-items-center rounded-[1.15rem] border border-dashed border-white/25 text-xl">＋</span>
+          <span className="grid h-[54px] w-[54px] place-items-center rounded-[16px] border border-dashed border-white/25 text-muted"><Glyph name="plus" size={22} /></span>
           <span className="text-[0.7rem] font-semibold text-muted">Aggiungi</span>
         </button>
       </div>
@@ -69,7 +68,7 @@ export function ShortcutEditor({ onClose }: { onClose: () => void }) {
             return (
               <li key={s.id} className={cx("flex items-center gap-3 rounded-2xl border px-3 py-2 transition", on ? "border-white/15 bg-white/[0.06]" : "border-transparent opacity-70")}>
                 <button type="button" onClick={() => toggle(s.id)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
-                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-xl" style={{ background: `color-mix(in srgb, ${s.color} 28%, transparent)` }}>{s.emoji}</span>
+                  <AppIcon name={s.icon} color={s.color} size={40} />
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-semibold">{s.label}</span>
                     <span className="block truncate text-[0.7rem] text-muted">{s.hint}</span>
@@ -105,12 +104,12 @@ export function TipCard() {
       className="aa-tile aa-kpi flex w-full items-start gap-3 text-left"
       style={{ "--kpi": "#7cf0a8" } as CSSProperties}
     >
-      <span key={`e${i}`} className="aa-pop grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/[0.07] text-xl">{tip.emoji}</span>
+      <span key={`e${i}`} className="aa-pop"><AppIcon name={tip.icon} color="#2f9e6a" size={40} /></span>
       <span key={`t${i}`} className="aa-rise min-w-0">
         <span className="block text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-[#7cf0a8]">Lo sapevi? · {(i % TIPS.length) + 1}/{TIPS.length}</span>
         <span className="mt-0.5 block text-[0.8rem] leading-snug">{tip.text}</span>
       </span>
-      <span className="ml-auto self-center text-muted">›</span>
+      <Glyph name="chevron" size={16} className="ml-auto shrink-0 self-center text-muted" />
     </button>
   );
 }

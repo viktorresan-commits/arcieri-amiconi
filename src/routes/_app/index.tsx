@@ -7,6 +7,8 @@ import { programById } from "@/lib/arcieri/program";
 import { useLoad } from "@/lib/arcieri/use-load";
 import { HeroTarget } from "@/components/hero-target";
 import { ShortcutRow, TipCard } from "@/components/shortcuts";
+import { JourneyCard } from "@/components/journey";
+import { Glyph } from "@/components/icons";
 import { ArrowArt } from "@/components/arrow-art";
 import { Button, Card, Empty, ErrorNote, HoldDelete, Loading, cx } from "@/components/kit";
 
@@ -79,7 +81,7 @@ function Home() {
                 {data.since ? ` · ultimo tiro ${data.since.n} ${data.since.unit === "h" ? (data.since.n === 1 ? "ora" : "ore") : data.since.n === 1 ? "giorno" : "giorni"} fa` : ""}
               </p>
               <Link to="/bacheca" className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/8 px-3 py-1 text-xs font-semibold">
-                📣 News
+                <Glyph name="megaphone" size={14} /> News
                 {data.unread > 0 ? <span className="grid min-h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[0.6rem] font-bold text-accent-fg">{data.unread > 9 ? "9+" : data.unread}</span> : null}
               </Link>
             </div>
@@ -87,16 +89,19 @@ function Home() {
           </div>
           <div className="mt-3 grid grid-cols-[1.4fr_1fr] gap-2">
             <Link to="/allenamento" search={{ avvia: "rapido" }} className="block">
-              <Button className="aa-glow w-full">⚡ Tiro rapido</Button>
+              <Button className="aa-glow w-full"><Glyph name="bolt" size={18} /> Tiro rapido</Button>
             </Link>
             <Link to="/allenamento" search={{ avvia: "foto" }} className="block">
-              <Button variant="ghost" className="w-full">📷 Da foto</Button>
+              <Button variant="ghost" className="w-full"><Glyph name="camera" size={18} /> Da foto</Button>
             </Link>
           </div>
         </div>
       </Rise>
       <Rise i={1}>
         <ShortcutRow />
+      </Rise>
+      <Rise i={2}>
+        <JourneyCard totalArrows={data.all.arrows} weekArrows={data.weekArrows} streak={data.streak} />
       </Rise>
       <Rise i={2}>
         <TipCard />
@@ -113,7 +118,7 @@ function Home() {
         <Card>
           <div className="mb-1 flex items-baseline justify-between gap-2">
             <p className="aa-section-title">Ultime frecce</p>
-            <Link to="/attrezzatura" className="text-[0.68rem] font-semibold text-muted underline-offset-2 hover:underline">🎨 Personalizza frecce</Link>
+            <Link to="/attrezzatura" className="text-[0.68rem] font-semibold text-muted underline-offset-2 hover:underline"><span className="inline-flex items-center gap-1"><Glyph name="palette" size={13} />Personalizza frecce</span></Link>
           </div>
           {data.lastShots.length ? <LastArrows shots={data.lastShots} /> : <p className="text-xs text-muted">Le frecce che tiri compaiono qui.</p>}
         </Card>

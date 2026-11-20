@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { StatusMark } from "@/components/icons";
 import { useState } from "react";
 import { deleteSession, getSession, saveSession } from "@/lib/arcieri/training.api";
 import { faceById, fmtAvg, summarize, aimAngleLabel, aimTargetLabel, sagomaMaxOf, keypad, ringPoint, scoreAtRadius, type AimAngle, type AimTarget, type Face } from "@/lib/arcieri/scoring";
@@ -244,7 +245,7 @@ function Volleys({
       )}
       {shots.length > session.arrowsPerEnd * session.endsPlanned * session.blocksPlanned ? (
         <div className="grid gap-2 rounded-xl border border-danger/40 bg-danger/10 p-3 text-sm">
-          <p>⚠️ Ci sono {shots.length} frecce ma il piano ne prevede {session.arrowsPerEnd * session.endsPlanned * session.blocksPlanned} ({session.arrowsPerEnd} × {session.endsPlanned} volée × {session.blocksPlanned} bersagli).</p>
+          <p><StatusMark state="warn" />Ci sono {shots.length} frecce ma il piano ne prevede {session.arrowsPerEnd * session.endsPlanned * session.blocksPlanned} ({session.arrowsPerEnd} × {session.endsPlanned} volée × {session.blocksPlanned} bersagli).</p>
           <Button disabled={busy} onClick={() => void commit(fitToPlan(shots, session.arrowsPerEnd, session.endsPlanned, session.blocksPlanned))}>Tieni solo le prime {session.arrowsPerEnd * session.endsPlanned * session.blocksPlanned}</Button>
         </div>
       ) : null}
@@ -506,7 +507,7 @@ function Editor({
       </div>
       <p className="text-sm text-muted">Totale previsto: {countOf(arrowsPerEnd, session.arrowsPerEnd, 24) * countOf(endsPlanned, session.endsPlanned, 60) * countOf(blocksPlanned, session.blocksPlanned, 40)} frecce. Le frecce segnate si rimettono in fila nel piano nuovo; se aumenti i numeri, aggiungile da Correggi frecce.</p>
       {shots.length > countOf(arrowsPerEnd, session.arrowsPerEnd, 24) * countOf(endsPlanned, session.endsPlanned, 60) * countOf(blocksPlanned, session.blocksPlanned, 40) ? (
-        <p className="rounded-xl border border-danger/50 bg-danger/10 p-2 text-sm">⚠️ Hai {shots.length} frecce segnate: salvando, restano solo le prime {countOf(arrowsPerEnd, session.arrowsPerEnd, 24) * countOf(endsPlanned, session.endsPlanned, 60) * countOf(blocksPlanned, session.blocksPlanned, 40)} e le altre vengono tolte.</p>
+        <p className="rounded-xl border border-danger/50 bg-danger/10 p-2 text-sm"><StatusMark state="warn" />Hai {shots.length} frecce segnate: salvando, restano solo le prime {countOf(arrowsPerEnd, session.arrowsPerEnd, 24) * countOf(endsPlanned, session.endsPlanned, 60) * countOf(blocksPlanned, session.blocksPlanned, 40)} e le altre vengono tolte.</p>
       ) : null}
       <Field label="Obiettivo">
         <Select value={program} onChange={(e) => setProgram(e.target.value)}>

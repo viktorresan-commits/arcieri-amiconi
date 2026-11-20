@@ -1,13 +1,6 @@
 import { createContext, useContext, useEffect, useLayoutEffect, useState, type ReactNode } from "react";
+import { Glyph, type IconName } from "./icons";
 import { Link, useRouterState } from "@tanstack/react-router";
-import {
-  House,
-  Menu,
-  Plus,
-  Target,
-  Users,
-  X,
-} from "lucide-react";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { RedirectToSignIn } from "@/lib/auth/gates";
 import { getMe } from "@/lib/arcieri/members.api";
@@ -143,9 +136,9 @@ export function Shell({ children }: { children: ReactNode }) {
   }
 
   const nav = [
-    { to: "/", label: "Casa", icon: House },
-    { to: "/allenamento", label: "Tiro", icon: Target },
-    { to: "/squadra", label: "Squadra", icon: Users },
+    { to: "/", label: "Casa", icon: "home" as IconName },
+    { to: "/allenamento", label: "Tiro", icon: "bow" as IconName },
+    { to: "/squadra", label: "Squadra", icon: "team" as IconName },
   ] as const;
 
   return (
@@ -183,7 +176,7 @@ export function Shell({ children }: { children: ReactNode }) {
               </span>
             </Link>
             <Link to="/allenamento" className="hidden h-10 items-center gap-1.5 rounded-full bg-primary px-4 text-sm font-semibold text-primary-fg md:flex">
-              <Plus className="h-4 w-4" /> Nuovo tiro
+              <Glyph name="plus" size={16} strokeWidth={2.4} /> Nuovo tiro
             </Link>
           </header>
           {offline ? <p className="bg-accent px-4 py-2 text-sm text-accent-fg">Sei offline. Il tiro resta sul telefono e si sincronizza al ritorno della rete.</p> : null}
@@ -197,12 +190,12 @@ export function Shell({ children }: { children: ReactNode }) {
                 aria-label="Nuovo tiro"
                 className="-mt-7 mb-2 grid h-16 w-16 place-items-center rounded-full border-4 border-bg bg-primary text-primary-fg shadow-[0_8px_24px_-6px_rgba(0,0,0,0.6)] active:scale-95"
               >
-                <Plus className="h-8 w-8" strokeWidth={2.6} />
+                <Glyph name="plus" size={30} strokeWidth={2.6} />
               </button>
             </div>
             <BottomLink item={nav[2]} active={path === "/squadra" || path.startsWith("/arciere/")} />
             <button type="button" className="flex min-h-16 flex-col items-center justify-center gap-0.5 text-[11px] text-muted" onClick={() => setMenu(true)}>
-              <Menu className="h-5 w-5" />
+              <Glyph name="grid" size={22} />
               Menu
             </button>
           </nav>
@@ -225,7 +218,7 @@ export function Shell({ children }: { children: ReactNode }) {
               <div className="sticky top-0 z-10 flex h-14 items-center justify-between bg-bg/90 px-4 backdrop-blur-md">
                 <p className="aa-section-title">Tutto in un tocco</p>
                 <button type="button" className="grid h-11 w-11 place-items-center rounded-full bg-white/5" onClick={() => setMenu(false)} aria-label="Chiudi">
-                  <X />
+                  <Glyph name="close" size={20} />
                 </button>
               </div>
               <div className="grid gap-4 px-4">
@@ -249,7 +242,7 @@ export function Shell({ children }: { children: ReactNode }) {
                       ))}
                     </span>
                   </div>
-                  <button type="button" className="aa-chip justify-self-start" onClick={() => { setMenu(false); setEditShort(true); }}>✎ Scegli le scorciatoie della Home</button>
+                  <button type="button" className="aa-chip justify-self-start" onClick={() => { setMenu(false); setEditShort(true); }}><Glyph name="edit" size={14} /> Scegli le scorciatoie della Home</button>
                 </div>
               </div>
             </div>
@@ -261,11 +254,10 @@ export function Shell({ children }: { children: ReactNode }) {
   );
 }
 
-function BottomLink({ item, active }: { item: { to: string; label: string; icon: typeof House }; active: boolean }) {
-  const Icon = item.icon;
+function BottomLink({ item, active }: { item: { to: string; label: string; icon: IconName }; active: boolean }) {
   return (
-    <Link to={item.to} className={cx("flex min-h-16 flex-col items-center justify-center gap-0.5 text-[11px]", active ? "text-primary" : "text-muted")}>
-      <Icon className="h-5 w-5" strokeWidth={active ? 2.6 : 2} />
+    <Link to={item.to} className={cx("flex min-h-16 flex-col items-center justify-center gap-0.5 text-[11px] font-medium", active ? "text-primary" : "text-muted")}>
+      <Glyph name={item.icon} size={23} strokeWidth={active ? 2.1 : 1.7} className={cx("transition-transform", active ? "-translate-y-0.5 scale-110" : "")} />
       {item.label}
       <span className={cx("mt-0.5 h-1 w-1 rounded-full", active ? "bg-primary" : "bg-transparent")} />
     </Link>

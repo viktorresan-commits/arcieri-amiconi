@@ -893,6 +893,20 @@ export const dashboard = createServerFn({ method: "GET" })
     const since = elapsedHours == null ? null : elapsedHours < 24 ? { n: Math.max(1, Math.round(elapsedHours)), unit: "h" as const } : { n: Math.max(1, Math.floor(elapsedHours / 24)), unit: "g" as const };
     const compared = highN + zeroN;
     const monthTrain = sum(monthCards);
+    // coinvolgimento: giorni di fila con almeno una freccia e frecce della settimana (da lunedì)
+    const dayKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const shotDays = new Set(cards.filter((c) => c.arrows > 0).map((c) => dayKey(new Date(c.startedAt))));
+    let streak = 0;
+    const probe = new Date();
+    if (!shotDays.has(dayKey(probe))) probe.setDate(probe.getDate() - 1);
+    while (shotDays.has(dayKey(probe))) {
+      streak += 1;
+      probe.setDate(probe.getDate() - 1);
+    }
+    const monday = new Date();
+    monday.setHours(0, 0, 0, 0);
+    monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+    const weekArrows = cards.filter((c) => new Date(c.startedAt) >= monday).reduce((a, c) => a + c.arrows, 0);
     return {
       month: { sessions: monthEvents, arrows: monthBag.arrows, points: monthBag.points, avg: monthBag.arrows ? monthBag.points / monthBag.arrows : monthTrain.avg },
       all: { ...allTrain, arrows: bag.arrows, points: bag.points, avg: bag.arrows ? bag.points / bag.arrows : 0, bestAvg: best, precisePct: compared ? (highN / compared) * 100 : null },
@@ -900,6 +914,8 @@ export const dashboard = createServerFn({ method: "GET" })
       since,
       trend,
       lastShots,
+      streak,
+      weekArrows,
       last: cards[0] ?? null,
       recent: cards.slice(0, 12).map((s) => ({
         id: s.id,

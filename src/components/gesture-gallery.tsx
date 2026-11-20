@@ -1,3 +1,4 @@
+import { IconTitle, StatusMark } from "./icons";
 import { useState } from "react";
 import { bestGestures, deleteGesture, listGestures, type GestureRow } from "@/lib/arcieri/gesture.api";
 import { useLoad } from "@/lib/arcieri/use-load";
@@ -61,7 +62,7 @@ export function GestureGallery() {
                 <p>Ancoraggio {r.anchorS == null ? "—" : `${r.anchorS.toFixed(1)} s`} · trazione {r.drawS == null ? "—" : `${r.drawS.toFixed(1)} s`}</p>
                 <p>Linea gomito {deg(r.lineDeg)} · braccio arco {deg(r.bowDeg)} · spalle {deg(r.shoulderDeg, 1)}</p>
                 {r.distanceM ? <p>Ripresa a {r.distanceM.toFixed(1)} m</p> : null}
-                {checksOf(r).map((c) => <p key={c} className="text-muted">{c.startsWith("ok") ? "✅" : c.startsWith("attenzione") ? "⚠️" : "❌"} {c.replace(/^[^:]+: /, "")}</p>)}
+                {checksOf(r).map((c) => <p key={c} className="text-muted"><StatusMark state={c.startsWith("ok") ? "ok" : c.startsWith("attenzione") ? "warn" : "bad"} />{c.replace(/^[^:]+: /, "")}</p>)}
                 <button type="button" className="mt-1 w-fit text-danger" onClick={() => deleteGesture({ data: { id: r.id } }).then(() => setNonce((n) => n + 1))}>Elimina</button>
               </div>
             ) : null}
@@ -156,13 +157,13 @@ export function GroupBestPosture() {
   if (best.loading) return <Loading />;
   return (
     <Card className="grid gap-2">
-      <h2 className="font-display text-2xl">🏹 Postura migliore del gruppo</h2>
+      <IconTitle icon="posture" color="#7652d1">Postura migliore del gruppo</IconTitle>
       {!rows.length ? <p className="text-sm text-muted">Nessuna analisi del gesto salvata, per ora. Salvane una da «Gesto (video)».</p> : null}
       {rows[0] ? (
         <div className="relative overflow-hidden rounded-2xl border border-accent">
           {rows[0].thumb ? <img src={rows[0].thumb} alt="" className="max-h-80 w-full object-cover" /> : null}
           <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent p-3 text-white">
-            <p className="text-xs uppercase tracking-wide text-[#e6b325]">🥇 Migliore</p>
+            <p className="text-xs uppercase tracking-wide text-[#e6b325]">Migliore</p>
             <p className="font-display text-2xl leading-none">{rows[0].name}</p>
             <p className="text-xs opacity-90">{rows[0].score}/100 · linea {deg(rows[0].lineDeg)} · ancoraggio {rows[0].anchorS == null ? "—" : `${rows[0].anchorS.toFixed(1)} s`}</p>
           </div>
@@ -172,7 +173,7 @@ export function GroupBestPosture() {
         {rows.slice(1).map((r, i) => (
           <div key={r.id} className="overflow-hidden rounded-xl border border-line">
             {r.thumb ? <img src={r.thumb} alt="" className="aspect-[3/4] w-full object-cover" /> : null}
-            <p className="truncate px-1.5 pt-1 text-xs font-semibold">{i === 0 ? "🥈 " : i === 1 ? "🥉 " : ""}{r.name}</p>
+            <p className="truncate px-1.5 pt-1 text-xs font-semibold"><span className="mr-1 inline-block h-2 w-2 rounded-full align-middle" style={{ background: i === 0 ? "#c9ced6" : i === 1 ? "#c98a4b" : "transparent" }} />{r.name}</p>
             <p className="px-1.5 pb-1 text-[11px] text-muted">{r.score}/100</p>
           </div>
         ))}

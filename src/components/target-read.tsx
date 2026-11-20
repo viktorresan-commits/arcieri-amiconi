@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from "react";
+import { Glyph, IconLabel, StatusMark } from "./icons";
 import { scoreAtRadius, type Face } from "@/lib/arcieri/scoring";
 import {
   RECT_SIZE,
@@ -629,7 +630,7 @@ export function TargetRead({
       )}
       <MediaPick kind="image" onFile={(file) => { setQueue([]); setBatch(null); onPhoto(file); }} />
       <button type="button" onClick={() => manyRef.current?.click()} className="min-h-11 rounded-xl border border-dashed border-accent/60 bg-accent/10 px-3 text-sm font-semibold">
-        📚 Più foto insieme (una per volée)
+        <IconLabel icon="stack">Più foto insieme (una per volée)</IconLabel>
       </button>
       <input ref={manyRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { onMany(e.currentTarget.files); e.currentTarget.value = ""; }} />
       {batch ? (
@@ -638,7 +639,7 @@ export function TargetRead({
           <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-accent transition-all" style={{ width: `${(batch.at / batch.total) * 100}%` }} /></div>
         </div>
       ) : null}
-      <MediaPick kind="video" onFile={(file) => void onVideo(file)} shootLabel="🎥 Video del bersaglio" albumLabel="🎞️ Video dalla galleria" />
+      <MediaPick kind="video" onFile={(file) => void onVideo(file)} shootLabel="Video del bersaglio" albumLabel="Video dalla galleria" />
       <label className="flex items-center gap-2 text-xs text-muted">
         <input type="checkbox" checked={ignoreKnown} onChange={(e) => setIgnoreKnown(e.target.checked)} />
         Ignora le frecce già segnate (se nella foto ci sono ancora quelle di prima)
@@ -659,12 +660,12 @@ export function TargetRead({
             <button type="button" disabled={!calib} onClick={() => { setView("dritta"); setTaps(null); }} className={`min-h-10 rounded-full px-3 text-sm disabled:opacity-50 ${view === "dritta" ? "bg-primary text-primary-fg" : "border border-line"}`}>Bersaglio raddrizzato</button>
             {image ? (
               <>
-              <button type="button" onClick={() => { setView("foto"); setAdjust(null); setTapKind(2); setTaps([]); setNote("Tocca il CENTRO del bersaglio, poi un punto del BORDO esterno. Tieni il dito giù e guarda la lente: il punto si mette quando lo alzi."); }} className={`min-h-10 rounded-full px-3 text-sm ${taps && tapKind === 2 ? "bg-accent text-accent-fg" : "border border-line"}`}>⊙ Centro + bordo</button>
-              <button type="button" onClick={() => { setView("foto"); setAdjust(null); setTapKind(4); setTaps([]); setNote("Tocca il bordo esterno della faccia: in alto, a destra, in basso, a sinistra. Tieni il dito giù e guarda la lente: il punto si mette quando lo alzi."); }} className={`min-h-10 rounded-full px-3 text-sm ${taps && tapKind === 4 ? "bg-accent text-accent-fg" : "border border-line"}`}>📐 4 tocchi (foto storta)</button>
+              <button type="button" onClick={() => { setView("foto"); setAdjust(null); setTapKind(2); setTaps([]); setNote("Tocca il CENTRO del bersaglio, poi un punto del BORDO esterno. Tieni il dito giù e guarda la lente: il punto si mette quando lo alzi."); }} className={`min-h-10 rounded-full px-3 text-sm ${taps && tapKind === 2 ? "bg-accent text-accent-fg" : "border border-line"}`}><IconLabel icon="crosshair">Centro + bordo</IconLabel></button>
+              <button type="button" onClick={() => { setView("foto"); setAdjust(null); setTapKind(4); setTaps([]); setNote("Tocca il bordo esterno della faccia: in alto, a destra, in basso, a sinistra. Tieni il dito giù e guarda la lente: il punto si mette quando lo alzi."); }} className={`min-h-10 rounded-full px-3 text-sm ${taps && tapKind === 4 ? "bg-accent text-accent-fg" : "border border-line"}`}><IconLabel icon="scan">4 tocchi (foto storta)</IconLabel></button>
               </>
             ) : null}
             {image && calib ? (
-              <button type="button" onClick={() => (adjust ? applyAdjust() : startAdjust())} className={`min-h-10 rounded-full px-3 text-sm ${adjust ? "bg-accent text-accent-fg" : "border border-line"}`}>{adjust ? "✅ Applica" : "✋ Sposta e ingrandisci il padiglione"}</button>
+              <button type="button" onClick={() => (adjust ? applyAdjust() : startAdjust())} className={`min-h-10 rounded-full px-3 text-sm ${adjust ? "bg-accent text-accent-fg" : "border border-line"}`}>{adjust ? <IconLabel icon="check">Applica</IconLabel> : <IconLabel icon="hand">Sposta e ingrandisci il padiglione</IconLabel>}</button>
             ) : null}
             {calib && view === "foto" && !adjust ? (
               <button type="button" onClick={() => setShowFace((v) => !v)} className="min-h-10 rounded-full border border-line px-3 text-sm">{showFace ? "Padiglione: sì" : "Padiglione: no"}</button>
@@ -688,7 +689,7 @@ export function TargetRead({
               <Slider label="Schiacciamento (foto di sbieco)" min={0.35} max={1} step={0.005} value={adjust.B / adjust.A} onChange={(k) => setAdjust({ ...adjust, B: adjust.A * k })} show={(k) => `${Math.round(k * 100)}%`} />
               <Slider label="Rotazione" min={-90} max={90} step={0.5} value={(adjust.angle * 180) / Math.PI} onChange={(deg) => setAdjust({ ...adjust, angle: (deg * Math.PI) / 180 })} show={(d) => `${d.toFixed(0)}°`} />
               <div className="flex gap-2">
-                <button type="button" onClick={applyAdjust} className="min-h-10 flex-1 rounded-full bg-primary px-3 text-sm font-semibold text-primary-fg">✅ Applica e rileggi le frecce</button>
+                <button type="button" onClick={applyAdjust} className="min-h-10 flex-1 rounded-full bg-primary px-3 text-sm font-semibold text-primary-fg"><IconLabel icon="check">Applica e rileggi le frecce</IconLabel></button>
                 <button type="button" onClick={() => { setAdjust(null); setNote(""); }} className="min-h-10 rounded-full border border-line px-3 text-sm">Annulla</button>
               </div>
             </div>
@@ -735,7 +736,7 @@ export function TargetRead({
             ))}
           </div>
           <div className="flex gap-2">
-            <button type="button" className="min-h-9 rounded-full border border-line px-3 text-xs" onClick={() => { const from = renumber; setHits((list) => list.filter((_, i) => i !== from)); setApplied(false); setRenumber(null); }}>🗑 Togli questa freccia</button>
+            <button type="button" className="min-h-9 rounded-full border border-line px-3 text-xs" onClick={() => { const from = renumber; setHits((list) => list.filter((_, i) => i !== from)); setApplied(false); setRenumber(null); }}><IconLabel icon="trash" size={14}>Togli questa freccia</IconLabel></button>
             <button type="button" className="min-h-9 rounded-full border border-line px-3 text-xs" onClick={() => setRenumber(null)}>Annulla</button>
           </div>
         </div>
@@ -784,7 +785,7 @@ export function TargetRead({
             </>
           ) : null}
           {distance ? (
-            <p className="text-xs text-muted">📏 Distanza stimata dalla foto: circa {distance.toFixed(1)} m (faccia da {faceCm} cm, foto senza zoom: con lo zoom il conto non vale).</p>
+            <p className="text-xs text-muted">Distanza stimata dalla foto: circa {distance.toFixed(1)} m (faccia da {faceCm} cm, foto senza zoom: con lo zoom il conto non vale).</p>
           ) : null}
         </div>
       ) : null}
@@ -792,21 +793,21 @@ export function TargetRead({
       {hits.length && !applied ? (
         <div className="grid grid-cols-[1fr_auto] gap-2">
           <button type="button" className="min-h-11 rounded-full bg-primary px-3 text-sm font-semibold text-primary-fg" onClick={save}>
-            💾 Salva {expected && expected > 0 ? Math.min(expected, hits.length) : hits.length} frecce {volleyLabel ? `nella ${volleyLabel}` : "nella volée"}{queue.length ? " → foto dopo" : ""}
+            <Glyph name="save" size={16} className="mr-1.5 inline -translate-y-px" />Salva {expected && expected > 0 ? Math.min(expected, hits.length) : hits.length} frecce {volleyLabel ? `nella ${volleyLabel}` : "nella volée"}{queue.length ? " → foto dopo" : ""}
           </button>
           <button type="button" className="min-h-11 rounded-full border border-line px-3 text-sm" onClick={() => { setHits([]); setApplied(false); }}>Svuota</button>
         </div>
       ) : null}
       {queue.length && onApplyBatch && hits.length && !applied ? (
         <button type="button" disabled={busyBatch} onClick={() => void saveAll()} className="min-h-10 rounded-full border border-accent/60 px-3 text-xs font-semibold">
-          {busyBatch ? "Leggo le foto…" : `⚡ Salva questa e le altre ${queue.length} senza controllarle`}
+          {busyBatch ? "Leggo le foto…" : `Salva questa e le altre ${queue.length} senza controllarle`}
         </button>
       ) : null}
       {applied ? (
         <div className="aa-rise grid gap-2 rounded-2xl border border-primary/40 bg-primary/10 p-3">
-          <p className="text-sm font-semibold">✅ Volée salvata. Avanti con la prossima:</p>
+          <p className="text-sm font-semibold"><StatusMark state="ok" />Volée salvata. Avanti con la prossima:</p>
           <p className="text-xs text-muted">Togli le frecce, tira, poi fotografa di nuovo il bersaglio. Le volée e le frecce si sommano da sole.</p>
-          <MediaPick kind="image" onFile={onPhoto} shootLabel={`📷 Foto ${volleyLabel ?? "volée dopo"}`} albumLabel="🖼️ Dall'album" />
+          <MediaPick kind="image" onFile={onPhoto} shootLabel={`Foto ${volleyLabel ?? "volée dopo"}`} albumLabel="Dall'album" />
         </div>
       ) : null}
     </div>

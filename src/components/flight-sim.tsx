@@ -1,3 +1,4 @@
+import { AppIcon, Glyph, IconLabel } from "./icons";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { angularSize, effectiveLb, goldOf, compensatedDistance, describeRound, eyePoint, launchSpeed, releasePoint, type Fletch, type FlightInput } from "@/lib/arcieri/flight";
 import { Button, Card, Chips, Field, Segmented, Select, TextInput } from "@/components/kit";
@@ -174,7 +175,7 @@ export function FlightSim() {
         <h2 className="font-display text-2xl">Simulatore di volo</h2>
         <p className="text-sm text-muted">Dalla corda al bersaglio: velocità, parabola, vento e quanto vale un gruppo con questa attrezzatura.</p>
         <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted">
-          <span className="rounded-full border border-line px-2 py-1">💾 {savedNote || "Ogni modifica resta salvata su questo telefono."}</span>
+          <span className="inline-flex items-center gap-1 rounded-full border border-line px-2 py-1"><Glyph name="save" size={12} />{savedNote || "Ogni modifica resta salvata su questo telefono."}</span>
           <button type="button" onClick={resetAll} className="min-h-9 rounded-full border border-line px-3 text-xs">Ripristina valori iniziali</button>
         </div>
       </div>
@@ -192,10 +193,10 @@ export function FlightSim() {
         value={tab}
         onChange={setTab}
         options={[
-          { id: "arco", label: "🏹 Arco" },
-          { id: "freccia", label: "➶ Freccia" },
-          { id: "tiro", label: "🎯 Tiro" },
-          { id: "meteo", label: "🌬️ Vento" },
+          { id: "arco", label: <IconLabel icon="bow" size={14}>Arco</IconLabel> },
+          { id: "freccia", label: <IconLabel icon="arrow" size={14}>Freccia</IconLabel> },
+          { id: "tiro", label: <IconLabel icon="target" size={14}>Tiro</IconLabel> },
+          { id: "meteo", label: <IconLabel icon="wind" size={14}>Vento</IconLabel> },
         ]}
       />
       {tab === "arco" ? (
@@ -275,7 +276,7 @@ export function FlightSim() {
       <FlightPath trueScale={trueScale} onGold={(goldM) => patch({ goldM })} input={{ ...form, sighted: setup.sighted }} round={primary} sighted={setup.sighted} mode={pathMode} title={`${form.distanceM} m · faccia ${form.faceCm} cm${form.slopeDeg ? ` · pendenza ${form.slopeDeg > 0 ? "+" : ""}${form.slopeDeg}°` : ""} · gruppo ${primary.total}/${n * (form.zones === 5 ? 9 : 10)}`} />
       </div>
       <label className="flex w-12 shrink-0 flex-col items-center gap-1 text-center text-[10px] leading-tight text-muted">
-        <span>🎯 oro</span>
+        <span className="grid justify-items-center gap-0.5"><Glyph name="target" size={14} />oro</span>
         <input
           type="range"
           min={0.3}
@@ -536,7 +537,7 @@ function FlightPath({ input, round, sighted, mode, title, onGold, trueScale = fa
         <circle r="3" fill="#2f7fd1" />
         <circle r="1.3" fill="#0b0f12" />
       </g>
-      <text x={X(eye.x) + 11} y={Y(v(eye.x, eye.z)) + 13} fill="#f4f1ea" fontSize="9" opacity="0.9">👁 occhio {fmtM(eye.z)}</text>
+      <text x={X(eye.x) + 11} y={Y(v(eye.x, eye.z)) + 13} fill="#f4f1ea" fontSize="9" opacity="0.9">◉ occhio {fmtM(eye.z)}</text>
       {/* linea di mira */}
       <line x1={X(eye.x)} y1={Y(v(eye.x, eye.z))} x2={X(D)} y2={Y(v(D, aim.z))} stroke="#f4f1ea" strokeWidth="1" strokeDasharray="3 3" opacity="0.75" />
       {/* dispersione del gruppo */}
@@ -667,10 +668,10 @@ function FaceFront({ input, round, sighted, title }: { input: FlightInput; round
           {eyeIn ? (
             <>
               <line x1={pad.l} x2={W - pad.r} y1={Y(eye.z)} y2={Y(eye.z)} stroke="#f4f1ea" strokeWidth="0.8" strokeDasharray="2 4" opacity="0.55" />
-              <text x={W - pad.r - 4} y={Y(eye.z) - 4} fill="#f4f1ea" fontSize="9" textAnchor="end" opacity="0.9">👁 occhio {fmtM(eye.z)}</text>
+              <text x={W - pad.r - 4} y={Y(eye.z) - 4} fill="#f4f1ea" fontSize="9" textAnchor="end" opacity="0.9">◉ occhio {fmtM(eye.z)}</text>
             </>
           ) : (
-            <text x={W - pad.r - 4} y={eye.z > hi ? pad.t + 10 : H - pad.b - 4} fill="#f4f1ea" fontSize="9" textAnchor="end" opacity="0.8">👁 occhio {fmtM(eye.z)} {eye.z > hi ? "↑" : "↓"}</text>
+            <text x={W - pad.r - 4} y={eye.z > hi ? pad.t + 10 : H - pad.b - 4} fill="#f4f1ea" fontSize="9" textAnchor="end" opacity="0.8">occhio {fmtM(eye.z)} {eye.z > hi ? "↑" : "↓"}</text>
           )}
           {/* dispersione e centro del gruppo */}
           <circle cx={centreX} cy={centreY} r={Math.max(round.rms * k, dot)} fill="rgba(224,122,47,0.14)" stroke="#e07a2f" strokeWidth="1" strokeDasharray="4 3" />
@@ -736,7 +737,7 @@ function AimHelp({ input, round, sighted, fixY, fixZ, gold, R }: { input: Flight
   const offZ = round.mz - gold;
   return (
     <div className="grid gap-1.5 rounded-xl border border-[#7cf0a8]/30 bg-[#7cf0a8]/[0.06] p-2.5 text-[0.78rem] leading-snug">
-      <p className="font-semibold text-[#7cf0a8]">🎯 Dove mirare</p>
+      <p className="flex items-center gap-1.5 font-semibold text-[#7cf0a8]"><Glyph name="crosshair" size={16} />Dove mirare</p>
       {sighted ? (
         <>
           <p>
@@ -823,7 +824,7 @@ function Inclinometer({ onUse }: { onUse: (deg: number) => void }) {
   }
   if (!on) {
     return (
-      <button type="button" onClick={() => void start()} className="min-h-10 w-fit rounded-full border border-line px-3 text-sm">📐 Misura la pendenza con il telefono</button>
+      <button type="button" onClick={() => void start()} className="min-h-10 w-fit rounded-full border border-line px-3 text-sm"><IconLabel icon="mountain">Misura la pendenza con il telefono</IconLabel></button>
     );
   }
   return (
@@ -912,12 +913,12 @@ function SaveFlight({ snapshot, onLoad }: { snapshot: FlightSnapshot; onLoad: (s
   return (
     <div className="min-w-0 rounded-2xl border border-hair bg-white/[0.03] p-2.5">
       <button type="button" onClick={() => setOpen((v) => !v)} className="flex w-full items-center justify-between gap-2 text-left">
-        <span className="text-sm font-semibold">💾 Salva o carica dall'Attrezzatura</span>
+        <span className="flex items-center gap-2 text-sm font-semibold"><AppIcon name="save" color="#8b6a3e" size={30} />Salva o carica dall'Attrezzatura</span>
         <span className="aa-chip">{open ? "Chiudi" : "Apri"}</span>
       </button>
       {open ? (
         <div className="mt-2 grid min-w-0 gap-2">
-          <Chips value={use} onChange={setUse} options={[{ id: "gara", label: "🏆 Da gara" }, { id: "allenamento", label: "🏹 Allenamento" }, { id: "entrambi", label: "Entrambi" }]} />
+          <Chips value={use} onChange={setUse} options={[{ id: "gara", label: <IconLabel icon="trophy" size={14}>Da gara</IconLabel> }, { id: "allenamento", label: <IconLabel icon="bow" size={14}>Allenamento</IconLabel> }, { id: "entrambi", label: "Entrambi" }]} />
           <div className="grid grid-cols-[1fr_auto] gap-2">
             <TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder={`Nome (es. Frecce gara ${snapshot.form.distanceM} m)`} />
             <Button disabled={busy} onClick={() => void save()}>Salva</Button>

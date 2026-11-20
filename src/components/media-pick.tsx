@@ -1,4 +1,5 @@
 import { useRef } from "react";
+import { Glyph } from "./icons";
 
 /**
  * Due strade per la stessa cosa: scattare/registrare adesso, oppure prendere
@@ -28,11 +29,13 @@ export function MediaPick({
   };
   return (
     <div className={`grid grid-cols-2 gap-2 ${className}`}>
-      <button type="button" onClick={() => shoot.current?.click()} className="min-h-11 rounded-xl border border-line bg-surface px-3 text-sm font-semibold">
-        {shootLabel ?? (kind === "image" ? "📷 Scatta foto" : "🎥 Registra video")}
+      <button type="button" onClick={() => shoot.current?.click()} className="aa-press inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-hair bg-white/[0.05] px-3 text-sm font-semibold">
+        <Glyph name={kind === "image" ? "camera" : "video"} size={17} className="shrink-0 opacity-90" />
+        {shootLabel ?? (kind === "image" ? "Scatta foto" : "Registra video")}
       </button>
-      <button type="button" onClick={() => album.current?.click()} className="min-h-11 rounded-xl border border-line bg-surface px-3 text-sm font-semibold">
-        {albumLabel ?? (kind === "image" ? "🖼️ Dall'album" : "🎞️ Dalla galleria")}
+      <button type="button" onClick={() => album.current?.click()} className="aa-press inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-hair bg-white/[0.05] px-3 text-sm font-semibold">
+        <Glyph name="image" size={17} className="shrink-0 opacity-90" />
+        {albumLabel ?? (kind === "image" ? "Dall'album" : "Dalla galleria")}
       </button>
       <input ref={shoot} type="file" accept={accept} capture="environment" className="hidden" onChange={(e) => take(e.currentTarget)} />
       <input ref={album} type="file" accept={accept} className="hidden" onChange={(e) => take(e.currentTarget)} />

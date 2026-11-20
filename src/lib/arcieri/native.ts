@@ -153,7 +153,7 @@ export const APK_URL = "https://github.com/viktorresan-commits/arcieri-amiconi/r
 /** Messaggio di invito per WhatsApp. */
 export function inviteText(name?: string, code?: string) {
   return [
-    `Ciao${name ? ` ${name}` : ""}! Ti invito negli *Arcieri Amiconi* 🏹`,
+    `Ciao${name ? ` ${name}` : ""}! Ti invito negli *Arcieri Amiconi*`,
     "",
     `Apri l'app: ${SITE_URL}`,
     `Android (APK): ${APK_URL}`,

@@ -1,4 +1,5 @@
 import { useState, type CSSProperties } from "react";
+import { IconLabel, IconTitle } from "./icons";
 import { removeTeamMember, resetMyData, teamList } from "@/lib/arcieri/account.api";
 import { claimRoster, resetMemberPassword, updateMember } from "@/lib/arcieri/members.api";
 import { APK_URL, SITE_URL, inviteText, openExternal, whatsappLink } from "@/lib/arcieri/native";
@@ -11,20 +12,20 @@ export function InviteCard() {
   const [copied, setCopied] = useState(false);
   return (
     <Card className="grid gap-2">
-      <h2 className="aa-section-title">📲 Invita e scarica l'app</h2>
+      <IconTitle icon="share" color="#2c8a57">Invita e scarica l'app</IconTitle>
       <p className="text-xs text-muted">Manda l'invito su WhatsApp con il link del sito e dell'app Android.</p>
       <Button onClick={() => void openExternal(whatsappLink(inviteText()))} className="!bg-[#25d366] !text-[#0b1f12]">
         <WaIcon /> Invita su WhatsApp
       </Button>
       <div className="grid grid-cols-2 gap-2">
-        <Button variant="ghost" onClick={() => void openExternal(APK_URL)}>⬇ Scarica APK</Button>
+        <Button variant="ghost" onClick={() => void openExternal(APK_URL)}><IconLabel icon="download">Scarica APK</IconLabel></Button>
         <Button
           variant="ghost"
           onClick={() => {
             void navigator.clipboard?.writeText(SITE_URL).then(() => setCopied(true)).catch(() => undefined);
           }}
         >
-          {copied ? "✓ Copiato" : "🔗 Copia link"}
+          {copied ? <IconLabel icon="check">Copiato</IconLabel> : <IconLabel icon="link">Copia link</IconLabel>}
         </Button>
       </div>
     </Card>
@@ -46,7 +47,7 @@ export function ClaimCard({ onDone }: { onDone: () => void }) {
   const [msg, setMsg] = useState("");
   return (
     <Card className="grid gap-2">
-      <h2 className="aa-section-title">🎟️ Hai un codice d'invito?</h2>
+      <IconTitle icon="ticket" color="#c39320">Hai un codice d'invito?</IconTitle>
       <p className="text-xs text-muted">Se l'amministratore ti ha già messo in squadra, il codice collega il tuo account a quel posto (con i dati già inseriti).</p>
       <div className="grid grid-cols-[1fr_auto] gap-2">
         <TextInput value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="AMXXXXXX" />
@@ -94,7 +95,7 @@ export function ResetCard({ onDone }: { onDone: () => void }) {
   }
   return (
     <Card className="grid gap-2 border-rose-500/30">
-      <h2 className="aa-section-title">🧹 Azzera i miei dati</h2>
+      <IconTitle icon="broom" color="#c4475a">Azzera i miei dati</IconTitle>
       <Chips value={scope} onChange={setScope} options={SCOPES.map(({ id, label }) => ({ id, label }))} />
       <p className="text-xs text-muted">Cancella {pick?.text}. Non si può annullare: prima, se vuoi, scarica il JSON qui sopra.</p>
       <Field label="Per confermare scrivi AZZERA">
@@ -125,7 +126,7 @@ export function TeamAdmin() {
     p.then(() => { setMsg(ok); setNonce((n) => n + 1); }).catch((e: unknown) => setMsg(e instanceof Error ? e.message : "Non riuscito"));
   return (
     <Card className="grid gap-2">
-      <h2 className="aa-section-title">🛡️ Gestione squadra</h2>
+      <IconTitle icon="shield" color="#4568d6">Gestione squadra</IconTitle>
       <p className="text-xs text-muted">Ruoli, password, inviti su WhatsApp e rimozione. Togliere una persona cancella il suo account e tutti i suoi dati.</p>
       <TextInput value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cerca per nome o email" />
       {msg ? <ErrorNote text={msg} /> : null}
@@ -151,7 +152,7 @@ export function TeamAdmin() {
                     <Button onClick={() => void act(resetMemberPassword({ data: { email: p.email, password: pw.value } }), `Password di ${p.name} cambiata: comunicagliela.`).then(() => setPw(null))}>Salva</Button>
                   </div>
                 ) : (
-                  <Button variant="ghost" onClick={() => setPw({ id: p.id, value: "" })}>🔑 Password</Button>
+                  <Button variant="ghost" onClick={() => setPw({ id: p.id, value: "" })}><IconLabel icon="key">Password</IconLabel></Button>
                 )
               ) : null}
               {p.id !== team.data?.meId ? (
@@ -167,7 +168,7 @@ export function TeamAdmin() {
                     void act(removeTeamMember({ data: { id: p.id } }), `${p.name} tolto dalla squadra.`);
                   }}
                 >
-                  {sure === p.id ? "Tocca ancora: elimina" : "🗑 Togli"}
+                  {sure === p.id ? "Tocca ancora: elimina" : <IconLabel icon="trash">Togli</IconLabel>}
                 </Button>
               ) : null}
             </div>

@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { IconLabel, IconTitle } from "./icons";
 import { importGrokGear, importGrokSessions, importReportSessions } from "@/lib/arcieri/account.api";
 import { Button, Card, Select } from "./kit";
 
@@ -267,13 +268,13 @@ export function Migrazione({ myEmail }: { myEmail: string | null }) {
   const ready = !!report?.length || !!personal;
   return (
     <Card className="grid gap-2">
-      <h2 className="aa-section-title">⇪ Porta qui i tuoi dati da Grok</h2>
+      <IconTitle icon="import" color="#2b74c9" sub="JSON completo o report PDF dalla vecchia app">Porta qui i tuoi dati</IconTitle>
       <p className="text-xs text-muted">
         Nella vecchia app: Profilo → <b>Scarica JSON</b> (completo, con tutte le frecce) oppure <b>Scarica report PDF</b> (solo le uscite).
         Poi caricalo qui: va sul tuo account. Ogni arciere lo fa dal proprio profilo. Ripeterlo non crea doppioni.
       </p>
       <input ref={fileRef} type="file" accept="application/json,.json,application/pdf,.pdf" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void read(f); e.currentTarget.value = ""; }} />
-      <Button variant="ghost" disabled={busy} onClick={() => fileRef.current?.click()}>📄 Scegli il file JSON o PDF</Button>
+      <Button variant="ghost" disabled={busy} onClick={() => fileRef.current?.click()}><IconLabel icon="import">Scegli il file JSON o PDF</IconLabel></Button>
       {people.length ? (
         <Select value={pick} onChange={(e) => choose(e.target.value)}>
           <option value="">Di chi sono i dati?</option>

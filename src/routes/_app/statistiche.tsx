@@ -1,3 +1,4 @@
+import { Glyph, IconLabel } from "@/components/icons";
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { statsSeries } from "@/lib/arcieri/training.api";
@@ -101,7 +102,7 @@ function Page() {
   return (
     <div className="grid gap-3">
       <PageHead kicker="I tuoi numeri" title="Statistiche" lede="Allenamento e campionato, confrontati periodo su periodo e gara contro gara.">
-        <Segmented value={tab} onChange={setTab} options={[{ id: "allenamento", label: "🏹 Allenamento" }, { id: "gare", label: "🏆 Gare" }]} />
+        <Segmented value={tab} onChange={setTab} options={[{ id: "allenamento", label: <IconLabel icon="bow" size={14}>Allenamento</IconLabel> }, { id: "gare", label: <IconLabel icon="trophy" size={14}>Gare</IconLabel> }]} />
       </PageHead>
       {loading ? <Loading /> : null}
       {error ? <ErrorNote text={error} /> : null}
@@ -110,10 +111,10 @@ function Page() {
         <>
           <Chips value={period} onChange={setPeriod} options={PERIODS} />
           <div className="grid grid-cols-2 gap-2">
-            <Kpi label="Allenamenti" value={String(inPeriod.length)} delta={period === "all" ? null : delta(inPeriod.length, prevPeriod.length)} color="#5aa6e8" icon="📅" />
-            <Kpi label="Frecce" value={arrowsNow.toLocaleString("it-IT")} delta={period === "all" ? null : delta(arrowsNow, arrowsPrev)} color="#3d8f5f" icon="➶" />
-            <Kpi label="Media freccia" value={fmtAvg(avgNow)} delta={period === "all" ? null : delta(avgNow, avgPrev)} color="#e0b15a" icon="◎" />
-            <Kpi label="Miglior seduta" value={best ? best.toFixed(2) : "—"} color="#c4a2f2" icon="★" />
+            <Kpi label="Allenamenti" value={String(inPeriod.length)} delta={period === "all" ? null : delta(inPeriod.length, prevPeriod.length)} color="#5aa6e8" icon={<Glyph name="calendar" size={16} />} />
+            <Kpi label="Frecce" value={arrowsNow.toLocaleString("it-IT")} delta={period === "all" ? null : delta(arrowsNow, arrowsPrev)} color="#3d8f5f" icon={<Glyph name="arrow" size={16} />} />
+            <Kpi label="Media freccia" value={fmtAvg(avgNow)} delta={period === "all" ? null : delta(avgNow, avgPrev)} color="#e0b15a" icon={<Glyph name="target" size={16} />} />
+            <Kpi label="Miglior seduta" value={best ? best.toFixed(2) : "—"} color="#c4a2f2" icon={<Glyph name="level" size={16} />} />
           </div>
           <Card>
             <SectionHead title="Frecce per settimana" sub="Barre impilate per arco · linea = media a freccia (asse destro)" />
@@ -167,10 +168,10 @@ function Page() {
           {comps.loading ? <p className="text-xs text-muted">Carico le gare…</p> : null}
           {comps.error ? <ErrorNote text={comps.error} /> : null}
           <div className="grid grid-cols-2 gap-2">
-            <Kpi label="Gare" value={String(mine.length)} color="#5aa6e8" icon="🏆" />
-            <Kpi label="Piazzole" value={String(sumOf((e) => e.laneCount))} color="#3d8f5f" icon="⛳" />
-            <Kpi label="Punti" value={String(sumOf((e) => e.score))} delta={last?.score != null && prev?.score ? delta(last.score, prev.score) : null} color="#e0b15a" icon="◎" />
-            <Kpi label="Spot" value={String(sumOf((e) => e.spot))} color="#e07a72" icon="✦" />
+            <Kpi label="Gare" value={String(mine.length)} color="#5aa6e8" icon={<Glyph name="trophy" size={16} />} />
+            <Kpi label="Piazzole" value={String(sumOf((e) => e.laneCount))} color="#3d8f5f" icon={<Glyph name="flag" size={16} />} />
+            <Kpi label="Punti" value={String(sumOf((e) => e.score))} delta={last?.score != null && prev?.score ? delta(last.score, prev.score) : null} color="#e0b15a" icon={<Glyph name="target" size={16} />} />
+            <Kpi label="Spot" value={String(sumOf((e) => e.spot))} color="#e07a72" icon={<Glyph name="sparkle" size={16} />} />
           </div>
           <Card className="grid gap-2">
             <SectionHead title="Campionato" sub={`${sumOf((e) => e.championshipPoints)} punti campionato in totale`} />
