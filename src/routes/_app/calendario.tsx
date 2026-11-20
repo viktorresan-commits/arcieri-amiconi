@@ -141,9 +141,10 @@ function Page() {
 
 /** Fotogramma salvato a tutto schermo, con il riassunto dell'analisi pro se c'è. */
 function GestureSheet({ g, onClose }: { g: GestureRow; onClose: () => void }) {
-  let pro: { total?: number; areas?: Record<string, number | null>; issues?: string[] } | null = null;
+  type ProSummary = { total?: number; areas?: Record<string, number | null>; issues?: string[] };
+  let pro: ProSummary | null = null;
   try {
-    pro = (JSON.parse(g.data || "{}") as { pro?: typeof pro }).pro ?? null;
+    pro = (JSON.parse(g.data || "{}") as { pro?: ProSummary }).pro ?? null;
   } catch {
     pro = null;
   }
@@ -159,10 +160,10 @@ function GestureSheet({ g, onClose }: { g: GestureRow; onClose: () => void }) {
         <p className="mt-2 text-xs text-muted">{new Date(g.createdAt).toLocaleString("it-IT", { dateStyle: "full", timeStyle: "short", timeZone: "Europe/Rome" })}{g.score != null ? ` · ${Math.round(g.score)}/100` : ""}</p>
         {pro?.areas ? (
           <div className="mt-3 grid gap-1.5">
-            {Object.entries(pro.areas).filter(([, v]) => v != null).map(([k, v]) => (
+            {Object.entries(pro.areas).filter((e): e is [string, number] => e[1] != null).map(([k, v]) => (
               <div key={k} className="grid grid-cols-[6.5rem_1fr_2rem] items-center gap-2 text-xs">
                 <span className="text-muted">{LABEL[k] ?? k}</span>
-                <span className="h-2 overflow-hidden rounded-full bg-white/[0.07]"><span className="aa-grow block h-full rounded-full" style={{ width: `${v}%`, background: (v ?? 0) >= 80 ? "#2fbf71" : (v ?? 0) >= 60 ? "#e3a21a" : "#e5484d" }} /></span>
+                <span className="h-2 overflow-hidden rounded-full bg-white/[0.07]"><span className="aa-grow block h-full rounded-full" style={{ width: `${v}%`, background: v >= 80 ? "#2fbf71" : v >= 60 ? "#e3a21a" : "#e5484d" }} /></span>
                 <b className="text-right tabular-nums">{v}</b>
               </div>
             ))}
