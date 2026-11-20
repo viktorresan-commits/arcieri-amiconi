@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { ToolArt } from "@/components/tool-art";
 import { Card, Chips, PageHead } from "@/components/kit";
 import { realLb } from "@/lib/arcieri/gear-advice";
 import { Num, Mini, num, fmt } from "@/components/tool-kit";
@@ -17,6 +18,7 @@ function Page() {
   return (
     <div className="grid gap-3">
       <PageHead kicker="Strumenti" title="Allungo" lede="Braccia aperte, schiena al muro: misura da punta a punta del dito medio." />
+      <ToolArt id="allungo" />
       <Card className="grid gap-3">
         <Num label="Apertura delle braccia" unit="cm" value={st.span} onChange={(span) => setSt({ ...st, span })} />
         <svg viewBox="0 0 300 120" className="w-full">

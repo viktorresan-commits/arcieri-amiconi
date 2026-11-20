@@ -35,7 +35,29 @@ export const SWATCHES = ["#d63a2f", "#e6b325", "#2f7fd1", "#3d9b74", "#f4f1ea", 
  * Arco disegnato come un oggetto vero: legno o metallo, flettenti con riflessi, corda, accessori.
  * Ogni tipo ha la sua forma (olimpico con mirino e stabilizzatore, compound con camme, longbow a D, ...).
  */
-export function BowIcon({ type, className = "h-16 w-16" }: { type: string; className?: string; color?: string }) {
+/** Lunghezze tipiche (pollici) per tipo di arco: scelte rapide nella scheda. */
+export const BOW_LENGTHS: Record<string, number[]> = {
+  olimpico: [62, 64, 66, 68, 70, 72],
+  nudo: [60, 62, 64, 66, 68, 70],
+  compound: [30, 32, 34, 36, 38, 40],
+  longbow: [64, 66, 68, 70, 72],
+  ricurvo: [56, 58, 60, 62, 64, 66],
+  storico: [44, 48, 50, 52, 54, 58],
+};
+
+/** Colori del riser (impugnatura) e dei flettenti, per disegnare l'arco come il tuo. */
+export const RISER_COLORS = ["#2f6fbe", "#1d2126", "#b02a2a", "#3fae6a", "#e6b325", "#c9c9c9", "#7a4a26", "#7c3aed", "#e07a2f", "#f4f1ea"];
+export const LIMB_COLORS = ["#15191d", "#9b6334", "#5b3618", "#f4f1ea", "#2f6fbe", "#b02a2a", "#3d9b74", "#e6b325"];
+
+function hexShade(hex: string, k: number) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return hex;
+  const n = Number.parseInt(m[1], 16);
+  const ch = (v: number) => Math.max(0, Math.min(255, Math.round(k >= 0 ? v + (255 - v) * k : v * (1 + k))));
+  return `#${((ch((n >> 16) & 255) << 16) | (ch((n >> 8) & 255) << 8) | ch(n & 255)).toString(16).padStart(6, "0")}`;
+}
+
+export function BowIcon({ type, className = "h-16 w-16", riser = "", limbs = "" }: { type: string; className?: string; color?: string; riser?: string; limbs?: string }) {
   const u = useId().replace(/[^a-zA-Z0-9]/g, "");
   const wood = type === "longbow" || type === "ricurvo" || type === "storico";
   const limb = `url(#${u}l)`;
@@ -43,7 +65,14 @@ export function BowIcon({ type, className = "h-16 w-16" }: { type: string; class
     <svg viewBox="0 0 64 64" className={className} aria-hidden>
       <defs>
         <linearGradient id={`${u}l`} x1="0" x2="1">
-          {wood ? (
+          {limbs ? (
+            <>
+              <stop offset="0" stopColor={hexShade(limbs, -0.6)} />
+              <stop offset="0.45" stopColor={limbs} />
+              <stop offset="0.62" stopColor={hexShade(limbs, 0.35)} />
+              <stop offset="1" stopColor={hexShade(limbs, -0.5)} />
+            </>
+          ) : wood ? (
             <>
               <stop offset="0" stopColor="#3c2414" />
               <stop offset="0.4" stopColor="#9b6334" />
@@ -60,9 +89,9 @@ export function BowIcon({ type, className = "h-16 w-16" }: { type: string; class
           )}
         </linearGradient>
         <linearGradient id={`${u}r`} x1="0" x2="1">
-          <stop offset="0" stopColor={type === "compound" ? "#1f5c38" : "#2f6fbe"} />
-          <stop offset="0.5" stopColor={type === "compound" ? "#3fae6a" : "#6fa8f0"} />
-          <stop offset="1" stopColor={type === "compound" ? "#14391f" : "#1d3f73"} />
+          <stop offset="0" stopColor={riser ? hexShade(riser, -0.4) : type === "compound" ? "#1f5c38" : "#2f6fbe"} />
+          <stop offset="0.5" stopColor={riser ? hexShade(riser, 0.3) : type === "compound" ? "#3fae6a" : "#6fa8f0"} />
+          <stop offset="1" stopColor={riser ? hexShade(riser, -0.6) : type === "compound" ? "#14391f" : "#1d3f73"} />
         </linearGradient>
         <linearGradient id={`${u}m`} x1="0" x2="1" y1="0" y2="1">
           <stop offset="0" stopColor="#f5f7f9" />
@@ -114,7 +143,7 @@ export function BowIcon({ type, className = "h-16 w-16" }: { type: string; class
           <path d="M33 42 C25 47 22 53 26 58 C27 59.2 29 59 29.4 57.2" fill="none" stroke={limb} strokeWidth="4.4" strokeLinecap="round" />
           <path d="M32 21.5 C26.5 17 24.5 12 27 8" fill="none" stroke="#fff" strokeOpacity="0.3" strokeWidth="0.9" />
           <path d="M28.4 6.8 L28.4 57.2" stroke="#f4f1ea" strokeWidth="0.9" />
-          {type === "ricurvo" ? (
+          {type === "ricurvo" && !riser ? (
             <path d="M31 20 Q40 32 31 44 L36 44 Q44 32 36 20 Z" fill={limb} />
           ) : (
             <path d="M31 19 Q40 32 31 45 L36 45 Q44 32 36 19 Z" fill={`url(#${u}r)`} />
@@ -151,6 +180,8 @@ export function ArrowIcon({
   wrap?: string;
   number?: string | number;
   fletchType?: string;
+  fletchStyle?: string;
+  fletch2?: string;
   point?: string;
   className?: string;
 }) {

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { ToolArt } from "@/components/tool-art";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Card, Chips, PageHead } from "@/components/kit";
 import { Glyph } from "@/components/icons";
@@ -69,6 +70,7 @@ function Page() {
   return (
     <div className="grid gap-3">
       <PageHead kicker="Allenati" title="Tempo di allungo" lede="Dall'inizio della trazione al rilascio. Più è costante, più il tiro è ripetibile." />
+      <ToolArt id="tempi" />
       <Chips value={src} onChange={setSrc} options={[{ id: "cronometro", label: "Cronometro" }, { id: "video", label: "Dalle analisi del gesto" }]} />
       <Chips value={st.bow} onChange={(bow) => setSt({ ...st, bow })} options={[{ id: "olimpico", label: "Olimpico" }, { id: "nudo", label: "Nudo" }, { id: "tradizionale", label: "Tradizionale" }, { id: "compound", label: "Compound" }]} />
       {src === "cronometro" ? (

@@ -6,7 +6,9 @@ import { AppIcon, Glyph } from "@/components/icons";
 import { CATEGORIES, categoryLabel, euro, parseEuro } from "@/lib/arcieri/labels";
 import { useLoad } from "@/lib/arcieri/use-load";
 import { Button, Card, Empty, ErrorNote, Field, Loading, PageHead, Select, TextArea, TextInput } from "@/components/kit";
-import { ARROW_USE, BOW_TYPES, FLETCH_TYPES, POINT_TYPES, SHAFT_MATERIALS, SWATCHES, ArrowIcon, BowIcon, CategoryIcon } from "@/components/gear-icons";
+import { ARROW_USE, BOW_LENGTHS, BOW_TYPES, FLETCH_TYPES, LIMB_COLORS, POINT_TYPES, RISER_COLORS, SHAFT_MATERIALS, SWATCHES, ArrowIcon, BowIcon, CategoryIcon } from "@/components/gear-icons";
+import { ARROW_MODELS, FLETCH_STYLES } from "@/components/arrow-art";
+import { MainGearCard } from "@/components/main-gear";
 
 export const Route = createFileRoute("/_app/attrezzatura")({ component: Page });
 
@@ -80,6 +82,7 @@ function Page() {
   return (
     <div className="grid gap-3">
       <PageHead title="Attrezzatura" lede="Archi, frecce, corde e il resto. Una configurazione si aggancia all'allenamento." />
+      <MainGearCard />
       {!open ? (
         <Button onClick={() => { setForm(EMPTY); setOpen(true); }}>＋ Aggiungi attrezzatura</Button>
       ) : (
@@ -113,11 +116,24 @@ function Page() {
                 </button>
               ))}
             </div>
+            <div className="grid place-items-center rounded-xl border border-line bg-elev p-2">
+              <BowIcon type={spec("bowType") || "olimpico"} riser={spec("riser")} limbs={spec("limbs")} className="h-28 w-28" />
+            </div>
             <div className="grid grid-cols-3 gap-2">
               <Field label="Libbre"><TextInput inputMode="decimal" value={spec("draw")} onChange={(e) => setSpec("draw", e.target.value)} placeholder="36" /></Field>
               <Field label="Lunghezza ″"><TextInput inputMode="decimal" value={spec("length")} onChange={(e) => setSpec("length", e.target.value)} placeholder="68" /></Field>
               <Field label="Allungo ″"><TextInput inputMode="decimal" value={spec("drawLen")} onChange={(e) => setSpec("drawLen", e.target.value)} placeholder="28" /></Field>
             </div>
+            <div className="grid gap-1">
+              <span className="text-xs text-muted">Lunghezze tipiche per questo arco</span>
+              <div className="flex flex-wrap gap-1.5">
+                {(BOW_LENGTHS[spec("bowType") || "olimpico"] ?? []).map((l) => (
+                  <button key={l} type="button" aria-pressed={spec("length") === String(l)} className="aa-chip" onClick={() => setSpec("length", String(l))}>{l}″</button>
+                ))}
+              </div>
+            </div>
+            <ColorRow label="Colore del riser (impugnatura)" value={spec("riser")} colors={RISER_COLORS} onPick={(v) => setSpec("riser", v)} />
+            <ColorRow label="Colore dei flettenti" value={spec("limbs")} colors={LIMB_COLORS} onPick={(v) => setSpec("limbs", v)} />
           </>
         ) : null}
 
@@ -125,7 +141,19 @@ function Page() {
           <>
             <p className="rounded-xl bg-white/[0.04] px-3 py-2 text-xs text-muted">Ogni scheda è una <b className="text-fg">serie di frecce</b>: se ne hai più di una (per esempio penne rosse per l'indoor e gialle per l'outdoor) crea una scheda per serie, con nome e colori. Quando dai il numero a una freccia sul bersaglio scegli prima la serie, poi il numero.</p>
             <div className="rounded-xl border border-line bg-elev p-2">
-              <ArrowIcon material={spec("material")} shaft={spec("shaft")} fletch={spec("fletch")} cock={spec("cock")} nock={spec("nock")} wrap={spec("wrap")} fletchType={spec("fletchType")} point={spec("pointType") || "ogiva"} number={spec("numFrom") || undefined} className="h-14 w-full" />
+              <ArrowIcon material={spec("material")} shaft={spec("shaft")} fletch={spec("fletch")} cock={spec("cock")} nock={spec("nock")} wrap={spec("wrap")} fletchType={spec("fletchType")} fletchStyle={spec("fletchStyle")} fletch2={spec("fletch2")} point={spec("pointType") || "ogiva"} number={spec("numFrom") || undefined} className="h-14 w-full" />
+            </div>
+            <div className="grid gap-1">
+              <span className="text-xs text-muted">Modelli pronti (poi puoi cambiare ogni dettaglio)</span>
+              <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none]">
+                {ARROW_MODELS.map((m) => (
+                  <button key={m.id} type="button" onClick={() => setForm((f) => ({ ...f, specs: { ...f.specs, ...m.specs } }))} className="grid w-36 shrink-0 gap-1 rounded-xl border border-line bg-white/[0.03] p-1.5 text-left">
+                    <ArrowIcon {...m.specs} point={m.specs.pointType} className="h-6 w-full" />
+                    <span className="text-[0.72rem] font-semibold leading-tight">{m.label}</span>
+                    <span className="text-[0.62rem] leading-tight text-muted">{m.note}</span>
+                  </button>
+                ))}
+              </div>
             </div>
             <div className="grid grid-cols-3 gap-2">
               <Field label="Quante"><TextInput inputMode="numeric" value={spec("qty")} onChange={(e) => setSpec("qty", e.target.value)} placeholder="12" /></Field>
@@ -138,9 +166,11 @@ function Page() {
             <Chips label="Uso" value={spec("use")} options={ARROW_USE} onPick={(v) => setSpec("use", v)} />
             <Chips label="Materiale" value={spec("material")} options={SHAFT_MATERIALS} onPick={(v) => setSpec("material", v)} />
             <Chips label="Impennaggio" value={spec("fletchType")} options={FLETCH_TYPES} onPick={(v) => setSpec("fletchType", v)} />
+            <Chips label="Stile delle penne" value={spec("fletchStyle") || "pieno"} options={FLETCH_STYLES} onPick={(v) => setSpec("fletchStyle", v)} />
             <Chips label="Punta" value={spec("pointType") || "ogiva"} options={POINT_TYPES} onPick={(v) => setSpec("pointType", v)} />
             <Swatches label="Colore asta (vuoto = colore del materiale)" value={spec("shaft")} onPick={(v) => setSpec("shaft", v)} allowNone />
             <Swatches label="Colore penne / alette" value={spec("fletch")} onPick={(v) => setSpec("fletch", v)} />
+            {spec("fletchStyle") && spec("fletchStyle") !== "pieno" && spec("fletchStyle") !== "elicoidale" ? <Swatches label="Secondo colore delle penne" value={spec("fletch2")} onPick={(v) => setSpec("fletch2", v)} /> : null}
             <Swatches label="Penna indice (guida)" value={spec("cock")} onPick={(v) => setSpec("cock", v)} />
             <Swatches label="Cocca" value={spec("nock")} onPick={(v) => setSpec("nock", v)} />
             <Swatches label="Fascia (cresting)" value={spec("wrap")} onPick={(v) => setSpec("wrap", v)} allowNone />
@@ -190,7 +220,7 @@ function Page() {
             <Card key={item.id} className="grid gap-2 p-3">
               <div className="flex items-start gap-3">
                 <span className="grid h-14 w-14 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-                  {item.category === "arco" ? <BowIcon type={sp.bowType || "olimpico"} className="h-12 w-12" /> : <CategoryIcon category={item.category} className="h-8 w-8" />}
+                  {item.category === "arco" ? <BowIcon type={sp.bowType || "olimpico"} riser={sp.riser} limbs={sp.limbs} className="h-12 w-12" /> : <CategoryIcon category={item.category} className="h-8 w-8" />}
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-semibold">{item.name}</p>
@@ -208,7 +238,7 @@ function Page() {
               </div>
               {isArrow ? (
                 <>
-                  <ArrowIcon material={sp.material} shaft={sp.shaft} fletch={sp.fletch} cock={sp.cock} nock={sp.nock} wrap={sp.wrap} fletchType={sp.fletchType} point={sp.pointType} number={qty ? `${from}–${from + qty - 1}` : sp.numFrom} className="h-9 w-full" />
+                  <ArrowIcon material={sp.material} shaft={sp.shaft} fletch={sp.fletch} cock={sp.cock} nock={sp.nock} wrap={sp.wrap} fletchType={sp.fletchType} fletchStyle={sp.fletchStyle} fletch2={sp.fletch2} point={sp.pointType} number={qty ? `${from}–${from + qty - 1}` : sp.numFrom} className="h-9 w-full" />
                   <div className="flex flex-wrap gap-1 text-[11px]">
                     {sp.use ? <span className={`rounded-full px-2 py-0.5 ${sp.use === "gara" ? "bg-accent text-accent-fg" : "border border-line"}`}>{ARROW_USE.find((u) => u.id === sp.use)?.label}</span> : null}
                     {sp.material ? <span className="rounded-full border border-line px-2 py-0.5">{SHAFT_MATERIALS.find((m) => m.id === sp.material)?.label ?? sp.material}</span> : null}
@@ -304,6 +334,20 @@ function Swatches({ label, value, onPick, allowNone }: { label: string; value: s
           <button key={c} type="button" aria-label={c} onClick={() => onPick(c)} className={`h-8 w-8 rounded-full border-2 ${value === c ? "border-fg" : "border-line"}`} style={{ background: c }} />
         ))}
         <input type="color" value={value || "#ffffff"} onChange={(e) => onPick(e.target.value)} className="h-8 w-10 rounded" aria-label={`${label}: altro colore`} />
+      </div>
+    </div>
+  );
+}
+
+function ColorRow({ label, value, colors, onPick }: { label: string; value: string; colors: string[]; onPick: (v: string) => void }) {
+  return (
+    <div className="grid gap-1">
+      <span className="text-xs text-muted">{label}</span>
+      <div className="flex flex-wrap gap-1.5">
+        <button type="button" aria-pressed={!value} onClick={() => onPick("")} className={`h-8 rounded-full border px-2 text-[0.7rem] ${!value ? "border-accent" : "border-line"}`}>originale</button>
+        {colors.map((c) => (
+          <button key={c} type="button" aria-label={c} aria-pressed={value === c} onClick={() => onPick(c)} className={`h-8 w-8 rounded-full border-2 ${value === c ? "border-white" : "border-transparent"}`} style={{ background: c }} />
+        ))}
       </div>
     </div>
   );

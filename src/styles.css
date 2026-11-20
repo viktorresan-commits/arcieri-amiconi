@@ -1003,8 +1003,8 @@ html[data-scenes="no"] .aa-scene { display: none; }
 @keyframes aa-impact { from { opacity: 1; transform: scale(0.3); } to { opacity: 0; transform: scale(2.4); } }
 .aa-full { animation: aa-fade 0.25s ease both; }
 @keyframes aa-fade { from { opacity: 0; } to { opacity: 1; } }
-.aa-full-body svg { max-height: calc(100dvh - 130px); width: auto; max-width: 100%; margin: 0 auto; display: block; }
-.aa-full-body > div > svg { max-height: calc(100dvh - 210px); }
+.aa-full-body svg[role="img"] { max-height: calc(100dvh - 130px); width: auto; max-width: 100%; margin: 0 auto; display: block; }
+.aa-full-body > div > svg[role="img"] { max-height: calc(100dvh - 210px); }
 .aa-ff-arrow { transform-box: fill-box; transform-origin: center; animation: aa-ff-in 0.55s cubic-bezier(0.2, 0.8, 0.25, 1) both; }
 @keyframes aa-ff-in { 0% { opacity: 0; transform: scale(5); } 70% { opacity: 1; transform: scale(0.9); } 100% { transform: none; } }
 
@@ -1033,3 +1033,20 @@ html[data-scenes="no"] .aa-scene { display: none; }
 @keyframes aa-slide-x { from { transform: translateX(var(--dx)); } to { transform: none; } }
 @media (prefers-reduced-motion: reduce) { .aa-slide-x { animation: none; } }
 .aa-3d-wrap { position: relative; touch-action: none; }
+.aa-spin-fast { animation: aa-spin 1.4s linear infinite; }
+.aa-full-body .aa-3d { height: calc(100dvh - 150px) !important; }
+
+/* ── Arciere della Home ────────────────────────────────────────── */
+.aa-breathe { animation: aa-breathe 3.6s ease-in-out infinite; transform-box: view-box; }
+@keyframes aa-breathe { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-1.2px); } }
+.aa-loose { animation: aa-loose 0.9s cubic-bezier(0.3, 0.7, 0.4, 1) both; }
+@keyframes aa-loose { 0% { transform: translateX(0); opacity: 1; } 70% { transform: translateX(260px); opacity: 1; } 100% { transform: translateX(300px); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .aa-breathe, .aa-loose { animation: none; } }
+.aa-avatar-stage {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-card, 1.25rem);
+  background:
+    radial-gradient(120% 70% at 80% 10%, rgba(255, 214, 150, 0.55), transparent 55%),
+    linear-gradient(180deg, #24496f 0%, #5a86a8 45%, #c9b98f 72%, #5f7f4a 72.2%, #2e4a26 100%);
+}

@@ -107,9 +107,10 @@ export function useGestures<T extends HTMLElement>(handlers: GestureHandlers) {
 }
 
 /** Vista 3D comandata con le dita: rotazione, inclinazione, zoom e spostamento. */
-export type OrbitView = { yaw: number; pitch: number; zoom: number; px: number; py: number; touched: boolean };
+/** auto: la scena gira da sola (pulsante «Gira»); spin: quanto ha girato la freccia sul suo asse. */
+export type OrbitView = { yaw: number; pitch: number; zoom: number; px: number; py: number; touched: boolean; auto: boolean; spin: number };
 
-export const freshOrbit = (): OrbitView => ({ yaw: 0, pitch: 0, zoom: 1, px: 0, py: 0, touched: false });
+export const freshOrbit = (): OrbitView => ({ yaw: 0, pitch: 0, zoom: 1, px: 0, py: 0, touched: false, auto: false, spin: 0 });
 
 export function useOrbitGestures<T extends HTMLElement>() {
   const view = useRef<OrbitView>(freshOrbit());
@@ -130,7 +131,7 @@ export function useOrbitGestures<T extends HTMLElement>() {
       v.touched = true;
     },
     double: () => {
-      view.current = freshOrbit();
+      view.current = { ...freshOrbit(), auto: view.current.auto };
     },
     wheel: true,
   });

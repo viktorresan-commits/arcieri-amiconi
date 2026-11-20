@@ -40,6 +40,7 @@ export const SHORTCUTS: Shortcut[] = [
   { id: "gioco", group: "squadra", label: "Giochiamo", hint: "Mini giochi di tiro", icon: "game", color: "#b0802a", to: "/gioco" },
   { id: "acquisti", group: "prepara", label: "Acquisti", hint: "Lista della spesa", icon: "bag", color: "#946f42", to: "/acquisti" },
   { id: "profilo", group: "squadra", label: "Profilo", hint: "Dati, import, impostazioni", icon: "user", color: "#646c7a", to: "/profilo" },
+  { id: "avatar", group: "squadra", label: "Il tuo arciere", hint: "Aspetto, abiti e attrezzatura", icon: "archer", color: "#c46b2b", to: "/avatar" },
   { id: "timer", group: "allena", label: "Timer di tiro", hint: "Semaforo e tempi da gara", icon: "stopwatch", color: "#d6582a", to: "/timer" },
   { id: "borsa", group: "prepara", label: "Prima di partire", hint: "Borsa e riscaldamento", icon: "checklist", color: "#3f8a76", to: "/borsa" },
   { id: "manutenzione", group: "prepara", label: "Manutenzione", hint: "Corda, cocche, penne", icon: "wrench", color: "#6c7684", to: "/manutenzione" },
@@ -55,6 +56,7 @@ export const SHORTCUTS: Shortcut[] = [
   { id: "tuning", group: "strumenti", label: "Bare shaft", hint: "Messa a punto con l'asta nuda", icon: "bareshaft", color: "#cc4f3b", to: "/tuning" },
   { id: "assetto", group: "strumenti", label: "Assetto arco", hint: "Brace, tiller, punto d'incocco", icon: "caliper", color: "#6c7684", to: "/assetto" },
   { id: "unita", group: "strumenti", label: "Convertitore", hint: "lb, grani, pollici, iarde", icon: "ruler", color: "#8b6a3e", to: "/unita" },
+  { id: "lezioni", group: "impara", label: "Lezioni", hint: "3 livelli, dal primo tiro alla gara", icon: "steps", color: "#2f8f6a", to: "/lezioni" },
   { id: "sfida-giorno", group: "impara", label: "Sfida del giorno", hint: "Un esercizio nuovo ogni giorno", icon: "daily", color: "#d6582a", to: "/sfida-giorno" },
   { id: "quiz", group: "impara", label: "Quiz", hint: "Regole, tecnica, attrezzatura", icon: "quiz", color: "#5568c2", to: "/quiz" },
   { id: "stima", group: "impara", label: "Stima distanze", hint: "Gioco per occhio da 3D", icon: "binoculars", color: "#3d8a4e", to: "/stima" },
@@ -158,7 +160,7 @@ const NEXT: Record<string, string> = {
   respiro: "routine", routine: "tempi", tempi: "secco", secco: "gesto", allungo: "spine", vento: "balistica", energia: "balistica",
   unita: "spine", gare: "segnapunti", segnapunti: "classifiche", classifiche: "confronta", confronta: "squadra",
   calendario: "gare", sfide: "classifiche", squadra: "bacheca", bacheca: "calendario", gioco: "stima", stima: "regole",
-  regole: "glossario", glossario: "quiz", quiz: "sfida-giorno", "sfida-giorno": "rapido", acquisti: "attrezzatura", profilo: "obiettivi",
+  regole: "glossario", glossario: "lezioni", lezioni: "quiz", quiz: "sfida-giorno", avatar: "attrezzatura", "sfida-giorno": "rapido", acquisti: "attrezzatura", profilo: "obiettivi",
 };
 
 export function currentShortcut(path: string) {

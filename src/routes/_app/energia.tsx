@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { ToolArt } from "@/components/tool-art";
 import { Card, Chips, PageHead } from "@/components/kit";
 import { Num, Mini, num, fmt } from "@/components/tool-kit";
 import { useLocalState } from "@/lib/arcieri/local-store";
@@ -25,6 +26,7 @@ function Page() {
   return (
     <div className="grid gap-3">
       <PageHead kicker="Strumenti" title="Velocità ed energia" lede="Quanto corre e quanta energia porta la freccia: utile per scegliere il peso giusto." />
+      <ToolArt id="energia" />
       <Chips value={st.mode} onChange={(mode) => setSt({ ...st, mode })} options={[{ id: "stima", label: "Stima dalle libbre" }, { id: "misura", label: "Ho il cronografo" }]} />
       <Card className="grid grid-cols-2 gap-2">
         {st.mode === "stima" ? <Num label="Libbre sulle dita" unit="lb" value={st.lb} onChange={(lb) => setSt({ ...st, lb })} /> : <Num label="Velocità misurata" unit="fps" value={st.fps} onChange={(fps) => setSt({ ...st, fps })} />}

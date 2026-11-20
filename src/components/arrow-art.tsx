@@ -18,6 +18,28 @@ export const FLETCH_SHAPES = [
   { id: "fob", label: "FOB (anello)" },
 ] as const;
 
+/** Stile della decorazione delle penne: tinta unita o con un secondo colore. */
+export const FLETCH_STYLES = [
+  { id: "pieno", label: "Tinta unita" },
+  { id: "striato", label: "Striate (barrate)" },
+  { id: "spirale", label: "A spirale" },
+  { id: "bicolore", label: "Bicolore" },
+  { id: "punta", label: "Punta colorata" },
+  { id: "maculato", label: "Maculate" },
+  { id: "elicoidale", label: "Montate elicoidali" },
+] as const;
+
+/** Modelli pronti: un tocco imposta materiale, impennaggio, punta e colori tipici. */
+export const ARROW_MODELS: { id: string; label: string; note: string; specs: Record<string, string> }[] = [
+  { id: "gara-indoor", label: "Gara indoor", note: "Carbonio grosso, alette, ogiva", specs: { material: "carbonio", fletchType: "alette", pointType: "ogiva", fletch: "#e6b325", cock: "#d63a2f", nock: "#14181c", fletchStyle: "pieno", use: "gara" } },
+  { id: "gara-outdoor", label: "Gara outdoor", note: "Carbonio sottile, spin wing", specs: { material: "carbo-alluminio", fletchType: "spin", pointType: "ogiva", fletch: "#ff5fa2", cock: "#f4f1ea", nock: "#f4f1ea", fletchStyle: "pieno", use: "gara" } },
+  { id: "campagna", label: "Campagna e 3D", note: "Carbonio, alette corte, punta 3D", specs: { material: "carbonio", fletchType: "blazer", pointType: "3d", fletch: "#3d9b74", cock: "#e6b325", nock: "#e6b325", fletchStyle: "bicolore", fletch2: "#14181c" } },
+  { id: "legno", label: "Legno tradizionale", note: "Cedro, penne naturali barrate", specs: { material: "legno", fletchType: "penne", pointType: "field", fletch: "#c9a46a", cock: "#d63a2f", nock: "#14181c", fletchStyle: "striato", fletch2: "#3a2a1e", wrap: "#d63a2f" } },
+  { id: "storico", label: "Storico", note: "Bambù o legno, penne a scudo", specs: { material: "bambu", fletchType: "scudo", pointType: "field", fletch: "#f4f1ea", cock: "#14181c", nock: "#e6b325", fletchStyle: "punta", fletch2: "#14181c" } },
+  { id: "alluminio", label: "Alluminio da scuola", note: "Plastifletch, field", specs: { material: "alluminio", fletchType: "plastifletch", pointType: "field", fletch: "#2f7fd1", cock: "#e6b325", nock: "#f4f1ea", fletchStyle: "pieno" } },
+  { id: "caccia", label: "Caccia (solo sagome)", note: "Penne a spirale, lama", specs: { material: "carbonio", fletchType: "penne", pointType: "caccia", fletch: "#e07a2f", cock: "#f4f1ea", nock: "#e07a2f", fletchStyle: "spirale", fletch2: "#f4f1ea" } },
+];
+
 export const POINT_TYPES = [
   { id: "ogiva", label: "Ogiva (bullet)" },
   { id: "field", label: "Field" },
@@ -68,7 +90,12 @@ export function ArrowArt({
   number,
   className = "h-9 w-full",
   shine = true,
+  fletchStyle = "pieno",
+  fletch2 = "",
 }: {
+  /** decorazione delle penne (FLETCH_STYLES) e secondo colore */
+  fletchStyle?: string;
+  fletch2?: string;
   material?: string;
   /** colore dell'asta: se vuoto vale quello del materiale */
   shaft?: string;
@@ -90,6 +117,12 @@ export function ArrowArt({
   const x1 = 290; // inizio della punta
   const vane = VANES[fletchType] ?? VANES.alette;
   const fx = x0 + 10; // le alette partono poco dopo la cocca
+  const deco =
+    fletchStyle === "striato" ? `url(#fs-${id})` :
+    fletchStyle === "spirale" ? `url(#fp-${id})` :
+    fletchStyle === "maculato" ? `url(#fm-${id})` :
+    fletchStyle === "bicolore" ? `url(#fb-${id})` :
+    fletchStyle === "punta" ? `url(#ft-${id})` : "";
   return (
     <svg viewBox="0 0 320 36" className={className} aria-hidden preserveAspectRatio="xMidYMid meet">
       <defs>
@@ -107,6 +140,25 @@ export function ArrowArt({
           <stop offset="0%" stopColor="#000" stopOpacity="0.22" />
           <stop offset="40%" stopColor="#fff" stopOpacity="0.18" />
           <stop offset="100%" stopColor="#000" stopOpacity="0.08" />
+        </linearGradient>
+        {/* decorazioni delle penne con il secondo colore */}
+        <pattern id={`fs-${id}`} width="7" height="40" patternUnits="userSpaceOnUse">
+          <rect width="3" height="40" fill={fletch2 || shade(fletch, -0.5)} />
+        </pattern>
+        <pattern id={`fp-${id}`} width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(35)">
+          <rect width="4" height="8" fill={fletch2 || shade(fletch, 0.6)} />
+        </pattern>
+        <pattern id={`fm-${id}`} width="9" height="7" patternUnits="userSpaceOnUse">
+          <circle cx="3" cy="2.5" r="1.6" fill={fletch2 || shade(fletch, -0.5)} />
+          <circle cx="7.5" cy="5.5" r="1.1" fill={fletch2 || shade(fletch, -0.5)} />
+        </pattern>
+        <linearGradient id={`fb-${id}`} x1="0" x2="1">
+          <stop offset="0.5" stopColor={fletch} stopOpacity="0" />
+          <stop offset="0.5" stopColor={fletch2 || shade(fletch, -0.45)} />
+        </linearGradient>
+        <linearGradient id={`ft-${id}`} x1="0" x2="1">
+          <stop offset="0.72" stopColor={fletch} stopOpacity="0" />
+          <stop offset="0.72" stopColor={fletch2 || "#14181c"} />
         </linearGradient>
         <pattern id={`cf-${id}`} width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
           <rect width="4" height="4" fill="transparent" />
@@ -147,10 +199,14 @@ export function ArrowArt({
         </g>
       ) : (
         <g>
-          <path d={vane.path(fx, y - r + 0.3, -1)} fill={fletch} />
-          <path d={vane.path(fx, y - r + 0.3, -1)} fill={`url(#vn-${id})`} />
-          <path d={vane.path(fx, y + r - 0.3, 1)} fill={fletch} />
-          <path d={vane.path(fx, y + r - 0.3, 1)} fill="#000" opacity="0.18" />
+          <g transform={fletchStyle === "elicoidale" ? `skewX(-8) translate(${y * 0.14} 0)` : undefined}>
+            <path d={vane.path(fx, y - r + 0.3, -1)} fill={fletch} />
+            {deco ? <path d={vane.path(fx, y - r + 0.3, -1)} fill={deco} /> : null}
+            <path d={vane.path(fx, y - r + 0.3, -1)} fill={`url(#vn-${id})`} />
+            <path d={vane.path(fx, y + r - 0.3, 1)} fill={fletch} />
+            {deco ? <path d={vane.path(fx, y + r - 0.3, 1)} fill={deco} /> : null}
+            <path d={vane.path(fx, y + r - 0.3, 1)} fill="#000" opacity="0.18" />
+          </g>
           {/* penna guida, vista di sbieco sopra l'asta */}
           <path d={vane.path(fx + 2, y - 0.2, -1)} transform={`translate(0 ${y * 0.45}) scale(1 0.55)`} fill={cock} opacity="0.95" />
           {fletchType === "penne" || fletchType === "scudo" ? (

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ToolArt } from "@/components/tool-art";
 import { createFileRoute } from "@tanstack/react-router";
 import { Card, Chips, PageHead } from "@/components/kit";
 import { useLocalState } from "@/lib/arcieri/local-store";
@@ -47,6 +48,7 @@ function Page() {
   return (
     <div className="grid gap-3">
       <PageHead kicker="Strumenti" title="Asta nuda" lede="Tre frecce con le penne e due senza, stessa mira, a 18 m. Tocca dove sono finite le nude." />
+      <ToolArt id="tuning" />
       <Chips value={st.hand} onChange={(hand) => setSt({ ...st, hand })} options={[{ id: "destro", label: "Arciere destro" }, { id: "mancino", label: "Mancino" }]} />
       <Card className="grid justify-items-center gap-3">
         <div className="relative">

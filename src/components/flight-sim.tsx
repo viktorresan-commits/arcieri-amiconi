@@ -4,6 +4,8 @@ import { airDensity, angularSize, effectiveLb, goldOf, compensatedDistance, desc
 import { Button, Card, Chips, Field, Segmented, Select, TextInput } from "@/components/kit";
 import { listEquipment, saveEquipment } from "@/lib/arcieri/club.api";
 import { Zoomable } from "./zoomable";
+import { Flight3D } from "./flight-3d";
+import { useMainArrowLook } from "@/lib/arcieri/main-gear";
 
 const ROUNDS = [
   { id: "18", name: "Indoor 18 m", distanceM: 18, faceCm: 40 },
@@ -111,6 +113,8 @@ export function FlightSim() {
   const [pathMode, setPathMode] = useState<"reale" | "linea">("reale");
   const [trueScale, setTrueScale] = useState(false);
   const [replay, setReplay] = useState(0);
+  const [view3d, setView3d] = useState(true);
+  const arrowLook = useMainArrowLook();
   const [tab, setTab] = useState<"arco" | "freccia" | "tiro" | "meteo">("arco");
   const patch = (part: Partial<FlightInput>) => setForm((current) => ({ ...current, ...part }));
 
@@ -171,6 +175,7 @@ export function FlightSim() {
     [compare, secondInput, n, setup, consistency, seed],
   );
   const speed = launchSpeed({ ...form, sighted: setup.sighted });
+  const flightInput = useMemo(() => ({ ...form, sighted: setup.sighted }), [form, setup.sighted]);
   const gpp = form.drawLb > 0 ? form.grains / form.drawLb : 0;
   const bad = form.braceCm >= form.drawCm || form.grains < 80 || form.drawLb < 10;
 
@@ -281,24 +286,39 @@ export function FlightSim() {
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm font-semibold">Traiettoria e bersaglio</span>
         <div className="ml-auto flex gap-1">
-          <button type="button" onClick={() => setPathMode("reale")} className={`min-h-9 rounded-full px-3 text-xs ${pathMode === "reale" ? "bg-primary text-primary-fg" : "border border-line"}`}>Quota da terra</button>
-          <button type="button" onClick={() => setPathMode("linea")} className={`min-h-9 rounded-full px-3 text-xs ${pathMode === "linea" ? "bg-primary text-primary-fg" : "border border-line"}`}>Sulla linea all'oro</button>
-          <button type="button" onClick={() => setTrueScale((v) => !v)} className={`min-h-9 rounded-full px-3 text-xs ${trueScale ? "bg-accent text-accent-fg" : "border border-line"}`}>{trueScale ? "Proporzioni vere ✓" : "Proporzioni vere"}</button>
+          <button type="button" onClick={() => setView3d(true)} className={`min-h-9 rounded-full px-3 text-xs ${view3d ? "bg-primary text-primary-fg" : "border border-line"}`}>3D</button>
+          <button type="button" onClick={() => setView3d(false)} className={`min-h-9 rounded-full px-3 text-xs ${!view3d ? "bg-primary text-primary-fg" : "border border-line"}`}>Grafici</button>
           <button type="button" onClick={() => setReplay((r) => r + 1)} className="min-h-9 rounded-full bg-white/10 px-3 text-xs font-semibold"><Glyph name="play" size={12} className="mr-1 inline -translate-y-px" />Rivedi il tiro</button>
         </div>
       </div>
-      <Expand title="Traiettoria" onReplay={() => setReplay((r) => r + 1)}>
-        <FlightPath replay={replay} trueScale={trueScale} input={{ ...form, sighted: setup.sighted }} round={primary} sighted={setup.sighted} mode={pathMode} title={`${form.distanceM} m · faccia ${form.faceCm} cm${form.slopeDeg ? ` · pendenza ${form.slopeDeg > 0 ? "+" : ""}${form.slopeDeg}°` : ""} · gruppo ${primary.total}/${n * (form.zones === 5 ? 9 : 10)}`} />
-      </Expand>
-      <Expand title="Bersaglio" onReplay={() => setReplay((r) => r + 1)}>
-        <FaceFront key={`ff-${replay}`} input={{ ...form, sighted: setup.sighted }} round={primary} sighted={setup.sighted} />
-      </Expand>
+      {view3d ? (
+        <>
+          <Expand title="Tiro in 3D" onReplay={() => setReplay((r) => r + 1)}>
+            <Flight3D key={`f3-${replay}`} input={flightInput} round={primary} sighted={setup.sighted} look={arrowLook} />
+          </Expand>
+          <AimHelp input={flightInput} round={primary} sighted={setup.sighted} fixY={-primary.my} fixZ={goldOf(form) + (setup.sighted ? 0 : primary.gap) - (primary.mz - goldOf(form))} gold={goldOf(form)} R={form.faceCm / 200} />
+        </>
+      ) : (
+        <>
+          <div className="flex flex-wrap gap-1">
+            <button type="button" onClick={() => setPathMode("reale")} className={`min-h-9 rounded-full px-3 text-xs ${pathMode === "reale" ? "bg-primary text-primary-fg" : "border border-line"}`}>Quota da terra</button>
+            <button type="button" onClick={() => setPathMode("linea")} className={`min-h-9 rounded-full px-3 text-xs ${pathMode === "linea" ? "bg-primary text-primary-fg" : "border border-line"}`}>Sulla linea all'oro</button>
+            <button type="button" onClick={() => setTrueScale((v) => !v)} className={`min-h-9 rounded-full px-3 text-xs ${trueScale ? "bg-accent text-accent-fg" : "border border-line"}`}>{trueScale ? "Proporzioni vere ✓" : "Proporzioni vere"}</button>
+          </div>
+          <Expand title="Traiettoria" onReplay={() => setReplay((r) => r + 1)}>
+            <FlightPath replay={replay} trueScale={trueScale} input={flightInput} round={primary} sighted={setup.sighted} mode={pathMode} title={`${form.distanceM} m · faccia ${form.faceCm} cm${form.slopeDeg ? ` · pendenza ${form.slopeDeg > 0 ? "+" : ""}${form.slopeDeg}°` : ""} · gruppo ${primary.total}/${n * (form.zones === 5 ? 9 : 10)}`} />
+          </Expand>
+          <Expand title="Bersaglio" onReplay={() => setReplay((r) => r + 1)}>
+            <FaceFront key={`ff-${replay}`} input={flightInput} round={primary} sighted={setup.sighted} />
+          </Expand>
+        </>
+      )}
       {Math.abs(form.targetSpeed ?? 0) > 0.01 ? (
         <p className="rounded-xl border border-[#7cf0a8]/40 bg-[#7cf0a8]/[0.07] px-3 py-2 text-sm">
           Bersaglio in movimento a {Math.abs(form.targetSpeed ?? 0).toFixed(1).replace(".", ",")} m/s verso {(form.targetSpeed ?? 0) > 0 ? "destra" : "sinistra"}: la freccia vola {primary.clean.t.toFixed(2).replace(".", ",")} s, quindi mira <b>{Math.abs(primary.lead * 100).toFixed(0)} cm avanti</b> rispetto al centro che vedi al rilascio (circa {(Math.abs(primary.lead) / Math.max(0.01, form.faceCm / 100)).toFixed(1).replace(".", ",")} facce). Il cerchio tratteggiato è dov'era il bersaglio quando sei partito.
         </p>
       ) : null}
-      <p className="text-center text-[0.68rem] text-muted">Grafici: due dita per ingrandire, ruotare e spostare · doppio tocco per tornare com'era · l'animazione dura quanto il volo vero ({primary.clean.t.toFixed(2).replace(".", ",")} s).</p>
+      <p className="text-center text-[0.68rem] text-muted">Trascina o usa due dita per girare, ingrandire e spostare · doppio tocco per tornare com'era · «Gira» fa il giro della scena · il volo dura quanto quello vero ({primary.clean.t.toFixed(2).replace(".", ",")} s).</p>
       <div className="flex flex-wrap gap-2">
         {[3, 6, 12].map((count) => (
           <button key={count} type="button" onClick={() => setN(count)} className={`min-h-11 rounded-full px-3 text-sm ${n === count ? "bg-primary text-primary-fg" : "border border-line"}`}>{count} frecce</button>

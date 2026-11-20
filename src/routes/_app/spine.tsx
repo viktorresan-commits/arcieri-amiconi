@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { ToolArt } from "@/components/tool-art";
 import { Card, Chips, PageHead } from "@/components/kit";
 import { Num, Mini, num, fmt } from "@/components/tool-kit";
 import { useLocalState } from "@/lib/arcieri/local-store";
@@ -27,6 +28,7 @@ function Page() {
   return (
     <div className="grid gap-3">
       <PageHead kicker="Strumenti" title="Spine e libbre" lede="Le libbre scritte sui flettenti valgono a 28″: al tuo allungo cambiano. Da qui spine e peso freccia di partenza." />
+      <ToolArt id="spine" />
       <Chips value={st.bowType} onChange={(bowType) => setSt({ ...st, bowType })} options={TYPES} />
       <Card className="grid grid-cols-2 gap-2">
         <Num label="Libbre scritte" unit="lb" value={st.draw} onChange={(draw) => setSt({ ...st, draw })} hint="a 28″" />

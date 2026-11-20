@@ -5,7 +5,9 @@ import { dismissNote, openNotes } from "@/lib/arcieri/club.api";
 import { fmtWhen } from "@/lib/arcieri/time";
 import { programById } from "@/lib/arcieri/program";
 import { useLoad } from "@/lib/arcieri/use-load";
-import { HeroTarget } from "@/components/hero-target";
+import { AvatarScene, useAvatar } from "@/components/avatar-hero";
+import { MainGearCard } from "@/components/main-gear";
+import { levelOf, useXp } from "@/lib/arcieri/xp";
 import { ShortcutRow, TipCard } from "@/components/shortcuts";
 import { JourneyCard } from "@/components/journey";
 import { TodayCard } from "@/components/today-card";
@@ -56,31 +58,42 @@ function Home() {
   const { data, error, loading } = useLoad(`dash-${nonce}`, () => dashboard());
   const { prefs } = usePrefs();
   const notes = useLoad(`notes-${nonce}`, () => openNotes());
+  const avatar = useAvatar();
+  const xp = useXp();
+  const lvl = levelOf(xp.xp);
   if (loading) return <Loading />;
   if (error) return <ErrorNote text={error} />;
   if (!data) return null;
-  const trend = data.trend.slice(-60);
   const rankFill = data.rank && data.rank.of > 1 ? ((data.rank.of - data.rank.position) / (data.rank.of - 1)) * 100 : data.rank ? 100 : 0;
   return (
     <div className="grid gap-3">
       <Rise i={0}>
-        <div className="aa-hero px-4 pb-4 pt-4">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <p className="text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-white/60">{new Date().toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" })}</p>
-              <h1 className="font-display text-[2.4rem] leading-none tracking-tight">Oggi</h1>
-              <p className="mt-1 text-xs text-white/70">
-                {data.month.sessions} uscite e {num(data.month.arrows)} frecce questo mese
-                {data.since ? ` · ultimo tiro ${data.since.n} ${data.since.unit === "h" ? (data.since.n === 1 ? "ora" : "ore") : data.since.n === 1 ? "giorno" : "giorni"} fa` : ""}
-              </p>
-              <Link to="/bacheca" className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/8 px-3 py-1 text-xs font-semibold">
-                <Glyph name="megaphone" size={14} /> News
-                {data.unread > 0 ? <span className="grid min-h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[0.6rem] font-bold text-accent-fg">{data.unread > 9 ? "9+" : data.unread}</span> : null}
-              </Link>
+        <div className="grid gap-2">
+          <AvatarScene look={avatar.shown} height="h-[23rem]">
+            <div className="pointer-events-none absolute inset-x-0 top-0 flex justify-end p-3">
+              <div className="pointer-events-auto max-w-[62%] text-right text-white [text-shadow:0_1px_8px_rgba(0,0,0,0.45)]">
+                <p className="text-[0.66rem] font-semibold uppercase tracking-[0.18em] text-white/75">{new Date().toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" })}</p>
+                <h1 className="font-display text-[2.3rem] leading-none tracking-tight">Oggi</h1>
+                <p className="mt-1 text-xs text-white/85">
+                  {data.month.sessions} uscite e {num(data.month.arrows)} frecce questo mese
+                  {data.since ? ` · ultimo tiro ${data.since.n} ${data.since.unit === "h" ? (data.since.n === 1 ? "ora" : "ore") : data.since.n === 1 ? "giorno" : "giorni"} fa` : ""}
+                </p>
+                <div className="mt-2 flex flex-wrap justify-end gap-1.5">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-black/35 px-2.5 py-1 text-[0.7rem] font-semibold backdrop-blur">Livello {lvl.level}<span className="h-1.5 w-10 overflow-hidden rounded-full bg-white/20"><span className="block h-full rounded-full bg-[#ffd27a]" style={{ width: `${Math.round((lvl.into / lvl.need) * 100)}%` }} /></span></span>
+                  {data.streak > 1 ? <span className="rounded-full bg-black/35 px-2.5 py-1 text-[0.7rem] font-semibold backdrop-blur">{data.streak} giorni di fila</span> : null}
+                  <Link to="/bacheca" className="inline-flex items-center gap-1 rounded-full bg-black/35 px-2.5 py-1 text-[0.7rem] font-semibold backdrop-blur">
+                    <Glyph name="megaphone" size={13} /> News
+                    {data.unread > 0 ? <span className="grid min-h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[0.6rem] font-bold text-accent-fg">{data.unread > 9 ? "9+" : data.unread}</span> : null}
+                  </Link>
+                </div>
+              </div>
             </div>
-            <HeroTarget scores={trend} size={124} />
-          </div>
-          <div className="mt-3 grid grid-cols-[1.4fr_1fr] gap-2">
+            <Link to="/avatar" className="absolute bottom-3 right-3 inline-flex min-h-10 items-center gap-1.5 rounded-full bg-black/45 px-3 text-xs font-semibold text-white backdrop-blur">
+              <Glyph name="palette" size={15} /> Personalizza
+            </Link>
+            <p className="pointer-events-none absolute bottom-14 right-3 text-[0.62rem] text-white/70">Tocca l'arciere per scoccare</p>
+          </AvatarScene>
+          <div className="grid grid-cols-[1.4fr_1fr] gap-2">
             <Link to="/allenamento" search={{ avvia: "rapido" }} className="block">
               <Button className="aa-glow w-full"><Glyph name="bolt" size={18} /> Tiro rapido</Button>
             </Link>
@@ -88,6 +101,7 @@ function Home() {
               <Button variant="ghost" className="w-full"><Glyph name="camera" size={18} /> Da foto</Button>
             </Link>
           </div>
+          <MainGearCard compact />
         </div>
       </Rise>
       {prefs.home.shortcuts ? (
@@ -309,6 +323,8 @@ function LastArrows({ shots }: { shots: LastShot[] }) {
                   nock={sp.nock || "#f4f1ea"}
                   wrap={sp.wrap}
                   fletchType={sp.fletchType || "alette"}
+                  fletchStyle={sp.fletchStyle}
+                  fletch2={sp.fletch2}
                   point={sp.pointType || "ogiva"}
                   number={num}
                   className="h-10 w-full"

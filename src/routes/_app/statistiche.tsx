@@ -5,6 +5,7 @@ import { statsSeries } from "@/lib/arcieri/training.api";
 import { listCompetitions, skillBoard } from "@/lib/arcieri/club.api";
 import { fmtAvg, aimAngleLabel, aimTargetLabel } from "@/lib/arcieri/scoring";
 import { useLoad } from "@/lib/arcieri/use-load";
+import { BodyStats } from "@/components/body-stats";
 import { useMember } from "@/components/shell";
 import { ActivityHeat, AvgLine, ComboBars, DistBars, Ring, ScoreLine } from "@/components/charts";
 import { GaraTrend, type GaraPoint } from "@/components/gara-trend";
@@ -33,7 +34,7 @@ function mondayKey(iso: string) {
 function Page() {
   const [nonce] = useState(0);
   const [period, setPeriod] = useState<Period>("90");
-  const [tab, setTab] = useState<"allenamento" | "gare">("allenamento");
+  const [tab, setTab] = useState<"allenamento" | "corpo" | "gare">("allenamento");
   const { me } = useMember();
   const { data, error, loading } = useLoad(`stats-${nonce}`, () => statsSeries({ data: {} }));
   const comps = useLoad(`comps-${nonce}`, () => listCompetitions());
@@ -102,7 +103,7 @@ function Page() {
   return (
     <div className="grid gap-3">
       <PageHead kicker="I tuoi numeri" title="Statistiche" lede="Allenamento e campionato, confrontati periodo su periodo e gara contro gara.">
-        <Segmented value={tab} onChange={setTab} options={[{ id: "allenamento", label: <IconLabel icon="bow" size={14}>Allenamento</IconLabel> }, { id: "gare", label: <IconLabel icon="trophy" size={14}>Gare</IconLabel> }]} />
+        <Segmented value={tab} onChange={setTab} options={[{ id: "allenamento", label: <IconLabel icon="bow" size={14}>Allenamento</IconLabel> }, { id: "corpo", label: <IconLabel icon="posture" size={14}>Corpo</IconLabel> }, { id: "gare", label: <IconLabel icon="trophy" size={14}>Gare</IconLabel> }]} />
       </PageHead>
       {loading ? <Loading /> : null}
       {error ? <ErrorNote text={error} /> : null}
@@ -163,6 +164,8 @@ function Page() {
           ) : null}
           <DistanceCard training={data?.byDistance ?? []} competitions={comps.data?.competitions ?? []} userId={me.userId ?? ""} />
         </>
+      ) : tab === "corpo" ? (
+        <BodyStats />
       ) : (
         <>
           {comps.loading ? <p className="text-xs text-muted">Carico le gare…</p> : null}

@@ -36,6 +36,7 @@ function Page() {
         if (nk === 0) {
           setRound((r) => r + 1);
           setSt((s) => ({ ...s, cycles: s.cycles + 1 }));
+          logBreath(st.mode);
           if (round + 1 === 5) award(5, "Cinque respiri guidati");
         }
         setK(nk);
@@ -74,4 +75,16 @@ function Page() {
       </Card>
     </div>
   );
+}
+
+/** Diario dei respiri guidati per giorno (per le statistiche): { "2026-11-20": { volee: 3, ... } }. */
+function logBreath(mode: string) {
+  try {
+    const day = new Date().toLocaleDateString("sv-SE");
+    const all = JSON.parse(localStorage.getItem("aa-respiro-days") || "{}") as Record<string, Record<string, number>>;
+    all[day] = { ...(all[day] ?? {}), [mode]: ((all[day] ?? {})[mode] ?? 0) + 1 };
+    localStorage.setItem("aa-respiro-days", JSON.stringify(all));
+  } catch {
+    /* memoria non disponibile */
+  }
 }

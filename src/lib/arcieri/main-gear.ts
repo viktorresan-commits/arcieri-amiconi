@@ -1,0 +1,83 @@
+import { useEffect, useState } from "react";
+
+/**
+ * Attrezzatura principale: la configurazione (arco + frecce) che usi di solito.
+ * Resta sul telefono con una copia delle schede, così Home, avatar, balistica e 3D
+ * la mostrano subito, anche senza rete. Un allenamento nuovo parte con questa.
+ */
+export type MainGear = {
+  setupId: number | null;
+  name: string;
+  bowId: number | null;
+  arrowId: number | null;
+  bowName: string;
+  arrowName: string;
+  bowSpecs: Record<string, string>;
+  arrowSpecs: Record<string, string>;
+};
+
+const KEY = "aa-main-gear";
+const EVENT = "aa-main-gear";
+
+export function readMainGear(): MainGear | null {
+  if (typeof localStorage === "undefined") return null;
+  try {
+    const raw = JSON.parse(localStorage.getItem(KEY) || "null") as Partial<MainGear> | null;
+    if (!raw || typeof raw !== "object") return null;
+    return {
+      setupId: typeof raw.setupId === "number" ? raw.setupId : null,
+      name: String(raw.name ?? ""),
+      bowId: typeof raw.bowId === "number" ? raw.bowId : null,
+      arrowId: typeof raw.arrowId === "number" ? raw.arrowId : null,
+      bowName: String(raw.bowName ?? ""),
+      arrowName: String(raw.arrowName ?? ""),
+      bowSpecs: raw.bowSpecs && typeof raw.bowSpecs === "object" ? (raw.bowSpecs as Record<string, string>) : {},
+      arrowSpecs: raw.arrowSpecs && typeof raw.arrowSpecs === "object" ? (raw.arrowSpecs as Record<string, string>) : {},
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function saveMainGear(gear: MainGear | null) {
+  try {
+    if (gear) localStorage.setItem(KEY, JSON.stringify(gear));
+    else localStorage.removeItem(KEY);
+    window.dispatchEvent(new Event(EVENT));
+  } catch {
+    /* memoria non disponibile */
+  }
+}
+
+export function useMainGear() {
+  const [gear, setGear] = useState<MainGear | null>(null);
+  useEffect(() => {
+    const load = () => setGear(readMainGear());
+    load();
+    window.addEventListener(EVENT, load);
+    window.addEventListener("storage", load);
+    return () => {
+      window.removeEventListener(EVENT, load);
+      window.removeEventListener("storage", load);
+    };
+  }, []);
+  return gear;
+}
+
+const SHAFT_BY_MATERIAL: Record<string, string> = { legno: "#c99a5e", carbonio: "#1d1f22", alluminio: "#9aa7b2", "carbo-alluminio": "#5b6670", bambu: "#c9b46a" };
+
+/** Colori delle frecce principali, per le viste 3D. */
+export function arrowLookOf(sp: Record<string, string> | undefined | null) {
+  if (!sp) return {};
+  return {
+    shaft: sp.shaft || SHAFT_BY_MATERIAL[sp.material ?? ""] || undefined,
+    fletch: sp.fletch || undefined,
+    cock: sp.cock || undefined,
+    nock: sp.nock || undefined,
+  };
+}
+
+export function useMainArrowLook() {
+  const gear = useMainGear();
+  return arrowLookOf(gear?.arrowSpecs);
+}

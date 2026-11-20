@@ -11,6 +11,7 @@ import { TargetFace } from "@/components/target-face";
 import { ShotLab } from "@/components/shot-lab";
 import { useLoad } from "@/lib/arcieri/use-load";
 import { useMember } from "@/components/shell";
+import { MainGearCard } from "@/components/main-gear";
 import { Avatar, Button, Card, Empty, ErrorNote, Field, HoldDelete, Loading, PageHead, TextArea, TextInput } from "@/components/kit";
 import { GaraTrend, type GaraPoint } from "@/components/gara-trend";
 import { GaraResult } from "@/components/gara-result";
@@ -113,6 +114,7 @@ function Page() {
   return (
     <div className="grid min-w-0 gap-4">
       <PageHead title="Gare" lede="Segni solo quelle a cui hai partecipato. Il punteggio degli altri si vede, ma si cambia solo il tuo." />
+      <MainGearCard compact />
       {totals.gare > 0 ? (
         <Card>
           <p className="text-xs uppercase tracking-wide text-muted">Tutte le gare</p>

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ToolArt } from "@/components/tool-art";
 import { createFileRoute } from "@tanstack/react-router";
 import { Card, PageHead } from "@/components/kit";
 import { Glyph } from "@/components/icons";
@@ -24,6 +25,7 @@ function Page() {
   return (
     <div className="grid gap-3">
       <PageHead kicker="Strumenti" title="Assetto arco" lede="Segna le misure quando le controlli: vedi subito se qualcosa si è spostato." />
+      <ToolArt id="assetto" />
       <Card className="grid gap-2">
         <div className="grid grid-cols-2 gap-2">
           <Num label="Brace height" unit="cm" value={f.brace} onChange={(brace) => setF({ ...f, brace })} />

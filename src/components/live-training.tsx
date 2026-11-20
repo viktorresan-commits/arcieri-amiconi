@@ -29,6 +29,7 @@ import { TargetFace } from "./target-face";
 import { PhotoSession } from "./photo-session";
 import { tagsOf } from "@/lib/arcieri/arrow-tags";
 import { ArrowPicker, lastArrowSet, type ArrowSet } from "./arrow-picker";
+import { readMainGear } from "@/lib/arcieri/main-gear";
 import { ShotLab } from "./shot-lab";
 import { TargetRead } from "./target-read";
 import { AppIcon, Glyph } from "./icons";
@@ -86,7 +87,7 @@ function quickDraft(recentProgram: string): Draft {
     face: last.face ?? "wa10",
     aimTarget: last.aimTarget ?? "padiglione",
     aimAngle: last.aimAngle ?? "frontale",
-    setupId: last.setupId ?? null,
+    setupId: readMainGear()?.setupId ?? last.setupId ?? null,
     arrowsPerEnd: last.arrowsPerEnd ?? 3,
     endsPlanned: last.endsPlanned ?? 10,
     blocksPlanned: last.blocksPlanned ?? 1,
@@ -1081,7 +1082,7 @@ function Setup({
         <Field label="Configurazione">
           <Select value={meta.setupId ?? ""} onChange={(e) => apply({ setupId: e.target.value ? Number(e.target.value) : null })}>
             <option value="">Nessuna</option>
-            {boot.setups.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            {boot.setups.map((s) => <option key={s.id} value={s.id}>{s.name}{readMainGear()?.setupId === s.id ? " · principale" : ""}</option>)}
           </Select>
         </Field>
         <div className="grid grid-cols-3 gap-2">
@@ -1147,7 +1148,7 @@ function ProgramPick({
           face,
           aimTarget,
           aimAngle,
-          setupId: null,
+          setupId: readMainGear()?.setupId ?? null,
           arrowsPerEnd: 3,
           endsPlanned: volume / 3,
           blocksPlanned: 1,

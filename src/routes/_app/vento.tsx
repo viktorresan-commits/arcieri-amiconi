@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { ToolArt } from "@/components/tool-art";
 import { Card, Chips, PageHead } from "@/components/kit";
 import { Num, Mini, num, fmt } from "@/components/tool-kit";
 import { useLocalState } from "@/lib/arcieri/local-store";
@@ -35,6 +36,7 @@ function Page() {
   return (
     <div className="grid gap-3">
       <PageHead kicker="Strumenti" title="Vento" lede="Quanto il vento laterale sposta la freccia, e dove mirare per compensare." />
+      <ToolArt id="vento" />
       <Card className="grid gap-2.5">
         <div className="grid grid-cols-2 gap-2">
           <Num label="Vento" unit="km/h" value={st.kmh} onChange={(kmh) => setSt({ ...st, kmh })} />

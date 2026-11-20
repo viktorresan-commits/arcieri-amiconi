@@ -2,6 +2,7 @@ import { Card, Chips } from "@/components/kit";
 import { StatusMark } from "@/components/icons";
 import { useLocalState } from "@/lib/arcieri/local-store";
 import { FocBalance3D, FocFlight3D, estimateSpeed } from "@/components/foc-3d";
+import { useMainArrowLook } from "@/lib/arcieri/main-gear";
 
 /**
  * FOC (front of center): di quanto il punto di equilibrio della freccia sta davanti alla metà.
@@ -20,6 +21,7 @@ type Store = {
   grains: string; // peso totale misurato (modo "Ho misurato")
   view: "equilibrio" | "gittata";
   dist: number;
+  spine?: string; // spine dell'asta (facoltativo), per il confronto
 };
 const DEFAULT: Store = { mode: "pesi", len: "72", bal: "41", gpi: "7,5", point: "100", insert: "10", fletch: "18", nock: "8", lb: "36", grains: "350", view: "equilibrio", dist: 30 };
 const n = (s: string) => Number(String(s).replace(",", "."));
@@ -49,6 +51,7 @@ function compute(st: Store) {
 }
 
 export function FocTool() {
+  const look = useMainArrowLook();
   const [st, setSt] = useLocalState<Store>("aa-foc-v1", DEFAULT);
   const r = compute(st);
   const set = (k: keyof Store) => (e: { target: { value: string } }) => setSt({ ...st, [k]: e.target.value });
@@ -131,6 +134,7 @@ export function FocTool() {
           {gpp ? <p className="text-xs text-muted">{gpp < 6 ? "Sotto i 6 grani per libbra la freccia è leggera: occhio alla garanzia dei flettenti." : gpp > 9 ? "Freccia pesante per il carico: più stabile, ma cala di più." : "Peso equilibrato per il carico."}</p> : null}
         </Card>
       ) : null}
+      {r ? <Analysis st={st} r={r} grains={grains} speed={speed} onSpine={(spine) => setSt({ ...st, spine })} /> : null}
       {r ? (
         <Card className="grid gap-2.5">
           <div className="flex items-center justify-between gap-2">
@@ -138,10 +142,10 @@ export function FocTool() {
             <Chips value={st.view} onChange={(view) => setSt({ ...st, view })} options={[{ id: "equilibrio", label: "Equilibrio" }, { id: "gittata", label: "Gittata" }]} />
           </div>
           {st.view === "equilibrio" ? (
-            <FocBalance3D key="eq" L={r.L} B={r.B} foc={r.foc} />
+            <FocBalance3D key="eq" L={r.L} B={r.B} foc={r.foc} look={look} />
           ) : (
             <>
-              <FocFlight3D key="fl" distance={st.dist} speed={speed} foc={r.foc} />
+              <FocFlight3D key="fl" distance={st.dist} speed={speed} foc={r.foc} look={look} />
               <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 [scrollbar-width:none]">
                 {[18, 30, 50, 70, 90].map((d) => (
                   <button key={d} type="button" aria-pressed={st.dist === d} className="aa-chip" onClick={() => setSt({ ...st, dist: d })}>{d} m</button>
@@ -185,5 +189,85 @@ function Mini({ k, v }: { k: string; v: string }) {
       <span className="block text-[0.6rem] uppercase tracking-wider text-muted">{k}</span>
       <b className="font-display text-lg tabular-nums">{v}</b>
     </span>
+  );
+}
+
+/** Spine consigliato (indicativo, tabelle per archi ricurvi a dita): libbre effettive per lunghezza e punta. */
+function spineFor(lb: number, lenIn: number, point: number) {
+  if (!(lb > 10 && lenIn > 20)) return null;
+  const eff = lb + 2.5 * (lenIn - 28) + 3 * ((point - 100) / 25);
+  if (!(eff > 8)) return null;
+  const raw = 23500 / eff;
+  const step = raw > 1000 ? 100 : 50;
+  return Math.round(raw / step) * step;
+}
+
+/** Riepilogo dei numeri della freccia e cosa cambiare per correggerla. */
+function Analysis({ st, r, grains, speed, onSpine }: { st: Store; r: { L: number; B: number; foc: number; total: number | null }; grains: number; speed: number; onSpine: (v: string) => void }) {
+  const lb = n(st.lb);
+  const lenIn = r.L / 2.54;
+  const point = st.mode === "pesi" ? n(st.point) || 0 : 100;
+  const gpp = grains > 0 && lb > 0 ? grains / lb : null;
+  const mass = grains * 6.48e-5;
+  const energy = speed > 0 && grains > 0 ? 0.5 * mass * speed * speed : null;
+  const momentum = speed > 0 && grains > 0 ? mass * speed : null;
+  const spineIdeal = spineFor(lb, lenIn, point);
+  const spineMine = n(st.spine ?? "");
+  // punta che porta il FOC al 10% (solo dai pesi): risolvo il baricentro con la massa della punta
+  let pointFor10: number | null = null;
+  if (st.mode === "pesi" && r.total) {
+    const L = r.L;
+    const shaft = n(st.gpi) * (L / 2.54);
+    const parts: [number, number][] = [[n(st.nock) || 0, 0.6], [n(st.fletch) || 0, 6], [shaft || 0, L / 2], [n(st.insert) || 0, L - 1.6]];
+    const M = parts.reduce((a, [m]) => a + m, 0);
+    const S = parts.reduce((a, [m, x]) => a + m * x, 0);
+    const want = L * 0.6;
+    const xp = L + 0.4;
+    const p = (want * M - S) / (xp - want);
+    if (p > 0 && p < 400) pointFor10 = Math.round(p / 5) * 5;
+  }
+  const tips: { s: "ok" | "warn"; t: string }[] = [];
+  if (r.foc < 7) tips.push({ s: "warn", t: pointFor10 ? `FOC basso: con una punta da circa ${pointFor10} grani arrivi al 10%. In alternativa inserto più pesante o penne più leggere.` : "FOC basso: punta o inserto più pesanti, oppure penne più leggere." });
+  else if (r.foc > 18) tips.push({ s: "warn", t: pointFor10 ? `FOC alto: per la targa una punta da circa ${pointFor10} grani riporta il FOC al 10%, la freccia cala meno.` : "FOC alto: punta più leggera se tiri alla targa sulle lunghe distanze." });
+  else tips.push({ s: "ok", t: "FOC nella fascia buona: niente da cambiare sul peso davanti." });
+  if (gpp != null) {
+    if (gpp < 6) tips.push({ s: "warn", t: `${f1(gpp)} grani per libbra: troppo leggera per il carico, rischi di danneggiare i flettenti. Sali almeno a ${Math.round(lb * 6)} grani totali.` });
+    else if (gpp > 10) tips.push({ s: "warn", t: `${f1(gpp)} grani per libbra: molto pesante, traiettoria più curva. Per la targa resta tra 6 e 9.` });
+    else tips.push({ s: "ok", t: `${f1(gpp)} grani per libbra: peso adatto al carico.` });
+  }
+  if (spineIdeal && spineMine > 0) {
+    const diff = (spineMine - spineIdeal) / spineIdeal;
+    if (diff > 0.12) tips.push({ s: "warn", t: `Spine ${spineMine} più morbido del consigliato (~${spineIdeal}): con lo sgancio a dita la punta va a sinistra (arciere destro). Punta più leggera, asta più corta o spine più rigido.` });
+    else if (diff < -0.12) tips.push({ s: "warn", t: `Spine ${spineMine} più rigido del consigliato (~${spineIdeal}): la punta tende a destra (arciere destro). Punta più pesante o asta più lunga lo ammorbidiscono.` });
+    else tips.push({ s: "ok", t: `Spine ${spineMine} in linea con il carico (~${spineIdeal}).` });
+  }
+  if (lenIn > 0 && lb > 0 && r.L > 0 && st.mode === "pesi" && n(st.fletch) > 30) tips.push({ s: "warn", t: "Penne pesanti: spostano il baricentro indietro. Penne più corte o spin wing aumentano il FOC e la velocità." });
+  return (
+    <Card className="grid gap-2.5">
+      <p className="aa-section-title">Analisi delle aste</p>
+      <div className="grid grid-cols-3 gap-1.5 text-center">
+        <Mini k="Peso" v={grains > 0 ? `${Math.round(grains)} gr` : "—"} />
+        <Mini k="Velocità" v={speed > 0 ? `${Math.round(speed)} m/s` : "—"} />
+        <Mini k="Energia" v={energy ? `${f1(energy)} J` : "—"} />
+        <Mini k="Q. moto" v={momentum ? `${(momentum).toFixed(3).replace(".", ",")}` : "—"} />
+        <Mini k="Spine ideale" v={spineIdeal ? String(spineIdeal) : "—"} />
+        <Mini k="Lunghezza" v={`${lenIn.toFixed(1).replace(".", ",")}″`} />
+      </div>
+      <label className="grid gap-1">
+        <span className="text-xs text-muted">Spine delle tue aste (facoltativo, per il confronto)</span>
+        <span className="flex items-center gap-1 rounded-xl border border-hair bg-black/20 px-3">
+          <input inputMode="numeric" value={st.spine ?? ""} onChange={(e) => onSpine(e.target.value)} placeholder="es. 600" className="min-h-11 w-full min-w-0 bg-transparent text-base tabular-nums outline-none" />
+        </span>
+      </label>
+      <ul className="grid gap-1.5">
+        {tips.map((tip) => (
+          <li key={tip.t} className="flex gap-2 rounded-xl bg-white/[0.04] px-2.5 py-2 text-sm leading-snug">
+            <StatusMark state={tip.s} />
+            <span>{tip.t}</span>
+          </li>
+        ))}
+      </ul>
+      <p className="text-[0.68rem] text-muted">Valori stimati per archi ricurvi e tradizionali a dita; spine dalle tabelle indicative (libbre al tuo allungo, lunghezza e punta). La prova vera resta il tiro con frecce senza penne (bare shaft).</p>
+    </Card>
   );
 }

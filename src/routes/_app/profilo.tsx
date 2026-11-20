@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import { authClient } from "@/lib/auth/client";
 import { UserButton } from "@/lib/auth/gates";
 import { forgetAccount, rememberAccount, savedAccounts, type SavedAccount } from "@/lib/arcieri/accounts";
@@ -250,10 +250,22 @@ function Page() {
         ) : null}
 
         {tab === "aspetto" ? (
+          <>
+          <Link to="/avatar" className="block">
+            <Card className="flex items-center gap-3">
+              <span className="grid h-12 w-12 place-items-center rounded-2xl bg-[#c46b2b]/20"><Glyph name="archer" size={26} /></span>
+              <span className="min-w-0 flex-1">
+                <b className="block">Il tuo arciere</b>
+                <span className="text-xs text-muted">Viso, capelli, barba, abiti, arco e frecce dell'avatar in Home</span>
+              </span>
+              <Glyph name="chevron" size={16} />
+            </Card>
+          </Link>
           <Card className="grid gap-1">
             <IconTitle icon="palette" color="#7652d1" sub="Ogni scelta si salva da sola.">Personalizza</IconTitle>
             <PersonalizePanel />
           </Card>
+          </>
         ) : null}
 
         {tab === "gesti" ? <GestureGallery /> : null}

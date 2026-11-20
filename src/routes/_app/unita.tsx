@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { ToolArt } from "@/components/tool-art";
 import { Card, PageHead } from "@/components/kit";
 import { Num, num } from "@/components/tool-kit";
 import { useLocalState } from "@/lib/arcieri/local-store";
@@ -21,6 +22,7 @@ function Page() {
   return (
     <div className="grid gap-3">
       <PageHead kicker="Strumenti" title="Convertitore" lede="Scrivi in una delle due caselle." />
+      <ToolArt id="unita" />
       {PAIRS.map((p) => {
         const a = st[`${p.id}a`] ?? "";
         const b = st[`${p.id}b`] ?? "";

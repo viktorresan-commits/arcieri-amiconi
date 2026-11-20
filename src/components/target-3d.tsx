@@ -59,7 +59,7 @@ export function Target3D({ face, shots, picture, look }: { face: Face; shots: Sh
 
   const ends = useMemo(() => [...new Set(shots.map((s) => s.end ?? 0))].sort((a, b) => a - b), [shots]);
   const shown = useMemo(() => (end === "tutte" ? shots : shots.filter((s) => (s.end ?? 0) === end)), [shots, end]);
-  const arrows = useMemo(() => shown.map((shot, index) => arrowOf(shot, index, look)), [shown, look]);
+  const arrows = useMemo(() => shown.map((shot, index) => arrowOf(shot, index, look, picture ? -picture.halfH - 0.015 : null)), [shown, look, picture]);
   const sceneRef = useRef({ face, arrows, picture });
   sceneRef.current = { face, arrows, picture };
   useEffect(() => {
@@ -271,10 +271,10 @@ export function Target3D({ face, shots, picture, look }: { face: Face; shots: Sh
 
 /* ---------- scena ---------- */
 
-type Arrow = { hit: V3; dir: V3; color: string; hen: string; shaft: string; nockColor: string; roll: number; start: V3; arc: number; index: number };
+type Arrow = { hit: V3; dir: V3; color: string; hen: string; shaft: string; nockColor: string; roll: number; start: V3; arc: number; index: number; behind?: boolean };
 
 /** Le frecce hanno i colori dell'attrezzatura dell'utente; un colore per persona solo nella vista di squadra. */
-function arrowOf(shot: Shot, index: number, look?: ArrowLook): Arrow {
+function arrowOf(shot: Shot, index: number, look?: ArrowLook, sagomaGround: number | null = null): Arrow {
   // ogni freccia con i colori della sua serie, se nota; altrimenti quelli dell'assetto
   const L = { ...DEFAULT_LOOK, ...Object.fromEntries(Object.entries(shot.look ?? look ?? {}).filter(([, v]) => v)) } as Required<ArrowLook>;
   const r1 = hash(index * 7 + 1);
@@ -282,6 +282,30 @@ function arrowOf(shot: Shot, index: number, look?: ArrowLook): Arrow {
   const r3 = hash(index * 3 + 11);
   // la freccia entra quasi dritta: un filo inclinata verso il basso e di lato
   const dir = norm([(r1 - 0.5) * 0.12 + shot.x * 0.03, (r2 - 0.5) * 0.08 + 0.05, 1]);
+  // freccia che non prende né paglione né sagoma: passa oltre e scende fino al prato dietro,
+  // seguendo la curva in discesa (non resta sospesa in aria)
+  const off = sagomaGround != null ? Boolean(shot.miss) : Math.abs(shot.x) > 1.2 || Math.abs(shot.y) > 1.2;
+  if (off) {
+    const ground = sagomaGround ?? GROUND;
+    const y0 = -shot.y;
+    const fall = 0.16 + r2 * 0.1; // discesa per unità di distanza
+    const run = Math.min(9, Math.max(0.8, (y0 - ground) / fall));
+    const land: V3 = [shot.x * (1 + run * 0.04), ground + 0.02, -run];
+    const ddir = norm([(r1 - 0.5) * 0.08, fall * 1.4, 1]);
+    return {
+      hit: land,
+      dir: ddir,
+      color: shot.color ?? L.cock,
+      hen: shot.color ? "#f4f1ea" : L.fletch,
+      shaft: L.shaft,
+      nockColor: shot.color ?? L.nock,
+      roll: r3 * Math.PI * 2,
+      start: [shot.x * 0.15 + (r1 - 0.5) * 0.6, 0.5 + r2 * 0.4, 26],
+      arc: 1.1 + r3 * 0.5,
+      index,
+      behind: true,
+    };
+  }
   return {
     hit: [shot.x, -shot.y, 0],
     dir,
@@ -381,21 +405,79 @@ function draw(el: HTMLCanvasElement | null, face: Face, arrows: Arrow[], c: Cam,
     }
   };
 
-  // cielo
+  // cielo con sole basso e nuvole che si spostano appena girando la vista
   const sky = ctx.createLinearGradient(0, 0, 0, h);
-  sky.addColorStop(0, "#7fb6dc");
-  sky.addColorStop(0.55, "#cfe6f3");
-  sky.addColorStop(1, "#e9f1e4");
+  sky.addColorStop(0, "#3f78b5");
+  sky.addColorStop(0.5, "#9cc4e2");
+  sky.addColorStop(1, "#e8efe2");
   ctx.fillStyle = sky;
   ctx.fillRect(0, 0, w, h);
+  const sunX = w * (0.78 - c.yaw * 0.35);
+  const sun = ctx.createRadialGradient(sunX, h * 0.12, 2, sunX, h * 0.12, w * 0.45);
+  sun.addColorStop(0, "rgba(255,248,220,0.85)");
+  sun.addColorStop(0.08, "rgba(255,244,210,0.45)");
+  sun.addColorStop(1, "rgba(255,244,210,0)");
+  ctx.fillStyle = sun;
+  ctx.fillRect(0, 0, w, h);
+  ctx.fillStyle = "rgba(255,255,255,0.55)";
+  for (let i = 0; i < 6; i += 1) {
+    const cx0 = (((i * 0.23 + 0.1 - c.yaw * 0.12) % 1.2) + 1.2) % 1.2;
+    const x = cx0 * w * 1.1 - w * 0.05;
+    const y = h * (0.08 + (i % 3) * 0.07);
+    const r = w * (0.05 + (i % 2) * 0.025);
+    ctx.beginPath();
+    ctx.ellipse(x, y, r * 1.9, r * 0.55, 0, 0, Math.PI * 2);
+    ctx.ellipse(x + r * 0.8, y - r * 0.3, r, r * 0.6, 0, 0, Math.PI * 2);
+    ctx.ellipse(x - r * 0.9, y - r * 0.15, r * 0.9, r * 0.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
 
   // con una sagoma il terreno è ai suoi piedi (niente paglione né cavalletto)
   const G = picture ? -picture.halfH - 0.015 : GROUND;
+  // colline lontane, campo dietro, filare di alberi
+  const hills: V3[] = [[-120, G, -90]];
+  for (let i = 0; i <= 40; i += 1) {
+    const x = -120 + i * 6;
+    hills.push([x, G + 7 + 5 * Math.abs(Math.sin(i * 0.7)) + 3 * Math.sin(i * 0.23), -90]);
+  }
+  hills.push([120, G, -90]);
+  fillPoly(poly(hills), "#7f9fae");
+  fillPoly(poly([[-120, G, -90], [120, G, -90], [120, G, -12], [-120, G, -12]]), "#6d9148");
+  for (let i = 0; i < 46; i += 1) {
+    const x = -46 + i * 2 + (hash(i * 5) - 0.5) * 1.2;
+    const z = -26 - hash(i * 9) * 6;
+    const ht = 3.2 + hash(i * 3) * 2.6;
+    const rad = 1.1 + hash(i * 7) * 0.7;
+    const trunk = poly([[x - 0.12, G, z], [x + 0.12, G, z], [x + 0.12, G + ht * 0.45, z], [x - 0.12, G + ht * 0.45, z]]);
+    fillPoly(trunk, "#4a3826");
+    const crown: V3[] = [];
+    for (let k = 0; k < 14; k += 1) {
+      const a = (k / 14) * Math.PI * 2;
+      crown.push([x + Math.cos(a) * rad, G + ht * 0.62 + Math.sin(a) * rad * 1.15, z]);
+    }
+    fillPoly(poly(crown), i % 3 === 0 ? "#3f6a35" : i % 3 === 1 ? "#4b7a3c" : "#355c2e");
+  }
   // prato a strisce
   for (let i = -6; i < 16; i += 1) {
     const z0 = i * 2;
     const z1 = z0 + 2;
     fillPoly(poly([[-30, G, z0], [30, G, z0], [30, G, z1], [-30, G, z1]]), i % 2 ? "#7aa452" : "#71994b");
+  }
+  // ciuffi d'erba vicino al paglione
+  for (let i = 0; i < 70; i += 1) {
+    const x = (hash(i * 11) - 0.5) * 9;
+    const z = (hash(i * 13) - 0.5) * 6 + 1;
+    const ht = 0.08 + hash(i * 17) * 0.12;
+    const a = screen(view([x, G, z]));
+    const b = screen(view([x + 0.03, G + ht, z]));
+    const vz = view([x, G, z])[2];
+    if (vz <= NEAR) continue;
+    ctx.strokeStyle = i % 2 ? "rgba(70,110,40,0.7)" : "rgba(150,180,90,0.6)";
+    ctx.lineWidth = Math.max(1, w / 500);
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
   }
   // linea di tiro
   fillPoly(poly([[-6, G + 0.002, 18], [6, G + 0.002, 18], [6, G + 0.002, 18.12], [-6, G + 0.002, 18.12]]), "#f4f1ea");
@@ -458,6 +540,36 @@ function draw(el: HTMLCanvasElement | null, face: Face, arrows: Arrow[], c: Cam,
     });
   }
 
+  // paglioni delle corsie vicine: il campo di tiro com'è davvero
+  if (!picture) {
+    for (const nx of [-4.4, 4.4, -8.8, 8.8]) {
+      const front: V3[] = [[nx - B, -B, Z1], [nx + B, -B, Z1], [nx + B, B, Z1], [nx - B, B, Z1]];
+      const side: V3[] = nx > 0 ? [[nx - B, -B, Z0], [nx - B, -B, Z1], [nx - B, B, Z1], [nx - B, B, Z0]] : [[nx + B, -B, Z0], [nx + B, -B, Z1], [nx + B, B, Z1], [nx + B, B, Z0]];
+      const mid: V3 = [nx, 0, Z0];
+      prims.push({
+        depth: depthOf(mid) + 0.01,
+        paint: (g) => {
+          line(g, view([nx - 0.95, -1.05, -0.2]), view([nx - 1.15, GROUND, 0.25]), "#6b4a2b", 0.07, F, NEAR, w, h);
+          line(g, view([nx + 0.95, -1.05, -0.2]), view([nx + 1.15, GROUND, 0.25]), "#6b4a2b", 0.07, F, NEAR, w, h);
+          fillPoly(poly(side), "#a8834e", "rgba(60,40,15,0.35)", 1);
+          if (eye[2] > 0.01) {
+            fillPoly(poly(front), "#cdb07e", "rgba(60,40,15,0.35)", 1);
+            const cols = ["#f4f1ea", "#1a1c1e", "#2a6294", "#c4473d", "#e6b325"];
+            cols.forEach((col, i) => {
+              const rad = 0.9 * (1 - i / 5);
+              const pts: V3[] = [];
+              for (let k = 0; k < 40; k += 1) {
+                const an = (k / 40) * Math.PI * 2;
+                pts.push([nx + Math.cos(an) * rad, Math.sin(an) * rad, 0.002]);
+              }
+              fillPoly(poly(pts), col, "rgba(20,24,28,0.35)", 0.6);
+            });
+          }
+        },
+      });
+    }
+  }
+
   // faccia del bersaglio (la sagoma si vede anche da dietro, scura)
   const facing = eye[2] > 0.01;
   if (picture && !facing) {
@@ -493,6 +605,7 @@ function draw(el: HTMLCanvasElement | null, face: Face, arrows: Arrow[], c: Cam,
         }
         // lampi d'impatto
         for (const arrow of arrows) {
+          if (arrow.behind) continue;
           const s0 = arrow.index * stagger(arrows.length);
           const since = t - s0 - FLY;
           if (since < 0 || since > 0.45) continue;

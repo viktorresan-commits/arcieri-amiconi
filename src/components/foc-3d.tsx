@@ -1,4 +1,4 @@
-import { useEffect, type RefObject } from "react";
+import { useEffect, useState, type MutableRefObject, type RefObject } from "react";
 import { useOrbitGestures, type OrbitView } from "@/lib/arcieri/gestures";
 
 /**
@@ -8,16 +8,16 @@ import { useOrbitGestures, type OrbitView } from "@/lib/arcieri/gestures";
  * - Gittata: la freccia vola sul campo fino al bersaglio; la curva e l'oscillazione in volo
  *   dipendono da peso, libbre e FOC.
  */
-type V = [number, number, number];
-const sub = (a: V, b: V): V => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
-const dot = (a: V, b: V) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-const cross = (a: V, b: V): V => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
-const norm = (a: V): V => {
+export type V = [number, number, number];
+export const sub = (a: V, b: V): V => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+export const dot = (a: V, b: V) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+export const cross = (a: V, b: V): V => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+export const norm = (a: V): V => {
   const l = Math.hypot(a[0], a[1], a[2]) || 1;
   return [a[0] / l, a[1] / l, a[2] / l];
 };
 
-function camera(eye: V, target: V, fovDeg: number, w: number, h: number) {
+export function camera(eye: V, target: V, fovDeg: number, w: number, h: number) {
   const f = norm(sub(target, eye));
   const r = norm(cross(f, [0, 1, 0]));
   const u = cross(r, f);
@@ -30,7 +30,7 @@ function camera(eye: V, target: V, fovDeg: number, w: number, h: number) {
 }
 
 /** Applica alla camera la vista scelta con le dita: giro attorno al centro, inclinazione, zoom, spostamento. */
-function orbit(eye: V, target: V, view: OrbitView): { eye: V; target: V } {
+export function orbit(eye: V, target: V, view: OrbitView): { eye: V; target: V } {
   const d = sub(eye, target);
   const c = Math.cos(view.yaw);
   const s = Math.sin(view.yaw);
@@ -49,7 +49,7 @@ function orbit(eye: V, target: V, view: OrbitView): { eye: V; target: V } {
   return { eye: [t2[0] + nd[0], t2[1] + nd[1], t2[2] + nd[2]], target: t2 };
 }
 
-function useCanvas(draw: (ctx: CanvasRenderingContext2D, w: number, h: number, t: number, view: OrbitView) => void, deps: unknown[]) {
+export function useCanvas(draw: (ctx: CanvasRenderingContext2D, w: number, h: number, t: number, view: OrbitView) => void, deps: unknown[]) {
   const { ref, view } = useOrbitGestures<HTMLCanvasElement>();
   useEffect(() => {
     const cv = ref.current;
@@ -59,7 +59,16 @@ function useCanvas(draw: (ctx: CanvasRenderingContext2D, w: number, h: number, t
     const reduce = typeof matchMedia !== "undefined" && (matchMedia("(prefers-reduced-motion: reduce)").matches || document.documentElement.dataset.motion === "ridotta");
     let raf = 0;
     const t0 = performance.now();
+    let last = t0;
     const frame = (now: number) => {
+      // «Gira»: la camera fa il giro della scena e la freccia ruota sul suo asse
+      const dt = Math.min(0.1, (now - last) / 1000);
+      last = now;
+      if (view.current.auto) {
+        view.current.yaw += dt * 0.55;
+        view.current.spin += dt * 9;
+        view.current.touched = true;
+      }
       const dpr = Math.min(2, window.devicePixelRatio || 1);
       const w = cv.clientWidth;
       const h = cv.clientHeight;
@@ -76,13 +85,16 @@ function useCanvas(draw: (ctx: CanvasRenderingContext2D, w: number, h: number, t
     return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
-  return ref;
+  return { ref, view };
 }
+
+/** Colori della freccia nel 3D. */
+export type Arrow3DLook = { shaft?: string; fletch?: string; cock?: string; nock?: string };
 
 const FLETCH = "#d63a2f";
 
 /** Freccia 3D: asta lungo una direzione, tre penne che girano attorno all'asta, punta e cocca. */
-function drawArrow(ctx: CanvasRenderingContext2D, P: ReturnType<typeof camera>, nock: V, dir: V, len: number, spin: number, radius = 0.022) {
+export function drawArrow(ctx: CanvasRenderingContext2D, P: ReturnType<typeof camera>, nock: V, dir: V, len: number, spin: number, radius = 0.022, look: Arrow3DLook = {}) {
   const d = norm(dir);
   // due vettori perpendicolari all'asta per le penne
   const a = norm(Math.abs(d[1]) < 0.9 ? cross(d, [0, 1, 0]) : cross(d, [1, 0, 0]));
@@ -98,7 +110,7 @@ function drawArrow(ctx: CanvasRenderingContext2D, P: ReturnType<typeof camera>, 
     const ang = spin + (i * 2 * Math.PI) / 3;
     const quad = [at(len * 0.04), at(len * 0.16), at(len * 0.13, len * 0.055, ang), at(len * 0.06, len * 0.05, ang)].map(P);
     const depth = P(at(len * 0.1, len * 0.04, ang)).z;
-    return { quad, depth, lit: 0.6 + 0.4 * Math.cos(ang - 0.8) };
+    return { quad, depth, lit: 0.6 + 0.4 * Math.cos(ang - 0.8), cock: i === 0 };
   });
   const mid = P(at(len * 0.1)).z;
   const back = vanes.filter((v) => v.depth >= mid);
@@ -107,7 +119,7 @@ function drawArrow(ctx: CanvasRenderingContext2D, P: ReturnType<typeof camera>, 
     ctx.beginPath();
     v.quad.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
     ctx.closePath();
-    ctx.fillStyle = FLETCH;
+    ctx.fillStyle = v.cock ? look.cock || look.fletch || FLETCH : look.fletch || FLETCH;
     ctx.globalAlpha = 0.55 + 0.45 * v.lit;
     ctx.fill();
     ctx.globalAlpha = 1;
@@ -115,7 +127,7 @@ function drawArrow(ctx: CanvasRenderingContext2D, P: ReturnType<typeof camera>, 
   back.forEach(paintVane);
   const wpx = Math.max(1.5, radius * 2 * ((n0.k + n1.k) / 2));
   ctx.lineCap = "round";
-  ctx.strokeStyle = "#15191d";
+  ctx.strokeStyle = look.shaft || "#15191d";
   ctx.lineWidth = wpx;
   ctx.beginPath();
   ctx.moveTo(n0.x, n0.y);
@@ -137,7 +149,7 @@ function drawArrow(ctx: CanvasRenderingContext2D, P: ReturnType<typeof camera>, 
   ctx.stroke();
   // cocca
   const c1 = P(at(len * 0.035));
-  ctx.strokeStyle = "#f2c94c";
+  ctx.strokeStyle = look.nock || "#f2c94c";
   ctx.lineWidth = wpx * 1.25;
   ctx.beginPath();
   ctx.moveTo(n0.x, n0.y);
@@ -149,8 +161,8 @@ function drawArrow(ctx: CanvasRenderingContext2D, P: ReturnType<typeof camera>, 
 const ease = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x * x * (3 - 2 * x));
 
 /** Equilibrio: L = lunghezza, B = punto di equilibrio dalla cocca (stesse unità). */
-export function FocBalance3D({ L, B, foc }: { L: number; B: number; foc: number }) {
-  const ref = useCanvas(
+export function FocBalance3D({ L, B, foc, look = {} }: { L: number; B: number; foc: number; look?: Arrow3DLook }) {
+  const { ref, view: orbitRef } = useCanvas(
     (ctx, w, h, time, view) => {
       const cycle = 6.5;
       const t = time % cycle;
@@ -232,7 +244,7 @@ export function FocBalance3D({ L, B, foc }: { L: number; B: number; foc: number 
       const rot = (x: number): V => [fx + (x - fx) * Math.cos(ang), r + (x - fx) * Math.sin(ang), 0];
       const nock = rot(-1);
       const tip = rot(1);
-      drawArrow(ctx, P, nock, sub(tip, nock), 2, time * 0.6, 0.026);
+      drawArrow(ctx, P, nock, sub(tip, nock), 2, time * 0.6 + view.spin, 0.026, look);
       // segni: metà e punto di equilibrio
       const mark = (x: number, color: string, label: string, up: number) => {
         const p = rot(x);
@@ -269,14 +281,14 @@ export function FocBalance3D({ L, B, foc }: { L: number; B: number; foc: number 
         ctx.globalAlpha = 1;
       }
     },
-    [L, B, foc],
+    [L, B, foc, look.fletch, look.shaft, look.cock, look.nock],
   );
-  return <Stage3D canvasRef={ref} className="h-56" label="Animazione 3D del punto di equilibrio" />;
+  return <Stage3D canvasRef={ref} view={orbitRef} className="h-56" label="Animazione 3D del punto di equilibrio" />;
 }
 
 /** Gittata: distanza in metri, velocità in m/s, FOC in %. */
-export function FocFlight3D({ distance, speed, foc }: { distance: number; speed: number; foc: number }) {
-  const ref = useCanvas(
+export function FocFlight3D({ distance, speed, foc, look = {} }: { distance: number; speed: number; foc: number; look?: Arrow3DLook }) {
+  const { ref, view: orbitRef } = useCanvas(
     (ctx, w, h, time, view) => {
       const g = 9.81;
       const D = distance;
@@ -420,7 +432,7 @@ export function FocFlight3D({ distance, speed, foc }: { distance: number; speed:
       const len = 0.9 * big;
       const tipPos: V = [0, yAt(u), zAt(u)];
       const nock: V = [tipPos[0] - dWob[0] * len, tipPos[1] - dWob[1] * len, tipPos[2] - dWob[2] * len];
-      drawArrow(ctx, P, nock, dWob, len, time * 9, 0.03 * big);
+      drawArrow(ctx, P, nock, dWob, len, time * 9 + view.spin, 0.03 * big, look);
       if (ex > 1.05) {
         ctx.fillStyle = "rgba(255,255,255,0.5)";
         ctx.font = "10px system-ui, sans-serif";
@@ -437,9 +449,9 @@ export function FocFlight3D({ distance, speed, foc }: { distance: number; speed:
         ctx.stroke();
       }
     },
-    [distance, speed, foc],
+    [distance, speed, foc, look.fletch, look.shaft, look.cock, look.nock],
   );
-  return <Stage3D canvasRef={ref} className="h-60" label="Animazione 3D del volo della freccia" />;
+  return <Stage3D canvasRef={ref} view={orbitRef} className="h-60" label="Animazione 3D del volo della freccia" />;
 }
 
 /** Velocità stimata (m/s) da libbre e peso della freccia: arco tradizionale/ricurvo, resa ~75%. */
@@ -452,11 +464,25 @@ export function estimateSpeed(lb: number, grains: number) {
 }
 
 /** Tela 3D con l'aiuto dei gesti: un dito gira, due dita ingrandiscono e spostano, doppio tocco ripristina. */
-function Stage3D({ canvasRef, className, label }: { canvasRef: RefObject<HTMLCanvasElement | null>; className: string; label: string }) {
+export function Stage3D({ canvasRef, view, className, label }: { canvasRef: RefObject<HTMLCanvasElement | null>; view: MutableRefObject<OrbitView>; className: string; label: string }) {
+  const [spinning, setSpinning] = useState(false);
   return (
     <div className="aa-3d-wrap">
       <canvas ref={canvasRef} className={`aa-3d block w-full rounded-2xl ${className}`} style={{ touchAction: "none" }} aria-label={`${label}: trascina per ruotare, due dita per ingrandire e spostare, doppio tocco per ripristinare`} />
-      <span className="pointer-events-none absolute bottom-1.5 left-2 rounded-full bg-black/45 px-2 py-0.5 text-[0.62rem] text-white/80">Trascina per girare · due dita zoom · doppio tocco ripristina</span>
+      <button
+        type="button"
+        aria-pressed={spinning}
+        onClick={() => {
+          const next = !spinning;
+          view.current.auto = next;
+          setSpinning(next);
+        }}
+        className={`absolute bottom-1.5 right-2 flex min-h-9 items-center gap-1.5 rounded-full px-3 text-xs font-semibold backdrop-blur ${spinning ? "bg-[#7cf0a8] text-[#0b120e]" : "bg-black/55 text-white"}`}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden className={spinning ? "aa-spin-fast" : undefined}><path d="M20 12a8 8 0 1 1-2.3-5.6" /><path d="M20 4v4h-4" /></svg>
+        {spinning ? "Ferma" : "Gira"}
+      </button>
+      <span className="pointer-events-none absolute bottom-2 left-2 max-w-[62%] rounded-full bg-black/45 px-2 py-0.5 text-[0.6rem] leading-tight text-white/80">Trascina: gira · due dita: zoom · doppio tocco: ripristina</span>
     </div>
   );
 }
