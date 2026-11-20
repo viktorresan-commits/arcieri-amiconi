@@ -161,7 +161,7 @@ export function drawTrees(g: GL3D, D: number, seed = 1) {
 }
 
 /** Paglione su cavalletto con la visuale. `R` raggio della visuale, `k` ingrandimento della scena. */
-export function drawBoss(g: GL3D, cx: number, gH: number, D: number, R: number, k: number, zones: number) {
+export function drawBoss(g: GL3D, cx: number, gH: number, D: number, R: number, k: number, zones: number, tex?: WebGLTexture) {
   const boss = R + 0.14 * k;
   const depth = 0.32 * k;
   // cavalletto
@@ -174,7 +174,7 @@ export function drawBoss(g: GL3D, cx: number, gH: number, D: number, R: number, 
   // paglia
   g.draw("box", trs([cx, gH, D + depth / 2], 0, [boss * 2, boss * 2, depth]), [1, 1, 1], { tex: strawTex(g), shine: 0.05 });
   // visuale appena davanti
-  g.draw("disc", trs([cx, gH, D - 0.004 * k], 0, [R, R, 1]), [1, 1, 1], { tex: faceTex(g, zones), shine: 0.08 });
+  g.draw("disc", trs([cx, gH, D - 0.004 * k], 0, [R, R, 1]), [1, 1, 1], { tex: tex ?? faceTex(g, zones), shine: 0.08 });
   g.shadow([cx + 0.3 * k, 0, D + depth * 1.6], boss * 1.4, depth * 3.5, 0.32);
 }
 
@@ -409,4 +409,40 @@ export function drawArrow3D(g: GL3D, nock: Vec3, dir: Vec3, len: number, spin: n
     g.draw("cone", segment(at(0.975), at(1.0), r * 1.04), "#d8dde2", metal);
     g.draw("sphere", trs(at(0.975), 0, [r * 1.04, r * 1.04, r * 1.04]), "#c9ced4", metal);
   }
+}
+
+/** Texture della visuale dagli anelli veri del bersaglio (WA, campagna, 3D schematico...). */
+export function ringsTexture(g: GL3D, id: string, rings: { outer: number; fill: string }[]) {
+  return g.once(`rings-${id}`, () =>
+    g.textureFrom(
+      canvasTexture(512, (c, s) => {
+        const R = s / 2;
+        c.fillStyle = "#f4f1ea";
+        c.fillRect(0, 0, s, s);
+        for (const ring of [...rings].sort((a, b) => b.outer - a.outer)) {
+          c.fillStyle = ring.fill;
+          c.beginPath();
+          c.arc(R, R, ring.outer * R, 0, Math.PI * 2);
+          c.fill();
+          c.strokeStyle = ring.fill === "#1a1c1e" ? "rgba(244,241,234,0.7)" : "rgba(20,24,28,0.5)";
+          c.lineWidth = 1.5;
+          c.stroke();
+        }
+        c.strokeStyle = "rgba(20,24,28,0.75)";
+        c.beginPath();
+        c.moveTo(R - 7, R);
+        c.lineTo(R + 7, R);
+        c.moveTo(R, R - 7);
+        c.lineTo(R, R + 7);
+        c.stroke();
+        const r = rand(5);
+        for (let i = 0; i < 1500; i += 1) {
+          c.fillStyle = `rgba(0,0,0,${r() * 0.05})`;
+          c.fillRect(r() * s, r() * s, 1.5, 1.5);
+        }
+      }),
+      true,
+      false,
+    ),
+  );
 }

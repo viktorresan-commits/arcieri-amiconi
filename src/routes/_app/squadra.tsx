@@ -1,4 +1,5 @@
 import { removeTeamMember } from "@/lib/arcieri/account.api";
+import { TargetGL } from "@/components/target-gl";
 import { useMemo, useState } from "react";
 import { Podium } from "@/components/podium";
 import { useTeamAvatars } from "@/components/avatar-hero";
@@ -10,7 +11,6 @@ import { useLoad } from "@/lib/arcieri/use-load";
 import { ANIMALS, animalByLabel } from "@/lib/arcieri/sagome";
 import { DistBars, MultiBars, useThemeInk } from "@/components/charts";
 import { SagomaLab } from "@/components/sagoma-lab";
-import { Target3D } from "@/components/target-3d";
 import { faceById } from "@/lib/arcieri/scoring";
 
 const TEAM_FACE = faceById("wa10");
@@ -144,7 +144,7 @@ function Page() {
         ) : look === "tre" && dots.length ? (
           <div className="grid gap-2">
             <Segmented value={look} onChange={setLook} options={[{ id: "tre", label: "3D animato" }, { id: "mappa", label: "Mappa" }]} />
-            <Target3D face={TEAM_FACE} shots={dots.slice(-180).map((d) => ({ x: d.nx, y: d.ny, color: d.color }))} />
+            <TargetGL face={TEAM_FACE} shots={dots.slice(-180).map((d) => ({ x: d.nx, y: d.ny, color: d.color }))} />
           </div>
         ) : (
           <>

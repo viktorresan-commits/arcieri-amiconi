@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { TargetGL } from "@/components/target-gl";
 import { animalByLabel } from "@/lib/arcieri/sagome";
 import { faceById } from "@/lib/arcieri/scoring";
-import { Target3D, type Picture } from "@/components/target-3d";
+import { type Picture } from "@/components/target-3d";
 
 type SagomaShot = { score: number; miss?: boolean; nx: number | null; ny: number | null; end?: number };
 
@@ -46,7 +47,7 @@ export function SagomaLab({ animal, shots, title, initial = "mappa" }: { animal:
         <button type="button" onClick={() => setView("mappa")} className={`min-h-10 rounded-full px-3 text-sm ${view === "mappa" ? "bg-primary text-primary-fg" : "border border-line"}`}>Mappa termica</button>
         <button type="button" onClick={() => setView("tre")} className={`min-h-10 rounded-full px-3 text-sm ${view === "tre" ? "bg-primary text-primary-fg" : "border border-line"}`}>Vista 3D</button>
       </div>
-      {view === "mappa" ? <SagomaHeat img={img} shots={placed} /> : picture ? <Target3D face={faceById("sagoma11")} shots={shots3d} picture={picture} /> : <p className="text-sm text-muted">Carico la sagoma…</p>}
+      {view === "mappa" ? <SagomaHeat img={img} shots={placed} /> : picture ? <TargetGL face={faceById("sagoma11")} shots={shots3d} picture={picture} /> : <p className="text-sm text-muted">Carico la sagoma…</p>}
       <div className="grid grid-cols-3 gap-2 text-center">
         <Stat k="Frecce" v={String(shots.length)} />
         <Stat k="Punti" v={String(total)} />

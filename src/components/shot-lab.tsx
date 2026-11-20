@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { TargetGL } from "@/components/target-gl";
 import { ringPoint, scoreAtRadius, type Face } from "@/lib/arcieri/scoring";
 import { Card } from "@/components/kit";
 import { PoseRead } from "@/components/pose-read";
-import { Target3D, lookOf } from "@/components/target-3d";
+import { lookOf } from "@/components/target-3d";
 import { TargetRead } from "@/components/target-read";
 
 type Point = { nx: number | null; ny: number | null; score: number; isX?: boolean; miss?: boolean; arrow: number; end: number; set?: number | null };
@@ -51,7 +52,7 @@ export function ShotLab({
       {view === "corpo" ? <PoseRead /> : null}
       {view !== "corpo" && placed.length < 2 ? <p className="text-sm text-muted">Servono almeno due frecce sul bersaglio.</p> : null}
       {view === "mappa" ? <Heat face={face} shots={placed} /> : null}
-      {view === "tre" ? <Target3D face={face} shots={placed3d} look={look} /> : null}
+      {view === "tre" ? <TargetGL face={face} shots={placed3d} look={look} /> : null}
       {view === "corpo" ? null : (
       <>
       <div className="grid grid-cols-3 gap-2 text-sm">
