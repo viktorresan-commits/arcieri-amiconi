@@ -39,7 +39,7 @@ export const Route = createRootRoute({
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `try{var ink=localStorage.getItem("aa-ink")||"verde";document.documentElement.dataset.ink=ink}catch(e){}`,
+            __html: `try{var d=document.documentElement,ink=localStorage.getItem("aa-ink")||"verde",p=JSON.parse(localStorage.getItem("aa-prefs-v1")||"{}");d.dataset.ink=ink;d.dataset.icons=p.icons||"tema";d.dataset.motion=p.motion||"piena"}catch(e){}`,
           }}
         />
         <style

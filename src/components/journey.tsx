@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { WEEK_GOALS, usePrefs } from "@/lib/arcieri/prefs";
 import { AppIcon, Glyph } from "./icons";
 
 /**
@@ -7,8 +8,6 @@ import { AppIcon, Glyph } from "./icons";
  */
 
 const LEVELS = ["Novizio", "Apprendista", "Arciere", "Tiratore", "Esperto", "Veterano", "Maestro", "Campione", "Leggenda"];
-const GOALS = [60, 120, 200, 300, 450];
-const GOAL_KEY = "aa-week-goal";
 
 /** Frecce necessarie per raggiungere il livello n (0 = Novizio): crescono a gradini. */
 const need = (n: number) => 150 * n * (n + 1);
@@ -22,15 +21,10 @@ function levelOf(arrows: number) {
 }
 
 export function JourneyCard({ totalArrows, weekArrows, streak }: { totalArrows: number; weekArrows: number; streak: number }) {
-  const [goal, setGoal] = useState(120);
+  const { prefs, update } = usePrefs();
+  const goal = prefs.weekGoal;
   const [shown, setShown] = useState(0);
   useEffect(() => {
-    try {
-      const g = Number(localStorage.getItem(GOAL_KEY));
-      if (GOALS.includes(g)) setGoal(g);
-    } catch {
-      /* niente memoria: resta il predefinito */
-    }
     const t = window.setTimeout(() => setShown(1), 120);
     return () => window.clearTimeout(t);
   }, []);
@@ -38,16 +32,7 @@ export function JourneyCard({ totalArrows, weekArrows, streak }: { totalArrows: 
   const week = Math.min(1, weekArrows / goal);
   const r = 30;
   const c = 2 * Math.PI * r;
-  const nextGoal = () => {
-    const g = GOALS[(GOALS.indexOf(goal) + 1) % GOALS.length];
-    setGoal(g);
-    try {
-      localStorage.setItem(GOAL_KEY, String(g));
-    } catch {
-      /* ignorato */
-    }
-    if (navigator.vibrate) navigator.vibrate(8);
-  };
+  const nextGoal = () => update({ weekGoal: WEEK_GOALS[(WEEK_GOALS.indexOf(goal) + 1) % WEEK_GOALS.length] });
   return (
     <section className="aa-journey relative overflow-hidden rounded-[var(--radius-card)] border border-hair p-3.5">
       <div className="flex items-center justify-between">

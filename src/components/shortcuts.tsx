@@ -1,6 +1,6 @@
 import { useState, type CSSProperties } from "react";
 import { Link } from "@tanstack/react-router";
-import { SHORTCUTS, TIPS, shortcutById, usePinned, type Shortcut } from "@/lib/arcieri/shortcuts";
+import { SHORTCUTS, STATIONS, TIPS, shortcutById, usePinned, type Shortcut } from "@/lib/arcieri/shortcuts";
 import { cx } from "./kit";
 import { AppIcon, Glyph } from "./icons";
 
@@ -111,5 +111,50 @@ export function TipCard() {
       </span>
       <Glyph name="chevron" size={16} className="ml-auto shrink-0 self-center text-muted" />
     </button>
+  );
+}
+
+/** Mappa del percorso: cinque tappe in fila, collegate da un sentiero, con le loro sezioni. */
+export function PathMap({ onPick, current }: { onPick?: () => void; current?: string }) {
+  return (
+    <ol className="relative grid gap-3">
+      <span aria-hidden className="aa-trail absolute bottom-6 left-[21px] top-6 w-[3px] rounded-full" />
+      {STATIONS.map((st, si) => {
+        const items = SHORTCUTS.filter((s) => s.group === st.id);
+        const here = items.some((s) => current && s.to !== "/" && current.startsWith(s.to));
+        return (
+          <li key={st.id} className="aa-station relative grid grid-cols-[46px_1fr] gap-2" style={{ animationDelay: `${si * 90}ms` }}>
+            <span className="relative z-[1] grid h-[46px] w-[46px] place-items-center">
+              <AppIcon name={st.icon} color={st.color} size={42} />
+              <span className="absolute -right-1 -top-1 grid h-5 w-5 place-items-center rounded-full border-2 border-bg bg-fg text-[0.6rem] font-bold text-bg">{si + 1}</span>
+            </span>
+            <div className={cx("min-w-0 rounded-2xl border p-2.5", here ? "border-primary/60 bg-primary/10" : "border-hair bg-white/[0.03]")}>
+              <div className="mb-2 flex items-baseline justify-between gap-2">
+                <p className="text-sm font-bold tracking-wide">{st.title}</p>
+                <p className="truncate text-[0.66rem] text-muted">{here ? "sei qui" : st.sub}</p>
+              </div>
+              <div className="grid grid-cols-4 gap-x-1 gap-y-2.5">
+                {items.map((s, i) => (
+                  <Link
+                    key={s.id}
+                    to={s.to as "/"}
+                    search={(s.search ?? {}) as never}
+                    onClick={() => {
+                      if (navigator.vibrate) navigator.vibrate(8);
+                      onPick?.();
+                    }}
+                    className="aa-short grid justify-items-center gap-1 text-center"
+                    style={{ animationDelay: `${si * 90 + i * 35}ms` }}
+                  >
+                    <AppIcon name={s.icon} color={s.color} size={44} className="aa-short-icon" />
+                    <span className="w-full truncate text-[0.64rem] font-semibold leading-tight">{s.label}</span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </li>
+        );
+      })}
+    </ol>
   );
 }

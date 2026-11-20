@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
-import { deleteEquipment, deleteSetup, listEquipment, listSetups, saveEquipment, saveSetup } from "@/lib/arcieri/club.api";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { deleteEquipment, deleteSetup, gearStats, listEquipment, listSetups, saveEquipment, saveSetup } from "@/lib/arcieri/club.api";
+import { arrowAdvice, bowAdvice } from "@/lib/arcieri/gear-advice";
+import { AppIcon, Glyph } from "@/components/icons";
 import { CATEGORIES, categoryLabel, euro, parseEuro } from "@/lib/arcieri/labels";
 import { useLoad } from "@/lib/arcieri/use-load";
 import { Button, Card, Empty, ErrorNote, Field, Loading, PageHead, Select, TextArea, TextInput } from "@/components/kit";
-import { FlightSim } from "@/components/flight-sim";
 import { ARROW_USE, BOW_TYPES, FLETCH_TYPES, POINT_TYPES, SHAFT_MATERIALS, SWATCHES, ArrowIcon, BowIcon, CategoryIcon } from "@/components/gear-icons";
 
 export const Route = createFileRoute("/_app/attrezzatura")({ component: Page });
@@ -29,6 +30,9 @@ function Page() {
   const [nonce, setNonce] = useState(0);
   const gear = useLoad(`g-${nonce}`, () => listEquipment());
   const setups = useLoad(`s-${nonce}`, () => listSetups());
+  const stats = useLoad(`gs-${nonce}`, () => gearStats());
+  const statOf = (id: number) => (stats.data ?? []).find((x) => x.id === id);
+  const mainBow = (gear.data ?? []).find((g) => g.mine && g.category === "arco" && g.status === "in_use") ?? (gear.data ?? []).find((g) => g.mine && g.category === "arco") ?? null;
   const [form, setForm] = useState<Form>(EMPTY);
   const [open, setOpen] = useState(false);
   const [setup, setSetup] = useState({ name: "", bowId: "", arrowId: "", stringNote: "" });
@@ -161,6 +165,9 @@ function Page() {
           <option value="unused">Non usato</option>
         </Select>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.visibility === "group"} onChange={(e) => setForm({ ...form, visibility: e.target.checked ? "group" : "personal" })} /> Inventario del gruppo</label>
+        {form.category === "arco" || form.category === "freccia" ? (
+          <Advice lines={form.category === "arco" ? bowAdvice(form.specs) : arrowAdvice(form.specs, mainBow?.specs)} />
+        ) : null}
         {err ? <ErrorNote text={err} /> : null}
         <Button onClick={save}>{form.id ? "Salva le modifiche" : "Aggiungi"}</Button>
       </Card>
@@ -211,6 +218,21 @@ function Page() {
                   </div>
                 </>
               ) : null}
+              {(() => {
+                const st = statOf(item.id);
+                return st && st.arrows ? (
+                  <div className="grid grid-cols-3 gap-1.5 text-center">
+                    <span className="rounded-lg bg-white/[0.05] px-1 py-1"><b className="block font-display text-base tabular-nums">{st.arrows.toLocaleString("it-IT")}</b><span className="text-[0.6rem] uppercase tracking-wider text-muted">frecce</span></span>
+                    <span className="rounded-lg bg-white/[0.05] px-1 py-1"><b className="block font-display text-base tabular-nums">{st.avg.toFixed(2).replace(".", ",")}</b><span className="text-[0.6rem] uppercase tracking-wider text-muted">media</span></span>
+                    <span className="rounded-lg bg-white/[0.05] px-1 py-1"><b className="block font-display text-base tabular-nums">{st.sessions}</b><span className="text-[0.6rem] uppercase tracking-wider text-muted">uscite</span></span>
+                  </div>
+                ) : item.mine && (item.category === "arco" || item.category === "freccia") ? (
+                  <p className="text-[0.7rem] text-muted">Statistiche dopo il primo allenamento con una configurazione che lo usa.</p>
+                ) : null;
+              })()}
+              {item.mine && (item.category === "arco" || item.category === "freccia") ? (
+                <Advice compact lines={item.category === "arco" ? bowAdvice(sp) : arrowAdvice(sp, mainBow && mainBow.id !== item.id ? mainBow.specs : null)} />
+              ) : null}
               {item.mine ? (
                 <div className="flex gap-3 text-xs">
                   <button type="button" className="font-semibold text-primary" onClick={() => edit(item)}>Modifica</button>
@@ -236,7 +258,24 @@ function Page() {
         <Button variant="primary" onClick={() => saveSetup({ data: { name: setup.name, bowId: setup.bowId || null, arrowId: setup.arrowId || null, stringNote: setup.stringNote, notes: "" } }).then(reload)}>Salva configurazione</Button>
         <ul className="text-sm">{(setups.data ?? []).map((s) => <li key={s.id} className="flex justify-between py-1">{s.name} <button type="button" className="text-danger" onClick={() => deleteSetup({ data: { id: s.id } }).then(reload)}>togli</button></li>)}</ul>
       </Card>
-      <FlightSim />
+      <Link to="/balistica" className="aa-press flex items-center gap-3 rounded-[var(--radius-card)] border border-hair bg-white/[0.04] p-3">
+        <AppIcon name="ballistics" color="#cc4f3b" size={44} />
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold">Balistica con la tua attrezzatura</span>
+          <span className="block text-[0.72rem] text-muted">Composizioni pronte e dai tuoi archi e frecce, parabola e dove mirare.</span>
+        </span>
+        <Glyph name="chevron" size={16} className="text-muted" />
+      </Link>
+    </div>
+  );
+}
+
+function Advice({ lines, compact = false }: { lines: string[]; compact?: boolean }) {
+  if (!lines.length) return null;
+  return (
+    <div className={`grid gap-1 rounded-xl border border-[#7cf0a8]/25 bg-[#7cf0a8]/[0.05] ${compact ? "p-2" : "p-2.5"}`}>
+      <p className="flex items-center gap-1.5 text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-[#7cf0a8]"><Glyph name="sparkle" size={13} />Consiglio</p>
+      {(compact ? lines.slice(0, 2) : lines).map((l) => <p key={l} className="text-[0.76rem] leading-snug">{l}</p>)}
     </div>
   );
 }

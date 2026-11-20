@@ -1346,3 +1346,32 @@ export const listGadgets = createServerFn({ method: "GET" })
     };
   });
 
+
+/** Quanto è stato usato ogni attrezzo: uscite, frecce e media, passando dalle configurazioni. */
+export const gearStats = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    const sql = await db();
+    const rows = await sql<{ id: number; sessions: number; arrows: number; points: number; last: unknown }>`
+      select eq.id,
+        count(distinct s.id)::int as sessions,
+        count(sh.id)::int as arrows,
+        coalesce(sum(sh.score), 0)::int as points,
+        max(s.started_at) as last
+      from equipment eq
+      join setups su on su.user_id = ${context.userId} and (su.bow_id = eq.id or su.arrow_id = eq.id)
+      join sessions s on s.setup_id = su.id and s.user_id = ${context.userId}
+      left join shots sh on sh.session_id = s.id
+      where eq.user_id = ${context.userId}
+      group by eq.id`;
+    return rows.map((r) => {
+      const arrows = Number(r.arrows) || 0;
+      return {
+        id: Number(r.id),
+        sessions: Number(r.sessions) || 0,
+        arrows,
+        avg: arrows ? (Number(r.points) || 0) / arrows : 0,
+        last: r.last ? new Date(String(r.last)).toISOString().slice(0, 10) : "",
+      };
+    });
+  });

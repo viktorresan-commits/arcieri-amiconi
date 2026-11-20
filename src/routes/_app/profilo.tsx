@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { authClient } from "@/lib/auth/client";
 import { UserButton } from "@/lib/auth/gates";
@@ -15,6 +15,8 @@ import { saveFile } from "@/lib/arcieri/native";
 import { Trasloco } from "@/components/trasloco";
 import { GestureGallery } from "@/components/gesture-gallery";
 import { Migrazione } from "@/components/migrazione";
+import { PersonalizePanel } from "@/components/personalize";
+import { IconTitle } from "@/components/icons";
 import { ClaimCard, InviteCard, ResetCard, TeamAdmin } from "@/components/profile-tools";
 
 export const Route = createFileRoute("/_app/profilo")({ component: Page });
@@ -64,13 +66,27 @@ function Page() {
     await signOut(`/login?utente=${encodeURIComponent(email)}`);
   }
 
+  // salvataggio automatico: poco dopo l'ultima modifica, senza pulsanti né messaggi
+  const touched = useRef(false);
+  const [autoState, setAutoState] = useState<"" | "busy" | "err">("");
+  useEffect(() => {
+    if (!touched.current) return;
+    const t = window.setTimeout(() => {
+      setAutoState("busy");
+      saveProfile()
+        .then(() => setAutoState(""))
+        .catch(() => setAutoState("err"));
+    }, 900);
+    return () => window.clearTimeout(t);
+  }, [given, family, nick, bow, bio, joined, flags]);
+
   async function saveProfile() {
     await updateMember({ data: { givenName: given, familyName: family, nickname: nick, bowType: bow, bio, joinedOn: joined, ...flags } });
     const shown = nick.trim() || given.trim() || family.trim() || me.email || "";
     if (me.email) rememberAccount({ email: me.email, name: shown });
     await authClient.updateUser({ name: given.trim() || shown }).catch(() => undefined);
     setAccounts(savedAccounts());
-    setMsg("Profilo aggiornato.");
+    touched.current = false;
     reload();
   }
 
@@ -168,6 +184,7 @@ function Page() {
         </div>
       </Card>
       <Card className="grid gap-3">
+        <div className="grid gap-3" onChangeCapture={() => { touched.current = true; }}>
         {me.photoUrl ? <img src={me.photoUrl} alt="" className="h-20 w-20 rounded-full object-cover" /> : null}
         <Field label="Foto"><TextInput type="file" accept="image/*" onChange={(e) => { const f = e.target.files?.[0]; if (f) void photo(f).catch((err: unknown) => setMsg(err instanceof Error ? err.message : "Foto non salvata")); }} /></Field>
         <Field label="Nome"><TextInput value={given} onChange={(e) => setGiven(e.target.value)} /></Field>
@@ -185,7 +202,8 @@ function Page() {
           </label>
         ))}
         {msg ? <ErrorNote text={msg} /> : null}
-        <Button onClick={() => void saveProfile().catch((e: unknown) => setMsg(e instanceof Error ? e.message : "Errore"))}>Salva profilo</Button>
+        </div>
+        <p className="text-[0.7rem] text-muted">{autoState === "busy" ? "…" : autoState === "err" ? "Non salvato: controlla la rete." : ""}</p>
       </Card>
       <Card className="grid gap-2">
         <h2 className="font-display text-2xl">Password</h2>
@@ -198,6 +216,10 @@ function Page() {
         <Button variant="ghost" onClick={() => void downloadJson()}>Scarica JSON</Button>
         <Button variant="ghost" onClick={() => void downloadPdf()}>Scarica report PDF</Button>
         <div className="pt-2"><UserButton /></div>
+      </Card>
+      <Card className="grid gap-1">
+        <IconTitle icon="palette" color="#7652d1" sub="Ogni scelta si salva da sola.">Personalizza</IconTitle>
+        <PersonalizePanel />
       </Card>
       <Migrazione myEmail={me.email} />
       <InviteCard />

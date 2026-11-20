@@ -8,6 +8,7 @@ import { useLoad } from "@/lib/arcieri/use-load";
 import { HeroTarget } from "@/components/hero-target";
 import { ShortcutRow, TipCard } from "@/components/shortcuts";
 import { JourneyCard } from "@/components/journey";
+import { usePrefs } from "@/lib/arcieri/prefs";
 import { Glyph } from "@/components/icons";
 import { ArrowArt } from "@/components/arrow-art";
 import { Button, Card, Empty, ErrorNote, HoldDelete, Loading, cx } from "@/components/kit";
@@ -62,6 +63,7 @@ function Rise({ i, className, children }: { i: number; className?: string; child
 function Home() {
   const [nonce, setNonce] = useState(0);
   const { data, error, loading } = useLoad(`dash-${nonce}`, () => dashboard());
+  const { prefs } = usePrefs();
   const notes = useLoad(`notes-${nonce}`, () => openNotes());
   if (loading) return <Loading />;
   if (error) return <ErrorNote text={error} />;
@@ -97,24 +99,30 @@ function Home() {
           </div>
         </div>
       </Rise>
-      <Rise i={1}>
-        <ShortcutRow />
-      </Rise>
-      <Rise i={2}>
-        <JourneyCard totalArrows={data.all.arrows} weekArrows={data.weekArrows} streak={data.streak} />
-      </Rise>
-      <Rise i={2}>
-        <TipCard />
-      </Rise>
-      <div className="grid grid-cols-3 gap-2">
+      {prefs.home.shortcuts ? (
+        <Rise i={1}>
+          <ShortcutRow />
+        </Rise>
+      ) : null}
+      {prefs.home.journey ? (
+        <Rise i={2}>
+          <JourneyCard totalArrows={data.all.arrows} weekArrows={data.weekArrows} streak={data.streak} />
+        </Rise>
+      ) : null}
+      {prefs.home.tips ? (
+        <Rise i={2}>
+          <TipCard />
+        </Rise>
+      ) : null}
+      {prefs.home.numbers ? <div className="grid grid-cols-3 gap-2">
         <Rise i={2}><Link to="/statistiche" className="block"><Meter label="Media mese" value={data.month.arrows ? data.month.avg : null} digits={2} color="#e0b15a" /></Link></Rise>
         <Rise i={3}><Link to="/statistiche" className="block"><Meter label="Precisione" value={data.all.precisePct} digits={1} suffix="%" color="#3d8f5f" /></Link></Rise>
         <Rise i={4}><Link to="/statistiche" className="block"><Meter label="Miglior media" value={data.all.bestAvg || null} digits={2} color="#c4a2f2" /></Link></Rise>
         <Rise i={5}><Link to="/statistiche" className="block"><Meter label="Frecce" value={data.all.arrows} color="#5aa6e8" /></Link></Rise>
         <Rise i={6}><Link to="/calendario" className="block"><Meter label="Uscite mese" value={data.month.sessions} color="#9dbea4" /></Link></Rise>
         <Rise i={7}><Link to="/statistiche" className="block"><Meter label="Miglior dist." value={data.bestDistance} suffix=" m" color="#e07a72" /></Link></Rise>
-      </div>
-      <Rise i={8}>
+      </div> : null}
+      {prefs.home.arrows ? <Rise i={8}>
         <Card>
           <div className="mb-1 flex items-baseline justify-between gap-2">
             <p className="aa-section-title">Ultime frecce</p>
@@ -122,7 +130,7 @@ function Home() {
           </div>
           {data.lastShots.length ? <LastArrows shots={data.lastShots} /> : <p className="text-xs text-muted">Le frecce che tiri compaiono qui.</p>}
         </Card>
-      </Rise>
+      </Rise> : null}
       <Rise i={9}>
         <Link to="/classifiche" className="block">
           <Card>

@@ -17,6 +17,7 @@ const BOWS = [
   { id: "compound", name: "Compound", eta: 0.84, k: 0.7, sighted: true, scatter: 1.1, speed: 0.006 },
   { id: "barebow", name: "Nudo", eta: 0.74, k: 0.55, sighted: false, scatter: 3.2, speed: 0.014 },
   { id: "longbow", name: "Longbow", eta: 0.68, k: 0.48, sighted: false, scatter: 4.2, speed: 0.018 },
+  { id: "tradizionale", name: "Tradizionale", eta: 0.72, k: 0.5, sighted: false, scatter: 3.8, speed: 0.016 },
 ] as const;
 
 const RELEASES = [
@@ -103,7 +104,6 @@ export function FlightSim() {
   const [ready, setReady] = useState(false);
   const [pathMode, setPathMode] = useState<"reale" | "linea">("reale");
   const [trueScale, setTrueScale] = useState(false);
-  const [savedNote, setSavedNote] = useState("");
   const [tab, setTab] = useState<"arco" | "freccia" | "tiro" | "meteo">("arco");
   const patch = (part: Partial<FlightInput>) => setForm((current) => ({ ...current, ...part }));
 
@@ -120,7 +120,6 @@ export function FlightSim() {
       setN(saved.n);
       setConsistency(saved.consistency);
       setSeed(saved.seed);
-      setSavedNote("Ripresi i tuoi ultimi dati.");
     }
     setReady(true);
   }, []);
@@ -144,7 +143,6 @@ export function FlightSim() {
     setN(6);
     setConsistency(0.4);
     setSeed(4);
-    setSavedNote("Valori iniziali ripristinati.");
   }
 
   const setup = useMemo(() => {
@@ -171,22 +169,22 @@ export function FlightSim() {
 
   return (
     <Card className="grid gap-3">
-      <div>
-        <h2 className="font-display text-2xl">Simulatore di volo</h2>
-        <p className="text-sm text-muted">Dalla corda al bersaglio: velocità, parabola, vento e quanto vale un gruppo con questa attrezzatura.</p>
-        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted">
-          <span className="inline-flex items-center gap-1 rounded-full border border-line px-2 py-1"><Glyph name="save" size={12} />{savedNote || "Ogni modifica resta salvata su questo telefono."}</span>
-          <button type="button" onClick={resetAll} className="min-h-9 rounded-full border border-line px-3 text-xs">Ripristina valori iniziali</button>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h2 className="aa-section-title">Simulatore di volo</h2>
+          <p className="text-xs text-muted">Scegli una composizione o regola i valori: tutto si salva da solo.</p>
         </div>
+        <button type="button" onClick={resetAll} className="aa-chip shrink-0" aria-label="Ripristina valori iniziali">
+          <Glyph name="history" size={14} /> Iniziali
+        </button>
       </div>
-      <SaveFlight
-        snapshot={{ form, bow, release, round }}
-        onLoad={(saved) => {
-          setForm({ ...START, ...saved.form });
-          if (BOWS.some((b) => b.id === saved.bow)) setBow(saved.bow as (typeof BOWS)[number]["id"]);
-          if (RELEASES.some((r) => r.id === saved.release)) setRelease(saved.release as (typeof RELEASES)[number]["id"]);
-          setRound(saved.round ?? "");
-          setSavedNote("Caricato dall'attrezzatura.");
+      <Compositions
+        current={{ form, bow, release, round }}
+        onApply={(c) => {
+          setForm({ ...START, ...c.form });
+          setBow(c.bow);
+          setRelease(c.release);
+          setRound(c.round);
         }}
       />
       <Segmented
@@ -568,6 +566,7 @@ function FlightPath({ input, round, sighted, mode, title, onGold, trueScale = fa
  * Stessa scala in orizzontale e in verticale (i cerchi restano tondi).
  */
 function FaceFront({ input, round, sighted, title }: { input: FlightInput; round: RoundView; sighted: boolean; title?: string }) {
+  const [picked, setPicked] = useState<number | null>(null);
   const GOLD_HEIGHT = goldOf(input);
   const R = input.faceCm / 200;
   const boss = R + 0.14;
@@ -675,9 +674,29 @@ function FaceFront({ input, round, sighted, title }: { input: FlightInput; round
           )}
           {/* dispersione e centro del gruppo */}
           <circle cx={centreX} cy={centreY} r={Math.max(round.rms * k, dot)} fill="rgba(224,122,47,0.14)" stroke="#e07a2f" strokeWidth="1" strokeDasharray="4 3" />
+          {/* quote dal centro dell'oro al centro del gruppo: quanto e da che parte */}
+          {Math.hypot(centreX - gx, centreY - gy) > 3 ? (
+            <g stroke="#e07a2f" strokeWidth="0.9" fill="#e07a2f" fontSize="8.5">
+              <line x1={gx} y1={gy} x2={centreX} y2={gy} strokeDasharray="2 2" />
+              <line x1={centreX} y1={gy} x2={centreX} y2={centreY} strokeDasharray="2 2" />
+              {Math.abs(round.my) >= 0.005 ? (
+                <text x={(gx + centreX) / 2} y={gy + (centreY > gy ? -4 : 10)} textAnchor="middle" stroke="#0f1a14" strokeWidth="2.6" strokeDasharray="none" style={{ paintOrder: "stroke" }}>
+                  {`${Math.abs(round.my * 100).toFixed(1).replace(".", ",")} cm ${round.my > 0 ? "dx" : "sx"}`}
+                </text>
+              ) : null}
+              {Math.abs(round.mz - GOLD_HEIGHT) >= 0.005 ? (
+                <text x={centreX + (centreX >= gx ? 5 : -5)} y={(gy + centreY) / 2 + 3} textAnchor={centreX >= gx ? "start" : "end"} stroke="#0f1a14" strokeWidth="2.6" strokeDasharray="none" style={{ paintOrder: "stroke" }}>
+                  {`${Math.abs((round.mz - GOLD_HEIGHT) * 100).toFixed(1).replace(".", ",")} cm ${round.mz > GOLD_HEIGHT ? "su" : "giù"}`}
+                </text>
+              ) : null}
+            </g>
+          ) : null}
           {round.hits.map((hit, i) => (
-            <g key={i} className="aa-rise" style={{ animationDelay: `${i * 70}ms` }}>
-              <circle cx={X(hit.y)} cy={Y(hit.z)} r={dot} fill="#14181c" stroke="#f4f1ea" strokeWidth="0.9" />
+            <g key={i} className="aa-hit cursor-pointer" style={{ animationDelay: `${150 + i * 110}ms` }} onClick={() => setPicked(picked === i ? null : i)}>
+              <circle cx={X(hit.y)} cy={Y(hit.z)} r={dot * 3.2} fill="none" stroke="#f4f1ea" strokeWidth="0.8" className="aa-hit-ring" style={{ animationDelay: `${150 + i * 110}ms` }} />
+              <circle cx={X(hit.y)} cy={Y(hit.z)} r={Math.max(dot, 5)} fill="transparent" />
+              <circle cx={X(hit.y)} cy={Y(hit.z)} r={dot} fill={picked === i ? "#7cf0a8" : "#14181c"} stroke="#f4f1ea" strokeWidth="0.9" />
+              {round.hits.length <= 12 ? <text x={X(hit.y) + dot + 1.5} y={Y(hit.z) - dot} fontSize="6.5" fill="#f4f1ea" opacity="0.85">{i + 1}</text> : null}
             </g>
           ))}
           <path d={`M${centreX - 6} ${centreY} H${centreX + 6} M${centreX} ${centreY - 6} V${centreY + 6}`} stroke="#e07a2f" strokeWidth="1.6" />
@@ -704,6 +723,24 @@ function FaceFront({ input, round, sighted, title }: { input: FlightInput; round
         {/* cornice dell'area */}
         <rect x={pad.l} y={pad.t} width={iw} height={ih} fill="none" stroke="rgba(244,241,234,0.08)" />
       </svg>
+      {picked != null && round.hits[picked] ? (() => {
+        const h = round.hits[picked];
+        const dy = h.y * 100;
+        const dz = (h.z - GOLD_HEIGHT) * 100;
+        const dist = Math.hypot(dy, dz);
+        const clock = Math.round((((Math.atan2(dy, dz) * 180) / Math.PI + 360) % 360) / 30) % 12 || 12;
+        return (
+          <div className="aa-rise grid grid-cols-[auto_1fr_auto] items-center gap-2.5 rounded-xl border border-hair bg-white/[0.04] p-2.5 text-[0.78rem]">
+            <span className="grid h-10 w-10 place-items-center rounded-full font-display text-xl" style={{ background: h.miss ? "#5b6470" : Number(h.zone) >= 9 || h.zone === "X" ? "#e6b325" : Number(h.zone) >= 7 ? "#c4473d" : Number(h.zone) >= 5 ? "#2a6294" : "#1a1c1e", color: Number(h.zone) >= 9 || h.zone === "X" ? "#14181c" : "#f4f1ea" }}>{h.zone}</span>
+            <span className="leading-snug">
+              <b>Freccia {picked + 1}</b>: a {dist.toFixed(1).replace(".", ",")} cm dal centro, ore {clock}
+              <br />
+              <span className="text-muted">{Math.abs(dz).toFixed(1).replace(".", ",")} cm {dz >= 0 ? "sopra" : "sotto"} · {Math.abs(dy).toFixed(1).replace(".", ",")} cm a {dy >= 0 ? "destra" : "sinistra"} · arriva in {h.t.toFixed(2).replace(".", ",")} s</span>
+            </span>
+            <button type="button" className="grid h-8 w-8 place-items-center rounded-full bg-white/5" onClick={() => setPicked(null)} aria-label="Chiudi"><Glyph name="close" size={14} /></button>
+          </div>
+        );
+      })() : <p className="text-center text-[0.68rem] text-muted">Tocca una freccia sul bersaglio per vedere dove è arrivata rispetto al centro.</p>}
       <AimHelp input={input} round={round} sighted={sighted} fixY={fixY} fixZ={fixZ} gold={GOLD_HEIGHT} R={R} />
       <p className="text-center text-[0.68rem] text-muted">
         Frecce: {fmtScore}
@@ -838,55 +875,131 @@ function Inclinometer({ onUse }: { onUse: (deg: number) => void }) {
   );
 }
 
-type FlightSnapshot = { form: FlightInput; bow: string; release: string; round: string };
+type BowId = (typeof BOWS)[number]["id"];
+type ReleaseId = (typeof RELEASES)[number]["id"];
+type FlightSnapshot = { form: FlightInput; bow: BowId; release: ReleaseId; round: string };
+type Composition = FlightSnapshot & { id: string; name: string; note: string; kind: "pronta" | "tua" | "attrezzatura"; use?: string; gearId?: number };
 
 const FLETCH_TO_GEAR: Record<string, string> = { spin: "spin", vane3: "alette", feather3: "penne", feather4: "penne" };
 
-/** Salva le impostazioni di volo nell'Attrezzatura (gara, allenamento o entrambi) e le ricarica. */
-function SaveFlight({ snapshot, onLoad }: { snapshot: FlightSnapshot; onLoad: (saved: FlightSnapshot) => void }) {
-  const [open, setOpen] = useState(false);
-  const [use, setUse] = useState<"gara" | "allenamento" | "entrambi">("gara");
+const roundOf = (id: string) => ROUNDS.find((r) => r.id === id) ?? ROUNDS[0];
+const preset = (id: string, name: string, note: string, bow: BowId, release: ReleaseId, round: string, part: Partial<FlightInput>): Composition => {
+  const b = BOWS.find((x) => x.id === bow) ?? BOWS[0];
+  const r = roundOf(round);
+  const rel = RELEASES.find((x) => x.id === release) ?? RELEASES[0];
+  return {
+    id,
+    name,
+    note,
+    kind: "pronta",
+    bow,
+    release,
+    round,
+    form: { ...START, eta: b.eta, k: b.k, sighted: b.sighted, lbAt28: bow !== "compound", eyeCm: b.sighted ? 2 : rel.eyeCm, distanceM: r.distanceM, faceCm: r.faceCm, ...part },
+  };
+};
+
+/** Composizioni pronte: valori tipici per ogni specialità, da cui partire e poi ritoccare. */
+const PRESETS: Composition[] = [
+  preset("sc", "Scuola · principianti", "20 lb, frecce in alluminio leggere", "recurve", "dita", "18", { drawLb: 20, drawCm: 66, grains: 300, diameterMm: 6, lengthCm: 72, fletch: "vane3", faceCm: 80 }),
+  preset("ol18", "Olimpico indoor 18 m", "36 lb, carbonio, spin wing", "recurve", "dita", "18", { drawLb: 36, drawCm: 71, grains: 360, diameterMm: 5, lengthCm: 76, fletch: "spin" }),
+  preset("ol70", "Olimpico 70 m", "42 lb, frecce sottili da outdoor", "recurve", "dita", "70", { drawLb: 42, drawCm: 72, grains: 330, diameterMm: 4, lengthCm: 76, fletch: "spin" }),
+  preset("co50", "Compound 50 m", "55 lb, sgancio, alette", "compound", "sgancio", "50", { drawLb: 55, drawCm: 71, grains: 340, diameterMm: 5, lengthCm: 74, fletch: "vane3", braceCm: 17 }),
+  preset("nu18", "Arco nudo 18 m", "34 lb, tre sotto, freccia pesante", "barebow", "sotto", "18", { drawLb: 34, drawCm: 70, grains: 400, diameterMm: 5.5, lengthCm: 76, fletch: "vane3" }),
+  preset("lb", "Longbow in legno", "40 lb, legno e piume naturali", "longbow", "dita", "30", { drawLb: 40, drawCm: 71, grains: 520, diameterMm: 8.5, lengthCm: 79, fletch: "feather3", braceCm: 17 }),
+  preset("tr3d", "Tradizionale 3D", "38 lb, ricurvo da caccia, piume", "tradizionale", "dita", "30", { drawLb: 38, drawCm: 70, grains: 460, diameterMm: 7, lengthCm: 78, fletch: "feather3", braceCm: 19 }),
+  preset("st", "Storico / a cavallo", "35 lb, pollice o dita, frecce leggere", "tradizionale", "dita", "30", { drawLb: 35, drawCm: 74, grains: 420, diameterMm: 7.5, lengthCm: 80, fletch: "feather3", braceCm: 15 }),
+];
+
+const GEAR_BOW: Record<string, BowId> = { olimpico: "recurve", compound: "compound", nudo: "barebow", longbow: "longbow", ricurvo: "tradizionale", storico: "tradizionale" };
+const GEAR_DIAM: Record<string, number> = { carbonio: 5.2, legno: 8.5, alluminio: 6.5, "carbo-alluminio": 5, bambu: 8.5 };
+
+function describeComp(c: FlightSnapshot) {
+  return `${c.form.drawLb} lb · ${(c.form.drawCm / 2.54).toFixed(0)}″ · ${c.form.grains} gr · ${c.form.distanceM} m`;
+}
+
+function sameComp(a: FlightSnapshot, b: FlightSnapshot) {
+  return a.bow === b.bow && a.form.drawLb === b.form.drawLb && a.form.drawCm === b.form.drawCm && a.form.grains === b.form.grains && a.form.distanceM === b.form.distanceM && a.form.diameterMm === b.form.diameterMm;
+}
+
+/**
+ * Composizioni: pronte, le tue salvate e quelle costruite dalla tua attrezzatura (arco + frecce).
+ * Un tocco le applica; "Salva questa" la mette in Attrezzatura come da gara o da allenamento.
+ */
+function Compositions({ current, onApply }: { current: FlightSnapshot; onApply: (c: FlightSnapshot) => void }) {
+  const [mine, setMine] = useState<Composition[]>([]);
+  const [fromGear, setFromGear] = useState<Composition[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [use, setUse] = useState<"gara" | "allenamento" | "entrambi">("allenamento");
   const [name, setName] = useState("");
-  const [msg, setMsg] = useState("");
-  const [list, setList] = useState<{ id: number; name: string; use: string; snap: FlightSnapshot }[]>([]);
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
 
   async function refresh() {
     try {
       const rows = await listEquipment();
-      const out: { id: number; name: string; use: string; snap: FlightSnapshot }[] = [];
+      const saved: Composition[] = [];
+      const bows = rows.filter((r) => r.mine && r.category === "arco" && Number(r.specs.draw) > 0);
+      const arrows = rows.filter((r) => r.mine && r.category === "freccia" && !r.specs.flight && Number(r.specs.weight) > 0);
       for (const row of rows) {
         if (!row.mine || !row.specs.flight) continue;
         try {
-          out.push({ id: row.id, name: row.name, use: row.specs.use || "entrambi", snap: JSON.parse(row.specs.flight) as FlightSnapshot });
+          const snap = JSON.parse(row.specs.flight) as FlightSnapshot;
+          saved.push({ ...snap, form: { ...START, ...snap.form }, id: `e${row.id}`, gearId: row.id, name: row.name, note: row.specs.use === "gara" ? "Da gara" : row.specs.use === "allenamento" ? "Da allenamento" : "Gara e allenamento", kind: "tua", use: row.specs.use });
         } catch {
-          /* voce rovinata: la salto */
+          /* voce non leggibile: saltata */
         }
       }
-      setList(out);
+      const built: Composition[] = [];
+      for (const b of bows.slice(0, 4)) {
+        const bow = GEAR_BOW[b.specs.bowType] ?? "recurve";
+        const list = arrows.length ? arrows.slice(0, 3) : [null];
+        for (const a of list) {
+          const base = PRESETS.find((p) => p.bow === bow) ?? PRESETS[1];
+          const inch = Number(b.specs.drawLen) || 28;
+          built.push({
+            ...base,
+            id: `g${b.id}-${a?.id ?? 0}`,
+            kind: "attrezzatura",
+            name: a ? `${b.name} + ${a.name}` : b.name,
+            note: "Dalla tua attrezzatura",
+            form: {
+              ...base.form,
+              drawLb: Number(b.specs.draw) || base.form.drawLb,
+              drawCm: Math.round(inch * 2.54 * 2) / 2,
+              grains: a ? Number(a.specs.weight) : base.form.grains,
+              lengthCm: a && Number(a.specs.length) ? Math.round(Number(a.specs.length) * 2.54 * 2) / 2 : base.form.lengthCm,
+              diameterMm: a ? GEAR_DIAM[a.specs.material] ?? base.form.diameterMm : base.form.diameterMm,
+              fletch: a ? (a.specs.fletchType === "spin" ? "spin" : a.specs.fletchType === "penne" || a.specs.fletchType === "scudo" ? "feather3" : "vane3") : base.form.fletch,
+            },
+          });
+        }
+      }
+      setMine(saved);
+      setFromGear(built);
     } catch {
-      setList([]);
+      /* senza rete restano le composizioni pronte */
     }
   }
 
   useEffect(() => {
-    if (open) void refresh();
-  }, [open]);
+    void refresh();
+  }, []);
 
-  async function save(existing?: number) {
-    const f = snapshot.form;
-    const label = name.trim() || `Balistica ${use === "gara" ? "gara" : use === "allenamento" ? "allenamento" : ""} ${f.distanceM} m`.replace(/\s+/g, " ").trim();
+  async function save() {
+    const f = current.form;
+    const label = name.trim() || `${(BOWS.find((b) => b.id === current.bow) ?? BOWS[0]).name} ${f.drawLb} lb · ${f.distanceM} m`;
     setBusy(true);
-    setMsg("");
+    setErr("");
     try {
       await saveEquipment({
         data: {
-          id: existing ?? null,
+          id: null,
           category: "freccia",
           name: label,
           status: "in_use",
           visibility: "personal",
-          notes: `Dal simulatore di volo: ${f.drawLb} lb, allungo ${f.drawCm} cm, ${f.grains} gr, ${f.distanceM} m.`,
+          notes: `Composizione del simulatore: ${describeComp(current)}.`,
           specs: {
             use,
             weight: String(f.grains),
@@ -896,52 +1009,65 @@ function SaveFlight({ snapshot, onLoad }: { snapshot: FlightSnapshot; onLoad: (s
             diameter: String(f.diameterMm),
             fletchType: FLETCH_TO_GEAR[f.fletch] ?? "alette",
             material: "carbonio",
-            flight: JSON.stringify(snapshot),
+            flight: JSON.stringify(current),
           },
         },
       });
-      setMsg(existing ? "Aggiornato in Attrezzatura." : `Salvato in Attrezzatura come «${label}» (${use}).`);
+      setSaving(false);
       setName("");
-      void refresh();
+      await refresh();
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : "Non salvato");
+      setErr(e instanceof Error ? e.message : "Non salvata");
     } finally {
       setBusy(false);
     }
   }
 
+  const all = [...mine, ...fromGear, ...PRESETS];
   return (
-    <div className="min-w-0 rounded-2xl border border-hair bg-white/[0.03] p-2.5">
-      <button type="button" onClick={() => setOpen((v) => !v)} className="flex w-full items-center justify-between gap-2 text-left">
-        <span className="flex items-center gap-2 text-sm font-semibold"><AppIcon name="save" color="#8b6a3e" size={30} />Salva o carica dall'Attrezzatura</span>
-        <span className="aa-chip">{open ? "Chiudi" : "Apri"}</span>
-      </button>
-      {open ? (
-        <div className="mt-2 grid min-w-0 gap-2">
+    <div className="grid min-w-0 gap-2">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-semibold">Composizioni</p>
+        <button type="button" className="aa-chip" onClick={() => setSaving((v) => !v)}>
+          <Glyph name="save" size={14} /> Salva questa
+        </button>
+      </div>
+      {saving ? (
+        <div className="aa-rise grid gap-2 rounded-2xl border border-hair bg-white/[0.04] p-2.5">
           <Chips value={use} onChange={setUse} options={[{ id: "gara", label: <IconLabel icon="trophy" size={14}>Da gara</IconLabel> }, { id: "allenamento", label: <IconLabel icon="bow" size={14}>Allenamento</IconLabel> }, { id: "entrambi", label: "Entrambi" }]} />
           <div className="grid grid-cols-[1fr_auto] gap-2">
-            <TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder={`Nome (es. Frecce gara ${snapshot.form.distanceM} m)`} />
-            <Button disabled={busy} onClick={() => void save()}>Salva</Button>
+            <TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome (facoltativo)" />
+            <Button disabled={busy} onClick={() => void save()}>{busy ? "…" : "Salva"}</Button>
           </div>
-          {list.length ? (
-            <ul className="grid min-w-0 gap-1.5">
-              {list.map((item) => (
-                <li key={item.id} className="flex min-w-0 items-center gap-2 rounded-xl border border-hair px-2.5 py-1.5 text-sm">
-                  <span className="min-w-0 flex-1 truncate">
-                    {item.name}
-                    <span className="ml-1 text-[0.68rem] text-muted">· {item.use} · {item.snap.form?.drawLb} lb · {item.snap.form?.distanceM} m</span>
-                  </span>
-                  <button type="button" className="aa-chip" onClick={() => { onLoad(item.snap); setMsg(`Caricato «${item.name}».`); }}>Carica</button>
-                  <button type="button" className="aa-chip" disabled={busy} onClick={() => void save(item.id)}>Aggiorna</button>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-xs text-muted">Nessuna impostazione salvata, per ora.</p>
-          )}
-          {msg ? <p className="text-xs text-muted">{msg}</p> : null}
+          <p className="text-[0.68rem] text-muted">Finisce in Attrezzatura tra le frecce, con i valori di volo: la ritrovi qui tra «Le tue».</p>
+          {err ? <p className="text-xs text-danger">{err}</p> : null}
         </div>
       ) : null}
+      <div className="-mx-3.5 flex snap-x gap-2 overflow-x-auto px-3.5 pb-1 [scrollbar-width:none]">
+        {all.map((c, i) => {
+          const on = sameComp(c, current);
+          return (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => {
+                onApply(c);
+                if (navigator.vibrate) navigator.vibrate(8);
+              }}
+              aria-pressed={on}
+              className={`aa-short grid w-[9.2rem] shrink-0 snap-start gap-1.5 rounded-2xl border p-2.5 text-left transition ${on ? "border-primary bg-primary/15" : "border-hair bg-white/[0.03]"}`}
+              style={{ animationDelay: `${i * 35}ms` }}
+            >
+              <span className="flex items-center justify-between">
+                <AppIcon name={c.kind === "pronta" ? (c.bow === "compound" ? "gear" : c.bow === "longbow" || c.bow === "tradizionale" ? "quiver" : "bow") : c.kind === "tua" ? (c.use === "gara" ? "trophy" : "save") : "archer"} color={c.kind === "pronta" ? "#55647b" : c.kind === "tua" ? "#c39320" : "#2c8a57"} size={30} />
+                <span className="text-[0.58rem] font-semibold uppercase tracking-wider text-muted">{c.kind === "pronta" ? "pronta" : c.kind === "tua" ? "tua" : "attrezzi"}</span>
+              </span>
+              <span className="line-clamp-2 text-[0.78rem] font-semibold leading-tight">{c.name}</span>
+              <span className="text-[0.64rem] tabular-nums text-muted">{describeComp(c)}</span>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

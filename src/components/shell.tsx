@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useLayoutEffect, useState, type ReactNode } from "react";
-import { Glyph, type IconName } from "./icons";
+import { AppIcon, Glyph, type IconName } from "./icons";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { RedirectToSignIn } from "@/lib/auth/gates";
@@ -8,8 +8,10 @@ import type { PublicMember } from "@/lib/arcieri/access";
 import { greet, romeHour } from "@/lib/arcieri/time";
 import { memberLabel, initials } from "@/lib/arcieri/labels";
 import { Avatar, Loading, Mark, cx } from "./kit";
-import { QUICK_ACTIONS, SHORTCUTS, shortcutById } from "@/lib/arcieri/shortcuts";
-import { ShortcutEditor, ShortcutTile } from "./shortcuts";
+import { QUICK_ACTIONS, shortcutById } from "@/lib/arcieri/shortcuts";
+import { PathMap, ShortcutEditor, ShortcutTile } from "./shortcuts";
+import { PersonalizeSheet } from "./personalize";
+import { applyPrefs, readPrefs } from "@/lib/arcieri/prefs";
 
 type Ctx = { me: PublicMember; reload: () => void };
 const MemberCtx = createContext<Ctx | null>(null);
@@ -35,13 +37,6 @@ const MORE = [
   ["/gioco", "Giochiamo"],
 ] as const;
 
-const INKS = [
-  { id: "verde", color: "#1f5c38" },
-  { id: "blu", color: "#2f6fbe" },
-  { id: "rosso", color: "#c4473d" },
-  { id: "giallo", color: "#d7b56a" },
-  { id: "viola", color: "#7a4bb5" },
-] as const;
 
 export function Shell({ children }: { children: ReactNode }) {
   const { user, isPending } = useCurrentUserState();
@@ -51,7 +46,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const [menu, setMenu] = useState(false);
   const [quick, setQuick] = useState(false);
   const [editShort, setEditShort] = useState(false);
-  const [ink, setInk] = useState("verde");
+  const [prefsOpen, setPrefsOpen] = useState(false);
   const [offline, setOffline] = useState(false);
   const path = useRouterState({ select: (s) => s.location.pathname });
 
@@ -96,7 +91,7 @@ export function Shell({ children }: { children: ReactNode }) {
   }, [path]);
 
   useEffect(() => {
-    setInk(document.documentElement.dataset.ink || "verde");
+    applyPrefs(readPrefs());
     const onOff = () => setOffline(!navigator.onLine);
     onOff();
     window.addEventListener("online", onOff);
@@ -129,11 +124,6 @@ export function Shell({ children }: { children: ReactNode }) {
   const label = memberLabel(me, [me]);
   const hour = greet(romeHour());
 
-  function pickInk(next: string) {
-    document.documentElement.dataset.ink = next;
-    localStorage.setItem("aa-ink", next);
-    setInk(next);
-  }
 
   const nav = [
     { to: "/", label: "Casa", icon: "home" as IconName },
@@ -216,37 +206,25 @@ export function Shell({ children }: { children: ReactNode }) {
           {menu ? (
             <div className="aa-sheet fixed inset-0 z-40 overflow-y-auto bg-bg pb-[calc(env(safe-area-inset-bottom)+1.5rem)] md:hidden">
               <div className="sticky top-0 z-10 flex h-14 items-center justify-between bg-bg/90 px-4 backdrop-blur-md">
-                <p className="aa-section-title">Tutto in un tocco</p>
+                <p className="aa-section-title">La mappa</p>
                 <button type="button" className="grid h-11 w-11 place-items-center rounded-full bg-white/5" onClick={() => setMenu(false)} aria-label="Chiudi">
                   <Glyph name="close" size={20} />
                 </button>
               </div>
-              <div className="grid gap-4 px-4">
-                <div className="grid grid-cols-4 gap-x-2 gap-y-4">
-                  {SHORTCUTS.map((sc, i) => <ShortcutTile key={sc.id} s={sc} size="lg" index={i} onClick={() => setMenu(false)} />)}
-                </div>
-                <div className="grid gap-2 rounded-2xl border border-hair bg-white/[0.03] p-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold">Colore dell'app</span>
-                    <span className="flex items-center gap-2" role="group" aria-label="Colore">
-                      {INKS.map((item) => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          aria-label={item.id}
-                          aria-pressed={ink === item.id}
-                          onClick={() => pickInk(item.id)}
-                          className={cx("h-8 w-8 rounded-full border-2 transition-transform", ink === item.id ? "scale-110 border-fg" : "border-transparent")}
-                          style={{ background: item.color }}
-                        />
-                      ))}
-                    </span>
-                  </div>
-                  <button type="button" className="aa-chip justify-self-start" onClick={() => { setMenu(false); setEditShort(true); }}><Glyph name="edit" size={14} /> Scegli le scorciatoie della Home</button>
-                </div>
+              <div className="grid gap-3 px-4">
+                <button type="button" onClick={() => { setMenu(false); setPrefsOpen(true); }} className="aa-press flex items-center gap-3 rounded-2xl border border-hair bg-white/[0.04] p-2.5 text-left">
+                  <AppIcon name="palette" color="#7652d1" size={38} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-semibold">Personalizza</span>
+                    <span className="block truncate text-[0.7rem] text-muted">Colore, icone, animazioni, Home e scorciatoie</span>
+                  </span>
+                  <Glyph name="chevron" size={16} className="text-muted" />
+                </button>
+                <PathMap current={path} onPick={() => setMenu(false)} />
               </div>
             </div>
           ) : null}
+          {prefsOpen ? <PersonalizeSheet onClose={() => setPrefsOpen(false)} /> : null}
           {editShort ? <ShortcutEditor onClose={() => setEditShort(false)} /> : null}
         </div>
       </div>
