@@ -5,6 +5,7 @@ import { Num, Mini, num, fmt } from "@/components/tool-kit";
 import { useLocalState } from "@/lib/arcieri/local-store";
 import { useArcherSetup } from "@/lib/arcieri/setup";
 import { grainsFor, realLb, spineFor } from "@/lib/arcieri/gear-advice";
+import { ToolChart, type ChartSeries } from "@/components/tool-chart";
 
 export const Route = createFileRoute("/_app/spine")({ component: Page });
 
@@ -27,6 +28,11 @@ function Page() {
   const spine = spineFor(bow, num(st.arrowLen) || undefined);
   const gr = grainsFor(bow);
   const diff = lb - (num(st.draw) || 0);
+  const draws = Array.from({ length: 17 }, (_, i) => 24 + i * 0.5);
+  const curves: ChartSeries[] = [
+    { name: "Libbre reali", color: "#7cf0a8", unit: "lb", points: draws.map((x) => ({ x, y: realLb({ ...bow, drawLen: String(x) }) || 0 })) },
+    { name: "Scritte", color: "#9aa7b2", unit: "lb", dashed: true, points: draws.map((x) => ({ x, y: num(st.draw) || 0 })) },
+  ];
   return (
     <div className="grid gap-3">
       <PageHead kicker="Strumenti" title="Spine e libbre" lede="Le libbre scritte sui flettenti valgono a 28″: al tuo allungo cambiano. Da qui spine e peso freccia di partenza." />
@@ -55,6 +61,7 @@ function Page() {
               <span className="absolute top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-primary shadow transition-[left] duration-500" style={{ left: `${Math.min(100, Math.max(0, ((lb - 20) / 40) * 100))}%` }} />
             </div>
           </div>
+          {st.bowType !== "compound" ? <ToolChart title="Libbre al variare dell'allungo" series={curves} xLabel="pollici" yLabel="lb" marker={{ x: num(st.drawLen) || 28, label: `il tuo allungo: ${st.drawLen}″` }} fmtX={(x) => `${x}″`} /> : null}
           <p className="text-sm">
             {st.bowType === "compound"
               ? "Sul compound le libbre si regolano con i flettenti: l'allungo non le cambia."

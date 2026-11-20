@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 import { ArcherAvatar } from "./archer-avatar";
 import { ToolArt } from "./tool-art";
-import type { AvatarLook } from "@/lib/arcieri/avatar";
+import type { AvatarLook, Pose } from "@/lib/arcieri/avatar";
+import { AvatarScene } from "./avatar-hero";
 
 const Q = "#ffd27a";
 const G = "#7cf0a8";
@@ -178,6 +179,11 @@ const CUSTOM: Record<string, ReactNode> = {
 
 /** Illustrazione di una lezione: l'arciere con le note, oppure un disegno dedicato. */
 export function LessonArt({ art, look, compact = false }: { art: string; look: AvatarLook; compact?: boolean }) {
+  // l'arciere in una posa ("pose:mira") o mentre esegue tutta la sequenza ("seq")
+  if (art === "seq" || art.startsWith("pose:")) {
+    const pose = art === "seq" ? "animata" : (art.slice(5) as Pose);
+    return <AvatarScene look={{ ...look, routine: "completa" }} pose={pose} height={compact ? "h-28" : "h-72"} phase={art === "seq" && !compact} interactive={!compact} />;
+  }
   if (OVERLAY[art]) {
     return (
       <div className={`aa-avatar-stage relative ${compact ? "h-28" : "h-72"}`}>

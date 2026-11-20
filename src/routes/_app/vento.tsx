@@ -4,6 +4,7 @@ import { Card, Chips, PageHead } from "@/components/kit";
 import { Num, Mini, num, fmt } from "@/components/tool-kit";
 import { useLocalState } from "@/lib/arcieri/local-store";
 import { estimateSpeed } from "@/components/foc-3d";
+import { ToolChart, type ChartSeries } from "@/components/tool-chart";
 
 export const Route = createFileRoute("/_app/vento")({ component: Page });
 
@@ -27,8 +28,17 @@ function Page() {
   const w = (num(st.kmh) || 0) / 3.6;
   const a = 0.002;
   const D = st.dist;
-  const tAir = -Math.log(1 - a * D) / (a * v0);
-  const drift = w * d.f * (tAir - D / v0); // metri
+  const driftAt = (dist: number, wind: number) => {
+    const t = -Math.log(Math.max(1e-6, 1 - a * dist)) / (a * v0);
+    return wind * d.f * (t - dist / v0);
+  };
+  const drift = driftAt(D, w); // metri
+  const xs = Array.from({ length: 17 }, (_, i) => 10 + i * 5);
+  const kmh = num(st.kmh) || 0;
+  const curves: ChartSeries[] = [
+    { name: `${fmt(kmh, 0)} km/h`, color: "#9fe9ff", unit: "cm", points: xs.map((x) => ({ x, y: driftAt(x, w) * 100 })) },
+    { name: `${fmt(kmh + 10, 0)} km/h`, color: "#f2a65a", unit: "cm", dashed: true, points: xs.map((x) => ({ x, y: driftAt(x, (kmh + 10) / 3.6) * 100 })) },
+  ];
   const cm = drift * 100;
   const faceCm = D >= 60 ? 122 : D >= 40 ? 80 : 60;
   const ringCm = faceCm / 20;
@@ -67,6 +77,7 @@ function Page() {
         <p className="text-sm">
           {d.f === 0 ? "Vento di fronte o alle spalle: non sposta di lato, cambia un po' l'altezza." : `Mira circa ${fmt(Math.abs(cm), 0)} cm ${d.side > 0 ? "a sinistra" : "a destra"} del centro (cerchio tratteggiato), su un bersaglio da ${faceCm} cm.`}
         </p>
+        {d.f ? <div className="w-full"><ToolChart title="Spostamento per distanza" series={curves} xLabel="metri" yLabel="cm" marker={{ x: D, label: `a ${D} m` }} /></div> : null}
         <p className="text-[0.7rem] text-muted">Stima per raffiche costanti: il vento vero cambia in volo. Usala per capire l'ordine di grandezza, poi correggi sul campo.</p>
       </Card>
     </div>

@@ -12,7 +12,7 @@ export const Route = createFileRoute("/_app/lezioni")({
   component: Page,
 });
 
-/** Corso in tre livelli: ogni lezione ha un disegno, i punti chiave, gli errori, un esercizio e una domanda. */
+/** Corso in quattro livelli: ogni lezione ha un disegno, i punti chiave, gli errori, un esercizio e una domanda. */
 function Page() {
   const [st, setSt] = useLocalState<{ done: string[]; open: string | null }>("aa-lezioni-v1", { done: [], open: null });
   const { shown } = useAvatar();
@@ -51,7 +51,7 @@ function Page() {
   const total = LESSONS.length;
   return (
     <div className="grid gap-3">
-      <PageHead kicker="Impara" title="Lezioni" lede="Dal primo tiro alla gara, in tre livelli. Ogni lezione ha un disegno, gli errori da evitare, un esercizio e una domanda.">
+      <PageHead kicker="Impara" title="Lezioni" lede="Dal primo tiro alla gara e alle specialità, in quattro livelli. Ogni lezione ha un disegno, gli errori da evitare, un esercizio e una domanda.">
         <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
           <div className="h-full rounded-full bg-[#7cf0a8]" style={{ width: `${(st.done.length / total) * 100}%` }} />
         </div>

@@ -4,6 +4,7 @@ import { Card, Chips, PageHead } from "@/components/kit";
 import { Num, Mini, num, fmt } from "@/components/tool-kit";
 import { useLocalState } from "@/lib/arcieri/local-store";
 import { estimateSpeed } from "@/components/foc-3d";
+import { ToolChart, type ChartSeries } from "@/components/tool-chart";
 
 export const Route = createFileRoute("/_app/energia")({ component: Page });
 
@@ -18,6 +19,13 @@ function Page() {
   const ke = 0.5 * kg * ms * ms;
   const mom = kg * ms;
   const ok = ms > 0 && kg > 0;
+  // curva sul peso: con le stesse libbre, più grani = meno velocità e traiettoria più curva
+  const lbN = num(st.lb) || 30;
+  const gs = Array.from({ length: 17 }, (_, i) => 200 + i * 25);
+  const curves: ChartSeries[] = [
+    { name: "Velocità", color: "#3aa7c4", unit: "m/s", points: gs.map((g) => ({ x: g, y: estimateSpeed(lbN, g) })) },
+    { name: "Caduta a 30 m", color: "#f08ab4", unit: "cm", points: gs.map((g) => { const v = estimateSpeed(lbN, g) || 1; return { x: g, y: 0.5 * 9.81 * (30 / v) ** 2 * 100 }; }) },
+  ];
   const bars = [
     { k: "Velocità", v: ms, max: 100, label: `${fmt(ms, 0)} m/s · ${fmt(ms / 0.3048, 0)} fps`, c: "#3aa7c4" },
     { k: "Energia", v: ke, max: 120, label: `${fmt(ke, 1)} J · ${fmt(ke * 0.7376, 1)} ft·lb`, c: "#d6912a" },
@@ -46,7 +54,8 @@ function Page() {
             <Mini k="Grani per libbra" v={st.mode === "stima" && num(st.lb) ? fmt(gr / num(st.lb), 1) : "—"} />
             <Mini k="Tempo a 70 m" v={`${fmt(70 / ms, 2)} s`} />
           </div>
-          <p className="text-[0.7rem] text-muted">{st.mode === "stima" ? "Stima per archi ricurvi e tradizionali (resa circa 75%): un cronografo dà il dato vero." : "1 fps = 0,3048 m/s. Energia = ½·massa·velocità²."}</p>
+          {st.mode === "stima" ? <ToolChart title={`Se cambi il peso della freccia (${fmt(lbN, 0)} lb)`} series={curves} xLabel="grani" marker={{ x: gr, label: `la tua: ${fmt(gr, 0)} gr` }} band={{ from: lbN * 8, to: lbN * 10, label: "8–10 grani per libbra" }} /> : null}
+          <p className="text-[0.7rem] text-muted">{st.mode === "stima" ? "Stima per archi ricurvi e tradizionali (resa circa 75%): con le stesse libbre l'energia resta quasi uguale, cambia come la usa la freccia. Un cronografo dà il dato vero." : "1 fps = 0,3048 m/s. Energia = ½·massa·velocità²."}</p>
         </Card>
       ) : null}
     </div>

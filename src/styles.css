@@ -1088,3 +1088,7 @@ html[data-scenes="no"] .aa-scene { display: none; }
 @keyframes aa-game-shake { 0% { transform: translateX(0); } 25% { transform: translateX(3px) rotate(0.8deg); } 50% { transform: translateX(-2px) rotate(-0.6deg); } 100% { transform: translateX(0); } }
 .aa-game-hint { animation: aa-game-hint 2.2s ease-in-out infinite; }
 @keyframes aa-game-hint { 0%, 100% { transform: translateX(0); opacity: 0.85; } 50% { transform: translateX(-10px); opacity: 1; } }
+
+.aa-pulse-dot { animation: aa-pulse-dot 1.6s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes aa-pulse-dot { 0%, 100% { transform: scale(0.7); opacity: 0.35; } 50% { transform: scale(1.5); opacity: 0.1; } }
+@media (prefers-reduced-motion: reduce) { .aa-pulse-dot { animation: none; } }
