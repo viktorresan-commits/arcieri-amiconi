@@ -397,8 +397,9 @@ export function drawArcher(g: GL3D, origin: Vec3, toward: Vec3, k: number, pose:
 export const GHOST = hexRgb("#7cf0a8");
 
 /** Il corpo realistico vale per arciere uomo e ragazzo (il modello è maschile). */
-export function realistic(look: ManLook) {
-  return look.body !== "donna" && look.body !== "ragazza";
+export function realistic(_look: ManLook) {
+  // l'arciere nelle scene 3D resta quello illustrato (manichino stilizzato), non il corpo fotorealistico
+  return false;
 }
 
 /** Attrezzatura e accessori sopra il corpo realistico: parabraccio, guantino, pettorina, cappelli, capelli lunghi, mantello. */

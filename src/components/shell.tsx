@@ -12,7 +12,7 @@ import { QUICK_ACTIONS, shortcutById } from "@/lib/arcieri/shortcuts";
 import { NextCard, PathMap, ShortcutEditor, ShortcutTile } from "./shortcuts";
 import { Scene } from "./scene";
 import { levelOf, useXp, useXpToasts } from "@/lib/arcieri/xp";
-import { RealFace } from "./archer-3d";
+import { AvatarFace } from "./archer-avatar";
 import { useAvatar, useAvatarSync } from "./avatar-hero";
 import { RealIcon } from "./real-icons";
 import { PersonalizeSheet } from "./personalize";
@@ -199,7 +199,7 @@ export function Shell({ children }: { children: ReactNode }) {
           <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-line/60 bg-bg/85 px-4 backdrop-blur-md">
             <Link to="/avatar" className="flex min-w-0 items-center gap-3">
               <span className="aa-pin grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-full ring-2 ring-[#ffd27a]/70">
-                <RealFace look={avatar.shown} className="h-10 w-10" />
+                <AvatarFace look={avatar.shown} className="h-10 w-10" />
               </span>
               <span className="min-w-0">
                 <p className="truncate text-[11px] leading-tight text-muted">{hour}</p>

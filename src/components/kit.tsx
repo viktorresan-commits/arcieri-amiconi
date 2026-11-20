@@ -1,5 +1,7 @@
 import { useRef, useState, type ButtonHTMLAttributes, type CSSProperties, type InputHTMLAttributes, type ReactNode, type PointerEvent as ReactPointerEvent, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
 import { clsx } from "clsx";
+import type { AvatarLook } from "@/lib/arcieri/avatar";
+import { AvatarFace } from "./archer-avatar";
 
 export function cx(...parts: Array<string | false | null | undefined>) {
   return clsx(parts);
@@ -168,9 +170,11 @@ export function ErrorNote({ text }: { text: string }) {
   return <p className="rounded-xl border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">{text}</p>;
 }
 
-export function Avatar({ label, color, photo, className, size = "md" }: { label: string; color: string; photo?: string | null; className?: string; size?: "sm" | "md" | "lg" | "xl" }) {
+export function Avatar({ label, color, photo, className, size = "md", look }: { label: string; color: string; photo?: string | null; className?: string; size?: "sm" | "md" | "lg" | "xl"; look?: AvatarLook | null }) {
   const box = size === "xl" ? "h-24 w-24 text-2xl" : size === "lg" ? "h-14 w-14 text-base" : size === "sm" ? "h-8 w-8 text-[10px]" : "h-10 w-10 text-sm";
   if (photo) return <img src={photo} alt="" className={cx(box, "rounded-full object-cover", className)} />;
+  // senza foto: il volto del suo arciere, se l'ha creato
+  if (look) return <AvatarFace look={look} className={cx(box, "rounded-full", className)} />;
   return (
     <span
       className={cx(box, "grid place-items-center rounded-full font-semibold text-primary-fg", className)}

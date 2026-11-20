@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import type { AvatarLook, Pose } from "@/lib/arcieri/avatar";
 
 /**
@@ -32,56 +32,102 @@ type PoseDef = {
   arrow: boolean;
   fore: number; // lunghezza apparente dell'avambraccio della corda
   face?: AvatarLook["expression"] | "felice";
+  /** quanto la mano sta sulla corda (0–1) durante i passaggi */
+  hookW?: number;
 };
 
 const ANCHOR = p(166, 106);
 const POSES: Record<string, PoseDef> = {
   riposo: { grip: p(186, 214), bowAngle: 6, hand: p(118, 210), pull: 0, hooked: false, arrow: false, fore: 46 },
-  incocco: { grip: p(206, 176), bowAngle: -48, hand: null, pull: 0, hooked: true, arrow: true, fore: 52 },
-  alzata: { grip: p(244, 128), bowAngle: 0, hand: null, pull: 0.12, hooked: true, arrow: true, fore: 66, face: "concentrato" },
+  // incocco: arco basso e quasi orizzontale, la mano porta la freccia sul rest e la incastra
+  incocco: { grip: p(206, 192), bowAngle: -66, hand: p(192, 184), pull: 0, hooked: false, arrow: true, fore: 48 },
+  // aggancio e presa: tre dita sulla corda, mano dell'arco rilassata sull'impugnatura
+  aggancio: { grip: p(214, 172), bowAngle: -40, hand: null, pull: 0, hooked: true, arrow: true, fore: 52 },
+  predraw: { grip: p(244, 132), bowAngle: -3, hand: null, pull: 0.1, hooked: true, arrow: true, fore: 64, face: "concentrato" },
+  trazione: { grip: p(249, 125), bowAngle: 0, hand: null, pull: 0.62, hooked: true, arrow: true, fore: 74, face: "concentrato" },
   allungo: { grip: p(250, 124), bowAngle: 0, hand: null, pull: 1, hooked: true, arrow: true, fore: 82, face: "concentrato" },
+  mira: { grip: p(250, 124), bowAngle: 0, hand: null, pull: 1.03, hooked: true, arrow: true, fore: 83, face: "concentrato" },
   rilascio: { grip: p(250, 124), bowAngle: 2, hand: p(132, 104), pull: 0, hooked: false, arrow: false, fore: 82, face: "concentrato" },
-  accompagna: { grip: p(250, 127), bowAngle: 9, hand: p(128, 106), pull: 0, hooked: false, arrow: false, fore: 80 },
+  accompagna: { grip: p(251, 127), bowAngle: 9, hand: p(126, 106), pull: 0, hooked: false, arrow: false, fore: 80 },
+  rilassa: { grip: p(214, 186), bowAngle: 22, hand: p(122, 196), pull: 0, hooked: false, arrow: false, fore: 50 },
   vittoria: { grip: p(206, 34), bowAngle: -12, hand: p(104, 52), pull: 0, hooked: false, arrow: false, fore: 46, face: "felice" },
   fiero: { grip: p(192, 204), bowAngle: 2, hand: p(116, 186), pull: 0, hooked: false, arrow: false, fore: 40, face: "sorriso" },
+  saluto: { grip: p(194, 208), bowAngle: 4, hand: p(150, 150), pull: 0, hooked: false, arrow: false, fore: 40, face: "sorriso" },
 };
 
-/** Sequenza del tiro animato in Home (secondi). */
-const SEQUENCE: [string, number][] = [
-  ["riposo", 1.8],
-  ["incocco", 0.9],
-  ["alzata", 0.9],
-  ["allungo", 1.1],
-  ["allungo", 1.3],
-  ["rilascio", 0.14],
-  ["accompagna", 1.2],
-  ["riposo", 1.0],
-];
-const CYCLE = SEQUENCE.reduce((a, [, d]) => a + d, 0);
-const RELEASE_AT = SEQUENCE.slice(0, 5).reduce((a, [, x]) => a + x, 0);
+export const PHASE_NAMES: Record<string, string> = {
+  riposo: "Posizione",
+  incocco: "Incocco",
+  aggancio: "Aggancio e presa",
+  predraw: "Pre-trazione",
+  trazione: "Trazione",
+  allungo: "Ancoraggio",
+  mira: "Trasferimento e mira",
+  rilascio: "Rilascio",
+  accompagna: "Accompagnamento",
+  rilassa: "Rilassamento",
+};
 
-function poseAt(t: number): { def: PoseDef; release: number | null } {
+type Step = [string, number];
+type Plan = { steps: Step[]; cycle: number; releases: number[] };
+
+/**
+ * Sequenza di tiro dell'avatar: completa (11 tempi), rapida o da gara (mira lunga), con le frecce
+ * della volée in fila e il rilassamento alla fine.
+ */
+export function routinePlan(look: Pick<AvatarLook, "routine" | "hold" | "volley">): Plan {
+  const hold = Math.max(0.6, Math.min(6, Number(look.hold) || 2));
+  const n = Math.max(1, Math.min(6, Number(look.volley) || 1));
+  const kind = look.routine ?? "completa";
+  const one: Step[] =
+    kind === "rapida"
+      ? [["aggancio", 0.5], ["predraw", 0.45], ["allungo", 0.75], ["mira", hold * 0.6], ["rilascio", 0.12], ["accompagna", 0.7]]
+      : [["incocco", 0.9], ["aggancio", 0.7], ["predraw", 0.8], ["trazione", 0.7], ["allungo", 0.5], ["mira", kind === "gara" ? hold + 1.2 : hold], ["rilascio", 0.12], ["accompagna", kind === "gara" ? 1.4 : 1.1]];
+  const steps: Step[] = [["riposo", kind === "rapida" ? 0.7 : 1.3]];
+  for (let i = 0; i < n; i += 1) {
+    if (i > 0) steps.push(["rilassa", 0.6]);
+    steps.push(...one);
+  }
+  steps.push(["rilassa", 0.8], ["riposo", 0.6]);
+  const releases: number[] = [];
   let acc = 0;
-  for (let i = 0; i < SEQUENCE.length; i += 1) {
-    const [name, d] = SEQUENCE[i];
+  for (const [name, d] of steps) {
+    if (name === "rilascio") releases.push(acc);
+    acc += d;
+  }
+  return { steps, cycle: acc, releases };
+}
+
+const easeIO = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
+
+function poseAt(plan: Plan, t: number): { def: PoseDef; release: number | null; phase: string } {
+  const { steps, releases } = plan;
+  let acc = 0;
+  let release: number | null = null;
+  for (const r of releases) if (t >= r && t - r < 1.2) release = t - r;
+  for (let i = 0; i < steps.length; i += 1) {
+    const [name, d] = steps[i];
     if (t < acc + d) {
       const raw = (t - acc) / d;
-      const prev = POSES[SEQUENCE[(i + SEQUENCE.length - 1) % SEQUENCE.length][0]];
+      const prev = POSES[steps[(i + steps.length - 1) % steps.length][0]];
       const cur = POSES[name];
-      return { def: mix(prev, cur, name === "rilascio" ? raw : ease(raw)), release: t >= RELEASE_AT ? t - RELEASE_AT : null };
+      // il rilascio è uno scatto; il resto scorre morbido; nella mira resta un filo di espansione
+      const k = name === "rilascio" ? Math.min(1, raw * 1.6) : easeIO(raw);
+      return { def: mix(prev, cur, k), release, phase: PHASE_NAMES[name] ?? name };
     }
     acc += d;
   }
-  return { def: POSES.riposo, release: null };
+  return { def: POSES.riposo, release, phase: PHASE_NAMES.riposo };
 }
 
 function mix(a: PoseDef, b: PoseDef, t: number): PoseDef {
   return {
     grip: lerpP(a.grip, b.grip, t),
     bowAngle: lerp(a.bowAngle, b.bowAngle, t),
-    hand: a.hand && b.hand ? lerpP(a.hand, b.hand, t) : t < 0.5 ? a.hand : b.hand,
+    hand: a.hand && b.hand ? lerpP(a.hand, b.hand, t) : (a.hand ?? b.hand),
     pull: lerp(a.pull, b.pull, t),
     hooked: t < 0.5 ? a.hooked : b.hooked,
+    hookW: lerp(a.hookW ?? (a.hooked ? 1 : 0), b.hookW ?? (b.hooked ? 1 : 0), t),
     arrow: t < 0.5 ? a.arrow : b.arrow,
     fore: lerp(a.fore, b.fore, t),
     face: t < 0.5 ? a.face : b.face,
@@ -135,7 +181,7 @@ function Figure({ look, def, t, flying, blink, uid }: { look: AvatarLook; def: P
   const skin = look.skin;
   const skinD = shade(skin, -0.2);
   const breath = Math.sin(t * 1.7) * 0.9;
-  const longSleeves = ["felpa", "giacca", "tunica", "farsetto"].includes(look.top);
+  const longSleeves = ["felpa", "giacca", "tunica", "tunica-lunga", "farsetto"].includes(look.top);
   const shirt = look.shirt;
   const capeSway = Math.sin(t * 1.3) * 2.5;
 
@@ -152,12 +198,13 @@ function Figure({ look, def, t, flying, blink, uid }: { look: AvatarLook; def: P
   const restW = rot(restLocal, def.bowAngle, grip);
   const tremble = def.pull > 0.95 ? Math.sin(t * 23) * 0.35 : 0;
   const stringHand = lerpP(restW, p(ANCHOR.x, ANCHOR.y + tremble), def.pull);
-  const handTarget = def.hooked ? stringHand : (def.hand ?? restW);
+  const hookW = def.hookW ?? (def.hooked ? 1 : 0);
+  const handTarget = def.hand ? lerpP(def.hand, stringHand, hookW) : stringHand;
   const drawArm = ik(SD, handTarget, 40, def.fore, -1);
   const drawHand = drawArm.hand;
   const tipTop = rot(p(g.tipX, -g.tipY), def.bowAngle, grip);
   const tipBot = rot(p(g.tipX, g.tipY), def.bowAngle, grip);
-  const nockPt = def.hooked ? drawHand : null;
+  const nockPt = hookW > 0.5 ? drawHand : null;
 
   const face = def.face ?? look.expression;
   const torsoW = (woman ? 0.9 : 1) * W;
@@ -169,7 +216,8 @@ function Figure({ look, def, t, flying, blink, uid }: { look: AvatarLook; def: P
   const hipL = cx - (woman ? 23 : 21) * W;
   const hipR = cx + (woman ? 23 : 21) * W;
   const torso = `M${f(shoulderL)} 124 C${f(shoulderL + 6)} 116 ${f(shoulderR - 6)} 116 ${f(shoulderR)} 124 C${f(shoulderR + 2)} 150 ${f(waistR + 2)} 172 ${f(waistR)} 186 C${f(hipR)} 196 ${f(hipR)} 204 ${f(hipR)} 210 L${f(hipL)} 210 C${f(hipL)} 204 ${f(hipL)} 196 ${f(waistL)} 186 C${f(waistL - 2)} 172 ${f(shoulderL - 2)} 150 ${f(shoulderL)} 124 Z`;
-  const tunicLen = look.top === "tunica" ? 252 : 214;
+  const tunicLen = look.top === "tunica" ? 252 : look.top === "tunica-lunga" ? 266 : 214;
+  const longTunic = look.top === "tunica" || look.top === "tunica-lunga";
 
   // gambe
   const kneeB = 2 + Math.sin(t * 1.7) * 0.6;
@@ -179,26 +227,50 @@ function Figure({ look, def, t, flying, blink, uid }: { look: AvatarLook; def: P
   };
   const legW = 19 * W;
 
-  const limb = (a: P, b: P, w: number, color: string) => (
-    <line x1={f(a.x)} y1={f(a.y)} x2={f(b.x)} y2={f(b.y)} stroke={color} strokeWidth={w} strokeLinecap="round" />
+  // contorno scuro e lume chiaro: il tratto da illustrazione dei giochi
+  const OUT = "#1b130d";
+  const limb = (a: P, b: P, w: number, color: string, outline = true) => (
+    <g>
+      {outline ? <line x1={f(a.x)} y1={f(a.y)} x2={f(b.x)} y2={f(b.y)} stroke={OUT} strokeOpacity="0.55" strokeWidth={w + 2.6} strokeLinecap="round" /> : null}
+      <line x1={f(a.x)} y1={f(a.y)} x2={f(b.x)} y2={f(b.y)} stroke={color} strokeWidth={w} strokeLinecap="round" />
+      {outline && w > 8 ? <line x1={f(a.x - w * 0.18)} y1={f(a.y - w * 0.1)} x2={f(b.x - w * 0.18)} y2={f(b.y - w * 0.1)} stroke="#fff" strokeOpacity="0.13" strokeWidth={w * 0.28} strokeLinecap="round" /> : null}
+    </g>
   );
 
   const shoe = (ankle: P) => {
-    if (look.footwear === "stivali") {
+    const sc = look.shoes;
+    if (look.footwear === "stivali" || look.footwear === "stivali-risvolto") {
+      const top = look.footwear === "stivali-risvolto" ? 54 : 46;
       return (
         <g>
-          <path d={`M${f(ankle.x - 9)} ${f(ankle.y - 46)} L${f(ankle.x + 9)} ${f(ankle.y - 46)} L${f(ankle.x + 9)} ${f(ankle.y + 2)} C${f(ankle.x + 14)} ${f(ankle.y + 4)} ${f(ankle.x + 22)} ${f(ankle.y + 6)} ${f(ankle.x + 22)} ${f(ankle.y + 10)} L${f(ankle.x - 11)} ${f(ankle.y + 10)} Z`} fill={look.shoes} />
-          <path d={`M${f(ankle.x - 10)} ${f(ankle.y - 46)} h20 v6 h-20 z`} fill={shade(look.shoes, -0.3)} />
-          <path d={`M${f(ankle.x - 11)} ${f(ankle.y + 8)} h33`} stroke="#000" strokeOpacity="0.35" strokeWidth="2.5" />
+          <path d={`M${f(ankle.x - 10)} ${f(ankle.y - top)} L${f(ankle.x + 10)} ${f(ankle.y - top)} L${f(ankle.x + 9)} ${f(ankle.y + 2)} C${f(ankle.x + 14)} ${f(ankle.y + 4)} ${f(ankle.x + 22)} ${f(ankle.y + 5)} ${f(ankle.x + 23)} ${f(ankle.y + 10)} L${f(ankle.x - 11)} ${f(ankle.y + 10)} Z`} fill={`url(#${uid}boot)`} stroke={OUT} strokeOpacity="0.55" strokeWidth="1.6" />
+          <path d={`M${f(ankle.x - 6)} ${f(ankle.y - top + 8)} L${f(ankle.x - 5)} ${f(ankle.y - 4)}`} stroke="#fff" strokeOpacity="0.18" strokeWidth="2.4" strokeLinecap="round" />
+          <path d={`M${f(ankle.x - 11)} ${f(ankle.y + 8)} h34`} stroke="#000" strokeOpacity="0.45" strokeWidth="2.6" />
+          {look.footwear === "stivali-risvolto" ? (
+            <g>
+              <path d={`M${f(ankle.x - 13)} ${f(ankle.y - top - 2)} ${[0, 1, 2, 3, 4, 5].map((i) => `q2 ${i % 2 ? 4 : -3} 4.6 0`).join(" ")} l0 9 ${[0, 1, 2, 3, 4, 5].map((i) => `q-2 ${i % 2 ? 3 : -2} -4.6 0`).join(" ")} Z`} fill="#eee2c8" stroke={OUT} strokeOpacity="0.4" strokeWidth="1" />
+              <path d={`M${f(ankle.x - 10)} ${f(ankle.y - top + 4)} l3 -2 M${f(ankle.x - 3)} ${f(ankle.y - top + 5)} l3 -2 M${f(ankle.x + 4)} ${f(ankle.y - top + 4)} l3 -2`} stroke="#c9b894" strokeWidth="0.9" />
+            </g>
+          ) : <path d={`M${f(ankle.x - 10)} ${f(ankle.y - top)} h20 v6 h-20 z`} fill={shade(sc, -0.3)} />}
+          <path d={`M${f(ankle.x - 9)} ${f(ankle.y - 12)} h18`} stroke={shade(sc, -0.4)} strokeWidth="1.2" />
+        </g>
+      );
+    }
+    if (look.footwear === "sandali") {
+      return (
+        <g>
+          <path d={`M${f(ankle.x - 8)} ${f(ankle.y - 4)} C${f(ankle.x + 6)} ${f(ankle.y - 4)} ${f(ankle.x + 18)} ${f(ankle.y + 2)} ${f(ankle.x + 21)} ${f(ankle.y + 7)} L${f(ankle.x - 10)} ${f(ankle.y + 7)} Z`} fill={skin} stroke={OUT} strokeOpacity="0.4" strokeWidth="1.2" />
+          <path d={`M${f(ankle.x - 11)} ${f(ankle.y + 7)} h33 v3 h-33 z`} fill={shade(sc, -0.2)} />
+          <path d={`M${f(ankle.x - 8)} ${f(ankle.y - 14)} L${f(ankle.x + 4)} ${f(ankle.y - 2)} M${f(ankle.x + 6)} ${f(ankle.y - 14)} L${f(ankle.x - 6)} ${f(ankle.y - 2)} M${f(ankle.x + 4)} ${f(ankle.y + 1)} L${f(ankle.x + 14)} ${f(ankle.y + 4)}`} stroke={sc} strokeWidth="2.2" strokeLinecap="round" />
         </g>
       );
     }
     const high = look.footwear === "stivaletti" ? 12 : 4;
     return (
       <g>
-        <path d={`M${f(ankle.x - 9)} ${f(ankle.y - high)} L${f(ankle.x + 8)} ${f(ankle.y - high)} C${f(ankle.x + 10)} ${f(ankle.y - 1)} ${f(ankle.x + 20)} ${f(ankle.y + 1)} ${f(ankle.x + 22)} ${f(ankle.y + 7)} L${f(ankle.x + 22)} ${f(ankle.y + 10)} L${f(ankle.x - 11)} ${f(ankle.y + 10)} Z`} fill={look.shoes} />
+        <path d={`M${f(ankle.x - 9)} ${f(ankle.y - high)} L${f(ankle.x + 8)} ${f(ankle.y - high)} C${f(ankle.x + 10)} ${f(ankle.y - 1)} ${f(ankle.x + 20)} ${f(ankle.y + 1)} ${f(ankle.x + 22)} ${f(ankle.y + 7)} L${f(ankle.x + 22)} ${f(ankle.y + 10)} L${f(ankle.x - 11)} ${f(ankle.y + 10)} Z`} fill={`url(#${uid}boot)`} stroke={OUT} strokeOpacity="0.55" strokeWidth="1.4" />
         {look.footwear === "sportive" ? <path d={`M${f(ankle.x - 11)} ${f(ankle.y + 7)} h33 v3.5 h-33 z`} fill="#f2efe8" /> : <path d={`M${f(ankle.x - 11)} ${f(ankle.y + 8)} h33`} stroke="#000" strokeOpacity="0.35" strokeWidth="2.5" />}
-        {look.footwear === "sportive" ? <path d={`M${f(ankle.x - 2)} ${f(ankle.y - 2)} l8 4 M${f(ankle.x + 1)} ${f(ankle.y - 3)} l8 4`} stroke={shade(look.shoes, 0.5)} strokeWidth="1" /> : null}
+        {look.footwear === "sportive" ? <path d={`M${f(ankle.x - 2)} ${f(ankle.y - 2)} l8 4 M${f(ankle.x + 1)} ${f(ankle.y - 3)} l8 4`} stroke={shade(sc, 0.5)} strokeWidth="1" /> : null}
       </g>
     );
   };
@@ -206,7 +278,8 @@ function Figure({ look, def, t, flying, blink, uid }: { look: AvatarLook; def: P
   const leg = (L: typeof legs.back, key: string) => {
     const tight = look.bottom === "calzamaglia";
     const shorts = look.bottom === "pantaloncini";
-    const w = tight ? legW * 0.82 : legW;
+    const brache = look.bottom === "brache";
+    const w = tight ? legW * 0.82 : brache ? legW * 1.1 : legW;
     return (
       <g key={key}>
         {shorts ? (
@@ -219,6 +292,7 @@ function Figure({ look, def, t, flying, blink, uid }: { look: AvatarLook; def: P
           <>
             {limb(L.hip, L.knee, w, `url(#${uid}pants)`)}
             {limb(L.knee, L.ankle, w * 0.86, `url(#${uid}pants)`)}
+            {brache ? <path d={`M${f(L.knee.x - 6)} ${f(L.knee.y + 8)} q5 5 12 0 M${f(L.hip.x - 4)} ${f(L.hip.y + 22)} q4 6 10 1`} stroke={shade(look.pants, -0.35)} strokeWidth="1" fill="none" /> : null}
             {look.bottom === "jeans" ? <line x1={f(L.hip.x + 4)} y1={f(L.hip.y + 6)} x2={f(L.ankle.x + 3)} y2={f(L.ankle.y - 4)} stroke={shade(look.pants, 0.35)} strokeWidth="0.8" strokeDasharray="3 2" /> : null}
           </>
         )}
@@ -228,6 +302,7 @@ function Figure({ look, def, t, flying, blink, uid }: { look: AvatarLook; def: P
   };
 
   // braccio: manica corta o lunga, avambraccio, mano
+  const hook = hookW;
   const arm = (s: P, e: P, h: P, which: "bow" | "draw") => {
     const sleeveLong = longSleeves || look.top === "corpetto" || look.top === "gilet";
     const sleeve = look.top === "gilet" || look.top === "corpetto" ? look.trim : shirt;
@@ -238,7 +313,7 @@ function Figure({ look, def, t, flying, blink, uid }: { look: AvatarLook; def: P
         {limb(s, e, upW, sleeve)}
         {sleeveLong ? limb(e, lerpP(e, h, 0.86), foreW + 1.5, sleeve) : limb(e, h, foreW, skin)}
         {sleeveLong ? limb(lerpP(e, h, 0.86), h, foreW - 1, skin) : null}
-        {look.top === "tunica" || look.top === "farsetto" ? <circle cx={f(lerp(e.x, h.x, 0.84))} cy={f(lerp(e.y, h.y, 0.84))} r={6.5 * W} fill={look.trim} /> : null}
+        {look.top === "tunica" || look.top === "tunica-lunga" || look.top === "farsetto" ? <circle cx={f(lerp(e.x, h.x, 0.84))} cy={f(lerp(e.y, h.y, 0.84))} r={6.5 * W} fill={look.trim} /> : null}
         {!sleeveLong ? <circle cx={f(lerp(s.x, e.x, 0.6))} cy={f(lerp(s.y, e.y, 0.6))} r={upW / 2 + 0.4} fill={shade(sleeve, -0.15)} /> : null}
         {!sleeveLong ? limb(lerpP(s, e, 0.62), e, foreW + 1, skin) : null}
         {which === "bow" ? (
@@ -248,8 +323,21 @@ function Figure({ look, def, t, flying, blink, uid }: { look: AvatarLook; def: P
             <line x1={f(lerp(e.x, h.x, 0.6))} y1={f(lerp(e.y, h.y, 0.6) - 6)} x2={f(lerp(e.x, h.x, 0.6))} y2={f(lerp(e.y, h.y, 0.6) + 6)} stroke={shade(look.armguard, 0.45)} strokeWidth="1" />
           </>
         ) : null}
-        <circle cx={f(h.x)} cy={f(h.y)} r={7.4 * W} fill={skin} />
-        <circle cx={f(h.x - 1.5)} cy={f(h.y + 1.5)} r={7.4 * W} fill={skinD} opacity="0.25" />
+        {look.bracers ? (
+          <g>
+            <line x1={f(lerp(e.x, h.x, 0.32))} y1={f(lerp(e.y, h.y, 0.32))} x2={f(lerp(e.x, h.x, 0.86))} y2={f(lerp(e.y, h.y, 0.86))} stroke={OUT} strokeOpacity="0.5" strokeWidth={foreW + 6} strokeLinecap="round" />
+            <line x1={f(lerp(e.x, h.x, 0.32))} y1={f(lerp(e.y, h.y, 0.32))} x2={f(lerp(e.x, h.x, 0.86))} y2={f(lerp(e.y, h.y, 0.86))} stroke={look.bracers} strokeWidth={foreW + 4} strokeLinecap="round" />
+            {[0.42, 0.56, 0.7].map((k) => {
+              const c = lerpP(e, h, k);
+              return <path key={k} d={`M${f(c.x - 3)} ${f(c.y - 4)} l6 8 M${f(c.x + 3)} ${f(c.y - 4)} l-6 8`} stroke={shade(look.bracers, 0.5)} strokeWidth="0.9" />;
+            })}
+            <line x1={f(lerp(e.x, h.x, 0.33))} y1={f(lerp(e.y, h.y, 0.33) - 1)} x2={f(lerp(e.x, h.x, 0.85))} y2={f(lerp(e.y, h.y, 0.85) - 1)} stroke="#fff" strokeOpacity="0.15" strokeWidth="1.6" strokeLinecap="round" />
+          </g>
+        ) : null}
+        <circle cx={f(h.x)} cy={f(h.y)} r={7.4 * W + 1.3} fill={OUT} opacity="0.5" />
+        <circle cx={f(h.x)} cy={f(h.y)} r={7.4 * W} fill={look.gloves ? "#4a2c16" : skin} />
+        <circle cx={f(h.x - 1.5)} cy={f(h.y + 1.5)} r={7.4 * W} fill={look.gloves ? "#2a180c" : skinD} opacity="0.25" />
+        {which === "draw" && hook > 0.5 ? <path d={`M${f(h.x + 2)} ${f(h.y - 5)} q4 1 4 4 M${f(h.x + 2)} ${f(h.y - 1)} q4 1 4 4 M${f(h.x + 2)} ${f(h.y + 3)} q4 1 4 4`} stroke={look.gloves ? "#1a0e06" : skinD} strokeWidth="1.1" fill="none" /> : null}
         {which === "draw" ? (
           <g>
             <rect x={f(h.x + 1)} y={f(h.y - 6.5)} width="8" height="13" rx="2.5" fill={look.tab} />
@@ -366,9 +454,17 @@ function Figure({ look, def, t, flying, blink, uid }: { look: AvatarLook; def: P
       {leg(legs.back, "lb")}
       {leg(legs.front, "lf")}
 
-      <path d={look.top === "tunica" ? `${torso.replace(" Z", "")} L${f(hipR + 6)} ${tunicLen} L${f(hipL - 6)} ${tunicLen} Z` : torso} fill={`url(#${uid}shirt)`} />
+      {longTunic ? <path d={`M${f(hipL + 1)} 200 L${f(hipR - 1)} 200 C${f(hipR + 4)} 224 ${f(hipR + 10)} ${tunicLen - 18} ${f(hipR + 12)} ${tunicLen} Q${f(cx)} ${tunicLen + 5} ${f(hipL - 12)} ${tunicLen} C${f(hipL - 10)} ${tunicLen - 18} ${f(hipL - 4)} 224 ${f(hipL + 1)} 200 Z`} fill={`url(#${uid}shirt)`} stroke={OUT} strokeOpacity="0.5" strokeWidth="2.2" /> : null}
+      <path d={torso} fill={`url(#${uid}shirt)`} stroke={OUT} strokeOpacity="0.5" strokeWidth="2.2" />
       <Outfit look={look} cx={cx} shoulderL={shoulderL} shoulderR={shoulderR} hipL={hipL} hipR={hipR} tunicLen={tunicLen} W={W} woman={woman} />
-      {look.quiverPlace !== "schiena" ? quiver("fianco") : null}
+      {look.quiverPlace !== "schiena" ? quiver("fianco") : (
+        <g>
+          <path d={`M${f(shoulderL + 4)} 122 L${f(hipR - 2)} 204`} stroke={OUT} strokeOpacity="0.5" strokeWidth="9" strokeLinecap="round" />
+          <path d={`M${f(shoulderL + 4)} 122 L${f(hipR - 2)} 204`} stroke={shade(look.quiver, -0.15)} strokeWidth="6.5" strokeLinecap="round" />
+          <path d={`M${f(shoulderL + 4)} 122 L${f(hipR - 2)} 204`} stroke={shade(look.quiver, 0.35)} strokeWidth="0.8" strokeDasharray="2.5 2" />
+          <rect x={f(lerp(shoulderL + 4, hipR - 2, 0.45) - 4)} y={f(lerp(122, 204, 0.45) - 4)} width="8" height="8" rx="1.5" fill="none" stroke="#c9a46a" strokeWidth="1.4" />
+        </g>
+      )}
       {look.chestguard ? (
         <g>
           <path d={`M${f(cx + 2)} 128 C${f(cx + 14)} 124 ${f(shoulderR - 2)} 128 ${f(shoulderR - 1)} 136 L${f(shoulderR - 4)} 162 C${f(cx + 16)} 166 ${f(cx + 6)} 164 ${f(cx + 1)} 158 Z`} fill={look.chestColor} />
@@ -394,7 +490,7 @@ function Figure({ look, def, t, flying, blink, uid }: { look: AvatarLook; def: P
       </g>
 
       {bow}
-      {def.arrow && nockPt ? arrowNode(nockPt, restW, 124) : null}
+      {def.arrow ? arrowNode(nockPt ?? drawHand, restW, 124) : null}
       {flying != null && flying < 0.9 ? <g transform={`translate(${f(flying * 900)} ${f(-flying * 20)})`}>{arrowNode(ANCHOR, rot(restLocal, 0, relGrip), 124)}</g> : null}
       <path d={nockPt ? `M${f(tipTop.x)} ${f(tipTop.y)} L${f(nockPt.x)} ${f(nockPt.y)} L${f(tipBot.x)} ${f(tipBot.y)}` : `M${f(tipTop.x)} ${f(tipTop.y)} L${f(tipBot.x)} ${f(tipBot.y)}`} stroke={look.string || "#f4f1ea"} strokeWidth="1.1" fill="none" opacity="0.9" />
       {arm(SB, bowArm.elbow, grip, "bow")}
@@ -407,10 +503,15 @@ function Outfit({ look, cx, shoulderL, shoulderR, hipL, hipR, tunicLen, W, woman
   const sh = look.shirt;
   const tr = look.trim;
   const dark = shade(sh, -0.3);
-  const belt = (
+  const wide = look.belt === "larga";
+  const bc = look.beltColor || (look.style === "medievale" ? "#5b3a1e" : shade(look.pants, -0.45));
+  const belt = look.belt === "nessuna" ? (look.pouch ? <path d={`M${f(hipR - 14)} 206 h12 v14 a3 3 0 0 1 -3 3 h-6 a3 3 0 0 1 -3 -3 z`} fill="#7a4a26" stroke="#4a2c16" strokeWidth="0.8" /> : null) : (
     <g>
-      <rect x={f(hipL - 1)} y="200" width={f(hipR - hipL + 2)} height="8" rx="2" fill={look.style === "medievale" ? "#5b3a1e" : shade(look.pants, -0.45)} />
-      <rect x={f(cx - 3.5)} y="200.5" width="7" height="7" rx="1.2" fill="none" stroke="#c9a46a" strokeWidth="1.2" />
+      <rect x={f(hipL - 2)} y={wide ? 196 : 200} width={f(hipR - hipL + 4)} height={wide ? 13 : 8} rx="2" fill={bc} stroke="#1b130d" strokeOpacity="0.5" strokeWidth="1.2" />
+      <rect x={f(hipL - 2)} y={wide ? 197 : 200.6} width={f(hipR - hipL + 4)} height="1.6" fill="#fff" opacity="0.15" />
+      {wide ? [hipL + 6, hipR - 6].map((x) => <circle key={x} cx={f(x)} cy="202.5" r="1.3" fill="#d9b45a" />) : null}
+      <rect x={f(cx - (wide ? 6 : 3.5))} y={wide ? 196.5 : 200.5} width={wide ? 12 : 7} height={wide ? 12 : 7} rx="1.6" fill="none" stroke="#d9b45a" strokeWidth={wide ? 2 : 1.2} />
+      {wide ? <path d={`M${f(cx + 2)} 209 l4 10 l3 -1 l-4 -9 z`} fill={bc} /> : null}
       {look.pouch ? <path d={`M${f(hipR - 14)} 206 h12 v14 a3 3 0 0 1 -3 3 h-6 a3 3 0 0 1 -3 -3 z`} fill="#7a4a26" stroke="#4a2c16" strokeWidth="0.8" /> : null}
     </g>
   );
@@ -461,6 +562,26 @@ function Outfit({ look, cx, shoulderL, shoulderR, hipL, hipR, tunicLen, W, woman
           <path d={`M${f(cx)} 126 v14`} stroke={shade(sh, -0.35)} strokeWidth="1.2" />
           <path d={`M${f(hipL - 6)} ${tunicLen - 2} L${f(hipR + 6)} ${tunicLen - 2}`} stroke={tr} strokeWidth="4" />
           <path d={`M${f(cx)} 210 L${f(cx)} ${tunicLen}`} stroke={shade(sh, -0.25)} strokeWidth="1.2" />
+          {belt}
+        </g>
+      );
+    case "tunica-lunga":
+      return (
+        <g>
+          <path d={`M${f(cx - 12)} 115 Q${f(cx)} 126 ${f(cx + 12)} 115`} stroke={shade(sh, -0.3)} strokeWidth="2.4" fill="none" />
+          <path d={`M${f(cx + 1)} 120 L${f(cx + 1)} 196`} stroke={shade(sh, -0.25)} strokeWidth="1.4" />
+          {[128, 141, 154, 167, 180, 192].map((y) => (
+            <g key={y}>
+              <circle cx={f(cx + 3.5)} cy={y} r="2" fill={tr} stroke={shade(tr, -0.4)} strokeWidth="0.6" />
+              <circle cx={f(cx + 3)} cy={y - 0.6} r="0.6" fill="#fff" opacity="0.6" />
+            </g>
+          ))}
+          {[[-14, 214, -18, 258], [-4, 216, -6, 262], [8, 216, 10, 262], [16, 214, 20, 258]].map(([x1, y1, x2, y2]) => (
+            <path key={x1} d={`M${f(cx + x1)} ${y1} Q${f(cx + (x1 + x2) / 2 + 2)} ${(y1 + y2) / 2} ${f(cx + x2)} ${y2}`} stroke={shade(sh, -0.22)} strokeWidth="1" fill="none" />
+          ))}
+          <path d={`M${f(hipR + 10)} ${tunicLen - 30} L${f(hipR + 12)} ${tunicLen}`} stroke={shade(sh, -0.4)} strokeWidth="1.3" />
+          <path d={`M${f(hipL - 10)} ${tunicLen - 30} L${f(hipL - 12)} ${tunicLen}`} stroke={shade(sh, -0.4)} strokeWidth="1.3" />
+          <path d={`M${f(shoulderL + 8)} 150 q8 4 16 0 M${f(shoulderR - 24)} 154 q8 4 16 0`} stroke={shade(sh, -0.2)} strokeWidth="1" fill="none" />
           {belt}
         </g>
       );
@@ -559,7 +680,7 @@ function Head({ look, H, face, blink, uid, t }: { look: AvatarLook; H: P; face: 
   return (
     <g transform={`translate(0 ${f(dy)})`}>
       {look.hair !== "calvo" && look.hair !== "rasati" && look.hair !== "cresta" && !capOn ? <path d="M131 84 C127 66 138 57 150 57 C140 64 136 76 138 92 Z" fill={`url(#${uid}hair)`} /> : null}
-      <path d={headPath} fill={`url(#${uid}face)`} />
+      <path d={headPath} fill={`url(#${uid}face)`} stroke="#1b130d" strokeOpacity="0.45" strokeWidth="1.6" />
       <ellipse cx="141" cy="88" rx="4.4" ry="6.6" fill={skinD} />
       <path d="M141 84 Q138 88 141 92" stroke={shade(skin, -0.38)} strokeWidth="0.9" fill="none" />
       {look.earring ? <circle cx="141.5" cy="96" r="1.8" fill="#d9b45a" stroke="#8a6a20" strokeWidth="0.5" /> : null}
@@ -720,6 +841,11 @@ function Defs({ look, uid }: { look: AvatarLook; uid: string }) {
         <stop offset="0.55" stopColor={look.shirt} />
         <stop offset="1" stopColor={shade(look.shirt, 0.12)} />
       </linearGradient>
+      <linearGradient id={`${uid}boot`} x1="0" x2="1">
+        <stop offset="0" stopColor={shade(look.shoes, -0.35)} />
+        <stop offset="0.45" stopColor={shade(look.shoes, 0.12)} />
+        <stop offset="1" stopColor={shade(look.shoes, -0.25)} />
+      </linearGradient>
       <linearGradient id={`${uid}pants`} x1="0" x2="1">
         <stop offset="0" stopColor={shade(look.pants, -0.3)} />
         <stop offset="1" stopColor={shade(look.pants, 0.1)} />
@@ -740,30 +866,39 @@ function Defs({ look, uid }: { look: AvatarLook; uid: string }) {
   );
 }
 
+/** Comando esterno (gioco): quanto è tesa la corda (0–1) e alzo in gradi (positivo = più in alto). */
+export type AvatarDrive = { pull: number; aim: number; released?: number | null };
+
 /**
- * L'arciere. `pose` = "animata" ripete il tiro completo; le altre sono pose ferme (con respiro e
- * battito delle palpebre). Toccandolo, in una posa ferma, scocca una freccia.
+ * L'arciere. `pose` = "animata" ripete la sequenza di tiro scelta (completa, rapida o da gara, con le
+ * frecce della volée); le altre sono pose ferme con respiro e battito delle palpebre. Toccandolo, in
+ * una posa ferma, scocca una freccia. Con `drive` lo muove il giocatore (tendere, mirare, rilasciare).
  */
-export function ArcherAvatar({ look, className = "h-72 w-auto", interactive = true, pose, onShot, hideFlight = false, still = false }: { look: AvatarLook; className?: string; interactive?: boolean; pose?: Pose; onShot?: () => void; hideFlight?: boolean; still?: boolean }) {
+export function ArcherAvatar({ look, className = "h-72 w-auto", interactive = true, pose, onShot, hideFlight = false, still = false, drive, onPhase }: { look: AvatarLook; className?: string; interactive?: boolean; pose?: Pose; onShot?: () => void; hideFlight?: boolean; still?: boolean; drive?: AvatarDrive | null; onPhase?: (name: string) => void }) {
   const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
-  const mode = pose ?? look.pose ?? "animata";
+  const mode = drive ? "guidata" : pose ?? look.pose ?? "animata";
+  const plan = useMemo(() => routinePlan(look), [look.routine, look.hold, look.volley]);
   const [t, setT] = useState(0);
   const [tapShot, setTapShot] = useState<number | null>(null);
   const shotRef = useRef(onShot);
   shotRef.current = onShot;
-  const lastRelease = useRef(-1);
+  const phaseRef = useRef(onPhase);
+  phaseRef.current = onPhase;
+  const lastPhase = useRef("");
+  const lastRelease = useRef("");
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    if (reduce || still) {
-      setT(mode === "animata" ? 4.6 : 0.5);
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches || document.documentElement.dataset.motion === "ridotta";
+    if ((reduce || still) && mode !== "guidata") {
+      setT(mode === "animata" ? plan.releases[0] - 0.4 : 0.5);
       return;
     }
     let raf = 0;
     let last = 0;
     const t0 = performance.now();
     const frame = (now: number) => {
-      if (now - last > 33 && !document.hidden) {
+      // ~50 fotogrammi al secondo: movimento fluido senza pesare sul telefono
+      if (now - last > 19 && !document.hidden) {
         last = now;
         setT((now - t0) / 1000);
       }
@@ -771,36 +906,58 @@ export function ArcherAvatar({ look, className = "h-72 w-auto", interactive = tr
     };
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
-  }, [mode, still]);
+  }, [mode, still, plan]);
 
   let def: PoseDef;
   let flying: number | null = null;
-  if (mode === "animata") {
-    const at = poseAt(t % CYCLE);
-    def = at.def;
-    if (at.release != null && at.release < 1) flying = at.release;
-    const n = Math.floor(t / CYCLE);
-    if (at.release != null && lastRelease.current !== n) {
-      lastRelease.current = n;
-      queueMicrotask(() => shotRef.current?.());
+  let phase = "";
+  if (mode === "guidata" && drive) {
+    // il giocatore tende e mira: da pre-trazione ad ancoraggio, l'arco sale o scende con l'alzo
+    const k = Math.max(0, Math.min(1, drive.pull));
+    const base = k <= 0.02 ? POSES.predraw : mix(POSES.predraw, POSES.allungo, easeIO(k));
+    const lift = Math.max(-14, Math.min(18, drive.aim)) * 1.5;
+    def = { ...base, grip: p(base.grip.x, base.grip.y - lift) };
+    if (drive.released != null) {
+      const dt = drive.released;
+      def = dt < 0.12 ? mix(POSES.mira, POSES.rilascio, dt / 0.12) : mix(POSES.rilascio, POSES.accompagna, Math.min(1, (dt - 0.12) / 0.6));
+      def = { ...def, grip: p(def.grip.x, def.grip.y - lift) };
     }
+    phase = drive.released != null ? PHASE_NAMES.accompagna : k > 0.9 ? PHASE_NAMES.mira : k > 0.05 ? PHASE_NAMES.trazione : PHASE_NAMES.predraw;
+  } else if (mode === "animata") {
+    const tc = t % plan.cycle;
+    const at = poseAt(plan, tc);
+    def = at.def;
+    phase = at.phase;
+    if (at.release != null && at.release < 1) flying = at.release;
+    const cycleN = Math.floor(t / plan.cycle);
+    plan.releases.forEach((r, i) => {
+      const key = `${cycleN}-${i}`;
+      if (tc >= r && tc - r < 0.3 && lastRelease.current !== key) {
+        lastRelease.current = key;
+        queueMicrotask(() => shotRef.current?.());
+      }
+    });
   } else {
-    const name = mode === "allungo" ? "allungo" : mode === "vittoria" ? "vittoria" : mode === "fiero" ? "fiero" : "riposo";
+    const name = mode in POSES ? mode : "riposo";
     def = POSES[name];
     if (tapShot != null) {
       const dt = t - tapShot;
-      if (dt < 0.95) {
-        def = dt < 0.5 ? mix(POSES[name], POSES.allungo, ease(Math.min(1, dt / 0.35))) : mix(POSES.rilascio, POSES[name], ease((dt - 0.5) / 0.45));
-        if (dt >= 0.5) flying = dt - 0.5;
+      if (dt < 1.3) {
+        def = dt < 0.25 ? mix(POSES[name], POSES.predraw, easeIO(dt / 0.25)) : dt < 0.6 ? mix(POSES.predraw, POSES.allungo, easeIO((dt - 0.25) / 0.35)) : dt < 0.72 ? mix(POSES.allungo, POSES.rilascio, (dt - 0.6) / 0.12) : mix(POSES.accompagna, POSES[name], easeIO((dt - 0.72) / 0.58));
+        if (dt >= 0.6) flying = dt - 0.6;
       }
     }
+  }
+  if (phase && phase !== lastPhase.current) {
+    lastPhase.current = phase;
+    queueMicrotask(() => phaseRef.current?.(phase));
   }
   const blink = t % 3.7 < 0.12;
   const kid = look.body === "ragazzo" || look.body === "ragazza";
   const tap = () => {
-    if (!interactive || mode === "animata") return;
+    if (!interactive || mode === "animata" || mode === "guidata") return;
     setTapShot(t);
-    window.setTimeout(() => shotRef.current?.(), 500);
+    window.setTimeout(() => shotRef.current?.(), 600);
   };
   return (
     <svg viewBox="40 0 300 350" className={className} role="img" aria-label="Il tuo arciere" onClick={tap} style={{ cursor: interactive && mode !== "animata" ? "pointer" : undefined, overflow: "visible" }}>

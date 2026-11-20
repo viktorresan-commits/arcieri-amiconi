@@ -1,7 +1,9 @@
 import { useState, type ReactNode } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { AvatarScene, useAvatar } from "@/components/avatar-hero";
-import { Archer3D, RealFace } from "@/components/archer-3d";
+import { Archer3D } from "@/components/archer-3d";
+import { AvatarFace } from "@/components/archer-avatar";
+import { AvatarPhotoButton } from "@/components/avatar-photo";
 import { BOW_TYPES } from "@/components/gear-icons";
 import { Button, Card, Chips, PageHead, Segmented } from "@/components/kit";
 import { Glyph } from "@/components/icons";
@@ -37,7 +39,7 @@ function Colors({ value, colors, onPick }: { value: string; colors: string[]; on
   return (
     <div className="flex flex-wrap gap-1.5">
       {colors.map((c) => (
-        <button key={c} type="button" aria-label={c} aria-pressed={value === c} onClick={() => onPick(c)} className={`h-9 w-9 rounded-full border-2 ${value === c ? "border-white shadow-[0_0_0_2px_rgba(0,0,0,0.4)]" : "border-transparent"}`} style={{ background: c }} />
+        <button key={c || "none"} type="button" aria-label={c || "Nessuno"} aria-pressed={value === c} onClick={() => onPick(c)} className={`grid h-9 w-9 place-items-center rounded-full border-2 text-xs text-muted ${value === c ? "border-white shadow-[0_0_0_2px_rgba(0,0,0,0.4)]" : c ? "border-transparent" : "border-line"}`} style={{ background: c || "transparent" }}>{c ? null : "—"}</button>
       ))}
     </div>
   );
@@ -62,17 +64,16 @@ function Page() {
 
   return (
     <div className="grid gap-3">
-      <PageHead kicker="Home" title="Il tuo arciere" lede="Aspetto, abiti e attrezzatura. Le modifiche si salvano da sole e compaiono in Home." />
+      <div className="flex items-center gap-3">
+        <AvatarFace look={shown} className="h-14 w-14 shrink-0 rounded-full ring-2 ring-white/15" />
+        <PageHead kicker="Home" title="Il tuo arciere" lede="Aspetto, abiti, attrezzatura e sequenza di tiro. Si salva da sé." />
+      </div>
       <div className="sticky top-16 z-10">
         <div className="relative">
           {in3d ? (
-            <Archer3D look={shown} height="h-64" />
+            <Archer3D look={shown} height="h-72" />
           ) : (
-            <AvatarScene look={shown} height="h-64">
-              <span className="absolute left-3 top-3 grid h-16 w-16 place-items-center overflow-hidden rounded-full ring-2 ring-[#ffd27a]/80">
-                <RealFace look={shown} className="h-16 w-16" />
-              </span>
-            </AvatarScene>
+            <AvatarScene look={shown} height="h-72" phase />
           )}
           <button type="button" aria-pressed={in3d} onClick={() => setIn3d((x) => !x)} className={`absolute right-2 top-2 z-10 min-h-9 rounded-full px-3 text-xs font-bold backdrop-blur ${in3d ? "bg-[#7cf0a8] text-[#0b120e]" : "bg-black/55 text-white"}`}>
             {in3d ? "Vista 2D" : "Vista 3D"}
@@ -86,6 +87,7 @@ function Page() {
         <button type="button" className="aa-chip shrink-0" onClick={() => setLook((l) => randomLook(l))}><Glyph name="sparkle" size={14} /> Casuale</button>
         <button type="button" className="aa-chip shrink-0" onClick={() => setLook(AVATAR_DEFAULT)}>Ricomincia</button>
       </div>
+      <AvatarPhotoButton look={shown} />
       <Segmented<Tab>
         value={tab}
         onChange={setTab}
@@ -141,9 +143,12 @@ function Page() {
             <Row label="Sopra"><Chips value={look.top} onChange={(v) => set("top", v)} options={TOPS[look.style]} /></Row>
             <Row label="Colore"><Colors value={look.shirt} colors={CLOTH_COLORS} onPick={(c) => set("shirt", c)} /></Row>
             <Row label="Rifiniture (colletto, bordi, maglia sotto)"><Colors value={look.trim} colors={CLOTH_COLORS} onPick={(c) => set("trim", c)} /></Row>
-            <Row label="Sotto"><Chips value={look.bottom} onChange={(v) => set("bottom", v)} options={[{ id: "pantaloni", label: "Pantaloni" }, { id: "jeans", label: "Jeans" }, { id: "pantaloncini", label: "Pantaloncini" }, { id: "calzamaglia", label: "Calzamaglia" }]} /></Row>
+            <Row label="Sotto"><Chips value={look.bottom} onChange={(v) => set("bottom", v)} options={[{ id: "pantaloni", label: "Pantaloni" }, { id: "jeans", label: "Jeans" }, { id: "pantaloncini", label: "Pantaloncini" }, { id: "calzamaglia", label: "Calzamaglia" }, { id: "brache", label: "Brache" }]} /></Row>
             <Row label="Colore"><Colors value={look.pants} colors={["#2b3440", "#3a2a1e", "#1f3a5f", "#2a4a7a", "#4b4b4b", "#5b4a2e", "#e9e4d8", "#4b6b2e"]} onPick={(c) => set("pants", c)} /></Row>
-            <Row label="Ai piedi"><Chips value={look.footwear} onChange={(v) => set("footwear", v)} options={[{ id: "sportive", label: "Scarpe sportive" }, { id: "stivaletti", label: "Stivaletti" }, { id: "stivali", label: "Stivali" }]} /></Row>
+            <Row label="Ai piedi"><Chips value={look.footwear} onChange={(v) => set("footwear", v)} options={[{ id: "sportive", label: "Scarpe sportive" }, { id: "stivaletti", label: "Stivaletti" }, { id: "stivali", label: "Stivali" }, { id: "stivali-risvolto", label: "Stivali con risvolto" }, { id: "sandali", label: "Sandali" }]} /></Row>
+            <Row label="Cintura"><Chips value={look.belt} onChange={(v) => set("belt", v)} options={[{ id: "sottile", label: "Sottile" }, { id: "larga", label: "Larga con fibbia" }, { id: "nessuna", label: "Nessuna" }]} /></Row>
+            {look.belt !== "nessuna" ? <Row label="Colore della cintura"><Colors value={look.beltColor} colors={["#5b3a1e", "#4a2c16", "#14181c", "#8a2f2f", "#7a4a26", "#c9a46a"]} onPick={(c) => set("beltColor", c)} /></Row> : null}
+            <Row label="Bracciali di cuoio"><Colors value={look.bracers} colors={["", "#6b4224", "#4a2c16", "#14181c", "#8a2f2f", "#c9a46a"]} onPick={(c) => set("bracers", c)} /></Row>
             <Row label="Colore"><Colors value={look.shoes} colors={["#3a2a1e", "#14181c", "#e9e4d8", "#8a2f2f", "#2a5d8a", "#5e3b22"]} onPick={(c) => set("shoes", c)} /></Row>
             <Row label="Accessori">
               <div className="flex flex-wrap gap-1.5">
@@ -151,6 +156,7 @@ function Page() {
                 <Toggle on={look.scarf} label="Sciarpa" onChange={(v) => set("scarf", v)} />
                 <Toggle on={look.necklace} label="Collana" onChange={(v) => set("necklace", v)} />
                 <Toggle on={look.pouch} label="Borsello" onChange={(v) => set("pouch", v)} />
+                <Toggle on={look.gloves} label="Guanti" onChange={(v) => set("gloves", v)} />
               </div>
             </Row>
             {look.cape ? <Row label="Colore del mantello"><Colors value={look.capeColor} colors={CLOTH_COLORS} onPick={(c) => set("capeColor", c)} /></Row> : null}
@@ -160,10 +166,21 @@ function Page() {
           </>
         ) : null}
         {tab === "posa" ? (
-          <Row label="Come sta in Home">
-            <Chips value={look.pose} onChange={(v) => set("pose", v)} options={[{ id: "animata", label: "Tira in continuo" }, { id: "riposo", label: "A riposo" }, { id: "allungo", label: "In allungo" }, { id: "vittoria", label: "Vittoria" }, { id: "fiero", label: "Fiero" }]} />
-            <p className="text-xs text-muted">Nelle pose ferme tocca l'arciere: scocca una freccia verso il paglione.</p>
-          </Row>
+          <>
+            <Row label="Come sta">
+              <Chips value={look.pose} onChange={(v) => set("pose", v)} options={[{ id: "animata", label: "Tira in continuo" }, { id: "riposo", label: "Posizione" }, { id: "incocco", label: "Incocca" }, { id: "mira", label: "Mira" }, { id: "accompagna", label: "Accompagna" }, { id: "saluto", label: "Saluto" }, { id: "vittoria", label: "Vittoria" }, { id: "fiero", label: "Fiero" }]} />
+              <p className="text-xs text-muted">Nelle pose ferme tocca l'arciere: tende, rilascia e torna in posa.</p>
+            </Row>
+            <Row label="Sequenza di tiro">
+              <Chips value={look.routine} onChange={(v) => set("routine", v)} options={[{ id: "completa", label: "Completa (11 tempi)" }, { id: "rapida", label: "Rapida" }, { id: "gara", label: "Da gara" }]} />
+            </Row>
+            <Row label="Secondi di mira all'ancoraggio">
+              <Chips value={look.hold} onChange={(v) => set("hold", v)} options={["1", "2", "3", "4", "5"].map((x) => ({ id: x, label: `${x} s` }))} />
+            </Row>
+            <Row label="Frecce per volée">
+              <Chips value={look.volley} onChange={(v) => set("volley", v)} options={["1", "3", "6"].map((x) => ({ id: x, label: x }))} />
+            </Row>
+          </>
         ) : null}
         {tab === "attrezzatura" ? (
           <>

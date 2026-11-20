@@ -244,7 +244,7 @@ function Page() {
           const card = (
             <Link to="/arciere/$id" params={{ id: String(row.id) }}>
               <Card className="aa-menu-row flex items-center gap-3 p-3" style={{ animationDelay: `${Math.min(i, 10) * 40}ms` }}>
-                <Avatar size="lg" label={row.name} color={row.avatarColor} photo={row.photoUrl} />
+                <Avatar size="lg" label={row.name} color={row.avatarColor} photo={row.photoUrl} look={looks[row.userId]} />
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-display text-2xl leading-none">{row.name}</p>
                   <p className="mt-1 text-xs text-muted">{[row.division, `${row.sessions} allenamenti`, `${row.arrows} frecce`, `${row.gare} gare`, row.bestDistance != null ? `${row.bestDistance} m` : ""].filter(Boolean).join(" · ")}</p>

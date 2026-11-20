@@ -1,6 +1,6 @@
 /** L'arciere della Home: aspetto, abiti, accessori e attrezzatura. Salvato sul telefono e sul profilo. */
 export type HairStyle = "corti" | "rasati" | "mossi" | "ricci" | "lunghi" | "coda" | "chignon" | "treccia" | "codini" | "caschetto" | "cresta" | "calvo";
-export type Pose = "animata" | "riposo" | "allungo" | "vittoria" | "fiero";
+export type Pose = "animata" | "riposo" | "incocco" | "mira" | "allungo" | "accompagna" | "vittoria" | "fiero" | "saluto";
 
 export type AvatarLook = {
   body: "uomo" | "donna" | "ragazzo" | "ragazza";
@@ -20,12 +20,12 @@ export type AvatarLook = {
   hatColor: string;
   /** stile degli abiti: moderno o medievale */
   style: "moderno" | "medievale";
-  top: "maglia" | "felpa" | "polo" | "gilet" | "giacca" | "tunica" | "farsetto" | "corpetto";
+  top: "maglia" | "felpa" | "polo" | "gilet" | "giacca" | "tunica" | "tunica-lunga" | "farsetto" | "corpetto";
   shirt: string;
   trim: string;
-  bottom: "pantaloni" | "jeans" | "pantaloncini" | "calzamaglia";
+  bottom: "pantaloni" | "jeans" | "pantaloncini" | "calzamaglia" | "brache";
   pants: string;
-  footwear: "sportive" | "stivali" | "stivaletti";
+  footwear: "sportive" | "stivali" | "stivaletti" | "stivali-risvolto" | "sandali";
   shoes: string;
   cape: boolean;
   capeColor: string;
@@ -51,6 +51,19 @@ export type AvatarLook = {
   chestColor: string;
   quiver: string;
   quiverPlace: "fianco" | "schiena";
+  /** bracciali di cuoio su entrambi gli avambracci ("" = niente) */
+  bracers: string;
+  belt: "sottile" | "larga" | "nessuna";
+  beltColor: string;
+  gloves: boolean;
+  /** sequenza di tiro: completa (11 tempi), rapida, da gara (mira lunga) */
+  routine: "completa" | "rapida" | "gara";
+  /** secondi di mira all'ancoraggio */
+  hold: string;
+  /** frecce per volée nella sequenza animata */
+  volley: string;
+  /** il volto dell'arciere fa da foto profilo */
+  facePhoto: boolean;
 };
 
 export const SKINS = ["#f8dcc8", "#eec5a4", "#dba57d", "#c0865c", "#9a6440", "#6e4429", "#4a2c1a"];
@@ -69,6 +82,7 @@ export const TOPS: Record<AvatarLook["style"], { id: AvatarLook["top"]; label: s
   ],
   medievale: [
     { id: "tunica", label: "Tunica" },
+    { id: "tunica-lunga", label: "Tunica lunga con bottoni" },
     { id: "farsetto", label: "Farsetto" },
     { id: "corpetto", label: "Corpetto di cuoio" },
   ],
@@ -121,6 +135,14 @@ export const AVATAR_DEFAULT: AvatarLook = {
   chestColor: "#1d2126",
   quiver: "#7a4a26",
   quiverPlace: "fianco",
+  bracers: "",
+  belt: "sottile",
+  beltColor: "#5b3a1e",
+  gloves: false,
+  routine: "completa",
+  hold: "2",
+  volley: "3",
+  facePhoto: false,
 };
 
 export const AVATAR_KEY = "aa-avatar-v1";
@@ -139,6 +161,7 @@ export const AVATAR_PRESETS: { id: string; label: string; look: Partial<AvatarLo
   { id: "donna", label: "Arciera", look: { body: "donna", hair: "coda", beard: "nessuna", hairColor: "#16110d", skin: "#dba57d", style: "moderno", top: "gilet", shirt: "#1f3a5f", hat: "nessuno", cape: false } },
   { id: "ragazzo", label: "Giovane", look: { body: "ragazzo", hair: "mossi", beard: "nessuna", hairColor: "#b88a4a", skin: "#f8dcc8", style: "moderno", top: "felpa", shirt: "#c46b2b", chestguard: false, bottom: "pantaloncini" } },
   { id: "ragazza", label: "Giovane arciera", look: { body: "ragazza", hair: "codini", beard: "nessuna", hairColor: "#5e3b22", skin: "#c0865c", style: "moderno", top: "maglia", shirt: "#2a5d8a", bottom: "jeans", freckles: true } },
+  { id: "boscaiolo", label: "Arciere del bosco", look: { body: "uomo", style: "medievale", top: "tunica-lunga", shirt: "#e4d9bf", trim: "#8a6a3a", bottom: "brache", pants: "#3d4a52", footwear: "stivali-risvolto", shoes: "#5e3b22", bracers: "#6b4224", belt: "larga", beltColor: "#4a2c16", quiverPlace: "schiena", quiver: "#6b4224", cape: false, hat: "nessuno", bowType: "longbow", useMain: false, chestguard: false, beard: "accenno", hair: "corti" } },
   { id: "medievale", label: "Medievale", look: { style: "medievale", top: "tunica", shirt: "#4b6b2e", trim: "#c7a03a", bottom: "calzamaglia", pants: "#3a2a1e", footwear: "stivali", shoes: "#5e3b22", cape: true, capeColor: "#5b2b6e", hat: "cappuccio", hatColor: "#4b6b2e", bowType: "longbow", useMain: false, quiverPlace: "schiena", pouch: true, chestguard: false } },
 ];
 

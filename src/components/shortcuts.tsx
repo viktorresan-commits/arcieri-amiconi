@@ -63,31 +63,40 @@ export function ShortcutEditor({ onClose }: { onClose: () => void }) {
           <p className="aa-section-title">Le tue scorciatoie</p>
           <button type="button" className="aa-chip is-on" onClick={onClose}>Fatto</button>
         </div>
-        <p className="text-xs text-muted">Tocca per mettere o togliere. Le frecce cambiano l'ordine in Home.</p>
+        <p className="text-xs text-muted">In alto le tue, nell'ordine della Home: le frecce le spostano subito. Sotto le altre da aggiungere.</p>
         <ul className="grid gap-1.5">
-          {SHORTCUTS.map((s) => {
-            const on = pinned.includes(s.id);
+          {pinned.map((id, i) => {
+            const s = shortcutById(id);
+            if (!s) return null;
             return (
-              <li key={s.id} className={cx("flex items-center gap-3 rounded-2xl border px-3 py-2 transition", on ? "border-white/15 bg-white/[0.06]" : "border-transparent opacity-70")}>
-                <button type="button" onClick={() => toggle(s.id)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
-                  <AppIcon name={s.icon} color={s.color} size={40} />
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-semibold">{s.label}</span>
-                    <span className="block truncate text-[0.7rem] text-muted">{s.hint}</span>
-                  </span>
-                </button>
-                {on ? (
-                  <span className="flex gap-1">
-                    <button type="button" className="aa-chip !min-h-8 !px-2" onClick={() => move(s.id, -1)} aria-label="Più su">↑</button>
-                    <button type="button" className="aa-chip !min-h-8 !px-2" onClick={() => move(s.id, 1)} aria-label="Più giù">↓</button>
-                  </span>
-                ) : null}
-                <button type="button" onClick={() => toggle(s.id)} aria-pressed={on} className={cx("grid h-7 w-12 shrink-0 items-center rounded-full p-0.5 transition", on ? "bg-primary" : "bg-white/15")}>
-                  <span className={cx("h-6 w-6 rounded-full bg-white shadow transition-transform", on ? "translate-x-5" : "")} />
-                </button>
+              <li key={s.id} className="aa-rise flex items-center gap-2 rounded-2xl border border-white/15 bg-white/[0.06] px-2 py-2">
+                <span className="w-5 text-center font-display text-sm tabular-nums text-muted">{i + 1}</span>
+                <AppIcon name={s.icon} color={s.color} size={38} />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-semibold">{s.label}</span>
+                  <span className="block truncate text-[0.7rem] text-muted">{s.hint}</span>
+                </span>
+                <button type="button" disabled={i === 0} className="grid h-9 w-9 place-items-center rounded-xl bg-white/[0.07] disabled:opacity-30" onClick={() => move(s.id, -1)} aria-label={`Sposta ${s.label} più su`}><Glyph name="chevron" size={15} className="-rotate-90" /></button>
+                <button type="button" disabled={i === pinned.length - 1} className="grid h-9 w-9 place-items-center rounded-xl bg-white/[0.07] disabled:opacity-30" onClick={() => move(s.id, 1)} aria-label={`Sposta ${s.label} più giù`}><Glyph name="chevron" size={15} className="rotate-90" /></button>
+                <button type="button" className="grid h-9 w-9 place-items-center rounded-xl text-muted" onClick={() => toggle(s.id)} aria-label={`Togli ${s.label}`}><Glyph name="close" size={15} /></button>
               </li>
             );
           })}
+        </ul>
+        <p className="aa-section-title mt-1 text-base">Da aggiungere</p>
+        <ul className="grid gap-1.5">
+          {SHORTCUTS.filter((s) => !pinned.includes(s.id)).map((s) => (
+            <li key={s.id}>
+              <button type="button" onClick={() => toggle(s.id)} className="flex w-full items-center gap-3 rounded-2xl border border-transparent px-3 py-2 text-left opacity-80 transition hover:opacity-100">
+                <AppIcon name={s.icon} color={s.color} size={38} />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-semibold">{s.label}</span>
+                  <span className="block truncate text-[0.7rem] text-muted">{s.hint}</span>
+                </span>
+                <Glyph name="plus" size={18} className="text-muted" />
+              </button>
+            </li>
+          ))}
         </ul>
         <button type="button" className="aa-chip justify-self-start" onClick={reset}>Ripristina predefinite</button>
       </div>

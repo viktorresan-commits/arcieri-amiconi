@@ -1,3 +1,4 @@
+import { useTeamAvatars } from "@/components/avatar-hero";
 import { createFileRoute } from "@tanstack/react-router";
 import { archerBoard, listGadgets } from "@/lib/arcieri/club.api";
 import { bowLabel, memberLabel } from "@/lib/arcieri/labels";
@@ -10,6 +11,7 @@ import { PrizeMark, prizeTier, topPrizes } from "@/components/prize-mark";
 export const Route = createFileRoute("/_app/arciere/$id")({ component: Page });
 
 function Page() {
+  const looks = useTeamAvatars();
   const { id } = Route.useParams();
   const { data, error, loading } = useLoad(`archer-${id}`, () => archerBoard({ data: { id: Number(id) } }));
   const gadgets = useLoad(`archer-gadgets-${id}`, () => listGadgets());
@@ -24,7 +26,7 @@ function Page() {
   return (
     <div className="grid gap-5">
       <div className="flex items-center gap-4">
-        <Avatar size="xl" label={name} color={data.avatarColor} photo={data.photoUrl} />
+        <Avatar size="xl" label={name} color={data.avatarColor} photo={data.photoUrl} look={looks[data.userId]} />
         <div>
           <PageHead title={name} lede={data.bowType ? bowLabel(data.bowType) : "Arco non indicato"} />
           <p className="text-xs text-muted">Nel gruppo dal {data.joinedOn || "—"}</p>

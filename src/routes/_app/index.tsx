@@ -5,8 +5,9 @@ import { dismissNote, openNotes } from "@/lib/arcieri/club.api";
 import { fmtWhen } from "@/lib/arcieri/time";
 import { programById } from "@/lib/arcieri/program";
 import { useLoad } from "@/lib/arcieri/use-load";
-import { AvatarScene, useAvatar } from "@/components/avatar-hero";
-import { Archer3D, SkyPicker } from "@/components/archer-3d";
+import { useAvatar } from "@/components/avatar-hero";
+import { SkyPicker } from "@/components/archer-3d";
+import { ArcheryGame } from "@/components/archery-game";
 import { MainGearCard } from "@/components/main-gear";
 import { ShortcutRow, TipCard } from "@/components/shortcuts";
 import { JourneyCard } from "@/components/journey";
@@ -76,23 +77,25 @@ function Home() {
     <div className="grid gap-3">
       <Rise i={0}>
         <div className="grid gap-2">
-          <Archer3D look={avatar.shown} framing="home" height="h-[34rem]" fallback={<AvatarScene look={avatar.shown} height="h-[26rem]" />}>
-            <div className="pointer-events-none absolute inset-x-0 top-0 flex justify-end p-3">
-              <div className="pointer-events-auto max-w-[62%] text-right text-white [text-shadow:0_1px_8px_rgba(0,0,0,0.45)]">
-                <p className="text-[0.66rem] font-semibold uppercase tracking-[0.18em] text-white/75">{new Date().toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" })}</p>
-                <h1 className="font-display text-[2.3rem] leading-none tracking-tight">Oggi</h1>
-                <p className="mt-1 text-xs text-white/85">
-                  {data.month.sessions} uscite e {num(data.month.arrows)} frecce questo mese
-                  {data.since ? ` · ultimo tiro ${data.since.n} ${data.since.unit === "h" ? (data.since.n === 1 ? "ora" : "ore") : data.since.n === 1 ? "giorno" : "giorni"} fa` : ""}
-                </p>
-                {data.streak > 1 ? <p className="mt-2 inline-flex rounded-full bg-black/35 px-2.5 py-1 text-[0.7rem] font-semibold backdrop-blur">{data.streak} giorni di fila</p> : null}
-              </div>
+          <div className="flex items-end justify-between gap-3 px-1">
+            <div>
+              <p className="text-[0.66rem] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">{new Date().toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" })}</p>
+              <h1 className="font-display text-[2.1rem] leading-none tracking-tight">Oggi</h1>
+              <p className="mt-1 text-xs text-[var(--muted)]">
+                {data.month.sessions} uscite e {num(data.month.arrows)} frecce questo mese
+                {data.since ? ` · ultimo tiro ${data.since.n} ${data.since.unit === "h" ? (data.since.n === 1 ? "ora" : "ore") : data.since.n === 1 ? "giorno" : "giorni"} fa` : ""}
+              </p>
             </div>
-            <SkyPicker className="absolute left-3 top-3" />
-            <Link to="/avatar" aria-label="Personalizza l'arciere" className="absolute bottom-3 right-14 grid h-10 w-10 place-items-center rounded-full bg-black/45 text-white backdrop-blur">
-              <Glyph name="palette" size={18} />
-            </Link>
-          </Archer3D>
+            {data.streak > 1 ? <p className="shrink-0 rounded-full bg-[var(--accent-soft,rgba(255,210,122,0.18))] px-2.5 py-1 text-[0.7rem] font-semibold">{data.streak} giorni di fila</p> : null}
+          </div>
+          <ArcheryGame look={avatar.shown}>
+            <div data-ui className="absolute left-3 top-[5.6rem] grid gap-2" onPointerDown={(e) => e.stopPropagation()}>
+              <SkyPicker />
+              <Link to="/avatar" aria-label="Personalizza l'arciere" className="grid h-10 w-10 place-items-center rounded-full bg-black/45 text-white backdrop-blur">
+                <Glyph name="palette" size={18} />
+              </Link>
+            </div>
+          </ArcheryGame>
           <div className="grid grid-cols-[1.4fr_1fr] gap-2">
             <Link to="/allenamento" search={{ avvia: "rapido" }} className="block">
               <Button className="aa-glow w-full"><Glyph name="bolt" size={18} /> Tiro rapido</Button>

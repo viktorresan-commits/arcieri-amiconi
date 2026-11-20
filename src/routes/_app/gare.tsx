@@ -10,6 +10,7 @@ import { Avatar, Button, Card, Empty, ErrorNote, Field, HoldDelete, Loading, Pag
 import { GaraTrend, type GaraPoint } from "@/components/gara-trend";
 import { GaraResult } from "@/components/gara-result";
 import { LaneEditor } from "@/components/lane-editor";
+import { useTeamAvatars } from "@/components/avatar-hero";
 
 export const Route = createFileRoute("/_app/gare")({ component: Page });
 
@@ -267,13 +268,14 @@ function Roster({ tab, people }: { tab: "past" | "next"; people: Comp["roster"] 
 }
 
 function FaceRow({ label, people }: { label: string; people: Comp["roster"] }) {
+  const looks = useTeamAvatars();
   return (
     <div className="flex items-center gap-2">
       <p className="w-24 shrink-0 text-xs text-muted">{label}</p>
       {people.length ? (
         <div className="flex flex-wrap gap-1">
           {people.map((person) => (
-            <Avatar key={person.userId} size="sm" label={memberLabel(person, people)} color={person.avatarColor} photo={person.photoUrl} />
+            <Avatar key={person.userId} size="sm" label={memberLabel(person, people)} color={person.avatarColor} photo={person.photoUrl} look={looks[person.userId]} />
           ))}
         </div>
       ) : (

@@ -1070,4 +1070,21 @@ html[data-scenes="no"] .aa-scene { display: none; }
 @keyframes aa-scene-arrow { 0% { transform: translate(0, 0) scale(1) rotate(-2deg); opacity: 1; } 100% { transform: translate(var(--dx), var(--dy)) scale(0.3) rotate(6deg); opacity: 1; } }
 .aa-scene-hit { opacity: 0; transform: translate(-50%, -50%); animation: aa-scene-hit 1.1s ease-out 0.56s forwards; text-shadow: 0 2px 8px rgba(0,0,0,0.6); }
 @keyframes aa-scene-hit { 0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); } 25% { opacity: 1; transform: translate(-50%, -120%) scale(1.2); } 100% { opacity: 0; transform: translate(-50%, -260%) scale(1); } }
-@media (prefers-reduced-motion: reduce) { .aa-clouds, .aa-birds, .aa-tree, .aa-grass, .aa-ray { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .aa-clouds, .aa-birds, .aa-tree, .aa-grass, .aa-ray, .aa-rain, .aa-twinkle { animation: none; } }
+.aa-rain { animation: aa-rain 0.6s linear infinite; }
+@keyframes aa-rain { from { transform: translate(0, -24px); } to { transform: translate(-6px, 0); } }
+.aa-twinkle { animation: aa-twinkle 2.6s ease-in-out infinite; }
+@keyframes aa-twinkle { 0%, 100% { opacity: 0.25; } 50% { opacity: 1; } }
+/* gioco della Home */
+.aa-game { position: relative; overflow: hidden; border-radius: 1.75rem; touch-action: none; user-select: none; -webkit-user-select: none; box-shadow: 0 18px 40px -18px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(255,255,255,0.08); }
+.aa-game-hud { background: linear-gradient(180deg, rgba(8,14,12,0.55), rgba(8,14,12,0)); }
+.aa-game-pill { display: inline-flex; align-items: center; gap: 0.35rem; border-radius: 999px; padding: 0.3rem 0.65rem; background: rgba(10,16,14,0.55); backdrop-filter: blur(6px); color: #fff; font-weight: 700; font-size: 0.72rem; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12); }
+.aa-game-score { font-family: var(--font-display, inherit); text-shadow: 0 2px 0 rgba(0,0,0,0.35), 0 0 18px rgba(255,210,122,0.55); }
+.aa-game-pop { animation: aa-game-pop 1.2s cubic-bezier(.2,.9,.3,1.2) forwards; }
+@keyframes aa-game-pop { 0% { opacity: 0; transform: translate(-50%, -30%) scale(0.4); } 18% { opacity: 1; transform: translate(-50%, -90%) scale(1.25); } 70% { opacity: 1; transform: translate(-50%, -140%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -190%) scale(0.95); } }
+.aa-game-shake { animation: aa-game-shake 0.35s ease-out; }
+.aa-game-shake2 { animation: aa-game-shake2 0.35s ease-out; }
+@keyframes aa-game-shake2 { 0% { transform: translateX(0); } 25% { transform: translateX(3px) rotate(0.8deg); } 50% { transform: translateX(-2px) rotate(-0.6deg); } 100% { transform: translateX(0); } }
+@keyframes aa-game-shake { 0% { transform: translateX(0); } 25% { transform: translateX(3px) rotate(0.8deg); } 50% { transform: translateX(-2px) rotate(-0.6deg); } 100% { transform: translateX(0); } }
+.aa-game-hint { animation: aa-game-hint 2.2s ease-in-out infinite; }
+@keyframes aa-game-hint { 0%, 100% { transform: translateX(0); opacity: 0.85; } 50% { transform: translateX(-10px); opacity: 1; } }

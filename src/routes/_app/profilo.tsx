@@ -4,6 +4,8 @@ import { authClient } from "@/lib/auth/client";
 import { UserButton } from "@/lib/auth/gates";
 import { forgetAccount, rememberAccount, savedAccounts, type SavedAccount } from "@/lib/arcieri/accounts";
 import { exportMine, listRoster, updateMember } from "@/lib/arcieri/members.api";
+import { AvatarPhotoButton } from "@/components/avatar-photo";
+import { useAvatar } from "@/components/avatar-hero";
 import { listCompetitions, listGadgets } from "@/lib/arcieri/club.api";
 import { useLoad } from "@/lib/arcieri/use-load";
 import { simplePdf } from "@/lib/arcieri/pdf";
@@ -23,6 +25,7 @@ export const Route = createFileRoute("/_app/profilo")({ component: Page });
 
 function Page() {
   const { me, reload } = useMember();
+  const avatar = useAvatar();
   const [given, setGiven] = useState(me.givenName);
   const [family, setFamily] = useState(me.familyName);
   const [nick, setNick] = useState(me.nickname);
@@ -199,6 +202,7 @@ function Page() {
             <span className={`mt-1.5 inline-flex rounded-full px-2 py-0.5 text-[0.65rem] font-semibold ${me.role === "admin" ? "bg-amber-400 text-black" : "bg-white/10"}`}>{me.role === "admin" ? "Amministratore" : me.role === "archer" ? "Arciere" : "Ospite"}</span>
           </div>
         </div>
+        <AvatarPhotoButton look={avatar.shown} onDone={reload} />
         <div className="grid grid-cols-2 gap-2">
           <span className="rounded-xl bg-black/25 px-3 py-2">
             <span className="block text-[0.6rem] uppercase tracking-wider text-white/60">Punti campionato</span>
