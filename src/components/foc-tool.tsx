@@ -1,7 +1,8 @@
 import { Card, Chips } from "@/components/kit";
 import { StatusMark } from "@/components/icons";
 import { useLocalState } from "@/lib/arcieri/local-store";
-import { FocBalance3D, FocFlight3D, estimateSpeed } from "@/components/foc-3d";
+import { FocFlight3D, estimateSpeed } from "@/components/foc-3d";
+import { FocBalanceGL } from "@/components/foc-gl";
 import { useMainArrowLook } from "@/lib/arcieri/main-gear";
 
 /**
@@ -142,7 +143,7 @@ export function FocTool() {
             <Chips value={st.view} onChange={(view) => setSt({ ...st, view })} options={[{ id: "equilibrio", label: "Equilibrio" }, { id: "gittata", label: "Gittata" }]} />
           </div>
           {st.view === "equilibrio" ? (
-            <FocBalance3D key="eq" L={r.L} B={r.B} foc={r.foc} look={look} />
+            <FocBalanceGL key="eq" L={r.L} B={r.B} foc={r.foc} look={look} />
           ) : (
             <>
               <FocFlight3D key="fl" distance={st.dist} speed={speed} foc={r.foc} look={look} />
