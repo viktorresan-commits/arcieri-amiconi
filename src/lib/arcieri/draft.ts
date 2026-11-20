@@ -31,7 +31,7 @@ export type DraftMeta = {
   aimAngle: AimAngle;
 };
 
-export type DraftShot = TallyShot & { nx: number | null; ny: number | null; seq: number; tag?: number | null };
+export type DraftShot = TallyShot & { nx: number | null; ny: number | null; seq: number; tag?: number | null; set?: number | null };
 
 export type Draft = {
   clientKey: string;

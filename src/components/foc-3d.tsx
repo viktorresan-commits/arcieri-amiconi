@@ -1,4 +1,5 @@
-import { useEffect, useRef } from "react";
+import { useEffect, type RefObject } from "react";
+import { useOrbitGestures, type OrbitView } from "@/lib/arcieri/gestures";
 
 /**
  * Due animazioni 3D per il FOC, disegnate su canvas con una piccola proiezione prospettica.
@@ -28,8 +29,28 @@ function camera(eye: V, target: V, fovDeg: number, w: number, h: number) {
   };
 }
 
-function useCanvas(draw: (ctx: CanvasRenderingContext2D, w: number, h: number, t: number) => void, deps: unknown[]) {
-  const ref = useRef<HTMLCanvasElement>(null);
+/** Applica alla camera la vista scelta con le dita: giro attorno al centro, inclinazione, zoom, spostamento. */
+function orbit(eye: V, target: V, view: OrbitView): { eye: V; target: V } {
+  const d = sub(eye, target);
+  const c = Math.cos(view.yaw);
+  const s = Math.sin(view.yaw);
+  const rx = d[0] * c - d[2] * s;
+  const rz = d[0] * s + d[2] * c;
+  const flat = Math.hypot(rx, rz) || 1e-6;
+  const len = Math.hypot(d[0], d[1], d[2]) / view.zoom;
+  const elev = Math.max(-0.15, Math.min(1.45, Math.atan2(d[1], flat) + view.pitch));
+  const nd: V = [(rx / flat) * Math.cos(elev) * len, Math.sin(elev) * len, (rz / flat) * Math.cos(elev) * len];
+  const f = norm([-nd[0], -nd[1], -nd[2]]);
+  const r = norm(cross(f, [0, 1, 0]));
+  const u = cross(r, f);
+  const k = len * 0.0022;
+  const shift: V = [(-view.px * r[0] + view.py * u[0]) * k, (-view.px * r[1] + view.py * u[1]) * k, (-view.px * r[2] + view.py * u[2]) * k];
+  const t2: V = [target[0] + shift[0], target[1] + shift[1], target[2] + shift[2]];
+  return { eye: [t2[0] + nd[0], t2[1] + nd[1], t2[2] + nd[2]], target: t2 };
+}
+
+function useCanvas(draw: (ctx: CanvasRenderingContext2D, w: number, h: number, t: number, view: OrbitView) => void, deps: unknown[]) {
+  const { ref, view } = useOrbitGestures<HTMLCanvasElement>();
   useEffect(() => {
     const cv = ref.current;
     if (!cv) return;
@@ -48,8 +69,8 @@ function useCanvas(draw: (ctx: CanvasRenderingContext2D, w: number, h: number, t
       }
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, w, h);
-      draw(ctx, w, h, reduce ? 4.5 : (now - t0) / 1000);
-      if (!reduce) raf = requestAnimationFrame(frame);
+      draw(ctx, w, h, reduce ? 4.5 : (now - t0) / 1000, view.current);
+      raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
@@ -130,12 +151,12 @@ const ease = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x * x * (3 - 2 * x));
 /** Equilibrio: L = lunghezza, B = punto di equilibrio dalla cocca (stesse unità). */
 export function FocBalance3D({ L, B, foc }: { L: number; B: number; foc: number }) {
   const ref = useCanvas(
-    (ctx, w, h, time) => {
+    (ctx, w, h, time, view) => {
       const cycle = 6.5;
       const t = time % cycle;
-      const yaw = -0.55 + Math.sin(time * 0.35) * 0.35;
-      const eye: V = [Math.sin(yaw) * 3.1, 1.05, -Math.cos(yaw) * 3.1];
-      const P = camera(eye, [0.05, -0.15, 0], 38, w, h);
+      const yaw = -0.55 + (view.touched ? 0 : Math.sin(time * 0.35) * 0.35);
+      const cam = orbit([Math.sin(yaw) * 3.1, 1.05, -Math.cos(yaw) * 3.1], [0.05, -0.15, 0], view);
+      const P = camera(cam.eye, cam.target, 38, w, h);
       const toX = (cm: number) => (cm / L) * 2 - 1; // cocca a -1, fine asta a +1
       const xb = toX(B);
       // fase 1: sul fulcro a metà la freccia pende in avanti; fase 2: il fulcro va al punto giusto
@@ -250,13 +271,13 @@ export function FocBalance3D({ L, B, foc }: { L: number; B: number; foc: number 
     },
     [L, B, foc],
   );
-  return <canvas ref={ref} className="aa-3d h-56 w-full rounded-2xl" aria-label="Animazione 3D del punto di equilibrio" />;
+  return <Stage3D canvasRef={ref} className="h-56" label="Animazione 3D del punto di equilibrio" />;
 }
 
 /** Gittata: distanza in metri, velocità in m/s, FOC in %. */
 export function FocFlight3D({ distance, speed, foc }: { distance: number; speed: number; foc: number }) {
   const ref = useCanvas(
-    (ctx, w, h, time) => {
+    (ctx, w, h, time, view) => {
       const g = 9.81;
       const D = distance;
       const v = Math.max(20, speed);
@@ -273,9 +294,9 @@ export function FocFlight3D({ distance, speed, foc }: { distance: number; speed:
       // altezza ingrandita: su 70 m la freccia sale di 1–2 m, invisibile senza esagerare
       const ex = Math.max(1, Math.min(8, (D * 0.07) / Math.max(0.05, peak)));
       const yAt = (u: number) => 1.5 * Math.max(1, D / 22) + ex * (Math.tan(theta) * D * u - (g * (D * u) ** 2) / (2 * v * v * Math.cos(theta) ** 2));
-      const orbit = Math.sin(time * 0.3) * 0.12;
-      const eye: V = [D * 0.8 * Math.cos(orbit), 2.5 + D * 0.13, D * 0.45 + Math.sin(orbit) * D * 0.3];
-      const P = camera(eye, [0, Math.max(1, D / 22) * 1.5 + peak * ex * 0.7, D * 0.5], 54, w, h);
+      const swing = view.touched ? 0 : Math.sin(time * 0.3) * 0.12;
+      const cam = orbit([D * 0.8 * Math.cos(swing), 2.5 + D * 0.13, D * 0.45 + Math.sin(swing) * D * 0.3], [0, Math.max(1, D / 22) * 1.5 + peak * ex * 0.7, D * 0.5], view);
+      const P = camera(cam.eye, cam.target, 54, w, h);
       // freccia e bersaglio più grandi del vero, per vederli anche a 70–90 m
       const big = Math.max(1, D / 22);
       // cielo e prato
@@ -418,7 +439,7 @@ export function FocFlight3D({ distance, speed, foc }: { distance: number; speed:
     },
     [distance, speed, foc],
   );
-  return <canvas ref={ref} className="aa-3d h-60 w-full rounded-2xl" aria-label="Animazione 3D del volo della freccia" />;
+  return <Stage3D canvasRef={ref} className="h-60" label="Animazione 3D del volo della freccia" />;
 }
 
 /** Velocità stimata (m/s) da libbre e peso della freccia: arco tradizionale/ricurvo, resa ~75%. */
@@ -428,4 +449,14 @@ export function estimateSpeed(lb: number, grains: number) {
   const stored = 0.5 * force * 0.5 * 1.1;
   const mass = grains * 6.48e-5;
   return Math.sqrt((2 * 0.75 * stored) / mass);
+}
+
+/** Tela 3D con l'aiuto dei gesti: un dito gira, due dita ingrandiscono e spostano, doppio tocco ripristina. */
+function Stage3D({ canvasRef, className, label }: { canvasRef: RefObject<HTMLCanvasElement | null>; className: string; label: string }) {
+  return (
+    <div className="aa-3d-wrap">
+      <canvas ref={canvasRef} className={`aa-3d block w-full rounded-2xl ${className}`} style={{ touchAction: "none" }} aria-label={`${label}: trascina per ruotare, due dita per ingrandire e spostare, doppio tocco per ripristinare`} />
+      <span className="pointer-events-none absolute bottom-1.5 left-2 rounded-full bg-black/45 px-2 py-0.5 text-[0.62rem] text-white/80">Trascina per girare · due dita zoom · doppio tocco ripristina</span>
+    </div>
+  );
 }

@@ -28,6 +28,7 @@ import { Button, Card, ErrorNote, Field, Loading, Select, TextArea, TextInput } 
 import { TargetFace } from "./target-face";
 import { PhotoSession } from "./photo-session";
 import { tagsOf } from "@/lib/arcieri/arrow-tags";
+import { ArrowPicker, lastArrowSet, type ArrowSet } from "./arrow-picker";
 import { ShotLab } from "./shot-lab";
 import { TargetRead } from "./target-read";
 import { AppIcon, Glyph } from "./icons";
@@ -381,7 +382,7 @@ export function LiveTraining({ sessionId, openHistory = false, start }: { sessio
     hits.slice(0, free.length).forEach((hit, k) => {
       seq += 1;
       const miss = hit.miss;
-      shots = [...shots, { block, end, arrow: free[k], score: miss ? 0 : hit.score, isX: miss ? false : hit.isX, miss, nx: miss ? null : hit.nx, ny: miss ? null : hit.ny, seq, tag: hit.tag ?? null }];
+      shots = [...shots, { block, end, arrow: free[k], score: miss ? 0 : hit.score, isX: miss ? false : hit.isX, miss, nx: miss ? null : hit.nx, ny: miss ? null : hit.ny, seq, tag: hit.tag ?? null, set: hit.tag != null ? lastArrowSet(arrowSets, arrowGear?.id ?? null) : null }];
     });
     return { ...current, meta: plan, shots, selected: null, endClock: startClock({ running: false, startedAt: null, accumulatedMs: 0 }, Date.now()) };
   }
@@ -419,10 +420,12 @@ export function LiveTraining({ sessionId, openHistory = false, start }: { sessio
 
   // numeri delle frecce dell'attrezzatura scelta (es. 1–12), altrimenti 1–12
   const arrowGear = boot.gear.find((g) => g.id === boot.setups.find((st) => st.id === meta.setupId)?.arrowId);
-  const tagList = tagsOf(arrowGear?.specs ?? "");
+  // tutte le serie di frecce dell'arciere (penne di colore diverso): il numero va dentro la serie giusta
+  const arrowSets: ArrowSet[] = boot.gear.filter((g) => g.category === "freccia" && g.mine !== false).map((g) => ({ id: g.id, name: g.name, specs: g.specs }));
+  const tagList = tagsOf(arrowSets.find((a) => a.id === lastArrowSet(arrowSets, arrowGear?.id ?? null))?.specs ?? arrowGear?.specs ?? "");
   const pickShot = pickSeq != null ? draft.shots.find((sh) => sh.seq === pickSeq) ?? null : null;
-  function setTag(seq: number, tag: number | null) {
-    setDraft((current) => (current ? { ...current, shots: current.shots.map((sh) => (sh.seq === seq ? { ...sh, tag } : sh)) } : current));
+  function setTag(seq: number, tag: number | null, set: number | null = null) {
+    setDraft((current) => (current ? { ...current, shots: current.shots.map((sh) => (sh.seq === seq ? { ...sh, tag, set: tag == null ? null : set } : sh)) } : current));
   }
 
   function onTarget(nx: number, ny: number) {
@@ -638,25 +641,17 @@ export function LiveTraining({ sessionId, openHistory = false, start }: { sessio
               <Glyph name="close" size={16} />
             </button>
           </div>
-          <div className="grid grid-cols-6 gap-1.5">
-            {tagList.map((n) => {
-              const used = draft.shots.some((sh) => sh.tag === n && sh.block === pickShot.block && sh.end === pickShot.end && sh.seq !== pickShot.seq);
-              return (
-                <button
-                  key={n}
-                  type="button"
-                  aria-pressed={pickShot.tag === n}
-                  onClick={() => {
-                    setTag(pickShot.seq, pickShot.tag === n ? null : n);
-                    setPickSeq(null);
-                  }}
-                  className={`min-h-11 rounded-xl font-display text-lg tabular-nums transition ${pickShot.tag === n ? "bg-accent text-accent-fg" : used ? "bg-white/[0.03] text-muted" : "bg-white/[0.07]"}`}
-                >
-                  {n}
-                </button>
-              );
-            })}
-          </div>
+          <ArrowPicker
+            sets={arrowSets}
+            setId={pickShot.set ?? (pickShot.tag != null ? null : lastArrowSet(arrowSets, arrowGear?.id ?? null))}
+            tag={pickShot.tag ?? null}
+            fallbackTags={tagList}
+            used={(setId) => draft.shots.filter((sh) => sh.block === pickShot.block && sh.end === pickShot.end && sh.seq !== pickShot.seq && (sh.set ?? null) === setId && sh.tag != null).map((sh) => sh.tag as number)}
+            onPick={(setId, tag) => {
+              setTag(pickShot.seq, tag, setId);
+              setPickSeq(null);
+            }}
+          />
           <p className="text-[0.7rem] text-muted">
             {arrowGear ? `Numeri presi da ${arrowGear.name || "le tue frecce"}.` : "Scegli l'assetto con le frecce numerate per usare i loro numeri."} Tieni premuto e trascina per spostare il colpo.
           </p>
@@ -665,7 +660,7 @@ export function LiveTraining({ sessionId, openHistory = false, start }: { sessio
       {face.id.startsWith("sagoma") ? (
         <Card><SagomaLab animal="cinghiale" shots={draft.shots.map((sh) => ({ score: sh.score, miss: sh.miss, nx: sh.nx, ny: sh.ny, end: sh.end }))} /></Card>
       ) : null}
-      {face.id.startsWith("sagoma") ? null : <ShotLab face={face} shots={draft.shots} arrowSpecs={arrowGear?.specs} />}
+      {face.id.startsWith("sagoma") ? null : <ShotLab face={face} shots={draft.shots} arrowSpecs={arrowGear?.specs} arrowSets={arrowSets} />}
       <div className="flex gap-2 overflow-x-auto pb-1">
         {Array.from({ length: Math.max(3, meta.arrowsPerEnd) }, (_, index) => {
           const shot = endArrows.find((item) => item.arrow === index);

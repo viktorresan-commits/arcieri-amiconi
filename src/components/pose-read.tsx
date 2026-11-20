@@ -908,6 +908,7 @@ export function PoseRead() {
               shot={kind === "video" ? shot : null}
               hand={hand}
               aspect={size.w / size.h}
+              gear={gear}
               saveState={saveState}
               onSave={(p) => void storeAnalysis(p)}
             />

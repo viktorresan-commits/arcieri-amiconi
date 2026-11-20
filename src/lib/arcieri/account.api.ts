@@ -313,3 +313,29 @@ export const teamList = createServerFn({ method: "GET" })
       })),
     };
   });
+
+/* ---------------- amministratore con ID e password ---------------- */
+
+// Solo l'impronta (sha256 con sale) delle credenziali: ID e password in chiaro non sono nel codice.
+// Su Vercel si possono cambiare con la variabile ADMIN_KEY_HASH (formato "sale:impronta").
+const ADMIN_KEY = "3e6506e3f750be33032d4419cc735c5c:76d4a63c01cede6377b91febde5ad81d2084b7f6cb3399e0f89557989a9921f1";
+
+export const unlockAdmin = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: unknown) => {
+    const raw = (input ?? {}) as { id?: unknown; password?: unknown };
+    return { id: String(raw.id ?? "").trim().slice(0, 80), password: String(raw.password ?? "").slice(0, 120) };
+  })
+  .handler(async ({ context, data }) => {
+    const { createHash, timingSafeEqual } = await import("node:crypto");
+    const [salt, hash] = (process.env.ADMIN_KEY_HASH || ADMIN_KEY).split(":");
+    const got = createHash("sha256").update(`${salt}:${data.id}:${data.password}`).digest();
+    const want = Buffer.from(hash ?? "", "hex");
+    // piccola attesa fissa: rende inutili i tentativi a raffica
+    await new Promise((r) => setTimeout(r, 600));
+    if (want.length !== got.length || !timingSafeEqual(got, want)) throw new Error("ID o password non corretti.");
+    const sql = await db();
+    const me = await ensureMember(sql, context.userId);
+    await sql`update members set role = 'admin' where id = ${me.id}`;
+    return { ok: true as const };
+  });

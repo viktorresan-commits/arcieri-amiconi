@@ -1,8 +1,9 @@
 import { AppIcon, Glyph, IconLabel } from "./icons";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { angularSize, effectiveLb, goldOf, compensatedDistance, describeRound, eyePoint, launchSpeed, releasePoint, type Fletch, type FlightInput } from "@/lib/arcieri/flight";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { airDensity, angularSize, effectiveLb, goldOf, compensatedDistance, describeRound, eyePoint, launchSpeed, releasePoint, type Fletch, type FlightInput } from "@/lib/arcieri/flight";
 import { Button, Card, Chips, Field, Segmented, Select, TextInput } from "@/components/kit";
 import { listEquipment, saveEquipment } from "@/lib/arcieri/club.api";
+import { Zoomable } from "./zoomable";
 
 const ROUNDS = [
   { id: "18", name: "Indoor 18 m", distanceM: 18, faceCm: 40 },
@@ -47,6 +48,11 @@ const START: FlightInput = {
   slopeDeg: 0,
   goldM: 1.3,
   lbAt28: true,
+  headWind: 0,
+  tempC: 15,
+  altM: 0,
+  targetSpeed: 0,
+  focPct: 10,
 };
 
 const SAVE_KEY = "aa-flight-v1";
@@ -195,7 +201,7 @@ export function FlightSim() {
           { id: "arco", label: <IconLabel icon="bow" size={14}>Arco</IconLabel> },
           { id: "freccia", label: <IconLabel icon="arrow" size={14}>Freccia</IconLabel> },
           { id: "tiro", label: <IconLabel icon="target" size={14}>Tiro</IconLabel> },
-          { id: "meteo", label: <IconLabel icon="wind" size={14}>Vento</IconLabel> },
+          { id: "meteo", label: <IconLabel icon="wind" size={14}>Aria</IconLabel> },
         ]}
       />
       {tab === "arco" ? (
@@ -205,6 +211,9 @@ export function FlightSim() {
           <Slider label={form.lbAt28 ? "Libbre segnate (a 28″)" : "Libbre"} unit="lb" value={form.drawLb} min={16} max={70} step={1} onChange={(drawLb) => patch({ drawLb, grains: Math.round(gpp * drawLb) })} />
           <Slider label={`Allungo (${(form.drawCm / 2.54).toFixed(1).replace(".", ",")}″ · ${effectiveLb(form).toFixed(1).replace(".", ",")} lb reali)`} unit="cm" value={form.drawCm} min={58} max={84} step={0.5} onChange={(drawCm) => patch({ drawCm })} />
           <Slider label="Brace (corda–impugnatura)" unit="cm" value={form.braceCm} min={14} max={28} step={0.5} onChange={(braceCm) => patch({ braceCm })} />
+          <Slider label="Resa dell'arco (energia che passa alla freccia)" unit="%" value={Math.round(form.eta * 100)} min={55} max={92} step={1} onChange={(v) => patch({ eta: v / 100 })} />
+          <Slider label="Curva di carico (accumulo: 50 morbida, 70 camme)" unit="%" value={Math.round(form.k * 100)} min={40} max={80} step={1} onChange={(v) => patch({ k: v / 100 })} />
+          <p className="text-[0.7rem] text-muted">Energia {speed.energy.toFixed(1).replace(".", ",")} J · corsa di spinta {(speed.stroke * 100).toFixed(1).replace(".", ",")} cm · {Math.round(speed.speed * 3.28084)} fps</p>
         </div>
       ) : null}
       {tab === "freccia" ? (
@@ -220,6 +229,8 @@ export function FlightSim() {
               <option value="feather4">4 piume</option>
             </Select>
           </Field>
+          <Slider label="FOC (peso davanti: sotto l'8% il gruppo si apre)" unit="%" value={form.focPct ?? 10} min={2} max={30} step={0.5} onChange={(focPct) => patch({ focPct })} />
+          <p className="text-[0.7rem] text-muted">Il FOC esatto lo calcoli qui sotto, in «Calcolo FOC».</p>
         </div>
       ) : null}
       {tab === "tiro" ? (
@@ -228,6 +239,7 @@ export function FlightSim() {
           <Slider label="Distanza" unit="m" value={form.distanceM} min={5} max={90} step={0.5} onChange={(distanceM) => { setRound(""); patch({ distanceM }); }} />
           <Slider label="Diametro della faccia" unit="cm" value={form.faceCm} min={10} max={122} step={1} onChange={(faceCm) => patch({ faceCm })} />
           <Slider label="Altezza dell'oro da terra" unit="m" value={goldOf(form)} min={0.3} max={3} step={0.01} onChange={(goldM) => patch({ goldM })} />
+          <Slider label="Bersaglio in movimento (+ verso destra, − verso sinistra)" unit="m/s" value={form.targetSpeed ?? 0} min={-6} max={6} step={0.1} onChange={(targetSpeed) => patch({ targetSpeed })} />
           <Slider label="La tua altezza" unit="cm" value={form.heightCm} min={120} max={210} step={1} onChange={(heightCm) => patch({ heightCm })} />
           {!setup.sighted ? (
             <Slider label="Occhio sopra la freccia (aggancio)" unit="cm" value={form.eyeCm} min={2} max={16} step={0.5} onChange={(eyeCm) => patch({ eyeCm })} />
@@ -243,6 +255,10 @@ export function FlightSim() {
       {tab === "meteo" ? (
         <div className="grid gap-2.5">
           <Slider label="Vento (+ da sinistra, − da destra)" unit="m/s" value={form.wind} min={-8} max={8} step={0.5} onChange={(wind) => patch({ wind })} />
+          <Slider label="Vento frontale (+ contrario, − a favore)" unit="m/s" value={form.headWind ?? 0} min={-8} max={8} step={0.5} onChange={(headWind) => patch({ headWind })} />
+          <Slider label="Temperatura dell'aria" unit="°C" value={form.tempC ?? 15} min={-10} max={42} step={1} onChange={(tempC) => patch({ tempC })} />
+          <Slider label="Quota del campo" unit="m" value={form.altM ?? 0} min={0} max={2500} step={50} onChange={(altM) => patch({ altM })} />
+          <p className="text-[0.7rem] text-muted">Aria a {airDensity(form).toFixed(3).replace(".", ",")} kg/m³: più caldo o più in alto, meno resistenza e la freccia cala meno.</p>
           <Slider label="Pendenza (+ salita, − discesa)" unit="°" value={form.slopeDeg ?? 0} min={-35} max={35} step={1} onChange={(slopeDeg) => patch({ slopeDeg })} />
           <Inclinometer onUse={(slopeDeg) => patch({ slopeDeg })} />
           {form.slopeDeg ? (
@@ -271,32 +287,18 @@ export function FlightSim() {
           <button type="button" onClick={() => setReplay((r) => r + 1)} className="min-h-9 rounded-full bg-white/10 px-3 text-xs font-semibold"><Glyph name="play" size={12} className="mr-1 inline -translate-y-px" />Rivedi il tiro</button>
         </div>
       </div>
-      <div className="flex items-stretch gap-2">
-      <div className="min-w-0 flex-1">
       <Expand title="Traiettoria" onReplay={() => setReplay((r) => r + 1)}>
-      <FlightPath replay={replay} trueScale={trueScale} onGold={(goldM) => patch({ goldM })} input={{ ...form, sighted: setup.sighted }} round={primary} sighted={setup.sighted} mode={pathMode} title={`${form.distanceM} m · faccia ${form.faceCm} cm${form.slopeDeg ? ` · pendenza ${form.slopeDeg > 0 ? "+" : ""}${form.slopeDeg}°` : ""} · gruppo ${primary.total}/${n * (form.zones === 5 ? 9 : 10)}`} />
+        <FlightPath replay={replay} trueScale={trueScale} input={{ ...form, sighted: setup.sighted }} round={primary} sighted={setup.sighted} mode={pathMode} title={`${form.distanceM} m · faccia ${form.faceCm} cm${form.slopeDeg ? ` · pendenza ${form.slopeDeg > 0 ? "+" : ""}${form.slopeDeg}°` : ""} · gruppo ${primary.total}/${n * (form.zones === 5 ? 9 : 10)}`} />
       </Expand>
-      </div>
-      <label className="flex w-12 shrink-0 flex-col items-center gap-1 text-center text-[10px] leading-tight text-muted">
-        <span className="grid justify-items-center gap-0.5"><Glyph name="target" size={14} />oro</span>
-        <input
-          type="range"
-          min={0.3}
-          max={3}
-          step={0.01}
-          value={goldOf(form)}
-          onChange={(e) => patch({ goldM: Number(e.target.value) })}
-          aria-label="Altezza del centro del bersaglio"
-          className="min-h-0 flex-1 accent-[var(--accent)]"
-          style={{ writingMode: "vertical-lr", direction: "rtl" }}
-        />
-        <span className="font-display text-sm text-fg tabular-nums">{goldOf(form).toFixed(2).replace(".", ",")} m</span>
-        <button type="button" onClick={() => patch({ goldM: 1.3 })} className="rounded-full border border-line px-1.5 py-0.5">1,30</button>
-      </label>
-      </div>
       <Expand title="Bersaglio" onReplay={() => setReplay((r) => r + 1)}>
         <FaceFront key={`ff-${replay}`} input={{ ...form, sighted: setup.sighted }} round={primary} sighted={setup.sighted} />
       </Expand>
+      {Math.abs(form.targetSpeed ?? 0) > 0.01 ? (
+        <p className="rounded-xl border border-[#7cf0a8]/40 bg-[#7cf0a8]/[0.07] px-3 py-2 text-sm">
+          Bersaglio in movimento a {Math.abs(form.targetSpeed ?? 0).toFixed(1).replace(".", ",")} m/s verso {(form.targetSpeed ?? 0) > 0 ? "destra" : "sinistra"}: la freccia vola {primary.clean.t.toFixed(2).replace(".", ",")} s, quindi mira <b>{Math.abs(primary.lead * 100).toFixed(0)} cm avanti</b> rispetto al centro che vedi al rilascio (circa {(Math.abs(primary.lead) / Math.max(0.01, form.faceCm / 100)).toFixed(1).replace(".", ",")} facce). Il cerchio tratteggiato è dov'era il bersaglio quando sei partito.
+        </p>
+      ) : null}
+      <p className="text-center text-[0.68rem] text-muted">Grafici: due dita per ingrandire, ruotare e spostare · doppio tocco per tornare com'era · l'animazione dura quanto il volo vero ({primary.clean.t.toFixed(2).replace(".", ",")} s).</p>
       <div className="flex flex-wrap gap-2">
         {[3, 6, 12].map((count) => (
           <button key={count} type="button" onClick={() => setN(count)} className={`min-h-11 rounded-full px-3 text-sm ${n === count ? "bg-primary text-primary-fg" : "border border-line"}`}>{count} frecce</button>
@@ -414,11 +416,9 @@ type RoundView = ReturnType<typeof describeRound>;
 const RING_COLORS = ["#f4f1ea", "#1a1c1e", "#2a6294", "#c4473d", "#e6b325"];
 
 /** Traiettoria di fianco: tiratore, linea di mira, parabola, linea dell'oro e il paglione in fondo. */
-function FlightPath({ input, round, sighted, mode, title, onGold, trueScale = false, replay = 0 }: { input: FlightInput; round: RoundView; sighted: boolean; mode: "reale" | "linea"; title: string; onGold?: (m: number) => void; trueScale?: boolean; replay?: number }) {
+function FlightPath({ input, round, sighted, mode, title, trueScale = false, replay = 0 }: { input: FlightInput; round: RoundView; sighted: boolean; mode: "reale" | "linea"; title: string; trueScale?: boolean; replay?: number }) {
   const GOLD_HEIGHT = goldOf(input);
-  const svgRef = useRef<SVGSVGElement>(null);
-  const dragging = useRef(false);
-  // animazione del tiro: la freccia percorre la traiettoria (tempo di volo rallentato ~4×, tra 1,2 e 3 s)
+  // animazione del tiro in tempo reale: la freccia percorre la traiettoria nel suo vero tempo di volo
   const [k, setK] = useState(1);
   const flightS = round.clean.t;
   useEffect(() => {
@@ -427,9 +427,9 @@ function FlightPath({ input, round, sighted, mode, title, onGold, trueScale = fa
       setK(1);
       return;
     }
-    const dur = Math.min(3000, Math.max(1200, flightS * 4000));
+    const dur = Math.max(16, flightS * 1000);
     let raf = 0;
-    const t0 = performance.now() + 250;
+    const t0 = performance.now() + 350;
     const step = (now: number) => {
       const t = Math.max(0, Math.min(1, (now - t0) / dur));
       setK(t);
@@ -498,30 +498,13 @@ function FlightPath({ input, round, sighted, mode, title, onGold, trueScale = fa
     ? "mira: oro (mirino)"
     : `mira: ${Math.abs(gap * 100).toFixed(0)} cm ${gap >= 0 ? "sopra" : "sotto"} l'oro${offFace ? " · fuori faccia" : ""}`;
   return (
+    <Zoomable label="Traiettoria" className="border border-line">
     <svg
-      ref={svgRef}
       viewBox={`0 0 ${W} ${H}`}
-      className={`w-full rounded-xl border border-line ${onGold ? "touch-pan-x" : ""}`}
+      className="block w-full"
       style={{ background: "#0f1a14" }}
       role="img"
       aria-label={`Traiettoria a ${D} metri`}
-      onPointerDown={(e) => {
-        if (!onGold || mode !== "reale") return;
-        const r = e.currentTarget.getBoundingClientRect();
-        const px = ((e.clientX - r.left) / r.width) * W;
-        if (px < tx - 30) return; // si trascina solo il bersaglio, a destra
-        e.currentTarget.setPointerCapture(e.pointerId);
-        dragging.current = true;
-      }}
-      onPointerMove={(e) => {
-        if (!dragging.current || !onGold) return;
-        const r = e.currentTarget.getBoundingClientRect();
-        const py = ((e.clientY - r.top) / r.height) * H;
-        const z = hi - ((py - pad.t) / (H - pad.t - pad.b)) * (hi - lo);
-        onGold(Math.round(Math.max(0.3, Math.min(3, z)) * 100) / 100);
-      }}
-      onPointerUp={() => { dragging.current = false; }}
-      onPointerCancel={() => { dragging.current = false; }}
     >
       <text x={pad.l} y={14} fill="var(--muted)" fontSize="10.5">{title}</text>
       {/* griglia */}
@@ -614,7 +597,9 @@ function FlightPath({ input, round, sighted, mode, title, onGold, trueScale = fa
       {/* punto di mira */}
       <path d={`M${tx} ${Y(v(D, aim.z)) - 5} l5 5 l-5 5 l-5 -5 Z`} fill="#f4f1ea" stroke="#14181c" strokeWidth="0.8" />
       <text x={tx - 8} y={Y(v(D, aim.z)) < pad.t + 14 ? Y(v(D, aim.z)) + 16 : Y(v(D, aim.z)) - 7} fill="#f4f1ea" fontSize="9.5" textAnchor="end">{aimText}</text>
+      <text x={W - 44} y={14} fill={k < 1 ? "#fff1b0" : "var(--muted)"} fontSize="9.5" textAnchor="end">{(k * flightS).toFixed(2).replace(".", ",")} s</text>
     </svg>
+    </Zoomable>
   );
 }
 
@@ -647,9 +632,20 @@ function FaceFront({ input, round, sighted, title }: { input: FlightInput; round
   hi += m * 1.3;
   // se il terreno è vicino lo includo: si vede il paglione appoggiato
   if (lo < 0.45) lo = Math.min(lo, -0.05);
+  // bersaglio in movimento: al rilascio era indietro di `lead`, la finestra deve contenerlo
+  const lead = round.lead ?? 0;
+  const moving = Math.abs(lead) > 0.005;
+  const flightMs = Math.round(round.clean.t * 1000);
+  const ys = moving ? [-boss, boss, -lead - R, -lead + R, round.my, -round.my] : [];
+  const needY = moving ? (Math.max(...ys) - Math.min(...ys)) * 1.15 : 0;
+  if (needY > ((hi - lo) * iw) / ih) {
+    const extra = (needY * ih) / iw - (hi - lo);
+    lo -= extra / 2;
+    hi += extra / 2;
+  }
   const spanZ = hi - lo;
   const spanY = (spanZ * iw) / ih;
-  const cy = Math.max(-spanY / 2, Math.min(spanY / 2, round.my * 0.5));
+  const cy = moving ? (Math.max(...ys) + Math.min(...ys)) / 2 : Math.max(-spanY / 2, Math.min(spanY / 2, round.my * 0.5));
   const left = cy - spanY / 2;
   const X = (y: number) => pad.l + ((y - left) / spanY) * iw;
   const Y = (z: number) => pad.t + ((hi - z) / spanZ) * ih;
@@ -675,9 +671,11 @@ function FaceFront({ input, round, sighted, title }: { input: FlightInput; round
   const eyeIn = eye.z <= hi && eye.z >= lo;
   return (
     <div className="grid gap-1">
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full rounded-xl border border-line" style={{ background: "#0f1a14" }} role="img" aria-label="Bersaglio visto di fronte">
+      <Zoomable label="Bersaglio" className="border border-line">
+      <svg viewBox={`0 0 ${W} ${H}`} className="block w-full" style={{ background: "#0f1a14" }} role="img" aria-label="Bersaglio visto di fronte">
         <defs>
           <clipPath id="ff-clip"><rect x={pad.l} y={pad.t} width={iw} height={ih} /></clipPath>
+          <marker id="ff-move" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="#f4f1ea" /></marker>
           <radialGradient id="ff-sheen" cx="35%" cy="30%" r="80%">
             <stop offset="0%" stopColor="#fff" stopOpacity="0.16" />
             <stop offset="70%" stopColor="#fff" stopOpacity="0" />
@@ -706,6 +704,15 @@ function FaceFront({ input, round, sighted, title }: { input: FlightInput; round
               <line x1={pad.l} x2={W - pad.r} y1={ground} y2={ground} stroke="#7aa452" strokeWidth="2" />
             </>
           ) : null}
+          {moving ? (
+            <g>
+              <circle cx={X(-lead)} cy={gy} r={R * k} fill="none" stroke="#f4f1ea" strokeWidth="1" strokeDasharray="4 3" opacity="0.6" />
+              <text x={X(-lead)} y={Y(GOLD_HEIGHT + R) - 4} fill="#f4f1ea" fontSize="8.5" textAnchor="middle" opacity="0.8">al rilascio</text>
+              <line x1={X(-lead)} y1={gy} x2={gx} y2={gy} stroke="#f4f1ea" strokeWidth="1.2" opacity="0.7" markerEnd="url(#ff-move)" />
+              <text x={X(-lead)} y={Y(GOLD_HEIGHT - R) + 12} fill="#f4f1ea" fontSize="8.5" textAnchor="middle" stroke="#0f1a14" strokeWidth="2.6" style={{ paintOrder: "stroke" }}>anticipo {Math.abs(lead * 100).toFixed(0)} cm in {round.clean.t.toFixed(2).replace(".", ",")} s {lead > 0 ? "→" : "←"}</text>
+            </g>
+          ) : null}
+          <g className={moving ? "aa-slide-x" : undefined} style={moving ? ({ "--dx": `${-lead * k}px`, animationDuration: `${flightMs}ms`, animationDelay: "350ms" } as CSSProperties) : undefined}>
           {/* cavalletto */}
           <line x1={gx - boss * k * 0.55} y1={legTop} x2={gx - boss * k * 0.95} y2={Math.max(ground, H)} stroke="#8a6a3c" strokeWidth="3" />
           <line x1={gx + boss * k * 0.55} y1={legTop} x2={gx + boss * k * 0.95} y2={Math.max(ground, H)} stroke="#8a6a3c" strokeWidth="3" />
@@ -732,6 +739,7 @@ function FaceFront({ input, round, sighted, title }: { input: FlightInput; round
           <circle cx={gx + 2} cy={gy + 3} r={R * k} fill="none" stroke="rgba(0,0,0,0.25)" strokeWidth="2" />
           <circle cx={gx} cy={gy} r={R * k} fill="url(#ff-sheen)" />
           <path d={`M${gx - 3} ${gy} H${gx + 3} M${gx} ${gy - 3} V${gy + 3}`} stroke="#14181c" strokeWidth="0.7" />
+          </g>
           {/* occhio: a che quota guarda */}
           {eyeIn ? (
             <>
@@ -761,11 +769,11 @@ function FaceFront({ input, round, sighted, title }: { input: FlightInput; round
             </g>
           ) : null}
           {round.hits.map((hit, i) => (
-            <g key={i} className="aa-hit cursor-pointer" style={{ animationDelay: `${150 + i * 110}ms` }} onClick={() => setPicked(picked === i ? null : i)}>
-              <circle cx={X(hit.y)} cy={Y(hit.z)} r={dot * 3.2} fill="none" stroke="#f4f1ea" strokeWidth="0.8" className="aa-hit-ring" style={{ animationDelay: `${150 + i * 110}ms` }} />
+            <g key={i} className="aa-hit cursor-pointer" style={{ animationDelay: `${450 + flightMs + i * 110}ms` }} onClick={() => setPicked(picked === i ? null : i)}>
+              <circle cx={X(hit.y)} cy={Y(hit.z)} r={dot * 3.2} fill="none" stroke="#f4f1ea" strokeWidth="0.8" className="aa-hit-ring" style={{ animationDelay: `${450 + flightMs + i * 110}ms` }} />
               <circle cx={X(hit.y)} cy={Y(hit.z)} r={Math.max(dot, 5)} fill="transparent" />
               {/* coda della freccia vista da dietro: cocca e tre penne, arriva "verso lo schermo" */}
-              <g className="aa-ff-arrow" style={{ animationDelay: `${150 + i * 110}ms` }}>
+              <g className="aa-ff-arrow" style={{ animationDelay: `${450 + flightMs + i * 110}ms` }}>
                 {[0, 120, 240].map((a) => (
                   <path key={a} d={`M${X(hit.y)} ${Y(hit.z)} l${Math.cos(((a - 90) * Math.PI) / 180) * dot * 2.6} ${Math.sin(((a - 90) * Math.PI) / 180) * dot * 2.6}`} stroke={a === 0 ? "#e6b325" : "#d63a2f"} strokeWidth={Math.max(1.4, dot * 0.9)} strokeLinecap="round" />
                 ))}
@@ -798,6 +806,7 @@ function FaceFront({ input, round, sighted, title }: { input: FlightInput; round
         {/* cornice dell'area */}
         <rect x={pad.l} y={pad.t} width={iw} height={ih} fill="none" stroke="rgba(244,241,234,0.08)" />
       </svg>
+      </Zoomable>
       {picked != null && round.hits[picked] ? (() => {
         const h = round.hits[picked];
         const dy = h.y * 100;

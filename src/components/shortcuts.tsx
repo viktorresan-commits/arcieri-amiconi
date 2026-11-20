@@ -1,6 +1,6 @@
-import { useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Link } from "@tanstack/react-router";
-import { SHORTCUTS, STATIONS, TIPS, shortcutById, usePinned, type Shortcut } from "@/lib/arcieri/shortcuts";
+import { SHORTCUTS, STATIONS, TIPS, nextShortcut, shortcutById, usePinned, type Shortcut } from "@/lib/arcieri/shortcuts";
 import { cx } from "./kit";
 import { AppIcon, Glyph } from "./icons";
 import { RealIcon } from "./real-icons";
@@ -116,24 +116,14 @@ export function TipCard() {
 }
 
 /** Mappa del percorso: cinque tappe in fila, collegate da un sentiero, con le loro sezioni. */
-/** Menu: cerca, oppure scegli una sezione (schede scorrevoli, anche con il dito di lato) e tocca la voce. */
+/** Menu: cerca, oppure scorri le sezioni (carosello infinito, a destra e sinistra); quella al centro mostra le sue voci. */
 export function PathMap({ onPick, current, onPersonalize }: { onPick?: () => void; current?: string; onPersonalize?: () => void }) {
   const here = SHORTCUTS.find((s) => current && s.to !== "/" && current.startsWith(s.to));
   const [tab, setTab] = useState<string>(here?.group ?? "allena");
-  const [dir, setDir] = useState(0);
   const [q, setQ] = useState("");
-  const touch = useRef<{ x: number; y: number } | null>(null);
-  const tabs = useRef<HTMLDivElement>(null);
-  const idx = Math.max(0, STATIONS.findIndex((st) => st.id === tab));
-  const go = (i: number) => {
-    const k = (i + STATIONS.length) % STATIONS.length;
-    setDir(k > idx ? 1 : -1);
-    setTab(STATIONS[k].id);
-    const el = tabs.current?.children[k] as HTMLElement | undefined;
-    el?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
-  };
-  const st = STATIONS[idx];
   const query = q.trim().toLowerCase();
+  const idx = Math.max(0, STATIONS.findIndex((st) => st.id === tab));
+  const st = STATIONS[idx];
   const items = query ? SHORTCUTS.filter((s) => `${s.label} ${s.hint}`.toLowerCase().includes(query)) : SHORTCUTS.filter((s) => s.group === st.id);
   const stationOf = (id: string) => STATIONS.find((x) => x.id === id);
   return (
@@ -143,44 +133,15 @@ export function PathMap({ onPick, current, onPersonalize }: { onPick?: () => voi
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Cerca tra ${SHORTCUTS.length} voci`} className="min-h-11 w-full bg-transparent text-sm outline-none" />
         {q ? <button type="button" aria-label="Cancella" onClick={() => setQ("")} className="text-muted"><Glyph name="close" size={16} /></button> : null}
       </label>
-      {query ? null : (
-        <div ref={tabs} className="-mx-4 flex snap-x gap-1.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none]">
-          {STATIONS.map((s, i) => (
-            <button
-              key={s.id}
-              type="button"
-              onClick={() => go(i)}
-              aria-pressed={s.id === tab}
-              className={cx("aa-menu-tab flex shrink-0 items-center gap-1.5 rounded-full py-1 pl-1 pr-3 text-xs font-semibold transition-all duration-300", s.id === tab ? "text-fg" : "bg-white/[0.04] text-muted")}
-              style={s.id === tab ? { background: `color-mix(in srgb, ${s.color} 30%, transparent)`, boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${s.color} 55%, transparent)` } : undefined}
-            >
-              <RealIcon name={s.icon} size={26} className={cx("transition-transform duration-300", s.id === tab ? "scale-110" : "opacity-75")} />
-              {s.title}
-              <span className="text-[0.6rem] opacity-60">{SHORTCUTS.filter((x) => x.group === s.id).length}</span>
-            </button>
-          ))}
-        </div>
-      )}
-      <div
-        key={query ? "q" : tab}
-        className={query ? "aa-rise" : dir >= 0 ? "aa-menu-in-r" : "aa-menu-in-l"}
-        onTouchStart={(e) => (touch.current = { x: e.touches[0].clientX, y: e.touches[0].clientY })}
-        onTouchEnd={(e) => {
-          const t = touch.current;
-          touch.current = null;
-          if (!t || query) return;
-          const dx = e.changedTouches[0].clientX - t.x;
-          const dy = e.changedTouches[0].clientY - t.y;
-          if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) go(idx + (dx < 0 ? 1 : -1));
-        }}
-      >
+      {query ? null : <StationWheel active={tab} onChange={setTab} />}
+      <div key={query ? "q" : tab} className="aa-rise">
         {query ? null : <p className="mb-2 px-1 text-xs text-muted">{st.sub}</p>}
         <ul className="grid gap-1">
           {items.map((s, i) => {
             const on = !!current && s.to !== "/" && current.startsWith(s.to) && (!s.search || here?.id === s.id);
             const sta = stationOf(s.group);
             return (
-              <li key={s.id} className="aa-menu-row" style={{ animationDelay: `${Math.min(i, 10) * 30}ms` }}>
+              <li key={s.id} className="aa-menu-row" style={{ animationDelay: `${Math.min(i, 10) * 35}ms` }}>
                 <Link
                   to={s.to as "/"}
                   search={(s.search ?? {}) as never}
@@ -210,5 +171,100 @@ export function PathMap({ onPick, current, onPersonalize }: { onPick?: () => voi
         </button>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Carosello delle sezioni: schede grandi, scorrevoli all'infinito in tutte e due le direzioni
+ * (la lista è ripetuta e ricentrata senza scatti). Quando si ferma, vale la scheda al centro.
+ */
+function StationWheel({ active, onChange }: { active: string; onChange: (id: string) => void }) {
+  const COPIES = 5;
+  const n = STATIONS.length;
+  const ref = useRef<HTMLDivElement>(null);
+  const timer = useRef<number | null>(null);
+  const [center, setCenter] = useState(() => Math.floor(COPIES / 2) * n + Math.max(0, STATIONS.findIndex((s) => s.id === active)));
+  const cards = Array.from({ length: COPIES * n }, (_, i) => ({ i, st: STATIONS[i % n] }));
+  const cardAt = (i: number) => ref.current?.children[i] as HTMLElement | undefined;
+  const scrollToIndex = (i: number, smooth: boolean) => {
+    const el = ref.current;
+    const c = cardAt(i);
+    if (!el || !c) return;
+    el.scrollTo({ left: c.offsetLeft - (el.clientWidth - c.offsetWidth) / 2, behavior: smooth ? "smooth" : "auto" });
+  };
+  useEffect(() => {
+    scrollToIndex(center, false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const settle = () => {
+    const el = ref.current;
+    if (!el) return;
+    const mid = el.scrollLeft + el.clientWidth / 2;
+    let best = 0;
+    let dist = Infinity;
+    for (let i = 0; i < el.children.length; i++) {
+      const c = el.children[i] as HTMLElement;
+      const d = Math.abs(c.offsetLeft + c.offsetWidth / 2 - mid);
+      if (d < dist) {
+        dist = d;
+        best = i;
+      }
+    }
+    // tengo il centro sulla copia di mezzo: così si può scorrere per sempre
+    const middle = Math.floor(COPIES / 2) * n + (best % n);
+    if (middle !== best) {
+      const delta = (cardAt(middle)?.offsetLeft ?? 0) - (cardAt(best)?.offsetLeft ?? 0);
+      el.scrollLeft += delta;
+    }
+    setCenter(middle);
+    const id = STATIONS[best % n].id;
+    if (id !== active) {
+      onChange(id);
+      if (navigator.vibrate) navigator.vibrate(6);
+    }
+  };
+  return (
+    <div
+      ref={ref}
+      onScroll={() => {
+        if (timer.current) window.clearTimeout(timer.current);
+        timer.current = window.setTimeout(settle, 110);
+      }}
+      className="aa-wheel -mx-4 flex snap-x snap-mandatory gap-2.5 overflow-x-auto px-[calc(50%-3.75rem)] py-2 [scrollbar-width:none]"
+    >
+      {cards.map(({ i, st }) => {
+        const on = i % n === STATIONS.findIndex((s) => s.id === active) && Math.abs(i - center) < n / 2 + 0.5;
+        return (
+          <button
+            key={i}
+            type="button"
+            onClick={() => scrollToIndex(i, true)}
+            className={cx("aa-wheel-card grid h-[8.25rem] w-[7.5rem] shrink-0 snap-center content-center justify-items-center gap-1.5 rounded-3xl p-2 text-center transition-all duration-300", on ? "is-on" : "")}
+            style={{ ["--c" as string]: st.color }}
+          >
+            <RealIcon name={st.icon} size={on ? 64 : 52} className="transition-all duration-300" />
+            <span className="text-sm font-semibold leading-tight">{st.title}</span>
+            <span className="text-[0.62rem] text-muted">{SHORTCUTS.filter((x) => x.group === st.id).length} voci</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** In fondo a ogni pagina: il passo successivo più naturale. */
+export function NextCard({ path, onGo }: { path: string; onGo?: () => void }) {
+  const next = nextShortcut(path);
+  if (!next || path === "/") return null;
+  return (
+    <Link to={next.to as "/"} search={(next.search ?? {}) as never} onClick={onGo} className="aa-next mt-6 flex items-center gap-3 rounded-[var(--radius-card)] p-3">
+      <AppIcon name={next.icon} color={next.color} size={46} />
+      <span className="min-w-0 flex-1">
+        <span className="block text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-muted">Continua con</span>
+        <span className="block font-display text-xl leading-tight">{next.label}</span>
+        <span className="block truncate text-xs text-muted">{next.hint}</span>
+      </span>
+      <Glyph name="chevron" size={18} className="text-muted" />
+    </Link>
   );
 }

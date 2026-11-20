@@ -28,7 +28,7 @@ export const SHORTCUTS: Shortcut[] = [
   { id: "storico", group: "analizza", label: "Storico", hint: "Tutti i tuoi allenamenti", icon: "history", color: "#55647b", to: "/allenamento", search: { vista: "storico" } },
   { id: "gare", group: "gareggia", label: "Gare", hint: "Iscrizioni e risultati", icon: "trophy", color: "#c39320", to: "/gare" },
   { id: "statistiche", group: "analizza", label: "Statistiche", hint: "Grafici e progressi", icon: "chart", color: "#1b9097", to: "/statistiche" },
-  { id: "balistica", group: "prepara", label: "Balistica", hint: "Simulatore di volo", icon: "ballistics", color: "#cc4f3b", to: "/balistica" },
+  { id: "balistica", group: "prepara", label: "Balistica", hint: "Simulatore di volo e FOC", icon: "ballistics", color: "#cc4f3b", to: "/balistica" },
   { id: "attrezzatura", group: "prepara", label: "Attrezzatura", hint: "Archi, frecce, assetti", icon: "quiver", color: "#8b6a3e", to: "/attrezzatura" },
   { id: "squadra", group: "squadra", label: "Squadra", hint: "Compagni e podi", icon: "team", color: "#3d8a4e", to: "/squadra" },
   { id: "calendario", group: "gareggia", label: "Calendario", hint: "Uscite in programma", icon: "calendar", color: "#4568d6", to: "/calendario" },
@@ -42,9 +42,9 @@ export const SHORTCUTS: Shortcut[] = [
   { id: "profilo", group: "squadra", label: "Profilo", hint: "Dati, import, impostazioni", icon: "user", color: "#646c7a", to: "/profilo" },
   { id: "timer", group: "allena", label: "Timer di tiro", hint: "Semaforo e tempi da gara", icon: "stopwatch", color: "#d6582a", to: "/timer" },
   { id: "borsa", group: "prepara", label: "Prima di partire", hint: "Borsa e riscaldamento", icon: "checklist", color: "#3f8a76", to: "/borsa" },
-  { id: "foc", group: "prepara", label: "Calcolo FOC", hint: "Bilanciamento della freccia", icon: "foc", color: "#2f6fd1", to: "/foc" },
   { id: "manutenzione", group: "prepara", label: "Manutenzione", hint: "Corda, cocche, penne", icon: "wrench", color: "#6c7684", to: "/manutenzione" },
   { id: "secco", group: "allena", label: "A secco", hint: "Tenute con arco o elastico", icon: "hold", color: "#c4475a", to: "/secco" },
+  { id: "tempi", group: "allena", label: "Tempo di allungo", hint: "Cronometra la trazione, o dai video", icon: "stopwatch", color: "#8a5bd1", to: "/tempi" },
   { id: "routine", group: "allena", label: "Routine di tiro", hint: "I tuoi passi, uno alla volta", icon: "steps", color: "#2a9c66", to: "/routine" },
   { id: "respiro", group: "allena", label: "Respiro", hint: "Calma prima della volée", icon: "lungs", color: "#3a8fc4", to: "/respiro" },
   { id: "segnapunti", group: "gareggia", label: "Segnapunti", hint: "Punti con gli amici", icon: "scorecard", color: "#b8508a", to: "/segnapunti" },
@@ -149,3 +149,29 @@ export const TIPS: { icon: IconName; text: string }[] = [
   { icon: "follow", text: "Dopo il rilascio resta fermo e guarda la freccia arrivare: il «follow-through» stabilizza il gruppo." },
   { icon: "chart", text: "In Statistiche il calendario a quadretti mostra la tua costanza: meglio poco ma spesso." },
 ];
+
+/** Scheda "dopo" per ogni pagina: il passo che di solito viene subito dopo. */
+const NEXT: Record<string, string> = {
+  rapido: "statistiche", foto: "statistiche", nuovo: "statistiche", fatto: "statistiche", storico: "statistiche",
+  gesto: "routine", statistiche: "obiettivi", obiettivi: "sfida-giorno", attrezzatura: "balistica", balistica: "spine",
+  spine: "tuning", tuning: "assetto", assetto: "manutenzione", manutenzione: "borsa", borsa: "timer", timer: "respiro",
+  respiro: "routine", routine: "tempi", tempi: "secco", secco: "gesto", allungo: "spine", vento: "balistica", energia: "balistica",
+  unita: "spine", gare: "segnapunti", segnapunti: "classifiche", classifiche: "confronta", confronta: "squadra",
+  calendario: "gare", sfide: "classifiche", squadra: "bacheca", bacheca: "calendario", gioco: "stima", stima: "regole",
+  regole: "glossario", glossario: "quiz", quiz: "sfida-giorno", "sfida-giorno": "rapido", acquisti: "attrezzatura", profilo: "obiettivi",
+};
+
+export function currentShortcut(path: string) {
+  return [...SHORTCUTS].sort((a, b) => b.to.length - a.to.length).find((s) => s.to !== "/" && path.startsWith(s.to)) ?? null;
+}
+
+export function nextShortcut(path: string) {
+  const here = currentShortcut(path);
+  if (!here) return null;
+  const id = NEXT[here.id];
+  const byMap = id ? SHORTCUTS.find((s) => s.id === id) : null;
+  if (byMap) return byMap;
+  const same = SHORTCUTS.filter((s) => s.group === here.group);
+  const i = same.findIndex((s) => s.id === here.id);
+  return same[(i + 1) % same.length] ?? null;
+}

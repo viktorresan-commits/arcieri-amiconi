@@ -7,7 +7,7 @@ import type { Face } from "@/lib/arcieri/scoring";
  * Tutto lo stato della camera vive in ref: niente render React a ogni movimento.
  */
 
-type Shot = { x: number; y: number; end?: number; score?: number; miss?: boolean; color?: string };
+type Shot = { x: number; y: number; end?: number; score?: number; miss?: boolean; color?: string; look?: ArrowLook };
 /** Aspetto delle frecce dell'utente (dalla scheda dell'attrezzatura). */
 export type ArrowLook = { shaft?: string; fletch?: string; cock?: string; nock?: string };
 const DEFAULT_LOOK: Required<ArrowLook> = { shaft: "#1d1f22", fletch: "#d63a2f", cock: "#e6b325", nock: "#f4f1ea" };
@@ -275,7 +275,8 @@ type Arrow = { hit: V3; dir: V3; color: string; hen: string; shaft: string; nock
 
 /** Le frecce hanno i colori dell'attrezzatura dell'utente; un colore per persona solo nella vista di squadra. */
 function arrowOf(shot: Shot, index: number, look?: ArrowLook): Arrow {
-  const L = { ...DEFAULT_LOOK, ...Object.fromEntries(Object.entries(look ?? {}).filter(([, v]) => v)) } as Required<ArrowLook>;
+  // ogni freccia con i colori della sua serie, se nota; altrimenti quelli dell'assetto
+  const L = { ...DEFAULT_LOOK, ...Object.fromEntries(Object.entries(shot.look ?? look ?? {}).filter(([, v]) => v)) } as Required<ArrowLook>;
   const r1 = hash(index * 7 + 1);
   const r2 = hash(index * 13 + 5);
   const r3 = hash(index * 3 + 11);

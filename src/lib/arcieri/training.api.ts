@@ -11,7 +11,7 @@ import { divisionOf } from "./labels";
 const METRICS: RankMetric[] = ["avg", "best", "points", "arrows", "sessions", "consistency", "improvement", "precision"];
 const PERIODS: PeriodKind[] = ["day", "week", "month", "year", "all"];
 
-type ShotIn = TallyShot & { nx: number | null; ny: number | null; tag: number | null };
+type ShotIn = TallyShot & { nx: number | null; ny: number | null; tag: number | null; set: number | null };
 
 function parseShots(faceId: string, raw: unknown): ShotIn[] {
   if (!Array.isArray(raw)) return [];
@@ -37,7 +37,9 @@ function parseShots(faceId: string, raw: unknown): ShotIn[] {
     if (ny != null && (!Number.isFinite(ny) || Math.abs(ny) > 1.5)) throw new Error("Posizione freccia non valida.");
     const tagN = s.tag == null || s.tag === "" ? null : Math.round(asNum(s.tag, Number.NaN));
     const tag = tagN != null && Number.isFinite(tagN) && tagN >= 0 && tagN <= 999 ? tagN : null;
-    shots.push({ block, end, arrow, score, isX, miss, nx, ny, tag });
+    const setN = s.set == null || s.set === "" ? null : Math.round(asNum(s.set, Number.NaN));
+    const set = setN != null && Number.isFinite(setN) && setN > 0 && setN < 2_000_000_000 ? setN : null;
+    shots.push({ block, end, arrow, score, isX, miss, nx, ny, tag, set });
   }
   return shots;
 }
@@ -139,12 +141,19 @@ export const saveSession = createServerFn({ method: "POST" })
       data.aimTarget,
       data.aimAngle,
     ];
+    // serie di frecce: solo schede "freccia" di chi salva
+    const wanted = [...new Set(data.shots.map((s) => s.set).filter((v): v is number => v != null))];
+    const mySets = new Set<number>();
+    if (wanted.length) {
+      const rows = await sql<{ id: number }>`select id from equipment where user_id = ${context.userId} and category = 'freccia' and id = any(string_to_array(${wanted.join(",")}, ',')::int[])`;
+      rows.forEach((r) => mySets.add(asNum(r.id)));
+    }
     const shotParams: unknown[] = [];
     const tuples: string[] = [];
     data.shots.forEach((s, i) => {
-      const b = 32 + i * 9;
-      tuples.push(`($${b}::int,$${b + 1}::int,$${b + 2}::int,$${b + 3}::int,$${b + 4}::boolean,$${b + 5}::boolean,$${b + 6}::float8,$${b + 7}::float8,$${b + 8}::int)`);
-      shotParams.push(s.block, s.end, s.arrow, s.score, s.isX, s.miss, s.nx, s.ny, s.tag);
+      const b = 32 + i * 10;
+      tuples.push(`($${b}::int,$${b + 1}::int,$${b + 2}::int,$${b + 3}::int,$${b + 4}::boolean,$${b + 5}::boolean,$${b + 6}::float8,$${b + 7}::float8,$${b + 8}::int,$${b + 9}::int)`);
+      shotParams.push(s.block, s.end, s.arrow, s.score, s.isX, s.miss, s.nx, s.ny, s.tag, s.set != null && mySets.has(s.set) ? s.set : null);
     });
     const header = `
       with up as (
@@ -197,12 +206,13 @@ export const saveSession = createServerFn({ method: "POST" })
     const textFixed = data.shots.length
       ? `${header},
         ins as (
-          insert into shots (session_id, block_index, end_index, arrow_index, score, is_x, miss, nx, ny, arrow_tag)
-          select up.id, v.block_index, v.end_index, v.arrow_index, v.score, v.is_x, v.miss, v.nx, v.ny, v.arrow_tag
+          insert into shots (session_id, block_index, end_index, arrow_index, score, is_x, miss, nx, ny, arrow_tag, arrow_set)
+          select up.id, v.block_index, v.end_index, v.arrow_index, v.score, v.is_x, v.miss, v.nx, v.ny, v.arrow_tag, v.arrow_set
           from up
-          join (values ${tuples.join(",")}) as v(block_index, end_index, arrow_index, score, is_x, miss, nx, ny, arrow_tag) on true
+          join (values ${tuples.join(",")}) as v(block_index, end_index, arrow_index, score, is_x, miss, nx, ny, arrow_tag, arrow_set) on true
           on conflict (session_id, block_index, end_index, arrow_index) do update set
             arrow_tag = excluded.arrow_tag,
+            arrow_set = excluded.arrow_set,
             score = excluded.score,
             is_x = excluded.is_x,
             miss = excluded.miss,
@@ -354,8 +364,9 @@ export const getSession = createServerFn({ method: "POST" })
       nx: number | null;
       ny: number | null;
       arrow_tag: number | null;
+      arrow_set: number | null;
     }>`
-      select block_index, end_index, arrow_index, score, is_x, miss, nx, ny, arrow_tag
+      select block_index, end_index, arrow_index, score, is_x, miss, nx, ny, arrow_tag, arrow_set
       from shots where session_id = ${data.id}
       order by block_index, end_index, arrow_index`;
     let prior: { startedAt: string; arrows: number; avg: number; dispersion: string; errors: string } | null = null;
@@ -397,10 +408,15 @@ export const getSession = createServerFn({ method: "POST" })
       const v = sp[0]?.specs;
       arrowSpecs = typeof v === "string" ? v : v ? JSON.stringify(v) : "";
     }
+    // tutte le serie di frecce di chi ha tirato: il numero si sceglie dentro la serie giusta
+    const setRows = await sql<{ id: number; name: string; specs: unknown }>`
+      select id, name, specs from equipment where user_id = ${row.user_id} and category = 'freccia' order by name, id`;
+    const arrowSets = setRows.map((r) => ({ id: asNum(r.id), name: r.name, specs: typeof r.specs === "string" ? r.specs : r.specs ? JSON.stringify(r.specs) : "" }));
     return {
       session: card(row, true),
       prior,
       arrowSpecs,
+      arrowSets,
       shots: shots.map((s) => ({
         block: asNum(s.block_index),
         end: asNum(s.end_index),
@@ -411,6 +427,7 @@ export const getSession = createServerFn({ method: "POST" })
         nx: asNumOrNull(s.nx),
         ny: asNumOrNull(s.ny),
         tag: asNumOrNull(s.arrow_tag),
+        set: asNumOrNull(s.arrow_set),
       })),
     };
   });
@@ -713,11 +730,12 @@ export const dashboard = createServerFn({ method: "GET" })
     const inMonth = (day: string) => day >= fromDay && day < toDay;
     const trainShots = await sql<{ score: number; miss: boolean; is_x: boolean; max_arrow: number; started_at: string; distance_m: number; session_id: number; shot_id: number; arrow_index: number; arrow_tag: number | null; arrow_specs: string | null }>`
       select sh.score, sh.miss, sh.is_x, s.max_arrow, s.started_at::text as started_at, s.distance_m, s.id as session_id, sh.id as shot_id,
-        sh.arrow_index, sh.arrow_tag, eq.specs as arrow_specs
+        sh.arrow_index, sh.arrow_tag, coalesce(es.specs, eq.specs) as arrow_specs
       from shots sh
       join sessions s on s.id = sh.session_id
       left join setups su on su.id = s.setup_id
       left join equipment eq on eq.id = su.arrow_id and eq.category = 'freccia'
+      left join equipment es on es.id = sh.arrow_set and es.category = 'freccia' and es.user_id = s.user_id
       where s.user_id = ${context.userId}
       order by s.started_at, sh.id`;
     // la freccia "di casa": l'ultima in uso, se nella seduta non c'è un assetto con le frecce
@@ -953,8 +971,8 @@ export const trainingBootstrap = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const sql = await db();
     const me = await ensureMember(sql, context.userId);
-    const gear = await sql<{ id: number; category: string; name: string; brand: string; model: string; specs: string | null }>`
-      select id, category, name, brand, model, specs from equipment
+    const gear = await sql<{ id: number; user_id: string; category: string; name: string; brand: string; model: string; specs: string | null }>`
+      select id, user_id, category, name, brand, model, specs from equipment
       where user_id = ${context.userId} or visibility = 'group'
       order by name`;
     const setups = await sql<{ id: number; name: string; bow_id: number | null; arrow_id: number | null; string_note: string }>`
@@ -986,7 +1004,7 @@ export const trainingBootstrap = createServerFn({ method: "GET" })
     );
     return {
       canScore: canScore(me.role),
-      gear: gear.map((g) => ({ id: asNum(g.id), category: g.category, name: g.name, brand: g.brand, model: g.model, specs: typeof g.specs === "string" ? g.specs : g.specs ? JSON.stringify(g.specs) : "" })),
+      gear: gear.map((g) => ({ id: asNum(g.id), mine: g.user_id === context.userId, category: g.category, name: g.name, brand: g.brand, model: g.model, specs: typeof g.specs === "string" ? g.specs : g.specs ? JSON.stringify(g.specs) : "" })),
       setups: setups.map((s) => ({ id: asNum(s.id), name: s.name, bowId: asNumOrNull(s.bow_id), arrowId: asNumOrNull(s.arrow_id), stringNote: s.string_note })),
       places: places.map((p) => p.place),
       recent: recentRows.map((row) => {

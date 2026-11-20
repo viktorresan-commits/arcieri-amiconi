@@ -5,7 +5,7 @@ import { PoseRead } from "@/components/pose-read";
 import { Target3D, lookOf } from "@/components/target-3d";
 import { TargetRead } from "@/components/target-read";
 
-type Point = { nx: number | null; ny: number | null; score: number; isX?: boolean; miss?: boolean; arrow: number; end: number };
+type Point = { nx: number | null; ny: number | null; score: number; isX?: boolean; miss?: boolean; arrow: number; end: number; set?: number | null };
 
 export function ShotLab({
   face,
@@ -15,7 +15,10 @@ export function ShotLab({
   volleyLabel,
   onPhotoBatch,
   arrowSpecs,
+  arrowSets,
 }: {
+  /** tutte le serie di frecce: ogni colpo con la sua serie prende i suoi colori */
+  arrowSets?: { id: number; specs: string }[];
   /** scheda delle frecce dell'utente: colori di asta, penne e cocca nella vista 3D */
   arrowSpecs?: string;
   volleyLabel?: string;
@@ -34,6 +37,8 @@ export function ShotLab({
     .filter((shot): shot is Point & { x: number; y: number } => Boolean(shot));
   const [view, setView] = useState<"mappa" | "tre" | "corpo">("mappa");
   const look = useMemo(() => lookOf(arrowSpecs), [arrowSpecs]);
+  const looks = useMemo(() => new Map((arrowSets ?? []).map((a) => [a.id, lookOf(a.specs)])), [arrowSets]);
+  const placed3d = placed.map((p) => (p.set != null && looks.get(p.set) ? { ...p, look: looks.get(p.set) } : p));
   const stats = useMemo(() => groupStats(placed), [placed]);
 
   return (
@@ -46,7 +51,7 @@ export function ShotLab({
       {view === "corpo" ? <PoseRead /> : null}
       {view !== "corpo" && placed.length < 2 ? <p className="text-sm text-muted">Servono almeno due frecce sul bersaglio.</p> : null}
       {view === "mappa" ? <Heat face={face} shots={placed} /> : null}
-      {view === "tre" ? <Target3D face={face} shots={placed} look={look} /> : null}
+      {view === "tre" ? <Target3D face={face} shots={placed3d} look={look} /> : null}
       {view === "corpo" ? null : (
       <>
       <div className="grid grid-cols-3 gap-2 text-sm">

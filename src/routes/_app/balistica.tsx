@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { FlightSim } from "@/components/flight-sim";
+import { FocTool } from "@/components/foc-tool";
 import { PageHead } from "@/components/kit";
 
 export const Route = createFileRoute("/_app/balistica")({
@@ -9,8 +10,9 @@ export const Route = createFileRoute("/_app/balistica")({
 function Page() {
   return (
     <div className="grid gap-3">
-      <PageHead kicker="Simulatore di volo" title="Balistica" lede="Imposta arco e freccia, guarda la parabola e scopri dove mirare. Salva le impostazioni da gara o da allenamento." />
+      <PageHead kicker="Simulatore di volo e FOC" title="Balistica" lede="Imposta arco e freccia, guarda la parabola in tempo reale e scopri dove mirare, anche su un bersaglio in movimento. Sotto, il calcolo del FOC." />
       <FlightSim />
+      <FocTool />
     </div>
   );
 }

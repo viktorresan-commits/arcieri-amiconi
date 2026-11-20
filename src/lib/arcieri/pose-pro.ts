@@ -40,6 +40,8 @@ export type ProMetrics = {
   weight: number | null; // centro spalle rispetto al centro piedi, in spalle (+ = verso il bersaglio)
   drawLenCm: number | null; // allungo stimato
   scaleFrom: "piedi" | "spalle" | null;
+  /** centimetri per unità d'immagine (altezza del fotogramma = 1), se conosco la statura */
+  cmPerUnit: number | null;
 };
 
 const vis = (p: Landmark | undefined) => (p ? (p.visibility ?? 1) : 0);
@@ -157,8 +159,8 @@ export function proMetrics(lm: Landmark[], hand: Hand, aspect: number, setup: Pr
   // allungo: distanza indice della corda – polso dell'arco, in cm se conosco l'altezza
   let drawLenCm: number | null = null;
   let scaleFrom: ProMetrics["scaleFrom"] = null;
+  let cmPerUnit: number | null = null;
   if (setup.heightCm > 100) {
-    let cmPerUnit: number | null = null;
     if (feet && nose) {
       const ankleY = (P(27).y + P(28).y) / 2;
       cmPerUnit = (setup.heightCm * 0.89) / Math.max(1e-3, ankleY - nose.y);
@@ -173,10 +175,11 @@ export function proMetrics(lm: Landmark[], hand: Hand, aspect: number, setup: Pr
     if (!(drawLenCm > 40 && drawLenCm < 95)) {
       drawLenCm = null;
       scaleFrom = null;
+      cmPerUnit = null;
     }
   }
 
-  return { headTilt, headTurn, headLean, shrug, shoulderLevel, bowArm, bowArmHeight, bowWrist, bowWristDir, drawWrist, elbowLine, elbowHeight, anchorV, anchorH, anchorDist, trunk, sideLean, kneeBow, kneeDraw, stance, weight, drawLenCm, scaleFrom };
+  return { headTilt, headTurn, headLean, shrug, shoulderLevel, bowArm, bowArmHeight, bowWrist, bowWristDir, drawWrist, elbowLine, elbowHeight, anchorV, anchorH, anchorDist, trunk, sideLean, kneeBow, kneeDraw, stance, weight, drawLenCm, scaleFrom, cmPerUnit };
 }
 
 /** Mediana di più fotogrammi (es. tutta la fase di ancoraggio): più stabile di un fotogramma solo. */
@@ -427,4 +430,21 @@ export function evaluate(m: ProMetrics, setup: ProSetup, steady?: ReturnType<typ
 /** Lunghezza d'arco consigliata (AMO) dall'allungo in pollici, per archi ricurvi. */
 export function bowLengthFor(drawIn: number) {
   return drawIn < 24 ? "62–64″" : drawIn < 26 ? "64–66″" : drawIn < 28 ? "66–68″" : drawIn < 29.5 ? "68–70″" : "70–72″";
+}
+
+/** Misure dell'attrezzatura dal fotogramma: freccia, arco (corda tesa da punta a punta) e corda, in cm. */
+export function gearSizes(gear: { arrow: { x1: number; y1: number; x2: number; y2: number; measured?: boolean } | null; bow: { x1: number; y1: number; x2: number; y2: number; measured?: boolean } | null } | null, aspect: number, cmPerUnit: number | null, bowType: string) {
+  if (!gear || !cmPerUnit) return null;
+  const seg = (g: { x1: number; y1: number; x2: number; y2: number }) => Math.hypot((g.x2 - g.x1) * aspect, g.y2 - g.y1) * cmPerUnit;
+  const arrowCm = gear.arrow?.measured ? seg(gear.arrow) : null;
+  const chordCm = gear.bow?.measured ? seg(gear.bow) : null;
+  const ok = (v: number | null, lo: number, hi: number) => (v != null && v > lo && v < hi ? v : null);
+  const arrow = ok(arrowCm, 50, 100);
+  const chord = ok(chordCm, 80, 200);
+  // arco teso: la corda va quasi dritta da punta a punta. Corda ≈ distanza fra le punte,
+  // lunghezza AMO ≈ corda + 3″ (archi ricurvi e longbow); il compound si misura asse-asse.
+  const compound = bowType === "compound";
+  const amoIn = chord != null && !compound ? chord / 2.54 + 3 : null;
+  const stringIn = chord != null ? chord / 2.54 - (compound ? 0 : 0.3) : null;
+  return { arrowCm: arrow, chordCm: chord, amoIn, stringIn, compound };
 }

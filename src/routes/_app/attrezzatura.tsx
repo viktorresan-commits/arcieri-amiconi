@@ -123,6 +123,7 @@ function Page() {
 
         {form.category === "freccia" ? (
           <>
+            <p className="rounded-xl bg-white/[0.04] px-3 py-2 text-xs text-muted">Ogni scheda è una <b className="text-fg">serie di frecce</b>: se ne hai più di una (per esempio penne rosse per l'indoor e gialle per l'outdoor) crea una scheda per serie, con nome e colori. Quando dai il numero a una freccia sul bersaglio scegli prima la serie, poi il numero.</p>
             <div className="rounded-xl border border-line bg-elev p-2">
               <ArrowIcon material={spec("material")} shaft={spec("shaft")} fletch={spec("fletch")} cock={spec("cock")} nock={spec("nock")} wrap={spec("wrap")} fletchType={spec("fletchType")} point={spec("pointType") || "ogiva"} number={spec("numFrom") || undefined} className="h-14 w-full" />
             </div>

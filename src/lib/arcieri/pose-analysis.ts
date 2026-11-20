@@ -350,8 +350,9 @@ export function cameraDistance(samples: Sample[], videoW: number, videoH: number
 /* ---------------- arco e freccia nell'immagine ---------------- */
 
 export type Gear = {
-  arrow: { x1: number; y1: number; x2: number; y2: number; tilt: number } | null;
-  bow: { x1: number; y1: number; x2: number; y2: number; cant: number } | null;
+  /** measured: gli estremi sono dove la linea finisce davvero nell'immagine (non una lunghezza fissa). */
+  arrow: { x1: number; y1: number; x2: number; y2: number; tilt: number; measured?: boolean } | null;
+  bow: { x1: number; y1: number; x2: number; y2: number; cant: number; measured?: boolean } | null;
 };
 
 /**
@@ -367,8 +368,8 @@ export function detectGear(source: CanvasImageSource, W: number, H: number, lm: 
   const sw = Math.hypot((lm[11].x - lm[12].x) * W, (lm[11].y - lm[12].y) * H) || 40;
   const x0 = Math.max(0, Math.min(bw.x, dw.x) - 1.2 * sw);
   const x1 = Math.min(W, Math.max(bw.x, dw.x) + 1.2 * sw);
-  const y0 = Math.max(0, Math.min(bw.y, dw.y) - 2.2 * sw);
-  const y1 = Math.min(H, Math.max(bw.y, dw.y) + 2.2 * sw);
+  const y0 = Math.max(0, Math.min(bw.y, dw.y) - 2.7 * sw);
+  const y1 = Math.min(H, Math.max(bw.y, dw.y) + 2.7 * sw);
   const k = Math.min(1, 420 / Math.max(x1 - x0, y1 - y0));
   const cw = Math.max(16, Math.round((x1 - x0) * k));
   const ch = Math.max(16, Math.round((y1 - y0) * k));
@@ -413,6 +414,37 @@ export function detectGear(source: CanvasImageSource, W: number, H: number, lm: 
     return cnt > 8 ? sum / cnt : 0;
   };
   const r = Math.max(2, Math.round(swc * 0.05));
+  // fin dove continua la linea: si avanza a tratti finché la cresta resta forte (tollera piccoli buchi)
+  const reach = (cx: number, cy: number, ux: number, uy: number, start: number, end: number, rr: number, ref: number) => {
+    const seg = Math.max(10, swc * 0.12);
+    const dirn = Math.sign(end - start) || 1;
+    let far: number | null = null;
+    let gap = 0;
+    let shift = 0;
+    for (let t = start; (end - t) * dirn > 0; t += (dirn * seg) / 2) {
+      const a = dirn > 0 ? t : t - seg;
+      // segue la linea anche se curva (flettenti) o leggermente storta: prova piccoli spostamenti di lato
+      let sc = 0;
+      let bestD = 0;
+      for (const d of [0, -1, 1, -2, 2, -3, 3]) {
+        const o = shift + d;
+        const v = ridge(cx - uy * o, cy + ux * o, ux, uy, a, a + seg, rr);
+        if (v > sc) {
+          sc = v;
+          bestD = d;
+        }
+      }
+      if (sc > ref * 0.45) {
+        shift = Math.max(-swc * 0.4, Math.min(swc * 0.4, shift + bestD));
+        far = t + dirn * seg;
+        gap = 0;
+      } else {
+        gap += seg / 2;
+        if (far == null ? gap > swc * 0.6 : gap > seg * 1.6) break;
+      }
+    }
+    return far;
+  };
   // --- freccia
   const base = Math.atan2(B.y - D.y, B.x - D.x);
   const len = Math.hypot(B.x - D.x, B.y - D.y);
@@ -437,10 +469,15 @@ export function detectGear(source: CanvasImageSource, W: number, H: number, lm: 
     const uy = Math.sin(best.a);
     const cx = D.x - uy * best.o;
     const cy = D.y + ux * best.o;
-    const p1 = { x: (cx + ux * len * 0.05) / k + x0, y: (cy + uy * len * 0.05) / k + y0 };
-    const p2 = { x: (cx + ux * len * 1.25) / k + x0, y: (cy + uy * len * 1.25) / k + y0 };
+    // la punta: dove finisce la linea oltre la mano dell'arco; la cocca è sotto le dita della corda
+    const tip = reach(cx, cy, ux, uy, len * 0.6, len * 1.9, r, best.s);
+    const measured = tip != null && tip > len * 0.95 && tip < len * 1.85;
+    const t2 = measured ? (tip as number) : len * 1.25;
+    const t1 = measured ? -0.02 * len : len * 0.05;
+    const p1 = { x: (cx + ux * t1) / k + x0, y: (cy + uy * t1) / k + y0 };
+    const p2 = { x: (cx + ux * t2) / k + x0, y: (cy + uy * t2) / k + y0 };
     const tilt = (Math.atan2(p1.y - p2.y, Math.abs(p2.x - p1.x)) * 180) / Math.PI;
-    arrow = { x1: p1.x / W, y1: p1.y / H, x2: p2.x / W, y2: p2.y / H, tilt };
+    arrow = { x1: p1.x / W, y1: p1.y / H, x2: p2.x / W, y2: p2.y / H, tilt, measured };
   }
   // --- arco: perpendicolare alla freccia, passa vicino alla mano dell'arco
   const perp = base + Math.PI / 2;
@@ -466,14 +503,20 @@ export function detectGear(source: CanvasImageSource, W: number, H: number, lm: 
     const uy = Math.sin(bb.a);
     const cx = B.x + Math.cos(base) * bb.o;
     const cy = B.y + Math.sin(base) * bb.o;
-    const p1 = { x: (cx - ux * 1.6 * swc) / k + x0, y: (cy - uy * 1.6 * swc) / k + y0 };
-    const p2 = { x: (cx + ux * 1.6 * swc) / k + x0, y: (cy + uy * 1.6 * swc) / k + y0 };
+    // flettenti: dalla mano verso le due punte, finché la linea continua
+    const up = reach(cx, cy, ux, uy, 0.3 * swc, 3.2 * swc, rb, bb.s);
+    const down = reach(cx, cy, ux, uy, -0.3 * swc, -3.2 * swc, rb, bb.s);
+    const measured = up != null && down != null && up > 1.1 * swc && down < -1.1 * swc;
+    const ta = measured ? (down as number) : -1.6 * swc;
+    const tb = measured ? (up as number) : 1.6 * swc;
+    const p1 = { x: (cx + ux * ta) / k + x0, y: (cy + uy * ta) / k + y0 };
+    const p2 = { x: (cx + ux * tb) / k + x0, y: (cy + uy * tb) / k + y0 };
     const top = p1.y < p2.y ? p1 : p2;
     const bot = p1.y < p2.y ? p2 : p1;
     // cant: + quando la cima dell'arco pende verso la mano della corda
     const towardDraw = Math.sign(dw.x - bw.x) || 1;
     const cant = (Math.atan2((top.x - bot.x) * towardDraw, bot.y - top.y) * 180) / Math.PI;
-    bow = { x1: top.x / W, y1: top.y / H, x2: bot.x / W, y2: bot.y / H, cant };
+    bow = { x1: top.x / W, y1: top.y / H, x2: bot.x / W, y2: bot.y / H, cant, measured };
   }
   return { arrow, bow };
 }

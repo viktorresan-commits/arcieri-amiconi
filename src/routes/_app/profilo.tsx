@@ -10,13 +10,13 @@ import { simplePdf } from "@/lib/arcieri/pdf";
 import { BOWS } from "@/lib/arcieri/labels";
 import { useMember } from "@/components/shell";
 import { Button, Card, ErrorNote, Field, PageHead, Select, TextArea, TextInput } from "@/components/kit";
-import { PrizeMark, prizeTier } from "@/components/prize-mark";
 import { saveFile } from "@/lib/arcieri/native";
 import { Trasloco } from "@/components/trasloco";
 import { GestureGallery } from "@/components/gesture-gallery";
 import { Migrazione } from "@/components/migrazione";
 import { PersonalizePanel } from "@/components/personalize";
-import { IconTitle } from "@/components/icons";
+import { Glyph, IconTitle } from "@/components/icons";
+import { unlockAdmin } from "@/lib/arcieri/account.api";
 import { ClaimCard, InviteCard, ResetCard, TeamAdmin } from "@/components/profile-tools";
 
 export const Route = createFileRoute("/_app/profilo")({ component: Page });
@@ -28,6 +28,23 @@ function Page() {
   const [nick, setNick] = useState(me.nickname);
   const [bow, setBow] = useState(me.bowType);
   const [bio, setBio] = useState(me.bio);
+  const [tab, setTab] = useState<string>("io");
+  useEffect(() => {
+    try {
+      const t = localStorage.getItem("aa-profilo-tab");
+      if (t) setTab(t);
+    } catch {
+      /* niente */
+    }
+  }, []);
+  const pickTab = (t: string) => {
+    setTab(t);
+    try {
+      localStorage.setItem("aa-profilo-tab", t);
+    } catch {
+      /* niente */
+    }
+  };
   const [joined, setJoined] = useState(me.joinedOn);
   const [msg, setMsg] = useState("");
   const [current, setCurrent] = useState("");
@@ -157,115 +174,196 @@ function Page() {
     reload();
   }
 
+  const prizes = gadgets.data?.prizes ?? [];
+  const myPrizes = prizes.filter((p) => p.holders.some((h) => h.userId === me.userId));
+  const TABS = [
+    { id: "io", label: "Io" },
+    { id: "aspetto", label: "Aspetto" },
+    { id: "gesti", label: "Gesti" },
+    { id: "account", label: "Account" },
+    { id: "squadra", label: "Squadra" },
+  ] as const;
+
   return (
     <div className="grid gap-3">
-      <PageHead title="Profilo" lede={me.email ?? ""} />
-      <Card>
-        <p className="text-xs uppercase tracking-wide text-muted">Punti campionato</p>
-        <p className="font-display text-5xl tabular-nums leading-none">{comps.loading ? "…" : season}</p>
-        <p className="mt-2 text-sm text-muted">Somma dei punti campionato segnati sulle gare. Non è il punteggio di una singola giornata.</p>
-      </Card>
-      <Card>
-        <h2 className="mb-1 font-display text-2xl">Premi</h2>
-        <p className="mb-3 text-sm text-muted">Stesso simbolo, poi il metallo. Una stella, due, tre: alla quarta si passa ad argento, poi oro, poi platino.</p>
-        <div className="grid grid-cols-2 gap-2">
-          {(gadgets.data?.prizes ?? []).map((prize) => {
-            const mine = prize.holders.some((holder) => holder.userId === me.userId);
-            return (
-              <div key={prize.code} className={`flex items-center gap-2 rounded-xl border p-2 ${mine ? "border-accent" : "border-line opacity-60"}`}>
-                <PrizeMark code={prize.code} locked={!mine} />
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold">{prize.title}</p>
-                  <p className="text-[11px] text-muted">{[prizeTier(prize.code).label, mine ? "sbloccato" : prize.hint].filter(Boolean).join(" · ")}</p>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </Card>
-      <Card className="grid gap-3">
-        <div className="grid gap-3" onChangeCapture={() => { touched.current = true; }}>
-        {me.photoUrl ? <img src={me.photoUrl} alt="" className="h-20 w-20 rounded-full object-cover" /> : null}
-        <Field label="Foto"><TextInput type="file" accept="image/*" onChange={(e) => { const f = e.target.files?.[0]; if (f) void photo(f).catch((err: unknown) => setMsg(err instanceof Error ? err.message : "Foto non salvata")); }} /></Field>
-        <Field label="Nome"><TextInput value={given} onChange={(e) => setGiven(e.target.value)} /></Field>
-        <Field label="Cognome"><TextInput value={family} onChange={(e) => setFamily(e.target.value)} /></Field>
-        <Field label="Soprannome"><TextInput value={nick} onChange={(e) => setNick(e.target.value)} /></Field>
-        <Field label="Arco abituale">
-          <Select value={bow} onChange={(e) => setBow(e.target.value)}><option value="">Non indicato</option>{BOWS.map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}</Select>
-        </Field>
-        <Field label="Nel gruppo dal"><TextInput type="date" value={joined} onChange={(e) => setJoined(e.target.value)} /></Field>
-        <Field label="Note"><TextArea value={bio} onChange={(e) => setBio(e.target.value)} /></Field>
-        {(["notifyBoard", "notifyChallenges", "notifyGoals", "notifyComps"] as const).map((key) => (
-          <label key={key} className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={flags[key]} onChange={(e) => setFlags({ ...flags, [key]: e.target.checked })} />
-            {key === "notifyBoard" ? "Bacheca" : key === "notifyChallenges" ? "Sfide" : key === "notifyGoals" ? "Medaglie e obiettivi" : "Gare"}
+      <section className="aa-hero grid gap-3 p-4">
+        <div className="flex items-center gap-3">
+          <label className="relative shrink-0 cursor-pointer">
+            {me.photoUrl ? <img src={me.photoUrl} alt="" className="h-20 w-20 rounded-full object-cover ring-2 ring-white/20" /> : <span className="grid h-20 w-20 place-items-center rounded-full bg-white/10 font-display text-3xl">{(me.givenName || "?").slice(0, 1)}</span>}
+            <span className="absolute -bottom-1 -right-1 grid h-7 w-7 place-items-center rounded-full bg-primary text-primary-fg"><Glyph name="camera" size={14} /></span>
+            <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void photo(f).catch((err: unknown) => setMsg(err instanceof Error ? err.message : "Foto non salvata")); }} />
           </label>
-        ))}
-        {msg ? <ErrorNote text={msg} /> : null}
+          <div className="min-w-0">
+            <p className="truncate font-display text-3xl leading-none">{[me.givenName, me.familyName].filter(Boolean).join(" ") || me.nickname || "Arciere"}</p>
+            <p className="mt-1 truncate text-xs text-white/70">{me.email ?? ""}</p>
+            <span className={`mt-1.5 inline-flex rounded-full px-2 py-0.5 text-[0.65rem] font-semibold ${me.role === "admin" ? "bg-amber-400 text-black" : "bg-white/10"}`}>{me.role === "admin" ? "Amministratore" : me.role === "archer" ? "Arciere" : "Ospite"}</span>
+          </div>
         </div>
-        <p className="text-[0.7rem] text-muted">{autoState === "busy" ? "…" : autoState === "err" ? "Non salvato: controlla la rete." : ""}</p>
-      </Card>
-      <Card className="grid gap-2">
-        <h2 className="font-display text-2xl">Password</h2>
-        <Field label="Password attuale"><TextInput type="password" value={current} onChange={(e) => setCurrent(e.target.value)} /></Field>
-        <Field label="Nuova"><TextInput type="password" value={next} onChange={(e) => setNext(e.target.value)} /></Field>
-        <Button variant="ghost" onClick={() => authClient.changePassword({ currentPassword: current, newPassword: next, revokeOtherSessions: false }).then((res) => setMsg(res.error ? res.error.message || "Non cambiata" : "Password cambiata.")).catch((e: unknown) => setMsg(e instanceof Error ? e.message : "Errore"))}>Cambia password</Button>
-      </Card>
-      <Card className="grid gap-2">
-        <h2 className="font-display text-2xl">I tuoi dati</h2>
-        <Button variant="ghost" onClick={() => void downloadJson()}>Scarica JSON</Button>
-        <Button variant="ghost" onClick={() => void downloadPdf()}>Scarica report PDF</Button>
-        <div className="pt-2"><UserButton /></div>
-      </Card>
-      <Card className="grid gap-1">
-        <IconTitle icon="palette" color="#7652d1" sub="Ogni scelta si salva da sola.">Personalizza</IconTitle>
-        <PersonalizePanel />
-      </Card>
-      <Migrazione myEmail={me.email} />
-      <InviteCard />
-      <ClaimCard onDone={reload} />
-      <GestureGallery />
-      <TeamAdmin />
-      <ResetCard onDone={reload} />
-      {me.role === "admin" ? (
-        <details className="rounded-2xl border border-hair p-3">
-          <summary className="cursor-pointer text-sm font-semibold text-muted">Avanzate: trasloco dell'intero database (amministratore)</summary>
-          <div className="mt-2"><Trasloco /></div>
-        </details>
-      ) : null}
-      <Card className="grid gap-2">
-        <h2 className="font-display text-2xl">Profili</h2>
-        <p className="text-sm text-muted">Un profilo creato entra in squadra. Toglierlo da qui lo leva solo da questo telefono: l'account resta.</p>
-        <form onSubmit={(event) => void createProfile(event)} className="grid gap-2">
-          <Field label="Nome"><TextInput value={newName} onChange={(e) => setNewName(e.target.value)} required autoComplete="name" /></Field>
-          <Field label="Utente"><TextInput value={newUser} onChange={(e) => setNewUser(e.target.value)} required autoComplete="off" placeholder="nome oppure email" /></Field>
-          <Field label="Password"><TextInput type="password" value={newPass} onChange={(e) => setNewPass(e.target.value)} required minLength={8} autoComplete="new-password" /></Field>
-          <Button disabled={creating}>{creating ? "Attendi" : "Crea profilo"}</Button>
-        </form>
-        {accounts.map((account) => {
-          const here = account.email === (me.email ?? "").toLowerCase();
-          return (
-            <div key={account.email} className={`flex min-h-12 items-center gap-2 rounded-xl border px-3 ${here ? "border-accent" : "border-line"}`}>
-              <button type="button" disabled={here} onClick={() => void switchTo(account.email).catch((e: unknown) => setMsg(e instanceof Error ? e.message : "Cambio non riuscito"))} className="min-w-0 flex-1 py-2 text-left disabled:opacity-100">
-                <span className="block font-semibold">{account.name}</span>
-                <span className="block truncate text-xs text-muted">{account.email}</span>
-              </button>
-              <span className="text-sm font-semibold text-accent">{here ? "Dentro" : "Entra"}</span>
-              {here ? null : (
-                <button type="button" onClick={() => dropAccount(account.email)} className="text-sm text-muted">Togli</button>
-              )}
+        <div className="grid grid-cols-2 gap-2">
+          <span className="rounded-xl bg-black/25 px-3 py-2">
+            <span className="block text-[0.6rem] uppercase tracking-wider text-white/60">Punti campionato</span>
+            <b className="font-display text-2xl tabular-nums">{comps.loading ? "…" : season}</b>
+          </span>
+          <a href="/obiettivi" className="rounded-xl bg-black/25 px-3 py-2">
+            <span className="block text-[0.6rem] uppercase tracking-wider text-white/60">Premi</span>
+            <b className="font-display text-2xl tabular-nums">{myPrizes.length}<span className="text-sm text-white/60"> / {prizes.length}</span></b>
+          </a>
+        </div>
+      </section>
+
+      <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 [scrollbar-width:none]">
+        {TABS.map((t) => (
+          <button key={t.id} type="button" aria-pressed={tab === t.id} onClick={() => pickTab(t.id)} className="aa-chip shrink-0">{t.label}</button>
+        ))}
+      </div>
+
+      <div key={tab} className="aa-rise grid gap-3">
+        {tab === "io" ? (
+          <Card className="grid gap-3">
+            <IconTitle icon="user" color="#5a7bd1" sub="Si salva da solo mentre scrivi.">I tuoi dati</IconTitle>
+            <div className="grid gap-3" onChangeCapture={() => { touched.current = true; }}>
+              <div className="grid grid-cols-2 gap-2">
+                <Field label="Nome"><TextInput value={given} onChange={(e) => setGiven(e.target.value)} /></Field>
+                <Field label="Cognome"><TextInput value={family} onChange={(e) => setFamily(e.target.value)} /></Field>
+              </div>
+              <Field label="Soprannome"><TextInput value={nick} onChange={(e) => setNick(e.target.value)} /></Field>
+              <div className="grid grid-cols-2 gap-2">
+                <Field label="Arco abituale">
+                  <Select value={bow} onChange={(e) => setBow(e.target.value)}><option value="">Non indicato</option>{BOWS.map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}</Select>
+                </Field>
+                <Field label="Nel gruppo dal"><TextInput type="date" value={joined} onChange={(e) => setJoined(e.target.value)} /></Field>
+              </div>
+              <Field label="Note"><TextArea value={bio} onChange={(e) => setBio(e.target.value)} /></Field>
+              <p className="text-sm font-semibold">Avvisami per</p>
+              <div className="grid grid-cols-2 gap-2">
+                {(["notifyBoard", "notifyChallenges", "notifyGoals", "notifyComps"] as const).map((key) => (
+                  <label key={key} className="flex min-h-11 items-center gap-2 rounded-xl bg-white/[0.04] px-3 text-sm">
+                    <input type="checkbox" checked={flags[key]} onChange={(e) => setFlags({ ...flags, [key]: e.target.checked })} />
+                    {key === "notifyBoard" ? "Bacheca" : key === "notifyChallenges" ? "Sfide" : key === "notifyGoals" ? "Medaglie e obiettivi" : "Gare"}
+                  </label>
+                ))}
+              </div>
+              {msg ? <ErrorNote text={msg} /> : null}
             </div>
-          );
-        })}
-        <form onSubmit={(event) => void enterAccount(event)} className="mt-2 grid gap-2 border-t border-line pt-3">
-          <p className="text-sm text-muted">Entra con un account già esistente e aggiungilo a questo telefono.</p>
-          <Field label="Email o utente"><TextInput value={enterUser} onChange={(e) => setEnterUser(e.target.value)} required autoComplete="username" placeholder="nome oppure email" /></Field>
-          <Field label="Password"><TextInput type="password" value={enterPass} onChange={(e) => setEnterPass(e.target.value)} required minLength={8} autoComplete="current-password" /></Field>
-          <Button variant="ghost" disabled={entering}>{entering ? "Attendi" : "Entra"}</Button>
-        </form>
-        {msg ? <p className="text-sm text-muted">{msg}</p> : null}
-      </Card>
+            <p className="text-[0.7rem] text-muted">{autoState === "busy" ? "Salvo…" : autoState === "err" ? "Non salvato: controlla la rete." : ""}</p>
+          </Card>
+        ) : null}
+
+        {tab === "aspetto" ? (
+          <Card className="grid gap-1">
+            <IconTitle icon="palette" color="#7652d1" sub="Ogni scelta si salva da sola.">Personalizza</IconTitle>
+            <PersonalizePanel />
+          </Card>
+        ) : null}
+
+        {tab === "gesti" ? <GestureGallery /> : null}
+
+        {tab === "account" ? (
+          <>
+            <Card className="grid gap-2">
+              <IconTitle icon="user" color="#3f8a76" sub="Più persone sullo stesso telefono">Cambia account</IconTitle>
+              {accounts.map((account) => {
+                const here = account.email === (me.email ?? "").toLowerCase();
+                return (
+                  <div key={account.email} className={`flex min-h-12 items-center gap-2 rounded-xl border px-3 ${here ? "border-accent" : "border-line"}`}>
+                    <button type="button" disabled={here} onClick={() => void switchTo(account.email).catch((e: unknown) => setMsg(e instanceof Error ? e.message : "Cambio non riuscito"))} className="min-w-0 flex-1 py-2 text-left disabled:opacity-100">
+                      <span className="block font-semibold">{account.name}</span>
+                      <span className="block truncate text-xs text-muted">{account.email}</span>
+                    </button>
+                    <span className="text-sm font-semibold text-accent">{here ? "Dentro" : "Entra"}</span>
+                    {here ? null : <button type="button" onClick={() => dropAccount(account.email)} className="text-sm text-muted">Togli</button>}
+                  </div>
+                );
+              })}
+              <details className="rounded-xl bg-white/[0.04] p-3">
+                <summary className="cursor-pointer text-sm font-semibold">Entra con un altro account</summary>
+                <form onSubmit={(event) => void enterAccount(event)} className="mt-2 grid gap-2">
+                  <Field label="Email o utente"><TextInput value={enterUser} onChange={(e) => setEnterUser(e.target.value)} required autoComplete="username" placeholder="nome oppure email" /></Field>
+                  <Field label="Password"><TextInput type="password" value={enterPass} onChange={(e) => setEnterPass(e.target.value)} required minLength={8} autoComplete="current-password" /></Field>
+                  <Button variant="ghost" disabled={entering}>{entering ? "Attendi" : "Entra"}</Button>
+                </form>
+              </details>
+              <details className="rounded-xl bg-white/[0.04] p-3">
+                <summary className="cursor-pointer text-sm font-semibold">Crea un nuovo profilo</summary>
+                <p className="mt-1 text-xs text-muted">Un profilo creato entra in squadra. Toglierlo da qui lo leva solo da questo telefono: l'account resta.</p>
+                <form onSubmit={(event) => void createProfile(event)} className="mt-2 grid gap-2">
+                  <Field label="Nome"><TextInput value={newName} onChange={(e) => setNewName(e.target.value)} required autoComplete="name" /></Field>
+                  <Field label="Utente"><TextInput value={newUser} onChange={(e) => setNewUser(e.target.value)} required autoComplete="off" placeholder="nome oppure email" /></Field>
+                  <Field label="Password"><TextInput type="password" value={newPass} onChange={(e) => setNewPass(e.target.value)} required minLength={8} autoComplete="new-password" /></Field>
+                  <Button disabled={creating}>{creating ? "Attendi" : "Crea profilo"}</Button>
+                </form>
+              </details>
+              {msg ? <p className="text-sm text-muted">{msg}</p> : null}
+            </Card>
+            <Card className="grid gap-2">
+              <IconTitle icon="lock" color="#6c7684">Password</IconTitle>
+              <Field label="Password attuale"><TextInput type="password" value={current} onChange={(e) => setCurrent(e.target.value)} /></Field>
+              <Field label="Nuova"><TextInput type="password" value={next} onChange={(e) => setNext(e.target.value)} /></Field>
+              <Button variant="ghost" onClick={() => authClient.changePassword({ currentPassword: current, newPassword: next, revokeOtherSessions: false }).then((res) => setMsg(res.error ? res.error.message || "Non cambiata" : "Password cambiata.")).catch((e: unknown) => setMsg(e instanceof Error ? e.message : "Errore"))}>Cambia password</Button>
+            </Card>
+            <Card className="grid gap-2">
+              <IconTitle icon="download" color="#2f6fd1" sub="Una copia di tutto quello che hai segnato">I tuoi dati</IconTitle>
+              <div className="grid grid-cols-2 gap-2">
+                <Button variant="ghost" onClick={() => void downloadJson()}>Scarica JSON</Button>
+                <Button variant="ghost" onClick={() => void downloadPdf()}>Report PDF</Button>
+              </div>
+            </Card>
+            <Migrazione myEmail={me.email} />
+            <ResetCard onDone={reload} />
+            <div className="flex justify-center pt-1"><UserButton /></div>
+          </>
+        ) : null}
+
+        {tab === "squadra" ? (
+          <>
+            <InviteCard />
+            <ClaimCard onDone={reload} />
+            <AdminUnlock isAdmin={me.role === "admin"} onDone={reload} />
+            <TeamAdmin />
+            {me.role === "admin" ? (
+              <details className="rounded-2xl border border-hair p-3">
+                <summary className="cursor-pointer text-sm font-semibold text-muted">Avanzate: trasloco dell'intero database</summary>
+                <div className="mt-2"><Trasloco /></div>
+              </details>
+            ) : null}
+          </>
+        ) : null}
+      </div>
     </div>
+  );
+}
+
+/** Diventare amministratore con ID e password: poi si possono togliere persone dalla squadra. */
+function AdminUnlock({ isAdmin, onDone }: { isAdmin: boolean; onDone: () => void }) {
+  const [id, setId] = useState("");
+  const [pw, setPw] = useState("");
+  const [state, setState] = useState("");
+  if (isAdmin) {
+    return (
+      <Card className="grid gap-1">
+        <IconTitle icon="lock" color="#c39320">Amministratore</IconTitle>
+        <p className="text-sm text-muted">Sei amministratore: in Squadra tieni premuto su una persona per toglierla.</p>
+      </Card>
+    );
+  }
+  return (
+    <Card className="grid gap-2">
+      <IconTitle icon="lock" color="#c39320" sub="Con ID e password dell'amministratore">Diventa amministratore</IconTitle>
+      <Field label="ID"><TextInput value={id} onChange={(e) => setId(e.target.value)} autoComplete="username" autoCapitalize="none" /></Field>
+      <Field label="Password"><TextInput type="password" value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="current-password" /></Field>
+      <Button
+        disabled={state === "busy" || !id || !pw}
+        onClick={() => {
+          setState("busy");
+          unlockAdmin({ data: { id, password: pw } })
+            .then(() => { setState("ok"); setPw(""); onDone(); })
+            .catch((e: unknown) => setState(e instanceof Error ? e.message : "Non riuscito"));
+        }}
+      >
+        {state === "busy" ? "Controllo…" : "Sblocca"}
+      </Button>
+      {state && state !== "busy" ? <p className={`text-sm ${state === "ok" ? "text-emerald-300" : "text-danger"}`}>{state === "ok" ? "Fatto: ora sei amministratore." : state}</p> : null}
+    </Card>
   );
 }
 

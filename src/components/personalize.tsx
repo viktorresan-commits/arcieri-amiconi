@@ -82,7 +82,7 @@ export function PersonalizePanel() {
       <Row title="Animazioni">
         <Pills value={prefs.motion} onChange={(motion) => update({ motion })} options={[{ id: "piena", label: "Complete" }, { id: "ridotta", label: "Ridotte" }]} />
       </Row>
-      <Row title="Sfondi" sub="Una scena sfocata per ogni sezione, che scorre piano con la pagina.">
+      <Row title="Sfondi" sub="Una scena sfocata e ferma per ogni sezione, dietro i contenuti.">
         <Pills value={prefs.scenes} onChange={(scenes) => update({ scenes })} options={[{ id: "si", label: "Accesi" }, { id: "no", label: "Spenti" }]} />
       </Row>
       <Row title="Obiettivo della settimana" sub="Frecce da tirare da lunedì a domenica.">

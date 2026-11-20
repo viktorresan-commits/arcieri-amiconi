@@ -26,6 +26,16 @@ export type FlightInput = {
   goldM?: number;
   /** Libbre segnate sull'arco a 28″ (archi senza camme): al tuo allungo cambiano di circa 2 lb per pollice. */
   lbAt28?: boolean;
+  /** Vento frontale in m/s: + contrario (in faccia), − a favore. */
+  headWind?: number;
+  /** Temperatura dell'aria in °C (densità dell'aria). */
+  tempC?: number;
+  /** Quota del campo sul mare in metri (densità dell'aria). */
+  altM?: number;
+  /** Bersaglio in movimento: velocità laterale in m/s, + verso destra. */
+  targetSpeed?: number;
+  /** FOC della freccia in %: sotto il 7–8% la freccia è meno stabile e il gruppo si apre. */
+  focPct?: number;
 };
 
 export type FlightHit = {
@@ -100,6 +110,20 @@ function releaseHeight(input: FlightInput) {
   return 0.936 * height - input.eyeCm / 100 - diameter / 2;
 }
 
+/** Densità dell'aria da quota e temperatura (atmosfera standard). */
+export function airDensity(input: FlightInput) {
+  const alt = Math.max(-200, Math.min(4500, input.altM ?? 0));
+  const temp = Math.max(-30, Math.min(50, input.tempC ?? 15));
+  return RHO * 1.0208 * Math.exp(-alt / 8434) * (288.15 / (273.15 + temp));
+}
+
+/** Quanto si apre il gruppo per il FOC: 1 nella fascia buona, di più se la freccia è leggera davanti. */
+export function focScatter(input: FlightInput) {
+  const foc = input.focPct;
+  if (typeof foc !== "number" || !Number.isFinite(foc)) return 1;
+  return 1 + Math.max(0, 8 - foc) * 0.05 + Math.max(0, foc - 22) * 0.015;
+}
+
 function dragArea(input: FlightInput) {
   const diameter = input.diameterMm / 1000;
   const length = input.lengthCm / 100;
@@ -110,7 +134,8 @@ export function fly(input: FlightInput, theta: number, psi: number, speedScale =
   const { stroke, energy, mass, speed } = launchSpeed(input);
   const v0 = speed * speedScale;
   const area = dragArea(input);
-  const drag = (RHO * area) / (2 * mass);
+  const drag = (airDensity(input) * area) / (2 * mass);
+  const head = input.headWind ?? 0;
   let x = stroke * Math.cos(theta);
   let y = 0;
   let z = releaseHeight(input) + stroke * Math.sin(theta);
@@ -127,7 +152,7 @@ export function fly(input: FlightInput, theta: number, psi: number, speedScale =
   const plane = input.distanceM;
   let t = 0;
   for (let step = 0; step < 8000; step += 1) {
-    const rx = vx;
+    const rx = vx + head;
     const ry = vy - input.wind;
     const rz = vz;
     const rel = Math.hypot(rx, ry, rz);
@@ -157,7 +182,7 @@ export function fly(input: FlightInput, theta: number, psi: number, speedScale =
 export function solveAngle(input: FlightInput) {
   let lo = -0.05;
   let hi = 0.6;
-  const still = { ...input, wind: 0 };
+  const still = { ...input, wind: 0, headWind: 0 };
   for (let i = 0; i < 26; i += 1) {
     const mid = (lo + hi) / 2;
     const hit = fly(still, mid, 0);
@@ -199,6 +224,9 @@ export function scoreImpact(input: FlightInput, y: number, z: number) {
 
 export function shootGroup(input: FlightInput, count: number, scatterMrad: number, speedFrac: number, seed = 1) {
   const theta = solveAngle(input);
+  const cleanT = fly(input, theta, 0).t;
+  const move = input.targetSpeed ?? 0;
+  const spread = scatterMrad * focScatter(input);
   const hits = [];
   for (let i = 0; i < count; i += 1) {
     const a = gaussian(seed + i * 3);
@@ -206,11 +234,14 @@ export function shootGroup(input: FlightInput, count: number, scatterMrad: numbe
     const c = gaussian(seed + i * 3 + 2);
     const hit = fly(
       input,
-      theta + a * scatterMrad * 0.001,
-      b * scatterMrad * 0.001,
+      theta + a * spread * 0.001,
+      b * spread * 0.001,
       1 + c * speedFrac,
     );
-    hits.push({ ...hit, ...scoreImpact(input, hit.y, hit.z) });
+    // bersaglio in movimento: si mira avanti del tempo di volo pulito; una freccia più lenta
+    // o più veloce trova il bersaglio un po' più avanti o più indietro
+    const y = hit.y - move * (hit.t - cleanT);
+    hits.push({ ...hit, y, ...scoreImpact(input, y, hit.z) });
   }
   return { theta, hits };
 }
@@ -229,7 +260,9 @@ export function describeRound(input: FlightInput, count: number, scatterMrad: nu
   const tight = shootGroup(input, count, scatterMrad * Math.sqrt(1 - c), speedFrac * Math.sqrt(1 - c), seed + 100);
   const loose = shootGroup(input, count, scatterMrad * Math.sqrt(1 + c), speedFrac * Math.sqrt(1 + c), seed + 200);
   const avg = (list: { score: number }[]) => list.reduce((sum, hit) => sum + hit.score, 0) / list.length;
-  return { theta, clean, scored, gap, hits, my, mz, rms, total, expected: 0.5 * (avg(tight.hits) + avg(loose.hits)) };
+  // anticipo: di quanto il bersaglio si sposta mentre la freccia vola (si mira lì)
+  const lead = (input.targetSpeed ?? 0) * clean.t;
+  return { theta, clean, scored, gap, hits, my, mz, rms, total, lead, expected: 0.5 * (avg(tight.hits) + avg(loose.hits)) };
 }
 
 function gaussian(seed: number) {

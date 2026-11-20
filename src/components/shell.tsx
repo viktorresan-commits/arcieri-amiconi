@@ -9,7 +9,7 @@ import { greet, romeHour } from "@/lib/arcieri/time";
 import { memberLabel, initials } from "@/lib/arcieri/labels";
 import { Avatar, Loading, Mark, cx } from "./kit";
 import { QUICK_ACTIONS, shortcutById } from "@/lib/arcieri/shortcuts";
-import { PathMap, ShortcutEditor, ShortcutTile } from "./shortcuts";
+import { NextCard, PathMap, ShortcutEditor, ShortcutTile } from "./shortcuts";
 import { Scene } from "./scene";
 import { useXpToasts } from "@/lib/arcieri/xp";
 import { RealIcon } from "./real-icons";
@@ -33,10 +33,10 @@ const MORE = [
   ["/balistica", "Balistica"],
   ["/timer", "Timer di tiro"],
   ["/borsa", "Prima di partire"],
-  ["/foc", "Calcolo FOC"],
   ["/manutenzione", "Manutenzione"],
   ["/secco", "Allenamento a secco"],
   ["/routine", "Routine di tiro"],
+  ["/tempi", "Tempo di allungo"],
   ["/respiro", "Respiro"],
   ["/segnapunti", "Segnapunti"],
   ["/spine", "Spine e libbre"],
@@ -195,7 +195,10 @@ export function Shell({ children }: { children: ReactNode }) {
             </Link>
           </header>
           {offline ? <p className="bg-accent px-4 py-2 text-sm text-accent-fg">Sei offline. Il tiro resta sul telefono e si sincronizza al ritorno della rete.</p> : null}
-          <main key={path} className="aa-page mx-auto w-full min-w-0 max-w-3xl overflow-x-clip px-4 py-6 pb-28 md:pb-10">{children}</main>
+          <main key={path} className="aa-page mx-auto w-full min-w-0 max-w-3xl overflow-x-clip px-4 py-6 pb-28 md:pb-10">
+            {children}
+            <NextCard path={path} />
+          </main>
           <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 items-end border-t border-line/60 bg-elev/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden">
             {[nav[0], nav[1]].map((item) => <BottomLink key={item.to} item={item} active={path === item.to || (item.to !== "/" && path.startsWith(item.to))} />)}
             <div className="flex justify-center">

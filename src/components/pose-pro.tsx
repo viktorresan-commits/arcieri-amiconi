@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { type Hand, type Landmark, type Sample, type Shot, sides } from "@/lib/arcieri/pose-analysis";
-import { AREA_LABEL, type Area, type ProMetrics, type ProSetup, anchorTarget, bowLengthFor, evaluate, proMedian, proMetrics, proSteadiness } from "@/lib/arcieri/pose-pro";
+import { type Gear, type Hand, type Landmark, type Sample, type Shot, sides } from "@/lib/arcieri/pose-analysis";
+import { AREA_LABEL, type Area, type ProMetrics, type ProSetup, anchorTarget, bowLengthFor, evaluate, gearSizes, proMedian, proMetrics, proSteadiness } from "@/lib/arcieri/pose-pro";
 import { listGestures } from "@/lib/arcieri/gesture.api";
 import { useLocalState } from "@/lib/arcieri/local-store";
 import { BOW_TYPES } from "./gear-icons";
@@ -25,7 +25,9 @@ export function ProPanel({
   aspect,
   onSave,
   saveState,
+  gear = null,
 }: {
+  gear?: Gear | null;
   lm: Landmark[] | null;
   samples: Sample[];
   shot: Shot | null;
@@ -137,7 +139,7 @@ export function ProPanel({
 
       {series ? <Trend series={series} shot={shot} /> : null}
 
-      <DrawLength m={m} setup={setup} />
+      <DrawLength m={m} setup={setup} gear={gear} aspect={aspect} />
 
       <History />
 
@@ -338,7 +340,7 @@ function Trend({ series, shot }: { series: { t: number; m: ProMetrics }[]; shot:
   );
 }
 
-function DrawLength({ m, setup }: { m: ProMetrics; setup: ProSetup }) {
+function DrawLength({ m, setup, gear, aspect }: { m: ProMetrics; setup: ProSetup; gear: Gear | null; aspect: number }) {
   if (!setup.heightCm) {
     return <p className="rounded-2xl bg-white/[0.05] p-3 text-xs text-muted">Scrivi la tua altezza qui sopra: stimo l'allungo dal video e lo confronto con la lunghezza della freccia.</p>;
   }
@@ -354,6 +356,7 @@ function DrawLength({ m, setup }: { m: ProMetrics; setup: ProSetup }) {
         <span className="rounded-xl bg-black/20 px-1 py-1.5"><span className="block text-[0.6rem] uppercase tracking-wider text-muted">Margine</span><b className={`font-display text-lg tabular-nums ${room == null ? "" : room < 0 ? "text-rose-300" : room > 9 ? "text-amber-300" : "text-emerald-300"}`}>{room == null ? "—" : `${room > 0 ? "+" : ""}${room.toFixed(0)} cm`}</b></span>
         <span className="rounded-xl bg-black/20 px-1 py-1.5"><span className="block text-[0.6rem] uppercase tracking-wider text-muted">Arco</span><b className="font-display text-lg">{setup.bowType === "compound" ? "—" : bowLengthFor(inch)}</b></span>
       </div>
+      <GearSizes m={m} setup={setup} gear={gear} aspect={aspect} drawIn={inch} />
       <p className="text-[0.68rem] text-muted">Stima ±3 cm, misurata {m.scaleFrom === "piedi" ? "dalla tua altezza (piedi visibili)" : "dalla larghezza delle spalle (meno precisa: inquadra anche i piedi)"}. L'allungo vero si misura con una freccia graduata.</p>
     </div>
   );
@@ -528,4 +531,42 @@ export function drawPro(ctx: CanvasRenderingContext2D, w: number, h: number, lm:
     ctx.fillText(text, x, y);
   }
   ctx.restore();
+}
+
+/** Freccia, arco e corda riconosciuti nell'immagine e misurati con la scala della persona. */
+function GearSizes({ m, setup, gear, aspect, drawIn }: { m: ProMetrics; setup: ProSetup; gear: Gear | null; aspect: number; drawIn: number }) {
+  const g = gearSizes(gear, aspect, m.cmPerUnit, setup.bowType);
+  const inch = (cm: number) => `${(cm / 2.54).toFixed(1).replace(".", ",")}″`;
+  const cell = (k: string, v: string, hint: string, tone = "") => (
+    <span className="rounded-xl bg-black/20 px-1.5 py-1.5">
+      <span className="block text-[0.6rem] uppercase tracking-wider text-muted">{k}</span>
+      <b className={`font-display text-lg tabular-nums ${tone}`}>{v}</b>
+      <span className="block text-[0.6rem] text-muted">{hint}</span>
+    </span>
+  );
+  if (!gear || (!gear.arrow && !gear.bow)) {
+    return <p className="text-[0.68rem] text-muted">Freccia e arco non si vedono abbastanza: inquadra di lato, su uno sfondo uniforme, con tutto l'arco dentro l'immagine.</p>;
+  }
+  if (!g || (g.arrowCm == null && g.chordCm == null)) {
+    return <p className="text-[0.68rem] text-muted">Ho visto {gear.arrow ? "la freccia" : ""}{gear.arrow && gear.bow ? " e " : ""}{gear.bow ? "l'arco" : ""}, ma non le loro estremità: per misurarli serve l'immagine intera dell'arco, dalla punta alta a quella bassa, e la punta della freccia visibile.</p>;
+  }
+  const arrowIn = g.arrowCm != null ? g.arrowCm / 2.54 : null;
+  const room = arrowIn != null ? arrowIn - drawIn : null;
+  const declared = setup.arrowIn > 0 && arrowIn != null ? arrowIn - setup.arrowIn : null;
+  return (
+    <div className="grid gap-1.5">
+      <p className="flex items-center gap-1.5 text-xs font-semibold"><RealIcon name="caliper" size={20} />Attrezzatura riconosciuta nell'immagine</p>
+      <div className="grid grid-cols-3 gap-1.5 text-center">
+        {cell("Freccia", g.arrowCm != null ? inch(g.arrowCm) : "—", g.arrowCm != null ? `${g.arrowCm.toFixed(0)} cm${room != null ? ` · ${room >= 0 ? "+" : ""}${room.toFixed(1).replace(".", ",")}″ sull'allungo` : ""}` : "punta non vista", room != null && (room < 0.5 || room > 3.5) ? "text-amber-300" : "")}
+        {cell(g.compound ? "Asse-asse" : "Arco AMO", g.compound ? (g.chordCm != null ? inch(g.chordCm) : "—") : g.amoIn != null ? `${Math.round(g.amoIn)}″` : "—", g.chordCm != null ? `punte a ${g.chordCm.toFixed(0)} cm` : "punte non viste")}
+        {cell("Corda", g.stringIn != null && !g.compound ? `${g.stringIn.toFixed(1).replace(".", ",")}″` : "—", g.compound ? "dal produttore" : g.amoIn != null ? `AMO − 3″ = ${Math.round(g.amoIn - 3)}″` : "")}
+      </div>
+      <p className="text-[0.68rem] text-muted">
+        {room != null ? (room < 0.5 ? "Freccia corta per il tuo allungo: la punta rischia di finire dietro il bottone. " : room > 3.5 ? "Freccia lunga: pesa di più e cala prima, puoi accorciarla. " : "Lunghezza della freccia giusta per l'allungo. ") : ""}
+        {declared != null && Math.abs(declared) > 1.2 ? `Nelle impostazioni hai scritto ${setup.arrowIn}″, l'immagine dice circa ${arrowIn?.toFixed(1).replace(".", ",")}″. ` : ""}
+        {g.amoIn != null && setup.bowType !== "compound" ? `Per il tuo allungo l'arco consigliato è ${bowLengthFor(drawIn)}. ` : ""}
+        Misure dall'immagine ±4 cm: valgono se arco e freccia sono di lato alla camera.
+      </p>
+    </div>
+  );
 }

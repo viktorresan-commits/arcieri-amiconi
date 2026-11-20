@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { StatusMark } from "@/components/icons";
 import { useRef, useState } from "react";
 import { tagsOf } from "@/lib/arcieri/arrow-tags";
+import { ArrowPicker, type ArrowSet } from "@/components/arrow-picker";
 import { Glyph } from "@/components/icons";
 import { deleteSession, getSession, saveSession } from "@/lib/arcieri/training.api";
 import { faceById, fmtAvg, summarize, aimAngleLabel, aimTargetLabel, sagomaMaxOf, keypad, ringPoint, scoreAtRadius, type AimAngle, type AimTarget, type Face } from "@/lib/arcieri/scoring";
@@ -56,6 +57,7 @@ function Page() {
           initial={data.shots}
           tags={tagsOf(data.arrowSpecs ?? "")}
           arrowSpecs={data.arrowSpecs ?? ""}
+          arrowSets={data.arrowSets ?? []}
           face={face}
           sagoma={data.session.face.startsWith("sagoma")}
           onSaved={() => setNonce((n) => n + 1)}
@@ -97,13 +99,14 @@ function Page() {
 }
 
 type Session = Awaited<ReturnType<typeof getSession>>["session"];
-type Shot = Omit<Awaited<ReturnType<typeof getSession>>["shots"][number], "tag"> & { tag?: number | null };
+type Shot = Omit<Awaited<ReturnType<typeof getSession>>["shots"][number], "tag" | "set"> & { tag?: number | null; set?: number | null };
 
 function Volleys({
   session,
   initial,
   tags,
   arrowSpecs,
+  arrowSets,
   face,
   sagoma,
   onSaved,
@@ -112,6 +115,7 @@ function Volleys({
   initial: Shot[];
   tags: number[];
   arrowSpecs: string;
+  arrowSets: ArrowSet[];
   face: Face;
   sagoma: boolean;
   onSaved: () => void;
@@ -298,28 +302,23 @@ function Volleys({
           <div className="flex items-center justify-between gap-2">
             <p className="text-sm font-semibold">
               Volée {shots[pick].end + 1} · freccia {shots[pick].arrow + 1} · {shots[pick].miss ? "M" : shots[pick].isX ? "X" : shots[pick].score}
-              {shots[pick].tag != null ? ` · n.${shots[pick].tag}` : ""}
+              {shots[pick].tag != null ? ` · n.${shots[pick].tag}${shots[pick].set != null ? ` (${arrowSets.find((a) => a.id === shots[pick].set)?.name ?? "serie"})` : ""}` : ""}
             </p>
             <button type="button" aria-label="Chiudi" className="grid h-9 w-9 place-items-center rounded-full bg-white/5" onClick={() => setPick(null)}><Glyph name="close" size={16} /></button>
           </div>
-          <p className="text-xs text-muted">Quale freccia della tua attrezzatura era?</p>
-          <div className="grid grid-cols-6 gap-1.5">
-            {tags.map((n) => (
-              <button
-                key={n}
-                type="button"
-                aria-pressed={shots[pick].tag === n}
-                onClick={() => {
-                  const next = shots.map((x, i) => (i === pick ? { ...x, tag: x.tag === n ? null : n } : x));
-                  setPick(null);
-                  void commit(next);
-                }}
-                className={`min-h-11 rounded-xl font-display text-lg tabular-nums transition ${shots[pick].tag === n ? "bg-accent text-accent-fg" : "bg-white/[0.07]"}`}
-              >
-                {n}
-              </button>
-            ))}
-          </div>
+          <p className="text-xs text-muted">Quale freccia della tua attrezzatura era?{arrowSets.length > 1 ? " Scegli prima la serie (colore delle penne)." : ""}</p>
+          <ArrowPicker
+            sets={arrowSets}
+            setId={shots[pick].set ?? null}
+            tag={shots[pick].tag ?? null}
+            fallbackTags={tags}
+            used={(setId) => shots.filter((x, i) => i !== pick && x.block === shots[pick].block && x.end === shots[pick].end && (x.set ?? null) === setId && x.tag != null).map((x) => x.tag as number)}
+            onPick={(setId, tag) => {
+              const next = shots.map((x, i) => (i === pick ? { ...x, set: tag == null ? null : setId, tag } : x));
+              setPick(null);
+              void commit(next);
+            }}
+          />
           <button type="button" className="justify-self-start rounded-xl border border-line px-3 py-2 text-sm" onClick={() => { const shot = shots[pick]; setPick(null); dropArrow(shot); }}>Togli questa freccia</button>
         </Card>
       ) : null}
@@ -332,6 +331,7 @@ function Volleys({
       {sagoma ? <Card><SagomaLab animal="cinghiale" shots={shots} /></Card> : null}
       {sagoma ? null : <ShotLab
         arrowSpecs={arrowSpecs}
+        arrowSets={arrowSets}
         face={face}
         shots={shots}
         volleyLabel={(() => { const first = freeSlots(shots, session)[0]; return `volée ${first ? first.block * session.endsPlanned + first.end + 1 : session.endsPlanned * session.blocksPlanned + 1}`; })()}

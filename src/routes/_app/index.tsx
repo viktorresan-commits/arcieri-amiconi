@@ -16,17 +16,7 @@ import { Button, Card, Empty, ErrorNote, HoldDelete, Loading, cx } from "@/compo
 
 export const Route = createFileRoute("/_app/")({ component: Home });
 
-const CATS = [
-  ["/gioco", "Giochiamo", "bow"],
-  ["/squadra", "Squadra", "people"],
-  ["/gare", "Gare", "target"],
-  ["/statistiche", "Statistiche", "line"],
-  ["/classifiche", "Classifiche", "bars"],
-  ["/calendario", "Calendario", "cal"],
-  ["/sfide", "Sfide", "cross"],
-  ["/attrezzatura", "Attrezzatura", "bow"],
-  ["/profilo", "Profilo", "user"],
-] as const;
+
 
 function useCount(target: number) {
   const [value, setValue] = useState(0);
@@ -243,16 +233,6 @@ function Home() {
           </Link>
         </Rise>
       ) : null}
-      <div className="grid grid-cols-2 gap-2">
-        {CATS.map(([to, label, icon], index) => (
-          <Rise key={to} i={23 + index}>
-            <Link to={to} className="aa-tile aa-kpi flex min-h-14 items-center gap-3">
-              <CatIcon kind={icon} delay={180 + index * 70} />
-              <span className="text-sm font-semibold">{label}</span>
-            </Link>
-          </Rise>
-        ))}
-      </div>
     </div>
   );
 }
@@ -347,18 +327,3 @@ function LastArrows({ shots }: { shots: LastShot[] }) {
   );
 }
 
-function CatIcon({ kind, delay }: { kind: string; delay: number }) {
-  const pen = { fill: "none", stroke: "var(--primary)", strokeWidth: 1.8, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, pathLength: 100, className: "aa-draw", style: { animationDelay: `${delay}ms` } };
-  return (
-    <svg viewBox="0 0 32 32" className="h-8 w-8 shrink-0" aria-hidden>
-      {kind === "people" ? <path d="M8 24c1.5-4 4-6 8-6s6.5 2 8 6M12 12a4 4 0 1 0 8 0 4 4 0 0 0-8 0" {...pen} /> : null}
-      {kind === "target" ? <><circle cx="16" cy="16" r="10" {...pen} /><circle cx="16" cy="16" r="4" {...pen} /></> : null}
-      {kind === "line" ? <path d="M5 24 L12 14 L18 18 L27 7" {...pen} /> : null}
-      {kind === "bars" ? <path d="M7 24V16M16 24V8M25 24V13" {...pen} /> : null}
-      {kind === "cal" ? <path d="M8 8h16v16H8zM8 13h16M12 6v4M20 6v4" {...pen} /> : null}
-      {kind === "cross" ? <path d="M8 16h16M16 8v16" {...pen} /> : null}
-      {kind === "bow" ? <path d="M10 6c7 6 7 14 0 20M10 6c8 4 8 16 0 20" {...pen} /> : null}
-      {kind === "user" ? <path d="M8 25c2-5 5-7 8-7s6 2 8 7M16 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8" {...pen} /> : null}
-    </svg>
-  );
-}
