@@ -205,7 +205,10 @@ function Page() {
       )}
       <div className="flex gap-1.5 overflow-x-auto pb-1">
         {[{ id: "tutto", label: "Tutto" }, ...CATEGORIES].map((c) => (
-          <button key={c.id} type="button" onClick={() => setFilter(c.id)} className={`min-h-9 shrink-0 rounded-full px-3 text-sm ${filter === c.id ? "bg-primary text-primary-fg" : "border border-line"}`}>{c.label}</button>
+          <button key={c.id} type="button" onClick={() => setFilter(c.id)} className={`flex min-h-10 shrink-0 items-center gap-1.5 rounded-full py-1 pl-1.5 pr-3 text-sm ${filter === c.id ? "bg-primary text-primary-fg" : "border border-line"}`}>
+            {c.id === "tutto" ? <span className="grid h-7 w-7 place-items-center rounded-full bg-white/10 text-xs font-bold">∗</span> : <CategoryIcon category={c.id} className="h-7 w-7" />}
+            {c.label}
+          </button>
         ))}
       </div>
       {gear.loading ? <Loading /> : null}

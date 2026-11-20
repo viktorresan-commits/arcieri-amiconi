@@ -7,7 +7,10 @@ import type { PeriodKind } from "@/lib/arcieri/time";
 import type { RankMetric } from "@/lib/arcieri/rank";
 import { useLoad } from "@/lib/arcieri/use-load";
 import { useMember } from "@/components/shell";
-import { Avatar, Card, Empty, ErrorNote, HoldDelete, Loading, PageHead, Select } from "@/components/kit";
+import { Empty, ErrorNote, HoldDelete, Loading, PageHead, Select } from "@/components/kit";
+import { RankRow } from "@/components/podium";
+import { useTeamAvatars } from "@/components/avatar-hero";
+import { AVATAR_DEFAULT } from "@/lib/arcieri/avatar";
 
 export const Route = createFileRoute("/_app/classifiche")({ component: Page });
 
@@ -36,6 +39,9 @@ function Page() {
   const { data, error, loading } = useLoad(key, () =>
     rankings({ data: { period, metric, bow, distanceM: distance, face, discipline } }),
   );
+  const looks = useTeamAvatars();
+  const rows = (data?.rows ?? []).filter((row) => !division || row.division === division);
+  const mine = rows.findIndex((row) => row.userId === me.userId);
   return (
     <div className="grid min-w-0 gap-3">
       <PageHead title="Classifica" lede="Conta gli allenamenti e le piazzole di ogni gara. Poi puoi filtrare." />
@@ -70,28 +76,19 @@ function Page() {
       {data?.blocked ? <ErrorNote text={data.blocked} /> : null}
       {data?.warning ? <p className="text-sm text-muted">{data.warning}</p> : null}
       {data && !data.blocked && data.rows.length === 0 ? <Empty title="Nessun tiro in questo filtro" text="Quando qualcuno registra frecce compatibili, la classifica si riempie da sola." /> : null}
-      <div className="grid gap-2">
-        {(data?.rows ?? []).filter((row) => !division || row.division === division).map((row, index) => {
+      <div className="grid gap-2 pb-20">
+        {rows.map((row, index) => {
           const name = memberLabel(row, data?.rows ?? []);
           const show = metric === "avg" || metric === "best" ? fmtAvg(row.value ?? 0) : metric === "precision" || metric === "consistency" || metric === "improvement" ? row.value == null ? "—" : fmtPct(row.value) : String(Math.round(row.value ?? 0));
           const own = row.userId === me.userId;
           const canDrop = own || me.role === "admin";
-          const card = (
-            <Card className="flex items-center gap-3 p-3">
-              <span className="w-8 font-display text-2xl tabular-nums">{division ? index + 1 : row.position}</span>
-              <Avatar color={row.avatarColor} photo={row.photoUrl} label={name.slice(0, 2)} />
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-semibold">{name}</p>
-                <p className="text-xs text-muted">{[
-                  row.division,
-                  `${row.arrows} frecce`,
-                  `${row.sessions} ${row.sessions === 1 ? "allenamento" : "allenamenti"}`,
-                  row.lanes ? `${row.lanes} ${row.lanes === 1 ? "piazzola" : "piazzole"}` : "",
-                ].filter(Boolean).join(" · ")}{row.improvement != null ? ` · ${row.improvement > 0 ? "+" : ""}${fmtPct(row.improvement)} sul periodo prima` : ""}</p>
-              </div>
-              <p className="font-display text-2xl tabular-nums">{row.value == null ? "—" : show}</p>
-            </Card>
-          );
+          const sub = [
+            row.division,
+            `${row.arrows} frecce`,
+            `${row.sessions} ${row.sessions === 1 ? "allenamento" : "allenamenti"}`,
+            row.lanes ? `${row.lanes} ${row.lanes === 1 ? "piazzola" : "piazzole"}` : "",
+          ].filter(Boolean).join(" · ") + (row.improvement != null ? ` · ${row.improvement > 0 ? "+" : ""}${fmtPct(row.improvement)} sul periodo prima` : "");
+          const card = <RankRow pos={division ? index + 1 : row.position} name={name} sub={sub} value={row.value == null ? "—" : show} look={looks[row.userId] ?? AVATAR_DEFAULT} me={own} />;
           if (!canDrop) return <div key={row.userId}>{card}</div>;
           return (
             <HoldDelete
@@ -107,6 +104,13 @@ function Page() {
           );
         })}
       </div>
+      {mine >= 3 ? (
+        <div className="pointer-events-none sticky bottom-24 z-10 -mt-20 md:bottom-4">
+          <div className="pointer-events-auto">
+            <RankRow pos={division ? mine + 1 : rows[mine].position} name={memberLabel(rows[mine], data?.rows ?? [])} sub="La tua posizione" value={rows[mine].value == null ? "—" : metric === "avg" || metric === "best" ? fmtAvg(rows[mine].value ?? 0) : metric === "precision" || metric === "consistency" || metric === "improvement" ? fmtPct(rows[mine].value ?? 0) : String(Math.round(rows[mine].value ?? 0))} look={looks[me.userId ?? ""] ?? AVATAR_DEFAULT} me />
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

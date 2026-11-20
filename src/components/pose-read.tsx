@@ -1,4 +1,6 @@
 import { Glyph, IconLabel, StatusMark } from "./icons";
+import { Body3D } from "@/components/archer-3d";
+import { useAvatar } from "@/components/avatar-hero";
 import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from "react";
 import { MediaPick } from "@/components/media-pick";
 import { saveFile } from "@/lib/arcieri/native";
@@ -110,6 +112,8 @@ export function PoseRead() {
   showRef.current = showPose;
   /** come si vede: video con scheletro, sagoma luminosa su fondo scuro, o sagoma sopra il video */
   const [look, setLook] = useState<"scheletro" | "sagoma" | "mista">("scheletro");
+  const [show3d, setShow3d] = useState(false);
+  const { shown: avatarLook } = useAvatar();
   const lookRef = useRef(look);
   lookRef.current = look;
   const [samples, setSamples] = useState<Sample[]>([]);
@@ -227,7 +231,7 @@ export function PoseRead() {
       return b ? b.w * b.h : 0;
     };
     const chosen = [...poses].sort((a, b) => area(b) - area(a))[0];
-    const mapped = chosen.map((p) => ({ x: region.x + p.x * region.w, y: region.y + p.y * region.h, visibility: p.visibility }));
+    const mapped = chosen.map((p) => ({ x: region.x + p.x * region.w, y: region.y + p.y * region.h, z: p.z != null ? p.z * region.w : undefined, visibility: p.visibility }));
     if (!cropRef.current && followRef.current) autoBox.current = personBox(mapped, 0.45);
     return mapped;
   }
@@ -830,6 +834,7 @@ export function PoseRead() {
               {([["scheletro", "Scheletro"], ["sagoma", "Sagoma"], ["mista", "Mista"]] as const).map(([k, label]) => (
                 <button key={k} type="button" onClick={() => { setLook(k); if (k === "scheletro") setShowPose(true); }} className={`min-h-8 rounded-full px-2.5 ${look === k ? "bg-[#3ee08f] text-[#04140c]" : ""}`}>{label}</button>
               ))}
+              <button type="button" aria-pressed={show3d} onClick={() => setShow3d((v) => !v)} className={`min-h-8 rounded-full px-2.5 ${show3d ? "bg-[#7cf0a8] text-[#04140c]" : ""}`}>3D</button>
               {look === "scheletro" ? (
                 <button type="button" onClick={() => setShowPose((v) => !v)} className="min-h-8 rounded-full px-2" aria-label="Mostra o nascondi lo scheletro"><Glyph name="eye" size={15} className={showPose ? "" : "opacity-40"} /></button>
               ) : null}
@@ -841,6 +846,8 @@ export function PoseRead() {
               </div>
             ) : null}
           </div>
+
+          {show3d ? <Body3D lmRef={lastLm} aspect={size.w / Math.max(1, size.h)} hand={hand} look={avatarLook} /> : null}
 
           {kind === "video" ? (
             <div className="grid gap-2">

@@ -767,6 +767,167 @@ const DRAW: Record<string, Draw> = {
       </g>
     </>
   ),
+  // ── attrezzatura: sagome illustrate nello stesso stile ──
+  release: (u) => (
+    <>
+      <defs>
+        {lin(`${u}m`, [[0, "#f5f7f9"], [0.5, "#a3abb4"], [1, "#4c535b"]], 0, 0, 1, 1)}
+        {lin(`${u}g`, [[0, "#2a2f35"], [1, "#0d1013"]])}
+      </defs>
+      {shadow(32, 58, 16)}
+      <path d="M22 14 C14 14 12 24 16 30 L20 40 C22 46 30 47 34 42 L44 30 C48 25 46 18 40 16 Z" fill={`url(#${u}g)`} />
+      <path d="M24 18 C19 19 18 25 20 29" stroke="#fff" strokeOpacity={0.25} strokeWidth={2} fill="none" strokeLinecap="round" />
+      <rect x={38} y={26} width={14} height={7} rx={2.5} fill={`url(#${u}m)`} transform="rotate(-38 45 29)" />
+      <path d="M49 21 C55 18 58 22 55 26 L51 28" fill="none" stroke="#c9ced4" strokeWidth={2.2} strokeLinecap="round" />
+      <circle cx={30} cy={30} r={3} fill="#e3a21a" />
+      <path d="M24 44 Q18 56 30 56 Q42 56 36 44" fill="none" stroke="#2f6fbe" strokeWidth={3.4} strokeLinecap="round" />
+    </>
+  ),
+  armguard: (u) => (
+    <>
+      <defs>
+        {lin(`${u}c`, [[0, "#4a2b16"], [0.45, "#a8703e"], [1, "#5b3518"]], 0, 0, 1, 0)}
+      </defs>
+      {shadow(32, 58, 15)}
+      <path d="M19 8 Q32 4 45 8 L42 54 Q32 57 22 54 Z" fill={`url(#${u}c)`} />
+      <path d="M21 10 Q32 7 43 10 L40.6 52.5 Q32 55 23.4 52.5 Z" fill="none" stroke="#e6c25a" strokeWidth={0.7} strokeDasharray="1.4 1.4" />
+      {[18, 31, 44].map((y) => (
+        <g key={y}>
+          <rect x={12} y={y - 2} width={40} height={4} rx={2} fill="#2b1a10" />
+          <rect x={44} y={y - 3} width={6} height={6} rx={1.4} fill="none" stroke="#d6dbe1" strokeWidth={1.4} />
+        </g>
+      ))}
+      <path d="M25 10 L23.8 52" stroke="#fff" strokeOpacity={0.2} strokeWidth={2.4} />
+    </>
+  ),
+  chestguard: (u) => (
+    <>
+      <defs>
+        {lin(`${u}n`, [[0, "#3a3f45"], [1, "#14181c"]])}
+        {lin(`${u}k`, [[0, "#2f6fbe"], [1, "#1f3a5f"]])}
+      </defs>
+      {shadow(32, 59, 18)}
+      <path d="M14 10 C22 6 26 14 32 14 C38 14 42 6 50 10 L52 36 C46 50 38 56 32 56 C26 56 18 50 12 36 Z" fill={`url(#${u}n)`} />
+      {Array.from({ length: 5 }).map((_, r) => Array.from({ length: 6 }).map((__, c) => <circle key={`${r}-${c}`} cx={18 + c * 5.6} cy={20 + r * 6.5} r={1.5} fill="#000" opacity={0.45} />))}
+      <path d="M12 36 C18 50 26 56 32 56 C38 56 46 50 52 36" fill="none" stroke={`url(#${u}k)`} strokeWidth={3} />
+      <path d="M14 10 C22 6 26 14 32 14 C38 14 42 6 50 10" fill="none" stroke={`url(#${u}k)`} strokeWidth={3} />
+      <path d="M50 12 L60 6 M12 30 L4 34" stroke="#1d2126" strokeWidth={2.4} strokeLinecap="round" />
+    </>
+  ),
+  bowcase: (u) => (
+    <>
+      <defs>
+        {lin(`${u}b`, [[0, "#3a4350"], [0.4, "#1f252c"], [1, "#0f1317"]])}
+        {lin(`${u}z`, [[0, "#c9ced4"], [1, "#6b737d"]])}
+      </defs>
+      {shadow(32, 58, 24)}
+      <rect x={6} y={14} width={52} height={36} rx={7} fill={`url(#${u}b)`} />
+      <rect x={6} y={14} width={52} height={36} rx={7} fill="none" stroke="#000" strokeOpacity={0.4} />
+      <path d="M10 22 H54" stroke={`url(#${u}z)`} strokeWidth={1.2} strokeDasharray="1.6 1" />
+      <path d="M24 14 V9 Q32 5 40 9 V14" fill="none" stroke="#14181c" strokeWidth={3.4} strokeLinecap="round" />
+      <path d="M17 30 Q32 24 47 30 Q32 44 17 38 Z" fill="#2f6fbe" opacity={0.85} />
+      <path d="M19 31 Q32 27 45 31" fill="none" stroke="#fff" strokeOpacity={0.5} strokeWidth={0.8} />
+      <rect x={50} y={30} width={4} height={8} rx={1.4} fill={`url(#${u}z)`} />
+      <path d="M10 17 Q32 15 54 17" stroke="#fff" strokeOpacity={0.15} strokeWidth={2} />
+    </>
+  ),
+  targetbag: (u) => (
+    <>
+      <defs>
+        {lin(`${u}t`, [[0, "#2d6a4f"], [1, "#163a2b"]])}
+      </defs>
+      {shadow(32, 59, 21)}
+      <path d="M22 16 Q22 6 32 6 Q42 6 42 16" fill="none" stroke="#1d2126" strokeWidth={3.4} />
+      <rect x={10} y={14} width={44} height={42} rx={6} fill={`url(#${u}t)`} />
+      {target(u, 32, 35, 13, "tb")}
+      <path d="M12 20 H52" stroke="#000" strokeOpacity={0.25} strokeWidth={1.4} />
+      <path d="M13 17 Q32 15 51 17" stroke="#fff" strokeOpacity={0.2} strokeWidth={2} />
+    </>
+  ),
+  stabilizer: (u) => (
+    <>
+      <defs>
+        {lin(`${u}c`, [[0, "#4b535c"], [0.4, "#14181c"], [1, "#000"]])}
+        {lin(`${u}m`, [[0, "#f5f7f9"], [0.5, "#a3abb4"], [1, "#4c535b"]])}
+      </defs>
+      {shadow(32, 58, 22)}
+      <g transform="rotate(-24 32 32)">
+        <rect x={6} y={29} width={40} height={5} rx={2.5} fill={`url(#${u}c)`} />
+        <path d="M8 30.2 H44" stroke="#fff" strokeOpacity={0.3} strokeWidth={0.8} />
+        {[0, 1, 2, 3, 4, 5, 6].map((i) => <path key={i} d={`M${10 + i * 5} 29 l2 5`} stroke="#fff" strokeOpacity={0.08} />)}
+        <rect x={45} y={25} width={6} height={13} rx={2} fill={`url(#${u}m)`} />
+        <rect x={52} y={26.5} width={5} height={10} rx={1.8} fill={`url(#${u}m)`} />
+        <rect x={2} y={28} width={5} height={7} rx={1.5} fill="#2f6fbe" />
+        <circle cx={4.5} cy={31.5} r={1.2} fill="#cfd5db" />
+      </g>
+    </>
+  ),
+  bowstand: (u) => (
+    <>
+      <defs>
+        {lin(`${u}m`, [[0, "#f5f7f9"], [0.5, "#a3abb4"], [1, "#4c535b"]], 0, 0, 1, 0)}
+      </defs>
+      {shadow(32, 59, 20)}
+      <path d="M32 18 L16 56 M32 18 L48 56 M32 18 L32 56" stroke="#1d2126" strokeWidth={3} strokeLinecap="round" />
+      <path d="M32 18 L16 56 M32 18 L48 56" stroke="#fff" strokeOpacity={0.15} strokeWidth={1} />
+      <rect x={26} y={10} width={12} height={10} rx={3} fill={`url(#${u}m)`} />
+      <path d="M22 8 Q32 2 42 8" fill="none" stroke="#e3a21a" strokeWidth={3} strokeLinecap="round" />
+      <path d="M22 36 H42" stroke="#1d2126" strokeWidth={2} strokeLinecap="round" />
+    </>
+  ),
+  bowstring: (u) => (
+    <>
+      <defs>{lin(`${u}s`, [[0, "#ffffff"], [1, "#bfc6cd"]])}</defs>
+      {shadow(32, 58, 18)}
+      {[22, 17, 12].map((r, i) => <ellipse key={r} cx={32} cy={32} rx={r} ry={r * 0.72} fill="none" stroke={`url(#${u}s)`} strokeWidth={2.4 - i * 0.4} />)}
+      {[22, 17, 12].map((r) => <ellipse key={`d${r}`} cx={32} cy={33} rx={r} ry={r * 0.72} fill="none" stroke="#000" strokeOpacity={0.25} strokeWidth={0.8} />)}
+      <rect x={46} y={26} width={8} height={4} rx={1.4} fill="#14181c" />
+      <circle cx={14} cy={20} r={3} fill="#e3a21a" />
+      <path d="M12 20 h4" stroke="#7a4a00" strokeWidth={0.8} />
+    </>
+  ),
+  fingertab: (u) => (
+    <>
+      <defs>
+        {lin(`${u}c`, [[0, "#4a2b16"], [0.45, "#a8703e"], [1, "#5b3518"]], 0, 0, 1, 0)}
+        {lin(`${u}p`, [[0, "#f5f7f9"], [0.5, "#a3abb4"], [1, "#4c535b"]])}
+      </defs>
+      {shadow(32, 59, 15)}
+      <path d="M20 8 H44 Q48 8 48 13 V40 Q48 54 32 56 Q16 54 16 40 V13 Q16 8 20 8 Z" fill={`url(#${u}c)`} />
+      <path d="M24 31 H40" stroke="#2b1a10" strokeWidth={2.2} strokeLinecap="round" />
+      <rect x={14} y={8} width={36} height={9} rx={3} fill={`url(#${u}p)`} />
+      <circle cx={24} cy={12.5} r={2.6} fill="none" stroke="#3a3f45" strokeWidth={1.4} />
+      <circle cx={40} cy={12.5} r={2.6} fill="none" stroke="#3a3f45" strokeWidth={1.4} />
+      <path d="M19 20 V44" stroke="#fff" strokeOpacity={0.18} strokeWidth={2} />
+      <path d="M18 40 Q20 52 32 53.5 Q44 52 46 40" fill="none" stroke="#e6c25a" strokeWidth={0.6} strokeDasharray="1.2 1.2" />
+    </>
+  ),
+  arrowone: (u) => (
+    <>
+      {shadow(32, 56, 22)}
+      {arrow(u, 6, 50, 56, 12, "#d63a2f", "o")}
+    </>
+  ),
+  shoes: (u) => (
+    <>
+      <defs>{lin(`${u}s`, [[0, "#3a4350"], [1, "#14181c"]])}</defs>
+      {shadow(32, 54, 24)}
+      <path d="M8 46 C8 36 14 30 20 26 L28 26 C32 32 38 36 50 38 C57 39 58 44 56 48 Z" fill={`url(#${u}s)`} />
+      <path d="M6 48 H57" stroke="#e6e9ec" strokeWidth={4} strokeLinecap="round" />
+      <path d="M22 30 L30 34 M24 27 L33 31 M26 25 L34 28" stroke="#e6e9ec" strokeWidth={1.4} strokeLinecap="round" />
+      <path d="M38 38 Q46 40 52 40" stroke="#2f6fbe" strokeWidth={2} fill="none" />
+    </>
+  ),
+  shirt: (u) => (
+    <>
+      <defs>{lin(`${u}s`, [[0, "#3d9b74"], [1, "#1f5e45"]])}</defs>
+      {shadow(32, 59, 20)}
+      <path d="M22 8 L10 14 L4 28 L13 32 L16 26 L16 56 L48 56 L48 26 L51 32 L60 28 L54 14 L42 8 Q32 16 22 8 Z" fill={`url(#${u}s)`} />
+      <path d="M22 8 Q32 16 42 8" fill="none" stroke="#e9f8ef" strokeWidth={1.6} />
+      <path d="M24 30 H40" stroke="#e6b325" strokeWidth={2.4} />
+      <path d="M20 12 L19 54" stroke="#fff" strokeOpacity={0.15} strokeWidth={2} />
+    </>
+  ),
 };
 
 export function hasRealIcon(name: string) {

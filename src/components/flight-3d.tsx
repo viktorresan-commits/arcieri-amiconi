@@ -3,9 +3,9 @@ import { describeRound, goldOf, releasePoint, type FlightInput } from "@/lib/arc
 import { camera, drawArrow, norm, orbit, Stage3D, useCanvas, type Arrow3DLook, type V } from "./foc-3d";
 
 type RoundView = ReturnType<typeof describeRound>;
-type Preset = "panoramica" | "arciere" | "bersaglio" | "alto";
+export type Preset = "panoramica" | "arciere" | "bersaglio" | "alto";
 
-const PRESETS: { id: Preset; label: string }[] = [
+export const PRESETS: { id: Preset; label: string }[] = [
   { id: "panoramica", label: "Panoramica" },
   { id: "arciere", label: "Dietro l'arciere" },
   { id: "bersaglio", label: "Al bersaglio" },
@@ -19,7 +19,7 @@ const RINGS = ["#f4f1ea", "#f4f1ea", "#1a1c1e", "#1a1c1e", "#2a6294", "#2a6294",
  * faccia e le frecce piantate. Il volo dura il tempo reale; le altezze degli oggetti sono ingrandite
  * sulle distanze lunghe (scritto in alto) per vederli, la curva della traiettoria è esagerata a parte.
  */
-export function Flight3D({ input, round, sighted, look = {}, height = "h-72" }: { input: FlightInput; round: RoundView; sighted: boolean; look?: Arrow3DLook; height?: string }) {
+export function Flight3DCanvas({ input, round, sighted, look = {}, height = "h-72" }: { input: FlightInput; round: RoundView; sighted: boolean; look?: Arrow3DLook; height?: string }) {
   const [preset, setPreset] = useState<Preset>("panoramica");
   const presetRef = useRef<Preset>(preset);
   presetRef.current = preset;

@@ -11,7 +11,9 @@ import { Avatar, Loading, Mark, cx } from "./kit";
 import { QUICK_ACTIONS, shortcutById } from "@/lib/arcieri/shortcuts";
 import { NextCard, PathMap, ShortcutEditor, ShortcutTile } from "./shortcuts";
 import { Scene } from "./scene";
-import { useXpToasts } from "@/lib/arcieri/xp";
+import { levelOf, useXp, useXpToasts } from "@/lib/arcieri/xp";
+import { AvatarFace } from "./archer-avatar";
+import { useAvatar, useAvatarSync } from "./avatar-hero";
 import { RealIcon } from "./real-icons";
 import { PersonalizeSheet } from "./personalize";
 import { applyPrefs, readPrefs } from "@/lib/arcieri/prefs";
@@ -71,6 +73,17 @@ export function Shell({ children }: { children: ReactNode }) {
   const [editShort, setEditShort] = useState(false);
   const [prefsOpen, setPrefsOpen] = useState(false);
   const [offline, setOffline] = useState(false);
+  const avatar = useAvatar();
+  useAvatarSync(avatar.shown);
+  const xp = useXp();
+  // notizie non lette: le scrive la Home quando carica la bacheca
+  const [unread, setUnread] = useState(0);
+  useEffect(() => {
+    const read = () => setUnread(Number(localStorage.getItem("aa-unread") || 0) || 0);
+    read();
+    window.addEventListener("aa-unread", read);
+    return () => window.removeEventListener("aa-unread", read);
+  }, []);
   const path = useRouterState({ select: (s) => s.location.pathname });
 
   useLayoutEffect(() => {
@@ -146,6 +159,7 @@ export function Shell({ children }: { children: ReactNode }) {
 
   const label = memberLabel(me, [me]);
   const hour = greet(romeHour());
+  const lvl = levelOf(xp.xp);
 
 
   const nav = [
@@ -183,16 +197,28 @@ export function Shell({ children }: { children: ReactNode }) {
         </aside>
         <div className="aa-main relative z-0 min-w-0 md:ml-60">
           <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-line/60 bg-bg/85 px-4 backdrop-blur-md">
-            <Link to="/profilo" className="flex min-w-0 items-center gap-3">
-              <Avatar label={initials(label)} color={me.avatarColor} photo={me.photoUrl} className="aa-pin shrink-0" />
+            <Link to="/avatar" className="flex min-w-0 items-center gap-3">
+              <span className="aa-pin grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-full ring-2 ring-[#ffd27a]/70">
+                <AvatarFace look={avatar.shown} className="h-10 w-10" />
+              </span>
               <span className="min-w-0">
                 <p className="truncate text-[11px] leading-tight text-muted">{hour}</p>
                 <p className="truncate font-display text-xl leading-none">{label}</p>
               </span>
             </Link>
-            <Link to="/allenamento" className="hidden h-10 items-center gap-1.5 rounded-full bg-primary px-4 text-sm font-semibold text-primary-fg md:flex">
-              <Glyph name="plus" size={16} strokeWidth={2.4} /> Nuovo tiro
-            </Link>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <Link to="/obiettivi" className="flex h-9 items-center gap-1.5 rounded-full bg-white/[0.06] px-2.5 text-[0.72rem] font-semibold" aria-label={`Livello ${lvl.level}`}>
+                <span className="grid h-6 w-6 place-items-center rounded-full bg-[#ffd27a] font-display text-[0.8rem] text-[#1a1408]">{lvl.level}</span>
+                <span className="h-1.5 w-9 overflow-hidden rounded-full bg-white/15"><span className="block h-full rounded-full bg-[#ffd27a]" style={{ width: `${Math.round((lvl.into / Math.max(1, lvl.need)) * 100)}%` }} /></span>
+              </Link>
+              <Link to="/bacheca" className="relative grid h-9 w-9 place-items-center rounded-full bg-white/[0.06]" aria-label="News">
+                <Glyph name="megaphone" size={17} />
+                {unread > 0 ? <span className="absolute -right-0.5 -top-0.5 grid min-h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[0.58rem] font-bold text-accent-fg">{unread > 9 ? "9+" : unread}</span> : null}
+              </Link>
+              <Link to="/allenamento" className="hidden h-10 items-center gap-1.5 rounded-full bg-primary px-4 text-sm font-semibold text-primary-fg md:flex">
+                <Glyph name="plus" size={16} strokeWidth={2.4} /> Nuovo tiro
+              </Link>
+            </div>
           </header>
           {offline ? <p className="bg-accent px-4 py-2 text-sm text-accent-fg">Sei offline. Il tiro resta sul telefono e si sincronizza al ritorno della rete.</p> : null}
           <main key={path} className="aa-page mx-auto w-full min-w-0 max-w-3xl overflow-x-clip px-4 py-6 pb-28 md:pb-10">

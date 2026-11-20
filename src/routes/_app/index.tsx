@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { dashboard, deleteSession } from "@/lib/arcieri/training.api";
 import { dismissNote, openNotes } from "@/lib/arcieri/club.api";
 import { fmtWhen } from "@/lib/arcieri/time";
@@ -7,7 +7,6 @@ import { programById } from "@/lib/arcieri/program";
 import { useLoad } from "@/lib/arcieri/use-load";
 import { AvatarScene, useAvatar } from "@/components/avatar-hero";
 import { MainGearCard } from "@/components/main-gear";
-import { levelOf, useXp } from "@/lib/arcieri/xp";
 import { ShortcutRow, TipCard } from "@/components/shortcuts";
 import { JourneyCard } from "@/components/journey";
 import { TodayCard } from "@/components/today-card";
@@ -59,8 +58,15 @@ function Home() {
   const { prefs } = usePrefs();
   const notes = useLoad(`notes-${nonce}`, () => openNotes());
   const avatar = useAvatar();
-  const xp = useXp();
-  const lvl = levelOf(xp.xp);
+  useEffect(() => {
+    if (!data) return;
+    try {
+      localStorage.setItem("aa-unread", String(data.unread ?? 0));
+      window.dispatchEvent(new Event("aa-unread"));
+    } catch {
+      /* niente */
+    }
+  }, [data]);
   if (loading) return <Loading />;
   if (error) return <ErrorNote text={error} />;
   if (!data) return null;
@@ -78,20 +84,12 @@ function Home() {
                   {data.month.sessions} uscite e {num(data.month.arrows)} frecce questo mese
                   {data.since ? ` · ultimo tiro ${data.since.n} ${data.since.unit === "h" ? (data.since.n === 1 ? "ora" : "ore") : data.since.n === 1 ? "giorno" : "giorni"} fa` : ""}
                 </p>
-                <div className="mt-2 flex flex-wrap justify-end gap-1.5">
-                  <span className="inline-flex items-center gap-1 rounded-full bg-black/35 px-2.5 py-1 text-[0.7rem] font-semibold backdrop-blur">Livello {lvl.level}<span className="h-1.5 w-10 overflow-hidden rounded-full bg-white/20"><span className="block h-full rounded-full bg-[#ffd27a]" style={{ width: `${Math.round((lvl.into / lvl.need) * 100)}%` }} /></span></span>
-                  {data.streak > 1 ? <span className="rounded-full bg-black/35 px-2.5 py-1 text-[0.7rem] font-semibold backdrop-blur">{data.streak} giorni di fila</span> : null}
-                  <Link to="/bacheca" className="inline-flex items-center gap-1 rounded-full bg-black/35 px-2.5 py-1 text-[0.7rem] font-semibold backdrop-blur">
-                    <Glyph name="megaphone" size={13} /> News
-                    {data.unread > 0 ? <span className="grid min-h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[0.6rem] font-bold text-accent-fg">{data.unread > 9 ? "9+" : data.unread}</span> : null}
-                  </Link>
-                </div>
+                {data.streak > 1 ? <p className="mt-2 inline-flex rounded-full bg-black/35 px-2.5 py-1 text-[0.7rem] font-semibold backdrop-blur">{data.streak} giorni di fila</p> : null}
               </div>
             </div>
-            <Link to="/avatar" className="absolute bottom-3 right-3 inline-flex min-h-10 items-center gap-1.5 rounded-full bg-black/45 px-3 text-xs font-semibold text-white backdrop-blur">
-              <Glyph name="palette" size={15} /> Personalizza
+            <Link to="/avatar" aria-label="Personalizza l'arciere" className="absolute bottom-3 right-3 grid h-11 w-11 place-items-center rounded-full bg-black/45 text-white backdrop-blur">
+              <Glyph name="palette" size={19} />
             </Link>
-            <p className="pointer-events-none absolute bottom-14 right-3 text-[0.62rem] text-white/70">Tocca l'arciere per scoccare</p>
           </AvatarScene>
           <div className="grid grid-cols-[1.4fr_1fr] gap-2">
             <Link to="/allenamento" search={{ avvia: "rapido" }} className="block">
@@ -265,7 +263,7 @@ function Meter({ label, value, digits = 0, suffix = "", color }: { label: string
   );
 }
 
-type LastShot = { score: number; n: number; tag?: number | null; max?: number; distance: number; miss: boolean; isX: boolean; day: string; specs: string };
+type LastShot = { score: number; n: number; tag?: number | null; max?: number; distance: number; miss: boolean; isX: boolean; day: string; specs: string; link?: { kind: "allenamento" | "gara"; id: number } };
 
 function specsOf(raw: string): Record<string, string> {
   try {
@@ -278,6 +276,30 @@ function specsOf(raw: string): Record<string, string> {
 
 /** Le ultime frecce, disegnate come sono davvero (colori, penne, punta) con numero e distanza. */
 function LastArrows({ shots }: { shots: LastShot[] }) {
+  const navigate = useNavigate();
+  const hold = useRef<number | null>(null);
+  const [pressed, setPressed] = useState<number | null>(null);
+  // tenendo premuta una freccia si apre l'allenamento o la gara in cui è stata segnata
+  const open = (shot: LastShot) => {
+    if (!shot.link) return;
+    if (shot.link.kind === "allenamento") void navigate({ to: "/allenamento/$id", params: { id: String(shot.link.id) } });
+    else void navigate({ to: "/gare", hash: `gara-${shot.link.id}` });
+  };
+  const start = (i: number, shot: LastShot) => {
+    if (hold.current) window.clearTimeout(hold.current);
+    setPressed(i);
+    hold.current = window.setTimeout(() => {
+      hold.current = null;
+      setPressed(null);
+      if (navigator.vibrate) navigator.vibrate(18);
+      open(shot);
+    }, 520);
+  };
+  const stop = () => {
+    if (hold.current) window.clearTimeout(hold.current);
+    hold.current = null;
+    setPressed(null);
+  };
   // l'animazione parte quando la lista entra nello schermo, così si vede davvero
   const ref = useRef<HTMLUListElement>(null);
   const [seen, setSeen] = useState(false);
@@ -308,13 +330,24 @@ function LastArrows({ shots }: { shots: LastShot[] }) {
         const mood = shot.miss || ratio < 0.55 ? "neg" : ratio >= 0.8 ? "pos" : "mid";
         const tone = mood === "neg" ? "bg-rose-500/20 text-rose-200" : mood === "pos" ? "bg-emerald-400/20 text-emerald-200" : "bg-white/8 text-fg";
         const delay = 150 + i * 220;
+        // sfalsate come frecce piantate a profondità diverse
+        const stagger = [0, 9, 4, 13, 2, 11, 6, 15][i % 8];
         return (
-          <li key={`${shot.day}-${i}`} className={`aa-shot aa-shot-${mood} flex items-center gap-2`} style={{ ["--d" as string]: `${delay}ms` }}>
-            <div className="aa-shot-track relative h-10 min-w-0 flex-1 overflow-hidden rounded-full">
-              <span aria-hidden className="aa-shot-halo" />
-              <span aria-hidden className="aa-shot-streak" />
+          <li
+            key={`${shot.day}-${i}`}
+            className={`aa-shot aa-shot-${mood} flex select-none items-center gap-2 ${pressed === i ? "aa-shot-press" : ""}`}
+            style={{ ["--d" as string]: `${delay}ms`, WebkitTouchCallout: "none" }}
+            onPointerDown={() => start(i, shot)}
+            onPointerUp={stop}
+            onPointerLeave={stop}
+            onPointerCancel={stop}
+            onContextMenu={(e) => e.preventDefault()}
+            title={shot.link ? (shot.link.kind === "allenamento" ? "Tieni premuto per aprire l'allenamento" : "Tieni premuto per aprire la gara") : undefined}
+          >
+            <div className="aa-shot-track relative h-10 min-w-0 flex-1 overflow-hidden" style={{ paddingLeft: `${stagger}%` }}>
+              <span aria-hidden className="aa-shot-streak" style={{ left: `${stagger}%` }} />
               <span aria-hidden className="aa-shot-butt" />
-              <div className="aa-launch absolute inset-y-0 left-0 right-3">
+              <div className="aa-launch absolute inset-y-0 right-3" style={{ left: `${stagger}%` }}>
                 <ArrowArt
                   material={sp.material || "carbonio"}
                   shaft={sp.shaft}

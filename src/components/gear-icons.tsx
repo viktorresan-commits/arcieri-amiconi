@@ -10,6 +10,8 @@ export const BOW_TYPES = [
   { id: "longbow", label: "Longbow" },
   { id: "ricurvo", label: "Ricurvo tradizionale" },
   { id: "storico", label: "Storico / a cavallo" },
+  { id: "asiatico", label: "Asiatico (corno)" },
+  { id: "flatbow", label: "Flatbow" },
 ] as const;
 
 export const SHAFT_MATERIALS = [
@@ -198,74 +200,36 @@ export function CategoryIcon({ category, className = "h-8 w-8" }: { category: st
       <stop offset="1" stopColor="#4c535b" />
     </linearGradient>
   );
-  const leather = (
-    <linearGradient id={`${u}c`} x1="0" x2="1">
-      <stop offset="0" stopColor="#4a2b16" />
-      <stop offset="0.45" stopColor="#a8703e" />
-      <stop offset="1" stopColor="#5b3518" />
-    </linearGradient>
-  );
-  switch (category) {
-    case "arco":
-      return <BowIcon type="olimpico" className={className} />;
-    case "freccia":
-    case "faretra":
-    case "bersaglio":
-    case "mirino":
-      return <RealIcon name={category === "freccia" ? "duel" : category === "faretra" ? "quiver" : category === "bersaglio" ? "target" : "sight3"} size={64} className={className} />;
-    case "corda":
-      return (
-        <svg viewBox="0 0 32 32" className={className} aria-hidden>
-          <defs>{leather}</defs>
-          <ellipse cx="16" cy="17" rx="11" ry="8" fill="none" stroke="#f4f1ea" strokeWidth="1.6" />
-          <ellipse cx="16" cy="17" rx="8" ry="5.5" fill="none" stroke="#d6dbe1" strokeWidth="1.4" />
-          <ellipse cx="16" cy="17" rx="5" ry="3.2" fill="none" stroke="#f4f1ea" strokeWidth="1.2" />
-          <rect x="22" y="13" width="5" height="3" rx="1" fill="#2a2f35" />
-          <circle cx="9" cy="10" r="2" fill="#e3a21a" />
-        </svg>
-      );
-    case "stabilizzatore":
-      return (
-        <svg viewBox="0 0 32 32" className={className} aria-hidden>
-          <defs>{metal}</defs>
-          <rect x="3" y="14.5" width="20" height="3" rx="1.5" fill="#1d2126" />
-          <rect x="4" y="15" width="18" height="0.8" rx="0.4" fill="#fff" opacity="0.35" />
-          <rect x="22" y="11" width="4" height="10" rx="1.4" fill={`url(#${u}m)`} />
-          <rect x="26.5" y="12" width="3" height="8" rx="1.2" fill={`url(#${u}m)`} />
-          <circle cx="4" cy="16" r="2.2" fill="#2f6fbe" />
-        </svg>
-      );
-    case "parabraccio":
-    case "guantino":
-      return (
-        <svg viewBox="0 0 32 32" className={className} aria-hidden>
-          <defs>{leather}</defs>
-          <path d="M8 5 H24 L22 27 H10 Z" fill={`url(#${u}c)`} />
-          <path d="M9 11 H23 M9.5 18 H22.5" stroke="#2b1a10" strokeWidth="1.6" />
-          <path d="M10 6.5 V26 M22 6.5 V26" stroke="#e6c25a" strokeWidth="0.5" strokeDasharray="1 1" />
-          <circle cx="22.5" cy="11" r="1" fill="#d6dbe1" />
-          <circle cx="22" cy="18" r="1" fill="#d6dbe1" />
-        </svg>
-      );
-    case "rest":
-      return (
-        <svg viewBox="0 0 32 32" className={className} aria-hidden>
-          <defs>{metal}</defs>
-          <rect x="4" y="18" width="14" height="8" rx="2" fill={`url(#${u}m)`} />
-          <path d="M16 20 L25 11" stroke="#1d2126" strokeWidth="2" strokeLinecap="round" />
-          <circle cx="25" cy="11" r="2" fill="#e3a21a" />
-          <path d="M3 13 H29" stroke="#2a2f35" strokeWidth="1.4" strokeLinecap="round" opacity="0.7" />
-        </svg>
-      );
-    default:
-      return (
-        <svg viewBox="0 0 32 32" className={className} aria-hidden>
-          <defs>{leather}</defs>
-          <rect x="5" y="10" width="22" height="16" rx="3" fill={`url(#${u}c)`} />
-          <path d="M12 10 V7 H20 V10" fill="none" stroke="#2b1a10" strokeWidth="1.8" />
-          <rect x="5" y="15" width="22" height="2" fill="#2b1a10" opacity="0.5" />
-          <rect x="14.5" y="14" width="3" height="4" rx="0.8" fill="#e6c25a" />
-        </svg>
-      );
+  const real: Record<string, string> = {
+    freccia: "arrowone",
+    faretra: "quiver",
+    bersaglio: "target",
+    mirino: "sight3",
+    corda: "bowstring",
+    stabilizzatore: "stabilizer",
+    parabraccio: "armguard",
+    guantino: "fingertab",
+    sgancio: "release",
+    pettorina: "chestguard",
+    custodia: "bowcase",
+    borsa: "targetbag",
+    supporto: "bowstand",
+    accessorio: "bag",
+    abbigliamento: "shirt",
+    scarpe: "shoes",
+    altro: "archer",
+  };
+  if (category === "arco") return <BowIcon type="olimpico" className={className} />;
+  if (category === "rest") {
+    return (
+      <svg viewBox="0 0 32 32" className={className} aria-hidden>
+        <defs>{metal}</defs>
+        <rect x="4" y="18" width="14" height="8" rx="2" fill={`url(#${u}m)`} />
+        <path d="M16 20 L25 11" stroke="#1d2126" strokeWidth="2" strokeLinecap="round" />
+        <circle cx="25" cy="11" r="2" fill="#e3a21a" />
+        <path d="M3 13 H29" stroke="#2a2f35" strokeWidth="1.4" strokeLinecap="round" opacity="0.7" />
+      </svg>
+    );
   }
+  return <RealIcon name={real[category] ?? "bag"} size={64} className={className} />;
 }

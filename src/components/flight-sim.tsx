@@ -4,7 +4,7 @@ import { airDensity, angularSize, effectiveLb, goldOf, compensatedDistance, desc
 import { Button, Card, Chips, Field, Segmented, Select, TextInput } from "@/components/kit";
 import { listEquipment, saveEquipment } from "@/lib/arcieri/club.api";
 import { Zoomable } from "./zoomable";
-import { Flight3D } from "./flight-3d";
+import { Flight3D } from "./flight-gl";
 import { useMainArrowLook } from "@/lib/arcieri/main-gear";
 
 const ROUNDS = [

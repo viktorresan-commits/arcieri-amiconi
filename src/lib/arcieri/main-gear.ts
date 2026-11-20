@@ -74,6 +74,7 @@ export function arrowLookOf(sp: Record<string, string> | undefined | null) {
     fletch: sp.fletch || undefined,
     cock: sp.cock || undefined,
     nock: sp.nock || undefined,
+    wood: sp.material === "legno" || sp.material === "bambu" || undefined,
   };
 }
 

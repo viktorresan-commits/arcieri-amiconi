@@ -762,7 +762,8 @@ export const dashboard = createServerFn({ method: "GET" })
     let highN = 0;
     let zeroN = 0;
     const bySession = new Map<number, { arrows: number; points: number; day: string }>();
-    const shotMarks: { day: string; seq: number; score: number; n: number; tag?: number | null; max?: number; distance: number; miss: boolean; isX: boolean; specs: string }[] = [];
+    // at: momento del tiro (per ordinare davvero dalla più recente); link: dove è stata inserita
+    const shotMarks: { day: string; at: number; seq: number; score: number; n: number; tag?: number | null; max?: number; distance: number; miss: boolean; isX: boolean; specs: string; link: { kind: "allenamento" | "gara"; id: number } }[] = [];
     let bestDistance = 0;
     const noteDistance = (value: number) => {
       if (value > bestDistance) bestDistance = value;
@@ -796,7 +797,9 @@ export const dashboard = createServerFn({ method: "GET" })
       addShot(day, score, asNum(shot.session_id));
       mark(!miss && (asBool(shot.is_x) || score >= maxArrow - 1), miss);
       noteDistance(asNum(shot.distance_m));
-      shotMarks.push({ day, seq: asNum(shot.shot_id), score, n: asNum(shot.arrow_index) + 1, tag: shot.arrow_tag != null ? asNum(shot.arrow_tag) : null, max: asNum(shot.max_arrow, 10), distance: asNum(shot.distance_m), miss, isX: asBool(shot.is_x), specs: shot.arrow_specs ?? "" });
+      const atRaw = Date.parse(String(shot.started_at).replace(" ", "T").replace(/([+-]\d\d)$/, "$1:00"));
+      const at = Number.isFinite(atRaw) ? atRaw : 0;
+      shotMarks.push({ day, at, seq: asNum(shot.shot_id), score, n: asNum(shot.arrow_index) + 1, tag: shot.arrow_tag != null ? asNum(shot.arrow_tag) : null, max: asNum(shot.max_arrow, 10), distance: asNum(shot.distance_m), miss, isX: asBool(shot.is_x), specs: shot.arrow_specs ?? "", link: { kind: "allenamento", id: asNum(shot.session_id) } });
     }
     const compsWithArrows = new Set<number>();
     for (const row of laneRows) {
@@ -814,7 +817,8 @@ export const dashboard = createServerFn({ method: "GET" })
         addShot(day, score, null);
         mark(padiglione ? score >= 9 : score >= 8, score <= 0);
       }
-      parts.forEach((score, index) => shotMarks.push({ day, seq: 1_000_000 + asNum(row.n) * 20 + index, score, n: index + 1, max: padiglione ? 10 : Math.max(11, ...parts), distance: laneDistance || compDistance, miss: score <= 0, isX: false, specs: "" }));
+      const at = new Date(`${day}T12:00:00`).getTime() || 0;
+      parts.forEach((score, index) => shotMarks.push({ day, at, seq: 1_000_000 + asNum(row.n) * 20 + index, score, n: index + 1, max: padiglione ? 10 : Math.max(11, ...parts), distance: laneDistance || compDistance, miss: score <= 0, isX: false, specs: "", link: { kind: "gara", id } }));
     }
     let monthEvents = monthCards.filter((session) => session.arrows > 0).length;
     const seenMonth = new Set<number>();
@@ -894,7 +898,7 @@ export const dashboard = createServerFn({ method: "GET" })
       if (row.arrows >= 6) averages.push(row.points / row.arrows);
     }
     const best = averages.reduce((max, value) => Math.max(max, value), 0);
-    const ordered = shotMarks.sort((a, b) => a.day.localeCompare(b.day) || a.seq - b.seq);
+    const ordered = shotMarks.sort((a, b) => a.day.localeCompare(b.day) || a.at - b.at || a.seq - b.seq);
     const trend = ordered.slice(-60).map((row) => row.score);
     const fallbackSpecs = homeArrow[0]?.specs ?? "";
     // le ultime frecce tirate, con numero, distanza e l'aspetto della freccia (specs come testo JSON)
@@ -906,6 +910,9 @@ export const dashboard = createServerFn({ method: "GET" })
       isX: row.isX,
       day: row.day,
       specs: row.specs || fallbackSpecs,
+      tag: row.tag ?? null,
+      max: row.max,
+      link: row.link,
     }));
     let lastMs = 0;
     for (const session of cards) {
