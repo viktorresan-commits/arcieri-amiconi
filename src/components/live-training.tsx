@@ -54,7 +54,57 @@ function beep() {
   window.setTimeout(() => void ctx.close(), 600);
 }
 
-export function LiveTraining({ sessionId, openHistory = false }: { sessionId?: number; openHistory?: boolean }) {
+const LAST_META = "aa-last-meta-v1";
+
+/** Le impostazioni dell'ultima partenza, per ripartire uguale con un tocco. */
+function rememberMeta(meta: DraftMeta) {
+  try {
+    localStorage.setItem(LAST_META, JSON.stringify(meta));
+  } catch {
+    /* memoria non disponibile */
+  }
+}
+
+function quickDraft(recentProgram: string): Draft {
+  let last: Partial<DraftMeta> = {};
+  try {
+    last = (JSON.parse(localStorage.getItem(LAST_META) || "null") as Partial<DraftMeta> | null) ?? {};
+  } catch {
+    last = {};
+  }
+  const program = (last.program || recentProgram || "A") as DraftMeta["program"];
+  const meta: DraftMeta = {
+    place: last.place ?? "",
+    distanceM: last.distanceM ?? 18,
+    discipline: last.discipline ?? "tradizionale",
+    bowType: last.bowType ?? "tradizionale",
+    bowCustom: last.bowCustom ?? "",
+    face: last.face ?? "wa10",
+    aimTarget: last.aimTarget ?? "padiglione",
+    aimAngle: last.aimAngle ?? "frontale",
+    setupId: last.setupId ?? null,
+    arrowsPerEnd: last.arrowsPerEnd ?? 3,
+    endsPlanned: last.endsPlanned ?? 10,
+    blocksPlanned: last.blocksPlanned ?? 1,
+    weather: "",
+    feeling: "",
+    rating: null,
+    notes: "",
+    stringNote: last.stringNote ?? "",
+    gearSnapshot: last.gearSnapshot ?? "",
+    startedAt: new Date().toISOString(),
+    endedAt: "",
+    program,
+    body: last.body || "normale",
+    arrowsChosen: last.arrowsChosen ?? (last.arrowsPerEnd ?? 3) * (last.endsPlanned ?? 10) * (last.blocksPlanned ?? 1),
+    dispersion: "",
+    errors: "",
+    targetPhoto: "",
+  };
+  return newDraft(meta, null, null);
+}
+
+export function LiveTraining({ sessionId, openHistory = false, start }: { sessionId?: number; openHistory?: boolean; start?: "rapido" | "foto" | "gesto" | "fatto" }) {
   const navigate = useNavigate();
   const [boot, setBoot] = useState<Awaited<ReturnType<typeof trainingBootstrap>> | null>(null);
   const [error, setError] = useState("");
@@ -122,9 +172,21 @@ export function LiveTraining({ sessionId, openHistory = false }: { sessionId?: n
     }
     const existing = loadDraft();
     if (openHistory) setPhase("history");
-    else if (existing && existing.shots.length) setPhase("ask");
+    else if (start === "gesto") setPhase("gesto");
+    else if (start === "fatto") setPhase("past");
+    else if (start === "rapido" || start === "foto") {
+      // un tocco: riprende quello in corso, altrimenti riparte come l'ultima volta
+      if (existing && existing.shots.length) setDraft(existing);
+      else setDraft(quickDraft(boot.recent[0]?.program ?? ""));
+      setPhase("live");
+      if (start === "foto") window.setTimeout(() => document.getElementById("volee-foto")?.scrollIntoView({ behavior: "smooth", block: "start" }), 350);
+    } else if (existing && existing.shots.length) setPhase("ask");
     else setPhase("choose");
-  }, [boot, sessionId, openHistory]);
+  }, [boot, sessionId, openHistory, start]);
+
+  useEffect(() => {
+    if (draft && phase === "live" && !sessionId) rememberMeta(draft.meta);
+  }, [draft?.clientKey, phase, sessionId]);
 
   useEffect(() => {
     if (phase !== "live") return;
@@ -701,6 +763,7 @@ function PhotoVolley({
   const ends = new Set(shots.map((s) => `${s.block}:${s.end}`)).size;
   const known = shots.filter((s) => s.nx != null && s.ny != null).map((s) => ({ x: s.nx as number, y: s.ny as number }));
   return (
+    <div id="volee-foto" className="scroll-mt-16">
     <Card className="grid gap-2">
       <button type="button" onClick={() => setOpen((v) => !v)} className="flex items-center justify-between gap-3 text-left">
         <span className="min-w-0">
@@ -716,6 +779,7 @@ function PhotoVolley({
       </div>
       {open ? <TargetRead face={face} onApply={onApply} onApplyBatch={onApplyBatch} expected={Math.max(1, room)} known={known} volleyLabel={`volée ${volley}`} compact /> : null}
     </Card>
+    </div>
   );
 }
 
@@ -985,8 +1049,9 @@ function ProgramPick({
   onHistory: () => void;
   onGesture: () => void;
 }) {
-  const [program, setProgram] = useState<ProgramId | "">("");
-  const [body, setBody] = useState<BodyId | "">("");
+  // già pronti: l'obiettivo dell'ultima volta e "normale", così si parte con un tocco
+  const [program, setProgram] = useState<ProgramId | "">(() => (PROGRAMS.some((p) => p.id === boot.recent[0]?.program) ? (boot.recent[0]?.program as ProgramId) : ""));
+  const [body, setBody] = useState<BodyId | "">("normale");
   const [volume, setVolume] = useState<(typeof VOLUMES)[number]>(30);
   const [touched, setTouched] = useState(false);
   const [place, setPlace] = useState("");
@@ -1042,10 +1107,29 @@ function ProgramPick({
 
   return (
     <div className="grid gap-5">
-      <header className="aa-rise">
-        <p className="text-xs uppercase tracking-wide text-muted">Arco istintivo · 18 metri</p>
-        <h1 className="font-display text-[2.1rem] tracking-tight leading-none">Cosa alleni oggi</h1>
-        <p className="mt-2 max-w-prose text-sm text-muted">Il percorso segue te: stato, errori, risultati. Il numero di frecce non sale da solo.</p>
+      <header className="aa-hero px-4 pb-4 pt-4">
+        <p className="text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-white/60">Allenamento</p>
+        <h1 className="font-display text-[2.1rem] leading-none tracking-tight">Cosa alleni oggi</h1>
+        <p className="mt-1 text-xs text-white/70">Un tocco per ripartire, oppure scegli qui sotto obiettivo e frecce.</p>
+        <Link to="/allenamento" search={{ avvia: "rapido" }} className="mt-3 block">
+          <Button className="aa-glow w-full">⚡ Riparti come l'ultima volta</Button>
+        </Link>
+        <div className="mt-2 grid grid-cols-4 gap-1.5 text-center text-[0.68rem] font-semibold">
+          <Link to="/allenamento" search={{ avvia: "foto" }} className="aa-press grid gap-0.5 rounded-xl border border-white/10 bg-white/[0.06] py-2">
+            <span className="text-lg leading-none">📷</span>
+            Da foto
+          </Link>
+          {([
+            ["🎥", "Gesto", onGesture],
+            ["📝", "Già fatto", onPast],
+            ["🗂️", "Storico", onHistory],
+          ] as const).map(([emoji, label, go]) => (
+            <button key={label} type="button" onClick={go} className="aa-press grid gap-0.5 rounded-xl border border-white/10 bg-white/[0.06] py-2">
+              <span className="text-lg leading-none">{emoji}</span>
+              {label}
+            </button>
+          ))}
+        </div>
       </header>
       <section className="grid gap-2">
         <h2 className="font-display text-2xl">Obiettivo</h2>
@@ -1126,11 +1210,12 @@ function ProgramPick({
         <TextInput list="places" value={place} onChange={(e) => setPlace(e.target.value)} placeholder="Tiro, casa, bosco..." />
         <datalist id="places">{boot.places.map((p) => <option key={p} value={p} />)}</datalist>
       </Field>
-      <Button disabled={!program || !body} onClick={prepare}>Prepara allenamento</Button>
-      <Button variant="ghost" onClick={onPast}>Aggiungi un allenamento già fatto</Button>
-      <Button variant="ghost" onClick={onHistory}>Storico allenamenti</Button>
-      <Button variant="ghost" onClick={onGesture}>🎥 Analisi del gesto da video</Button>
-      <Button variant="ghost" onClick={onOther}>Altro formato</Button>
+      <div className="sticky bottom-[calc(env(safe-area-inset-bottom)+4.6rem)] z-10 grid gap-2 md:bottom-4">
+        <Button disabled={!program || !body} onClick={prepare} className="shadow-[0_10px_30px_-10px_rgba(0,0,0,0.8)]">
+          {program && body ? `🏹 Inizia · ${volume} frecce` : "Scegli l'obiettivo per iniziare"}
+        </Button>
+      </div>
+      <Button variant="ghost" onClick={onOther}>Altro formato (distanza, volée, arco)</Button>
     </div>
   );
 }

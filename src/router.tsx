@@ -8,5 +8,8 @@ export function getRouter() {
     routeTree,
     rewrite: previewPathRewrite(),
     defaultErrorComponent: AppErrorComponent,
+    // dissolvenza morbida fra le pagine dove il browser la supporta
+    defaultViewTransition: true,
+    scrollRestoration: true,
   });
 }

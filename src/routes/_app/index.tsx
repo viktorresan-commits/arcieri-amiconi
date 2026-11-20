@@ -6,6 +6,7 @@ import { fmtWhen } from "@/lib/arcieri/time";
 import { programById } from "@/lib/arcieri/program";
 import { useLoad } from "@/lib/arcieri/use-load";
 import { HeroTarget } from "@/components/hero-target";
+import { ShortcutRow, TipCard } from "@/components/shortcuts";
 import { ArrowArt } from "@/components/arrow-art";
 import { Button, Card, Empty, ErrorNote, HoldDelete, Loading, cx } from "@/components/kit";
 
@@ -84,18 +85,29 @@ function Home() {
             </div>
             <HeroTarget scores={trend} size={124} />
           </div>
-          <Link to="/allenamento" className="mt-3 block">
-            <Button className="aa-glow w-full">🏹 Prepara allenamento</Button>
-          </Link>
+          <div className="mt-3 grid grid-cols-[1.4fr_1fr] gap-2">
+            <Link to="/allenamento" search={{ avvia: "rapido" }} className="block">
+              <Button className="aa-glow w-full">⚡ Tiro rapido</Button>
+            </Link>
+            <Link to="/allenamento" search={{ avvia: "foto" }} className="block">
+              <Button variant="ghost" className="w-full">📷 Da foto</Button>
+            </Link>
+          </div>
         </div>
       </Rise>
-      <div className="grid grid-cols-2 gap-2">
+      <Rise i={1}>
+        <ShortcutRow />
+      </Rise>
+      <Rise i={2}>
+        <TipCard />
+      </Rise>
+      <div className="grid grid-cols-3 gap-2">
         <Rise i={2}><Link to="/statistiche" className="block"><Meter label="Media mese" value={data.month.arrows ? data.month.avg : null} digits={2} color="#e0b15a" /></Link></Rise>
         <Rise i={3}><Link to="/statistiche" className="block"><Meter label="Precisione" value={data.all.precisePct} digits={1} suffix="%" color="#3d8f5f" /></Link></Rise>
         <Rise i={4}><Link to="/statistiche" className="block"><Meter label="Miglior media" value={data.all.bestAvg || null} digits={2} color="#c4a2f2" /></Link></Rise>
-        <Rise i={5}><Link to="/statistiche" className="block"><Meter label="Frecce totali" value={data.all.arrows} color="#5aa6e8" /></Link></Rise>
+        <Rise i={5}><Link to="/statistiche" className="block"><Meter label="Frecce" value={data.all.arrows} color="#5aa6e8" /></Link></Rise>
         <Rise i={6}><Link to="/calendario" className="block"><Meter label="Uscite mese" value={data.month.sessions} color="#9dbea4" /></Link></Rise>
-        <Rise i={7}><Link to="/statistiche" className="block"><Meter label="Miglior distanza" value={data.bestDistance} suffix=" m" color="#e07a72" /></Link></Rise>
+        <Rise i={7}><Link to="/statistiche" className="block"><Meter label="Miglior dist." value={data.bestDistance} suffix=" m" color="#e07a72" /></Link></Rise>
       </div>
       <Rise i={8}>
         <Card>
@@ -237,7 +249,7 @@ function Meter({ label, value, digits = 0, suffix = "", color }: { label: string
   return (
     <div className="aa-kpi aa-tile h-full" style={color ? ({ "--kpi": color } as CSSProperties) : undefined}>
       <p className="truncate text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted">{label}</p>
-      <p className="mt-1 font-display text-[1.65rem] tabular-nums leading-none">{value == null ? "—" : <Count value={value} digits={digits} suffix={suffix} />}</p>
+      <p className="mt-1 font-display text-[1.35rem] tabular-nums leading-none">{value == null ? "—" : <Count value={value} digits={digits} suffix={suffix} />}</p>
     </div>
   );
 }

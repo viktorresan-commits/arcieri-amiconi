@@ -1,12 +1,10 @@
 import { createContext, useContext, useEffect, useLayoutEffect, useState, type ReactNode } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
-  CalendarDays,
   House,
   Menu,
   Plus,
   Target,
-  Trophy,
   Users,
   X,
 } from "lucide-react";
@@ -17,6 +15,8 @@ import type { PublicMember } from "@/lib/arcieri/access";
 import { greet, romeHour } from "@/lib/arcieri/time";
 import { memberLabel, initials } from "@/lib/arcieri/labels";
 import { Avatar, Loading, Mark, cx } from "./kit";
+import { QUICK_ACTIONS, SHORTCUTS, shortcutById } from "@/lib/arcieri/shortcuts";
+import { ShortcutEditor, ShortcutTile } from "./shortcuts";
 
 type Ctx = { me: PublicMember; reload: () => void };
 const MemberCtx = createContext<Ctx | null>(null);
@@ -32,6 +32,7 @@ const MORE = [
   ["/calendario", "Calendario"],
   ["/classifiche", "Classifiche"],
   ["/statistiche", "Statistiche"],
+  ["/balistica", "Balistica"],
   ["/sfide", "Sfide"],
   ["/attrezzatura", "Attrezzatura"],
   ["/gare", "Gare"],
@@ -56,6 +57,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const [nonce, setNonce] = useState(0);
   const [menu, setMenu] = useState(false);
   const [quick, setQuick] = useState(false);
+  const [editShort, setEditShort] = useState(false);
   const [ink, setInk] = useState("verde");
   const [offline, setOffline] = useState(false);
   const path = useRouterState({ select: (s) => s.location.pathname });
@@ -205,60 +207,54 @@ export function Shell({ children }: { children: ReactNode }) {
             </button>
           </nav>
           {quick ? (
-            <div className="fixed inset-0 z-40 flex items-end bg-black/50 md:hidden" onClick={() => setQuick(false)}>
-              <div className="aa-rise grid w-full gap-2 rounded-t-3xl border-t border-line bg-elev p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)]" onClick={(e) => e.stopPropagation()}>
-                <div className="mx-auto mb-1 h-1.5 w-10 rounded-full bg-line" />
-                <p className="font-display text-2xl">Cosa fai?</p>
-                {([
-                  ["/allenamento", "Allenamento", "Volée, foto del bersaglio, gesto", Target],
-                  ["/gare", "Gara", "Iscrizioni e risultati", Trophy],
-                  ["/calendario", "Calendario", "Allenamenti e gare in programma", CalendarDays],
-                ] as const).map(([to, title, sub, Icon]) => (
-                  <Link key={to} to={to} onClick={() => setQuick(false)} className="flex min-h-16 items-center gap-3 rounded-2xl border border-line bg-surface px-4">
-                    <span className="grid h-11 w-11 place-items-center rounded-xl bg-primary/15 text-primary"><Icon className="h-6 w-6" /></span>
-                    <span className="min-w-0">
-                      <span className="block font-semibold">{title}</span>
-                      <span className="block truncate text-xs text-muted">{sub}</span>
-                    </span>
-                  </Link>
-                ))}
+            <div className="fixed inset-0 z-40 flex items-end bg-black/55 backdrop-blur-[2px] md:hidden" onClick={() => setQuick(false)}>
+              <div className="aa-sheet grid w-full gap-3 rounded-t-3xl border-t border-hair bg-elev p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)]" onClick={(e) => e.stopPropagation()}>
+                <div className="mx-auto h-1.5 w-10 rounded-full bg-white/20" />
+                <p className="aa-section-title">Cosa fai adesso?</p>
+                <div className="grid grid-cols-3 gap-x-2 gap-y-4">
+                  {QUICK_ACTIONS.map((id, i) => {
+                    const sc = shortcutById(id);
+                    return sc ? <ShortcutTile key={id} s={sc} size="lg" index={i} onClick={() => setQuick(false)} /> : null;
+                  })}
+                </div>
               </div>
             </div>
           ) : null}
           {menu ? (
-            <div className="fixed inset-0 z-40 bg-bg md:hidden">
-              <div className="flex h-14 items-center justify-between px-4">
-                <p className="font-display text-2xl">Menu</p>
-                <button type="button" className="grid h-11 w-11 place-items-center" onClick={() => setMenu(false)} aria-label="Chiudi">
+            <div className="aa-sheet fixed inset-0 z-40 overflow-y-auto bg-bg pb-[calc(env(safe-area-inset-bottom)+1.5rem)] md:hidden">
+              <div className="sticky top-0 z-10 flex h-14 items-center justify-between bg-bg/90 px-4 backdrop-blur-md">
+                <p className="aa-section-title">Tutto in un tocco</p>
+                <button type="button" className="grid h-11 w-11 place-items-center rounded-full bg-white/5" onClick={() => setMenu(false)} aria-label="Chiudi">
                   <X />
                 </button>
               </div>
-              <div className="grid gap-2 px-4">
-                <div className="flex items-center justify-between rounded-xl border border-line px-4 py-3">
-                  <span className="text-sm font-semibold">Colore dell'app</span>
-                  <span className="flex items-center gap-2" role="group" aria-label="Colore">
-                    {INKS.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        aria-label={item.id}
-                        aria-pressed={ink === item.id}
-                        onClick={() => pickInk(item.id)}
-                        className={cx("h-7 w-7 rounded-full border-2", ink === item.id ? "border-fg" : "border-transparent")}
-                        style={{ background: item.color }}
-                      />
-                    ))}
-                  </span>
+              <div className="grid gap-4 px-4">
+                <div className="grid grid-cols-4 gap-x-2 gap-y-4">
+                  {SHORTCUTS.map((sc, i) => <ShortcutTile key={sc.id} s={sc} size="lg" index={i} onClick={() => setMenu(false)} />)}
                 </div>
-                {MORE.map(([to, text]) => (
-                  <Link key={to} to={to} onClick={() => setMenu(false)} className="flex min-h-12 items-center gap-3 rounded-xl border border-line px-4 font-semibold">
-                    {to === "/gioco" ? <Mark className="h-8 w-8" /> : null}
-                    {text}
-                  </Link>
-                ))}
+                <div className="grid gap-2 rounded-2xl border border-hair bg-white/[0.03] p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold">Colore dell'app</span>
+                    <span className="flex items-center gap-2" role="group" aria-label="Colore">
+                      {INKS.map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          aria-label={item.id}
+                          aria-pressed={ink === item.id}
+                          onClick={() => pickInk(item.id)}
+                          className={cx("h-8 w-8 rounded-full border-2 transition-transform", ink === item.id ? "scale-110 border-fg" : "border-transparent")}
+                          style={{ background: item.color }}
+                        />
+                      ))}
+                    </span>
+                  </div>
+                  <button type="button" className="aa-chip justify-self-start" onClick={() => { setMenu(false); setEditShort(true); }}>✎ Scegli le scorciatoie della Home</button>
+                </div>
               </div>
             </div>
           ) : null}
+          {editShort ? <ShortcutEditor onClose={() => setEditShort(false)} /> : null}
         </div>
       </div>
     </MemberCtx.Provider>

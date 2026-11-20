@@ -662,3 +662,37 @@ aside.aa-side button {
 .aa-pulse { animation: aa-pulse 1.6s ease-in-out infinite; }
 @keyframes aa-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
 @media (prefers-reduced-motion: reduce) { .aa-pulse { animation: none; } }
+
+/* ── Scorciatoie, fogli e transizioni ──────────────────────────────── */
+.aa-short { animation: aa-pop-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both; -webkit-tap-highlight-color: transparent; }
+.aa-short-icon {
+  position: relative;
+  background:
+    radial-gradient(120% 120% at 30% 20%, color-mix(in srgb, var(--c) 70%, white 10%) 0%, color-mix(in srgb, var(--c) 45%, transparent) 55%, color-mix(in srgb, var(--c) 25%, transparent) 100%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.25), 0 8px 18px -8px color-mix(in srgb, var(--c) 80%, black);
+  transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.2s ease;
+}
+.aa-short:active .aa-short-icon { transform: scale(0.88) rotate(-4deg); }
+.aa-short:hover .aa-short-icon { transform: translateY(-2px); }
+.aa-short-emoji { filter: drop-shadow(0 2px 2px rgb(0 0 0 / 0.35)); }
+@keyframes aa-pop-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.92); }
+  to { opacity: 1; transform: none; }
+}
+.aa-sheet { animation: aa-sheet-up 0.32s cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes aa-sheet-up { from { transform: translateY(100%); } to { transform: none; } }
+
+/* tocco: tutto ciò che si preme risponde */
+button:not(:disabled):active, a:active { transition: transform 0.12s ease; }
+.aa-press:active { transform: scale(0.97); }
+
+/* passaggio fra le pagine (View Transitions) */
+::view-transition-old(root) { animation: aa-vt-out 0.18s ease both; }
+::view-transition-new(root) { animation: aa-vt-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes aa-vt-out { to { opacity: 0; transform: translateY(-6px); } }
+@keyframes aa-vt-in { from { opacity: 0; transform: translateY(10px); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .aa-short, .aa-sheet { animation: none; }
+  ::view-transition-old(root), ::view-transition-new(root) { animation: none; }
+}
