@@ -40,8 +40,8 @@ export function Button({
   );
 }
 
-export function Card({ className, children }: { className?: string; children: ReactNode }) {
-  return <section className={cx("aa-glow-panel rounded-[var(--radius-card)] border border-hair p-3.5 shadow-card", className)}>{children}</section>;
+export function Card({ className, children, style }: { className?: string; children: ReactNode; style?: CSSProperties }) {
+  return <section style={style} className={cx("aa-glow-panel rounded-[var(--radius-card)] border border-hair p-3.5 shadow-card", className)}>{children}</section>;
 }
 
 export function Field({ label, children }: { label: string; children: ReactNode }) {

@@ -1,3 +1,5 @@
+import { Confetti, Sparkle } from "@/components/celebrate";
+import { RealIcon } from "@/components/real-icons";
 import { useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { listClubOrders, listGadgets, saveClubOrder, setClubOrder, skillBoard, squadBoard } from "@/lib/arcieri/club.api";
@@ -256,34 +258,46 @@ function Page() {
 function Podium({ title, rows }: { title: string; rows: Archer[] }) {
   const slots = [rows[1], rows[0], rows[2]];
   const METALS = {
-    1: { top: "#fff1b0", mid: "#e2b340", low: "#8a6216", h: "h-28", label: "1°" },
-    2: { top: "#ffffff", mid: "#c9d2db", low: "#6f7b87", h: "h-20", label: "2°" },
-    3: { top: "#f0b27a", mid: "#c4844a", low: "#6e4019", h: "h-14", label: "3°" },
+    1: { top: "#fff1b0", mid: "#e2b340", low: "#8a6216", h: "h-28", label: "1" },
+    2: { top: "#ffffff", mid: "#c9d2db", low: "#6f7b87", h: "h-20", label: "2" },
+    3: { top: "#f0b27a", mid: "#c4844a", low: "#6e4019", h: "h-14", label: "3" },
   } as const;
   return (
     <Card className="relative overflow-hidden">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-[radial-gradient(ellipse_at_top,rgba(226,179,64,0.22),transparent_70%)]" />
-      <h2 className="relative mb-3 font-display text-2xl">{title}</h2>
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-[radial-gradient(ellipse_at_top,rgba(226,179,64,0.28),transparent_70%)]" />
+      {rows[0] ? <span className="aa-spot absolute" /> : null}
+      {rows[0] ? <Confetti count={22} /> : null}
+      <h2 className="relative mb-3 flex items-center gap-2 font-display text-2xl"><RealIcon name="podium" size={30} />{title}</h2>
       {rows.length === 0 ? <p className="text-sm text-muted">Nessuno con un risultato, per ora.</p> : (
-        <div className="relative grid grid-cols-3 items-end gap-1.5">
+        <div className="aa-podium-stage relative grid grid-cols-3 items-end gap-1.5">
           {slots.map((row, index) => {
             const place = (index === 1 ? 1 : index === 0 ? 2 : 3) as 1 | 2 | 3;
             const m = METALS[place];
             if (!row) return <div key={place} />;
             return (
               <Link key={row.userId} to="/arciere/$id" params={{ id: String(row.id) }} className="flex min-w-0 flex-col items-center">
-                <div className="aa-pop relative mb-1.5 flex flex-col items-center" style={{ animationDelay: `${0.35 + (3 - place) * 0.12}s` }}>
+                <div className="aa-pop relative mb-2 flex flex-col items-center" style={{ animationDelay: `${0.45 + (3 - place) * 0.15}s` }}>
                   {place === 1 ? (
                     <>
-                      <svg viewBox="0 0 40 22" className="-mb-1 h-6 w-10 drop-shadow" aria-hidden>
-                        <path d="M3 20 L6 6 L14 13 L20 2 L26 13 L34 6 L37 20 Z" fill="#e2b340" stroke="#8a6216" strokeWidth="1.2" strokeLinejoin="round" />
+                      <svg viewBox="0 0 40 22" className="aa-crown -mb-1 h-7 w-11 drop-shadow-[0_2px_4px_rgba(226,179,64,0.6)]" aria-hidden>
+                        <defs>
+                          <linearGradient id={`crown-${title}`} x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0" stopColor="#fff1b0" />
+                            <stop offset="0.5" stopColor="#e2b340" />
+                            <stop offset="1" stopColor="#8a6216" />
+                          </linearGradient>
+                        </defs>
+                        <path d="M3 20 L6 6 L14 13 L20 2 L26 13 L34 6 L37 20 Z" fill={`url(#crown-${title})`} stroke="#8a6216" strokeWidth="1.2" strokeLinejoin="round" />
                         <circle cx="20" cy="3" r="2" fill="#fff1b0" />
+                        <circle cx="6" cy="6" r="1.5" fill="#d63a2f" />
+                        <circle cx="34" cy="6" r="1.5" fill="#2f7fd1" />
                       </svg>
-                      <span className="aa-twinkle absolute -left-2 top-3 text-xs text-[#fff1b0]">✦</span>
-                      <span className="aa-twinkle absolute -right-1 top-6 text-[10px] text-[#fff1b0]" style={{ animationDelay: "0.8s" }}>✦</span>
+                      <Sparkle size={12} className="aa-twinkle absolute -left-3 top-3" />
+                      <Sparkle size={9} className="aa-twinkle absolute -right-2 top-7" style={{ animationDelay: "0.8s" }} />
+                      <Sparkle size={7} className="aa-twinkle absolute left-1/2 -top-2" style={{ animationDelay: "1.4s" }} />
                     </>
                   ) : null}
-                  <span className="rounded-full p-[3px]" style={{ background: `linear-gradient(135deg, ${m.top}, ${m.mid} 50%, ${m.low})` }}>
+                  <span className="rounded-full p-[3px] shadow-[0_6px_18px_-6px_rgba(0,0,0,0.6)]" style={{ background: `linear-gradient(135deg, ${m.top}, ${m.mid} 50%, ${m.low})` }}>
                     <Avatar label={row.name} color={row.avatarColor} photo={row.photoUrl} size={place === 1 ? "lg" : "md"} className="ring-2 ring-bg" />
                   </span>
                   <p className="mt-1 max-w-full truncate text-center text-sm font-semibold">{row.name}</p>
@@ -292,12 +306,12 @@ function Podium({ title, rows }: { title: string; rows: Archer[] }) {
                 <div
                   className={`aa-step relative w-full ${m.h} rounded-t-xl`}
                   style={{
-                    animationDelay: `${(3 - place) * 0.12}s`,
+                    animationDelay: `${(3 - place) * 0.15}s`,
                     background: `linear-gradient(180deg, ${m.mid} 0%, ${m.low} 100%)`,
-                    boxShadow: `inset 0 2px 0 ${m.top}, inset 0 -8px 16px rgba(0,0,0,0.35)`,
+                    boxShadow: `inset 0 2px 0 ${m.top}, inset 0 -10px 18px rgba(0,0,0,0.35), 0 14px 22px -12px rgba(0,0,0,0.7)`,
                   }}
                 >
-                  <span className="absolute inset-x-0 top-1.5 text-center font-display text-3xl leading-none text-[#14181c]/80 drop-shadow-[0_1px_0_rgba(255,255,255,0.4)]">{m.label}</span>
+                  <span className="absolute inset-x-0 top-2 text-center font-display text-4xl leading-none text-[#14181c]/75 drop-shadow-[0_1px_0_rgba(255,255,255,0.45)]">{m.label}</span>
                 </div>
               </Link>
             );

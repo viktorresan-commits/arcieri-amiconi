@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEven
 import { MediaPick } from "@/components/media-pick";
 import { saveFile } from "@/lib/arcieri/native";
 import { saveGesture } from "@/lib/arcieri/gesture.api";
+import { ProPanel, drawPro, type ProSave } from "./pose-pro";
 import {
   PHASE_COLORS,
   PHASE_LABEL,
@@ -135,6 +136,10 @@ export function PoseRead() {
   const [saveState, setSaveState] = useState<"" | "busy" | "ok" | string>("");
   /** parte del video da analizzare e salvare (null = tutto) */
   const [range, setRange] = useState<{ from: number; to: number } | null>(null);
+  /** analisi pro: più punti (testa, mani), polsi, postura, allungo e consigli */
+  const [pro, setProState] = useState(true);
+  const proRef = useRef(pro);
+  proRef.current = pro;
   const span = () => ({ from: range?.from ?? 0, to: range?.to ?? duration });
 
   useEffect(() => {
@@ -142,6 +147,7 @@ export function PoseRead() {
       if (localStorage.getItem("aa-hand") === "left") setHandState("mancino");
       const q = localStorage.getItem("aa-pose-quality");
       if (q === "lite" || q === "full" || q === "heavy") setQualityState(q);
+      if (localStorage.getItem("aa-pose-pro") === "0") setProState(false);
     } catch {
       /* niente */
     }
@@ -252,6 +258,7 @@ export function PoseRead() {
     }
     if (lookRef.current !== "scheletro") drawSagoma(ctx, w, h, lm, handRef.current, gearRef.current, lookRef.current === "sagoma");
     else if (lm && showRef.current) drawPose(ctx, w, h, lm, handRef.current, gearRef.current);
+    if (lm && proRef.current && showRef.current && lookRef.current !== "sagoma") drawPro(ctx, w, h, lm, handRef.current);
     if (draft) {
       ctx.strokeStyle = "#e6b325";
       ctx.lineWidth = 3 * dpr;
@@ -691,28 +698,37 @@ export function PoseRead() {
   }
 
   /** Salva numeri e miniatura dell'analisi nel profilo, per i confronti nel tempo e nel gruppo. */
-  async function storeAnalysis() {
+  async function storeAnalysis(proData?: ProSave) {
     const media = kind === "video" ? videoRef.current : imageRef.current;
     if (!media) return;
     setSaveState("busy");
     try {
-      const k = 360 / Math.max(size.w, size.h);
+      // fotogramma dell'ancoraggio: porto il video lì prima di fare la miniatura
+      let frameLm = lastLm.current;
+      if (proData?.at != null && kind === "video" && videoRef.current) {
+        videoRef.current.pause();
+        await seekTo(videoRef.current, proData.at);
+        frameLm = lmAt(samples, proData.at) ?? frameLm;
+      }
+      const k = (proData ? 480 : 360) / Math.max(size.w, size.h);
       const c = document.createElement("canvas");
       c.width = Math.round(size.w * k);
       c.height = Math.round(size.h * k);
       const ctx = c.getContext("2d");
       if (!ctx) throw new Error("Miniatura non riuscita.");
       ctx.drawImage(media, 0, 0, c.width, c.height);
-      if (look !== "scheletro") drawSagoma(ctx, c.width, c.height, lastLm.current, hand, null, look === "sagoma");
-      else if (lastLm.current) drawPose(ctx, c.width, c.height, lastLm.current, hand, null);
-      const thumb = c.toDataURL("image/jpeg", 0.72);
+      if (look !== "scheletro") drawSagoma(ctx, c.width, c.height, frameLm, hand, null, look === "sagoma");
+      else if (frameLm) drawPose(ctx, c.width, c.height, frameLm, hand, null);
+      if (proData && frameLm && look !== "sagoma") drawPro(ctx, c.width, c.height, frameLm, hand);
+      let thumb = c.toDataURL("image/jpeg", 0.72);
+      if (thumb.length > 150_000) thumb = c.toDataURL("image/jpeg", 0.5);
       const m = shot?.at ?? now;
       await saveGesture({
         data: {
-          title: saveTitle.trim() || (kind === "video" ? "Video del gesto" : "Foto del gesto"),
+          title: saveTitle.trim() || (proData ? `Analisi pro · ${proData.total}/100` : kind === "video" ? "Video del gesto" : "Foto del gesto"),
           kind: kind === "video" ? "video" : "foto",
           hand,
-          score: shot?.score ?? null,
+          score: proData ? proData.total : (shot?.score ?? null),
           shots: analysis.shots.length,
           anchorS: shot?.anchorTime ?? null,
           drawS: shot?.drawTime ?? null,
@@ -730,6 +746,7 @@ export function PoseRead() {
             cant: gear?.bow?.cant ?? null,
             checks: shot?.checks.map((ch) => `${ch.ok ? "ok" : ch.warn ? "attenzione" : "no"}: ${ch.text}`) ?? [],
             spread: analysis.spread,
+            pro: proData ? { total: proData.total, areas: proData.areas, issues: proData.issues, m: proData.m, setup: proData.setup } : undefined,
           },
           thumb,
         },
@@ -860,6 +877,35 @@ export function PoseRead() {
           )}
 
           <Readout m={now} gear={gear} distance={distance} />
+
+          <div className="flex items-center justify-between gap-2 rounded-2xl bg-white/[0.04] px-3 py-2">
+            <span className="text-sm font-semibold">Analisi pro <span className="text-xs font-normal text-muted">testa, polsi, postura, allungo</span></span>
+            <button
+              type="button"
+              aria-pressed={pro}
+              onClick={() => {
+                const next = !pro;
+                setProState(next);
+                proRef.current = next;
+                try { localStorage.setItem("aa-pose-pro", next ? "1" : "0"); } catch { /* niente */ }
+                paintOverlay(lastLm.current);
+              }}
+              className={`relative h-7 w-12 rounded-full transition ${pro ? "bg-primary" : "bg-white/15"}`}
+            >
+              <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all ${pro ? "left-6" : "left-1"}`} />
+            </button>
+          </div>
+          {pro ? (
+            <ProPanel
+              lm={lastLm.current}
+              samples={samples}
+              shot={kind === "video" ? shot : null}
+              hand={hand}
+              aspect={size.w / size.h}
+              saveState={saveState}
+              onSave={(p) => void storeAnalysis(p)}
+            />
+          ) : null}
 
           {now ? (
             <div className="grid gap-2 rounded-xl border border-line bg-elev p-3">
