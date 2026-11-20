@@ -54,9 +54,7 @@ function Login() {
   const [email, setEmail] = useState(utente);
   const [password, setPassword] = useState("");
   const [error, setError] = useState(
-    oauthError
-      ? "Google non ha completato l'accesso (il collegamento Google del sito va sistemato). Intanto entra o registrati con utente e password: dal Profilo puoi caricare i dati della vecchia app."
-      : "",
+    oauthError ? googleErrorText(oauthError) : "",
   );
   const [busy, setBusy] = useState(false);
 
@@ -140,4 +138,15 @@ function Login() {
       </div>
     </main>
   );
+}
+
+/** Spiega il codice d'errore che torna da Google o dal server di accesso. */
+function googleErrorText(code: string) {
+  const c = code.toLowerCase();
+  const tail = ` (codice: ${code}). Intanto entra con utente e password.`;
+  if (c.includes("account_not_linked")) return `Esiste già un account con la stessa email: entra con utente e password e collega Google dal Profilo${tail}`;
+  if (c.includes("state") || c.includes("please_restart")) return `L'accesso è scaduto o è partito da un altro indirizzo del sito: riprova da arcieri-amiconi.vercel.app${tail}`;
+  if (c.includes("access_denied")) return `Hai annullato la scelta dell'account Google${tail}`;
+  if (c.includes("invalid_code") || c.includes("invalid_client") || c.includes("unable_to_get")) return `Google ha rifiutato le chiavi del sito: controlla che GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET su Vercel siano dello stesso client e che dopo la modifica ci sia stata una nuova pubblicazione${tail}`;
+  return `Google non ha completato l'accesso${tail}`;
 }
