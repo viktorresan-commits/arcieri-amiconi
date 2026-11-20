@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ringPoint, scoreAtRadius, type Face } from "@/lib/arcieri/scoring";
 import { Card } from "@/components/kit";
 import { PoseRead } from "@/components/pose-read";
-import { Target3D } from "@/components/target-3d";
+import { Target3D, lookOf } from "@/components/target-3d";
 import { TargetRead } from "@/components/target-read";
 
 type Point = { nx: number | null; ny: number | null; score: number; isX?: boolean; miss?: boolean; arrow: number; end: number };
@@ -14,7 +14,10 @@ export function ShotLab({
   expected,
   volleyLabel,
   onPhotoBatch,
+  arrowSpecs,
 }: {
+  /** scheda delle frecce dell'utente: colori di asta, penne e cocca nella vista 3D */
+  arrowSpecs?: string;
   volleyLabel?: string;
   onPhotoBatch?: (volleys: { nx: number; ny: number; score: number; isX: boolean; miss: boolean }[][]) => void;
   face: Face;
@@ -30,6 +33,7 @@ export function ShotLab({
     })
     .filter((shot): shot is Point & { x: number; y: number } => Boolean(shot));
   const [view, setView] = useState<"mappa" | "tre" | "corpo">("mappa");
+  const look = useMemo(() => lookOf(arrowSpecs), [arrowSpecs]);
   const stats = useMemo(() => groupStats(placed), [placed]);
 
   return (
@@ -42,7 +46,7 @@ export function ShotLab({
       {view === "corpo" ? <PoseRead /> : null}
       {view !== "corpo" && placed.length < 2 ? <p className="text-sm text-muted">Servono almeno due frecce sul bersaglio.</p> : null}
       {view === "mappa" ? <Heat face={face} shots={placed} /> : null}
-      {view === "tre" ? <Target3D face={face} shots={placed} /> : null}
+      {view === "tre" ? <Target3D face={face} shots={placed} look={look} /> : null}
       {view === "corpo" ? null : (
       <>
       <div className="grid grid-cols-3 gap-2 text-sm">

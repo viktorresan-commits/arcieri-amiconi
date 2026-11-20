@@ -123,7 +123,7 @@ body::before {
     radial-gradient(ellipse 70% 55% at 12% 8%, color-mix(in srgb, var(--glow) 42%, transparent) 0%, color-mix(in srgb, var(--glow) 22%, transparent) 18%, color-mix(in srgb, var(--glow) 10%, transparent) 36%, color-mix(in srgb, var(--glow) 4%, transparent) 54%, transparent 72%),
     radial-gradient(ellipse 50% 40% at 92% 0%, color-mix(in srgb, var(--glow) 16%, transparent) 0%, transparent 60%);
   filter: blur(40px);
-  animation: aa-drift 10s ease-in-out infinite alternate;
+  /* fermo: un alone che si muove dietro alle pagine dava fastidio */
 }
 
 .aa-app {
@@ -169,7 +169,7 @@ aside.aa-side button {
   border-radius: 50%;
   background: radial-gradient(circle, color-mix(in srgb, var(--glow) 40%, transparent) 0%, color-mix(in srgb, var(--glow) 18%, transparent) 24%, color-mix(in srgb, var(--glow) 7%, transparent) 46%, transparent 72%);
   filter: blur(28px);
-  animation: aa-card-glow 10s ease-in-out infinite alternate;
+  /* fermo: niente movimento dietro al testo */
 }
 
 .aa-glow-panel > *:not(.absolute) {
@@ -791,7 +791,7 @@ html[data-motion="ridotta"]::view-transition-old(root), html[data-motion="ridott
     radial-gradient(35% 45% at 30% 40%, color-mix(in srgb, var(--accent) 30%, transparent), transparent 70%),
     radial-gradient(30% 40% at 70% 60%, color-mix(in srgb, var(--primary) 34%, transparent), transparent 70%);
   filter: blur(18px);
-  animation: aa-aurora 14s ease-in-out infinite alternate;
+  transform: translate3d(-3%, -2%, 0);
 }
 @keyframes aa-aurora {
   0% { transform: translate3d(-6%, -4%, 0) rotate(0deg); }
@@ -900,9 +900,7 @@ html[data-icons="sobrie"] .aa-appicon .aa-line { display: block !important; }
   height: 130%;
   filter: blur(9px) saturate(1.15);
   opacity: 0.5;
-  transform: translate3d(0, calc(var(--sy, 0) * -0.07px), 0) scale(calc(1 + var(--sy, 0) * 0.00005));
-  transform-origin: 50% 30%;
-  will-change: transform;
+  /* fermo: lo sfondo non segue lo scorrimento (dava fastidio) */
   animation: aa-scene-in 0.9s ease both;
 }
 @keyframes aa-scene-in { from { opacity: 0; } to { opacity: 0.5; } }
@@ -999,3 +997,13 @@ html[data-scenes="no"] .aa-scene { display: none; }
 @keyframes aa-radar { from { transform: scale(0); opacity: 0; } to { transform: none; opacity: 1; } }
 .aa-gauge-dot { animation: aa-pop-in 0.5s cubic-bezier(0.22, 1.4, 0.36, 1) both; }
 @media (prefers-reduced-motion: reduce) { .aa-confetti, .aa-step::after, .aa-spot, .aa-crown, .aa-prize, .aa-prize-on::after, .aa-radar { animation: none !important; } }
+
+/* ── Balistica: impatto e tutto schermo ───────────────────────────── */
+.aa-impact { transform-box: fill-box; transform-origin: center; animation: aa-impact 0.7s ease-out both; }
+@keyframes aa-impact { from { opacity: 1; transform: scale(0.3); } to { opacity: 0; transform: scale(2.4); } }
+.aa-full { animation: aa-fade 0.25s ease both; }
+@keyframes aa-fade { from { opacity: 0; } to { opacity: 1; } }
+.aa-full-body svg { max-height: calc(100dvh - 130px); width: auto; max-width: 100%; margin: 0 auto; display: block; }
+.aa-full-body > div > svg { max-height: calc(100dvh - 210px); }
+.aa-ff-arrow { transform-box: fill-box; transform-origin: center; animation: aa-ff-in 0.55s cubic-bezier(0.2, 0.8, 0.25, 1) both; }
+@keyframes aa-ff-in { 0% { opacity: 0; transform: scale(5); } 70% { opacity: 1; transform: scale(0.9); } 100% { transform: none; } }

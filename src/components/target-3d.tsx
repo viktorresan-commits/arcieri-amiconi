@@ -8,6 +8,20 @@ import type { Face } from "@/lib/arcieri/scoring";
  */
 
 type Shot = { x: number; y: number; end?: number; score?: number; miss?: boolean; color?: string };
+/** Aspetto delle frecce dell'utente (dalla scheda dell'attrezzatura). */
+export type ArrowLook = { shaft?: string; fletch?: string; cock?: string; nock?: string };
+const DEFAULT_LOOK: Required<ArrowLook> = { shaft: "#1d1f22", fletch: "#d63a2f", cock: "#e6b325", nock: "#f4f1ea" };
+const SHAFT_BY_MATERIAL: Record<string, string> = { legno: "#c99a5e", carbonio: "#1d1f22", alluminio: "#9aa7b2", "carbo-alluminio": "#5b6670", bambu: "#c9b46a" };
+/** Dalla scheda JSON della freccia ai colori da disegnare. */
+export function lookOf(specs: string | null | undefined): ArrowLook | undefined {
+  if (!specs) return undefined;
+  try {
+    const sp = JSON.parse(specs) as Record<string, string>;
+    return { shaft: sp.shaft || SHAFT_BY_MATERIAL[sp.material ?? ""] || undefined, fletch: sp.fletch || undefined, cock: sp.cock || undefined, nock: sp.nock || undefined };
+  } catch {
+    return undefined;
+  }
+}
 /** Immagine da mettere sulla faccia (sagoma 3D): mezza larghezza e mezza altezza in unità faccia. */
 export type Picture = { img: HTMLImageElement; halfW: number; halfH: number };
 type V3 = [number, number, number];
@@ -23,11 +37,10 @@ const PRESETS: { id: string; label: string; cam: Cam }[] = [
 
 const GROUND = -1.86;
 const CENTER: V3 = [0, -0.1, 0.35];
-const VANES = ["#e07a2f", "#f4f1ea", "#3d9b74", "#e6b325", "#c084fc", "#7ec8e3"];
 const FLY = 0.62;
 const ARROW = 1.3;
 
-export function Target3D({ face, shots, picture }: { face: Face; shots: Shot[]; picture?: Picture | null }) {
+export function Target3D({ face, shots, picture, look }: { face: Face; shots: Shot[]; picture?: Picture | null; look?: ArrowLook }) {
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const cam = useRef<Cam>({ ...HOME });
@@ -46,7 +59,7 @@ export function Target3D({ face, shots, picture }: { face: Face; shots: Shot[]; 
 
   const ends = useMemo(() => [...new Set(shots.map((s) => s.end ?? 0))].sort((a, b) => a - b), [shots]);
   const shown = useMemo(() => (end === "tutte" ? shots : shots.filter((s) => (s.end ?? 0) === end)), [shots, end]);
-  const arrows = useMemo(() => shown.map((shot, index) => arrowOf(shot, index)), [shown]);
+  const arrows = useMemo(() => shown.map((shot, index) => arrowOf(shot, index, look)), [shown, look]);
   const sceneRef = useRef({ face, arrows, picture });
   sceneRef.current = { face, arrows, picture };
   useEffect(() => {
@@ -258,9 +271,11 @@ export function Target3D({ face, shots, picture }: { face: Face; shots: Shot[]; 
 
 /* ---------- scena ---------- */
 
-type Arrow = { hit: V3; dir: V3; color: string; roll: number; start: V3; arc: number; index: number };
+type Arrow = { hit: V3; dir: V3; color: string; hen: string; shaft: string; nockColor: string; roll: number; start: V3; arc: number; index: number };
 
-function arrowOf(shot: Shot, index: number): Arrow {
+/** Le frecce hanno i colori dell'attrezzatura dell'utente; un colore per persona solo nella vista di squadra. */
+function arrowOf(shot: Shot, index: number, look?: ArrowLook): Arrow {
+  const L = { ...DEFAULT_LOOK, ...Object.fromEntries(Object.entries(look ?? {}).filter(([, v]) => v)) } as Required<ArrowLook>;
   const r1 = hash(index * 7 + 1);
   const r2 = hash(index * 13 + 5);
   const r3 = hash(index * 3 + 11);
@@ -269,7 +284,10 @@ function arrowOf(shot: Shot, index: number): Arrow {
   return {
     hit: [shot.x, -shot.y, 0],
     dir,
-    color: shot.color ?? VANES[index % VANES.length],
+    color: shot.color ?? L.cock,
+    hen: shot.color ? "#f4f1ea" : L.fletch,
+    shaft: L.shaft,
+    nockColor: shot.color ?? L.nock,
     roll: r3 * Math.PI * 2,
     start: [shot.x * 0.15 + (r1 - 0.5) * 0.6, 0.5 + r2 * 0.4, 26],
     arc: 1.1 + r3 * 0.5,
@@ -534,13 +552,13 @@ function draw(el: HTMLCanvasElement | null, face: Face, arrows: Arrow[], c: Cam,
       const q = lerp3(tip, nockW, (k + 1) / 5);
       const mid = lerp3(p, q, 0.5);
       prims.push({ depth: depthOf(mid), paint: (g) => {
-        line(g, view(p), view(q), "#1d1f22", 0.016, F, NEAR, w, h);
+        line(g, view(p), view(q), arrow.shaft, 0.016, F, NEAR, w, h);
         line(g, view(p), view(q), "rgba(255,255,255,0.18)", 0.005, F, NEAR, w, h);
       } });
     }
     // cocca
     const nockEnd = add(nockW, scale(dir, 0.05));
-    prims.push({ depth: depthOf(nockEnd), paint: (g) => line(g, view(nockW), view(nockEnd), arrow.color, 0.02, F, NEAR, w, h) });
+    prims.push({ depth: depthOf(nockEnd), paint: (g) => line(g, view(nockW), view(nockEnd), arrow.nockColor, 0.02, F, NEAR, w, h) });
     // tre alette
     const shaftDir = norm(sub(nockW, tip));
     const a1 = norm(cross(shaftDir, [0, 1, 0]));
@@ -551,7 +569,7 @@ function draw(el: HTMLCanvasElement | null, face: Face, arrows: Arrow[], c: Cam,
       const b0 = add(tip, scale(shaftDir, ARROW - 0.34));
       const b1 = add(tip, scale(shaftDir, ARROW - 0.06));
       const pts: V3[] = [b0, b1, add(b1, scale(out, 0.075)), add(add(b0, scale(shaftDir, 0.12)), scale(out, 0.075))];
-      const color = v === 0 ? arrow.color : "#f4f1ea";
+      const color = v === 0 ? arrow.color : arrow.hen;
       prims.push({ depth: depthOf(avg3(pts)), paint: () => fillPoly(poly(pts), color, "rgba(20,24,28,0.5)", 1) });
     }
   }

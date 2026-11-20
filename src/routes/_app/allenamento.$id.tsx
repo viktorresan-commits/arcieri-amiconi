@@ -1,6 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { StatusMark } from "@/components/icons";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { tagsOf } from "@/lib/arcieri/arrow-tags";
+import { Glyph } from "@/components/icons";
 import { deleteSession, getSession, saveSession } from "@/lib/arcieri/training.api";
 import { faceById, fmtAvg, summarize, aimAngleLabel, aimTargetLabel, sagomaMaxOf, keypad, ringPoint, scoreAtRadius, type AimAngle, type AimTarget, type Face } from "@/lib/arcieri/scoring";
 import { fmtClock, fmtWhen } from "@/lib/arcieri/time";
@@ -52,6 +54,8 @@ function Page() {
         <Volleys
           session={data.session}
           initial={data.shots}
+          tags={tagsOf(data.arrowSpecs ?? "")}
+          arrowSpecs={data.arrowSpecs ?? ""}
           face={face}
           sagoma={data.session.face.startsWith("sagoma")}
           onSaved={() => setNonce((n) => n + 1)}
@@ -98,12 +102,16 @@ type Shot = Omit<Awaited<ReturnType<typeof getSession>>["shots"][number], "tag">
 function Volleys({
   session,
   initial,
+  tags,
+  arrowSpecs,
   face,
   sagoma,
   onSaved,
 }: {
   session: Session;
   initial: Shot[];
+  tags: number[];
+  arrowSpecs: string;
   face: Face;
   sagoma: boolean;
   onSaved: () => void;
@@ -122,54 +130,96 @@ function Volleys({
     groups.set(key, [...(groups.get(key) ?? []), shot]);
   }
 
+  // i salvataggi vanno in coda: se tocchi o sposti più frecce di fila nessuna modifica si perde
+  const saving = useRef(false);
+  const queued = useRef<{ next: Shot[]; plan?: { endsPlanned: number; blocksPlanned: number } } | null>(null);
+  const planRef = useRef({ endsPlanned: session.endsPlanned, blocksPlanned: session.blocksPlanned });
+  const [pick, setPick] = useState<number | null>(null);
+
+  async function save(next: Shot[], plan?: { endsPlanned: number; blocksPlanned: number }) {
+    if (plan) planRef.current = plan;
+    await saveSession({
+      data: {
+        clientKey: session.clientKey,
+        startedAt: session.startedAt,
+        endedAt: session.endedAt,
+        place: session.place,
+        distanceM: session.distanceM,
+        discipline: session.discipline,
+        bowType: session.bowType,
+        bowCustom: session.bowCustom,
+        face: session.face,
+        setupId: session.setupId,
+        arrowsPerEnd: session.arrowsPerEnd,
+        endsPlanned: planRef.current.endsPlanned,
+        blocksPlanned: planRef.current.blocksPlanned,
+        weather: session.weather,
+        feeling: session.feeling,
+        rating: session.rating,
+        notes: session.notes,
+        durationMs: session.durationMs,
+        timerLimitMs: session.timerLimitMs,
+        endLimitMs: session.endLimitMs,
+        gearSnapshot: session.gearSnapshot,
+        stringNote: session.stringNote,
+        program: session.program,
+        body: session.body,
+        dispersion: session.dispersion,
+        errors: session.errors,
+        targetPhoto: session.targetPhoto,
+        aimTarget: session.aimTarget || "padiglione",
+        aimAngle: session.aimAngle || "frontale",
+        shots: next,
+      },
+    });
+  }
+
   async function commit(next: Shot[], plan?: { endsPlanned: number; blocksPlanned: number }) {
-    if (busy) return;
-    const previous = shots;
     setShots(next);
+    if (saving.current) {
+      queued.current = { next, plan: plan ?? queued.current?.plan };
+      return;
+    }
+    saving.current = true;
     setBusy(true);
     setErr("");
     try {
-      await saveSession({
-        data: {
-          clientKey: session.clientKey,
-          startedAt: session.startedAt,
-          endedAt: session.endedAt,
-          place: session.place,
-          distanceM: session.distanceM,
-          discipline: session.discipline,
-          bowType: session.bowType,
-          bowCustom: session.bowCustom,
-          face: session.face,
-          setupId: session.setupId,
-          arrowsPerEnd: session.arrowsPerEnd,
-          endsPlanned: plan?.endsPlanned ?? session.endsPlanned,
-          blocksPlanned: plan?.blocksPlanned ?? session.blocksPlanned,
-          weather: session.weather,
-          feeling: session.feeling,
-          rating: session.rating,
-          notes: session.notes,
-          durationMs: session.durationMs,
-          timerLimitMs: session.timerLimitMs,
-          endLimitMs: session.endLimitMs,
-          gearSnapshot: session.gearSnapshot,
-          stringNote: session.stringNote,
-          program: session.program,
-          body: session.body,
-          dispersion: session.dispersion,
-          errors: session.errors,
-          targetPhoto: session.targetPhoto,
-          aimTarget: session.aimTarget || "padiglione",
-          aimAngle: session.aimAngle || "frontale",
-          shots: next,
-        },
-      });
+      await save(next, plan);
+      while (queued.current) {
+        const q = queued.current;
+        queued.current = null;
+        await save(q.next, q.plan);
+      }
       onSaved();
-      setBusy(false);
     } catch (e) {
-      setShots(previous);
-      setErr(e instanceof Error ? e.message : "Volée non salvata.");
+      setErr(e instanceof Error ? e.message : "Volée non salvata: riprova.");
+    } finally {
+      saving.current = false;
       setBusy(false);
     }
+  }
+
+  /** Tocco su un punto vuoto del bersaglio: nuova freccia nella prima volée con posto libero. */
+  function addAt(nx: number, ny: number) {
+    const open0 = open ? open.split("-").map(Number) : null;
+    let slot = open0 ? (() => {
+      const [block, end] = open0;
+      const used = new Set(shots.filter((x) => x.block === block && x.end === end).map((x) => x.arrow));
+      if (used.size >= session.arrowsPerEnd) return null;
+      let arrow = 0;
+      while (used.has(arrow)) arrow += 1;
+      return { block, end, arrow };
+    })() : null;
+    let plan: { endsPlanned: number; blocksPlanned: number } | undefined;
+    if (!slot) slot = freeSlots(shots, { ...session, ...planRef.current })[0] ?? null;
+    if (!slot) {
+      plan = { endsPlanned: planRef.current.endsPlanned + 1, blocksPlanned: planRef.current.blocksPlanned };
+      slot = freeSlots(shots, { ...session, ...plan })[0] ?? null;
+    }
+    if (!slot) return;
+    const hit = scoreAtRadius(face, Math.hypot(nx, ny));
+    if (navigator.vibrate) navigator.vibrate(10);
+    void commit([...shots, { ...slot, score: hit.miss ? 0 : hit.score, isX: hit.isX, miss: hit.miss, nx, ny }], plan);
   }
 
   function paint(index: number, score: number, isX: boolean, miss: boolean, nx: number, ny: number, done: boolean) {
@@ -233,7 +283,7 @@ function Volleys({
 
   return (
     <>
-      <p className="text-sm text-muted">Tieni un punto e spostalo. Il punteggio segue la zona.</p>
+      <p className="text-sm text-muted">Tocca il bersaglio per aggiungere una freccia, tocca una freccia per darle il numero o toglierla, tienila e trascinala per spostarla.</p>
       {sagoma ? (
         <BoarTarget
           max={sagomaMaxOf(session.face)}
@@ -241,8 +291,38 @@ function Volleys({
           onMove={(index, score, miss, nx, ny, done) => paint(index, score, false, miss, nx, ny, done)}
         />
       ) : (
-        <TargetFace face={face} shots={shots} onMove={relocate} color="#e07a2f" numbers />
+        <TargetFace face={face} shots={shots} onMove={relocate} onHit={addAt} onPick={(i) => setPick(i)} picked={pick} color="#e07a2f" numbers />
       )}
+      {pick != null && shots[pick] ? (
+        <Card className="aa-rise grid gap-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm font-semibold">
+              Volée {shots[pick].end + 1} · freccia {shots[pick].arrow + 1} · {shots[pick].miss ? "M" : shots[pick].isX ? "X" : shots[pick].score}
+              {shots[pick].tag != null ? ` · n.${shots[pick].tag}` : ""}
+            </p>
+            <button type="button" aria-label="Chiudi" className="grid h-9 w-9 place-items-center rounded-full bg-white/5" onClick={() => setPick(null)}><Glyph name="close" size={16} /></button>
+          </div>
+          <p className="text-xs text-muted">Quale freccia della tua attrezzatura era?</p>
+          <div className="grid grid-cols-6 gap-1.5">
+            {tags.map((n) => (
+              <button
+                key={n}
+                type="button"
+                aria-pressed={shots[pick].tag === n}
+                onClick={() => {
+                  const next = shots.map((x, i) => (i === pick ? { ...x, tag: x.tag === n ? null : n } : x));
+                  setPick(null);
+                  void commit(next);
+                }}
+                className={`min-h-11 rounded-xl font-display text-lg tabular-nums transition ${shots[pick].tag === n ? "bg-accent text-accent-fg" : "bg-white/[0.07]"}`}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+          <button type="button" className="justify-self-start rounded-xl border border-line px-3 py-2 text-sm" onClick={() => { const shot = shots[pick]; setPick(null); dropArrow(shot); }}>Togli questa freccia</button>
+        </Card>
+      ) : null}
       {shots.length > session.arrowsPerEnd * session.endsPlanned * session.blocksPlanned ? (
         <div className="grid gap-2 rounded-xl border border-danger/40 bg-danger/10 p-3 text-sm">
           <p><StatusMark state="warn" />Ci sono {shots.length} frecce ma il piano ne prevede {session.arrowsPerEnd * session.endsPlanned * session.blocksPlanned} ({session.arrowsPerEnd} × {session.endsPlanned} volée × {session.blocksPlanned} bersagli).</p>
@@ -251,6 +331,7 @@ function Volleys({
       ) : null}
       {sagoma ? <Card><SagomaLab animal="cinghiale" shots={shots} /></Card> : null}
       {sagoma ? null : <ShotLab
+        arrowSpecs={arrowSpecs}
         face={face}
         shots={shots}
         volleyLabel={(() => { const first = freeSlots(shots, session)[0]; return `volée ${first ? first.block * session.endsPlanned + first.end + 1 : session.endsPlanned * session.blocksPlanned + 1}`; })()}

@@ -15,12 +15,13 @@ export type IconName =
   | "eye" | "save" | "share" | "close" | "chevron" | "broom" | "medal" | "crosshair" | "mountain" | "home" | "grid"
   | "sight" | "checklist" | "stopwatch" | "foc" | "wrench" | "hold"
   | "steps" | "lungs" | "scorecard" | "spine" | "windsock" | "energy" | "span" | "bareshaft" | "caliper" | "ruler"
-  | "daily" | "quiz" | "binoculars" | "book" | "rules" | "lock";
+  | "daily" | "quiz" | "binoculars" | "book" | "rules" | "lock" | "expand";
 
 const A = 0.32; // opacità del secondo tono
 
 // ogni icona: tratti (stroke) e riempimenti tenui (fill, secondo tono)
 const ICONS: Partial<Record<IconName, ReactNode>> = {
+  expand: (<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />),
   lock: (<><rect x="5" y="11" width="14" height="10" rx="2" fill="currentColor" fillOpacity={A} /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></>),
   steps: (<><path d="M5 6h4M5 12h4M5 18h4" /><path d="M12 6h7M12 12h7M12 18h5" /><circle cx="3" cy="6" r="0.6" /></>),
   lungs: (<><path d="M12 4v8M12 12l-3 2M12 12l3 2" /><path d="M9 7C5 8 4 13 4 17c0 2 2 3 4 2l2-1V9zM15 7c4 1 5 6 5 10 0 2-2 3-4 2l-2-1V9z" fill="currentColor" fillOpacity={A} /></>),

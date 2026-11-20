@@ -138,6 +138,7 @@ export function PoseRead() {
   const [range, setRange] = useState<{ from: number; to: number } | null>(null);
   /** analisi pro: più punti (testa, mani), polsi, postura, allungo e consigli */
   const [pro, setProState] = useState(true);
+  const [live, setLive] = useState(false);
   const proRef = useRef(pro);
   proRef.current = pro;
   const span = () => ({ from: range?.from ?? 0, to: range?.to ?? duration });
@@ -778,7 +779,12 @@ export function PoseRead() {
         ))}
         <span>{quality === "heavy" ? "più lento, il più preciso" : quality === "lite" ? "per telefoni lenti" : "consigliato"}</span>
       </div>
-      <div className="grid gap-2">
+      <div className="grid grid-cols-2 gap-1 rounded-2xl bg-white/[0.05] p-1">
+        <button type="button" onClick={() => setLive(false)} className={`min-h-11 rounded-xl text-sm font-semibold transition ${!live ? "bg-primary text-primary-fg" : "text-muted"}`}>Video o foto</button>
+        <button type="button" onClick={() => { setLive(true); resetMedia(); setKind("none"); }} className={`flex min-h-11 items-center justify-center gap-1.5 rounded-xl text-sm font-semibold transition ${live ? "bg-primary text-primary-fg" : "text-muted"}`}><span className="h-2 w-2 rounded-full bg-red-500" />Dal vivo</button>
+      </div>
+      {live ? <LivePose hand={hand} quality={quality} onRecorded={(file) => { setLive(false); void onVideo(file); }} /> : null}
+      <div className={`grid gap-2 ${live ? "hidden" : ""}`}>
         <p className="text-xs font-semibold uppercase tracking-wide text-muted">Video del gesto</p>
         <MediaPick kind="video" onFile={(file) => void onVideo(file)} />
         <p className="text-xs font-semibold uppercase tracking-wide text-muted">Oppure una foto</p>
@@ -1602,4 +1608,254 @@ function seekTo(video: HTMLVideoElement, t: number) {
     window.setTimeout(finish, 1500);
     video.currentTime = t;
   });
+}
+
+/**
+ * Scansione dal vivo con la fotocamera: scheletro e punti pro sopra all'immagine mentre tiri,
+ * angoli principali in tempo reale e "Registra" per fare una ripresa. A ripresa finita il video
+ * passa all'analisi completa (fasi, tempi, analisi pro) e resta sul telefono.
+ */
+function LivePose({ hand, quality, onRecorded }: { hand: Hand; quality: Quality; onRecorded: (file: File) => void }) {
+  const video = useRef<HTMLVideoElement>(null);
+  const over = useRef<HTMLCanvasElement>(null);
+  const holder = useRef<HTMLDivElement>(null);
+  const work = useRef<HTMLCanvasElement | null>(null);
+  const stream = useRef<MediaStream | null>(null);
+  const rec = useRef<{ r: MediaRecorder; chunks: Blob[]; type: string } | null>(null);
+  const lmRef = useRef<Landmark[] | null>(null);
+  const [facing, setFacing] = useState<"environment" | "user">("environment");
+  const [on, setOn] = useState(false);
+  const [err, setErr] = useState("");
+  const [lm, setLm] = useState<Landmark[] | null>(null);
+  const [m, setM] = useState<Metrics | null>(null);
+  const [recording, setRecording] = useState(false);
+  const [secs, setSecs] = useState(0);
+  const [ratio, setRatio] = useState(9 / 16);
+  const [saveState, setSaveState] = useState("");
+
+  async function start(face = facing) {
+    setErr("");
+    try {
+      stop();
+      const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: face, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+      stream.current = s;
+      const v = video.current;
+      if (!v) return;
+      v.srcObject = s;
+      await v.play();
+      setRatio((v.videoWidth || 9) / (v.videoHeight || 16));
+      setOn(true);
+      await engine(quality);
+    } catch (e) {
+      setErr(e instanceof Error && /Permission|NotAllowed/i.test(e.name + e.message) ? "Serve il permesso della fotocamera: consentilo nelle impostazioni del browser." : "Non riesco ad aprire la fotocamera.");
+    }
+  }
+
+  function stop() {
+    stream.current?.getTracks().forEach((t) => t.stop());
+    stream.current = null;
+    setOn(false);
+  }
+
+  useEffect(() => () => {
+    if (rec.current?.r.state === "recording") rec.current.r.stop();
+    stream.current?.getTracks().forEach((t) => t.stop());
+  }, []);
+
+  // rilevamento continuo (~15 al secondo) e disegno sopra al video
+  useEffect(() => {
+    if (!on) return;
+    let raf = 0;
+    let busy = false;
+    let last = 0;
+    let live = true;
+    const tick = async (now: number) => {
+      if (!live) return;
+      raf = requestAnimationFrame((t) => void tick(t));
+      const v = video.current;
+      if (!v || busy || v.readyState < 2 || now - last < 66) return;
+      busy = true;
+      last = now;
+      try {
+        const marker = await engine(quality);
+        const W = v.videoWidth;
+        const H = v.videoHeight;
+        const k = Math.min(1, 640 / Math.max(W, H));
+        const c = work.current ?? (work.current = document.createElement("canvas"));
+        c.width = Math.round(W * k);
+        c.height = Math.round(H * k);
+        const ctx = c.getContext("2d");
+        if (!ctx) return;
+        ctx.drawImage(v, 0, 0, c.width, c.height);
+        const poses = marker.detect(c).landmarks ?? [];
+        const area = (p: Landmark[]) => {
+          const b = personBox(p, 0);
+          return b ? b.w * b.h : 0;
+        };
+        const best = [...poses].sort((a, b) => area(b) - area(a))[0] ?? null;
+        const next = best ? smoothLm(lmRef.current, best, 0.55) : null;
+        lmRef.current = next;
+        setLm(next);
+        setM(next ? metricsOf(next, hand, W / H, H) : null);
+        paint(next);
+      } catch {
+        /* fotogramma saltato */
+      } finally {
+        busy = false;
+      }
+    };
+    raf = requestAnimationFrame((t) => void tick(t));
+    return () => {
+      live = false;
+      cancelAnimationFrame(raf);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [on, quality, hand]);
+
+  function paint(points: Landmark[] | null) {
+    const c = over.current;
+    const h = holder.current;
+    if (!c || !h) return;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const w = Math.round(h.clientWidth * dpr);
+    const hh = Math.round(h.clientHeight * dpr);
+    if (c.width !== w || c.height !== hh) {
+      c.width = w;
+      c.height = hh;
+    }
+    const ctx = c.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, w, hh);
+    if (!points) return;
+    drawPose(ctx, w, hh, points, hand, null);
+    drawPro(ctx, w, hh, points, hand);
+  }
+
+  function record() {
+    const s = stream.current;
+    if (!s) return;
+    const types = ["video/mp4;codecs=avc1", "video/mp4", "video/webm;codecs=vp9", "video/webm"];
+    const type = types.find((t) => typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(t)) ?? "";
+    try {
+      const r = new MediaRecorder(s, type ? { mimeType: type, videoBitsPerSecond: 6_000_000 } : undefined);
+      const chunks: Blob[] = [];
+      r.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+      r.onstop = () => {
+        const mime = r.mimeType || type || "video/webm";
+        const blob = new Blob(chunks, { type: mime });
+        const ext = mime.includes("mp4") ? "mp4" : "webm";
+        setRecording(false);
+        if (blob.size > 0) onRecorded(new File([blob], `ripresa-tiro.${ext}`, { type: mime }));
+      };
+      r.start(500);
+      rec.current = { r, chunks, type };
+      setRecording(true);
+      setSecs(0);
+      if (navigator.vibrate) navigator.vibrate(20);
+    } catch {
+      setErr("Questo telefono non riesce a registrare dal browser: usa la fotocamera del telefono e carica il video.");
+    }
+  }
+
+  useEffect(() => {
+    if (!recording) return;
+    const t = window.setInterval(() => setSecs((x) => x + 1), 1000);
+    return () => window.clearInterval(t);
+  }, [recording]);
+
+  async function saveLive(p: ProSave) {
+    const v = video.current;
+    const points = lmRef.current;
+    if (!v || !points) return;
+    setSaveState("busy");
+    try {
+      const k = 480 / Math.max(v.videoWidth, v.videoHeight);
+      const c = document.createElement("canvas");
+      c.width = Math.round(v.videoWidth * k);
+      c.height = Math.round(v.videoHeight * k);
+      const ctx = c.getContext("2d");
+      if (!ctx) throw new Error("Fotogramma non riuscito.");
+      ctx.drawImage(v, 0, 0, c.width, c.height);
+      drawPose(ctx, c.width, c.height, points, hand, null);
+      drawPro(ctx, c.width, c.height, points, hand);
+      let thumb = c.toDataURL("image/jpeg", 0.72);
+      if (thumb.length > 150_000) thumb = c.toDataURL("image/jpeg", 0.5);
+      const mm = metricsOf(points, hand, v.videoWidth / v.videoHeight, v.videoHeight);
+      await saveGesture({
+        data: {
+          title: `Dal vivo · ${p.total}/100`,
+          kind: "foto",
+          hand,
+          score: p.total,
+          shots: 0,
+          anchorS: null,
+          drawS: null,
+          lineDeg: mm?.line ?? null,
+          bowDeg: mm?.bow ?? null,
+          shoulderDeg: mm?.shoulder ?? null,
+          jitter: null,
+          distanceM: null,
+          data: { pro: { total: p.total, areas: p.areas, issues: p.issues, m: p.m, setup: p.setup } },
+          thumb,
+        },
+      });
+      setSaveState("ok");
+    } catch (e) {
+      setSaveState(e instanceof Error ? e.message : "Salvataggio non riuscito.");
+    }
+  }
+
+  const mirror = facing === "user";
+  const ok = (good: boolean) => (good ? "text-emerald-300" : "text-amber-300");
+  return (
+    <div className="grid gap-3">
+      <div
+        ref={holder}
+        className="relative mx-auto w-full overflow-hidden rounded-2xl bg-black"
+        style={{ aspectRatio: `${ratio}`, maxHeight: "70vh", width: `min(100%, calc(70vh * ${ratio.toFixed(4)}))` }}
+      >
+        <video ref={video} playsInline muted className="absolute inset-0 h-full w-full object-cover" style={{ transform: mirror ? "scaleX(-1)" : undefined }} />
+        <canvas ref={over} className="pointer-events-none absolute inset-0 h-full w-full" style={{ transform: mirror ? "scaleX(-1)" : undefined }} />
+        {!on ? (
+          <div className="absolute inset-0 grid place-items-center p-6 text-center">
+            <div className="grid justify-items-center gap-3">
+              <Glyph name="camera" size={40} className="text-white/80" />
+              <p className="text-sm text-white/80">Appoggia il telefono di fronte all'arciere, a 3–5 metri, con tutto il corpo nell'inquadratura.</p>
+              <button type="button" onClick={() => void start()} className="min-h-12 rounded-2xl bg-primary px-6 font-semibold text-primary-fg">Apri la fotocamera</button>
+            </div>
+          </div>
+        ) : null}
+        {on && m ? (
+          <div className="absolute inset-x-2 bottom-2 grid grid-cols-3 gap-1 rounded-xl bg-black/60 p-1.5 text-center text-[0.7rem] text-white backdrop-blur">
+            <span>Braccio arco<b className={`block font-display text-lg ${ok(m.bow >= 165)}`}>{m.bow.toFixed(0)}°</b></span>
+            <span>Gomito in linea<b className={`block font-display text-lg ${ok(m.line >= 168)}`}>{m.line.toFixed(0)}°</b></span>
+            <span>Spalle<b className={`block font-display text-lg ${ok(Math.abs(m.shoulder) <= 4)}`}>{Math.abs(m.shoulder).toFixed(0)}°</b></span>
+          </div>
+        ) : null}
+        {on && !lm ? <p className="absolute inset-x-0 top-2 text-center text-xs text-white/80">Cerco l'arciere…</p> : null}
+        {recording ? (
+          <span className="absolute left-2 top-2 flex items-center gap-1.5 rounded-full bg-black/60 px-2.5 py-1 text-xs font-semibold text-white">
+            <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-red-500" />REC {Math.floor(secs / 60)}:{String(secs % 60).padStart(2, "0")}
+          </span>
+        ) : null}
+      </div>
+      {err ? <p className="text-sm text-danger">{err}</p> : null}
+      {on ? (
+        <div className="grid grid-cols-2 gap-2">
+          {recording ? (
+            <button type="button" onClick={() => rec.current?.r.stop()} className="col-span-2 flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-red-600 font-semibold text-white">
+              <span className="h-3.5 w-3.5 rounded-sm bg-white" /> Ferma e analizza la ripresa
+            </button>
+          ) : (
+            <button type="button" onClick={record} className="col-span-2 flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-red-600/90 font-semibold text-white">
+              <span className="h-3.5 w-3.5 rounded-full bg-white" /> Registra una ripresa
+            </button>
+          )}
+          <button type="button" disabled={recording} onClick={() => { const f = facing === "user" ? "environment" : "user"; setFacing(f); void start(f); }} className="min-h-11 rounded-xl border border-line text-sm font-semibold disabled:opacity-50">Gira fotocamera</button>
+          <button type="button" disabled={recording} onClick={stop} className="min-h-11 rounded-xl border border-line text-sm font-semibold disabled:opacity-50">Chiudi fotocamera</button>
+        </div>
+      ) : null}
+      {on ? <ProPanel lm={lm} samples={[]} shot={null} hand={hand} aspect={ratio} saveState={saveState} onSave={(p) => void saveLive(p)} /> : null}
+    </div>
+  );
 }

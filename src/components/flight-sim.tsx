@@ -1,5 +1,5 @@
 import { AppIcon, Glyph, IconLabel } from "./icons";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { angularSize, effectiveLb, goldOf, compensatedDistance, describeRound, eyePoint, launchSpeed, releasePoint, type Fletch, type FlightInput } from "@/lib/arcieri/flight";
 import { Button, Card, Chips, Field, Segmented, Select, TextInput } from "@/components/kit";
 import { listEquipment, saveEquipment } from "@/lib/arcieri/club.api";
@@ -104,6 +104,7 @@ export function FlightSim() {
   const [ready, setReady] = useState(false);
   const [pathMode, setPathMode] = useState<"reale" | "linea">("reale");
   const [trueScale, setTrueScale] = useState(false);
+  const [replay, setReplay] = useState(0);
   const [tab, setTab] = useState<"arco" | "freccia" | "tiro" | "meteo">("arco");
   const patch = (part: Partial<FlightInput>) => setForm((current) => ({ ...current, ...part }));
 
@@ -267,11 +268,14 @@ export function FlightSim() {
           <button type="button" onClick={() => setPathMode("reale")} className={`min-h-9 rounded-full px-3 text-xs ${pathMode === "reale" ? "bg-primary text-primary-fg" : "border border-line"}`}>Quota da terra</button>
           <button type="button" onClick={() => setPathMode("linea")} className={`min-h-9 rounded-full px-3 text-xs ${pathMode === "linea" ? "bg-primary text-primary-fg" : "border border-line"}`}>Sulla linea all'oro</button>
           <button type="button" onClick={() => setTrueScale((v) => !v)} className={`min-h-9 rounded-full px-3 text-xs ${trueScale ? "bg-accent text-accent-fg" : "border border-line"}`}>{trueScale ? "Proporzioni vere ✓" : "Proporzioni vere"}</button>
+          <button type="button" onClick={() => setReplay((r) => r + 1)} className="min-h-9 rounded-full bg-white/10 px-3 text-xs font-semibold"><Glyph name="play" size={12} className="mr-1 inline -translate-y-px" />Rivedi il tiro</button>
         </div>
       </div>
       <div className="flex items-stretch gap-2">
       <div className="min-w-0 flex-1">
-      <FlightPath trueScale={trueScale} onGold={(goldM) => patch({ goldM })} input={{ ...form, sighted: setup.sighted }} round={primary} sighted={setup.sighted} mode={pathMode} title={`${form.distanceM} m · faccia ${form.faceCm} cm${form.slopeDeg ? ` · pendenza ${form.slopeDeg > 0 ? "+" : ""}${form.slopeDeg}°` : ""} · gruppo ${primary.total}/${n * (form.zones === 5 ? 9 : 10)}`} />
+      <Expand title="Traiettoria" onReplay={() => setReplay((r) => r + 1)}>
+      <FlightPath replay={replay} trueScale={trueScale} onGold={(goldM) => patch({ goldM })} input={{ ...form, sighted: setup.sighted }} round={primary} sighted={setup.sighted} mode={pathMode} title={`${form.distanceM} m · faccia ${form.faceCm} cm${form.slopeDeg ? ` · pendenza ${form.slopeDeg > 0 ? "+" : ""}${form.slopeDeg}°` : ""} · gruppo ${primary.total}/${n * (form.zones === 5 ? 9 : 10)}`} />
+      </Expand>
       </div>
       <label className="flex w-12 shrink-0 flex-col items-center gap-1 text-center text-[10px] leading-tight text-muted">
         <span className="grid justify-items-center gap-0.5"><Glyph name="target" size={14} />oro</span>
@@ -290,7 +294,9 @@ export function FlightSim() {
         <button type="button" onClick={() => patch({ goldM: 1.3 })} className="rounded-full border border-line px-1.5 py-0.5">1,30</button>
       </label>
       </div>
-      <FaceFront input={{ ...form, sighted: setup.sighted }} round={primary} sighted={setup.sighted} />
+      <Expand title="Bersaglio" onReplay={() => setReplay((r) => r + 1)}>
+        <FaceFront key={`ff-${replay}`} input={{ ...form, sighted: setup.sighted }} round={primary} sighted={setup.sighted} />
+      </Expand>
       <div className="flex flex-wrap gap-2">
         {[3, 6, 12].map((count) => (
           <button key={count} type="button" onClick={() => setN(count)} className={`min-h-11 rounded-full px-3 text-sm ${n === count ? "bg-primary text-primary-fg" : "border border-line"}`}>{count} frecce</button>
@@ -408,10 +414,31 @@ type RoundView = ReturnType<typeof describeRound>;
 const RING_COLORS = ["#f4f1ea", "#1a1c1e", "#2a6294", "#c4473d", "#e6b325"];
 
 /** Traiettoria di fianco: tiratore, linea di mira, parabola, linea dell'oro e il paglione in fondo. */
-function FlightPath({ input, round, sighted, mode, title, onGold, trueScale = false }: { input: FlightInput; round: RoundView; sighted: boolean; mode: "reale" | "linea"; title: string; onGold?: (m: number) => void; trueScale?: boolean }) {
+function FlightPath({ input, round, sighted, mode, title, onGold, trueScale = false, replay = 0 }: { input: FlightInput; round: RoundView; sighted: boolean; mode: "reale" | "linea"; title: string; onGold?: (m: number) => void; trueScale?: boolean; replay?: number }) {
   const GOLD_HEIGHT = goldOf(input);
   const svgRef = useRef<SVGSVGElement>(null);
   const dragging = useRef(false);
+  // animazione del tiro: la freccia percorre la traiettoria (tempo di volo rallentato ~4×, tra 1,2 e 3 s)
+  const [k, setK] = useState(1);
+  const flightS = round.clean.t;
+  useEffect(() => {
+    const reduce = typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) {
+      setK(1);
+      return;
+    }
+    const dur = Math.min(3000, Math.max(1200, flightS * 4000));
+    let raf = 0;
+    const t0 = performance.now() + 250;
+    const step = (now: number) => {
+      const t = Math.max(0, Math.min(1, (now - t0) / dur));
+      setK(t);
+      if (t < 1) raf = requestAnimationFrame(step);
+    };
+    setK(0);
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [replay, input.distanceM, flightS, mode]);
   const W = 380;
   const H = 236;
   const pad = { l: 38, r: 30, t: 22, b: 30 };
@@ -540,8 +567,39 @@ function FlightPath({ input, round, sighted, mode, title, onGold, trueScale = fa
       <line x1={X(eye.x)} y1={Y(v(eye.x, eye.z))} x2={X(D)} y2={Y(v(D, aim.z))} stroke="#f4f1ea" strokeWidth="1" strokeDasharray="3 3" opacity="0.75" />
       {/* dispersione del gruppo */}
       {spread.map((path, i) => <path key={i} d={line(path)} fill="none" stroke="#e07a2f" strokeWidth="1" opacity="0.28" />)}
-      {/* traiettoria pulita */}
-      <path d={line(clean)} fill="none" stroke="#e6b325" strokeWidth="2.4" />
+      {/* traiettoria pulita: tratteggio di tutto il volo, scia luminosa fin dove è arrivata la freccia */}
+      <defs>
+        <linearGradient id={`fp-trail-${D}-${mode}`} x1="0" x2="1">
+          <stop offset="0" stopColor="#e6b325" stopOpacity="0.1" />
+          <stop offset="1" stopColor="#fff1b0" stopOpacity="1" />
+        </linearGradient>
+      </defs>
+      <path d={line(clean)} fill="none" stroke="#e6b325" strokeWidth="1.2" strokeDasharray="3 4" opacity="0.55" />
+      {(() => {
+        const n = Math.max(1, Math.round(k * (clean.length - 1)));
+        const done = clean.slice(0, n + 1);
+        const a = clean[Math.max(0, n - 1)];
+        const b = clean[n];
+        const ang = (Math.atan2(Y(v(b.x, b.z)) - Y(v(a.x, a.z)), X(b.x) - X(a.x)) * 180) / Math.PI;
+        return (
+          <>
+            <path d={line(done)} fill="none" stroke={`url(#fp-trail-${D}-${mode})`} strokeWidth="2.8" strokeLinecap="round" />
+            {k < 1 ? (
+              <g transform={`translate(${X(b.x)} ${Y(v(b.x, b.z))}) rotate(${ang})`}>
+                <line x1={-22} y1={0} x2={0} y2={0} stroke="#f4f1ea" strokeWidth="1.8" strokeLinecap="round" />
+                <path d="M0 0 l-5 -2.4 v4.8 z" fill="#c9d0d8" />
+                <path d="M-22 0 l4 -4 h4 l-3 4 z M-22 0 l4 4 h4 l-3 -4 z" fill="#d63a2f" />
+              </g>
+            ) : (
+              <g>
+                <circle cx={tx - 1} cy={Y(v(D, round.clean.z))} r="9" fill="none" stroke="#fff1b0" strokeWidth="1.5" className="aa-impact" />
+                <line x1={tx - 16} y1={Y(v(D, round.clean.z))} x2={tx} y2={Y(v(D, round.clean.z))} stroke="#f4f1ea" strokeWidth="1.8" />
+                <path d={`M${tx - 16} ${Y(v(D, round.clean.z))} l4 -4 h4 l-3 4 z M${tx - 16} ${Y(v(D, round.clean.z))} l4 4 h4 l-3 -4 z`} fill="#d63a2f" />
+              </g>
+            )}
+          </>
+        );
+      })()}
       <circle cx={X(peak.x)} cy={Y(v(peak.x, peak.z))} r="2.2" fill="#e6b325" />
       <text x={X(peak.x)} y={Math.max(pad.t + 8, Y(v(peak.x, peak.z)) - 6)} fill="#e6b325" fontSize="9" textAnchor="middle" opacity="0.95">culmine {fmtM(peak.z)} a {peak.x.toFixed(0)} m</text>
       {/* paglione in fondo: cavalletto, paglia, faccia */}
@@ -661,6 +719,17 @@ function FaceFront({ input, round, sighted, title }: { input: FlightInput; round
           {rings.map((ring, i) => (
             <circle key={i} cx={gx} cy={gy} r={ring.r * k} fill={ring.color} stroke={ring.color === "#1a1c1e" ? "rgba(244,241,234,0.5)" : "rgba(20,24,28,0.45)"} strokeWidth="0.5" />
           ))}
+          {/* anello della X e numeri delle zone sulla destra */}
+          <circle cx={gx} cy={gy} r={(R / zones / 2) * k} fill="none" stroke="rgba(20,24,28,0.6)" strokeWidth="0.5" />
+          {R * k > 40
+            ? rings.map((ring, i) => (
+                <text key={`n${i}`} x={gx + (ring.r - R / zones / 2) * k} y={gy + 2.5} fontSize={Math.max(5, Math.min(8, (R / zones) * k * 0.55))} textAnchor="middle" fill={ring.color === "#1a1c1e" || ring.color === "#2a6294" ? "#f4f1ea" : "#14181c"} opacity="0.75">
+                  {zones === 5 ? 5 + i : i + 1}
+                </text>
+              ))
+            : null}
+          {/* spessore della faccia e ombra sul paglione */}
+          <circle cx={gx + 2} cy={gy + 3} r={R * k} fill="none" stroke="rgba(0,0,0,0.25)" strokeWidth="2" />
           <circle cx={gx} cy={gy} r={R * k} fill="url(#ff-sheen)" />
           <path d={`M${gx - 3} ${gy} H${gx + 3} M${gx} ${gy - 3} V${gy + 3}`} stroke="#14181c" strokeWidth="0.7" />
           {/* occhio: a che quota guarda */}
@@ -695,7 +764,13 @@ function FaceFront({ input, round, sighted, title }: { input: FlightInput; round
             <g key={i} className="aa-hit cursor-pointer" style={{ animationDelay: `${150 + i * 110}ms` }} onClick={() => setPicked(picked === i ? null : i)}>
               <circle cx={X(hit.y)} cy={Y(hit.z)} r={dot * 3.2} fill="none" stroke="#f4f1ea" strokeWidth="0.8" className="aa-hit-ring" style={{ animationDelay: `${150 + i * 110}ms` }} />
               <circle cx={X(hit.y)} cy={Y(hit.z)} r={Math.max(dot, 5)} fill="transparent" />
-              <circle cx={X(hit.y)} cy={Y(hit.z)} r={dot} fill={picked === i ? "#7cf0a8" : "#14181c"} stroke="#f4f1ea" strokeWidth="0.9" />
+              {/* coda della freccia vista da dietro: cocca e tre penne, arriva "verso lo schermo" */}
+              <g className="aa-ff-arrow" style={{ animationDelay: `${150 + i * 110}ms` }}>
+                {[0, 120, 240].map((a) => (
+                  <path key={a} d={`M${X(hit.y)} ${Y(hit.z)} l${Math.cos(((a - 90) * Math.PI) / 180) * dot * 2.6} ${Math.sin(((a - 90) * Math.PI) / 180) * dot * 2.6}`} stroke={a === 0 ? "#e6b325" : "#d63a2f"} strokeWidth={Math.max(1.4, dot * 0.9)} strokeLinecap="round" />
+                ))}
+                <circle cx={X(hit.y)} cy={Y(hit.z)} r={dot} fill={picked === i ? "#7cf0a8" : "#14181c"} stroke="#f4f1ea" strokeWidth="0.9" />
+              </g>
               {round.hits.length <= 12 ? <text x={X(hit.y) + dot + 1.5} y={Y(hit.z) - dot} fontSize="6.5" fill="#f4f1ea" opacity="0.85">{i + 1}</text> : null}
             </g>
           ))}
@@ -1068,6 +1143,60 @@ function Compositions({ current, onApply }: { current: FlightSnapshot; onApply: 
           );
         })}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Riquadro che si apre a tutto schermo (anche in orizzontale, se il telefono lo consente),
+ * con il pulsante per rivedere l'animazione del tiro.
+ */
+function Expand({ title, children, onReplay }: { title: string; children: ReactNode; onReplay?: () => void }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const el = box.current;
+    const anyEl = el as (HTMLDivElement & { requestFullscreen?: () => Promise<void> }) | null;
+    anyEl?.requestFullscreen?.().catch(() => undefined);
+    const orientation = (screen as Screen & { orientation?: { lock?: (o: string) => Promise<void> } }).orientation;
+    orientation?.lock?.("landscape").catch(() => undefined);
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    const onFs = () => {
+      if (!document.fullscreenElement) setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    document.addEventListener("fullscreenchange", onFs);
+    onReplay?.();
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.removeEventListener("fullscreenchange", onFs);
+      if (document.fullscreenElement) document.exitFullscreen().catch(() => undefined);
+      (screen as Screen & { orientation?: { unlock?: () => void } }).orientation?.unlock?.();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+  return (
+    <div className="relative">
+      {children}
+      <button type="button" onClick={() => setOpen(true)} aria-label={`${title} a tutto schermo`} className="absolute right-1.5 top-1.5 grid h-8 w-8 place-items-center rounded-lg bg-black/55 text-white backdrop-blur">
+        <Glyph name="expand" size={15} />
+      </button>
+      {open ? (
+        <div ref={box} className="aa-full fixed inset-0 z-[90] flex flex-col bg-[#0b120e]">
+          <div className="flex items-center gap-2 px-3 pt-[max(env(safe-area-inset-top),10px)] pb-2">
+            <p className="font-display text-xl">{title}</p>
+            <div className="ml-auto flex gap-2">
+              {onReplay ? <button type="button" onClick={onReplay} className="min-h-10 rounded-full bg-primary px-4 text-sm font-semibold text-primary-fg"><Glyph name="play" size={13} className="mr-1 inline -translate-y-px" />Rivedi il tiro</button> : null}
+              <button type="button" onClick={() => setOpen(false)} className="min-h-10 rounded-full bg-white/10 px-4 text-sm">Chiudi</button>
+            </div>
+          </div>
+          <div className="grid min-h-0 flex-1 place-items-center overflow-auto p-2">
+            <div className="aa-full-body w-full">{children}</div>
+          </div>
+          <p className="pb-[max(env(safe-area-inset-bottom),8px)] text-center text-[0.7rem] text-white/50">Gira il telefono in orizzontale per vederlo più grande.</p>
+        </div>
+      ) : null}
     </div>
   );
 }

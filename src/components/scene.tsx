@@ -1,9 +1,9 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { SHORTCUTS } from "@/lib/arcieri/shortcuts";
 
 /**
  * Sfondo della categoria: una scena disegnata e molto sfocata dietro le pagine.
- * Non disturba la lettura (velo scuro sopra) e scorre appena con la pagina: un po' più lenta, e si avvicina leggermente.
+ * Non disturba la lettura (velo scuro sopra) e resta ferma mentre la pagina scorre.
  */
 export type SceneId = "home" | "prepara" | "allena" | "strumenti" | "analizza" | "gareggia" | "impara" | "squadra";
 
@@ -143,29 +143,8 @@ const ART: Record<SceneId, ReactNode> = {
 
 export function Scene({ path }: { path: string }) {
   const id = sceneOf(path);
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    let raf = 0;
-    const apply = () => {
-      raf = 0;
-      const y = window.scrollY;
-      // scorre a un decimo della pagina e si avvicina appena: profondità, senza distrarre
-      el.style.setProperty("--sy", String(Math.min(y, 4000)));
-    };
-    const onScroll = () => {
-      if (!raf) raf = requestAnimationFrame(apply);
-    };
-    apply();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => {
-      window.removeEventListener("scroll", onScroll);
-      if (raf) cancelAnimationFrame(raf);
-    };
-  }, []);
   return (
-    <div ref={ref} aria-hidden className="aa-scene">
+    <div aria-hidden className="aa-scene">
       <svg key={id} viewBox="0 0 400 900" preserveAspectRatio="xMidYMid slice">
         {ART[id]}
       </svg>

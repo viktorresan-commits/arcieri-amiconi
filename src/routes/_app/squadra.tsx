@@ -1,4 +1,5 @@
 import { Confetti, Sparkle } from "@/components/celebrate";
+import { removeTeamMember } from "@/lib/arcieri/account.api";
 import { RealIcon } from "@/components/real-icons";
 import { useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
@@ -14,7 +15,7 @@ import { faceById } from "@/lib/arcieri/scoring";
 
 const TEAM_FACE = faceById("wa10");
 import { GroupBestPosture } from "@/components/gesture-gallery";
-import { Avatar, Button, Card, Empty, ErrorNote, Field, Loading, PageHead, Segmented, Select, TextInput } from "@/components/kit";
+import { Avatar, Button, Card, Empty, ErrorNote, Field, HoldDelete, Loading, PageHead, Segmented, Select, TextInput } from "@/components/kit";
 import { useMember } from "@/components/shell";
 import { PrizeMark, prizeTier } from "@/components/prize-mark";
 
@@ -55,6 +56,7 @@ function Page() {
   const palette = [ink.primary, ink.accent, ink.soft];
   const { me } = useMember();
   const { data, error, loading } = useLoad("squad-board", () => squadBoard());
+  const [removed, setRemoved] = useState<number[]>([]);
   const [board, setBoard] = useState<"padiglione" | "sagoma">("padiglione");
   const [look, setLook] = useState<"tre" | "mappa">("tre");
   const [face, setFace] = useState("io");
@@ -236,17 +238,30 @@ function Page() {
       </Card>
 
       <div className="grid gap-2">
-        {people.map((row) => (
-          <Link key={row.id} to="/arciere/$id" params={{ id: String(row.id) }}>
-            <Card className="flex items-center gap-3 p-3">
-              <Avatar size="lg" label={row.name} color={row.avatarColor} photo={row.photoUrl} />
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-display text-2xl leading-none">{row.name}</p>
-                <p className="mt-1 text-xs text-muted">{[row.division, `${row.sessions} allenamenti`, `${row.arrows} frecce`, `${row.gare} gare`, row.bestDistance != null ? `${row.bestDistance} m` : ""].filter(Boolean).join(" · ")}</p>
-              </div>
-            </Card>
-          </Link>
-        ))}
+        {me.role === "admin" ? <p className="px-1 text-xs text-muted">Tieni premuto su una persona per toglierla dalla squadra.</p> : null}
+        {people.filter((row) => !removed.includes(row.id)).map((row, i) => {
+          const card = (
+            <Link to="/arciere/$id" params={{ id: String(row.id) }}>
+              <Card className="aa-menu-row flex items-center gap-3 p-3" style={{ animationDelay: `${Math.min(i, 10) * 40}ms` }}>
+                <Avatar size="lg" label={row.name} color={row.avatarColor} photo={row.photoUrl} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-display text-2xl leading-none">{row.name}</p>
+                  <p className="mt-1 text-xs text-muted">{[row.division, `${row.sessions} allenamenti`, `${row.arrows} frecce`, `${row.gare} gare`, row.bestDistance != null ? `${row.bestDistance} m` : ""].filter(Boolean).join(" · ")}</p>
+                </div>
+              </Card>
+            </Link>
+          );
+          if (me.role !== "admin" || row.userId === me.userId) return <div key={row.id}>{card}</div>;
+          return (
+            <HoldDelete
+              key={row.id}
+              label={`Togliere ${row.name} dalla squadra? Il suo account e i suoi allenamenti vengono cancellati e non si possono recuperare.`}
+              onDelete={() => removeTeamMember({ data: { id: row.id } }).then(() => setRemoved((list) => [...list, row.id]))}
+            >
+              {card}
+            </HoldDelete>
+          );
+        })}
       </div>
       <SquadAnimals />
       <GadgetShelf />

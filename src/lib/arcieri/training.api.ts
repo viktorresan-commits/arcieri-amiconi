@@ -389,9 +389,18 @@ export const getSession = createServerFn({ method: "POST" })
         };
       }
     }
+    // schede delle frecce dell'assetto: numeri (da/quante) e colori, per numerare i colpi
+    let arrowSpecs = "";
+    if (row.setup_id) {
+      const sp = await sql<{ specs: unknown }>`
+        select eq.specs from setups su join equipment eq on eq.id = su.arrow_id and eq.category = 'freccia' where su.id = ${row.setup_id} limit 1`;
+      const v = sp[0]?.specs;
+      arrowSpecs = typeof v === "string" ? v : v ? JSON.stringify(v) : "";
+    }
     return {
       session: card(row, true),
       prior,
+      arrowSpecs,
       shots: shots.map((s) => ({
         block: asNum(s.block_index),
         end: asNum(s.end_index),

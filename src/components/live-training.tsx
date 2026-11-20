@@ -27,6 +27,7 @@ import { getSession, listSessions, saveSession, trainingBootstrap } from "@/lib/
 import { Button, Card, ErrorNote, Field, Loading, Select, TextArea, TextInput } from "./kit";
 import { TargetFace } from "./target-face";
 import { PhotoSession } from "./photo-session";
+import { tagsOf } from "@/lib/arcieri/arrow-tags";
 import { ShotLab } from "./shot-lab";
 import { TargetRead } from "./target-read";
 import { AppIcon, Glyph } from "./icons";
@@ -664,7 +665,7 @@ export function LiveTraining({ sessionId, openHistory = false, start }: { sessio
       {face.id.startsWith("sagoma") ? (
         <Card><SagomaLab animal="cinghiale" shots={draft.shots.map((sh) => ({ score: sh.score, miss: sh.miss, nx: sh.nx, ny: sh.ny, end: sh.end }))} /></Card>
       ) : null}
-      {face.id.startsWith("sagoma") ? null : <ShotLab face={face} shots={draft.shots} />}
+      {face.id.startsWith("sagoma") ? null : <ShotLab face={face} shots={draft.shots} arrowSpecs={arrowGear?.specs} />}
       <div className="flex gap-2 overflow-x-auto pb-1">
         {Array.from({ length: Math.max(3, meta.arrowsPerEnd) }, (_, index) => {
           const shot = endArrows.find((item) => item.arrow === index);
@@ -1423,18 +1424,3 @@ function History({ onNew }: { onNew: () => void }) {
   );
 }
 
-/** Numeri delle frecce dalle schede dell'attrezzatura: "Numerate da" + "Quante". */
-function tagsOf(specs: string): number[] {
-  let from = 1;
-  let qty = 12;
-  try {
-    const sp = JSON.parse(specs || "{}") as { numFrom?: string; qty?: string };
-    const f = parseInt(String(sp.numFrom ?? ""), 10);
-    const q = parseInt(String(sp.qty ?? ""), 10);
-    if (Number.isFinite(f) && f >= 0) from = f;
-    if (Number.isFinite(q) && q > 0) qty = Math.min(q, 36);
-  } catch {
-    /* schede vecchie: numeri standard */
-  }
-  return Array.from({ length: qty }, (_, i) => from + i);
-}
