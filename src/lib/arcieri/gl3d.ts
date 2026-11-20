@@ -593,28 +593,3 @@ export function canvasTexture(size: number, paint: (ctx: CanvasRenderingContext2
   paint(ctx, size);
   return c;
 }
-
-// ── freccia di legno (modello CC0) ────────────────────────────────────────────
-let arrowGeoPromise: Promise<Geo> | null = null;
-let arrowImgPromise: Promise<HTMLImageElement> | null = null;
-
-function b64(s: string) {
-  const bin = atob(s);
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i += 1) out[i] = bin.charCodeAt(i);
-  return out.buffer;
-}
-
-/** Geometria della freccia di legno: cocca a z=0, punta a z=1. */
-export function loadWoodenArrow() {
-  arrowGeoPromise ??= fetch("/models/wooden-arrow.json")
-    .then((r) => r.json() as Promise<{ pos: string; nor: string; uv: string; idx: string }>)
-    .then((j) => ({ pos: new Float32Array(b64(j.pos)), nor: new Float32Array(b64(j.nor)), uv: new Float32Array(b64(j.uv)), idx: new Uint16Array(b64(j.idx)) }));
-  arrowImgPromise ??= new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = reject;
-    img.src = "/models/wooden-arrow.jpg";
-  });
-  return Promise.all([arrowGeoPromise, arrowImgPromise]);
-}

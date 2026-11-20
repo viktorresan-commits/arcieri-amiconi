@@ -89,7 +89,7 @@ export function useCanvas(draw: (ctx: CanvasRenderingContext2D, w: number, h: nu
 }
 
 /** Colori della freccia nel 3D. */
-export type Arrow3DLook = { shaft?: string; fletch?: string; cock?: string; nock?: string; wood?: boolean };
+export type Arrow3DLook = { shaft?: string; fletch?: string; cock?: string; nock?: string; wood?: boolean; material?: string; fletchType?: string; fletchStyle?: string; fletch2?: string; wrap?: string; pointType?: string };
 
 const FLETCH = "#d63a2f";
 

@@ -1,6 +1,9 @@
-import { basis, canvasTexture, cylinderGeo, project, trs, v3, type Env, type GL3D, type Vec3 } from "@/lib/arcieri/gl3d";
-import { drawArrow3D } from "@/lib/arcieri/scene3d";
-import { FocBalance3D, orbit, type Arrow3DLook } from "./foc-3d";
+import { basis, canvasTexture, cylinderGeo, project, segment, trs, v3, type Env, type GL3D, type Vec3 } from "@/lib/arcieri/gl3d";
+import { drawArrow3D, drawBoss, drawLane, drawTrees, drawWorld } from "@/lib/arcieri/scene3d";
+import { drawArcher, poseAt } from "@/lib/arcieri/mannequin";
+import { drawSkyOverlay, envOf, useSky } from "@/lib/arcieri/sky3d";
+import { useAvatar } from "./avatar-hero";
+import { FocBalance3D, FocFlight3D, orbit, type Arrow3DLook } from "./foc-3d";
 import { GLStage, useGLScene } from "./gl-stage";
 
 const ease = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x * x * (3 - 2 * x));
@@ -70,7 +73,7 @@ export function FocBalanceGL({ L, B, foc, look = {} }: { L: number; B: number; f
     const rot = (x: number): Vec3 => [fx + (x - fx) * Math.cos(ang), r + (x - fx) * Math.sin(ang), 0];
     const nock = rot(-1);
     const tip = rot(1);
-    drawArrow3D(g, nock, v3.sub(tip, nock), 2, time * 0.6 + v.spin, 0.022, look);
+    drawArrow3D(g, nock, v3.sub(tip, nock), 2, v.spin, 0.017, look);
     // scritte
     const P = (p: Vec3) => project(g.vp, p, w, h);
     const mark = (x: number, color: string, label: string, up: number) => {
@@ -110,7 +113,90 @@ export function FocBalanceGL({ L, B, foc, look = {} }: { L: number; B: number; f
         o.globalAlpha = 1;
       }
     }
-  });
+  }, { autoYaw: false });
   if (failed) return <FocBalance3D L={L} B={B} foc={foc} look={look} />;
   return <GLStage glRef={glRef} overlayRef={ref} view={view} className="h-56 w-full" label="Animazione 3D del punto di equilibrio" />;
+}
+
+/**
+ * Gittata in 3D: il tuo arciere esegue pre-trazione, ancoraggio e mira, rilascia e la freccia vola
+ * con l'alzo che serve per la distanza scelta. Altezze esagerate (scritto in alto) per vedere la curva.
+ */
+export function FocFlightGL({ distance, speed, foc, look = {} }: { distance: number; speed: number; foc: number; look?: Arrow3DLook }) {
+  const { shown } = useAvatar();
+  const { sky } = useSky();
+  const { ref, glRef, view, failed } = useGLScene((g, o, w, h, time, v) => {
+    const G = 9.81;
+    const D = distance;
+    const vel = Math.max(20, speed);
+    const s2 = Math.min(1, (G * D) / (vel * vel));
+    const theta = 0.5 * Math.asin(s2);
+    const tf = D / (vel * Math.cos(theta));
+    const play = Math.min(2.6, Math.max(1.2, tf * 1.6));
+    const pre = 3.1;
+    const cycle = pre + play + 1.8;
+    const t = (time % cycle) - pre;
+    const big = Math.max(1, D / 22);
+    const peak = (vel * vel * Math.sin(theta) ** 2) / (2 * G);
+    const ex = Math.max(1, Math.min(8, (D * 0.07) / Math.max(0.05, peak)));
+    const rel = 1.45 * big;
+    const yAt = (u: number) => rel + ex * (Math.tan(theta) * D * u - (G * (D * u) ** 2) / (2 * vel * vel * Math.cos(theta) ** 2)) - (rel - 1.3 * big) * u;
+    const cam = orbit([-(D * 0.55 + 6), 2.6 + D * 0.1, D * 0.15 - 3], [0, rel * 0.8 + peak * ex * 0.5, D * 0.45], v);
+    g.begin(cam.eye as Vec3, cam.target as Vec3, 50, envOf(sky));
+    drawWorld(g, [0, 0, D / 2], 900, sky, time);
+    drawTrees(g, D, Math.round(D) + 7);
+    const step = D > 40 ? 10 : 5;
+    drawLane(g, D, big, step);
+    drawBoss(g, 0, 1.3 * big, D, 0.61 * big, big, 10);
+    // arciere: ancoraggio e mira prima del rilascio (t = 0)
+    const s = big;
+    const tt = t < 0 ? -2.6 + ((t + pre) / pre) * 2.6 : t;
+    drawArcher(g, [0.05 * big, 0, -0.62 * s], [0, 0, 1], s, poseAt(tt), shown, look, 0.75);
+    // traiettoria
+    const N = 60;
+    const pts: Vec3[] = [];
+    for (let i = 0; i <= N; i += 1) pts.push([0, yAt(i / N), (i / N) * D]);
+    for (let i = 0; i < N; i += 2) g.draw("tube", segment(pts[i], pts[i + 1], 0.006 * big), [1, 1, 1], { alpha: 0.45, unlit: true });
+    const k = t <= 0 ? 0 : Math.min(1, t / play);
+    const n = Math.floor(k * N);
+    for (let i = 0; i < n; i += 1) g.draw("tube", segment(pts[i], pts[i + 1], 0.012 * big), [0.49, 0.94, 0.66], { unlit: true, alpha: 0.9 });
+    const len = 0.75 * big;
+    if (k > 0 && k < 1) {
+      const fi = k * N;
+      const i0 = Math.floor(fi);
+      const p0 = v3.lerp(pts[i0], pts[Math.min(N, i0 + 1)], fi - i0);
+      const dir = v3.norm(v3.sub(pts[Math.min(N, i0 + 1)], pts[Math.max(0, i0 - 1)]));
+      drawArrow3D(g, v3.sub(p0, v3.scale(dir, len)), dir, len, time * 18, 0.0065 * big, look);
+      g.shadow([p0[0], 0, p0[2] - len / 2], 0.05 * big, len * 0.5, 0.25);
+    } else if (k >= 1) {
+      const dir = v3.norm(v3.sub(pts[N], pts[N - 2]));
+      drawArrow3D(g, v3.sub(v3.add(pts[N], [0, 0, 0.05 * big]), v3.scale(dir, len * 0.8)), dir, len * 0.8, 0.5, 0.0065 * big, look);
+    }
+    drawSkyOverlay(o, g, sky, w, h, time);
+    const P = (p: Vec3) => project(g.vp, p, w, h);
+    const top = P([0, yAt(0.5), D * 0.5]);
+    if (top) {
+      o.font = "600 10px system-ui, sans-serif";
+      o.textAlign = "center";
+      o.lineWidth = 3;
+      o.strokeStyle = "rgba(8,14,12,0.7)";
+      const txt = `sale fino a ${peak.toFixed(2).replace(".", ",")} m`;
+      o.strokeText(txt, top.x, top.y - 10);
+      o.fillStyle = "#ffe39a";
+      o.fillText(txt, top.x, top.y - 10);
+    }
+    o.textAlign = "left";
+    o.font = "600 11px system-ui, sans-serif";
+    const line1 = `${D} m · ${Math.round(vel)} m/s · alzo ${((theta * 180) / Math.PI).toFixed(1).replace(".", ",")}° · volo ${tf.toFixed(2).replace(".", ",")} s`;
+    const line2 = `FOC ${foc.toFixed(1).replace(".", ",")}% · ${big > 1.05 ? `oggetti ×${big.toFixed(1).replace(".", ",")} · ` : ""}curva ×${ex.toFixed(0)}`;
+    for (const [txt, y] of [[line1, 18], [line2, 32]] as const) {
+      o.lineWidth = 3;
+      o.strokeStyle = "rgba(8,14,12,0.7)";
+      o.strokeText(txt, 10, y);
+      o.fillStyle = "#fff";
+      o.fillText(txt, 10, y);
+    }
+  });
+  if (failed) return <FocFlight3D distance={distance} speed={speed} foc={foc} look={look} />;
+  return <GLStage glRef={glRef} overlayRef={ref} view={view} className="h-64 w-full" label="Gittata in 3D con il tuo arciere" />;
 }

@@ -1233,3 +1233,36 @@ export const compareArchers = createServerFn({ method: "POST" })
     const pick = (id: string) => table.find((r) => r.userId === id) ?? null;
     return { a: pick(data.a), b: pick(data.b), fair: true };
   });
+
+/**
+ * Rendimento di ogni freccia numerata (serie + numero): media dei punti (in frazione del massimo),
+ * dove cade rispetto al gruppo delle altre e quanto si sparpaglia. Serve a trovare la freccia "storta".
+ */
+export const arrowPerformance = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    const sql = await db();
+    const rows = await sql<{ set_id: number | null; tag: number; n: number; avg: number; mx: number | null; my: number | null; spread: number | null; name: string | null; specs: unknown }>`
+      select sh.arrow_set as set_id, sh.arrow_tag as tag, count(*)::int as n,
+        avg(case when sh.miss then 0 else sh.score::float / greatest(1, s.max_arrow) end)::float as avg,
+        avg(sh.nx)::float as mx, avg(sh.ny)::float as my,
+        sqrt(greatest(0, coalesce(var_pop(sh.nx), 0) + coalesce(var_pop(sh.ny), 0)))::float as spread,
+        max(e.name) as name, max(e.specs::text) as specs
+      from shots sh
+      join sessions s on s.id = sh.session_id
+      left join equipment e on e.id = sh.arrow_set and e.user_id = s.user_id
+      where s.user_id = ${context.userId} and sh.arrow_tag is not null
+      group by sh.arrow_set, sh.arrow_tag
+      having count(*) >= 3
+      order by sh.arrow_set, sh.arrow_tag`;
+    return rows.map((r) => ({
+      setId: r.set_id == null ? null : asNum(r.set_id),
+      setName: r.name ?? "",
+      tag: asNum(r.tag),
+      n: asNum(r.n),
+      avg: asNum(r.avg),
+      mx: r.mx == null ? null : asNum(r.mx),
+      my: r.my == null ? null : asNum(r.my),
+      spread: r.spread == null ? null : asNum(r.spread),
+    }));
+  });

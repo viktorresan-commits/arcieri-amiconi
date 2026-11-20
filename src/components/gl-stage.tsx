@@ -9,7 +9,8 @@ export type GLDraw = (g: GL3D, o: CanvasRenderingContext2D, w: number, h: number
  * più recente viene usata a ogni fotogramma. Se WebGL non c'è, `failed` diventa vero e chi chiama
  * mostra la versione semplice.
  */
-export function useGLScene(draw: GLDraw) {
+export function useGLScene(draw: GLDraw, opts: { autoYaw?: boolean } = {}) {
+  const autoYaw = opts.autoYaw !== false;
   const { ref, view } = useOrbitGestures<HTMLCanvasElement>();
   const glRef = useRef<HTMLCanvasElement>(null);
   const drawRef = useRef(draw);
@@ -48,9 +49,14 @@ export function useGLScene(draw: GLDraw) {
       const dt = Math.min(0.1, (now - last) / 1000);
       last = now;
       if (view.current.auto) {
-        view.current.yaw += dt * 0.45;
-        view.current.spin += dt * 9;
-        view.current.touched = true;
+        if (autoYaw) {
+          view.current.yaw += dt * 0.45;
+          view.current.spin += dt * 9;
+          view.current.touched = true;
+        } else {
+          // «Gira» fa ruotare solo la freccia sul suo asse, veloce
+          view.current.spin += dt * 26;
+        }
       }
       const dpr = Math.min(2, window.devicePixelRatio || 1);
       const w = ov.clientWidth;

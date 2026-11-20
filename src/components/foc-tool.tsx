@@ -1,9 +1,14 @@
 import { Card, Chips } from "@/components/kit";
 import { StatusMark } from "@/components/icons";
 import { useLocalState } from "@/lib/arcieri/local-store";
-import { FocFlight3D, estimateSpeed } from "@/components/foc-3d";
-import { FocBalanceGL } from "@/components/foc-gl";
-import { useMainArrowLook } from "@/lib/arcieri/main-gear";
+import { estimateSpeed } from "@/components/foc-3d";
+import { FocBalanceGL, FocFlightGL } from "@/components/foc-gl";
+import { arrowLookOf, useMainArrowLook } from "@/lib/arcieri/main-gear";
+import { useArcherSetup, type ArcherSetup } from "@/lib/arcieri/setup";
+import { useLoad } from "@/lib/arcieri/use-load";
+import { listEquipment } from "@/lib/arcieri/club.api";
+import { arrowPerformance } from "@/lib/arcieri/training.api";
+import { ArrowIcon } from "@/components/gear-icons";
 
 /**
  * FOC (front of center): di quanto il punto di equilibrio della freccia sta davanti alla metà.
@@ -23,6 +28,8 @@ type Store = {
   view: "equilibrio" | "gittata";
   dist: number;
   spine?: string; // spine dell'asta (facoltativo), per il confronto
+  setId?: number | null; // serie di frecce analizzata
+  lbAuto?: boolean; // libbre prese dall'arco principale
 };
 const DEFAULT: Store = { mode: "pesi", len: "72", bal: "41", gpi: "7,5", point: "100", insert: "10", fletch: "18", nock: "8", lb: "36", grains: "350", view: "equilibrio", dist: 30 };
 const n = (s: string) => Number(String(s).replace(",", "."));
@@ -52,10 +59,33 @@ function compute(st: Store) {
 }
 
 export function FocTool() {
-  const look = useMainArrowLook();
-  const [st, setSt] = useLocalState<Store>("aa-foc-v1", DEFAULT);
+  const mainLook = useMainArrowLook();
+  const setup = useArcherSetup();
+  const [st0, setSt] = useLocalState<Store>("aa-foc-v1", { ...DEFAULT, lbAuto: true });
+  const gear = useLoad("foc-arrows", () => listEquipment());
+  const sets = (gear.data ?? []).filter((x) => x.mine && x.category === "freccia" && !x.specs.flight).sort((x, y) => (Number(x.specs.weight) || 9999) - (Number(y.specs.weight) || 9999));
+  const chosen = sets.find((x) => x.id === st0.setId) ?? null;
+  const look = chosen ? arrowLookOf(chosen.specs as Record<string, string>) : mainLook;
+  // libbre: quelle reali del tuo arco principale, finché non le cambi a mano
+  const st: Store = st0.lbAuto !== false && setup.realLb > 0 ? { ...st0, lb: String(Math.round(setup.realLb)) } : st0;
   const r = compute(st);
-  const set = (k: keyof Store) => (e: { target: { value: string } }) => setSt({ ...st, [k]: e.target.value });
+  const applySet = (x: (typeof sets)[number]) => {
+    const sp = x.specs as Record<string, string>;
+    const lenIn = Number(String(sp.length ?? "").replace(",", ".")) || 0;
+    const w = Number(sp.weight) || 0;
+    const pt = Number(sp.point) || Number(st.point) || 100;
+    const next: Store = { ...st0, setId: x.id, mode: "pesi", point: String(pt) };
+    if (lenIn) next.len = String(Math.round(lenIn * 2.54 * 10) / 10).replace(".", ",");
+    if (w) next.grains = String(w);
+    if (sp.spine) next.spine = String(sp.spine);
+    // grani per pollice stimati dal peso totale meno punta, inserto, penne e cocca
+    if (w && lenIn) {
+      const rest = w - pt - (n(st.insert) || 0) - (n(st.fletch) || 0) - (n(st.nock) || 0);
+      if (rest > 20) next.gpi = (rest / lenIn).toFixed(1).replace(".", ",");
+    }
+    setSt(next);
+  };
+  const set = (k: keyof Store) => (e: { target: { value: string } }) => setSt({ ...st0, ...(k === "lb" ? { lbAuto: false } : {}), [k]: e.target.value });
   const verdict = !r ? null : r.foc < 6 ? { s: "warn" as const, t: "Basso: la freccia può essere instabile al vento. Prova una punta più pesante." } : r.foc <= 13 ? { s: "ok" as const, t: "Nella fascia giusta per il tiro alla targa (circa 7–13%)." } : r.foc <= 20 ? { s: "ok" as const, t: "Alto: buono per 3D e campagna, frecce più stabili e penetranti." } : { s: "warn" as const, t: "Molto alto: freccia pesante davanti, cala di più sulle lunghe distanze." };
   const grains = r?.total ?? n(st.grains);
   const gpp = grains > 0 && n(st.lb) > 0 ? grains / n(st.lb) : null;
@@ -78,7 +108,27 @@ export function FocTool() {
         <h2 className="aa-section-title">Calcolo FOC</h2>
         <p className="text-xs text-muted">Quanto la freccia pesa davanti. Scrivi i dati: il risultato si aggiorna e resta salvato.</p>
       </div>
-      <Chips value={st.mode} onChange={(mode) => setSt({ ...st, mode })} options={[{ id: "pesi", label: "Dai pesi" }, { id: "misura", label: "Ho misurato" }]} />
+      {sets.length ? (
+        <Card className="grid gap-2">
+          <p className="aa-section-title">Quale freccia analizzi</p>
+          <p className="text-xs text-muted">Le tue serie, dalla più leggera. Un tocco riempie lunghezza, punta, peso e spine.</p>
+          <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none]">
+            {sets.map((x) => {
+              const sp = x.specs as Record<string, string>;
+              return (
+                <button key={x.id} type="button" aria-pressed={st0.setId === x.id} onClick={() => applySet(x)} className={`grid w-40 shrink-0 gap-1 rounded-2xl border p-2 text-left ${st0.setId === x.id ? "border-primary bg-primary/10" : "border-line bg-white/[0.03]"}`}>
+                  <ArrowIcon material={sp.material} shaft={sp.shaft} fletch={sp.fletch} cock={sp.cock} nock={sp.nock} wrap={sp.wrap} fletchType={sp.fletchType} fletchStyle={sp.fletchStyle} fletch2={sp.fletch2} point={sp.pointType || "ogiva"} className="h-6 w-full" />
+                  <span className="truncate text-[0.78rem] font-semibold">{x.name}</span>
+                  <span className="text-[0.66rem] text-muted">{sp.weight ? `${sp.weight} gr` : "peso ?"}{sp.spine ? ` · spine ${sp.spine}` : ""}{sp.length ? ` · ${sp.length}″` : ""}</span>
+                </button>
+              );
+            })}
+          </div>
+        </Card>
+      ) : null}
+      <WeakArrow onAnalyze={(id) => { const x = sets.find((y) => y.id === id); if (x) applySet(x); }} weights={Object.fromEntries(sets.map((x) => [x.id, Number(x.specs.weight) || 0]))} />
+      {setup.has ? <p className="px-1 text-xs text-muted">Il tuo arco: <b className="text-fg">{setup.summary}</b>{st0.lbAuto !== false ? " · libbre usate nei calcoli" : ""}.{st0.lbAuto === false ? <button type="button" className="ml-1 underline" onClick={() => setSt({ ...st0, lbAuto: true })}>Usa le libbre del mio arco</button> : null}</p> : null}
+      <Chips value={st.mode} onChange={(mode) => setSt({ ...st0, mode })} options={[{ id: "pesi", label: "Dai pesi" }, { id: "misura", label: "Ho misurato" }]} />
       <Card className="grid gap-3">
         <div className="grid grid-cols-2 gap-2">
           <Num label="Lunghezza asta" unit="cm" value={st.len} onChange={set("len")} />
@@ -135,21 +185,21 @@ export function FocTool() {
           {gpp ? <p className="text-xs text-muted">{gpp < 6 ? "Sotto i 6 grani per libbra la freccia è leggera: occhio alla garanzia dei flettenti." : gpp > 9 ? "Freccia pesante per il carico: più stabile, ma cala di più." : "Peso equilibrato per il carico."}</p> : null}
         </Card>
       ) : null}
-      {r ? <Analysis st={st} r={r} grains={grains} speed={speed} onSpine={(spine) => setSt({ ...st, spine })} /> : null}
+      {r ? <Analysis st={st} r={r} grains={grains} speed={speed} onSpine={(spine) => setSt({ ...st0, spine })} setup={setup} /> : null}
       {r ? (
         <Card className="grid gap-2.5">
           <div className="flex items-center justify-between gap-2">
             <p className="aa-section-title">In 3D</p>
-            <Chips value={st.view} onChange={(view) => setSt({ ...st, view })} options={[{ id: "equilibrio", label: "Equilibrio" }, { id: "gittata", label: "Gittata" }]} />
+            <Chips value={st.view} onChange={(view) => setSt({ ...st0, view })} options={[{ id: "equilibrio", label: "Equilibrio" }, { id: "gittata", label: "Gittata" }]} />
           </div>
           {st.view === "equilibrio" ? (
             <FocBalanceGL key="eq" L={r.L} B={r.B} foc={r.foc} look={look} />
           ) : (
             <>
-              <FocFlight3D key="fl" distance={st.dist} speed={speed} foc={r.foc} look={look} />
+              <FocFlightGL key="fl" distance={st.dist} speed={speed} foc={r.foc} look={look} />
               <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 [scrollbar-width:none]">
                 {[18, 30, 50, 70, 90].map((d) => (
-                  <button key={d} type="button" aria-pressed={st.dist === d} className="aa-chip" onClick={() => setSt({ ...st, dist: d })}>{d} m</button>
+                  <button key={d} type="button" aria-pressed={st.dist === d} className="aa-chip" onClick={() => setSt({ ...st0, dist: d })}>{d} m</button>
                 ))}
               </div>
               {flight ? (
@@ -204,7 +254,7 @@ function spineFor(lb: number, lenIn: number, point: number) {
 }
 
 /** Riepilogo dei numeri della freccia e cosa cambiare per correggerla. */
-function Analysis({ st, r, grains, speed, onSpine }: { st: Store; r: { L: number; B: number; foc: number; total: number | null }; grains: number; speed: number; onSpine: (v: string) => void }) {
+function Analysis({ st, r, grains, speed, onSpine, setup }: { st: Store; r: { L: number; B: number; foc: number; total: number | null }; grains: number; speed: number; onSpine: (v: string) => void; setup: ArcherSetup }) {
   const lb = n(st.lb);
   const lenIn = r.L / 2.54;
   const point = st.mode === "pesi" ? n(st.point) || 0 : 100;
@@ -231,6 +281,18 @@ function Analysis({ st, r, grains, speed, onSpine }: { st: Store; r: { L: number
   if (r.foc < 7) tips.push({ s: "warn", t: pointFor10 ? `FOC basso: con una punta da circa ${pointFor10} grani arrivi al 10%. In alternativa inserto più pesante o penne più leggere.` : "FOC basso: punta o inserto più pesanti, oppure penne più leggere." });
   else if (r.foc > 18) tips.push({ s: "warn", t: pointFor10 ? `FOC alto: per la targa una punta da circa ${pointFor10} grani riporta il FOC al 10%, la freccia cala meno.` : "FOC alto: punta più leggera se tiri alla targa sulle lunghe distanze." });
   else tips.push({ s: "ok", t: "FOC nella fascia buona: niente da cambiare sul peso davanti." });
+  if (setup.has) {
+    const lenIn2 = r.L / 2.54;
+    const room = lenIn2 - setup.drawIn;
+    if (room < 0.4) tips.push({ s: "warn", t: `Asta di ${f1(lenIn2)}″ con il tuo allungo di ${f1(setup.drawIn)}″: troppo corta, rischi di tirarla oltre il rest. Serve almeno 1″ in più.` });
+    else if (room > 2.5) tips.push({ s: "warn", t: `Asta di ${f1(lenIn2)}″ per un allungo di ${f1(setup.drawIn)}″: ${f1(room)}″ di troppo, la freccia è più pesante e più morbida. Puoi accorciarla a circa ${f1(setup.drawIn + 1)}″.` });
+    else tips.push({ s: "ok", t: `Lunghezza giusta per il tuo allungo di ${f1(setup.drawIn)}″ (${f1(room)}″ oltre).` });
+    if (setup.grains && grains > 0) {
+      if (grains < setup.grains.min) tips.push({ s: "warn", t: `Per il tuo ${setup.summary} il peso consigliato è ${setup.grains.min}–${setup.grains.max} grani: questa freccia (${Math.round(grains)}) è leggera.` });
+      else if (grains > setup.grains.max) tips.push({ s: "warn", t: `Per il tuo ${setup.summary} il peso consigliato è ${setup.grains.min}–${setup.grains.max} grani: questa freccia (${Math.round(grains)}) è pesante.` });
+    }
+    if (setup.spineRange && !n(st.spine ?? "")) tips.push({ s: "ok", t: `Spine indicato per il tuo arco: ${setup.spineRange}. Scrivilo sotto per il confronto.` });
+  }
   if (gpp != null) {
     if (gpp < 6) tips.push({ s: "warn", t: `${f1(gpp)} grani per libbra: troppo leggera per il carico, rischi di danneggiare i flettenti. Sali almeno a ${Math.round(lb * 6)} grani totali.` });
     else if (gpp > 10) tips.push({ s: "warn", t: `${f1(gpp)} grani per libbra: molto pesante, traiettoria più curva. Per la targa resta tra 6 e 9.` });
@@ -269,6 +331,79 @@ function Analysis({ st, r, grains, speed, onSpine }: { st: Store; r: { L: number
         ))}
       </ul>
       <p className="text-[0.68rem] text-muted">Valori stimati per archi ricurvi e tradizionali a dita; spine dalle tabelle indicative (libbre al tuo allungo, lunghezza e punta). La prova vera resta il tiro con frecce senza penne (bare shaft).</p>
+    </Card>
+  );
+}
+
+/**
+ * La freccia che rende meno, dai tiri numerati: media più bassa, gruppo spostato rispetto alle
+ * compagne o più sparpagliata. Dice cosa controllare e porta l'analisi su quella serie.
+ */
+function WeakArrow({ onAnalyze, weights }: { onAnalyze: (setId: number) => void; weights: Record<number, number> }) {
+  const perf = useLoad("arrow-perf", () => arrowPerformance());
+  const rows = perf.data ?? [];
+  if (!rows.length) return null;
+  const bySet = new Map<number | null, typeof rows>();
+  for (const r of rows) bySet.set(r.setId, [...(bySet.get(r.setId) ?? []), r]);
+  type Cand = { r: (typeof rows)[number]; setAvg: number; dx: number; dy: number; spreadK: number; bad: number };
+  const cands: Cand[] = [];
+  for (const list of bySet.values()) {
+    if (list.length < 3) continue;
+    const tot = list.reduce((a, x) => a + x.n, 0);
+    const avg = list.reduce((a, x) => a + x.avg * x.n, 0) / tot;
+    const mx = list.reduce((a, x) => a + (x.mx ?? 0) * x.n, 0) / tot;
+    const my = list.reduce((a, x) => a + (x.my ?? 0) * x.n, 0) / tot;
+    const sp = list.reduce((a, x) => a + (x.spread ?? 0) * x.n, 0) / tot || 0.0001;
+    for (const r of list) {
+      if (r.n < 5) continue;
+      const others = (avg * tot - r.avg * r.n) / Math.max(1, tot - r.n);
+      const dx = (r.mx ?? mx) - mx;
+      const dy = (r.my ?? my) - my;
+      const spreadK = (r.spread ?? sp) / sp;
+      const bad = Math.max(0, others - r.avg) * 4 + Math.max(0, Math.hypot(dx, dy) - 0.04) * 3 + Math.max(0, spreadK - 1.25);
+      if (bad > 0.12) cands.push({ r, setAvg: others, dx, dy, spreadK, bad });
+    }
+  }
+  cands.sort((a, b) => b.bad - a.bad);
+  const top = cands.slice(0, 2);
+  if (!top.length) {
+    return (
+      <Card className="grid gap-1">
+        <p className="aa-section-title">Le tue frecce numerate</p>
+        <p className="text-sm"><StatusMark state="ok" />Nessuna freccia si comporta peggio delle altre: le serie sono omogenee.</p>
+      </Card>
+    );
+  }
+  const dir = (dx: number, dy: number) => {
+    const v = dy > 0.03 ? "in basso" : dy < -0.03 ? "in alto" : "";
+    const o = dx > 0.03 ? "a destra" : dx < -0.03 ? "a sinistra" : "";
+    return [v, o].filter(Boolean).join(" ");
+  };
+  return (
+    <Card className="grid gap-2.5">
+      <p className="aa-section-title">Freccia da controllare</p>
+      {top.map(({ r, setAvg, dx, dy, spreadK }) => {
+        const where = dir(dx, dy);
+        const w = r.setId != null ? weights[r.setId] : 0;
+        return (
+          <div key={`${r.setId}-${r.tag}`} className="grid gap-1.5 rounded-2xl bg-white/[0.04] p-3">
+            <p className="text-sm font-semibold">Freccia n. {r.tag}{r.setName ? ` · ${r.setName}` : ""}</p>
+            <p className="text-xs text-muted">
+              {Math.round(r.avg * 100)}% del punteggio massimo contro {Math.round(setAvg * 100)}% delle compagne ({r.n} tiri)
+              {where ? `; cade ${where} rispetto al gruppo` : ""}
+              {spreadK > 1.25 ? `; più sparpagliata (×${spreadK.toFixed(1).replace(".", ",")})` : ""}.
+            </p>
+            <ul className="grid gap-0.5 text-xs">
+              {where ? <li>• Rotolala su un tavolo: se oscilla è storta (un gruppo spostato sempre dallo stesso lato è il segnale tipico).</li> : null}
+              <li>• Cocca: crepata, storta o ruotata? Sostituiscila e allineala come le altre.</li>
+              <li>• Penne: staccate, piegate o con la colla rovinata.</li>
+              <li>• Punta e inserto ben incollati e dritti.</li>
+              <li>• Pesala: deve stare entro ±2 grani dalle altre{w ? ` (serie da ${w} gr)` : ""}; con lo spine diverso va tolta dalla serie.</li>
+            </ul>
+            {r.setId != null ? <button type="button" onClick={() => onAnalyze(r.setId as number)} className="justify-self-start rounded-full border border-line px-3 py-1.5 text-xs font-semibold">Analizza questa serie</button> : null}
+          </div>
+        );
+      })}
     </Card>
   );
 }

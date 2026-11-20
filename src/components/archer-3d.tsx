@@ -7,6 +7,7 @@ import { drawArrow3D, drawBoss, drawTrees, drawWorld } from "@/lib/arcieri/scene
 import { drawSkyOverlay, envOf, TODS, useSky, WEATHERS } from "@/lib/arcieri/sky3d";
 import { useEffect, useState, type ReactNode } from "react";
 import { orbit } from "./foc-3d";
+import { useMainArrowLook } from "@/lib/arcieri/main-gear";
 import { GLStage, useGLScene } from "./gl-stage";
 
 /**
@@ -16,6 +17,7 @@ import { GLStage, useGLScene } from "./gl-stage";
  */
 export function Archer3D({ look, height = "h-80", still, framing = "posa", children, fallback = null, phase = true }: { look: AvatarLook; height?: string; still?: "riposo" | "allungo"; framing?: "posa" | "home"; children?: ReactNode; fallback?: ReactNode; phase?: boolean }) {
   const { sky } = useSky();
+  const mainArrow = useMainArrowLook();
   const { ref, glRef, view, failed } = useGLScene((g, o, w, h, time, v) => {
     const D = framing === "home" ? 18 : 12;
     const cycle = ROUTINE_END - ROUTINE_START + 0.8;
@@ -27,7 +29,7 @@ export function Archer3D({ look, height = "h-80", still, framing = "posa", child
     drawTrees(g, D + 10, 3);
     g.draw("box", trs([0, 0.006, 0], 0, [3, 0.006, 0.06]), [1, 1, 1], { unlit: true, alpha: 0.9 });
     drawBoss(g, 0, 1.3, D, 0.4, 1, 10);
-    const arrow = { shaft: look.shaft, fletch: look.fletch, cock: look.cock, nock: look.nock, wood: look.shaft === "#c99a5e" || look.bowType === "longbow" || look.style === "medievale" };
+    const arrow = { ...mainArrow, shaft: look.shaft || mainArrow.shaft, fletch: look.fletch || mainArrow.fletch, cock: look.cock || mainArrow.cock, nock: look.nock || mainArrow.nock, material: mainArrow.material ?? (look.bowType === "longbow" || look.style === "medievale" ? "legno" : undefined) };
     drawArcher(g, [0.05, 0, -0.6], [0, 0, 1], 1, poseAt(tt), look, arrow, 0.75);
     if (tt >= 0 && tt < T) {
       const f = tt / T;

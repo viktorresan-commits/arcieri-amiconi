@@ -2,7 +2,7 @@
  * Pezzi di scena per le viste 3D in WebGL: cielo con colline e nuvole, prato, alberi, paglione con
  * la visuale, frecce (di legno con il modello CC0, oppure costruite con i colori scelti).
  */
-import { basis, canvasTexture, hexRgb, loadWoodenArrow, segment, trs, v3, type GL3D, type Mesh, type Vec3 } from "./gl3d";
+import { basis, canvasTexture, hexRgb, segment, trs, v3, type GL3D, type Vec3 } from "./gl3d";
 import { drawSky, type Sky } from "./sky3d";
 
 const rand = (seed: number) => {
@@ -178,23 +178,161 @@ export function drawBoss(g: GL3D, cx: number, gH: number, D: number, R: number, 
   g.shadow([cx + 0.3 * k, 0, D + depth * 1.6], boss * 1.4, depth * 3.5, 0.32);
 }
 
-export type ArrowLook = { shaft?: string; fletch?: string; cock?: string; nock?: string; wood?: boolean };
+export type ArrowLook = { shaft?: string; fletch?: string; cock?: string; nock?: string; wood?: boolean; material?: string; fletchType?: string; fletchStyle?: string; fletch2?: string; wrap?: string; pointType?: string };
 
-type ArrowRes = { mesh: Mesh | null; tex: WebGLTexture | null };
-function woodenArrow(g: GL3D): ArrowRes {
-  return g.once("wooden-arrow", () => {
-    const res: ArrowRes = { mesh: null, tex: null };
-    loadWoodenArrow()
-      .then(([geo, img]) => {
-        res.mesh = g.mesh(geo);
-        res.tex = g.textureFrom(img, true, false);
-      })
-      .catch(() => {});
-    return res;
+// ── freccia dettagliata ───────────────────────────────────────────────────────
+type VaneShape = { lenF: number; hF: number; prof: (x: number) => number; curl?: number; feather?: boolean };
+const VANES: Record<string, VaneShape> = {
+  alette: { lenF: 0.085, hF: 0.022, prof: (x) => { const t = x ** 0.65; return 4 * t * (1 - t); } },
+  penne: { lenF: 0.16, hF: 0.026, prof: (x) => Math.min(1, x * 6) * (1 - x) ** 0.35 * (x > 0.85 ? 1 - (x - 0.85) * 3 : 1), feather: true },
+  scudo: { lenF: 0.16, hF: 0.026, prof: (x) => (x < 0.12 ? x / 0.12 : x < 0.55 ? 1 : x < 0.62 ? 1 - (x - 0.55) * 4 : 0.72 - (x - 0.62) * 1.7), feather: true },
+  plastifletch: { lenF: 0.1, hF: 0.022, prof: (x) => Math.min(1, x * 4) * (1 - x) ** 0.7 },
+  blazer: { lenF: 0.07, hF: 0.026, prof: (x) => { const t = x ** 0.5; return 4 * t * (1 - t); } },
+  fusion: { lenF: 0.08, hF: 0.022, prof: (x) => Math.min(1, x * 5) * (1 - x) ** 0.5 },
+  quickspin: { lenF: 0.07, hF: 0.02, prof: (x) => { const t = x ** 0.6; return 4 * t * (1 - t); }, curl: 0.25 },
+  spin: { lenF: 0.065, hF: 0.02, prof: (x) => Math.sin(Math.PI * Math.min(1, x * 1.05)) ** 0.7, curl: 0.6 },
+};
+
+function vaneMesh(g: GL3D, id: string) {
+  return g.once(`vane-${id}`, () => {
+    const v = VANES[id] ?? VANES.alette;
+    const N = 16;
+    const pos: number[] = [];
+    const nor: number[] = [];
+    const uv: number[] = [];
+    const idx: number[] = [];
+    for (let side = 0; side < 2; side += 1) {
+      const base = pos.length / 3;
+      const nx = side ? -1 : 1;
+      for (let i = 0; i <= N; i += 1) {
+        const x = i / N;
+        const h = Math.max(0, v.prof(x));
+        const curl = (v.curl ?? 0) * h * h;
+        pos.push(0, 0, x, curl, h, x);
+        nor.push(nx, 0, 0, nx, -curl * 0.5, 0);
+        uv.push(x, 0, x, 1);
+      }
+      for (let i = 0; i < N; i += 1) {
+        const a = base + i * 2;
+        if (side) idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
+        else idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+      }
+    }
+    return g.mesh({ pos: new Float32Array(pos), nor: new Float32Array(nor), uv: new Float32Array(uv), idx: new Uint16Array(idx) });
   });
 }
 
-/** Freccia da `nock` lungo `dir` per `len` metri; `r` raggio dell'asta (già ingrandito). */
+function vaneTexture(g: GL3D, style: string, c1: string, c2: string, feather: boolean) {
+  return g.once(`vtex-${style}-${c1}-${c2}-${feather}`, () =>
+    g.textureFrom(
+      canvasTexture(128, (c, s) => {
+        c.fillStyle = c1;
+        c.fillRect(0, 0, s, s);
+        if (style === "striato" || style === "spirale") {
+          c.fillStyle = c2;
+          for (let i = -2; i < 10; i += 1) {
+            c.beginPath();
+            const x = i * (s / 6);
+            const sk = style === "spirale" ? s * 0.5 : s * 0.18;
+            c.moveTo(x, s);
+            c.lineTo(x + s / 14, s);
+            c.lineTo(x + s / 14 + sk, 0);
+            c.lineTo(x + sk, 0);
+            c.closePath();
+            c.fill();
+          }
+        } else if (style === "bicolore") {
+          c.fillStyle = c2;
+          c.fillRect(0, 0, s, s * 0.45);
+        } else if (style === "punta") {
+          c.fillStyle = c2;
+          c.fillRect(s * 0.72, 0, s * 0.28, s);
+        } else if (style === "maculato") {
+          const r = rand(9);
+          c.fillStyle = c2;
+          for (let i = 0; i < 24; i += 1) {
+            c.beginPath();
+            c.ellipse(r() * s, r() * s, 3 + r() * 6, 2 + r() * 4, r() * 3, 0, Math.PI * 2);
+            c.fill();
+          }
+        }
+        if (feather) {
+          // rachide e barbe della penna naturale
+          c.strokeStyle = "rgba(0,0,0,0.22)";
+          c.lineWidth = 1;
+          for (let x = -s; x < s * 2; x += 3) {
+            c.beginPath();
+            c.moveTo(x, s);
+            c.lineTo(x + s * 0.35, 0);
+            c.stroke();
+          }
+          c.fillStyle = "rgba(255,255,255,0.35)";
+          c.fillRect(0, s - 6, s, 3);
+        } else {
+          // lucido delle alette in plastica
+          const gr = c.createLinearGradient(0, 0, 0, s);
+          gr.addColorStop(0, "rgba(255,255,255,0.18)");
+          gr.addColorStop(0.5, "rgba(255,255,255,0)");
+          gr.addColorStop(1, "rgba(0,0,0,0.12)");
+          c.fillStyle = gr;
+          c.fillRect(0, 0, s, s);
+        }
+      }),
+      true,
+      false,
+    ),
+  );
+}
+
+function shaftTexture(g: GL3D, material: string) {
+  return g.once(`shaft-${material}`, () =>
+    g.textureFrom(
+      canvasTexture(256, (c, s) => {
+        if (material === "legno" || material === "bambu") {
+          c.fillStyle = "#c9a06a";
+          c.fillRect(0, 0, s, s);
+          const r = rand(17);
+          // venature lungo l'asta (v = lunghezza)
+          for (let i = 0; i < 70; i += 1) {
+            const x = r() * s;
+            c.strokeStyle = r() < 0.5 ? "rgba(110,70,30,0.35)" : "rgba(240,210,160,0.35)";
+            c.lineWidth = 0.6 + r() * 1.6;
+            c.beginPath();
+            c.moveTo(x, 0);
+            for (let y = 0; y <= s; y += 16) c.lineTo(x + Math.sin(y * 0.05 + i) * 3, y);
+            c.stroke();
+          }
+        } else if (material === "carbonio" || material === "carbo-alluminio") {
+          c.fillStyle = "#3a3d42";
+          c.fillRect(0, 0, s, s);
+          for (let y = 0; y < s; y += 8) {
+            for (let x = 0; x < s; x += 8) {
+              c.fillStyle = (x + y) % 16 === 0 ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.25)";
+              c.fillRect(x, y, 8, 4);
+              c.fillStyle = (x + y) % 16 === 0 ? "rgba(0,0,0,0.25)" : "rgba(255,255,255,0.08)";
+              c.fillRect(x, y + 4, 8, 4);
+            }
+          }
+        } else {
+          c.fillStyle = "#cfd5db";
+          c.fillRect(0, 0, s, s);
+          for (let x = 0; x < s; x += 2) {
+            c.fillStyle = `rgba(255,255,255,${0.05 + 0.08 * Math.abs(Math.sin(x * 0.3))})`;
+            c.fillRect(x, 0, 1, s);
+          }
+        }
+      }),
+      true,
+      true,
+    ),
+  );
+}
+
+/**
+ * Freccia da `nock` lungo `dir` per `len` metri; `r` raggio dell'asta (già ingrandito).
+ * Disegna i dettagli scelti dall'arciere: materiale dell'asta, fascia e cresting, cocca con gola,
+ * forma e stile delle penne (anche elicoidali), inserto e tipo di punta.
+ */
 export function drawArrow3D(g: GL3D, nock: Vec3, dir: Vec3, len: number, spin: number, r: number, look: ArrowLook = {}) {
   const d = v3.norm(dir);
   const ref: Vec3 = Math.abs(d[1]) < 0.95 ? [0, 1, 0] : [1, 0, 0];
@@ -204,24 +342,71 @@ export function drawArrow3D(g: GL3D, nock: Vec3, dir: Vec3, len: number, spin: n
   const s = Math.sin(spin);
   const a = v3.add(v3.scale(a0, c), v3.scale(b0, s));
   const b = v3.cross(d, a);
-  if (look.wood) {
-    const w = woodenArrow(g);
-    if (w.mesh) {
-      // il modello ha la sezione proporzionata alla lunghezza: la allargo se la scena è ingrandita
-      const thick = Math.max(1, r / (0.0045 * len));
-      g.draw(w.mesh, basis(nock, v3.scale(a, len * thick), v3.scale(b, len * thick), v3.scale(d, len)), look.shaft ? v3.lerp([1, 1, 1], hexRgb(look.shaft), 0.25) : [1, 1, 1], { tex: w.tex, shine: 0.2 });
-      return;
+  const at = (f: number) => v3.add(nock, v3.scale(d, len * f));
+  const material = look.material ?? (look.wood ? "legno" : "carbonio");
+  const woodish = material === "legno" || material === "bambu";
+  const shaftCol = look.shaft || (woodish ? "#d8b07a" : material === "alluminio" ? "#9aa7b2" : material === "carbo-alluminio" ? "#5b6670" : "#2a2d31");
+  const metal = { shine: 0.95 };
+  // asta: tubo con la texture del materiale (la v della texture corre lungo l'asta)
+  const shine = woodish ? 0.22 : material === "alluminio" ? 0.95 : 0.7;
+  g.draw("tube", segment(at(0.012), at(0.955), r), woodish ? v3.lerp(hexRgb(shaftCol), [1, 1, 1], 0.2) : shaftCol, { shine, tex: shaftTexture(g, material) });
+  if (material === "bambu") for (const f of [0.3, 0.55, 0.8]) g.draw("tube", segment(at(f - 0.004), at(f + 0.004), r * 1.12), v3.scale(hexRgb(shaftCol), 0.8), { shine: 0.3 });
+  // fascia (wrap) e cresting
+  if (look.wrap) {
+    g.draw("tube", segment(at(0.015), at(0.2), r * 1.05), look.wrap, { shine: 0.35 });
+    g.draw("tube", segment(at(0.205), at(0.212), r * 1.06), look.cock || "#f4f1ea", { shine: 0.35 });
+    g.draw("tube", segment(at(0.217), at(0.221), r * 1.06), look.fletch2 || look.cock || "#14181c", { shine: 0.35 });
+  }
+  // cocca con la gola per la corda
+  const nockCol = look.nock || "#e6b325";
+  g.draw("cyl", segment(at(-0.004), at(0.016), r * 1.12), nockCol, { shine: 0.6 });
+  g.draw("cyl", segment(at(0.014), at(0.02), r * 1.04), "#c9ced4", metal);
+  for (const sg of [-1, 1]) g.draw("box", basis(v3.add(at(-0.012), v3.scale(b, sg * r * 0.62)), v3.scale(a, r * 2.0), v3.scale(b, r * 0.62), v3.scale(d, len * 0.016)), nockCol, { shine: 0.6 });
+  // penne
+  const ft = look.fletchType ?? (woodish ? "penne" : "alette");
+  const style = look.fletchStyle ?? "pieno";
+  const c1 = look.fletch || "#d63a2f";
+  const c2 = look.fletch2 || "#f4f1ea";
+  if (ft === "fob") {
+    g.draw("tube", segment(at(0.03), at(0.055), r * 4.2), c1, { shine: 0.3 });
+    g.draw("tube", segment(at(0.03), at(0.055), r * 3.8), v3.scale(hexRgb(c1), 0.7), { shine: 0.3 });
+  } else {
+    const shape = VANES[ft] ?? VANES.alette;
+    const mesh = vaneMesh(g, VANES[ft] ? ft : "alette");
+    const cant = style === "elicoidale" || style === "spirale" || ft === "spin" || ft === "quickspin" ? 0.09 : 0.02;
+    for (let i = 0; i < 3; i += 1) {
+      const ang = (i * Math.PI * 2) / 3;
+      const out = v3.add(v3.scale(a, Math.cos(ang)), v3.scale(b, Math.sin(ang)));
+      const tan = v3.cross(out, d);
+      const col = i === 0 ? look.cock || c1 : c1;
+      const tex = vaneTexture(g, style, i === 0 && look.cock ? look.cock : col, c2, !!shape.feather);
+      const lz = len * shape.lenF;
+      const zAxis = v3.add(v3.scale(d, lz), v3.scale(tan, lz * cant));
+      const start = v3.add(at(0.035), v3.scale(out, r * 0.95));
+      g.draw(mesh, basis(start, v3.scale(tan, len * shape.hF), v3.scale(out, len * shape.hF), zAxis), [1, 1, 1], { tex, shine: shape.feather ? 0.05 : 0.35 });
     }
   }
-  const tipAt = v3.add(nock, v3.scale(d, len));
-  g.draw("tube", segment(nock, v3.add(nock, v3.scale(d, len * 0.96)), r), look.shaft || "#1d1f22", { shine: 0.55 });
-  g.draw("cone", segment(v3.add(nock, v3.scale(d, len * 0.96)), v3.add(tipAt, v3.scale(d, len * 0.02)), r * 1.25), "#b8c0c8", { shine: 0.9 });
-  g.draw("cyl", segment(v3.sub(nock, v3.scale(d, r * 2.2)), v3.add(nock, v3.scale(d, r * 1.5)), r * 1.15), look.nock || "#e6b325", { shine: 0.4 });
-  for (let i = 0; i < 3; i += 1) {
-    const ang = (i * Math.PI * 2) / 3;
-    const out = v3.add(v3.scale(a, Math.cos(ang)), v3.scale(b, Math.sin(ang)));
-    const col = i === 0 ? look.cock || look.fletch || "#d63a2f" : look.fletch || "#d63a2f";
-    // aletta: piano (out, d), alta 0.05 len, lunga 0.12 len
-    g.draw("vane", basis(v3.add(nock, v3.scale(d, len * 0.03)), v3.cross(out, d), v3.scale(out, len * 0.05), v3.scale(d, len * 0.13)), col, { shine: 0.1 });
+  // inserto e punta
+  const pt = look.pointType ?? "ogiva";
+  g.draw("tube", segment(at(0.95), at(0.962), r * 1.04), "#b8c0c8", metal);
+  if (pt === "field") {
+    g.draw("cyl", segment(at(0.958), at(0.985), r * 1.04), "#c9ced4", metal);
+    g.draw("cone", segment(at(0.985), at(1.0), r * 1.04), "#d8dde2", metal);
+  } else if (pt === "3d") {
+    g.draw("cyl", segment(at(0.958), at(0.975), r * 1.08), "#c9ced4", metal);
+    g.draw("tube", segment(at(0.975), at(0.978), r * 0.9), "#6b737d", metal);
+    g.draw("cone", segment(at(0.978), at(1.0), r * 1.08), "#d8dde2", metal);
+  } else if (pt === "caccia") {
+    g.draw("cone", segment(at(0.958), at(1.0), r * 1.05), "#9aa3ab", metal);
+    for (let i = 0; i < 3; i += 1) {
+      const ang = (i * Math.PI * 2) / 3 + 0.4;
+      const out = v3.add(v3.scale(a, Math.cos(ang)), v3.scale(b, Math.sin(ang)));
+      g.draw("vane", basis(at(0.962), v3.cross(out, d), v3.scale(out, len * 0.028), v3.scale(d, len * 0.036)), "#e6e9ec", { shine: 1 });
+    }
+  } else {
+    // ogiva (bullet): corpo e punta arrotondata
+    g.draw("cyl", segment(at(0.958), at(0.975), r * 1.04), "#c9ced4", metal);
+    g.draw("cone", segment(at(0.975), at(1.0), r * 1.04), "#d8dde2", metal);
+    g.draw("sphere", trs(at(0.975), 0, [r * 1.04, r * 1.04, r * 1.04]), "#c9ced4", metal);
   }
 }
