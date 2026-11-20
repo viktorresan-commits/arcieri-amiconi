@@ -3,6 +3,7 @@
  * la visuale, frecce (di legno con il modello CC0, oppure costruite con i colori scelti).
  */
 import { basis, canvasTexture, hexRgb, loadWoodenArrow, segment, trs, v3, type GL3D, type Mesh, type Vec3 } from "./gl3d";
+import { drawSky, type Sky } from "./sky3d";
 
 const rand = (seed: number) => {
   let s = seed >>> 0;
@@ -11,60 +12,6 @@ const rand = (seed: number) => {
     return s / 4294967296;
   };
 };
-
-function skyTex(g: GL3D) {
-  return g.once("sky", () =>
-    g.textureFrom(
-      canvasTexture(1024, (c, s) => {
-        const h = s / 2;
-        const grd = c.createLinearGradient(0, 0, 0, h);
-        grd.addColorStop(0, "#2c5583");
-        grd.addColorStop(0.55, "#7fa6c4");
-        grd.addColorStop(0.92, "#cbdbe0");
-        grd.addColorStop(1, "#d9e3df");
-        c.fillStyle = grd;
-        c.fillRect(0, 0, s, h);
-        // nuvole morbide
-        const r = rand(7);
-        for (let i = 0; i < 26; i += 1) {
-          const x = r() * s;
-          const y = h * (0.35 + r() * 0.42);
-          const w = 40 + r() * 110;
-          for (let k = 0; k < 6; k += 1) {
-            const gx = x + (k - 3) * w * 0.22 + r() * 10;
-            const gy = y + (r() - 0.5) * w * 0.12;
-            const rr = w * (0.18 + r() * 0.16);
-            const rg = c.createRadialGradient(gx, gy, 0, gx, gy, rr);
-            rg.addColorStop(0, "rgba(255,255,255,0.55)");
-            rg.addColorStop(1, "rgba(255,255,255,0)");
-            c.fillStyle = rg;
-            for (const off of [-s, 0, s]) c.fillRect(gx - rr + off, gy - rr, rr * 2, rr * 2);
-          }
-        }
-        // colline lontane (periodiche in orizzontale)
-        const hill = (base: number, amp: number, col: string, f1: number, f2: number) => {
-          c.fillStyle = col;
-          c.beginPath();
-          c.moveTo(0, h + 4);
-          for (let x = 0; x <= s; x += 4) {
-            const a = (x / s) * Math.PI * 2;
-            c.lineTo(x, base - amp * (0.55 + 0.3 * Math.sin(a * f1 + 1.3) + 0.15 * Math.sin(a * f2 + 0.4)));
-          }
-          c.lineTo(s, h + 4);
-          c.closePath();
-          c.fill();
-        };
-        hill(h, 34, "#8ea6a8", 3, 11);
-        hill(h, 20, "#5f7d6c", 5, 13);
-        hill(h + 2, 9, "#46613f", 9, 23);
-        c.fillStyle = "#3f5a35";
-        c.fillRect(0, h, s, s - h);
-      }),
-      true,
-      false,
-    ),
-  );
-}
 
 function grassTex(g: GL3D) {
   return g.once("grass", () =>
@@ -166,9 +113,8 @@ function faceTex(g: GL3D, zones: number) {
 }
 
 /** Cielo (sempre centrato sulla camera) e prato. `center` è il mezzo del campo. */
-export function drawWorld(g: GL3D, center: Vec3, size = 900) {
-  const R = g.far * 0.85;
-  g.draw("sphere", trs([g.eye[0], g.eye[1] - R * 0.02, g.eye[2]], 0, [R, R, R]), [1, 1, 1], { tex: skyTex(g), unlit: true, noFog: true, noDepth: true });
+export function drawWorld(g: GL3D, center: Vec3, size = 900, sky: Sky = { tod: "pomeriggio", weather: "sereno" }, time = 0) {
+  drawSky(g, sky, time);
   g.draw(g.once("ground", () => g.mesh(groundGeo(80))), trs([center[0], 0, center[2]], 0, [size, 1, size]), [1, 1, 1], { tex: grassTex(g), shine: 0.02 });
 }
 

@@ -6,6 +6,7 @@ import { fmtWhen } from "@/lib/arcieri/time";
 import { programById } from "@/lib/arcieri/program";
 import { useLoad } from "@/lib/arcieri/use-load";
 import { AvatarScene, useAvatar } from "@/components/avatar-hero";
+import { Archer3D, SkyPicker } from "@/components/archer-3d";
 import { MainGearCard } from "@/components/main-gear";
 import { ShortcutRow, TipCard } from "@/components/shortcuts";
 import { JourneyCard } from "@/components/journey";
@@ -75,7 +76,7 @@ function Home() {
     <div className="grid gap-3">
       <Rise i={0}>
         <div className="grid gap-2">
-          <AvatarScene look={avatar.shown} height="h-[23rem]">
+          <Archer3D look={avatar.shown} framing="home" height="h-[34rem]" fallback={<AvatarScene look={avatar.shown} height="h-[26rem]" />}>
             <div className="pointer-events-none absolute inset-x-0 top-0 flex justify-end p-3">
               <div className="pointer-events-auto max-w-[62%] text-right text-white [text-shadow:0_1px_8px_rgba(0,0,0,0.45)]">
                 <p className="text-[0.66rem] font-semibold uppercase tracking-[0.18em] text-white/75">{new Date().toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" })}</p>
@@ -87,10 +88,11 @@ function Home() {
                 {data.streak > 1 ? <p className="mt-2 inline-flex rounded-full bg-black/35 px-2.5 py-1 text-[0.7rem] font-semibold backdrop-blur">{data.streak} giorni di fila</p> : null}
               </div>
             </div>
-            <Link to="/avatar" aria-label="Personalizza l'arciere" className="absolute bottom-3 right-3 grid h-11 w-11 place-items-center rounded-full bg-black/45 text-white backdrop-blur">
-              <Glyph name="palette" size={19} />
+            <SkyPicker className="absolute left-3 top-3" />
+            <Link to="/avatar" aria-label="Personalizza l'arciere" className="absolute bottom-3 right-14 grid h-10 w-10 place-items-center rounded-full bg-black/45 text-white backdrop-blur">
+              <Glyph name="palette" size={18} />
             </Link>
-          </AvatarScene>
+          </Archer3D>
           <div className="grid grid-cols-[1.4fr_1fr] gap-2">
             <Link to="/allenamento" search={{ avvia: "rapido" }} className="block">
               <Button className="aa-glow w-full"><Glyph name="bolt" size={18} /> Tiro rapido</Button>

@@ -82,12 +82,12 @@ export function useGLScene(draw: GLDraw) {
 }
 
 /** Tela 3D a due strati (WebGL + scritte) con il pulsante «Gira» e l'aiuto dei gesti. */
-export function GLStage({ glRef, overlayRef, view, className, label, children, hint = true }: { glRef: RefObject<HTMLCanvasElement | null>; overlayRef: RefObject<HTMLCanvasElement | null>; view: MutableRefObject<OrbitView>; className: string; label: string; children?: ReactNode; hint?: boolean }) {
+export function GLStage({ glRef, overlayRef, view, className, label, children, hint = true, touch = "none" }: { glRef: RefObject<HTMLCanvasElement | null>; overlayRef: RefObject<HTMLCanvasElement | null>; view: MutableRefObject<OrbitView>; className: string; label: string; children?: ReactNode; hint?: boolean; touch?: "none" | "pan-y" }) {
   const [spinning, setSpinning] = useState(false);
   return (
     <div className={`aa-3d-wrap overflow-hidden rounded-2xl bg-[#9fb6c2] ${className}`}>
       <canvas ref={glRef} className="aa-3d absolute inset-0 block h-full w-full" aria-hidden />
-      <canvas ref={overlayRef} className="absolute inset-0 block h-full w-full" style={{ touchAction: "none" }} role="img" aria-label={`${label}: trascina per ruotare, due dita per ingrandire e spostare, doppio tocco per ripristinare`} />
+      <canvas ref={overlayRef} className="absolute inset-0 block h-full w-full" style={{ touchAction: touch }} role="img" aria-label={`${label}: trascina per ruotare, due dita per ingrandire e spostare, doppio tocco per ripristinare`} />
       {children}
       <button
         type="button"

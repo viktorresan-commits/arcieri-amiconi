@@ -242,8 +242,10 @@ export function vaneGeo(): Geo {
 }
 
 // ── motore ────────────────────────────────────────────────────────────────────
+export type SkinGeo = { pos: Float32Array; nor: Float32Array; uv: Float32Array; bone: Float32Array; w: Float32Array; idx: Uint16Array };
+export type SkinMesh = { pos: WebGLBuffer; nor: WebGLBuffer; uv: WebGLBuffer; bone: WebGLBuffer; w: WebGLBuffer; idx: WebGLBuffer };
 export type Mesh = { vao: { pos: WebGLBuffer; nor: WebGLBuffer; uv: WebGLBuffer; idx: WebGLBuffer }; count: number };
-export type DrawOpts = { tex?: WebGLTexture | null; shine?: number; emissive?: number; alpha?: number; unlit?: boolean; noFog?: boolean; noDepth?: boolean };
+export type DrawOpts = { tex?: WebGLTexture | null; shine?: number; emissive?: number; alpha?: number; unlit?: boolean; noFog?: boolean; noDepth?: boolean; additive?: boolean; tint?: 0 | 1 | 2; texAlpha?: boolean };
 
 const VS = `
 attribute vec3 aPos; attribute vec3 aNor; attribute vec2 aUv;
@@ -257,16 +259,36 @@ void main(){
   gl_Position = uVP * w;
 }`;
 
+const SKIN_VS = `
+attribute vec3 aPos; attribute vec3 aNor; attribute vec2 aUv; attribute vec4 aBone; attribute vec4 aW;
+uniform mat4 uBones[16]; uniform mat4 uVP;
+varying vec3 vNor; varying vec3 vWorld; varying vec2 vUv;
+void main(){
+  mat4 m = uBones[int(aBone.x + 0.5)] * aW.x + uBones[int(aBone.y + 0.5)] * aW.y + uBones[int(aBone.z + 0.5)] * aW.z + uBones[int(aBone.w + 0.5)] * aW.w;
+  vec4 w = m * vec4(aPos, 1.0);
+  vWorld = w.xyz;
+  vNor = mat3(m) * aNor;
+  vUv = aUv;
+  gl_Position = uVP * w;
+}`;
+
 const FS = `
 precision mediump float;
 varying vec3 vNor; varying vec3 vWorld; varying vec2 vUv;
 uniform vec3 uColor; uniform vec3 uSun; uniform vec3 uSunCol; uniform vec3 uSky; uniform vec3 uGround;
 uniform vec3 uEye; uniform vec3 uFog; uniform float uFogNear; uniform float uFogFar;
 uniform float uShine; uniform float uEmissive; uniform float uAlpha; uniform float uUnlit; uniform float uFogK;
-uniform sampler2D uTex; uniform float uUseTex;
+uniform sampler2D uTex; uniform float uUseTex; uniform float uTint; uniform float uTexAlpha;
 void main(){
   vec3 base = uColor;
-  if (uUseTex > 0.5) base *= texture2D(uTex, vUv).rgb;
+  float ta = 1.0;
+  if (uUseTex > 0.5) {
+    vec4 t4 = texture2D(uTex, vUv);
+    vec3 tx = t4.rgb;
+    if (uTexAlpha > 0.5) ta = t4.a;
+    if (uTint > 0.5 && uTint < 1.5) base = uColor * dot(tx, vec3(0.3, 0.59, 0.11)) * 2.2;
+    else base *= tx;
+  }
   vec3 n = normalize(vNor);
   if (!gl_FrontFacing) n = -n;
   vec3 col;
@@ -284,7 +306,8 @@ void main(){
   float d = distance(uEye, vWorld);
   float f = clamp((d - uFogNear) / (uFogFar - uFogNear), 0.0, 1.0);
   col = mix(col, uFog, f * f * uFogK);
-  gl_FragColor = vec4(pow(col, vec3(1.0/1.12)), uAlpha);
+  if (uAlpha * ta < 0.01) discard;
+  gl_FragColor = vec4(pow(col, vec3(1.0/1.12)), uAlpha * ta);
 }`;
 
 export type Env = { sun: Vec3; sunCol: Vec3; sky: Vec3; ground: Vec3; fog: Vec3; fogNear: number; fogFar: number };
@@ -299,6 +322,8 @@ export class GL3D {
   vp: Mat4 = mat4();
   eye: Vec3 = [0, 0, 0];
   far = 200;
+  env: Env = DAY;
+  skin: { prog: WebGLProgram; loc: Record<string, WebGLUniformLocation | null>; attr: Record<string, number> } | null = null;
   white: WebGLTexture;
   meshes: Record<string, Mesh> = {};
   cache = new Map<string, unknown>();
@@ -327,7 +352,7 @@ export class GL3D {
     if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog) || "link");
     this.prog = prog;
     gl.useProgram(prog);
-    for (const u of ["uModel", "uVP", "uColor", "uSun", "uSunCol", "uSky", "uGround", "uEye", "uFog", "uFogNear", "uFogFar", "uShine", "uEmissive", "uAlpha", "uUnlit", "uTex", "uUseTex", "uFogK"]) this.loc[u] = gl.getUniformLocation(prog, u);
+    for (const u of ["uModel", "uVP", "uColor", "uSun", "uSunCol", "uSky", "uGround", "uEye", "uFog", "uFogNear", "uFogFar", "uShine", "uEmissive", "uAlpha", "uUnlit", "uTex", "uUseTex", "uFogK", "uTint", "uTexAlpha"]) this.loc[u] = gl.getUniformLocation(prog, u);
     this.attr = { pos: gl.getAttribLocation(prog, "aPos"), nor: gl.getAttribLocation(prog, "aNor"), uv: gl.getAttribLocation(prog, "aUv") };
     gl.enable(gl.DEPTH_TEST);
     gl.enable(gl.BLEND);
@@ -377,6 +402,10 @@ export class GL3D {
   }
 
   resize() {
+    if (!this.canvas.isConnected) {
+      this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+      return { w: this.canvas.width, h: this.canvas.height, cssW: this.canvas.width, cssH: this.canvas.height };
+    }
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     const w = Math.max(1, Math.round(this.canvas.clientWidth * dpr));
     const h = Math.max(1, Math.round(this.canvas.clientHeight * dpr));
@@ -397,6 +426,7 @@ export class GL3D {
     this.far = Math.max(260, dist * 8);
     this.vp = mul(perspective(fov, w / h, Math.max(0.02, dist * 0.01), this.far), lookAt(eye, target));
     this.eye = eye;
+    this.env = env;
     gl.useProgram(this.prog);
     gl.uniformMatrix4fv(this.loc.uVP, false, this.vp);
     gl.uniform3fv(this.loc.uSun, env.sun);
@@ -422,6 +452,8 @@ export class GL3D {
     gl.uniform1f(this.loc.uAlpha, o.alpha ?? 1);
     gl.uniform1f(this.loc.uUnlit, o.unlit ? 1 : 0);
     gl.uniform1f(this.loc.uFogK, o.noFog ? 0 : 1);
+    gl.uniform1f(this.loc.uTint, o.tint ?? 0);
+    gl.uniform1f(this.loc.uTexAlpha, o.texAlpha ? 1 : 0);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, o.tex ?? this.white);
     gl.uniform1i(this.loc.uTex, 0);
@@ -436,12 +468,99 @@ export class GL3D {
     bind(m.vao.nor, this.attr.nor, 3);
     bind(m.vao.uv, this.attr.uv, 2);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, m.vao.idx);
-    const soft = (o.alpha ?? 1) < 1 || o.noDepth;
+    const soft = (o.alpha ?? 1) < 1 || o.noDepth || o.additive;
     if (soft) gl.depthMask(false);
     if (o.noDepth) gl.disable(gl.DEPTH_TEST);
+    if (o.additive) gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
     gl.drawElements(gl.TRIANGLES, m.count, gl.UNSIGNED_SHORT, 0);
+    if (o.additive) gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     if (o.noDepth) gl.enable(gl.DEPTH_TEST);
     if (soft) gl.depthMask(true);
+  }
+
+  /** Programma per le mesh con ossa (pelle che segue lo scheletro). */
+  private skinProgram() {
+    if (this.skin) return this.skin;
+    const gl = this.gl;
+    const sh = (type: number, src: string) => {
+      const x = gl.createShader(type) as WebGLShader;
+      gl.shaderSource(x, src);
+      gl.compileShader(x);
+      if (!gl.getShaderParameter(x, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(x) || "shader");
+      return x;
+    };
+    const prog = gl.createProgram() as WebGLProgram;
+    gl.attachShader(prog, sh(gl.VERTEX_SHADER, SKIN_VS));
+    gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS));
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog) || "link");
+    const loc: Record<string, WebGLUniformLocation | null> = {};
+    for (const u of ["uBones", "uVP", "uColor", "uSun", "uSunCol", "uSky", "uGround", "uEye", "uFog", "uFogNear", "uFogFar", "uShine", "uEmissive", "uAlpha", "uUnlit", "uTex", "uUseTex", "uFogK", "uTint", "uTexAlpha"]) loc[u] = gl.getUniformLocation(prog, u === "uBones" ? "uBones[0]" : u);
+    const attr: Record<string, number> = {};
+    for (const a of ["aPos", "aNor", "aUv", "aBone", "aW"]) attr[a] = gl.getAttribLocation(prog, a);
+    this.skin = { prog, loc, attr };
+    return this.skin;
+  }
+
+  skinnedMesh(g: SkinGeo): SkinMesh {
+    const gl = this.gl;
+    const buf = (data: ArrayBufferView, target: number) => {
+      const b = gl.createBuffer() as WebGLBuffer;
+      gl.bindBuffer(target, b);
+      gl.bufferData(target, data, gl.STATIC_DRAW);
+      return b;
+    };
+    return { pos: buf(g.pos, gl.ARRAY_BUFFER), nor: buf(g.nor, gl.ARRAY_BUFFER), uv: buf(g.uv, gl.ARRAY_BUFFER), bone: buf(g.bone, gl.ARRAY_BUFFER), w: buf(g.w, gl.ARRAY_BUFFER), idx: buf(g.idx, gl.ELEMENT_ARRAY_BUFFER) };
+  }
+
+  /** Disegna una mesh con ossa: `bones` = 16 matrici 4×4 di fila; ogni parte ha la sua texture e tinta. */
+  drawSkinned(m: SkinMesh, bones: Float32Array, parts: { start: number; count: number; tex: WebGLTexture | null; color: Vec3; tint?: 0 | 1 | 2; shine?: number }[]) {
+    const gl = this.gl;
+    const sk = this.skinProgram();
+    gl.useProgram(sk.prog);
+    const L = sk.loc;
+    const env = this.env;
+    gl.uniformMatrix4fv(L.uVP, false, this.vp);
+    gl.uniformMatrix4fv(L.uBones, false, bones);
+    gl.uniform3fv(L.uSun, env.sun);
+    gl.uniform3fv(L.uSunCol, env.sunCol);
+    gl.uniform3fv(L.uSky, env.sky);
+    gl.uniform3fv(L.uGround, env.ground);
+    gl.uniform3fv(L.uEye, this.eye);
+    gl.uniform3fv(L.uFog, env.fog);
+    gl.uniform1f(L.uFogNear, env.fogNear);
+    gl.uniform1f(L.uFogFar, env.fogFar);
+    gl.uniform1f(L.uEmissive, 0);
+    gl.uniform1f(L.uAlpha, 1);
+    gl.uniform1f(L.uUnlit, 0);
+    gl.uniform1f(L.uFogK, 1);
+    gl.uniform1f(L.uTexAlpha, 0);
+    const bind = (b: WebGLBuffer, loc: number, n: number) => {
+      if (loc < 0) return;
+      gl.bindBuffer(gl.ARRAY_BUFFER, b);
+      gl.enableVertexAttribArray(loc);
+      gl.vertexAttribPointer(loc, n, gl.FLOAT, false, 0, 0);
+    };
+    bind(m.pos, sk.attr.aPos, 3);
+    bind(m.nor, sk.attr.aNor, 3);
+    bind(m.uv, sk.attr.aUv, 2);
+    bind(m.bone, sk.attr.aBone, 4);
+    bind(m.w, sk.attr.aW, 4);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, m.idx);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.uniform1i(L.uTex, 0);
+    for (const p of parts) {
+      gl.bindTexture(gl.TEXTURE_2D, p.tex ?? this.white);
+      gl.uniform1f(L.uUseTex, p.tex ? 1 : 0);
+      gl.uniform3fv(L.uColor, p.color);
+      gl.uniform1f(L.uTint, p.tint ?? 0);
+      gl.uniform1f(L.uShine, p.shine ?? 0.12);
+      gl.drawElements(gl.TRIANGLES, p.count, gl.UNSIGNED_SHORT, p.start * 2);
+    }
+    // gli attributi delle ossa non servono al programma normale
+    if (sk.attr.aBone >= 0) gl.disableVertexAttribArray(sk.attr.aBone);
+    if (sk.attr.aW >= 0) gl.disableVertexAttribArray(sk.attr.aW);
+    gl.useProgram(this.prog);
   }
 
   /** Ombra morbida a macchia sul terreno (y = 0.002). */

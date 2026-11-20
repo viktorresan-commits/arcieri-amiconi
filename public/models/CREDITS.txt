@@ -1,1 +1,6 @@
 Freccia di legno: "Wooden Arrow" di Marcel Plagmann (plaggy.net), licenza CC0 / pubblico dominio.
+
+archer-body.bin, archer-body.jpg, archer-top.jpg, archer-bottom.jpg, archer-shoes.jpg
+  Corpo dell'arciere ricavato da un personaggio Adobe Fuse/Mixamo ("Man Muscular Tank Top Workout Shorts")
+  fornito dal proprietario dell'app, convertito nel formato interno con pesi sulle ossa.
+  Uso consentito all'interno di progetti e prodotti secondo i termini Mixamo; non è distribuito come modello separato.

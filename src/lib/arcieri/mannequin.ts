@@ -5,6 +5,7 @@
  */
 import { basis, hexRgb, segment, trs, v3, type GL3D, type Vec3 } from "./gl3d";
 import { drawArrow3D, type ArrowLook } from "./scene3d";
+import { bodyRes, drawRealBody, solveBody } from "./body-mesh";
 import type { AvatarLook } from "./avatar";
 
 export type ManLook = Partial<AvatarLook>;
@@ -47,24 +48,61 @@ export function ik(s: Vec3, t: Vec3, l1: number, l2: number, pole: Vec3) {
 // ── pose del tiro (coordinate locali: f avanti/petto, u su, l verso il bersaglio) ──────────────────
 export type ArcherPose = { bow: Vec3; draw: Vec3; head: number; onString: number; arrow: number; drawAmt: number; bowLift: number };
 
-const P: Record<"riposo" | "alzata" | "allungo" | "rilascio" | "accompagna", ArcherPose> = {
-  riposo: { bow: [0.16, 0.86, 0.14], draw: [0.06, 0.86, -0.17], head: 0.35, onString: 0, arrow: 0, drawAmt: 0, bowLift: 0 },
-  alzata: { bow: [0.05, 1.32, 0.5], draw: [0.04, 1.33, 0.2], head: 1.4, onString: 1, arrow: 1, drawAmt: 0.05, bowLift: 1 },
-  allungo: { bow: [0.0, 1.44, 0.63], draw: [0.07, 1.53, -0.03], head: 1.45, onString: 1, arrow: 1, drawAmt: 1, bowLift: 1 },
-  rilascio: { bow: [0.0, 1.43, 0.64], draw: [0.04, 1.56, -0.2], head: 1.45, onString: 0, arrow: 0, drawAmt: 0, bowLift: 1 },
-  accompagna: { bow: [0.02, 1.38, 0.62], draw: [0.03, 1.5, -0.24], head: 1.4, onString: 0, arrow: 0, drawAmt: 0, bowLift: 1 },
+type Key = "riposo" | "incocco" | "aggancio" | "predraw" | "trazione" | "ancoraggio" | "mira" | "rilascio" | "accompagna";
+const P: Record<Key, ArcherPose> = {
+  riposo: { bow: [0.1, 0.9, 0.2], draw: [0.06, 0.86, -0.17], head: 0.35, onString: 0, arrow: 0, drawAmt: 0, bowLift: 0 },
+  incocco: { bow: [0.24, 1.0, 0.3], draw: [0.26, 1.03, 0.0], head: 0.15, onString: 0, arrow: 1, drawAmt: 0, bowLift: 0.35 },
+  aggancio: { bow: [0.2, 1.03, 0.32], draw: [0.17, 1.06, 0.1], head: 0.45, onString: 1, arrow: 1, drawAmt: 0.02, bowLift: 0.45 },
+  predraw: { bow: [0.04, 1.34, 0.52], draw: [0.05, 1.36, 0.22], head: 1.4, onString: 1, arrow: 1, drawAmt: 0.08, bowLift: 1 },
+  trazione: { bow: [0.0, 1.43, 0.62], draw: [0.06, 1.47, 0.12], head: 1.45, onString: 1, arrow: 1, drawAmt: 0.55, bowLift: 1 },
+  ancoraggio: { bow: [0.0, 1.44, 0.63], draw: [0.07, 1.53, -0.03], head: 1.45, onString: 1, arrow: 1, drawAmt: 1, bowLift: 1 },
+  mira: { bow: [0.0, 1.44, 0.63], draw: [0.07, 1.53, -0.045], head: 1.45, onString: 1, arrow: 1, drawAmt: 1, bowLift: 1 },
+  rilascio: { bow: [0.0, 1.43, 0.645], draw: [0.04, 1.56, -0.2], head: 1.45, onString: 0, arrow: 0, drawAmt: 0, bowLift: 1 },
+  accompagna: { bow: [0.02, 1.39, 0.63], draw: [0.03, 1.5, -0.24], head: 1.4, onString: 0, arrow: 0, drawAmt: 0, bowLift: 1 },
 };
 
+/**
+ * Sequenza di tiro in 11 tempi (posizione, incocco, aggancio e presa, pre-trazione, trazione,
+ * ancoraggio, trasferimento e mira, rilascio, accompagnamento, rilassamento), come nei programmi
+ * federali e "11 Steps to Archery Success". Il tempo 0 è il rilascio.
+ */
 const KEYS: [number, ArcherPose][] = [
-  [-2.7, P.riposo],
-  [-1.9, P.alzata],
-  [-1.05, P.allungo],
-  [0, { ...(P.allungo), draw: [0.07, 1.53, -0.045] }],
+  [-6.4, P.riposo],
+  [-5.6, P.incocco],
+  [-4.9, P.aggancio],
+  [-4.2, P.predraw],
+  [-3.7, P.predraw],
+  [-2.9, P.trazione],
+  [-2.3, P.ancoraggio],
+  [-1.3, P.mira],
+  [0, { ...P.mira, draw: [0.07, 1.53, -0.055] }],
   [0.07, P.rilascio],
-  [0.75, P.accompagna],
+  [0.8, P.accompagna],
   [1.9, P.accompagna],
-  [2.8, P.riposo],
+  [2.9, P.riposo],
 ];
+
+export const ROUTINE_START = -6.4;
+export const ROUTINE_END = 2.9;
+
+export const ROUTINE: { t: number; name: string }[] = [
+  { t: -6.4, name: "Posizione" },
+  { t: -5.6, name: "Incocco" },
+  { t: -4.9, name: "Aggancio e presa" },
+  { t: -4.2, name: "Pre-trazione" },
+  { t: -3.7, name: "Trazione" },
+  { t: -2.3, name: "Ancoraggio" },
+  { t: -1.3, name: "Trasferimento e mira" },
+  { t: 0, name: "Rilascio" },
+  { t: 0.25, name: "Accompagnamento" },
+  { t: 1.9, name: "Rilassamento" },
+];
+
+export function phaseAt(tt: number) {
+  let name = ROUTINE[0].name;
+  for (const r of ROUTINE) if (tt >= r.t) name = r.name;
+  return name;
+}
 
 const smooth = (x: number) => x * x * (3 - 2 * x);
 
@@ -81,8 +119,8 @@ export function poseAt(tt: number): ArcherPose {
         bow: v3.lerp(a.bow, b.bow, f),
         draw: v3.lerp(a.draw, b.draw, f),
         head: a.head + (b.head - a.head) * f,
-        onString: i === 4 ? 0 : step(a.onString, b.onString),
-        arrow: i === 4 ? 0 : step(a.arrow, b.arrow),
+        onString: b.onString < a.onString ? b.onString : step(a.onString, b.onString),
+        arrow: b.arrow < a.arrow ? b.arrow : step(a.arrow, b.arrow),
         drawAmt: a.drawAmt + (b.drawAmt - a.drawAmt) * f,
         bowLift: a.bowLift + (b.bowLift - a.bowLift) * f,
       };
@@ -282,7 +320,7 @@ export function drawArcher(g: GL3D, origin: Vec3, toward: Vec3, k: number, pose:
   const rLeg = ik(rHip, rFootT, 0.45 * s, 0.44 * s, F);
   const yaw = pose.head;
   const face = v3.add(v3.scale(F, Math.cos(yaw)), v3.scale(L, Math.sin(yaw)));
-  const J: Joints = {
+  let J: Joints = {
     head: at(0.01, 1.64, 0.01),
     neck: at(0, 1.5, 0),
     chest: at(0, 1.3, 0),
@@ -301,7 +339,29 @@ export function drawArcher(g: GL3D, origin: Vec3, toward: Vec3, k: number, pose:
     rFoot: rLeg.end,
     face,
   };
-  drawBody(g, J, s, look);
+  // corpo realistico (maschile) quando il modello è pronto; altrimenti il manichino
+  const res = realistic(look) ? bodyRes(g) : null;
+  if (res?.ready && res.asset) {
+    const bones = new Float32Array(256);
+    const R = solveBody(res.asset.header, {
+      origin,
+      F,
+      L,
+      s,
+      lHand: at(pose.bow[0], pose.bow[1], pose.bow[2]),
+      rHand: at(pose.draw[0], pose.draw[1], pose.draw[2]),
+      lPole: v3.add(v3.scale(F, -1), [0, -0.6, 0]),
+      rPole: v3.add(v3.scale(L, -1), [0, 0.35, 0]),
+      face,
+      twist: 0.08 * pose.bowLift,
+    }, bones);
+    drawRealBody(g, res, bones, look);
+    J = { ...J, head: R.head, neck: R.neck, chest: R.chest, pelvis: R.pelvis, lSh: R.lSh, rSh: R.rSh, lEl: R.lEl, rEl: R.rEl, lHand: R.lHand, rHand: R.rHand, lHip: R.lHip, rHip: R.rHip, lKnee: R.lKnee, rKnee: R.rKnee, lFoot: R.lAnk, rFoot: R.rAnk };
+    drawGearOnBody(g, J, s, look, R.lWr, R.rWr);
+    g.shadow(origin, 0.42 * s, 0.32 * s, 0.34);
+  } else {
+    drawBody(g, J, s, look);
+  }
   // faretra al fianco destro o sulla schiena
   if (look.quiver !== "") {
     const qc = look.quiver || "#7a4a26";
@@ -318,13 +378,13 @@ export function drawArcher(g: GL3D, origin: Vec3, toward: Vec3, k: number, pose:
   }
   // arco nella mano sinistra: in riposo pende verso il basso e in avanti
   const lift = pose.bowLift;
-  const bowU = v3.norm(v3.lerp(v3.add(v3.scale(U, 0.6), v3.scale(L, 0.8)), v3.add(U, v3.scale(L, -0.04)), lift));
+  const bowU = v3.norm(v3.lerp(v3.add(v3.scale(U, 0.95), v3.scale(L, 0.32)), v3.add(U, v3.scale(L, -0.04)), lift));
   const bowL = v3.norm(v3.sub(L, v3.scale(bowU, v3.dot(L, bowU))));
   const grip = v3.add(J.lHand, v3.scale(bowL, 0.01 * s));
   const nock = pose.onString > 0.5 ? J.rHand : null;
   drawBow(g, grip, bowU, bowL, F, s, look, pose.drawAmt, nock);
   if (pose.arrow > 0.5) {
-    const n = nock ?? v3.add(grip, v3.scale(bowL, -0.2 * s));
+    const n = nock ?? J.rHand;
     const restP = v3.add(grip, v3.add(v3.scale(bowU, 0.03 * s), v3.scale(F, 0.012 * s)));
     const dir = v3.norm(v3.sub(restP, n));
     drawArrow3D(g, n, dir, arrowLen * s, 0, 0.0045 * s, arrow);
@@ -335,3 +395,41 @@ export function drawArcher(g: GL3D, origin: Vec3, toward: Vec3, k: number, pose:
 
 /** Colore di contrasto per la sagoma fantasma. */
 export const GHOST = hexRgb("#7cf0a8");
+
+/** Il corpo realistico vale per arciere uomo e ragazzo (il modello è maschile). */
+export function realistic(look: ManLook) {
+  return look.body !== "donna" && look.body !== "ragazza";
+}
+
+/** Attrezzatura e accessori sopra il corpo realistico: parabraccio, guantino, pettorina, cappelli, capelli lunghi, mantello. */
+function drawGearOnBody(g: GL3D, J: Joints, s: number, look: ManLook, lWr: Vec3, rWr: Vec3) {
+  const U: Vec3 = [0, 1, 0];
+  const side = v3.norm(v3.sub(J.lSh, J.rSh));
+  const F = v3.norm(v3.cross(side, U));
+  if (look.armguard) g.draw("tube", segment(v3.lerp(J.lEl, lWr, 0.25), v3.lerp(J.lEl, lWr, 0.92), 0.04 * s), look.armguard, { shine: 0.35 });
+  if (look.tab) g.draw("sphere", trs(v3.lerp(rWr, J.rHand, 1.15), 0, [0.035 * s, 0.05 * s, 0.035 * s]), look.tab, { shine: 0.3 });
+  if (look.chestguard) {
+    g.draw("tube", segment(v3.add(J.lSh, v3.add(v3.scale(F, 0.03 * s), v3.scale(U, 0.03 * s))), v3.add(v3.lerp(J.chest, J.rSh, 0.6), v3.scale(F, 0.09 * s)), 0.008 * s), look.chestColor || "#1d2126");
+  }
+  const head = v3.add(J.neck, v3.scale(U, 0.16 * s));
+  const hr = 0.11 * s;
+  if (look.hat === "berretto") g.draw("sphere", basis(v3.add(head, v3.scale(U, hr * 0.45)), v3.scale(side, hr * 1.02), v3.scale(U, hr * 0.7), v3.scale(F, hr * 1.06)), look.hatColor || "#1f3a5f", { shine: 0.15 });
+  else if (look.hat === "cappuccio") g.draw("sphere", basis(v3.add(head, v3.add(v3.scale(U, hr * 0.15), v3.scale(F, -hr * 0.2))), v3.scale(side, hr * 1.2), v3.scale(U, hr * 1.18), v3.scale(F, hr * 1.12)), look.hatColor || "#4b6b2e", { shine: 0.12 });
+  else if (look.hat === "elmo") g.draw("sphere", basis(v3.add(head, v3.scale(U, hr * 0.35)), v3.scale(side, hr * 1.12), v3.scale(U, hr * 0.95), v3.scale(F, hr * 1.12)), "#9aa3ab", { shine: 0.9 });
+  else if (look.hat === "fascia") g.draw("tube", segment(v3.add(head, v3.scale(U, hr * 0.45)), v3.add(head, v3.scale(U, hr * 0.7)), hr * 1.0), look.hatColor || "#c4473d");
+  else if (look.hat === "piuma") {
+    g.draw("sphere", basis(v3.add(head, v3.scale(U, hr * 0.62)), v3.scale(side, hr * 1.3), v3.scale(U, hr * 0.45), v3.scale(F, hr * 1.3)), look.hatColor || "#4b6b2e", { shine: 0.12 });
+    g.draw("vane", basis(v3.add(head, v3.add(v3.scale(U, hr * 0.8), v3.scale(F, -hr * 0.5))), side, v3.scale(U, hr * 1.2), v3.scale(F, -hr * 1.6)), "#c4473d");
+  }
+  if (["lunghi", "coda", "treccia", "codini"].includes(look.hair ?? "") && look.hat !== "cappuccio" && look.hat !== "elmo") {
+    g.capsule(v3.add(head, v3.add(v3.scale(F, -hr * 0.85), v3.scale(U, hr * 0.2))), v3.add(head, v3.add(v3.scale(F, -hr * 1.1), v3.scale(U, -hr * 1.9))), hr * 0.3, look.hairColor || "#3b2a1d", { shine: 0.35 });
+  }
+  if (look.cape) {
+    const a = v3.add(J.neck, v3.scale(F, -0.1 * s));
+    g.draw("cyl", segment(v3.add(a, v3.scale(U, -0.95 * s)), a, 0.2 * s, 0.06 * s), look.capeColor || "#5b2b6e", { shine: 0.1 });
+  }
+  if (look.style === "medievale") {
+    g.draw("cyl", segment(v3.add(J.pelvis, [0, -0.22 * s, 0]), v3.add(J.pelvis, [0, 0.12 * s, 0]), 0.2 * s, 0.15 * s), look.shirt || "#4b6b2e", { shine: 0.1 });
+    g.draw("tube", segment(v3.add(J.pelvis, [0, 0.06 * s, 0]), v3.add(J.pelvis, [0, 0.1 * s, 0]), 0.165 * s, 0.14 * s), look.trim || "#c7a03a");
+  }
+}

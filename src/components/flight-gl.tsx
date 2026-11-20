@@ -1,12 +1,14 @@
 import { useRef, useState } from "react";
 import { describeRound, goldOf, releasePoint, type FlightInput } from "@/lib/arcieri/flight";
 import { project, segment, v3, type Vec3 } from "@/lib/arcieri/gl3d";
-import { drawArcher, poseAt } from "@/lib/arcieri/mannequin";
+import { drawArcher, phaseAt, poseAt, ROUTINE_END, ROUTINE_START } from "@/lib/arcieri/mannequin";
 import { drawArrow3D, drawBoss, drawLane, drawTrees, drawWorld } from "@/lib/arcieri/scene3d";
 import { useAvatar } from "./avatar-hero";
 import { orbit, type Arrow3DLook } from "./foc-3d";
 import { Flight3DCanvas, PRESETS, type Preset } from "./flight-3d";
 import { GLStage, useGLScene } from "./gl-stage";
+import { SkyPicker } from "./archer-3d";
+import { drawSkyOverlay, envOf, useSky } from "@/lib/arcieri/sky3d";
 
 type RoundView = ReturnType<typeof describeRound>;
 
@@ -21,6 +23,7 @@ export function Flight3D({ input, round, sighted, look = {}, height = "h-72" }: 
   const presetRef = useRef<Preset>(preset);
   presetRef.current = preset;
   const { shown } = useAvatar();
+  const { sky } = useSky();
 
   const { ref, glRef, view, failed } = useGLScene((g, o, w, h, time, v) => {
     const D = input.distanceM;
@@ -39,8 +42,8 @@ export function Flight3D({ input, round, sighted, look = {}, height = "h-72" }: 
     const lat = (x: number) => round.clean.y * (x / D) ** 2;
     const W3 = (x: number, z: number, y = lat(x)): Vec3 => [y * big, big * (lineZ(x) + ex * (z - lineZ(x))), x];
     const lead = round.lead ?? 0;
-    const cycle = T + 5.6;
-    const tt = (time % cycle) - 2.9;
+    const cycle = T + ROUTINE_END - ROUTINE_START + 0.6;
+    const tt = (time % cycle) + ROUTINE_START - 0.3;
     const flying = tt >= 0 && tt < T;
     const landed = tt >= T;
     const shift = lead && tt < T ? -lead * (1 - Math.max(0, tt) / T) : 0;
@@ -63,10 +66,10 @@ export function Flight3D({ input, round, sighted, look = {}, height = "h-72" }: 
       tgt = [0, gH * 0.7, D * 0.32];
     }
     const cam = orbit(eye, tgt, v);
-    g.begin(cam.eye as Vec3, cam.target as Vec3, p === "bersaglio" ? 44 : 50);
+    g.begin(cam.eye as Vec3, cam.target as Vec3, p === "bersaglio" ? 44 : 50, envOf(sky));
     const P2 = (q: Vec3) => project(g.vp, q, w, h);
 
-    drawWorld(g, [0, 0, D / 2]);
+    drawWorld(g, [0, 0, D / 2], 900, sky, time);
     drawTrees(g, D, Math.round(D));
     const step = D > 40 ? 10 : 5;
     drawLane(g, D, big, step);
@@ -126,6 +129,7 @@ export function Flight3D({ input, round, sighted, look = {}, height = "h-72" }: 
       flyTip = tip;
     }
 
+    drawSkyOverlay(o, g, sky, w, h, time);
     // ── scritte ──
     o.font = "10px system-ui, sans-serif";
     o.textAlign = "left";
@@ -203,7 +207,7 @@ export function Flight3D({ input, round, sighted, look = {}, height = "h-72" }: 
         o.fill();
       }
     }
-    const phase = tt < -2.7 ? "in posizione" : tt < -1.9 ? "alzata" : tt < -1.05 ? "trazione" : tt < 0 ? "mira" : flying ? "in volo" : "a segno";
+    const phase = tt < 0 ? phaseAt(tt).toLowerCase() : flying ? "in volo" : "a segno";
     o.textAlign = "left";
     label(o, `${Math.min(T, Math.max(0, tt)).toFixed(2).replace(".", ",")} / ${T.toFixed(2).replace(".", ",")} s · ${round.clean.v0.toFixed(0)} m/s · ${phase}`, 10, 18, "rgba(255,255,255,0.95)", "600 11px system-ui, sans-serif");
     label(o, `${D} m · ${big > 1.05 ? `oggetti ×${big.toFixed(1).replace(".", ",")} · ` : ""}curva ×${ex.toFixed(0)}`, 10, 32, "rgba(255,255,255,0.8)");
@@ -212,7 +216,9 @@ export function Flight3D({ input, round, sighted, look = {}, height = "h-72" }: 
   if (failed) return <Flight3DCanvas input={input} round={round} sighted={sighted} look={look} height={height} />;
   return (
     <div className="grid gap-1.5">
-      <GLStage glRef={glRef} overlayRef={ref} view={view} className={`w-full ${height}`} label="Tiro in 3D: arciere, traiettoria e bersaglio" />
+      <GLStage glRef={glRef} overlayRef={ref} view={view} className={`w-full ${height}`} label="Tiro in 3D: arciere, traiettoria e bersaglio">
+        <SkyPicker className="absolute bottom-11 left-2" />
+      </GLStage>
       <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 [scrollbar-width:none]">
         {PRESETS.map((item) => (
           <button

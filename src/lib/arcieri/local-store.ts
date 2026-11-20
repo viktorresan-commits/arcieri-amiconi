@@ -1,9 +1,15 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
-/** Stato salvato sul telefono: si legge all'apertura e si scrive a ogni modifica, senza pulsanti. */
+/**
+ * Stato salvato sul telefono: si legge all'apertura e si scrive a ogni modifica, senza pulsanti.
+ * Più componenti con la stessa chiave restano allineati (evento "aa-local").
+ */
 export function useLocalState<T>(key: string, initial: T) {
   const [value, setValue] = useState<T>(initial);
   const loaded = useRef(false);
+  const first = useRef(true);
+  const external = useRef(false);
+  const id = useId();
   useEffect(() => {
     try {
       const raw = localStorage.getItem(key);
@@ -12,16 +18,38 @@ export function useLocalState<T>(key: string, initial: T) {
       /* dato rovinato: si riparte dai valori iniziali */
     }
     loaded.current = true;
+    const on = (e: Event) => {
+      const d = (e as CustomEvent<{ key: string; value: T; src: string }>).detail;
+      if (!d || d.key !== key || d.src === id) return;
+      setValue((cur) => {
+        if (JSON.stringify(cur) === JSON.stringify(d.value)) return cur;
+        external.current = true;
+        return d.value;
+      });
+    };
+    window.addEventListener("aa-local", on);
+    return () => window.removeEventListener("aa-local", on);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
   useEffect(() => {
     if (!loaded.current) return;
+    // al primo giro il valore è ancora quello iniziale: non sovrascrive quello salvato
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    // valore arrivato da un altro componente: è già salvato, non lo rimando indietro
+    if (external.current) {
+      external.current = false;
+      return;
+    }
     try {
       localStorage.setItem(key, JSON.stringify(value));
     } catch {
       /* memoria piena o privata */
     }
-  }, [key, value]);
+    window.dispatchEvent(new CustomEvent("aa-local", { detail: { key, value, src: id } }));
+  }, [key, value, id]);
   return [value, setValue] as const;
 }
 

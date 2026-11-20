@@ -1,8 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { AvatarScene, useAvatar } from "@/components/avatar-hero";
-import { Archer3D } from "@/components/archer-3d";
-import { AvatarFace } from "@/components/archer-avatar";
+import { Archer3D, RealFace } from "@/components/archer-3d";
 import { BOW_TYPES } from "@/components/gear-icons";
 import { Button, Card, Chips, PageHead, Segmented } from "@/components/kit";
 import { Glyph } from "@/components/icons";
@@ -71,7 +70,7 @@ function Page() {
           ) : (
             <AvatarScene look={shown} height="h-64">
               <span className="absolute left-3 top-3 grid h-16 w-16 place-items-center overflow-hidden rounded-full ring-2 ring-[#ffd27a]/80">
-                <AvatarFace look={shown} className="h-16 w-16" />
+                <RealFace look={shown} className="h-16 w-16" />
               </span>
             </AvatarScene>
           )}
