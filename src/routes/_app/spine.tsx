@@ -3,6 +3,7 @@ import { ToolArt } from "@/components/tool-art";
 import { Card, Chips, PageHead } from "@/components/kit";
 import { Num, Mini, num, fmt } from "@/components/tool-kit";
 import { useLocalState } from "@/lib/arcieri/local-store";
+import { useArcherSetup } from "@/lib/arcieri/setup";
 import { grainsFor, realLb, spineFor } from "@/lib/arcieri/gear-advice";
 
 export const Route = createFileRoute("/_app/spine")({ component: Page });
@@ -19,6 +20,7 @@ const TYPES = [
 ];
 
 function Page() {
+  const archer = useArcherSetup();
   const [st, setSt] = useLocalState<Store>("aa-spine-v1", { bowType: "olimpico", draw: "34", drawLen: "28", arrowLen: "29" });
   const bow = { bowType: st.bowType, draw: String(num(st.draw) || ""), drawLen: String(num(st.drawLen) || "") };
   const lb = realLb(bow);
@@ -29,6 +31,11 @@ function Page() {
     <div className="grid gap-3">
       <PageHead kicker="Strumenti" title="Spine e libbre" lede="Le libbre scritte sui flettenti valgono a 28″: al tuo allungo cambiano. Da qui spine e peso freccia di partenza." />
       <ToolArt id="spine" />
+      {archer.has ? (
+        <button type="button" onClick={() => setSt({ bowType: TYPES.some((t) => t.id === archer.bowType) ? archer.bowType : "olimpico", draw: String(archer.lb), drawLen: String(archer.drawIn), arrowLen: String(archer.arrow.lengthIn || archer.drawIn + 1) })} className="justify-self-start rounded-full border border-line px-3 py-1.5 text-xs font-semibold">
+          Usa il mio arco: {archer.summary}
+        </button>
+      ) : null}
       <Chips value={st.bowType} onChange={(bowType) => setSt({ ...st, bowType })} options={TYPES} />
       <Card className="grid grid-cols-2 gap-2">
         <Num label="Libbre scritte" unit="lb" value={st.draw} onChange={(draw) => setSt({ ...st, draw })} hint="a 28″" />

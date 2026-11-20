@@ -1,3 +1,4 @@
+import { useArcherSetup } from "@/lib/arcieri/setup";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Link } from "@tanstack/react-router";
 import { SHORTCUTS, STATIONS, TIPS, nextShortcut, shortcutById, usePinned, type Shortcut } from "@/lib/arcieri/shortcuts";
@@ -96,8 +97,17 @@ export function ShortcutEditor({ onClose }: { onClose: () => void }) {
 
 /** "Lo sapevi?": un consiglio di tiro o un trucco dell'app; tocca per il prossimo. */
 export function TipCard() {
+  const archer = useArcherSetup();
+  // il primo consiglio è sul tuo arco, se l'attrezzatura principale ha libbre e allungo
+  const list = archer.has
+    ? [
+        { icon: TIPS[0].icon, text: `Con il tuo ${archer.summary}: frecce da ${archer.grains ? `${archer.grains.min}–${archer.grains.max} grani` : "6–9 grani per libbra"}${archer.spineRange ? `, spine ${archer.spineRange}` : ""}, lunghe circa ${(archer.drawIn + 1).toFixed(1).replace(".", ",")}″.` },
+        ...TIPS,
+      ]
+    : TIPS;
   const [i, setI] = useState(() => Math.floor((Date.now() / 86_400_000) % TIPS.length));
-  const tip = TIPS[i % TIPS.length];
+  const tip = list[i % list.length];
+  const TIPS_N = list.length;
   return (
     <button
       type="button"
@@ -107,7 +117,7 @@ export function TipCard() {
     >
       <span key={`e${i}`} className="aa-pop"><AppIcon name={tip.icon} color="#2f9e6a" size={40} /></span>
       <span key={`t${i}`} className="aa-rise min-w-0">
-        <span className="block text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-[#7cf0a8]">Lo sapevi? · {(i % TIPS.length) + 1}/{TIPS.length}</span>
+        <span className="block text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-[#7cf0a8]">{archer.has && i % TIPS_N === 0 ? "Per il tuo arco" : "Lo sapevi?"} · {(i % TIPS_N) + 1}/{TIPS_N}</span>
         <span className="mt-0.5 block text-[0.8rem] leading-snug">{tip.text}</span>
       </span>
       <Glyph name="chevron" size={16} className="ml-auto shrink-0 self-center text-muted" />

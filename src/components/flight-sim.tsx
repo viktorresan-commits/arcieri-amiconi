@@ -5,7 +5,8 @@ import { Button, Card, Chips, Field, Segmented, Select, TextInput } from "@/comp
 import { listEquipment, saveEquipment } from "@/lib/arcieri/club.api";
 import { Zoomable } from "./zoomable";
 import { Flight3D } from "./flight-gl";
-import { useMainArrowLook } from "@/lib/arcieri/main-gear";
+import { readMainGear, useMainArrowLook } from "@/lib/arcieri/main-gear";
+import { useArcherSetup, type ArcherSetup } from "@/lib/arcieri/setup";
 
 const ROUNDS = [
   { id: "18", name: "Indoor 18 m", distanceM: 18, faceCm: 40 },
@@ -115,12 +116,29 @@ export function FlightSim() {
   const [replay, setReplay] = useState(0);
   const [view3d, setView3d] = useState(true);
   const arrowLook = useMainArrowLook();
+  const archer = useArcherSetup();
   const [tab, setTab] = useState<"arco" | "freccia" | "tiro" | "meteo">("arco");
   const patch = (part: Partial<FlightInput>) => setForm((current) => ({ ...current, ...part }));
 
   // I dati balistici restano sul telefono: si ricaricano all'apertura e si salvano a ogni modifica.
   useEffect(() => {
     const saved = readSaved();
+    const main = readMainGear();
+    if (!saved && main && Number(main.bowSpecs.draw) > 0) {
+      // prima apertura: si parte dalla tua attrezzatura principale
+      const b = main.bowSpecs;
+      const a = main.arrowSpecs;
+      const inch = Number(b.drawLen) || 28;
+      setForm((f) => ({
+        ...f,
+        drawLb: Number(b.draw) || f.drawLb,
+        drawCm: Math.round(inch * 2.54 * 2) / 2,
+        grains: Number(a.weight) || f.grains,
+        lengthCm: Number(a.length) ? Math.round(Number(a.length) * 2.54 * 2) / 2 : f.lengthCm,
+        diameterMm: GEAR_DIAM[a.material] ?? f.diameterMm,
+      }));
+      setBow(GEAR_BOW[b.bowType] ?? "recurve");
+    }
     if (saved) {
       setForm(saved.form);
       setBow(saved.bow);
@@ -283,6 +301,7 @@ export function FlightSim() {
         <Stat k="Punto di mira" v={setup.sighted ? "oro" : `${Math.abs(primary.gap * 100).toFixed(0)} cm ${primary.gap >= 0 ? "sopra" : "sotto"}`} hint={setup.sighted ? "mirino sull'oro" : Math.abs(primary.gap) > form.faceCm / 200 ? "punta fuori dalla faccia" : "punta della freccia"} />
       </div>
       <p className="rounded-xl border border-line bg-elev px-3 py-2 text-sm">{advice(form, setup.sighted, primary)}</p>
+      {archer.has ? <p className="rounded-xl bg-white/[0.04] px-3 py-2 text-xs text-muted">{personalAdvice(form, archer)}</p> : null}
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm font-semibold">Traiettoria e bersaglio</span>
         <div className="ml-auto flex gap-1">
@@ -368,6 +387,21 @@ function advice(form: FlightInput, sighted: boolean, round: { clean: { y: number
   const gap = round.gap * 100;
   const point = `${Math.abs(gap).toFixed(0)} cm ${gap >= 0 ? "sopra" : "sotto"} l'oro`;
   return `Senza mirino la punta va tenuta ${point}. ${sentence(windText)}.`;
+}
+
+/** Confronto fra quello che simuli e il tuo arco vero (libbre reali, allungo, peso consigliato). */
+function personalAdvice(form: FlightInput, a: ArcherSetup) {
+  const out: string[] = [`Il tuo arco: ${a.summary}.`];
+  if (a.realLb && Math.abs(form.drawLb - a.realLb) >= 2) out.push(`Qui simuli ${Math.round(form.drawLb)} lb: con il tuo arco ne tiri circa ${Math.round(a.realLb)}, la freccia andrà ${form.drawLb > a.realLb ? "più bassa e più lenta" : "più alta e più veloce"} di così.`);
+  const inch = form.drawCm / 2.54;
+  if (Math.abs(inch - a.drawIn) >= 0.5) out.push(`Allungo simulato ${inch.toFixed(1).replace(".", ",")}″, il tuo è ${a.drawIn.toFixed(1).replace(".", ",")}″.`);
+  if (a.grains) {
+    if (form.grains < a.grains.min) out.push(`${Math.round(form.grains)} grani sono pochi per il tuo arco (consigliati ${a.grains.min}–${a.grains.max}): più veloce ma più sensibile al vento.`);
+    else if (form.grains > a.grains.max) out.push(`${Math.round(form.grains)} grani sono tanti per il tuo arco (consigliati ${a.grains.min}–${a.grains.max}): traiettoria più curva, serve più alzo.`);
+    else out.push(`Peso freccia adatto al tuo arco (${a.grains.min}–${a.grains.max} grani).`);
+  }
+  if (a.spineRange) out.push(`Spine indicato per te: ${a.spineRange}.`);
+  return out.join(" ");
 }
 
 function sentence(text: string) {
