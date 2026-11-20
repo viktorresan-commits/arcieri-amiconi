@@ -5,7 +5,7 @@ import type { IconName } from "@/components/icons";
  * Tutte le azioni dell'app raggiungibili in un tocco: Home, pulsante ＋ e Menu usano questo elenco,
  * così ogni percorso è lo stesso ovunque e l'utente sceglie quali tenere in vista.
  */
-export type StationId = "prepara" | "allena" | "analizza" | "gareggia" | "squadra";
+export type StationId = "prepara" | "allena" | "strumenti" | "analizza" | "gareggia" | "impara" | "squadra";
 
 export type Shortcut = {
   id: string;
@@ -45,14 +45,31 @@ export const SHORTCUTS: Shortcut[] = [
   { id: "foc", group: "prepara", label: "Calcolo FOC", hint: "Bilanciamento della freccia", icon: "foc", color: "#2f6fd1", to: "/foc" },
   { id: "manutenzione", group: "prepara", label: "Manutenzione", hint: "Corda, cocche, penne", icon: "wrench", color: "#6c7684", to: "/manutenzione" },
   { id: "secco", group: "allena", label: "A secco", hint: "Tenute con arco o elastico", icon: "hold", color: "#c4475a", to: "/secco" },
+  { id: "routine", group: "allena", label: "Routine di tiro", hint: "I tuoi passi, uno alla volta", icon: "steps", color: "#2a9c66", to: "/routine" },
+  { id: "respiro", group: "allena", label: "Respiro", hint: "Calma prima della volée", icon: "lungs", color: "#3a8fc4", to: "/respiro" },
+  { id: "segnapunti", group: "gareggia", label: "Segnapunti", hint: "Punti con gli amici", icon: "scorecard", color: "#b8508a", to: "/segnapunti" },
+  { id: "spine", group: "strumenti", label: "Spine e libbre", hint: "Libbre reali e spine giusto", icon: "spine", color: "#2f6fd1", to: "/spine" },
+  { id: "vento", group: "strumenti", label: "Vento", hint: "Di quanto ti sposta", icon: "windsock", color: "#3aa7c4", to: "/vento" },
+  { id: "energia", group: "strumenti", label: "Velocità ed energia", hint: "m/s, joule, quantità di moto", icon: "energy", color: "#d6912a", to: "/energia" },
+  { id: "allungo", group: "strumenti", label: "Allungo", hint: "Dall'apertura delle braccia", icon: "span", color: "#7652d1", to: "/allungo" },
+  { id: "tuning", group: "strumenti", label: "Bare shaft", hint: "Messa a punto con l'asta nuda", icon: "bareshaft", color: "#cc4f3b", to: "/tuning" },
+  { id: "assetto", group: "strumenti", label: "Assetto arco", hint: "Brace, tiller, punto d'incocco", icon: "caliper", color: "#6c7684", to: "/assetto" },
+  { id: "unita", group: "strumenti", label: "Convertitore", hint: "lb, grani, pollici, iarde", icon: "ruler", color: "#8b6a3e", to: "/unita" },
+  { id: "sfida-giorno", group: "impara", label: "Sfida del giorno", hint: "Un esercizio nuovo ogni giorno", icon: "daily", color: "#d6582a", to: "/sfida-giorno" },
+  { id: "quiz", group: "impara", label: "Quiz", hint: "Regole, tecnica, attrezzatura", icon: "quiz", color: "#5568c2", to: "/quiz" },
+  { id: "stima", group: "impara", label: "Stima distanze", hint: "Gioco per occhio da 3D", icon: "binoculars", color: "#3d8a4e", to: "/stima" },
+  { id: "glossario", group: "impara", label: "Glossario", hint: "Le parole dell'arciere", icon: "book", color: "#946f42", to: "/glossario" },
+  { id: "regole", group: "impara", label: "Distanze e bersagli", hint: "Gare indoor, targa, campagna", icon: "rules", color: "#c39320", to: "/regole" },
 ];
 
 /** Le tappe della mappa: il percorso naturale di un arciere, dalla preparazione alla squadra. */
 export const STATIONS: { id: StationId; title: string; sub: string; icon: IconName; color: string }[] = [
   { id: "prepara", title: "Preparati", sub: "Arco, frecce e simulatore di volo", icon: "quiver", color: "#8b6a3e" },
   { id: "allena", title: "Allenati", sub: "Tira, fotografa, riprendi il gesto", icon: "bow", color: "#2c8a57" },
+  { id: "strumenti", title: "Strumenti", sub: "Calcoli e messa a punto", icon: "caliper", color: "#2f6fd1" },
   { id: "analizza", title: "Analizza", sub: "Numeri, storico e traguardi", icon: "chart", color: "#1b9097" },
   { id: "gareggia", title: "Gareggia", sub: "Gare, calendario e classifiche", icon: "trophy", color: "#c39320" },
+  { id: "impara", title: "Impara", sub: "Sfide, quiz e giochi per crescere", icon: "daily", color: "#d6582a" },
   { id: "squadra", title: "Squadra", sub: "Compagni, news e profilo", icon: "team", color: "#4568d6" },
 ];
 

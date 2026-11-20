@@ -116,50 +116,71 @@ export function TipCard() {
 }
 
 /** Mappa del percorso: cinque tappe in fila, collegate da un sentiero, con le loro sezioni. */
-/** Menu: una categoria alla volta (schede in alto, scorri di lato per cambiare), voci in lista. */
+/** Menu: cerca, oppure scegli una sezione (schede scorrevoli, anche con il dito di lato) e tocca la voce. */
 export function PathMap({ onPick, current, onPersonalize }: { onPick?: () => void; current?: string; onPersonalize?: () => void }) {
   const here = SHORTCUTS.find((s) => current && s.to !== "/" && current.startsWith(s.to));
   const [tab, setTab] = useState<string>(here?.group ?? "allena");
   const [dir, setDir] = useState(0);
+  const [q, setQ] = useState("");
   const touch = useRef<{ x: number; y: number } | null>(null);
-  const idx = STATIONS.findIndex((st) => st.id === tab);
+  const tabs = useRef<HTMLDivElement>(null);
+  const idx = Math.max(0, STATIONS.findIndex((st) => st.id === tab));
   const go = (i: number) => {
-    const next = STATIONS[(i + STATIONS.length) % STATIONS.length];
-    setDir(i > idx ? 1 : -1);
-    setTab(next.id);
+    const k = (i + STATIONS.length) % STATIONS.length;
+    setDir(k > idx ? 1 : -1);
+    setTab(STATIONS[k].id);
+    const el = tabs.current?.children[k] as HTMLElement | undefined;
+    el?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
   };
-  const st = STATIONS[idx] ?? STATIONS[0];
-  const items = SHORTCUTS.filter((s) => s.group === st.id);
+  const st = STATIONS[idx];
+  const query = q.trim().toLowerCase();
+  const items = query ? SHORTCUTS.filter((s) => `${s.label} ${s.hint}`.toLowerCase().includes(query)) : SHORTCUTS.filter((s) => s.group === st.id);
+  const stationOf = (id: string) => STATIONS.find((x) => x.id === id);
   return (
-    <div className="grid gap-4">
-      <div className="aa-menu-tabs relative grid grid-cols-5 gap-1 rounded-2xl bg-white/[0.04] p-1">
-        <span aria-hidden className="aa-menu-ink absolute bottom-1 top-1 rounded-xl" style={{ left: `calc(${idx} * 20% + 4px)`, width: "calc(20% - 6px)", ["--c" as string]: st.color }} />
-        {STATIONS.map((s, i) => (
-          <button key={s.id} type="button" onClick={() => go(i)} aria-pressed={s.id === tab} className={cx("relative z-[1] grid justify-items-center gap-0.5 rounded-xl py-1.5 text-[0.62rem] font-semibold transition-colors", s.id === tab ? "text-fg" : "text-muted")}>
-            <RealIcon name={s.icon} size={26} className={cx("transition-transform duration-300", s.id === tab ? "scale-110" : "opacity-70 grayscale-[35%]")} />
-            {s.title}
-          </button>
-        ))}
-      </div>
+    <div className="grid gap-3">
+      <label className="flex items-center gap-2 rounded-2xl border border-hair bg-white/[0.04] px-3 focus-within:border-primary/60">
+        <Glyph name="eye" size={16} className="text-muted" />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Cerca tra ${SHORTCUTS.length} voci`} className="min-h-11 w-full bg-transparent text-sm outline-none" />
+        {q ? <button type="button" aria-label="Cancella" onClick={() => setQ("")} className="text-muted"><Glyph name="close" size={16} /></button> : null}
+      </label>
+      {query ? null : (
+        <div ref={tabs} className="-mx-4 flex snap-x gap-1.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none]">
+          {STATIONS.map((s, i) => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => go(i)}
+              aria-pressed={s.id === tab}
+              className={cx("aa-menu-tab flex shrink-0 items-center gap-1.5 rounded-full py-1 pl-1 pr-3 text-xs font-semibold transition-all duration-300", s.id === tab ? "text-fg" : "bg-white/[0.04] text-muted")}
+              style={s.id === tab ? { background: `color-mix(in srgb, ${s.color} 30%, transparent)`, boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${s.color} 55%, transparent)` } : undefined}
+            >
+              <RealIcon name={s.icon} size={26} className={cx("transition-transform duration-300", s.id === tab ? "scale-110" : "opacity-75")} />
+              {s.title}
+              <span className="text-[0.6rem] opacity-60">{SHORTCUTS.filter((x) => x.group === s.id).length}</span>
+            </button>
+          ))}
+        </div>
+      )}
       <div
-        key={tab}
-        className={dir >= 0 ? "aa-menu-in-r" : "aa-menu-in-l"}
+        key={query ? "q" : tab}
+        className={query ? "aa-rise" : dir >= 0 ? "aa-menu-in-r" : "aa-menu-in-l"}
         onTouchStart={(e) => (touch.current = { x: e.touches[0].clientX, y: e.touches[0].clientY })}
         onTouchEnd={(e) => {
           const t = touch.current;
           touch.current = null;
-          if (!t) return;
+          if (!t || query) return;
           const dx = e.changedTouches[0].clientX - t.x;
           const dy = e.changedTouches[0].clientY - t.y;
           if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) go(idx + (dx < 0 ? 1 : -1));
         }}
       >
-        <p className="mb-2 px-1 text-xs text-muted">{st.sub}</p>
+        {query ? null : <p className="mb-2 px-1 text-xs text-muted">{st.sub}</p>}
         <ul className="grid gap-1">
           {items.map((s, i) => {
             const on = !!current && s.to !== "/" && current.startsWith(s.to) && (!s.search || here?.id === s.id);
+            const sta = stationOf(s.group);
             return (
-              <li key={s.id} className="aa-menu-row" style={{ animationDelay: `${i * 35}ms` }}>
+              <li key={s.id} className="aa-menu-row" style={{ animationDelay: `${Math.min(i, 10) * 30}ms` }}>
                 <Link
                   to={s.to as "/"}
                   search={(s.search ?? {}) as never}
@@ -173,13 +194,14 @@ export function PathMap({ onPick, current, onPersonalize }: { onPick?: () => voi
                   <AppIcon name={s.icon} color={s.color} size={44} className="aa-short-icon" />
                   <span className="min-w-0 flex-1">
                     <span className={cx("block text-[0.95rem] font-semibold", on && "text-primary")}>{s.label}</span>
-                    <span className="block truncate text-xs text-muted">{s.hint}</span>
+                    <span className="block truncate text-xs text-muted">{query && sta ? `${sta.title} · ` : ""}{s.hint}</span>
                   </span>
                   <Glyph name="chevron" size={16} className="text-muted/60" />
                 </Link>
               </li>
             );
           })}
+          {!items.length ? <li className="px-2 py-6 text-center text-sm text-muted">Nessuna voce trovata.</li> : null}
         </ul>
       </div>
       {onPersonalize ? (

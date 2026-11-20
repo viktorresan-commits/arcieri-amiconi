@@ -132,7 +132,7 @@ body::before {
   background: transparent;
 }
 
-.aa-app > *:not(.aa-side):not(.aa-scene) {
+.aa-app > *:not(.aa-side):not(.aa-scene):not(.aa-xp-toasts) {
   position: relative;
   z-index: 1;
 }
@@ -889,7 +889,7 @@ html[data-icons="sobrie"] .aa-appicon .aa-line { display: block !important; }
   top: -8%;
   width: 124%;
   height: 130%;
-  filter: blur(26px) saturate(1.1);
+  filter: blur(9px) saturate(1.15);
   opacity: 0.5;
   transform: translate3d(0, calc(var(--sy, 0) * -0.07px), 0) scale(calc(1 + var(--sy, 0) * 0.00005));
   transform-origin: 50% 30%;
@@ -905,3 +905,35 @@ html[data-icons="sobrie"] .aa-appicon .aa-line { display: block !important; }
 html[data-motion="ridotta"] .aa-scene svg { transform: none; }
 @media (prefers-reduced-motion: reduce) { .aa-scene svg { transform: none; animation: none; } }
 html[data-scenes="no"] .aa-scene { display: none; }
+
+/* ── Strumenti e giochi ───────────────────────────────────────────── */
+.aa-wind { animation: aa-wind 1.6s linear infinite; }
+@keyframes aa-wind { from { transform: translateX(calc(var(--dx) * -0.4)); opacity: 0; } 30% { opacity: 1; } to { transform: translateX(var(--dx)); opacity: 0; } }
+.aa-grow { animation: aa-grow 0.9s cubic-bezier(0.22, 1, 0.36, 1) both; transform-origin: left; }
+@keyframes aa-grow { from { transform: scaleX(0); } to { transform: none; } }
+.aa-fill { animation: aa-fill linear both; transform-origin: left; }
+@keyframes aa-fill { from { transform: scaleX(0); } to { transform: none; } }
+.aa-shake { animation: aa-shake 0.4s ease both; }
+@keyframes aa-shake { 20%, 60% { transform: translateX(-5px); } 40%, 80% { transform: translateX(5px); } }
+.aa-thumb { animation: aa-pop-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.aa-daily { background: radial-gradient(120% 90% at 100% 0%, rgb(214 88 42 / 0.22), transparent 60%), var(--surface); }
+
+/* punti guadagnati: "+N" che sale */
+.aa-xp-toasts { position: fixed; left: 50%; top: calc(env(safe-area-inset-top) + 64px); z-index: 80; display: grid; gap: 6px; transform: translateX(-50%); pointer-events: none; }
+.aa-xp-toast {
+  display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px;
+  background: linear-gradient(135deg, #f6c43a, #e07a2f); color: #1c1206; font-weight: 800; font-size: 0.85rem;
+  box-shadow: 0 10px 24px -8px rgb(224 122 47 / 0.7);
+  animation: aa-xp 2.2s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes aa-xp { 0% { opacity: 0; transform: translateY(14px) scale(0.8); } 12% { opacity: 1; transform: none; } 80% { opacity: 1; } 100% { opacity: 0; transform: translateY(-22px); } }
+
+/* ── Menu: schede scorrevoli e ricerca ─────────────────────────────── */
+.aa-menu-tab { scroll-snap-align: center; }
+.aa-today {
+  background:
+    radial-gradient(110% 120% at 0% 0%, rgb(246 196 58 / 0.14), transparent 55%),
+    radial-gradient(90% 120% at 100% 100%, rgb(85 104 194 / 0.16), transparent 60%),
+    var(--surface);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06), var(--shadow-card);
+}

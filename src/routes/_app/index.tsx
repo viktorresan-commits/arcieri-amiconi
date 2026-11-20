@@ -8,6 +8,7 @@ import { useLoad } from "@/lib/arcieri/use-load";
 import { HeroTarget } from "@/components/hero-target";
 import { ShortcutRow, TipCard } from "@/components/shortcuts";
 import { JourneyCard } from "@/components/journey";
+import { TodayCard } from "@/components/today-card";
 import { usePrefs } from "@/lib/arcieri/prefs";
 import { Glyph } from "@/components/icons";
 import { ArrowArt } from "@/components/arrow-art";
@@ -104,6 +105,9 @@ function Home() {
           <ShortcutRow />
         </Rise>
       ) : null}
+      <Rise i={2}>
+        <TodayCard />
+      </Rise>
       {prefs.home.journey ? (
         <Rise i={2}>
           <JourneyCard totalArrows={data.all.arrows} weekArrows={data.weekArrows} streak={data.streak} />

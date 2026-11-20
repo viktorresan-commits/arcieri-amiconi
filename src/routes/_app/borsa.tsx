@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Card, Chips, PageHead } from "@/components/kit";
 import { Glyph } from "@/components/icons";
 import { useLocalState, whistle, useWakeLock } from "@/lib/arcieri/local-store";
+import { award } from "@/lib/arcieri/xp";
 
 export const Route = createFileRoute("/_app/borsa")({ component: Page });
 
@@ -78,7 +79,11 @@ function BagList() {
   const done = items.filter((i) => bag.done.includes(i.id)).length;
   const pct = items.length ? done / items.length : 0;
   const groups = [...new Set(items.map((i) => i.group))];
-  const toggle = (id: string) => setBag({ ...bag, done: bag.done.includes(id) ? bag.done.filter((d) => d !== id) : [...bag.done, id] });
+  const toggle = (id: string) => {
+    const done = bag.done.includes(id) ? bag.done.filter((d) => d !== id) : [...bag.done, id];
+    setBag({ ...bag, done });
+    if (items.every((i) => done.includes(i.id))) award(5, "Borsa pronta", `borsa-${new Date().toLocaleDateString("sv-SE")}`);
+  };
   const add = () => {
     const label = text.trim();
     if (!label) return;

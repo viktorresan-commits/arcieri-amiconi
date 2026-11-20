@@ -40,7 +40,10 @@ export function TargetRead({
   compact = false,
   onApplyBatch,
   tags,
+  file,
 }: {
+  /** foto scelta da fuori (allenamento da foto): la leggo appena cambia e nascondo i pulsanti per sceglierla */
+  file?: File | null;
   /** numeri delle frecce dell'attrezzatura, per dire quale freccia è ogni colpo */
   tags?: number[];
   /** più foto insieme: una volée per foto, salvate in un colpo solo */
@@ -114,6 +117,15 @@ export function TargetRead({
   }
 
   useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
+  const external = file !== undefined;
+  useEffect(() => {
+    if (!file) return;
+    setQueue([]);
+    setBatch(null);
+    setRenumber(null);
+    onPhoto(file);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [file]);
 
   const scored = (nx: number, ny: number): Hit => {
     const s = scoreAtRadius(face, Math.max(0, Math.hypot(nx, ny) - 0.012));
@@ -633,10 +645,10 @@ export function TargetRead({
           <p className="text-xs text-muted">Foto: scattala adesso o prendila dall'album. Video: telefono fermo (appoggiato o sul cavalletto) mentre tiri, e trovo ogni freccia nell'ordine in cui arriva.</p>
         </>
       )}
-      <MediaPick kind="image" onFile={(file) => { setQueue([]); setBatch(null); onPhoto(file); }} />
-      <button type="button" onClick={() => manyRef.current?.click()} className="min-h-11 rounded-xl border border-dashed border-accent/60 bg-accent/10 px-3 text-sm font-semibold">
+      {external ? null : <MediaPick kind="image" onFile={(file) => { setQueue([]); setBatch(null); onPhoto(file); }} />}
+      {external ? null : <button type="button" onClick={() => manyRef.current?.click()} className="min-h-11 rounded-xl border border-dashed border-accent/60 bg-accent/10 px-3 text-sm font-semibold">
         <IconLabel icon="stack">Più foto insieme (una per volée)</IconLabel>
-      </button>
+      </button>}
       <input ref={manyRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { onMany(e.currentTarget.files); e.currentTarget.value = ""; }} />
       {batch ? (
         <div className="flex items-center gap-2 rounded-xl bg-white/5 px-3 py-2 text-xs">
@@ -644,7 +656,7 @@ export function TargetRead({
           <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-accent transition-all" style={{ width: `${(batch.at / batch.total) * 100}%` }} /></div>
         </div>
       ) : null}
-      <MediaPick kind="video" onFile={(file) => void onVideo(file)} shootLabel="Video del bersaglio" albumLabel="Video dalla galleria" />
+      {external ? null : <MediaPick kind="video" onFile={(file) => void onVideo(file)} shootLabel="Video del bersaglio" albumLabel="Video dalla galleria" />}
       <label className="flex items-center gap-2 text-xs text-muted">
         <input type="checkbox" checked={ignoreKnown} onChange={(e) => setIgnoreKnown(e.target.checked)} />
         Ignora le frecce già segnate (se nella foto ci sono ancora quelle di prima)

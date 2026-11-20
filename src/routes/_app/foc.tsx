@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Card, Chips, PageHead } from "@/components/kit";
 import { StatusMark } from "@/components/icons";
 import { useLocalState } from "@/lib/arcieri/local-store";
+import { FocBalance3D, FocFlight3D, estimateSpeed } from "@/components/foc-3d";
 
 export const Route = createFileRoute("/_app/foc")({ component: Page });
 
@@ -19,8 +20,11 @@ type Store = {
   fletch: string; // tutte le penne insieme
   nock: string;
   lb: string; // libbre sulle dita (per i grani per libbra)
+  grains: string; // peso totale misurato (modo "Ho misurato")
+  view: "equilibrio" | "gittata";
+  dist: number;
 };
-const DEFAULT: Store = { mode: "pesi", len: "72", bal: "41", gpi: "7,5", point: "100", insert: "10", fletch: "18", nock: "8", lb: "36" };
+const DEFAULT: Store = { mode: "pesi", len: "72", bal: "41", gpi: "7,5", point: "100", insert: "10", fletch: "18", nock: "8", lb: "36", grains: "350", view: "equilibrio", dist: 30 };
 const n = (s: string) => Number(String(s).replace(",", "."));
 const f1 = (x: number) => x.toFixed(1).replace(".", ",");
 
@@ -52,7 +56,14 @@ function Page() {
   const r = compute(st);
   const set = (k: keyof Store) => (e: { target: { value: string } }) => setSt({ ...st, [k]: e.target.value });
   const verdict = !r ? null : r.foc < 6 ? { s: "warn" as const, t: "Basso: la freccia può essere instabile al vento. Prova una punta più pesante." } : r.foc <= 13 ? { s: "ok" as const, t: "Nella fascia giusta per il tiro alla targa (circa 7–13%)." } : r.foc <= 20 ? { s: "ok" as const, t: "Alto: buono per 3D e campagna, frecce più stabili e penetranti." } : { s: "warn" as const, t: "Molto alto: freccia pesante davanti, cala di più sulle lunghe distanze." };
-  const gpp = r?.total && n(st.lb) > 0 ? r.total / n(st.lb) : null;
+  const grains = r?.total ?? n(st.grains);
+  const gpp = grains > 0 && n(st.lb) > 0 ? grains / n(st.lb) : null;
+  const speed = estimateSpeed(n(st.lb), grains);
+  const flight = speed > 0 ? (() => {
+    const s2 = Math.min(1, (9.81 * st.dist) / (speed * speed));
+    const th = 0.5 * Math.asin(s2);
+    return { angle: (th * 180) / Math.PI, peak: (speed * speed * Math.sin(th) ** 2) / (2 * 9.81) };
+  })() : null;
 
   // disegno: la freccia in scala con metà e punto di equilibrio
   const W = 320;
@@ -68,7 +79,11 @@ function Page() {
         <div className="grid grid-cols-2 gap-2">
           <Num label="Lunghezza asta" unit="cm" value={st.len} onChange={set("len")} />
           {st.mode === "misura" ? (
-            <Num label="Punto di equilibrio" unit="cm" value={st.bal} onChange={set("bal")} hint="Dalla cocca" />
+            <>
+              <Num label="Punto di equilibrio" unit="cm" value={st.bal} onChange={set("bal")} hint="Dalla cocca" />
+              <Num label="Peso freccia" unit="gr" value={st.grains} onChange={set("grains")} hint="Per la gittata" />
+              <Num label="Libbre" unit="lb" value={st.lb} onChange={set("lb")} />
+            </>
           ) : (
             <>
               <Num label="Asta" unit="gpi" value={st.gpi} onChange={set("gpi")} hint="Grani per pollice" />
@@ -115,6 +130,35 @@ function Page() {
           ) : null}
           {gpp ? <p className="text-xs text-muted">{gpp < 6 ? "Sotto i 6 grani per libbra la freccia è leggera: occhio alla garanzia dei flettenti." : gpp > 9 ? "Freccia pesante per il carico: più stabile, ma cala di più." : "Peso equilibrato per il carico."}</p> : null}
         </Card>
+      ) : null}
+      {r ? (
+        <Card className="grid gap-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <p className="aa-section-title">In 3D</p>
+            <Chips value={st.view} onChange={(view) => setSt({ ...st, view })} options={[{ id: "equilibrio", label: "Equilibrio" }, { id: "gittata", label: "Gittata" }]} />
+          </div>
+          {st.view === "equilibrio" ? (
+            <FocBalance3D key="eq" L={r.L} B={r.B} foc={r.foc} />
+          ) : (
+            <>
+              <FocFlight3D key="fl" distance={st.dist} speed={speed} foc={r.foc} />
+              <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 [scrollbar-width:none]">
+                {[18, 30, 50, 70, 90].map((d) => (
+                  <button key={d} type="button" aria-pressed={st.dist === d} className="aa-chip" onClick={() => setSt({ ...st, dist: d })}>{d} m</button>
+                ))}
+              </div>
+              {flight ? (
+                <div className="grid grid-cols-3 gap-1.5 text-center">
+                  <Mini k="Velocità" v={`${Math.round(speed)} m/s`} />
+                  <Mini k="Alzo" v={`${flight.angle.toFixed(1).replace(".", ",")}°`} />
+                  <Mini k="Sale fino a" v={`${flight.peak.toFixed(1).replace(".", ",")} m`} />
+                </div>
+              ) : null}
+              <p className="text-[0.7rem] text-muted">Velocità stimata da libbre e peso (arco ricurvo o tradizionale, senza attrito dell'aria). Con FOC basso la freccia oscilla di più all'uscita; con FOC alto si stabilizza prima.</p>
+            </>
+          )}
+          <p className="text-[0.7rem] text-muted">{st.view === "equilibrio" ? "Sul fulcro a metà la freccia pende verso la punta: spostandolo fino al punto di equilibrio torna dritta. La distanza tra i due segni è il FOC." : null}</p>
+        </Card>
       ) : (
         <Card><p className="text-sm text-muted">Inserisci la lunghezza dell'asta (in cm) e i pesi per vedere il risultato.</p></Card>
       )}
@@ -132,5 +176,14 @@ function Num({ label, unit, value, onChange, hint }: { label: string; unit: stri
         <span className="text-xs text-muted">{unit}</span>
       </span>
     </label>
+  );
+}
+
+function Mini({ k, v }: { k: string; v: string }) {
+  return (
+    <span className="rounded-xl bg-white/[0.05] px-2 py-1.5">
+      <span className="block text-[0.6rem] uppercase tracking-wider text-muted">{k}</span>
+      <b className="font-display text-lg tabular-nums">{v}</b>
+    </span>
   );
 }

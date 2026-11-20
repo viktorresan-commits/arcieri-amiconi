@@ -11,6 +11,8 @@ import { Avatar, Loading, Mark, cx } from "./kit";
 import { QUICK_ACTIONS, shortcutById } from "@/lib/arcieri/shortcuts";
 import { PathMap, ShortcutEditor, ShortcutTile } from "./shortcuts";
 import { Scene } from "./scene";
+import { useXpToasts } from "@/lib/arcieri/xp";
+import { RealIcon } from "./real-icons";
 import { PersonalizeSheet } from "./personalize";
 import { applyPrefs, readPrefs } from "@/lib/arcieri/prefs";
 
@@ -34,6 +36,21 @@ const MORE = [
   ["/foc", "Calcolo FOC"],
   ["/manutenzione", "Manutenzione"],
   ["/secco", "Allenamento a secco"],
+  ["/routine", "Routine di tiro"],
+  ["/respiro", "Respiro"],
+  ["/segnapunti", "Segnapunti"],
+  ["/spine", "Spine e libbre"],
+  ["/vento", "Vento"],
+  ["/energia", "Velocità ed energia"],
+  ["/allungo", "Allungo"],
+  ["/tuning", "Asta nuda"],
+  ["/assetto", "Assetto arco"],
+  ["/unita", "Convertitore"],
+  ["/sfida-giorno", "Sfida del giorno"],
+  ["/quiz", "Quiz"],
+  ["/stima", "Stima distanze"],
+  ["/glossario", "Glossario"],
+  ["/regole", "Distanze e bersagli"],
   ["/sfide", "Sfide"],
   ["/attrezzatura", "Attrezzatura"],
   ["/gare", "Gare"],
@@ -141,6 +158,7 @@ export function Shell({ children }: { children: ReactNode }) {
     <MemberCtx.Provider value={{ me, reload: () => setNonce((n) => n + 1) }}>
       <div className="aa-app min-h-dvh text-fg" data-app="arcieri-amiconi">
         <Scene path={path} />
+        <XpToasts />
         <aside className="aa-side inset-y-0 left-0 z-[60] hidden w-60 flex-col overflow-hidden border-r border-line bg-elev px-4 py-5 md:flex">
           <Link to="/" className="mb-6 flex items-center gap-2">
             <Mark />
@@ -248,5 +266,20 @@ function NavLink({ to, label, active }: { to: string; label: string; active: boo
       {to === "/gioco" ? <Mark className="h-6 w-6" /> : null}
       {label}
     </Link>
+  );
+}
+
+function XpToasts() {
+  const list = useXpToasts();
+  if (!list.length) return null;
+  return (
+    <div className="aa-xp-toasts" aria-live="polite">
+      {list.map((t) => (
+        <div key={t.id} className="aa-xp-toast">
+          <RealIcon name="daily" size={22} />+{t.n} punti
+          <span className="max-w-40 truncate font-semibold opacity-80">· {t.why}</span>
+        </div>
+      ))}
+    </div>
   );
 }

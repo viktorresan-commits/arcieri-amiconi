@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Card, Chips, PageHead } from "@/components/kit";
 import { Glyph } from "@/components/icons";
 import { useLocalState, useWakeLock, whistle } from "@/lib/arcieri/local-store";
+import { award } from "@/lib/arcieri/xp";
 
 export const Route = createFileRoute("/_app/secco")({ component: Page });
 
@@ -62,6 +63,7 @@ function Page() {
           setPhase("fine");
           setRun(false);
           setStore({ ...store, done: store.done + 1, seconds: store.seconds + held.current, last: new Date().toISOString() });
+          award(10, "Tenute a secco", `secco-${new Date().toLocaleDateString("sv-SE")}`);
           return;
         }
         whistle(2, 1500);

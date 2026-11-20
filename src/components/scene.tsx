@@ -5,7 +5,7 @@ import { SHORTCUTS } from "@/lib/arcieri/shortcuts";
  * Sfondo della categoria: una scena disegnata e molto sfocata dietro le pagine.
  * Non disturba la lettura (velo scuro sopra) e scorre appena con la pagina: un po' più lenta, e si avvicina leggermente.
  */
-export type SceneId = "home" | "prepara" | "allena" | "analizza" | "gareggia" | "squadra";
+export type SceneId = "home" | "prepara" | "allena" | "strumenti" | "analizza" | "gareggia" | "impara" | "squadra";
 
 export function sceneOf(path: string): SceneId {
   if (path === "/") return "home";
@@ -27,41 +27,66 @@ const A = (x1: number, y1: number, x2: number, y2: number, c: string, w = 7) => 
     <line x1={x1} y1={y1} x2={x1 + (x2 - x1) * 0.14} y2={y1 + (y2 - y1) * 0.14} stroke={c} strokeWidth={w * 4} strokeLinecap="round" />
   </g>
 );
+/** Arciere in trazione, di profilo (guarda a destra). x,y = piedi; s = scala (alto ~ 220·s). */
+const Archer = (x: number, y: number, s: number, c = "#0b0f0c", flip = false) => (
+  <g transform={`translate(${x} ${y}) scale(${flip ? -s : s} ${s})`} fill={c} stroke={c} strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="0" cy="-196" r="17" stroke="none" />
+    <path d="M-10 -178 L10 -178 L16 -110 L-14 -110 Z" stroke="none" />
+    <path d="M-12 -112 L-26 0 M12 -112 L24 0" strokeWidth="15" fill="none" />
+    <path d="M6 -168 L96 -170" strokeWidth="11" fill="none" />
+    <path d="M-4 -166 L-30 -186 L4 -190" strokeWidth="10" fill="none" />
+    <path d="M96 -262 C130 -220 130 -120 96 -78" strokeWidth="7" fill="none" />
+    <path d="M96 -262 L2 -190 L96 -78" strokeWidth="1.6" fill="none" opacity="0.8" />
+    <path d="M2 -190 L130 -190" strokeWidth="3" fill="none" />
+  </g>
+);
 
 const ART: Record<SceneId, ReactNode> = {
   home: (
     <>
-      <rect width="400" height="900" fill="#0f1a14" />
-      <circle cx="80" cy="140" r="170" fill="#2c8a57" opacity="0.55" />
-      {T(320, 250, 150)}
-      {A(-20, 520, 250, 300, "#d63a2f")}
-      {A(10, 600, 290, 330, "#f2c94c")}
-      <circle cx="120" cy="760" r="200" fill="#c39320" opacity="0.35" />
+      <rect width="400" height="900" fill="#14120f" />
+      <rect width="400" height="520" fill="#e07a2f" opacity="0.38" />
+      <circle cx="300" cy="300" r="110" fill="#f6c43a" opacity="0.55" />
+      <rect y="560" width="400" height="340" fill="#1f3d1f" />
+      {T(320, 520, 70)}
+      {Archer(80, 700, 1.1)}
+      <circle cx="60" cy="140" r="150" fill="#2c8a57" opacity="0.4" />
     </>
   ),
   prepara: (
     <>
       <rect width="400" height="900" fill="#1b130c" />
-      <rect y="520" width="400" height="380" fill="#6e4222" opacity="0.65" />
-      <path d="M90 60 C300 250 300 600 90 820" fill="none" stroke="#c88a4f" strokeWidth="26" strokeLinecap="round" />
-      <line x1="90" y1="60" x2="90" y2="820" stroke="#f4f1ea" strokeWidth="5" />
-      {A(40, 300, 380, 180, "#d63a2f")}
-      {A(30, 380, 390, 300, "#2f7fd1")}
-      {A(50, 460, 380, 420, "#f2c94c")}
-      <circle cx="330" cy="700" r="140" fill="#cc4f3b" opacity="0.35" />
+      <rect y="560" width="400" height="340" fill="#6e4222" opacity="0.7" />
+      <path d="M110 80 C300 260 300 560 110 760" fill="none" stroke="#c88a4f" strokeWidth="26" strokeLinecap="round" />
+      <line x1="110" y1="80" x2="110" y2="760" stroke="#f4f1ea" strokeWidth="5" />
+      <rect x="250" y="380" width="70" height="300" rx="16" fill="#8a5a2e" transform="rotate(8 285 530)" />
+      {A(270, 390, 250, 120, "#d63a2f")}
+      {A(295, 392, 300, 110, "#2f7fd1")}
+      {A(315, 396, 345, 130, "#f2c94c")}
+      <circle cx="80" cy="820" r="120" fill="#cc4f3b" opacity="0.3" />
     </>
   ),
   allena: (
     <>
       <rect width="400" height="900" fill="#13202a" />
-      <rect width="400" height="420" fill="#2b5a86" opacity="0.6" />
-      <rect y="560" width="400" height="340" fill="#2e6b34" />
-      <path d="M0 560 Q200 500 400 560" fill="#3d8a4e" />
-      <rect x="250" y="420" width="12" height="220" fill="#6e4222" transform="rotate(10 256 520)" />
-      <rect x="320" y="420" width="12" height="220" fill="#6e4222" transform="rotate(-10 326 520)" />
-      {T(290, 420, 120)}
-      {A(-30, 470, 180, 430, "#d63a2f", 6)}
-      <circle cx="60" cy="120" r="120" fill="#f2c94c" opacity="0.35" />
+      <rect width="400" height="430" fill="#3b6f9e" opacity="0.6" />
+      <rect y="430" width="400" height="470" fill="#2e6b34" />
+      <path d="M0 430 Q200 400 400 430" fill="#3d8a4e" />
+      {[[70, 450, 26], [180, 446, 30], [300, 452, 26]].map(([x, y, r]) => <g key={x}>{T(x, y, r)}</g>)}
+      {[60, 180, 300].map((x) => <rect key={x} x={x - 4} y="470" width="8" height="70" fill="#6e4222" />)}
+      {Archer(110, 860, 1.6, "#0a120c")}
+      <circle cx="320" cy="110" r="90" fill="#f2c94c" opacity="0.4" />
+    </>
+  ),
+  strumenti: (
+    <>
+      <rect width="400" height="900" fill="#0d1726" />
+      {Array.from({ length: 12 }, (_, i) => <line key={`v${i}`} x1={i * 36} x2={i * 36} y1="0" y2="900" stroke="#2f6fd1" strokeOpacity="0.35" strokeWidth="2" />)}
+      {Array.from({ length: 26 }, (_, i) => <line key={`h${i}`} x1="0" x2="400" y1={i * 36} y2={i * 36} stroke="#2f6fd1" strokeOpacity="0.35" strokeWidth="2" />)}
+      {A(30, 420, 380, 300, "#d63a2f", 9)}
+      <path d="M200 380 l-40 120 h80 z" fill="#9aa3ad" />
+      <path d="M40 620 Q200 500 360 620" fill="none" stroke="#7cf0e0" strokeWidth="10" strokeDasharray="20 16" />
+      <circle cx="320" cy="150" r="110" fill="#2f6fd1" opacity="0.5" />
     </>
   ),
   analizza: (
@@ -72,7 +97,7 @@ const ART: Record<SceneId, ReactNode> = {
       <rect x="140" y="420" width="60" height="360" rx="10" fill="#4568d6" />
       <rect x="240" y="330" width="60" height="450" rx="10" fill="#e07a2f" />
       <path d="M20 600 L130 470 L210 520 L380 240" fill="none" stroke="#7cf0e0" strokeWidth="14" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx="330" cy="140" r="130" fill="#5568c2" opacity="0.45" />
+      {T(320, 140, 90)}
     </>
   ),
   gareggia: (
@@ -81,23 +106,37 @@ const ART: Record<SceneId, ReactNode> = {
       {[-40, -15, 10, 35, 60].map((a, i) => (
         <path key={i} d="M200 -40 L170 900 L230 900 Z" fill="#f6d24f" opacity="0.13" transform={`rotate(${a} 200 -40)`} />
       ))}
-      <rect x="40" y="560" width="110" height="340" fill="#c9d0d8" />
-      <rect x="145" y="440" width="110" height="460" fill="#f2c94c" />
-      <rect x="250" y="620" width="110" height="280" fill="#d0864a" />
+      <rect x="40" y="620" width="110" height="280" fill="#c9d0d8" />
+      <rect x="145" y="540" width="110" height="360" fill="#f2c94c" />
+      <rect x="250" y="680" width="110" height="220" fill="#d0864a" />
+      {Archer(185, 540, 1.1, "#f6d24f")}
       <path d="M0 120 Q100 180 200 120 T400 120" fill="none" stroke="#c4475a" strokeWidth="8" />
       {[30, 90, 150, 210, 270, 330].map((x, i) => <path key={x} d={`M${x} ${130 + (i % 2) * 12} l20 0 l-10 40z`} fill={["#d63a2f", "#2f7fd1", "#f2c94c", "#2fbf71"][i % 4]} />)}
+    </>
+  ),
+  impara: (
+    <>
+      <rect width="400" height="900" fill="#1a1410" />
+      <rect y="520" width="400" height="380" fill="#2e4a24" />
+      {[30, 120, 330, 380].map((x, i) => <path key={x} d={`M${x} 540 l-50 0 l50 -${220 + i * 30} l50 ${220 + i * 30}z`} fill="#1f3a1d" />)}
+      <path d="M200 640 q20 -90 110 -86 q60 0 70 50 l0 60 l-20 20 l-150 0 z" fill="#7a5230" />
+      <circle cx="300" cy="600" r="16" fill="#f4f1ea" />
+      <circle cx="300" cy="600" r="7" fill="#d63a2f" />
+      <rect x="40" y="120" width="160" height="110" rx="24" fill="#5568c2" />
+      <path d="M80 230 l-20 40 l50 -40z" fill="#5568c2" />
+      <circle cx="320" cy="150" r="80" fill="#d6582a" opacity="0.55" />
+      {Archer(70, 860, 1.25, "#e8b47a")}
     </>
   ),
   squadra: (
     <>
       <rect width="400" height="900" fill="#14121c" />
       {[
-        [70, 160, 90, "#4568d6"], [300, 230, 110, "#b8508a"], [160, 420, 130, "#3d8a4e"], [330, 560, 90, "#c39320"], [80, 700, 120, "#e07a2f"], [280, 820, 100, "#5568c2"],
+        [70, 160, 90, "#4568d6"], [300, 230, 110, "#b8508a"], [330, 560, 90, "#c39320"], [280, 820, 100, "#5568c2"],
       ].map(([x, y, r, c], i) => <circle key={i} cx={x as number} cy={y as number} r={r as number} fill={c as string} opacity="0.55" />)}
-      <circle cx="150" cy="520" r="44" fill="#f3c9a1" opacity="0.6" />
-      <path d="M80 700 C80 610 220 610 220 700" fill="#3d8a4e" opacity="0.7" />
-      <circle cx="270" cy="480" r="38" fill="#e0b08a" opacity="0.55" />
-      <path d="M210 640 C210 560 330 560 330 640" fill="#4568d6" opacity="0.65" />
+      {Archer(70, 760, 1.05, "#4fcf8a")}
+      {Archer(190, 800, 1.2, "#7d9cff")}
+      {Archer(320, 760, 1.05, "#e07ab8", true)}
     </>
   ),
 };

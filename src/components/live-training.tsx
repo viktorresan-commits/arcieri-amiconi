@@ -26,6 +26,7 @@ import { fmtClock } from "@/lib/arcieri/time";
 import { getSession, listSessions, saveSession, trainingBootstrap } from "@/lib/arcieri/training.api";
 import { Button, Card, ErrorNote, Field, Loading, Select, TextArea, TextInput } from "./kit";
 import { TargetFace } from "./target-face";
+import { PhotoSession } from "./photo-session";
 import { ShotLab } from "./shot-lab";
 import { TargetRead } from "./target-read";
 import { AppIcon, Glyph } from "./icons";
@@ -110,7 +111,7 @@ export function LiveTraining({ sessionId, openHistory = false, start }: { sessio
   const [boot, setBoot] = useState<Awaited<ReturnType<typeof trainingBootstrap>> | null>(null);
   const [error, setError] = useState("");
   const [draft, setDraft] = useState<Draft | null>(null);
-  const [phase, setPhase] = useState<"boot" | "ask" | "choose" | "setup" | "past" | "history" | "live" | "gesto">("boot");
+  const [phase, setPhase] = useState<"boot" | "ask" | "choose" | "setup" | "past" | "history" | "live" | "gesto" | "foto">("boot");
   const [now, setNow] = useState(() => Date.now());
   const [pending, setPending] = useState("");
   const [closing, setClosing] = useState(false);
@@ -176,18 +177,21 @@ export function LiveTraining({ sessionId, openHistory = false, start }: { sessio
     if (openHistory) setPhase("history");
     else if (start === "gesto") setPhase("gesto");
     else if (start === "fatto") setPhase("past");
-    else if (start === "rapido" || start === "foto") {
+    else if (start === "foto") {
+      // da foto: sempre un allenamento nuovo (quello lasciato aperto resta salvato sul server)
+      setDraft(quickDraft(boot.recent[0]?.program ?? ""));
+      setPhase("foto");
+    } else if (start === "rapido") {
       // un tocco: riprende quello in corso, altrimenti riparte come l'ultima volta
       if (existing && existing.shots.length) setDraft(existing);
       else setDraft(quickDraft(boot.recent[0]?.program ?? ""));
       setPhase("live");
-      if (start === "foto") window.setTimeout(() => document.getElementById("volee-foto")?.scrollIntoView({ behavior: "smooth", block: "start" }), 350);
     } else if (existing && existing.shots.length) setPhase("ask");
     else setPhase("choose");
   }, [boot, sessionId, openHistory, start]);
 
   useEffect(() => {
-    if (draft && phase === "live" && !sessionId) rememberMeta(draft.meta);
+    if (draft && (phase === "live" || phase === "foto") && !sessionId) rememberMeta(draft.meta);
   }, [draft?.clientKey, phase, sessionId]);
 
   useEffect(() => {
@@ -202,11 +206,12 @@ export function LiveTraining({ sessionId, openHistory = false, start }: { sessio
   }, [phase]);
 
   useEffect(() => {
-    if (draft && phase === "live") saveDraft(draft);
+    if (draft && (phase === "live" || phase === "foto")) saveDraft(draft);
   }, [draft, phase]);
 
   useEffect(() => {
-    if (!draft || phase !== "live") return;
+    if (!draft || (phase !== "live" && phase !== "foto")) return;
+    if (phase === "foto" && !draft.shots.length) return;
     const handle = window.setTimeout(() => {
       void saveSession({ data: payload(draft, false) })
         .then(() => setPending(""))
@@ -481,6 +486,21 @@ export function LiveTraining({ sessionId, openHistory = false, start }: { sessio
         meta: { ...current.meta, startedAt: started.toISOString(), endedAt: ended ? ended.toISOString() : "" },
       };
     });
+  }
+
+  if (phase === "foto") {
+    return (
+      <PhotoSession
+        draft={draft}
+        face={face}
+        tags={tagList}
+        pending={pending}
+        onVolley={addVolley}
+        onDistance={(m) => setDraft((d) => (d ? { ...d, meta: { ...d.meta, distanceM: m } } : d))}
+        onFinish={() => void finish()}
+        onOpenLive={() => setPhase("live")}
+      />
+    );
   }
 
   return (

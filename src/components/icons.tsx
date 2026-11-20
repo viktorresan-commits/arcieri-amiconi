@@ -13,12 +13,29 @@ export type IconName =
   | "video" | "image" | "download" | "link" | "key" | "trash" | "shield" | "sparkle" | "import" | "ticket"
   | "gear" | "plus" | "check" | "play" | "stack" | "flame" | "level" | "arrow" | "hand" | "scan" | "edit"
   | "eye" | "save" | "share" | "close" | "chevron" | "broom" | "medal" | "crosshair" | "mountain" | "home" | "grid"
-  | "sight" | "checklist" | "stopwatch" | "foc" | "wrench" | "hold";
+  | "sight" | "checklist" | "stopwatch" | "foc" | "wrench" | "hold"
+  | "steps" | "lungs" | "scorecard" | "spine" | "windsock" | "energy" | "span" | "bareshaft" | "caliper" | "ruler"
+  | "daily" | "quiz" | "binoculars" | "book" | "rules";
 
 const A = 0.32; // opacità del secondo tono
 
 // ogni icona: tratti (stroke) e riempimenti tenui (fill, secondo tono)
 const ICONS: Partial<Record<IconName, ReactNode>> = {
+  steps: (<><path d="M5 6h4M5 12h4M5 18h4" /><path d="M12 6h7M12 12h7M12 18h5" /><circle cx="3" cy="6" r="0.6" /></>),
+  lungs: (<><path d="M12 4v8M12 12l-3 2M12 12l3 2" /><path d="M9 7C5 8 4 13 4 17c0 2 2 3 4 2l2-1V9zM15 7c4 1 5 6 5 10 0 2-2 3-4 2l-2-1V9z" fill="currentColor" fillOpacity={A} /></>),
+  scorecard: (<><rect x="4" y="3" width="16" height="18" rx="2" fill="currentColor" fillOpacity={A} /><path d="M8 8h8M8 12h8M8 16h5M12 6v12" /></>),
+  spine: (<><path d="M3 15c5-5 13-5 18 0" /><path d="M3 13l-1 2 1 2M21 13l1 2-1 2" /><path d="M12 6v3M10.5 7.5 12 9l1.5-1.5" /></>),
+  windsock: (<><path d="M4 3v18" /><path d="M4 5l14 2v6L4 15z" fill="currentColor" fillOpacity={A} /><path d="M9 5.7v8.6M14 6.4v7.2" /></>),
+  energy: (<><path d="M13 2 5 13h6l-1 9 8-11h-6z" fill="currentColor" fillOpacity={A} /></>),
+  span: (<><circle cx="12" cy="5" r="2" /><path d="M2 10h20M12 7v8l-3 6M12 15l3 6" /></>),
+  bareshaft: (<><rect x="3" y="3" width="18" height="18" rx="3" /><circle cx="10" cy="13" r="2.5" fill="currentColor" fillOpacity={A} /><circle cx="15" cy="9" r="1.2" /></>),
+  caliper: (<><path d="M4 4h4v16H4zM8 6h12M8 10h9M17 10v4" /><path d="M11 6v2M14 6v2" /></>),
+  ruler: (<><rect x="2" y="8" width="20" height="8" rx="1.5" fill="currentColor" fillOpacity={A} /><path d="M6 8v3M10 8v4M14 8v3M18 8v4" /></>),
+  daily: (<><rect x="4" y="5" width="16" height="15" rx="2" /><path d="M8 3v4M16 3v4" /><path d="M12 10l1.2 2.4 2.6.4-1.9 1.8.5 2.6L12 16l-2.4 1.2.5-2.6-1.9-1.8 2.6-.4z" fill="currentColor" fillOpacity={A} /></>),
+  quiz: (<><path d="M4 5h16v11H9l-5 4z" fill="currentColor" fillOpacity={A} /><path d="M10 9a2 2 0 1 1 3 1.7c-.6.4-1 .8-1 1.5M12 14v.01" /></>),
+  binoculars: (<><circle cx="7" cy="15" r="4" /><circle cx="17" cy="15" r="4" /><path d="M9 7l-2 4M15 7l2 4M10 13h4" /></>),
+  book: (<><path d="M4 4h7a2 2 0 0 1 2 2v14a2 2 0 0 0-2-2H4z" fill="currentColor" fillOpacity={A} /><path d="M20 4h-7a2 2 0 0 0-2 2v14a2 2 0 0 1 2-2h7z" /></>),
+  rules: (<><circle cx="12" cy="12" r="8" /><circle cx="12" cy="12" r="4" fill="currentColor" fillOpacity={A} /><path d="M12 2v3M12 19v3M2 12h3M19 12h3" /></>),
   foc: (
     <>
       <path d="M3 10h18M19 8l2 2-2 2M3 8.5v3" />
