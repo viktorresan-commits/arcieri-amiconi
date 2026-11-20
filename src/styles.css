@@ -667,6 +667,8 @@ aside.aa-side button {
 .aa-short { animation: aa-pop-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both; -webkit-tap-highlight-color: transparent; }
 .aa-short-icon { transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1); }
 .aa-short:active .aa-short-icon { transform: scale(0.88) rotate(-4deg); }
+.aa-short.is-here .aa-short-icon { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px color-mix(in srgb, var(--primary) 70%, transparent); }
+.aa-short.is-here span { color: var(--primary); }
 .aa-short:hover .aa-short-icon { transform: translateY(-2px); }
 @keyframes aa-pop-in {
   from { opacity: 0; transform: translateY(10px) scale(0.92); }
@@ -744,15 +746,7 @@ html[data-motion="ridotta"] *, html[data-motion="ridotta"] *::before, html[data-
 }
 html[data-motion="ridotta"]::view-transition-old(root), html[data-motion="ridotta"]::view-transition-new(root) { animation: none; }
 
-/* ── Mappa del percorso ───────────────────────────────────────────── */
-.aa-trail {
-  background: linear-gradient(180deg, color-mix(in srgb, var(--primary) 85%, white 10%), color-mix(in srgb, var(--accent) 80%, transparent));
-  opacity: 0.55;
-  transform-origin: top;
-  animation: aa-trail 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
-  mask-image: repeating-linear-gradient(180deg, #000 0 8px, transparent 8px 13px);
-}
-@keyframes aa-trail { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+/* ── Menu: gruppi puliti ──────────────────────────────────────────── */
 .aa-station { animation: aa-pop-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
 
 /* frecce che arrivano sul bersaglio (balistica) */
@@ -760,3 +754,64 @@ html[data-motion="ridotta"]::view-transition-old(root), html[data-motion="ridott
 @keyframes aa-hit-in { from { opacity: 0; transform: scale(2.4); } to { opacity: 1; transform: none; } }
 .aa-hit-ring { opacity: 0; transform-box: fill-box; transform-origin: center; animation: aa-hit-ring 0.7s ease-out both; }
 @keyframes aa-hit-ring { from { opacity: 0.9; transform: scale(0.3); } to { opacity: 0; transform: scale(1.4); } }
+
+/* ── Movimento moderno ────────────────────────────────────────────── */
+/* pagina: i blocchi entrano uno dopo l'altro */
+.aa-page > * > * { animation: aa-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.aa-page > * > *:nth-child(2) { animation-delay: 50ms; }
+.aa-page > * > *:nth-child(3) { animation-delay: 100ms; }
+.aa-page > * > *:nth-child(4) { animation-delay: 150ms; }
+.aa-page > * > *:nth-child(5) { animation-delay: 200ms; }
+.aa-page > * > *:nth-child(n + 6) { animation-delay: 250ms; }
+
+/* barra in basso: pillola che si accende sotto l'icona */
+.aa-tab { -webkit-tap-highlight-color: transparent; }
+.aa-tab-pill::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--primary) 20%, transparent);
+  transform: scaleX(0.3);
+  opacity: 0;
+  transition: transform 0.35s cubic-bezier(0.22, 1.2, 0.36, 1), opacity 0.25s;
+}
+.aa-tab.is-active .aa-tab-pill::before { transform: none; opacity: 1; }
+.aa-tab.is-active svg { transform: translateY(-1px) scale(1.06); }
+.aa-tab:active svg { transform: scale(0.86); }
+
+/* hero: aurora che respira */
+.aa-hero::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: -40%;
+  background:
+    radial-gradient(35% 45% at 30% 40%, color-mix(in srgb, var(--accent) 30%, transparent), transparent 70%),
+    radial-gradient(30% 40% at 70% 60%, color-mix(in srgb, var(--primary) 34%, transparent), transparent 70%);
+  filter: blur(18px);
+  animation: aa-aurora 14s ease-in-out infinite alternate;
+}
+@keyframes aa-aurora {
+  0% { transform: translate3d(-6%, -4%, 0) rotate(0deg); }
+  50% { transform: translate3d(5%, 3%, 0) rotate(8deg); }
+  100% { transform: translate3d(-2%, 6%, 0) rotate(-6deg); }
+}
+
+/* caricamento: riflesso che scorre */
+.aa-skel {
+  background: linear-gradient(100deg, color-mix(in srgb, var(--fg) 6%, transparent) 30%, color-mix(in srgb, var(--fg) 13%, transparent) 50%, color-mix(in srgb, var(--fg) 6%, transparent) 70%);
+  background-size: 300% 100%;
+  animation: aa-shimmer 1.4s linear infinite;
+}
+@keyframes aa-shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
+
+/* tocco: tutto ciò che si preme risponde */
+.aa-chip, .aa-check, a.aa-glow-panel, button.aa-glow-panel { transition: transform 0.16s cubic-bezier(0.22, 1, 0.36, 1), background-color 0.2s, border-color 0.2s; }
+.aa-chip:active, .aa-check:active, a.aa-glow-panel:active, button.aa-glow-panel:active { transform: scale(0.97); }
+.aa-check .aa-check-box { transition: background-color 0.2s, border-color 0.2s, transform 0.25s cubic-bezier(0.22, 1.4, 0.36, 1); }
+.aa-check.is-on .aa-check-box { background: var(--primary); border-color: var(--primary); color: var(--primary-fg, #fff); transform: scale(1.08); }
+
+@media (prefers-reduced-motion: reduce) {
+  .aa-page > * > *, .aa-hero::before, .aa-skel { animation: none; }
+}

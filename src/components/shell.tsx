@@ -28,6 +28,9 @@ const MORE = [
   ["/classifiche", "Classifiche"],
   ["/statistiche", "Statistiche"],
   ["/balistica", "Balistica"],
+  ["/timer", "Timer di tiro"],
+  ["/tacche", "Tacche mirino"],
+  ["/borsa", "Prima di partire"],
   ["/sfide", "Sfide"],
   ["/attrezzatura", "Attrezzatura"],
   ["/gare", "Gare"],
@@ -170,7 +173,7 @@ export function Shell({ children }: { children: ReactNode }) {
             </Link>
           </header>
           {offline ? <p className="bg-accent px-4 py-2 text-sm text-accent-fg">Sei offline. Il tiro resta sul telefono e si sincronizza al ritorno della rete.</p> : null}
-          <main key={path} className="aa-rise mx-auto w-full min-w-0 max-w-3xl overflow-x-clip px-4 py-6 pb-28 md:pb-10">{children}</main>
+          <main key={path} className="aa-page mx-auto w-full min-w-0 max-w-3xl overflow-x-clip px-4 py-6 pb-28 md:pb-10">{children}</main>
           <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 items-end border-t border-line/60 bg-elev/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden">
             {[nav[0], nav[1]].map((item) => <BottomLink key={item.to} item={item} active={path === item.to || (item.to !== "/" && path.startsWith(item.to))} />)}
             <div className="flex justify-center">
@@ -234,10 +237,11 @@ export function Shell({ children }: { children: ReactNode }) {
 
 function BottomLink({ item, active }: { item: { to: string; label: string; icon: IconName }; active: boolean }) {
   return (
-    <Link to={item.to} className={cx("flex min-h-16 flex-col items-center justify-center gap-0.5 text-[11px] font-medium", active ? "text-primary" : "text-muted")}>
-      <Glyph name={item.icon} size={23} strokeWidth={active ? 2.1 : 1.7} className={cx("transition-transform", active ? "-translate-y-0.5 scale-110" : "")} />
+    <Link to={item.to} className={cx("aa-tab flex min-h-16 flex-col items-center justify-center gap-0.5 text-[11px] font-medium", active ? "is-active text-primary" : "text-muted")}>
+      <span className="aa-tab-pill relative grid h-8 w-14 place-items-center rounded-full">
+        <Glyph name={item.icon} size={22} strokeWidth={active ? 2.1 : 1.7} className="relative transition-transform duration-300" />
+      </span>
       {item.label}
-      <span className={cx("mt-0.5 h-1 w-1 rounded-full", active ? "bg-primary" : "bg-transparent")} />
     </Link>
   );
 }

@@ -40,6 +40,9 @@ export const SHORTCUTS: Shortcut[] = [
   { id: "gioco", group: "squadra", label: "Giochiamo", hint: "Mini giochi di tiro", icon: "game", color: "#b0802a", to: "/gioco" },
   { id: "acquisti", group: "prepara", label: "Acquisti", hint: "Lista della spesa", icon: "bag", color: "#946f42", to: "/acquisti" },
   { id: "profilo", group: "squadra", label: "Profilo", hint: "Dati, import, impostazioni", icon: "user", color: "#646c7a", to: "/profilo" },
+  { id: "timer", group: "allena", label: "Timer di tiro", hint: "Semaforo e tempi da gara", icon: "stopwatch", color: "#d6582a", to: "/timer" },
+  { id: "tacche", group: "prepara", label: "Tacche mirino", hint: "Da 2 distanze a tutte", icon: "sight", color: "#5a7bd1", to: "/tacche" },
+  { id: "borsa", group: "prepara", label: "Prima di partire", hint: "Borsa e riscaldamento", icon: "checklist", color: "#3f8a76", to: "/borsa" },
 ];
 
 /** Le tappe della mappa: il percorso naturale di un arciere, dalla preparazione alla squadra. */
@@ -52,7 +55,7 @@ export const STATIONS: { id: StationId; title: string; sub: string; icon: IconNa
 ];
 
 export const DEFAULT_PINNED = ["rapido", "foto", "gesto", "statistiche", "balistica", "gare", "attrezzatura", "squadra"];
-export const QUICK_ACTIONS = ["rapido", "foto", "nuovo", "gesto", "fatto", "gare"];
+export const QUICK_ACTIONS = ["rapido", "foto", "timer", "gesto", "fatto", "gare"];
 
 const KEY = "aa-shortcuts-v1";
 const EVENT = "aa-shortcuts";

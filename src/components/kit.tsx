@@ -156,10 +156,10 @@ export function Empty({ title, text }: { title: string; text?: string }) {
 export function Loading() {
   return (
     <div className="grid gap-3" aria-busy>
-      <p className="text-sm text-muted">Caricamento…</p>
-      <div className="h-8 w-40 animate-pulse rounded-lg bg-line" />
-      <div className="h-28 animate-pulse rounded-2xl bg-line" />
-      <div className="h-28 animate-pulse rounded-2xl bg-line" />
+      <span className="sr-only">Caricamento…</span>
+      <div className="aa-skel h-8 w-40 rounded-lg" />
+      <div className="aa-skel h-28 rounded-2xl" style={{ animationDelay: "120ms" }} />
+      <div className="aa-skel h-28 rounded-2xl" style={{ animationDelay: "240ms" }} />
     </div>
   );
 }

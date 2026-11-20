@@ -11,12 +11,13 @@ export type IconName =
   | "bag" | "user" | "breath" | "posture" | "timer" | "palette" | "pin" | "wind" | "follow" | "target"
   | "video" | "image" | "download" | "link" | "key" | "trash" | "shield" | "sparkle" | "import" | "ticket"
   | "gear" | "plus" | "check" | "play" | "stack" | "flame" | "level" | "arrow" | "hand" | "scan" | "edit"
-  | "eye" | "save" | "share" | "close" | "chevron" | "broom" | "medal" | "crosshair" | "mountain" | "home" | "grid";
+  | "eye" | "save" | "share" | "close" | "chevron" | "broom" | "medal" | "crosshair" | "mountain" | "home" | "grid"
+  | "sight" | "checklist" | "stopwatch";
 
 const A = 0.32; // opacità del secondo tono
 
 // ogni icona: tratti (stroke) e riempimenti tenui (fill, secondo tono)
-const ICONS: Record<IconName, ReactNode> = {
+const ICONS: Partial<Record<IconName, ReactNode>> = {
   bolt: (
     <>
       <path d="M13.2 2.8 5.6 13.1h5.6l-1.3 8.1 8.5-11.3h-5.8l.6-7.1Z" fill="currentColor" fillOpacity={A} />
@@ -442,7 +443,291 @@ const ICONS: Record<IconName, ReactNode> = {
   ),
 };
 
-export function Glyph({ name, size = 20, className, strokeWidth = 1.7, title }: { name: IconName; size?: number; className?: string; strokeWidth?: number; title?: string }) {
+
+// ── Versioni dettagliate (tre livelli di tono + tratti fini) per le icone delle sezioni ──
+const L1 = 0.16;
+const L2 = 0.36;
+const L3 = 0.7;
+const FINE = { strokeWidth: 1.1 } as const;
+
+const DETAILED: Partial<Record<IconName, ReactNode>> = {
+  bolt: (
+    <>
+      <circle cx="12" cy="12" r="9.2" fill="currentColor" fillOpacity={L1} stroke="none" />
+      <path d="M13.4 2.6 5.4 13.3h5.5l-1.2 8.1 8.9-11.7h-5.9l.7-7.1Z" fill="currentColor" fillOpacity={L2} />
+      <path d="M13.4 2.6 5.4 13.3h5.5l-1.2 8.1 8.9-11.7h-5.9l.7-7.1Z" />
+      <path d="m12.2 6.4-3.6 5" {...FINE} strokeOpacity={0.8} />
+      <path d="M20 4.5h1.6M20.8 3.7v1.6M3.2 18.6h1.4M3.9 17.9v1.4" {...FINE} />
+    </>
+  ),
+  camera: (
+    <>
+      <path d="M3.2 8.3c0-1.1.9-2 2-2h2.4l1.5-2.1h5.8l1.5 2.1h2.4c1.1 0 2 .9 2 2v9.4c0 1.1-.9 2-2 2H5.2c-1.1 0-2-.9-2-2V8.3Z" fill="currentColor" fillOpacity={L1} />
+      <path d="M3.2 8.3c0-1.1.9-2 2-2h2.4l1.5-2.1h5.8l1.5 2.1h2.4c1.1 0 2 .9 2 2v9.4c0 1.1-.9 2-2 2H5.2c-1.1 0-2-.9-2-2V8.3Z" />
+      <circle cx="12" cy="12.9" r="4.4" fill="currentColor" fillOpacity={L2} />
+      <circle cx="12" cy="12.9" r="4.4" />
+      <circle cx="12" cy="12.9" r="2.6" {...FINE} />
+      <circle cx="12" cy="12.9" r="0.9" fill="currentColor" stroke="none" />
+      <path d="M10.4 11.2a2.4 2.4 0 0 1 1.6-.7" {...FINE} strokeOpacity={0.9} />
+      <circle cx="17.6" cy="9" r=".7" fill="currentColor" stroke="none" />
+      <path d="M5.6 9.2h1.8" {...FINE} />
+    </>
+  ),
+  bow: (
+    <>
+      <path d="M10.3 4.5c4 2.1 5.5 4.9 5.5 7.5s-1.5 5.4-5.5 7.5" strokeWidth={3.4} strokeOpacity={L2} />
+      <path d="M8.5 3.2c.9.1 1.6.6 1.8 1.3 4 2.1 5.5 4.9 5.5 7.5s-1.5 5.4-5.5 7.5c-.2.7-.9 1.2-1.8 1.3" />
+      <rect x="14.4" y="10.2" width="2.6" height="3.6" rx="1" fill="currentColor" fillOpacity={L3} stroke="none" />
+      <path d="M8.6 3.4v17.2" {...FINE} strokeOpacity={0.75} />
+      <path d="M3.2 12h17" />
+      <path d="m17.6 9.6 2.9 2.4-2.9 2.4Z" fill="currentColor" fillOpacity={L3} />
+      <path d="M3.2 12 5 10.1M3.2 12 5 13.9M5.3 12l1.8-1.9M5.3 12l1.8 1.9" {...FINE} />
+      <circle cx="8.6" cy="12" r=".8" fill="currentColor" stroke="none" />
+    </>
+  ),
+  archer: (
+    <>
+      <circle cx="12" cy="12" r="9.3" fill="currentColor" fillOpacity={L1} stroke="none" />
+      <circle cx="8.4" cy="5" r="2" fill="currentColor" fillOpacity={L3} />
+      <path d="M8.4 7.4c-.6 2-.6 4.2 0 6.4l-2.2 6.9M8.4 13.8l2.7 6.9" />
+      <path d="M8.6 9.1h8.1M8.6 9.1 6 9.5l1.7-2.4" />
+      <path d="M16.6 3.4c2 1.6 3 3.7 3 5.8s-1 4.2-3 5.8" strokeWidth={2.4} strokeOpacity={L2} />
+      <path d="M16.6 3.4c2 1.6 3 3.7 3 5.8s-1 4.2-3 5.8" />
+      <path d="M16.6 3.4v11.6" {...FINE} strokeOpacity={0.7} />
+      <path d="M5.6 9.1h15.6" {...FINE} strokeDasharray="1 1.5" strokeOpacity={0.6} />
+      <path d="m20.1 8.2 1.4.9-1.4.9" {...FINE} />
+    </>
+  ),
+  notebook: (
+    <>
+      <rect x="5" y="2.8" width="14.2" height="18.4" rx="2.2" fill="currentColor" fillOpacity={L1} />
+      <rect x="5" y="2.8" width="14.2" height="18.4" rx="2.2" />
+      <path d="M5 2.8h3.8v18.4H5" fill="currentColor" fillOpacity={L2} stroke="none" />
+      <path d="M8.8 2.8v18.4" {...FINE} />
+      <path d="M11.4 6.8h5M11.4 9.2h3.4" {...FINE} strokeOpacity={0.8} />
+      <circle cx="14.6" cy="15.2" r="3" fill="currentColor" fillOpacity={L3} stroke="none" />
+      <path d="m13.3 15.2 1 1 1.8-2" stroke="#000" strokeOpacity={0.45} strokeWidth={1.3} />
+      <path d="M3.6 6.5h2.6M3.6 10h2.6M3.6 13.5h2.6M3.6 17h2.6" {...FINE} />
+    </>
+  ),
+  history: (
+    <>
+      <circle cx="12.6" cy="12.2" r="8.4" fill="currentColor" fillOpacity={L1} stroke="none" />
+      <circle cx="12.6" cy="12.2" r="5.6" fill="currentColor" fillOpacity={L2} stroke="none" />
+      <path d="M4.3 12.2a8.3 8.3 0 1 0 2.5-6" />
+      <path d="M3.9 4.1v3.8h3.8" />
+      <path d="M12.6 8v4.3l2.9 1.9" />
+      <path d="M12.6 4.6v1M12.6 18.8v1M20.2 12.2h-1M6.2 12.2h-1" {...FINE} />
+      <circle cx="12.6" cy="12.3" r=".9" fill="currentColor" stroke="none" />
+    </>
+  ),
+  trophy: (
+    <>
+      <path d="M7.4 3.2h9.2v5.6a4.6 4.6 0 0 1-9.2 0V3.2Z" fill="currentColor" fillOpacity={L2} />
+      <path d="M7.4 3.2h9.2v5.6a4.6 4.6 0 0 1-9.2 0V3.2Z" />
+      <path d="M9.4 4.6v3.8a2.6 2.6 0 0 0 1.2 2.2" {...FINE} strokeOpacity={0.9} />
+      <path d="M7.4 5.2H4.4c0 3.2 1.3 4.9 3.4 5.2M16.6 5.2h3c0 3.2-1.3 4.9-3.4 5.2" />
+      <path d="M12 13.4v3" />
+      <path d="M9.2 16.4h5.6l.9 4.1H8.3l.9-4.1Z" fill="currentColor" fillOpacity={L3} />
+      <path d="M7.2 20.5h9.6" />
+      <path d="m12 5.4.6 1.2 1.3.2-1 .9.3 1.3-1.2-.6-1.2.6.3-1.3-1-.9 1.3-.2.6-1.2Z" fill="currentColor" stroke="none" />
+    </>
+  ),
+  chart: (
+    <>
+      <rect x="3" y="3" width="18" height="18" rx="3" fill="currentColor" fillOpacity={L1} stroke="none" />
+      <path d="M5 18.5h14.5" {...FINE} />
+      <rect x="6" y="12.5" width="2.6" height="6" rx=".8" fill="currentColor" fillOpacity={L2} stroke="none" />
+      <rect x="10.7" y="9.5" width="2.6" height="9" rx=".8" fill="currentColor" fillOpacity={L2} stroke="none" />
+      <rect x="15.4" y="6.5" width="2.6" height="12" rx=".8" fill="currentColor" fillOpacity={L3} stroke="none" />
+      <path d="m5.6 10.6 4.6-3.7 3.8 2.3 5-4.6" />
+      <circle cx="10.2" cy="6.9" r="1" fill="currentColor" stroke="none" />
+      <circle cx="14" cy="9.2" r="1" fill="currentColor" stroke="none" />
+      <circle cx="19" cy="4.6" r="1.3" fill="currentColor" stroke="none" />
+    </>
+  ),
+  ballistics: (
+    <>
+      <path d="M2.8 20.6h18.4" {...FINE} />
+      <path d="M2.8 19.8C5.4 10 11.6 5.4 16 8.3" strokeDasharray="2.2 1.8" />
+      <path d="m14.6 6 2.8 2.8-3.5 1" fill="currentColor" fillOpacity={L3} />
+      <circle cx="18.4" cy="15.2" r="4" fill="currentColor" fillOpacity={L1} />
+      <circle cx="18.4" cy="15.2" r="4" />
+      <circle cx="18.4" cy="15.2" r="2.5" fill="currentColor" fillOpacity={L2} {...FINE} />
+      <circle cx="18.4" cy="15.2" r="1" fill="currentColor" stroke="none" />
+      <path d="M16.4 19.1 15 20.6M20.4 19.1l1.4 1.5" {...FINE} />
+      <circle cx="2.8" cy="19.8" r="1" fill="currentColor" stroke="none" />
+    </>
+  ),
+  quiver: (
+    <>
+      <path d="M7 9.2 9.5 21.2h5L17 9.2H7Z" fill="currentColor" fillOpacity={L2} />
+      <path d="M7 9.2 9.5 21.2h5L17 9.2H7Z" />
+      <path d="M7.6 12.2h8.8M8.3 15.6h7.4" {...FINE} strokeOpacity={0.8} />
+      <path d="M9.6 9.2 8.2 3.8M12 9.2V3.1M14.4 9.2l1.4-5.4" />
+      <path d="m7.2 4.6.9-1.8 1.1 1.7M11 3.9l1-1.9 1 1.9M14.8 4.5l1.1-1.7.9 1.8" fill="currentColor" fillOpacity={L3} {...FINE} />
+      <path d="M17 9.6c1.8.4 2.6 2 2.2 4.4" {...FINE} />
+    </>
+  ),
+  team: (
+    <>
+      <circle cx="12" cy="12" r="9.4" fill="currentColor" fillOpacity={L1} stroke="none" />
+      <circle cx="16.8" cy="7.6" r="2.4" fill="currentColor" fillOpacity={L2} />
+      <path d="M17.2 12.4c2.2.4 3.6 2 4 4.4" />
+      <circle cx="9" cy="8.2" r="3.2" fill="currentColor" fillOpacity={L3} />
+      <circle cx="9" cy="8.2" r="3.2" />
+      <path d="M2.8 19.6c.6-3.4 3.1-5.4 6.2-5.4s5.6 2 6.2 5.4" fill="currentColor" fillOpacity={L2} />
+      <path d="M2.8 19.6c.6-3.4 3.1-5.4 6.2-5.4s5.6 2 6.2 5.4" />
+      <circle cx="16.8" cy="7.6" r="2.4" />
+    </>
+  ),
+  calendar: (
+    <>
+      <rect x="3.4" y="4.8" width="17.2" height="15.8" rx="2.4" fill="currentColor" fillOpacity={L1} />
+      <path d="M3.4 7.2c0-1.3 1.1-2.4 2.4-2.4h12.4c1.3 0 2.4 1.1 2.4 2.4v2.4H3.4V7.2Z" fill="currentColor" fillOpacity={L3} stroke="none" />
+      <rect x="3.4" y="4.8" width="17.2" height="15.8" rx="2.4" />
+      <path d="M8 2.8v4M16 2.8v4" />
+      <path d="M6.8 13h1.4M11.3 13h1.4M15.8 13h1.4M6.8 16.6h1.4M11.3 16.6h1.4" {...FINE} />
+      <circle cx="16.5" cy="16.6" r="1.6" fill="currentColor" stroke="none" />
+    </>
+  ),
+  podium: (
+    <>
+      <rect x="9" y="9" width="6" height="11.5" rx=".8" fill="currentColor" fillOpacity={L3} />
+      <rect x="3.4" y="13" width="5.6" height="7.5" rx=".8" fill="currentColor" fillOpacity={L2} />
+      <rect x="15" y="15" width="5.6" height="5.5" rx=".8" fill="currentColor" fillOpacity={L1} />
+      <path d="M9 20.5V9h6v11.5M3.4 20.5V13H9M15 15h5.6v5.5M2.6 20.5h18.8" />
+      <path d="m12 2.6.9 1.8 2 .3-1.4 1.4.3 2-1.8-1-1.8 1 .3-2-1.4-1.4 2-.3.9-1.8Z" fill="currentColor" />
+      <path d="M11.4 12.4 12 12v3.6M5.6 15.8h1.4M17.2 17.5h1.4" {...FINE} />
+    </>
+  ),
+  duel: (
+    <>
+      <circle cx="12" cy="12" r="9.4" fill="currentColor" fillOpacity={L1} stroke="none" />
+      <path d="m4.2 19.8 15.4-15.4M19.8 19.8 4.4 4.4" />
+      <path d="M15.8 4.2h4v4" fill="currentColor" fillOpacity={L3} />
+      <path d="M8.2 4.2h-4v4" fill="currentColor" fillOpacity={L3} />
+      <path d="m4.6 17 2.4 2.4M3.4 18.6l1.9 1.9M19.4 17 17 19.4M20.6 18.6l-1.9 1.9" {...FINE} />
+      <circle cx="12" cy="12" r="2.2" fill="currentColor" fillOpacity={L2} />
+    </>
+  ),
+  flag: (
+    <>
+      <circle cx="7" cy="19.6" r="3" fill="currentColor" fillOpacity={L1} stroke="none" />
+      <path d="M6 21V3.2" />
+      <path d="M6 4c3.8-1.8 6.2 1.6 10.8 0v8.4C12.2 14 9.8 10.6 6 12.4V4Z" fill="currentColor" fillOpacity={L2} />
+      <path d="M6 4c3.8-1.8 6.2 1.6 10.8 0v8.4C12.2 14 9.8 10.6 6 12.4" />
+      <circle cx="11.4" cy="8.2" r="2.3" {...FINE} />
+      <circle cx="11.4" cy="8.2" r=".8" fill="currentColor" stroke="none" />
+      <circle cx="6" cy="21" r="1" fill="currentColor" stroke="none" />
+    </>
+  ),
+  megaphone: (
+    <>
+      <path d="M4 10.1v3.8c0 .7.6 1.3 1.3 1.3h2.4l7.6 4.6V4.2L7.7 8.8H5.3c-.7 0-1.3.6-1.3 1.3Z" fill="currentColor" fillOpacity={L2} />
+      <path d="M4 10.1v3.8c0 .7.6 1.3 1.3 1.3h2.4l7.6 4.6V4.2L7.7 8.8H5.3c-.7 0-1.3.6-1.3 1.3Z" />
+      <path d="M7.7 8.8v6.4" {...FINE} />
+      <path d="m8.1 15.2 1 5h2.3l-.9-3.8" fill="currentColor" fillOpacity={L3} />
+      <path d="M18.2 9a4 4 0 0 1 0 6M20.4 6.8a7 7 0 0 1 0 10.4" />
+    </>
+  ),
+  compare: (
+    <>
+      <path d="M12 3.2v17.3M6.2 20.5h11.6" />
+      <circle cx="12" cy="4.2" r="1.2" fill="currentColor" stroke="none" />
+      <path d="M4.6 6.6h14.8" />
+      <path d="M2.2 12.8h5.2a2.6 2.6 0 0 1-5.2 0ZM16.6 12.8h5.2a2.6 2.6 0 0 1-5.2 0Z" fill="currentColor" fillOpacity={L3} />
+      <path d="m4.8 6.6-2.6 6.2M4.8 6.6l2.6 6.2M19.2 6.6l-2.6 6.2M19.2 6.6l2.6 6.2" {...FINE} />
+      <rect x="9.6" y="17.6" width="4.8" height="2.9" rx=".8" fill="currentColor" fillOpacity={L2} stroke="none" />
+    </>
+  ),
+  game: (
+    <>
+      <path d="M7.2 7.3h9.6a4.3 4.3 0 0 1 4.2 5.1l-.9 4.3a2.4 2.4 0 0 1-4.1 1.2L14 15.6h-4l-2 2.3a2.4 2.4 0 0 1-4.1-1.2L3 12.4a4.3 4.3 0 0 1 4.2-5.1Z" fill="currentColor" fillOpacity={L2} />
+      <path d="M7.2 7.3h9.6a4.3 4.3 0 0 1 4.2 5.1l-.9 4.3a2.4 2.4 0 0 1-4.1 1.2L14 15.6h-4l-2 2.3a2.4 2.4 0 0 1-4.1-1.2L3 12.4a4.3 4.3 0 0 1 4.2-5.1Z" />
+      <path d="M8 9.8v3.2M6.4 11.4h3.2" />
+      <circle cx="15.6" cy="10.4" r="1" fill="currentColor" stroke="none" />
+      <circle cx="17.6" cy="12.4" r="1" fill="currentColor" stroke="none" />
+      <path d="M11 9.6h2" {...FINE} />
+      <path d="M12 7.3V5.2c0-1 .8-1.8 1.8-1.8" {...FINE} />
+    </>
+  ),
+  bag: (
+    <>
+      <path d="M4.8 7.8h14.4l-1.1 12.8H5.9L4.8 7.8Z" fill="currentColor" fillOpacity={L2} />
+      <path d="M4.8 7.8h14.4l-1.1 12.8H5.9L4.8 7.8Z" />
+      <path d="M9 10.6V6.8a3 3 0 0 1 6 0v3.8" />
+      <circle cx="9" cy="10.6" r=".9" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="10.6" r=".9" fill="currentColor" stroke="none" />
+      <path d="M8.2 16.8h7.6" {...FINE} strokeOpacity={0.8} />
+    </>
+  ),
+  user: (
+    <>
+      <circle cx="12" cy="12" r="9.4" fill="currentColor" fillOpacity={L1} stroke="none" />
+      <circle cx="12" cy="8.4" r="3.8" fill="currentColor" fillOpacity={L3} />
+      <circle cx="12" cy="8.4" r="3.8" />
+      <path d="M4.6 20.2c.9-3.9 3.8-6 7.4-6s6.5 2.1 7.4 6" fill="currentColor" fillOpacity={L2} />
+      <path d="M4.6 20.2c.9-3.9 3.8-6 7.4-6s6.5 2.1 7.4 6" />
+      <path d="m12 14.2-.9 2 .9 3.3.9-3.3-.9-2Z" fill="currentColor" stroke="none" />
+    </>
+  ),
+  palette: (
+    <>
+      <path d="M12 3.4a8.6 8.6 0 1 0 0 17.2c1.3 0 1.9-.9 1.3-2-.6-1.3.2-2.7 1.7-2.7h1.8a3.8 3.8 0 0 0 3.8-3.8c0-4.8-3.8-8.7-8.6-8.7Z" fill="currentColor" fillOpacity={L2} />
+      <path d="M12 3.4a8.6 8.6 0 1 0 0 17.2c1.3 0 1.9-.9 1.3-2-.6-1.3.2-2.7 1.7-2.7h1.8a3.8 3.8 0 0 0 3.8-3.8c0-4.8-3.8-8.7-8.6-8.7Z" />
+      <circle cx="7.6" cy="11.2" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="10.4" cy="7.2" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="15.2" cy="7.4" r="1.4" fill="currentColor" fillOpacity={L3} stroke="none" />
+      <circle cx="8.8" cy="15.6" r="1.4" fill="currentColor" fillOpacity={L3} stroke="none" />
+    </>
+  ),
+  target: (
+    <>
+      <circle cx="12" cy="12" r="9" fill="currentColor" fillOpacity={L1} />
+      <circle cx="12" cy="12" r="9" />
+      <circle cx="12" cy="12" r="6.2" fill="currentColor" fillOpacity={L2} {...FINE} />
+      <circle cx="12" cy="12" r="3.5" fill="currentColor" fillOpacity={L3} {...FINE} />
+      <circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none" />
+      <path d="m12 12 7.4-7.4M17.4 4.2l2.4.2.2 2.4" {...FINE} />
+    </>
+  ),
+  sight: (
+    <>
+      <rect x="9.5" y="2.8" width="3.2" height="18.4" rx="1.2" fill="currentColor" fillOpacity={L2} />
+      <rect x="9.5" y="2.8" width="3.2" height="18.4" rx="1.2" />
+      <path d="M9.5 6h1.4M9.5 8.6h2M9.5 11.2h1.4M9.5 13.8h2M9.5 16.4h1.4M9.5 19h2" {...FINE} />
+      <path d="M12.7 12h3.4" />
+      <circle cx="18.6" cy="12" r="2.6" fill="currentColor" fillOpacity={L3} />
+      <circle cx="18.6" cy="12" r="2.6" />
+      <circle cx="18.6" cy="12" r=".8" fill="currentColor" stroke="none" />
+      <path d="M3 9.2h3.4M3 14.8h3.4" {...FINE} strokeOpacity={0.7} />
+    </>
+  ),
+  checklist: (
+    <>
+      <rect x="4.4" y="3.6" width="15.2" height="17.6" rx="2.4" fill="currentColor" fillOpacity={L1} />
+      <rect x="4.4" y="3.6" width="15.2" height="17.6" rx="2.4" />
+      <rect x="8.6" y="2.2" width="6.8" height="3.2" rx="1.2" fill="currentColor" fillOpacity={L3} />
+      <path d="m7.4 10 1.2 1.2 2-2.2M7.4 14.6l1.2 1.2 2-2.2" />
+      <path d="M12.6 10.2h4.2M12.6 14.8h4.2" {...FINE} />
+      <path d="M7.6 18.6h2.6M12.6 18.6h2.6" {...FINE} strokeOpacity={0.6} />
+    </>
+  ),
+  stopwatch: (
+    <>
+      <circle cx="12" cy="13.6" r="7.4" fill="currentColor" fillOpacity={L1} />
+      <path d="M12 6.2a7.4 7.4 0 0 1 7.4 7.4H12V6.2Z" fill="currentColor" fillOpacity={L3} stroke="none" />
+      <circle cx="12" cy="13.6" r="7.4" />
+      <path d="M10 2.6h4M12 2.6v3.6M18.4 6.4l1.5-1.5" />
+      <path d="M12 13.6 8.8 11" />
+      <path d="M12 7.6v1M12 18.6v1M6 13.6h1M17 13.6h1" {...FINE} />
+      <circle cx="12" cy="13.6" r="1" fill="currentColor" stroke="none" />
+    </>
+  ),
+};
+
+export function Glyph({ name, size = 20, className, strokeWidth = 1.7, title, detailed = false }: { name: IconName; size?: number; className?: string; strokeWidth?: number; title?: string; detailed?: boolean }) {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -458,7 +743,7 @@ export function Glyph({ name, size = 20, className, strokeWidth = 1.7, title }: 
       role={title ? "img" : undefined}
     >
       {title ? <title>{title}</title> : null}
-      {ICONS[name]}
+      {(detailed ? DETAILED[name] : undefined) ?? ICONS[name] ?? DETAILED[name]}
     </svg>
   );
 }
@@ -470,7 +755,7 @@ export function AppIcon({ name, color, size = 52, className }: { name: IconName;
       className={["aa-appicon relative grid shrink-0 place-items-center", className].filter(Boolean).join(" ")}
       style={{ "--c": color, width: size, height: size, borderRadius: size * 0.3 } as CSSProperties}
     >
-      <Glyph name={name} size={Math.round(size * 0.5)} strokeWidth={1.8} className="relative z-[1] text-white drop-shadow-[0_1px_1.5px_rgba(0,0,0,0.35)]" />
+      <Glyph name={name} detailed size={Math.round(size * 0.58)} strokeWidth={1.6} className="relative z-[1] text-white drop-shadow-[0_1px_1.5px_rgba(0,0,0,0.35)]" />
     </span>
   );
 }
