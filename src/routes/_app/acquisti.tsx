@@ -113,7 +113,7 @@ function Page() {
             <button type="button" aria-label="Chiudi" onClick={() => setAdding(false)} className="grid h-9 w-9 place-items-center rounded-full border border-line"><Glyph name="close" size={16} /></button>
           </div>
           <div className="grid grid-cols-4 gap-1.5">
-            {CATEGORIES.filter((c) => c.id !== "tutto").map((c) => (
+            {CATEGORIES.map((c) => (
               <button key={c.id} type="button" onClick={() => setForm({ ...form, category: c.id })} className={`grid justify-items-center gap-0.5 rounded-xl border p-1.5 text-[0.62rem] leading-tight ${form.category === c.id ? "border-primary bg-primary/15" : "border-line"}`}>
                 <CategoryIcon category={c.id} className="h-10 w-10" />
                 <span className="line-clamp-2 text-center">{c.label}</span>
