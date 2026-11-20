@@ -179,7 +179,7 @@ export function TargetRead({
       const img = await loadImage(file).catch(() => null);
       if (!img) continue;
       const res = readPhoto(img, img.naturalWidth, img.naturalHeight, face, { calib: null, known: [], max: expected && expected > 0 ? expected : 12 });
-      volleys.push(res.hits.slice(0, expected && expected > 0 ? expected : res.hits.length).map(({ nx, ny, score, isX, miss }) => ({ nx, ny, score, isX, miss })));
+      volleys.push(res.hits.slice(0, expected && expected > 0 ? expected : res.hits.length).map(({ nx, ny, score, isX, miss }) => ({ nx, ny, score, isX, miss, tag: null })));
     }
     onApplyBatch(volleys.filter((v) => v.length));
     setQueue([]);

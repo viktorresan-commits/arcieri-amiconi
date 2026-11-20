@@ -93,7 +93,7 @@ function Page() {
 }
 
 type Session = Awaited<ReturnType<typeof getSession>>["session"];
-type Shot = Awaited<ReturnType<typeof getSession>>["shots"][number];
+type Shot = Omit<Awaited<ReturnType<typeof getSession>>["shots"][number], "tag"> & { tag?: number | null };
 
 function Volleys({
   session,
@@ -109,7 +109,7 @@ function Volleys({
   onSaved: () => void;
 }) {
   const keys = keypad(face);
-  const [shots, setShots] = useState(initial);
+  const [shots, setShots] = useState<Shot[]>(initial);
   const [open, setOpen] = useState<string | null>(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
