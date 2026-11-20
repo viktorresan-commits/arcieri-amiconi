@@ -1,8 +1,9 @@
-import { useState, type CSSProperties } from "react";
+import { useRef, useState, type CSSProperties } from "react";
 import { Link } from "@tanstack/react-router";
 import { SHORTCUTS, STATIONS, TIPS, shortcutById, usePinned, type Shortcut } from "@/lib/arcieri/shortcuts";
 import { cx } from "./kit";
 import { AppIcon, Glyph } from "./icons";
+import { RealIcon } from "./real-icons";
 
 /** Una scorciatoia: icona colorata che rimbalza al tocco. */
 export function ShortcutTile({ s, size = "md", onClick, index = 0 }: { s: Shortcut; size?: "md" | "lg"; onClick?: () => void; index?: number }) {
@@ -115,39 +116,77 @@ export function TipCard() {
 }
 
 /** Mappa del percorso: cinque tappe in fila, collegate da un sentiero, con le loro sezioni. */
-export function PathMap({ onPick, current }: { onPick?: () => void; current?: string }) {
+/** Menu: una categoria alla volta (schede in alto, scorri di lato per cambiare), voci in lista. */
+export function PathMap({ onPick, current, onPersonalize }: { onPick?: () => void; current?: string; onPersonalize?: () => void }) {
+  const here = SHORTCUTS.find((s) => current && s.to !== "/" && current.startsWith(s.to));
+  const [tab, setTab] = useState<string>(here?.group ?? "allena");
+  const [dir, setDir] = useState(0);
+  const touch = useRef<{ x: number; y: number } | null>(null);
+  const idx = STATIONS.findIndex((st) => st.id === tab);
+  const go = (i: number) => {
+    const next = STATIONS[(i + STATIONS.length) % STATIONS.length];
+    setDir(i > idx ? 1 : -1);
+    setTab(next.id);
+  };
+  const st = STATIONS[idx] ?? STATIONS[0];
+  const items = SHORTCUTS.filter((s) => s.group === st.id);
   return (
     <div className="grid gap-4">
-      {STATIONS.map((st, si) => {
-        const items = SHORTCUTS.filter((s) => s.group === st.id);
-        return (
-          <section key={st.id} className="aa-station grid gap-2" style={{ animationDelay: `${si * 70}ms` }}>
-            <p className="px-1 text-[0.66rem] font-semibold uppercase tracking-[0.14em] text-muted">{st.title}</p>
-            <div className="grid grid-cols-4 gap-x-1 gap-y-3">
-              {items.map((s, i) => {
-                const here = !!current && s.to !== "/" && current.startsWith(s.to);
-                return (
-                  <Link
-                    key={s.id}
-                    to={s.to as "/"}
-                    search={(s.search ?? {}) as never}
-                    onClick={() => {
-                      if (navigator.vibrate) navigator.vibrate(8);
-                      onPick?.();
-                    }}
-                    className={cx("aa-short relative grid justify-items-center gap-1 text-center", here && "is-here")}
-                    style={{ animationDelay: `${si * 70 + i * 30}ms` }}
-                    aria-current={here ? "page" : undefined}
-                  >
-                    <AppIcon name={s.icon} color={s.color} size={50} className="aa-short-icon" />
-                    <span className="w-full truncate text-[0.66rem] font-medium leading-tight">{s.label}</span>
-                  </Link>
-                );
-              })}
-            </div>
-          </section>
-        );
-      })}
+      <div className="aa-menu-tabs relative grid grid-cols-5 gap-1 rounded-2xl bg-white/[0.04] p-1">
+        <span aria-hidden className="aa-menu-ink absolute bottom-1 top-1 rounded-xl" style={{ left: `calc(${idx} * 20% + 4px)`, width: "calc(20% - 6px)", ["--c" as string]: st.color }} />
+        {STATIONS.map((s, i) => (
+          <button key={s.id} type="button" onClick={() => go(i)} aria-pressed={s.id === tab} className={cx("relative z-[1] grid justify-items-center gap-0.5 rounded-xl py-1.5 text-[0.62rem] font-semibold transition-colors", s.id === tab ? "text-fg" : "text-muted")}>
+            <RealIcon name={s.icon} size={26} className={cx("transition-transform duration-300", s.id === tab ? "scale-110" : "opacity-70 grayscale-[35%]")} />
+            {s.title}
+          </button>
+        ))}
+      </div>
+      <div
+        key={tab}
+        className={dir >= 0 ? "aa-menu-in-r" : "aa-menu-in-l"}
+        onTouchStart={(e) => (touch.current = { x: e.touches[0].clientX, y: e.touches[0].clientY })}
+        onTouchEnd={(e) => {
+          const t = touch.current;
+          touch.current = null;
+          if (!t) return;
+          const dx = e.changedTouches[0].clientX - t.x;
+          const dy = e.changedTouches[0].clientY - t.y;
+          if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) go(idx + (dx < 0 ? 1 : -1));
+        }}
+      >
+        <p className="mb-2 px-1 text-xs text-muted">{st.sub}</p>
+        <ul className="grid gap-1">
+          {items.map((s, i) => {
+            const on = !!current && s.to !== "/" && current.startsWith(s.to) && (!s.search || here?.id === s.id);
+            return (
+              <li key={s.id} className="aa-menu-row" style={{ animationDelay: `${i * 35}ms` }}>
+                <Link
+                  to={s.to as "/"}
+                  search={(s.search ?? {}) as never}
+                  onClick={() => {
+                    if (navigator.vibrate) navigator.vibrate(8);
+                    onPick?.();
+                  }}
+                  aria-current={on ? "page" : undefined}
+                  className={cx("aa-short flex items-center gap-3 rounded-2xl px-2 py-1.5 transition-colors", on ? "bg-primary/12" : "active:bg-white/[0.05]")}
+                >
+                  <AppIcon name={s.icon} color={s.color} size={44} className="aa-short-icon" />
+                  <span className="min-w-0 flex-1">
+                    <span className={cx("block text-[0.95rem] font-semibold", on && "text-primary")}>{s.label}</span>
+                    <span className="block truncate text-xs text-muted">{s.hint}</span>
+                  </span>
+                  <Glyph name="chevron" size={16} className="text-muted/60" />
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+      {onPersonalize ? (
+        <button type="button" onClick={onPersonalize} className="flex items-center justify-center gap-2 py-2 text-xs font-semibold text-muted">
+          <Glyph name="palette" size={15} /> Personalizza colori, icone e Home
+        </button>
+      ) : null}
     </div>
   );
 }

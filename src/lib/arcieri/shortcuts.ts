@@ -41,8 +41,10 @@ export const SHORTCUTS: Shortcut[] = [
   { id: "acquisti", group: "prepara", label: "Acquisti", hint: "Lista della spesa", icon: "bag", color: "#946f42", to: "/acquisti" },
   { id: "profilo", group: "squadra", label: "Profilo", hint: "Dati, import, impostazioni", icon: "user", color: "#646c7a", to: "/profilo" },
   { id: "timer", group: "allena", label: "Timer di tiro", hint: "Semaforo e tempi da gara", icon: "stopwatch", color: "#d6582a", to: "/timer" },
-  { id: "tacche", group: "prepara", label: "Tacche mirino", hint: "Da 2 distanze a tutte", icon: "sight", color: "#5a7bd1", to: "/tacche" },
   { id: "borsa", group: "prepara", label: "Prima di partire", hint: "Borsa e riscaldamento", icon: "checklist", color: "#3f8a76", to: "/borsa" },
+  { id: "foc", group: "prepara", label: "Calcolo FOC", hint: "Bilanciamento della freccia", icon: "foc", color: "#2f6fd1", to: "/foc" },
+  { id: "manutenzione", group: "prepara", label: "Manutenzione", hint: "Corda, cocche, penne", icon: "wrench", color: "#6c7684", to: "/manutenzione" },
+  { id: "secco", group: "allena", label: "A secco", hint: "Tenute con arco o elastico", icon: "hold", color: "#c4475a", to: "/secco" },
 ];
 
 /** Le tappe della mappa: il percorso naturale di un arciere, dalla preparazione alla squadra. */

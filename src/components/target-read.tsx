@@ -20,8 +20,8 @@ import {
 } from "@/lib/arcieri/target-vision";
 import { MediaPick } from "@/components/media-pick";
 
-type Hit = { nx: number; ny: number; score: number; isX: boolean; miss: boolean; t?: number; kind?: string; tail?: { x: number; y: number } | null };
-type Apply = (hits: { nx: number; ny: number; score: number; isX: boolean; miss: boolean }[]) => void;
+type Hit = { nx: number; ny: number; score: number; isX: boolean; miss: boolean; tag?: number | null; t?: number; kind?: string; tail?: { x: number; y: number } | null };
+type Apply = (hits: { nx: number; ny: number; score: number; isX: boolean; miss: boolean; tag?: number | null }[]) => void;
 
 const SIZES = [40, 60, 80, 122];
 
@@ -39,9 +39,12 @@ export function TargetRead({
   volleyLabel,
   compact = false,
   onApplyBatch,
+  tags,
 }: {
+  /** numeri delle frecce dell'attrezzatura, per dire quale freccia è ogni colpo */
+  tags?: number[];
   /** più foto insieme: una volée per foto, salvate in un colpo solo */
-  onApplyBatch?: (volleys: { nx: number; ny: number; score: number; isX: boolean; miss: boolean }[][]) => void;
+  onApplyBatch?: (volleys: { nx: number; ny: number; score: number; isX: boolean; miss: boolean; tag?: number | null }[][]) => void;
   face: Face;
   onApply: Apply;
   known?: { x: number; y: number }[];
@@ -159,7 +162,7 @@ export function TargetRead({
   }
 
   function currentHits() {
-    return hits.slice(0, expected && expected > 0 ? expected : hits.length).map(({ nx, ny, score, isX, miss }) => ({ nx, ny, score, isX, miss }));
+    return hits.slice(0, expected && expected > 0 ? expected : hits.length).map(({ nx, ny, score, isX, miss, tag }) => ({ nx, ny, score, isX, miss, tag: tag ?? null }));
   }
 
   function save() {
@@ -552,11 +555,13 @@ export function TargetRead({
     const d = drag.current;
     drag.current = null;
     if (!d || d.moved) return;
-    setApplied(false);
     if (d.index >= 0) {
-      setHits((list) => list.filter((_, i) => i !== d.index));
+      // tocco su una freccia: si apre la scelta (numero dell'attrezzatura, ordine, togli)
+      if (navigator.vibrate) navigator.vibrate(12);
+      setRenumber(d.index);
       return;
     }
+    setApplied(false);
     const { u, v } = pointOf(event);
     const f = faceAt(u, v);
     if (!f || Math.hypot(f.x, f.y) > 1.15) return;
@@ -712,7 +717,7 @@ export function TargetRead({
       ) : null}
       {renumber != null && hits[renumber] ? (
         <div className="aa-rise grid gap-2 rounded-2xl border border-accent/50 bg-accent/10 p-3">
-          <p className="text-sm font-semibold">Freccia n. {renumber + 1} ({hits[renumber].miss ? "M" : hits[renumber].isX ? "X" : hits[renumber].score}): che numero è?</p>
+          <p className="text-sm font-semibold">Colpo {renumber + 1} ({hits[renumber].miss ? "M" : hits[renumber].isX ? "X" : hits[renumber].score}): in che ordine è arrivato?</p>
           <div className="flex flex-wrap gap-1.5">
             {hits.map((_, i) => (
               <button
@@ -735,6 +740,29 @@ export function TargetRead({
               </button>
             ))}
           </div>
+          {tags?.length ? (
+            <>
+              <p className="text-xs text-muted">Quale freccia della tua attrezzatura?</p>
+              <div className="flex flex-wrap gap-1.5">
+                {tags.map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    aria-pressed={hits[renumber].tag === n}
+                    className="aa-chip min-w-10 justify-center"
+                    onClick={() => {
+                      const at = renumber;
+                      setHits((list) => list.map((h, i) => (i === at ? { ...h, tag: h.tag === n ? null : n } : h)));
+                      setApplied(false);
+                      setRenumber(null);
+                    }}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : null}
           <div className="flex gap-2">
             <button type="button" className="min-h-9 rounded-full border border-line px-3 text-xs" onClick={() => { const from = renumber; setHits((list) => list.filter((_, i) => i !== from)); setApplied(false); setRenumber(null); }}><IconLabel icon="trash" size={14}>Togli questa freccia</IconLabel></button>
             <button type="button" className="min-h-9 rounded-full border border-line px-3 text-xs" onClick={() => setRenumber(null)}>Annulla</button>
@@ -742,7 +770,7 @@ export function TargetRead({
         </div>
       ) : null}
       {note ? <p className="text-sm">{note}</p> : null}
-      {hits.length && !adjust ? <p className="text-[0.7rem] text-muted">Tocca un punto per toglierlo, trascinalo per spostarlo, tienilo premuto per cambiare il numero della freccia. Con due dita sposti e ingrandisci il padiglione.</p> : null}
+      {hits.length && !adjust ? <p className="text-[0.7rem] text-muted">Tocca una freccia per darle il numero o toglierla, trascinala per spostarla. Con due dita sposti e ingrandisci il padiglione.</p> : null}
 
       {has ? (
         <div className="grid gap-2 rounded-xl border border-line p-3 text-sm">
@@ -844,7 +872,7 @@ function mark(ctx: CanvasRenderingContext2D, x: number, y: number, index: number
   ctx.arc(x, y, 2.5, 0, Math.PI * 2);
   ctx.fillStyle = "#fff";
   ctx.fill();
-  const label = `${index + 1}·${hit.miss ? "M" : hit.isX ? "X" : hit.score}`;
+  const label = `${hit.tag != null ? `n.${hit.tag}` : index + 1}·${hit.miss ? "M" : hit.isX ? "X" : hit.score}`;
   ctx.font = "bold 22px sans-serif";
   ctx.lineWidth = 5;
   ctx.strokeStyle = "#14181c";

@@ -63,7 +63,7 @@ export function PersonalizePanel() {
           ))}
         </div>
       </Row>
-      <Row title="Icone" sub="A tema seguono il colore dell'app; colorate distinguono le sezioni; sobrie sono le più discrete.">
+      <Row title="Icone" sub="Oggetti realistici: a tema prendono il colore dell'app, colorate distinguono le sezioni. Sobrie: solo il disegno a linee.">
         <Pills
           value={prefs.icons}
           onChange={(icons) => update({ icons })}
@@ -81,6 +81,9 @@ export function PersonalizePanel() {
       </Row>
       <Row title="Animazioni">
         <Pills value={prefs.motion} onChange={(motion) => update({ motion })} options={[{ id: "piena", label: "Complete" }, { id: "ridotta", label: "Ridotte" }]} />
+      </Row>
+      <Row title="Sfondi" sub="Una scena sfocata per ogni sezione, che scorre piano con la pagina.">
+        <Pills value={prefs.scenes} onChange={(scenes) => update({ scenes })} options={[{ id: "si", label: "Accesi" }, { id: "no", label: "Spenti" }]} />
       </Row>
       <Row title="Obiettivo della settimana" sub="Frecce da tirare da lunedì a domenica.">
         <Pills value={prefs.weekGoal} onChange={(weekGoal) => update({ weekGoal })} options={WEEK_GOALS.map((g) => ({ id: g, label: String(g) }))} />

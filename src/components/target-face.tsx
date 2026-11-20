@@ -6,27 +6,33 @@ export function TargetFace({
   shots,
   onHit,
   onMove,
+  onPick,
+  picked,
   interactive = true,
   color = "var(--fg)",
   numbers = false,
 }: {
   face: Face;
-  shots: { nx: number | null; ny: number | null; score?: number; isX?: boolean; miss?: boolean; arrow?: number }[];
+  shots: { nx: number | null; ny: number | null; score?: number; isX?: boolean; miss?: boolean; arrow?: number; tag?: number | null }[];
   onHit?: (nx: number, ny: number) => void;
   onMove?: (index: number, nx: number, ny: number, done: boolean) => void;
+  /** Tocco breve su una freccia già segnata (senza trascinarla). */
+  onPick?: (index: number) => void;
+  picked?: number | null;
   interactive?: boolean;
   color?: string;
   numbers?: boolean;
 }) {
   const ref = useRef<SVGSVGElement>(null);
   const drag = useRef<number | null>(null);
+  const grab = useRef<{ x: number; y: number; moved: boolean } | null>(null);
   const start = useRef<{ x: number; y: number } | null>(null);
   const pointers = useRef(new Map<number, { cx: number; cy: number }>());
   const pinch = useRef<{ dist: number; zoom: number } | null>(null);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [loupe, setLoupe] = useState<{ x: number; y: number; label: string } | null>(null);
-  const active = interactive && (Boolean(onHit) || Boolean(onMove));
+  const active = interactive && (Boolean(onHit) || Boolean(onMove) || Boolean(onPick));
 
   function local(clientX: number, clientY: number) {
     const svg = ref.current;
@@ -78,13 +84,12 @@ export function TargetFace({
             setLoupe(null);
             return;
           }
-          const index = onMove ? nearest(point.x, point.y) : -1;
+          const index = onMove || onPick ? nearest(point.x, point.y) : -1;
           if (index >= 0) {
+            // si sposta solo se il dito si muove davvero: un tocco fermo apre la scelta del numero
             drag.current = index;
+            grab.current = { x: point.x, y: point.y, moved: false };
             start.current = null;
-            const hit = scoreAtRadius(face, Math.hypot(point.x, point.y));
-            setLoupe({ x: point.x, y: point.y, label: hit.miss ? "M" : hit.isX ? "X" : String(hit.score) });
-            onMove?.(index, point.x, point.y, false);
             return;
           }
           drag.current = null;
@@ -100,7 +105,11 @@ export function TargetFace({
             zoomAt(pinch.current.zoom * (dist / pinch.current.dist));
             return;
           }
-          if (drag.current == null) return;
+          if (drag.current == null || !onMove) return;
+          if (grab.current && !grab.current.moved) {
+            if (Math.hypot(point.x - grab.current.x, point.y - grab.current.y) < 0.035 / zoom) return;
+            grab.current.moved = true;
+          }
           const hit = scoreAtRadius(face, Math.hypot(point.x, point.y));
           setLoupe({ x: point.x, y: point.y, label: hit.miss ? "M" : hit.isX ? "X" : String(hit.score) });
           onMove?.(drag.current, point.x, point.y, false);
@@ -109,9 +118,15 @@ export function TargetFace({
           const point = local(event.clientX, event.clientY);
           pointers.current.delete(event.pointerId);
           if (pointers.current.size < 2) pinch.current = null;
-          if (drag.current != null && point) onMove?.(drag.current, point.x, point.y, true);
-          else if (start.current && point && Math.hypot(point.x - start.current.x, point.y - start.current.y) < 0.08 / zoom) onHit?.(point.x, point.y);
+          if (drag.current != null && point) {
+            if (grab.current?.moved) onMove?.(drag.current, point.x, point.y, true);
+            else if (onPick) {
+              if (navigator.vibrate) navigator.vibrate(12);
+              onPick(drag.current);
+            }
+          } else if (start.current && point && Math.hypot(point.x - start.current.x, point.y - start.current.y) < 0.08 / zoom) onHit?.(point.x, point.y);
           drag.current = null;
+          grab.current = null;
           start.current = null;
           setLoupe(null);
         } : undefined}
@@ -156,7 +171,8 @@ export function TargetFace({
           {shots.map((shot, index) => {
             const placed = placeShot(face, shot, index);
             if (!placed) return null;
-            const n = (shot.arrow ?? index) + 1;
+            const n = shot.tag != null ? shot.tag : (shot.arrow ?? index) + 1;
+            const sel = picked === index;
             if (placed.miss) {
               return (
                 <text key={index} x={placed.x} y={placed.y} textAnchor="middle" fill="var(--fg)" fontSize="0.07" fontFamily="var(--font-disp)">
@@ -166,9 +182,10 @@ export function TargetFace({
             }
             return (
               <g key={index}>
-                <circle cx={placed.x} cy={placed.y} r={numbers ? 0.055 : 0.045} fill={color} stroke="#14181c" strokeWidth="0.012" />
+                {sel ? <circle cx={placed.x} cy={placed.y} r={0.085} fill="none" stroke="var(--accent)" strokeWidth="0.014" className="aa-pulse" /> : null}
+                <circle cx={placed.x} cy={placed.y} r={numbers ? 0.055 : 0.045} fill={shot.tag != null ? "var(--accent)" : color} stroke="#14181c" strokeWidth="0.012" />
                 {numbers ? (
-                  <text x={placed.x} y={placed.y + 0.018} textAnchor="middle" fill="#14181c" fontSize="0.055" fontFamily="var(--font-disp)">
+                  <text x={placed.x} y={placed.y + 0.018} textAnchor="middle" fill="#14181c" fontSize={n >= 10 ? 0.045 : 0.055} fontFamily="var(--font-disp)">
                     {n}
                   </text>
                 ) : null}

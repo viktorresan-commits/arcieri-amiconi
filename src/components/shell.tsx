@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useLayoutEffect, useState, type ReactNode } from "react";
-import { AppIcon, Glyph, type IconName } from "./icons";
+import { Glyph, type IconName } from "./icons";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { RedirectToSignIn } from "@/lib/auth/gates";
@@ -10,6 +10,7 @@ import { memberLabel, initials } from "@/lib/arcieri/labels";
 import { Avatar, Loading, Mark, cx } from "./kit";
 import { QUICK_ACTIONS, shortcutById } from "@/lib/arcieri/shortcuts";
 import { PathMap, ShortcutEditor, ShortcutTile } from "./shortcuts";
+import { Scene } from "./scene";
 import { PersonalizeSheet } from "./personalize";
 import { applyPrefs, readPrefs } from "@/lib/arcieri/prefs";
 
@@ -29,8 +30,10 @@ const MORE = [
   ["/statistiche", "Statistiche"],
   ["/balistica", "Balistica"],
   ["/timer", "Timer di tiro"],
-  ["/tacche", "Tacche mirino"],
   ["/borsa", "Prima di partire"],
+  ["/foc", "Calcolo FOC"],
+  ["/manutenzione", "Manutenzione"],
+  ["/secco", "Allenamento a secco"],
   ["/sfide", "Sfide"],
   ["/attrezzatura", "Attrezzatura"],
   ["/gare", "Gare"],
@@ -137,6 +140,7 @@ export function Shell({ children }: { children: ReactNode }) {
   return (
     <MemberCtx.Provider value={{ me, reload: () => setNonce((n) => n + 1) }}>
       <div className="aa-app min-h-dvh text-fg" data-app="arcieri-amiconi">
+        <Scene path={path} />
         <aside className="aa-side inset-y-0 left-0 z-[60] hidden w-60 flex-col overflow-hidden border-r border-line bg-elev px-4 py-5 md:flex">
           <Link to="/" className="mb-6 flex items-center gap-2">
             <Mark />
@@ -209,21 +213,13 @@ export function Shell({ children }: { children: ReactNode }) {
           {menu ? (
             <div className="aa-sheet fixed inset-0 z-40 overflow-y-auto bg-bg pb-[calc(env(safe-area-inset-bottom)+1.5rem)] md:hidden">
               <div className="sticky top-0 z-10 flex h-14 items-center justify-between bg-bg/90 px-4 backdrop-blur-md">
-                <p className="aa-section-title">La mappa</p>
+                <p className="font-display text-xl">Menu</p>
                 <button type="button" className="grid h-11 w-11 place-items-center rounded-full bg-white/5" onClick={() => setMenu(false)} aria-label="Chiudi">
                   <Glyph name="close" size={20} />
                 </button>
               </div>
               <div className="grid gap-3 px-4">
-                <button type="button" onClick={() => { setMenu(false); setPrefsOpen(true); }} className="aa-press flex items-center gap-3 rounded-2xl border border-hair bg-white/[0.04] p-2.5 text-left">
-                  <AppIcon name="palette" color="#7652d1" size={38} />
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-semibold">Personalizza</span>
-                    <span className="block truncate text-[0.7rem] text-muted">Colore, icone, animazioni, Home e scorciatoie</span>
-                  </span>
-                  <Glyph name="chevron" size={16} className="text-muted" />
-                </button>
-                <PathMap current={path} onPick={() => setMenu(false)} />
+                <PathMap current={path} onPick={() => setMenu(false)} onPersonalize={() => { setMenu(false); setPrefsOpen(true); }} />
               </div>
             </div>
           ) : null}

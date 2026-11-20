@@ -1,3 +1,4 @@
+import { RealIcon, hasRealIcon } from "./real-icons";
 import type { CSSProperties, ReactNode } from "react";
 
 /**
@@ -12,12 +13,33 @@ export type IconName =
   | "video" | "image" | "download" | "link" | "key" | "trash" | "shield" | "sparkle" | "import" | "ticket"
   | "gear" | "plus" | "check" | "play" | "stack" | "flame" | "level" | "arrow" | "hand" | "scan" | "edit"
   | "eye" | "save" | "share" | "close" | "chevron" | "broom" | "medal" | "crosshair" | "mountain" | "home" | "grid"
-  | "sight" | "checklist" | "stopwatch";
+  | "sight" | "checklist" | "stopwatch" | "foc" | "wrench" | "hold";
 
 const A = 0.32; // opacità del secondo tono
 
 // ogni icona: tratti (stroke) e riempimenti tenui (fill, secondo tono)
 const ICONS: Partial<Record<IconName, ReactNode>> = {
+  foc: (
+    <>
+      <path d="M3 10h18M19 8l2 2-2 2M3 8.5v3" />
+      <path d="M12 10l-3.5 8h7z" fill="currentColor" fillOpacity={A} />
+      <path d="M7 20h10" />
+    </>
+  ),
+  wrench: (
+    <>
+      <path d="M14.5 6.5a4 4 0 0 0 5 5L12 19a2.1 2.1 0 0 1-3-3l7.5-7.5a4 4 0 0 1-2-2z" fill="currentColor" fillOpacity={A} />
+      <path d="M4 7c2-2 5-2 7 0" />
+    </>
+  ),
+  hold: (
+    <>
+      <path d="M5 11c3 4 11 4 14 0M5 11c3-3 11-3 14 0" />
+      <rect x="2" y="8.5" width="3" height="5" rx="1" fill="currentColor" fillOpacity={A} />
+      <rect x="19" y="8.5" width="3" height="5" rx="1" fill="currentColor" fillOpacity={A} />
+      <circle cx="12" cy="18.5" r="2.5" />
+    </>
+  ),
   bolt: (
     <>
       <path d="M13.2 2.8 5.6 13.1h5.6l-1.3 8.1 8.5-11.3h-5.8l.6-7.1Z" fill="currentColor" fillOpacity={A} />
@@ -750,12 +772,14 @@ export function Glyph({ name, size = 20, className, strokeWidth = 1.7, title, de
 
 /** Tessera d'icona: vetro colorato con luce in alto, ombra morbida e glifo bianco. */
 export function AppIcon({ name, color, size = 52, className }: { name: IconName; color: string; size?: number; className?: string }) {
+  const real = hasRealIcon(name);
   return (
     <span
-      className={["aa-appicon relative grid shrink-0 place-items-center", className].filter(Boolean).join(" ")}
+      className={["aa-appicon relative grid shrink-0 place-items-center", real ? "is-real" : "", className].filter(Boolean).join(" ")}
       style={{ "--c": color, width: size, height: size, borderRadius: size * 0.3 } as CSSProperties}
     >
-      <Glyph name={name} detailed size={Math.round(size * 0.58)} strokeWidth={1.6} className="relative z-[1] text-white drop-shadow-[0_1px_1.5px_rgba(0,0,0,0.35)]" />
+      {real ? <RealIcon name={name} size={Math.round(size * 0.84)} className="aa-real relative z-[1]" /> : null}
+      <Glyph name={name} detailed size={Math.round(size * 0.58)} strokeWidth={1.6} className={["aa-line relative z-[1] text-white drop-shadow-[0_1px_1.5px_rgba(0,0,0,0.35)]", real ? "hidden" : ""].join(" ")} />
     </span>
   );
 }

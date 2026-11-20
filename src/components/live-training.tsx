@@ -114,6 +114,7 @@ export function LiveTraining({ sessionId, openHistory = false, start }: { sessio
   const [now, setNow] = useState(() => Date.now());
   const [pending, setPending] = useState("");
   const [closing, setClosing] = useState(false);
+  const [pickSeq, setPickSeq] = useState<number | null>(null);
   const beeped = useRef(false);
   const endBeeped = useRef(false);
 
@@ -374,7 +375,7 @@ export function LiveTraining({ sessionId, openHistory = false, start }: { sessio
     hits.slice(0, free.length).forEach((hit, k) => {
       seq += 1;
       const miss = hit.miss;
-      shots = [...shots, { block, end, arrow: free[k], score: miss ? 0 : hit.score, isX: miss ? false : hit.isX, miss, nx: miss ? null : hit.nx, ny: miss ? null : hit.ny, seq }];
+      shots = [...shots, { block, end, arrow: free[k], score: miss ? 0 : hit.score, isX: miss ? false : hit.isX, miss, nx: miss ? null : hit.nx, ny: miss ? null : hit.ny, seq, tag: hit.tag ?? null }];
     });
     return { ...current, meta: plan, shots, selected: null, endClock: startClock({ running: false, startedAt: null, accumulatedMs: 0 }, Date.now()) };
   }
@@ -408,6 +409,14 @@ export function LiveTraining({ sessionId, openHistory = false, start }: { sessio
         shots: current.shots.map((item) => (item.seq === seq ? { ...item, score: miss ? 0 : score, isX: miss ? false : isX, miss, nx, ny } : item)),
       };
     });
+  }
+
+  // numeri delle frecce dell'attrezzatura scelta (es. 1–12), altrimenti 1–12
+  const arrowGear = boot.gear.find((g) => g.id === boot.setups.find((st) => st.id === meta.setupId)?.arrowId);
+  const tagList = tagsOf(arrowGear?.specs ?? "");
+  const pickShot = pickSeq != null ? draft.shots.find((sh) => sh.seq === pickSeq) ?? null : null;
+  function setTag(seq: number, tag: number | null) {
+    setDraft((current) => (current ? { ...current, shots: current.shots.map((sh) => (sh.seq === seq ? { ...sh, tag } : sh)) } : current));
   }
 
   function onTarget(nx: number, ny: number) {
@@ -566,6 +575,7 @@ export function LiveTraining({ sessionId, openHistory = false, start }: { sessio
           points={tally.points}
           onApply={addVolley}
           onApplyBatch={addVolleys}
+          tags={tagList}
         />
       )}
       {face.id.startsWith("sagoma") ? (
@@ -584,6 +594,11 @@ export function LiveTraining({ sessionId, openHistory = false, start }: { sessio
           shots={endArrows}
           onHit={onTarget}
           numbers
+          picked={pickShot ? endArrows.findIndex((sh) => sh.seq === pickShot.seq) : null}
+          onPick={(index) => {
+            const shot = endArrows[index];
+            if (shot) setPickSeq(shot.seq);
+          }}
           onMove={(index, nx, ny) => {
             const shot = endArrows[index];
             if (!shot) return;
@@ -592,6 +607,40 @@ export function LiveTraining({ sessionId, openHistory = false, start }: { sessio
           }}
         />
       )}
+      {pickShot ? (
+        <Card className="aa-rise grid gap-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm font-semibold">
+              Colpo da {pickShot.miss ? "M" : pickShot.isX ? "X" : pickShot.score}: quale freccia era?
+            </p>
+            <button type="button" className="grid h-9 w-9 place-items-center rounded-full bg-white/5" onClick={() => setPickSeq(null)} aria-label="Chiudi">
+              <Glyph name="close" size={16} />
+            </button>
+          </div>
+          <div className="grid grid-cols-6 gap-1.5">
+            {tagList.map((n) => {
+              const used = draft.shots.some((sh) => sh.tag === n && sh.block === pickShot.block && sh.end === pickShot.end && sh.seq !== pickShot.seq);
+              return (
+                <button
+                  key={n}
+                  type="button"
+                  aria-pressed={pickShot.tag === n}
+                  onClick={() => {
+                    setTag(pickShot.seq, pickShot.tag === n ? null : n);
+                    setPickSeq(null);
+                  }}
+                  className={`min-h-11 rounded-xl font-display text-lg tabular-nums transition ${pickShot.tag === n ? "bg-accent text-accent-fg" : used ? "bg-white/[0.03] text-muted" : "bg-white/[0.07]"}`}
+                >
+                  {n}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-[0.7rem] text-muted">
+            {arrowGear ? `Numeri presi da ${arrowGear.name || "le tue frecce"}.` : "Scegli l'assetto con le frecce numerate per usare i loro numeri."} Tieni premuto e trascina per spostare il colpo.
+          </p>
+        </Card>
+      ) : null}
       {face.id.startsWith("sagoma") ? (
         <Card><SagomaLab animal="cinghiale" shots={draft.shots.map((sh) => ({ score: sh.score, miss: sh.miss, nx: sh.nx, ny: sh.ny, end: sh.end }))} /></Card>
       ) : null}
@@ -607,9 +656,10 @@ export function LiveTraining({ sessionId, openHistory = false, start }: { sessio
             key={shot.seq}
             type="button"
             onClick={() => setDraft({ ...draft, selected: shot.seq })}
-            className={`grid h-12 min-w-12 place-items-center rounded-xl border font-display text-2xl tabular-nums ${draft.selected === shot.seq ? "border-accent bg-accent text-accent-fg" : "border-line bg-surface"}`}
+            className={`grid h-12 min-w-12 content-center justify-items-center gap-0.5 rounded-xl border font-display text-2xl tabular-nums ${draft.selected === shot.seq ? "border-accent bg-accent text-accent-fg" : "border-line bg-surface"}`}
           >
-            {shot.miss ? "M" : shot.isX && face.rings.some((r) => r.x && r.label !== String(r.score)) ? "X" : shot.score}
+            <span className="leading-none">{shot.miss ? "M" : shot.isX && face.rings.some((r) => r.x && r.label !== String(r.score)) ? "X" : shot.score}</span>
+            {shot.tag != null ? <span className="font-sans text-[0.55rem] leading-none opacity-70">n.{shot.tag}</span> : null}
           </button>
           );
         })}
@@ -739,7 +789,7 @@ function clampCount(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, Math.round(value)));
 }
 
-type PhotoHit = { nx: number; ny: number; score: number; isX: boolean; miss: boolean };
+type PhotoHit = { nx: number; ny: number; score: number; isX: boolean; miss: boolean; tag?: number | null };
 
 function PhotoVolley({
   face,
@@ -750,7 +800,9 @@ function PhotoVolley({
   points,
   onApply,
   onApplyBatch,
+  tags,
 }: {
+  tags?: number[];
   face: Face;
   shots: DraftShot[];
   volley: number;
@@ -778,7 +830,7 @@ function PhotoVolley({
         <span className="aa-kpi !px-2 !py-1.5"><span className="block text-[0.62rem] uppercase tracking-wider text-muted">Frecce</span><b className="font-display text-xl tabular-nums">{arrows}</b></span>
         <span className="aa-kpi !px-2 !py-1.5"><span className="block text-[0.62rem] uppercase tracking-wider text-muted">Punti</span><b className="font-display text-xl tabular-nums">{points}</b></span>
       </div>
-      {open ? <TargetRead face={face} onApply={onApply} onApplyBatch={onApplyBatch} expected={Math.max(1, room)} known={known} volleyLabel={`volée ${volley}`} compact /> : null}
+      {open ? <TargetRead face={face} tags={tags} onApply={onApply} onApplyBatch={onApplyBatch} expected={Math.max(1, room)} known={known} volleyLabel={`volée ${volley}`} compact /> : null}
     </Card>
     </div>
   );
@@ -1349,4 +1401,20 @@ function History({ onNew }: { onNew: () => void }) {
       )}
     </div>
   );
+}
+
+/** Numeri delle frecce dalle schede dell'attrezzatura: "Numerate da" + "Quante". */
+function tagsOf(specs: string): number[] {
+  let from = 1;
+  let qty = 12;
+  try {
+    const sp = JSON.parse(specs || "{}") as { numFrom?: string; qty?: string };
+    const f = parseInt(String(sp.numFrom ?? ""), 10);
+    const q = parseInt(String(sp.qty ?? ""), 10);
+    if (Number.isFinite(f) && f >= 0) from = f;
+    if (Number.isFinite(q) && q > 0) qty = Math.min(q, 36);
+  } catch {
+    /* schede vecchie: numeri standard */
+  }
+  return Array.from({ length: qty }, (_, i) => from + i);
 }

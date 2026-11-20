@@ -267,7 +267,7 @@ function Meter({ label, value, digits = 0, suffix = "", color }: { label: string
   );
 }
 
-type LastShot = { score: number; n: number; distance: number; miss: boolean; isX: boolean; day: string; specs: string };
+type LastShot = { score: number; n: number; tag?: number | null; max?: number; distance: number; miss: boolean; isX: boolean; day: string; specs: string };
 
 function specsOf(raw: string): Record<string, string> {
   try {
@@ -281,33 +281,41 @@ function specsOf(raw: string): Record<string, string> {
 /** Le ultime frecce, disegnate come sono davvero (colori, penne, punta) con numero e distanza. */
 function LastArrows({ shots }: { shots: LastShot[] }) {
   return (
-    <ul className="grid gap-0.5">
+    <ul className="grid gap-1">
       {shots.map((shot, i) => {
         const sp = specsOf(shot.specs);
         const from = Number(sp.numFrom) || 1;
-        const num = shot.n + from - 1;
+        const num = shot.tag != null ? shot.tag : shot.n + from - 1;
         const left = i % 2 === 0;
-        const tone = shot.miss ? "bg-rose-500/20 text-rose-300" : shot.score >= 9 || shot.isX ? "bg-amber-400/20 text-amber-200" : "bg-white/8 text-fg";
+        const max = shot.max && shot.max > 0 ? shot.max : 10;
+        const ratio = shot.miss ? 0 : (shot.isX ? max : shot.score) / max;
+        // alone: verde se il colpo è buono, rosso se è debole o fuori, nessuno a metà strada
+        const mood = shot.miss || ratio < 0.55 ? "neg" : ratio >= 0.8 ? "pos" : "mid";
+        const tone = mood === "neg" ? "bg-rose-500/20 text-rose-200" : mood === "pos" ? "bg-emerald-400/20 text-emerald-200" : "bg-white/8 text-fg";
+        const delay = 150 + i * 130;
         return (
-          <li key={`${shot.day}-${i}`} className={`aa-rise flex items-center gap-1.5 ${left ? "" : "flex-row-reverse"}`} style={{ animationDelay: `${120 + i * 70}ms` }}>
-            <span className={`grid w-12 shrink-0 gap-0.5 text-[0.62rem] font-semibold leading-none ${left ? "text-left" : "text-right"}`}>
+          <li key={`${shot.day}-${i}`} className={`aa-shot aa-shot-${mood} flex items-center gap-1.5 ${left ? "" : "flex-row-reverse"}`} style={{ ["--d" as string]: `${delay}ms` }}>
+            <span className={`aa-shot-label grid w-12 shrink-0 gap-0.5 text-[0.62rem] font-semibold leading-none ${left ? "text-left" : "text-right"}`}>
               <span className="text-white/90">n.{num}</span>
               <span className="text-muted">{shot.distance ? `${shot.distance} m` : "—"}</span>
               <span className={`w-fit rounded px-1 py-0.5 tabular-nums ${left ? "" : "justify-self-end"} ${tone}`}>{shot.miss ? "M" : shot.isX ? "X" : shot.score}</span>
             </span>
-            <div className="aa-arrow-in min-w-0 flex-1" style={{ animationDelay: `${120 + i * 70}ms` }}>
-              <ArrowArt
-                material={sp.material || "carbonio"}
-                shaft={sp.shaft}
-                fletch={sp.fletch || "#d63a2f"}
-                cock={sp.cock || "#e6b325"}
-                nock={sp.nock || "#f4f1ea"}
-                wrap={sp.wrap}
-                fletchType={sp.fletchType || "alette"}
-                point={sp.pointType || "ogiva"}
-                number={num}
-                className="h-9 w-full"
-              />
+            <div className="aa-shot-track relative min-w-0 flex-1">
+              <span aria-hidden className="aa-shot-halo" />
+              <div className="aa-launch relative">
+                <ArrowArt
+                  material={sp.material || "carbonio"}
+                  shaft={sp.shaft}
+                  fletch={sp.fletch || "#d63a2f"}
+                  cock={sp.cock || "#e6b325"}
+                  nock={sp.nock || "#f4f1ea"}
+                  wrap={sp.wrap}
+                  fletchType={sp.fletchType || "alette"}
+                  point={sp.pointType || "ogiva"}
+                  number={num}
+                  className="h-9 w-full"
+                />
+              </div>
             </div>
           </li>
         );

@@ -132,7 +132,7 @@ body::before {
   background: transparent;
 }
 
-.aa-app > *:not(.aa-side) {
+.aa-app > *:not(.aa-side):not(.aa-scene) {
   position: relative;
   z-index: 1;
 }
@@ -815,3 +815,93 @@ html[data-motion="ridotta"]::view-transition-old(root), html[data-motion="ridott
 @media (prefers-reduced-motion: reduce) {
   .aa-page > * > *, .aa-hero::before, .aa-skel { animation: none; }
 }
+
+/* ── Ultime frecce: lancio e alone ────────────────────────────────── */
+.aa-shot-label { animation: aa-rise 0.4s ease both; animation-delay: calc(var(--d) + 420ms); }
+.aa-launch {
+  transform-origin: 80% 50%;
+  animation: aa-launch 0.62s cubic-bezier(0.2, 0.75, 0.25, 1) both;
+  animation-delay: var(--d);
+  will-change: transform, opacity;
+}
+@keyframes aa-launch {
+  0% { opacity: 0; transform: translate3d(-110%, -18px, 0) rotate(-7deg); filter: blur(2px); }
+  35% { opacity: 1; filter: blur(1px); }
+  80% { transform: translate3d(3%, 0, 0) rotate(0.6deg); filter: none; }
+  90% { transform: translate3d(-1%, 0, 0) rotate(-0.4deg); }
+  100% { opacity: 1; transform: none; }
+}
+.aa-shot-halo {
+  position: absolute;
+  inset: -6px -4px;
+  border-radius: 999px;
+  pointer-events: none;
+  opacity: 0;
+  animation: aa-halo 0.9s ease-out both;
+  animation-delay: calc(var(--d) + 480ms);
+}
+.aa-shot-pos .aa-shot-halo { background: radial-gradient(60% 75% at 82% 50%, rgb(52 211 153 / 0.38), transparent 70%); }
+.aa-shot-neg .aa-shot-halo { background: radial-gradient(60% 75% at 82% 50%, rgb(244 63 94 / 0.34), transparent 70%); }
+.aa-shot-mid .aa-shot-halo { background: radial-gradient(55% 70% at 82% 50%, rgb(255 255 255 / 0.1), transparent 70%); }
+.aa-shot-pos .aa-launch svg { filter: drop-shadow(0 0 5px rgb(52 211 153 / 0.45)); }
+.aa-shot-neg .aa-launch svg { filter: drop-shadow(0 0 5px rgb(244 63 94 / 0.4)); }
+@keyframes aa-halo {
+  0% { opacity: 0; transform: scale(0.6); }
+  40% { opacity: 1; transform: scale(1.06); }
+  100% { opacity: 0.75; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) { .aa-launch, .aa-shot-halo, .aa-shot-label { animation: none; opacity: 1; } }
+
+/* ── Icone realistiche: oggetto a colori su vetro scuro tinto della sezione ── */
+.aa-appicon.is-real {
+  background:
+    radial-gradient(110% 85% at 28% 12%, color-mix(in srgb, var(--c) 70%, white 14%) 0%, color-mix(in srgb, var(--c) 46%, #121619) 58%, color-mix(in srgb, var(--c) 26%, #0a0d10) 100%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.28),
+    inset 0 -3px 8px rgb(0 0 0 / 0.35),
+    0 10px 18px -10px color-mix(in srgb, var(--c) 70%, black),
+    0 2px 4px rgb(0 0 0 / 0.3);
+}
+.aa-appicon.is-real::before { opacity: 0.55; }
+.aa-appicon .aa-real { filter: drop-shadow(0 1.5px 1.5px rgb(0 0 0 / 0.35)); }
+html[data-icons="sobrie"] .aa-appicon .aa-real { display: none; }
+html[data-icons="sobrie"] .aa-appicon .aa-line { display: block !important; }
+.aa-breathe { animation: aa-breathe 2.4s ease-in-out infinite; }
+@keyframes aa-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.04); } }
+
+/* ── Menu leggero: schede per categoria ───────────────────────────── */
+.aa-menu-ink {
+  background: linear-gradient(160deg, color-mix(in srgb, var(--c) 34%, transparent), color-mix(in srgb, var(--c) 16%, transparent));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12);
+  transition: left 0.38s cubic-bezier(0.22, 1.1, 0.36, 1), background 0.3s;
+}
+.aa-menu-in-r { animation: aa-menu-in-r 0.32s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.aa-menu-in-l { animation: aa-menu-in-l 0.32s cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes aa-menu-in-r { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
+@keyframes aa-menu-in-l { from { opacity: 0; transform: translateX(-24px); } to { opacity: 1; transform: none; } }
+.aa-menu-row { animation: aa-rise 0.35s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* ── Sfondi di categoria: scena sfocata con parallasse leggera ─────── */
+.aa-scene { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+.aa-scene svg {
+  position: absolute;
+  left: -12%;
+  top: -8%;
+  width: 124%;
+  height: 130%;
+  filter: blur(26px) saturate(1.1);
+  opacity: 0.5;
+  transform: translate3d(0, calc(var(--sy, 0) * -0.07px), 0) scale(calc(1 + var(--sy, 0) * 0.00005));
+  transform-origin: 50% 30%;
+  will-change: transform;
+  animation: aa-scene-in 0.9s ease both;
+}
+@keyframes aa-scene-in { from { opacity: 0; } to { opacity: 0.5; } }
+.aa-scene-veil {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bg) 72%, transparent) 0%, color-mix(in srgb, var(--bg) 48%, transparent) 45%, color-mix(in srgb, var(--bg) 74%, transparent) 100%);
+}
+html[data-motion="ridotta"] .aa-scene svg { transform: none; }
+@media (prefers-reduced-motion: reduce) { .aa-scene svg { transform: none; animation: none; } }
+html[data-scenes="no"] .aa-scene { display: none; }

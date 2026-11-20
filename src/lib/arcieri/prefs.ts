@@ -8,6 +8,7 @@ export type Prefs = {
   ink: "verde" | "blu" | "rosso" | "giallo" | "viola";
   icons: "tema" | "colori" | "sobrie";
   motion: "piena" | "ridotta";
+  scenes: "si" | "no";
   weekGoal: number;
   home: { journey: boolean; tips: boolean; numbers: boolean; arrows: boolean; shortcuts: boolean };
 };
@@ -26,6 +27,7 @@ const DEFAULTS: Prefs = {
   ink: "verde",
   icons: "tema",
   motion: "piena",
+  scenes: "si",
   weekGoal: 120,
   home: { journey: true, tips: true, numbers: true, arrows: true, shortcuts: true },
 };
@@ -58,6 +60,7 @@ export function applyPrefs(p: Prefs) {
   el.dataset.ink = p.ink;
   el.dataset.icons = p.icons;
   el.dataset.motion = p.motion;
+  el.dataset.scenes = p.scenes;
 }
 
 export function writePrefs(next: Prefs) {
