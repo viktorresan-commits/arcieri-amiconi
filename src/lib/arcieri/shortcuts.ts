@@ -101,17 +101,17 @@ export function usePinned() {
 }
 
 /** Piccoli consigli di tiro e trucchi dell'app, a rotazione. */
-export const TIPS = [
+export const TIPS: { icon: IconName; text: string }[] = [
   { icon: "bolt", text: "«Tiro rapido» riparte con gli stessi bersaglio, distanza e frecce dell'ultima volta: un tocco e sei in linea." },
   { icon: "camera", text: "Fotografa il bersaglio dopo ogni volée: con «Più foto insieme» le volée si contano da sole." },
-  { icon: "hand" as IconName, text: "Sulla foto, due dita spostano e ingrandiscono il padiglione; tieni premuto su una freccia per cambiarle numero." },
+  { icon: "hand", text: "Sulla foto, due dita spostano e ingrandiscono il padiglione; tieni premuto su una freccia per cambiarle numero." },
   { icon: "ballistics", text: "In Balistica, il mirino verde «MIRA QUI» ti dice dove puntare per portare il gruppo sull'oro." },
-  { icon: "breath" as IconName, text: "Respira prima di aprire: espira a metà trazione e trattieni in ancoraggio, senza forzare." },
-  { icon: "posture" as IconName, text: "Spalla dell'arco bassa e scapole che si chiudono: è la schiena che tira, non il braccio." },
-  { icon: "timer" as IconName, text: "Un ancoraggio costante dura 2–4 secondi: oltre, il gesto si scompone. L'analisi del gesto lo misura." },
-  { icon: "palette" as IconName, text: "In Attrezzatura personalizzi colore asta, penne, indice e punta: le frecce in Home cambiano con te." },
-  { icon: "pin" as IconName, text: "Tocca «Personalizza» in Home per scegliere le tue scorciatoie: solo quelle che usi davvero." },
-  { icon: "wind" as IconName, text: "Col vento laterale mira contro vento, non correggere il mirino a ogni raffica: aspetta la calma." },
-  { icon: "follow" as IconName, text: "Dopo il rilascio resta fermo e guarda la freccia arrivare: il «follow-through» stabilizza il gruppo." },
+  { icon: "breath", text: "Respira prima di aprire: espira a metà trazione e trattieni in ancoraggio, senza forzare." },
+  { icon: "posture", text: "Spalla dell'arco bassa e scapole che si chiudono: è la schiena che tira, non il braccio." },
+  { icon: "timer", text: "Un ancoraggio costante dura 2–4 secondi: oltre, il gesto si scompone. L'analisi del gesto lo misura." },
+  { icon: "palette", text: "In Attrezzatura personalizzi colore asta, penne, indice e punta: le frecce in Home cambiano con te." },
+  { icon: "pin", text: "Tocca «Personalizza» in Home per scegliere le tue scorciatoie: solo quelle che usi davvero." },
+  { icon: "wind", text: "Col vento laterale mira contro vento, non correggere il mirino a ogni raffica: aspetta la calma." },
+  { icon: "follow", text: "Dopo il rilascio resta fermo e guarda la freccia arrivare: il «follow-through» stabilizza il gruppo." },
   { icon: "chart", text: "In Statistiche il calendario a quadretti mostra la tua costanza: meglio poco ma spesso." },
 ];
