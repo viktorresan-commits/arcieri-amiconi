@@ -1291,3 +1291,7 @@ html .aa-cat-page .aa-appicon, html[data-icons] .aa-cat-page .aa-appicon { --c: 
 .aa-flame { transform-box: fill-box; transform-origin: 50% 100%; animation: aa-flame 0.9s ease-in-out infinite alternate; }
 @keyframes aa-flame { from { transform: scale(1, 1); } to { transform: scale(0.88, 1.12); } }
 @media (prefers-reduced-motion: reduce) { .aa-flame { animation: none; } }
+
+/* nastri di scelte dell'editor: le miniature fuori schermo non si disegnano finché non servono */
+.aa-lazy { content-visibility: auto; contain-intrinsic-size: 90px 112px; }
+.aa-strip { scroll-padding-left: 1rem; }

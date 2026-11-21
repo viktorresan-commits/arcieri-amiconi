@@ -1,6 +1,7 @@
 import { useId } from "react";
 import { tune, type AvatarLook } from "@/lib/arcieri/avatar";
 import { AvatarFace, bodyWidth, shade } from "./archer-avatar";
+import { Buckle, ChestEmblem, Clasp, ClothPattern, Pouch, QuiverBody } from "./avatar-extras";
 
 const OUT = "#1b130d";
 const LONG_TOPS: Record<string, number> = { tunica: 252, "tunica-lunga": 266, ranger: 262, incrociata: 250, cappotto: 258, "cappotto-lungo": 292, giubba: 230, cotta: 240 };
@@ -10,7 +11,7 @@ const LONG_SLEEVES = ["felpa", "giacca", "camicia", "tunica", "tunica-lunga", "f
  * L'arciere visto di fronte, fermo e in piedi, con l'arco in mano: per il profilo degli
  * altri arcieri. Stessi colori, abiti e accessori della figura di profilo.
  */
-export function ArcherFront({ look, className = "h-96 w-auto" }: { look: AvatarLook; className?: string }) {
+export function ArcherFront({ look, className = "h-96 w-auto", crop }: { look: AvatarLook; className?: string; /** riquadro da mostrare (viewBox), per le miniature di un dettaglio */ crop?: string }) {
   const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
   const woman = look.body === "donna" || look.body === "ragazza";
   const kid = look.body === "ragazzo" || look.body === "ragazza";
@@ -28,6 +29,8 @@ export function ArcherFront({ look, className = "h-96 w-auto" }: { look: AvatarL
   const sideLen = Math.max(206, Math.min(312, (LONG_TOPS[look.top] ?? 200) + stretch));
   const hem = 206 + (sideLen - 206) * 1.05;
   const longTop = sideLen > 216;
+  const tunicD = `M${hip.l} 196 L${hip.r} 196 C${hip.r + 6} 230 ${hip.r + 12} ${hem - 20} ${hip.r + 14} ${hem} Q${cx} ${hem + 6} ${hip.l - 14} ${hem} C${hip.l - 12} ${hem - 20} ${hip.l - 6} 230 ${hip.l} 196 Z`;
+  const torsoD = `M${sh.l} 106 C${sh.l + 10} 94 ${sh.r - 10} 94 ${sh.r} 106 C${sh.r + 2} 140 ${waist.r + 2} 170 ${waist.r} 186 C${hip.r} 194 ${hip.r} 200 ${hip.r} 208 L${hip.l} 208 C${hip.l} 200 ${hip.l} 194 ${waist.l} 186 C${waist.l - 2} 170 ${sh.l - 2} 140 ${sh.l} 106 Z`;
   const tight = look.bottom === "calzamaglia";
   const wide = look.bottom === "larghi" || look.bottom === "brache";
   const shorts = look.bottom === "pantaloncini" || look.bottom === "gonna";
@@ -68,7 +71,7 @@ export function ArcherFront({ look, className = "h-96 w-auto" }: { look: AvatarL
     );
   };
   return (
-    <svg viewBox="0 0 200 370" className={className} role="img" aria-label="L'arciere di fronte">
+    <svg viewBox={crop ?? "0 0 200 370"} className={className} style={crop ? undefined : { aspectRatio: "200 / 370" }} role="img" aria-label="L'arciere di fronte">
       <defs>
         <linearGradient id={`${uid}sh`} x1="0" x2="1">
           <stop offset="0" stopColor={shade(shirt, -0.28)} />
@@ -100,7 +103,7 @@ export function ArcherFront({ look, className = "h-96 w-auto" }: { look: AvatarL
                 <path d={`M${dx} -40 l-4 -10 l4 3 l4 -3 z`} fill={i === 1 ? look.cock : look.fletch} />
               </g>
             ))}
-            <rect x="-10" y="-24" width="20" height="40" rx="5" fill={look.quiver} stroke={shade(look.quiver, -0.4)} strokeWidth="1.2" />
+            <QuiverBody kind={look.quiverStyle} color={look.quiver} h={40} top={-24} />
           </g>
         ) : null}
 
@@ -128,12 +131,11 @@ export function ArcherFront({ look, className = "h-96 w-auto" }: { look: AvatarL
           </g>
         ) : null}
         {/* veste */}
-        {longTop ? (
-          <path d={`M${hip.l} 196 L${hip.r} 196 C${hip.r + 6} 230 ${hip.r + 12} ${hem - 20} ${hip.r + 14} ${hem} Q${cx} ${hem + 6} ${hip.l - 14} ${hem} C${hip.l - 12} ${hem - 20} ${hip.l - 6} 230 ${hip.l} 196 Z`} fill={`url(#${uid}sh)`} stroke={OUT} strokeOpacity="0.5" strokeWidth="1.8" />
-        ) : null}
+        {longTop ? <path d={tunicD} fill={`url(#${uid}sh)`} stroke={OUT} strokeOpacity="0.5" strokeWidth="1.8" /> : null}
         {longTop ? <path d={`M${hip.l - 14} ${hem - 3} Q${cx} ${hem + 3} ${hip.r + 14} ${hem - 3}`} stroke={look.trim} strokeWidth="3" fill="none" /> : null}
         {longTop && ["cappotto-lungo", "ranger", "tunica-lunga", "incrociata"].includes(look.top) ? <path d={`M${cx} 200 L${cx} ${hem + 2}`} stroke={shade(shirt, -0.45)} strokeWidth="1.6" /> : null}
-        <path d={`M${sh.l} 106 C${sh.l + 10} 94 ${sh.r - 10} 94 ${sh.r} 106 C${sh.r + 2} 140 ${waist.r + 2} 170 ${waist.r} 186 C${hip.r} 194 ${hip.r} 200 ${hip.r} 208 L${hip.l} 208 C${hip.l} 200 ${hip.l} 194 ${waist.l} 186 C${waist.l - 2} 170 ${sh.l - 2} 140 ${sh.l} 106 Z`} fill={`url(#${uid}sh)`} stroke={OUT} strokeOpacity="0.5" strokeWidth="1.8" />
+        <path d={torsoD} fill={`url(#${uid}sh)`} stroke={OUT} strokeOpacity="0.5" strokeWidth="1.8" />
+        <ClothPattern kind={look.pattern} shapes={longTop ? [torsoD, tunicD] : [torsoD]} base={shirt} trim={look.trim} uid={`${uid}f`} box={[sh.l - 16, 94, sh.r + 16, (longTop ? hem : 208) + 6]} />
         <path d={`M${cx - 12} 97 L${cx} 116 L${cx + 12} 97`} stroke={look.trim} strokeWidth="3.2" fill="none" strokeLinejoin="round" />
         {["tunica-lunga", "farsetto", "giubba", "polo"].includes(look.top) ? [124, 140, 156, 172].map((y) => <circle key={y} cx={cx} cy={y} r="1.8" fill={look.trim} />) : null}
         {look.top === "ranger" || look.top === "incrociata" ? <path d={`M${cx - 18} 100 L${cx + 14} 196`} stroke={look.trim} strokeWidth="2.6" /> : null}
@@ -144,14 +146,16 @@ export function ArcherFront({ look, className = "h-96 w-auto" }: { look: AvatarL
         {look.belt !== "nessuna" ? (
           <g>
             <path d={`M${waist.l - 1} ${look.belt === "larga" ? 184 : 187} L${waist.r + 1} ${look.belt === "larga" ? 184 : 187} L${waist.r + 1} 194 L${waist.l - 1} 194 Z`} fill={look.beltColor} stroke={OUT} strokeOpacity="0.4" strokeWidth="1" />
-            <rect x={cx - 5} y={look.belt === "larga" ? 183 : 186} width="10" height={look.belt === "larga" ? 12 : 9} rx="1.5" fill="none" stroke="#d9b45a" strokeWidth="1.8" />
+            {look.buckle && look.buckle !== "semplice" ? <Buckle kind={look.buckle} x={cx} y={190} /> : <rect x={cx - 5} y={look.belt === "larga" ? 183 : 186} width="10" height={look.belt === "larga" ? 12 : 9} rx="1.5" fill="none" stroke="#d9b45a" strokeWidth="1.8" />}
           </g>
         ) : null}
-        {look.pouch ? <rect x={cx - bowSide * 24 - 8} y="192" width="16" height="18" rx="4" fill="#6b4224" stroke={OUT} strokeOpacity="0.45" strokeWidth="1" /> : null}
+        {look.pouch ? <Pouch kind={look.pouchType} x={cx - bowSide * 24} y={192} /> : null}
+        <ChestEmblem kind={look.emblem} x={cx - bowSide * 14} y={134} s={0.85} base={shirt} trim={look.trim} />
+        {look.cape && look.clasp !== "nessuno" ? <><Clasp kind={look.clasp} x={sh.l + 6} y={104} /><Clasp kind={look.clasp} x={sh.r - 6} y={104} /></> : null}
         {!quiverBack ? (
           <g transform={`translate(${cx - bowSide * (hip.r - cx + 10)} ${222 + tune(look.quiverY, 0, -40, 40)}) rotate(${-bowSide * 8 + spin})`}>
             {[-4, 0, 4].map((dx, i) => <path key={dx} d={`M${dx} -42 l-3.4 -9 l3.4 2.6 l3.4 -2.6 z`} fill={i === 1 ? look.cock : look.fletch} />)}
-            <rect x="-9" y="-40" width="18" height="70" rx="5" fill={look.quiver} stroke={shade(look.quiver, -0.4)} strokeWidth="1.2" />
+            <QuiverBody kind={look.quiverStyle} color={look.quiver} w={18} h={70} top={-40} />
             <rect x="-10" y="-42" width="20" height="6" rx="2" fill={shade(look.quiver, -0.3)} />
           </g>
         ) : null}

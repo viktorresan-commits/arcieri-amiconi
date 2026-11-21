@@ -20,9 +20,11 @@ import {
   GEAR_COLORS,
   HAIR_COLORS,
   SKINS,
+  EXTRA_OPTIONS,
   randomLook,
   tune,
   type AvatarLook,
+  type ExtraKey,
 } from "@/lib/arcieri/avatar";
 
 export const Route = createFileRoute("/_app/avatar")({
@@ -47,6 +49,88 @@ const HAIR_OPTS: [AvatarLook["hair"], string][] = [
 const HAT_OPTS: [AvatarLook["hat"], string][] = [["nessuno", "Niente"], ["berretto", "Berretto"], ["cuffia", "Cuffia"], ["fascia", "Fascia"], ["bandana", "Bandana"], ["piuma", "Con piuma"], ["robin", "A punta"], ["tesa", "Tesa larga"], ["cappuccio", "Cappuccio"], ["cerchietto", "Diadema"], ["alloro", "Alloro"], ["elmo", "Elmo"]];
 const BOTTOM_OPTS: [AvatarLook["bottom"], string][] = [["pantaloni", "Pantaloni"], ["jeans", "Jeans"], ["cargo", "Con tasche"], ["pantaloncini", "Pantaloncini"], ["calzamaglia", "Calzamaglia"], ["brache", "Brache"], ["larghi", "Larghi"], ["gonna", "Gonnellino"]];
 const FOOT_OPTS: [AvatarLook["footwear"], string][] = [["sportive", "Sportive"], ["stivaletti", "Stivaletti"], ["scarponi", "Scarponi"], ["mocassini", "Mocassini"], ["sandali", "Sandali"], ["stivali", "Stivali"], ["stivali-risvolto", "Con risvolto"], ["stivali-alti", "Alti"], ["stivali-pelliccia", "Con pelliccia"]];
+
+/**
+ * Nastro di scelte da scorrere col dito: ogni miniatura mostra il proprio arciere con
+ * quella scelta già applicata. Si tocca e si vede subito.
+ */
+function Strip({ title, items, current, onPick, hint }: { title: string; items: { id: string; label: string; preview: ReactNode }[]; current: string; onPick: (id: string) => void; hint?: string }) {
+  const idx = Math.max(0, items.findIndex((it) => it.id === current));
+  return (
+    <section className="grid gap-1.5">
+      <div className="flex items-baseline justify-between gap-2 px-0.5">
+        <h3 className="text-sm font-semibold">{title}</h3>
+        <span className="shrink-0 text-[0.68rem] tabular-nums text-muted">{idx + 1}/{items.length}{hint ? ` · ${hint}` : ""}</span>
+      </div>
+      <div className="aa-strip -mx-4 flex snap-x snap-mandatory gap-2 overflow-x-auto px-4 pb-1.5 [scrollbar-width:none]">
+        {items.map((it) => {
+          const on = it.id === current;
+          return (
+            <button key={it.id} type="button" aria-pressed={on} onClick={() => onPick(it.id)} className={`aa-press aa-lazy grid w-[5.6rem] shrink-0 snap-start justify-items-center gap-1 rounded-2xl p-1.5 text-center text-[0.64rem] font-semibold leading-tight transition ${on ? "bg-[#7cf0a8]/15 ring-2 ring-[#7cf0a8]" : "bg-white/[0.04] ring-1 ring-white/5"}`}>
+              <span className="relative block h-[4.6rem] w-full overflow-hidden rounded-xl bg-gradient-to-b from-white/[0.07] to-transparent">{it.preview}</span>
+              <span className="line-clamp-2 min-h-[1.6em]">{it.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+/** come si vede una scelta in più: volto, figura di fronte, arco o solo il nome */
+const EXTRA_PREVIEW: Record<ExtraKey, "volto" | "fronte" | "arco" | "testo"> = {
+  pattern: "fronte", emblem: "fronte", paint: "volto", tattoo: "testo", earringType: "volto", hairAcc: "volto",
+  bowDeco: "arco", fletchStyle: "arco", quiverStyle: "fronte", eyeShape: "volto", mouth: "volto", ears: "volto",
+  blush: "volto", age: "volto", mark: "volto", buckle: "fronte", pouchType: "fronte", clasp: "fronte",
+  capePattern: "testo", frame: "volto", idle: "testo",
+};
+/** cosa accendere perché la scelta si veda nell'anteprima */
+const EXTRA_NEEDS: Partial<Record<ExtraKey, Partial<AvatarLook>>> = {
+  earringType: { earring: true, hat: "nessuno" },
+  hairAcc: { hat: "nessuno" },
+  pouchType: { pouch: true },
+  clasp: { cape: true },
+  buckle: { belt: "larga" },
+  quiverStyle: { quiverPlace: "fianco" },
+  tattoo: {},
+};
+
+function ExtraPreview({ k, look, value }: { k: ExtraKey; look: AvatarLook; value: string }) {
+  const kind = EXTRA_PREVIEW[k];
+  const l = { ...look, ...EXTRA_NEEDS[k], [k]: value } as AvatarLook;
+  if (kind === "volto") {
+    const zoom = k === "frame" ? "h-full w-full" : "absolute left-[-30%] top-[-26%] h-[160%] w-[160%]";
+    return <AvatarFace look={k === "frame" ? l : { ...l, frame: "nessuna" }} className={zoom} />;
+  }
+  if (kind === "fronte") {
+    const crop = k === "buckle" ? "70 165 60 50" : k === "pouchType" ? "40 170 120 70" : k === "quiverStyle" ? "15 160 100 110" : k === "clasp" ? "40 80 120 60" : "40 90 120 130";
+    return <ArcherFront look={{ ...l, lefty: false }} crop={crop} className="h-full w-full" />;
+  }
+  if (kind === "arco") {
+    return <span className="absolute left-[-30%] top-[-12%] w-[150%]"><ArcherAvatar look={{ ...l, useMain: false, lefty: false }} pose="mira" still interactive={false} className="h-auto w-full" /></span>;
+  }
+  const label = (EXTRA_OPTIONS[k].items as readonly (readonly [string, string])[]).find(([id]) => id === value)?.[1] ?? value;
+  return <span className="grid h-full place-items-center px-1 font-display text-[0.9rem] leading-tight text-white/90">{label}</span>;
+}
+
+/** tutte le novità di una sezione dell'editor, ognuna nel suo nastro */
+function ExtraStrips({ tab, look, shown, set }: { tab: string; look: AvatarLook; shown: AvatarLook; set: (k: ExtraKey, v: string) => void }) {
+  const keys = (Object.keys(EXTRA_OPTIONS) as ExtraKey[]).filter((k) => EXTRA_OPTIONS[k].tab === tab);
+  if (!keys.length) return null;
+  return (
+    <div className="grid gap-4">
+      {keys.map((k) => (
+        <Strip
+          key={k}
+          title={EXTRA_OPTIONS[k].label}
+          current={String(look[k] ?? "")}
+          onPick={(id) => set(k, id)}
+          items={(EXTRA_OPTIONS[k].items as readonly (readonly [string, string])[]).map(([id, label]) => ({ id, label, preview: <ExtraPreview k={k} look={shown} value={id} /> }))}
+        />
+      ))}
+    </div>
+  );
+}
 
 /** riquadro di scelta con anteprima disegnata */
 function Pick({ on, label, onClick, children }: { on: boolean; label: string; onClick: () => void; children: ReactNode }) {
@@ -75,15 +159,13 @@ function FaceGrid({ look, items, current, onPick, zoom = false }: { look: Avatar
 
 /** griglia di figure intere per abiti, pantaloni e calzature */
 function BodyGrid({ look, items, current, onPick, legs = false, feet = false }: { look: AvatarLook; items: { id: string; label: string; patch: Partial<AvatarLook> }[]; current: string; onPick: (id: string) => void; legs?: boolean; feet?: boolean }) {
-  const frame = feet ? "top-[-300%] h-[400%]" : legs ? "top-[-62%] h-[175%]" : "top-[-4%] h-[118%]";
+  const crop = feet ? "45 250 110 110" : legs ? "35 180 130 170" : "10 0 180 290";
   return (
     <div className="grid grid-cols-3 gap-2">
       {items.map((it) => (
         <Pick key={it.id} on={current === it.id} label={it.label} onClick={() => onPick(it.id)}>
           <div className="relative h-24 w-full overflow-hidden rounded-xl bg-gradient-to-b from-white/[0.06] to-transparent">
-            <div className={`absolute inset-x-0 flex justify-center ${frame}`}>
-              <ArcherFront look={{ ...look, ...it.patch, cape: false, lefty: false }} className="h-full w-auto" />
-            </div>
+            <ArcherFront look={{ ...look, ...it.patch, cape: false, lefty: false }} crop={crop} className="h-full w-full" />
           </div>
         </Pick>
       ))}
@@ -188,6 +270,23 @@ function Toggle({ on, label, onChange }: { on: boolean; label: string; onChange:
 function Page() {
   const { look, setLook, shown, main } = useAvatar();
   const [tab, setTab] = useState<Tab>("corpo");
+  const [mode, setMode] = useState<"semplice" | "completa">(() => {
+    try {
+      return (localStorage.getItem("aa-avatar-mode") as "semplice" | "completa") || "semplice";
+    } catch {
+      return "semplice";
+    }
+  });
+  const pickMode = (m: "semplice" | "completa") => {
+    setMode(m);
+    try {
+      localStorage.setItem("aa-avatar-mode", m);
+    } catch {
+      /* niente */
+    }
+  };
+  // alcune scelte si vedono solo se c'è l'oggetto: lo accendo insieme
+  const setX = (k: ExtraKey, v: string) => setLook((l) => ({ ...l, [k]: v, ...(k === "earringType" ? { earring: true } : k === "pouchType" ? { pouch: true } : k === "clasp" && v !== "nessuno" ? { cape: true } : {}) }));
   const [view, setView] = useState<"lato" | "fronte" | "3d">("lato");
   const { sky } = useSky();
   const set = <K extends keyof AvatarLook>(k: K, v: AvatarLook[K]) => setLook((l) => ({ ...l, [k]: v }));
@@ -238,6 +337,32 @@ function Page() {
         <button type="button" className="aa-chip shrink-0" onClick={() => setLook(AVATAR_DEFAULT)}>Ricomincia</button>
       </div>
       <AvatarPhotoButton look={shown} />
+      <div className="grid grid-cols-2 gap-1 rounded-2xl bg-white/[0.05] p-1" role="tablist" aria-label="Modo dell'editor">
+        {([["semplice", "Semplice", "Scorri e tocca"], ["completa", "Completa", "Tutte le regolazioni"]] as const).map(([id, label, sub]) => (
+          <button key={id} type="button" role="tab" aria-selected={mode === id} onClick={() => pickMode(id)} className={`aa-press grid rounded-xl px-3 py-2 text-left transition ${mode === id ? "bg-[#7cf0a8] text-[#0b120e] shadow-[0_6px_18px_-8px_rgba(124,240,168,.7)]" : "text-white/80"}`}>
+            <span className="text-sm font-bold">{label}</span>
+            <span className={`text-[0.66rem] ${mode === id ? "text-[#0b120e]/70" : "text-muted"}`}>{sub}</span>
+          </button>
+        ))}
+      </div>
+      {mode === "semplice" ? (
+        <Card className="grid gap-5">
+          <Strip title="Stili pronti" current="" hint="tocca per provarne uno" onPick={(id) => { const p = AVATAR_PRESETS.find((x) => x.id === id); if (p) setLook((l) => ({ ...l, ...p.look })); }} items={AVATAR_PRESETS.map((p) => ({ id: p.id, label: p.label, preview: <AvatarFace look={{ ...shown, ...p.look, frame: "nessuna" } as AvatarLook} className="absolute left-[-6%] top-[-4%] h-[112%] w-[112%]" /> }))} />
+          <Strip title="Ambientazione" current={look.scene} onPick={(id) => set("scene", id)} items={SCENES.map((sc) => ({ id: sc.id, label: sc.label.replace(" (al chiuso)", ""), preview: <SceneThumb scene={sc.id} sky={sky} className="h-full w-full" /> }))} />
+          <Strip title="Capelli" current={look.hair} onPick={(id) => set("hair", id as AvatarLook["hair"])} items={HAIR_OPTS.map(([id, label]) => ({ id, label, preview: <AvatarFace look={{ ...shown, hair: id, hat: "nessuno", frame: "nessuna" }} className="h-full w-full" /> }))} />
+          <Row label="Colore dei capelli"><Tint value={look.hairColor} onPick={(c) => set("hairColor", c)} quick={HAIR_COLORS} /></Row>
+          {look.body === "uomo" ? <Strip title="Barba" current={look.beard} onPick={(id) => set("beard", id as AvatarLook["beard"])} items={BEARD_OPTS.map(([id, label]) => ({ id, label, preview: <AvatarFace look={{ ...shown, beard: id, frame: "nessuna" }} className="absolute left-[-30%] top-[-26%] h-[160%] w-[160%]" /> }))} /> : null}
+          <Strip title="In testa" current={look.hat} onPick={(id) => set("hat", id as AvatarLook["hat"])} items={HAT_OPTS.map(([id, label]) => ({ id, label, preview: <AvatarFace look={{ ...shown, hat: id, frame: "nessuna" }} className="h-full w-full" /> }))} />
+          <Strip title="Sopra" current={look.top} onPick={(id) => set("top", id as AvatarLook["top"])} items={[...TOPS.moderno, ...TOPS.medievale].map((t) => ({ id: t.id, label: t.label, preview: <ArcherFront look={{ ...shown, top: t.id, cape: false, lefty: false }} crop="30 70 140 170" className="h-full w-full" /> }))} />
+          <Row label="Colore della veste"><Tint value={look.shirt} onPick={(c) => set("shirt", c)} quick={CLOTH_COLORS} /></Row>
+          <Strip title="Sotto" current={look.bottom} onPick={(id) => set("bottom", id as AvatarLook["bottom"])} items={BOTTOM_OPTS.map(([id, label]) => ({ id, label, preview: <ArcherFront look={{ ...shown, bottom: id, cape: false, lefty: false }} crop="35 180 130 170" className="h-full w-full" /> }))} />
+          <Strip title="Ai piedi" current={look.footwear} onPick={(id) => set("footwear", id as AvatarLook["footwear"])} items={FOOT_OPTS.map(([id, label]) => ({ id, label, preview: <ArcherFront look={{ ...shown, footwear: id, cape: false, lefty: false }} crop="45 250 110 110" className="h-full w-full" /> }))} />
+          <Strip title="Arco" current={look.bowType} onPick={(id) => setLook((l) => ({ ...l, bowType: id, useMain: false }))} items={BOW_TYPES.map((t) => ({ id: t.id, label: t.label, preview: <span className="absolute left-[-30%] top-[-12%] w-[150%]"><ArcherAvatar look={{ ...shown, bowType: t.id, useMain: false, lefty: false }} pose="mira" still interactive={false} className="h-auto w-full" /></span> }))} />
+          <p className="text-xs text-muted">Altre {Object.values(EXTRA_OPTIONS).reduce((n, o) => n + o.items.length, 0)} scelte: pitture, tatuaggi, stemmi, fantasie, cornici, faretre, penne e molto altro, in Completa.</p>
+          <Button variant="ghost" onClick={() => pickMode("completa")}>Apri l'editor completo</Button>
+        </Card>
+      ) : null}
+      {mode === "completa" ? <>
       <div className="-mx-1 overflow-x-auto px-1 [scrollbar-width:none]">
         <Segmented<Tab>
           value={tab}
@@ -482,7 +607,9 @@ function Page() {
             {look.chestguard ? <Row label="Colore della pettorina"><Colors value={look.chestColor} colors={GEAR_COLORS} onPick={(c) => set("chestColor", c)} /></Row> : null}
           </>
         ) : null}
+        <ExtraStrips tab={tab} look={look} shown={shown} set={setX} />
       </Card>
+      </> : null}
       <Button variant="ghost" onClick={() => history.back()}>Fatto</Button>
     </div>
   );
