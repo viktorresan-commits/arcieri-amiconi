@@ -22,6 +22,7 @@ import {
   SKINS,
   EXTRA_OPTIONS,
   randomLook,
+  presetLook,
   tune,
   type AvatarLook,
   type ExtraKey,
@@ -331,7 +332,7 @@ function Page() {
       </div>
       <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 [scrollbar-width:none]">
         {AVATAR_PRESETS.map((p) => (
-          <button key={p.id} type="button" className="aa-chip shrink-0" onClick={() => setLook((l) => ({ ...l, ...p.look }))}>{p.label}</button>
+          <button key={p.id} type="button" className="aa-chip shrink-0" onClick={() => setLook((l) => presetLook(l, p.look))}>{p.label}</button>
         ))}
         <button type="button" className="aa-chip shrink-0" onClick={() => setLook((l) => randomLook(l))}><Glyph name="sparkle" size={14} /> Casuale</button>
         <button type="button" className="aa-chip shrink-0" onClick={() => setLook(AVATAR_DEFAULT)}>Ricomincia</button>
@@ -347,11 +348,19 @@ function Page() {
       </div>
       {mode === "semplice" ? (
         <Card className="grid gap-5">
-          <Strip title="Stili pronti" current="" hint="tocca per provarne uno" onPick={(id) => { const p = AVATAR_PRESETS.find((x) => x.id === id); if (p) setLook((l) => ({ ...l, ...p.look })); }} items={AVATAR_PRESETS.map((p) => ({ id: p.id, label: p.label, preview: <AvatarFace look={{ ...shown, ...p.look, frame: "nessuna" } as AvatarLook} className="absolute left-[-6%] top-[-4%] h-[112%] w-[112%]" /> }))} />
+          <Strip title="Stili pronti" current="" hint="tocca per provarne uno" onPick={(id) => { const p = AVATAR_PRESETS.find((x) => x.id === id); if (p) setLook((l) => presetLook(l, p.look)); }} items={AVATAR_PRESETS.map((p) => ({ id: p.id, label: p.label, preview: <AvatarFace look={{ ...presetLook(shown, p.look), frame: "nessuna" }} className="absolute left-[-6%] top-[-4%] h-[112%] w-[112%]" /> }))} />
           <Strip title="Ambientazione" current={look.scene} onPick={(id) => set("scene", id)} items={SCENES.map((sc) => ({ id: sc.id, label: sc.label.replace(" (al chiuso)", ""), preview: <SceneThumb scene={sc.id} sky={sky} className="h-full w-full" /> }))} />
           <Strip title="Capelli" current={look.hair} onPick={(id) => set("hair", id as AvatarLook["hair"])} items={HAIR_OPTS.map(([id, label]) => ({ id, label, preview: <AvatarFace look={{ ...shown, hair: id, hat: "nessuno", frame: "nessuna" }} className="h-full w-full" /> }))} />
           <Row label="Colore dei capelli"><Tint value={look.hairColor} onPick={(c) => set("hairColor", c)} quick={HAIR_COLORS} /></Row>
           {look.body === "uomo" ? <Strip title="Barba" current={look.beard} onPick={(id) => set("beard", id as AvatarLook["beard"])} items={BEARD_OPTS.map(([id, label]) => ({ id, label, preview: <AvatarFace look={{ ...shown, beard: id, frame: "nessuna" }} className="absolute left-[-30%] top-[-26%] h-[160%] w-[160%]" /> }))} /> : null}
+          <Row label="Sul viso">
+            <div className="flex flex-wrap gap-1.5">
+              <Toggle on={look.mask} label="Maschera" onChange={(v) => set("mask", v)} />
+              <Toggle on={look.glasses} label="Occhiali" onChange={(v) => set("glasses", v)} />
+              <Toggle on={look.sunglasses} label="Occhiali da sole" onChange={(v) => set("sunglasses", v)} />
+              <Toggle on={look.freckles} label="Lentiggini" onChange={(v) => set("freckles", v)} />
+            </div>
+          </Row>
           <Strip title="In testa" current={look.hat} onPick={(id) => set("hat", id as AvatarLook["hat"])} items={HAT_OPTS.map(([id, label]) => ({ id, label, preview: <AvatarFace look={{ ...shown, hat: id, frame: "nessuna" }} className="h-full w-full" /> }))} />
           <Strip title="Sopra" current={look.top} onPick={(id) => set("top", id as AvatarLook["top"])} items={[...TOPS.moderno, ...TOPS.medievale].map((t) => ({ id: t.id, label: t.label, preview: <ArcherFront look={{ ...shown, top: t.id, cape: false, lefty: false }} crop="30 70 140 170" className="h-full w-full" /> }))} />
           <Row label="Colore della veste"><Tint value={look.shirt} onPick={(c) => set("shirt", c)} quick={CLOTH_COLORS} /></Row>
@@ -485,6 +494,7 @@ function Page() {
           <>
             <Row label="Sul viso e in testa">
               <div className="flex flex-wrap gap-1.5">
+                <Toggle on={look.mask} label="Maschera sul viso" onChange={(v) => set("mask", v)} />
                 <Toggle on={look.glasses} label="Occhiali" onChange={(v) => set("glasses", v)} />
                 <Toggle on={look.sunglasses} label="Occhiali da sole" onChange={(v) => set("sunglasses", v)} />
                 <Toggle on={look.earring} label="Orecchino" onChange={(v) => set("earring", v)} />

@@ -388,6 +388,11 @@ function pick<T>(list: readonly T[], r: number) {
 }
 
 /** Un arciere a caso, per chi non sa da dove partire. */
+/** Stile pronto: riparte da zero, così non restano pezzi del modello precedente (maschera, corone...). Resta la mano. */
+export function presetLook(base: AvatarLook, preset: Partial<AvatarLook>): AvatarLook {
+  return normalizeLook({ ...AVATAR_DEFAULT, ...preset, lefty: base.lefty });
+}
+
 export function randomLook(base: AvatarLook): AvatarLook {
   const r = () => Math.random();
   const body = pick(["uomo", "donna", "ragazzo", "ragazza"] as const, r());
@@ -395,6 +400,7 @@ export function randomLook(base: AvatarLook): AvatarLook {
   const hair = pick(["corti", "rasati", "mossi", "ricci", "lunghi", "coda", "chignon", "treccia", "codini", "caschetto", "cresta", "calvo", "spettinati", "lunghi-mossi", "raccolti", "afro", "trecce", "frangia", "ciuffo", "undercut", "dread", "vichinga", "coda-alta"] as const, r());
   return normalizeLook({
     ...base,
+    mask: false,
     body,
     build: pick(["snello", "normale", "robusto"] as const, r()),
     skin: pick(SKINS, r()),
