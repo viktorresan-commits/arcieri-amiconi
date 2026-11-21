@@ -130,6 +130,10 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop }: { look: A
             {[-0.7, -0.35, 0, 0.35, 0.7].map((k) => <path key={k} d={`M${cx + k * 28} 204 L${cx + k * 38} 262`} stroke={shade(look.pants, -0.35)} strokeWidth="1" />)}
           </g>
         ) : null}
+        {/* capelli lunghi e cappuccio: dietro il corpo */}
+        <svg x={cx - 65} y="-8" width="130" height="130" viewBox="0 0 100 100" overflow="visible">
+          <AvatarFace look={look} className="" bare part="back" />
+        </svg>
         {/* veste */}
         {longTop ? <path d={tunicD} fill={`url(#${uid}sh)`} stroke={OUT} strokeOpacity="0.5" strokeWidth="1.8" /> : null}
         {longTop && look.top === "giubbetto" ? <path d={zigQ([hip.l - 14, hem - 3], [cx, hem + 3], [hip.r + 14, hem - 3], 26, 2.2)} stroke={look.trim} strokeWidth="1.6" fill="none" strokeLinejoin="round" /> : longTop ? <path d={`M${hip.l - 14} ${hem - 3} Q${cx} ${hem + 3} ${hip.r + 14} ${hem - 3}`} stroke={look.trim} strokeWidth="3" fill="none" /> : null}
@@ -194,7 +198,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop }: { look: A
         {/* testa di fronte, la stessa della foto profilo */}
         <rect x={cx - 9} y="78" width="18" height="26" rx="4" fill={shade(skin, -0.2)} />
         <svg x={cx - 65} y="-8" width="130" height="130" viewBox="0 0 100 100" overflow="visible">
-          <AvatarFace look={look} className="" bare />
+          <AvatarFace look={look} className="" bare part="front" />
         </svg>
       </g>
     </svg>

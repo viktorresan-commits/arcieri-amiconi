@@ -1830,7 +1830,7 @@ export function ArcherAvatar({ look, className = "h-72 w-auto", interactive = tr
 }
 
 /** Volto di fronte (per l'intestazione, il podio e le classifiche). */
-export function AvatarFace({ look, className = "h-10 w-10", bare = false }: { look: AvatarLook; className?: string; /** solo la testa, senza sfondo né spalle: per il ritratto a figura intera */ bare?: boolean }) {
+export function AvatarFace({ look, className = "h-10 w-10", bare = false, part }: { look: AvatarLook; className?: string; /** solo la testa, senza sfondo né spalle: per il ritratto a figura intera */ bare?: boolean; /** figura intera: "back" disegna solo capelli lunghi e cappuccio (dietro il corpo), "front" tutto il resto */ part?: "back" | "front" }) {
   const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
   const skin = look.skin;
   const skinD = shade(skin, -0.2);
@@ -2010,6 +2010,23 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false }: { lo
     </g>
   );
   const hv = 0.88 + (tune(look.hairVolume, 50, 0, 100) / 100) * 0.24;
+  const hoodNode = capOn ? <path d={look.hat === "elmo" ? "M18 100 C16 60 26 22 50 20 C74 22 84 60 82 100 Z" : `M14 100 C10 58 22 ${fy - ry - 14} 50 ${fy - ry - 16} C78 ${fy - ry - 14} 90 58 86 100 Z`} fill={look.hat === "elmo" ? "#9aa3ad" : shade(look.hatColor, -0.35)} /> : null;
+  const backNode = !capOn && hairBack[look.hair] ? <g transform={`translate(0 ${fy - 6}) scale(1 ${(0.5 + tune(look.hairLength, 50, 0, 100) / 100).toFixed(3)}) translate(0 ${-(fy - 6)})`}>{hairBack[look.hair]}</g> : null;
+  if (part === "back") {
+    // capelli lunghi e cappuccio stanno dietro il corpo, non sopra il petto
+    return (
+      <svg viewBox="0 0 100 100" className={className} overflow="visible" aria-hidden>
+        <defs>
+          <linearGradient id={`${uid}h`} x1="0" x2="1" y1="0" y2="1">
+            <stop offset="0" stopColor={shade(hair, 0.2)} />
+            <stop offset="1" stopColor={shade(hair, -0.38)} />
+          </linearGradient>
+        </defs>
+        {hoodNode}
+        {backNode}
+      </svg>
+    );
+  }
   return (
     <svg viewBox="0 0 100 100" className={className} role="img" aria-label="Volto dell'arciere" overflow={bare ? "visible" : undefined}>
       <defs>
@@ -2043,8 +2060,8 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false }: { lo
           </g>
         ) : null}
         {look.cape && !bare ? <path d="M10 100 C14 82 30 74 50 74 C70 74 86 82 90 100 Z" fill={shade(look.capeColor, -0.1)} /> : null}
-        {capOn ? <path d={look.hat === "elmo" ? "M18 100 C16 60 26 22 50 20 C74 22 84 60 82 100 Z" : `M14 100 C10 58 22 ${fy - ry - 14} 50 ${fy - ry - 16} C78 ${fy - ry - 14} 90 58 86 100 Z`} fill={look.hat === "elmo" ? "#9aa3ad" : shade(look.hatColor, -0.35)} /> : null}
-        {!capOn && hairBack[look.hair] ? <g transform={`translate(0 ${fy - 6}) scale(1 ${(0.5 + tune(look.hairLength, 50, 0, 100) / 100).toFixed(3)}) translate(0 ${-(fy - 6)})`}>{hairBack[look.hair]}</g> : null}
+        {part === "front" ? null : hoodNode}
+        {part === "front" ? null : backNode}
         {bare ? null : <path d="M22 100 C24 84 36 78 50 78 C64 78 76 84 78 100 Z" fill={look.shirt} />}
         {bare ? null : <path d="M42 78 L50 88 L58 78" stroke={look.trim} strokeWidth="3" fill="none" />}
         <rect x="43" y={fy + 14} width="14" height="16" fill={skinD} />

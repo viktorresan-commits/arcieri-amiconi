@@ -68,8 +68,9 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
   const [released, setReleased] = useState<number | null>(null);
   const [t, setT] = useState(() => now());
   const [pop, setPop] = useState<{ id: number; x: number; y: number; text: string } | null>(null);
-  const [puff, setPuff] = useState<{ id: number; x: number; y: number } | null>(null);
-  const [shake, setShake] = useState(0);
+  const [puff, setPuff] = useState<{ id: number; x: number; y: number; t0: number } | null>(null);
+  // colpo sul paglione: il bersaglio vibra un attimo (niente scossoni di tutto il riquadro, che lampeggiava)
+  const [thud, setThud] = useState<number | null>(null);
   const [rawWind, setWind] = useState(() => Math.round((Math.random() * 6 - 3) * 10) / 10);
   const wind = indoor ? 0 : rawWind;
   const [playing, setPlaying] = useState(false);
@@ -130,9 +131,11 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
   const speed = motion.speed + (dist - 18) / 160;
   const targetAt = (time: number) => ({ x: BASE.x + Math.sin(time * speed + motion.phase) * amp, y: BASE.y });
   const T = targetAt(t);
+  const since0 = thud != null ? t - thud : 9;
+  const wobble = since0 < 0.4 ? Math.sin(since0 * 48) * 1.6 * (1 - since0 / 0.4) : 0;
 
   // orologio: fluido mentre si tende o la freccia vola, più lento a riposo (risparmia batteria)
-  const busy = draw != null || flight != null || (released != null && t - released < 1.2);
+  const busy = draw != null || flight != null || (released != null && t - released < 1.2) || (thud != null && t - thud < 0.6);
   useEffect(() => {
     let raf = 0;
     let last = 0;
@@ -210,7 +213,8 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
     const h = f.hit;
     const at = targetAt(now());
     setPop({ id: Date.now(), x: at.x + h.dx, y: at.y + h.dy, text: h.score === 0 ? "M" : h.x10 ? "X" : String(h.score) });
-    if (h.score > 0) setPuff({ id: Date.now(), x: at.x + h.dx, y: at.y + h.dy });
+    if (h.score > 0) setPuff({ id: Date.now(), x: at.x + h.dx, y: at.y + h.dy, t0: now() });
+    setThud(now());
     if (f.demo) {
       setDemoHits((list) => [...list.slice(-5), h]);
       return;
@@ -219,7 +223,6 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
     hitsRef.current = next;
     setHits(next);
     if (next.length === 3) finish(next);
-    setShake((s) => s + 1);
     try {
       navigator.vibrate?.(h.score >= 9 ? [18, 30, 18] : 12);
     } catch {
@@ -330,7 +333,7 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
   return (
     <div
       ref={stage}
-      className={`aa-game aspect-[3/4] w-full ${shake === 0 ? "" : shake % 2 ? "aa-game-shake" : "aa-game-shake2"} ${className}`}
+      className={`aa-game aspect-[3/4] w-full ${className}`}
       onPointerDown={onDown}
       onPointerMove={onMove}
       onPointerUp={onUp}
@@ -378,7 +381,7 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
         {/* binario del bersaglio mobile */}
         {moving ? <path d={`M${BASE.x - amp - 30} 302 H${BASE.x + amp + 30}`} stroke="#5b3d22" strokeWidth="2.4" strokeLinecap="round" /> : null}
         {/* paglione su cavalletto */}
-        <g transform={`translate(${T.x - BASE.x} 0)`}>
+        <g transform={`translate(${(T.x - BASE.x + wobble).toFixed(2)} 0)`}>
           <ellipse cx={BASE.x + 3} cy={302} rx={R * 1.6} ry="4" fill="#000" opacity="0.3" />
           <circle cx={BASE.x} cy={BASE.y} r={R * 1.9} fill="url(#gm-glow)" className="aa-target-glow" />
           <path d={`M${BASE.x - R * 0.8} ${BASE.y + R * 0.8} L${BASE.x - R * 1.05} 302 M${BASE.x + R * 0.8} ${BASE.y + R * 0.8} L${BASE.x + R * 1.05} 302 M${BASE.x} ${BASE.y + R} L${BASE.x + R * 0.3} 300`} stroke="#5b3d22" strokeWidth={Math.max(2, R * 0.09)} strokeLinecap="round" />
@@ -417,9 +420,13 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
             <path d="M-30 0 L-25 3.6 L-19 3 L-18 0 Z" fill={look.fletch} />
           </g>
         ) : null}
-        {puff ? (
-          <g key={puff.id} className="aa-puff" style={{ transformOrigin: `${puff.x}px ${puff.y}px` }}>
-            {[0, 1, 2, 3, 4, 5].map((i) => <circle key={i} cx={puff.x + Math.cos(i) * 4} cy={puff.y + Math.sin(i * 1.7) * 3} r="1.4" fill="#e2c58c" />)}
+        {puff && t - puff.t0 < 0.5 ? (
+          // sbuffo di paglia: calcolato a ogni fotogramma insieme al resto, senza animazioni CSS dentro l'SVG
+          <g opacity={(1 - (t - puff.t0) / 0.5).toFixed(2)}>
+            {[0, 1, 2, 3, 4, 5].map((i) => {
+              const k = 0.6 + ((t - puff.t0) / 0.5) * 1.8;
+              return <circle key={i} cx={puff.x + Math.cos(i) * 4 * k} cy={puff.y + Math.sin(i * 1.7) * 3 * k} r={1.4 * k} fill="#e2c58c" />;
+            })}
           </g>
         ) : null}
         <rect width={W} height={H} fill="url(#gm-vig)" pointerEvents="none" />
