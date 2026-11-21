@@ -262,7 +262,7 @@ function CategoryCarousel({ current, onGo, isHere }: { current?: string; onGo: (
           const items = SHORTCUTS.filter((s) => s.group === st.id);
           const k = i % n;
           return (
-            <section key={i} className="grid min-h-[calc(100dvh-15rem)] w-full shrink-0 snap-center content-start gap-4 px-4 pb-8 pt-1" style={{ background: `radial-gradient(130% 55% at 50% 8%, ${st.color}24, transparent 72%)` }}>
+            <section key={i} className="grid min-h-[calc(100dvh-15rem)] w-full shrink-0 snap-center content-start gap-4 px-4 pb-8 pt-1" style={{ background: `linear-gradient(180deg, ${st.color}38 0%, ${st.color}1f 35%, ${st.color}12 70%, ${st.color}08 100%)` }}>
               {/* intestazione illustrata della categoria: grande icona con alone, titolo e bersaglio decorativo */}
               <div className="aa-cat-hero relative overflow-hidden rounded-[1.75rem] p-4" style={{ ["--cat" as string]: st.color, background: `linear-gradient(135deg, ${st.color}55, ${st.color}1a 55%, rgba(255,255,255,0.02))` }}>
                 <svg aria-hidden viewBox="0 0 200 200" className="aa-cat-rings pointer-events-none absolute -right-10 -top-12 h-52 w-52 opacity-[0.22]">
@@ -287,7 +287,7 @@ function CategoryCarousel({ current, onGo, isHere }: { current?: string; onGo: (
               <div className="grid grid-cols-3 gap-x-2 gap-y-6 pt-1">
                 {items.map((s, j) => (
                   <Link key={s.id} to={s.to as "/"} search={(s.search ?? {}) as never} onClick={onGo} aria-current={isHere(s) ? "page" : undefined} className={cx("aa-short flex min-w-0 flex-col items-center gap-1.5 text-center", isHere(s) && "is-here")} style={{ animationDelay: `${j * 35}ms` }}>
-                    <AppIcon name={s.icon} color={s.color} size={72} className="aa-short-icon" />
+                    <AppIcon name={s.icon} color={st.color} size={72} className="aa-short-icon" />
                     <span className="w-full truncate text-[0.78rem] font-semibold leading-tight">{s.label}</span>
                     <span className="line-clamp-2 w-full text-[0.6rem] leading-tight text-muted">{s.hint}</span>
                   </Link>
