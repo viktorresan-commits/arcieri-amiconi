@@ -68,6 +68,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const [error, setError] = useState("");
   const [nonce, setNonce] = useState(0);
   const [menu, setMenu] = useState(false);
+  const [menuSearch, setMenuSearch] = useState(false);
   const [quick, setQuick] = useState(false);
   const [editShort, setEditShort] = useState(false);
   const [prefsOpen, setPrefsOpen] = useState(false);
@@ -279,12 +280,17 @@ export function Shell({ children }: { children: ReactNode }) {
             <div className="aa-sheet fixed inset-0 z-40 overflow-y-auto bg-bg pb-[calc(env(safe-area-inset-bottom)+1.5rem)] md:hidden">
               <div className="aa-appheader sticky top-0 z-10 flex h-14 items-center justify-between bg-bg/90 px-4 backdrop-blur-md">
                 <p className="font-display text-xl">Menu</p>
-                <button type="button" className="grid h-11 w-11 place-items-center rounded-full bg-white/5" onClick={() => setMenu(false)} aria-label="Chiudi">
-                  <Glyph name="close" size={20} />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button type="button" className={cx("grid h-11 w-11 place-items-center rounded-full", menuSearch ? "bg-primary text-primary-fg" : "bg-white/5")} onClick={() => setMenuSearch((v) => !v)} aria-label="Cerca" aria-pressed={menuSearch}>
+                    <Glyph name="eye" size={19} />
+                  </button>
+                  <button type="button" className="grid h-11 w-11 place-items-center rounded-full bg-white/5" onClick={() => setMenu(false)} aria-label="Chiudi">
+                    <Glyph name="close" size={20} />
+                  </button>
+                </div>
               </div>
               <div className="grid gap-3 px-4">
-                <PathMap current={path} onPick={() => setMenu(false)} onPersonalize={() => { setMenu(false); setPrefsOpen(true); }} />
+                <PathMap current={path} showSearch={menuSearch} onPick={() => setMenu(false)} />
               </div>
             </div>
           ) : null}

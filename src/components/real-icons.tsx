@@ -57,6 +57,227 @@ function arrow(u: string, x1: number, y1: number, x2: number, y2: number, fletch
 }
 
 const DRAW: Record<string, Draw> = {
+  // ── icone aggiunte: tutte le tessere hanno ora un disegno a colori ──
+  arrow: (u) => (
+    <>
+      {shadow(32, 56, 22)}
+      {arrow(u, 8, 46, 54, 14, "#2f7fd1", "ar")}
+      <path d="M9 47 l-3 3 M12 44 l-4 1" stroke="#fff" strokeOpacity={0.35} strokeWidth={1} strokeLinecap="round" />
+    </>
+  ),
+  eye: (u) => (
+    <>
+      <defs>
+        {lin(`${u}s`, [[0, "#ffffff"], [1, "#d9dee4"]])}
+        {rad(`${u}i`, [[0, "#9fe3c9"], [0.5, "#2f9e6a"], [1, "#0f4a32"]], 0.45, 0.4, 0.55)}
+        {lin(`${u}l`, [[0, "#3a2a1e"], [1, "#1d140d"]])}
+      </defs>
+      {shadow(32, 52, 18)}
+      <path d="M6 32 C14 18 50 18 58 32 C50 46 14 46 6 32 Z" fill={`url(#${u}s)`} stroke="#1d2126" strokeOpacity={0.35} strokeWidth={1} />
+      <circle cx={32} cy={32} r={10.5} fill={`url(#${u}i)`} />
+      <circle cx={32} cy={32} r={4.6} fill="#0b0d10" />
+      <circle cx={35.5} cy={28.5} r={2.4} fill="#fff" opacity={0.9} />
+      <path d="M6 32 C14 18 50 18 58 32" fill="none" stroke={`url(#${u}l)`} strokeWidth={3} strokeLinecap="round" />
+      {[14, 22, 32, 42, 50].map((x, i) => <path key={x} d={`M${x} ${23 - (i === 2 ? 2 : i % 2)} l${(x - 32) * 0.08} -5`} stroke="#1d140d" strokeWidth={1.6} strokeLinecap="round" />)}
+    </>
+  ),
+  mountain: (u) => (
+    <>
+      <defs>
+        {lin(`${u}k`, [[0, "#8fc4ff"], [1, "#e7f2ff"]])}
+        {lin(`${u}m`, [[0, "#7d8ea3"], [1, "#465566"]], 0, 0, 1, 1)}
+        {lin(`${u}n`, [[0, "#5d8a45"], [1, "#3a6630"]])}
+      </defs>
+      <rect x={6} y={10} width={52} height={42} rx={9} fill={`url(#${u}k)`} />
+      <circle cx={46} cy={20} r={5} fill="#fff3b0" />
+      <path d="M6 46 L24 20 L34 34 L42 26 L58 46 V52 H6 Z" fill={`url(#${u}m)`} />
+      <path d="M24 20 L29 27.5 L25 26 L21 28 Z M42 26 L46 32 L42 30.5 L39 32 Z" fill="#fff" />
+      <path d="M6 46 C20 40 40 42 58 46 V52 C58 52 6 52 6 52 Z" fill={`url(#${u}n)`} />
+      <rect x={6} y={10} width={52} height={42} rx={9} fill="none" stroke="#000" strokeOpacity={0.2} />
+    </>
+  ),
+  sparkle: (u) => (
+    <>
+      <defs>{lin(`${u}g`, [[0, "#fff6c8"], [0.5, "#ffd166"], [1, "#e2a925"]], 0, 0, 1, 1)}</defs>
+      {shadow(32, 56, 14)}
+      <path d="M30 8 C32 22 36 26 50 28 C36 30 32 34 30 48 C28 34 24 30 10 28 C24 26 28 22 30 8 Z" fill={`url(#${u}g)`} stroke="#b07a12" strokeOpacity={0.5} strokeWidth={0.8} />
+      <path d="M48 38 C49 44 50 45 56 46 C50 47 49 48 48 54 C47 48 46 47 40 46 C46 45 47 44 48 38 Z" fill={`url(#${u}g)`} />
+      <path d="M50 8 C50.6 12 51 12.4 55 13 C51 13.6 50.6 14 50 18 C49.4 14 49 13.6 45 13 C49 12.4 49.4 12 50 8 Z" fill="#fff" opacity={0.9} />
+      <path d="M30 14 C31 22 33 25 40 27" stroke="#fff" strokeOpacity={0.6} strokeWidth={1.2} fill="none" strokeLinecap="round" />
+    </>
+  ),
+  medal: (u) => (
+    <>
+      <defs>
+        {lin(`${u}r1`, [[0, "#d63a2f"], [1, "#8a1f19"]])}
+        {lin(`${u}r2`, [[0, "#2f7fd1"], [1, "#1a4a8a"]])}
+        {rad(`${u}g`, [[0, "#fff1b8"], [0.55, "#f2c94c"], [1, "#a87612"]], 0.4, 0.35, 0.65)}
+      </defs>
+      {shadow(32, 58, 14)}
+      <path d="M20 6 H30 L36 28 H26 Z" fill={`url(#${u}r1)`} />
+      <path d="M44 6 H34 L28 28 H38 Z" fill={`url(#${u}r2)`} />
+      <circle cx={32} cy={40} r={15} fill={`url(#${u}g)`} stroke="#8a5e0e" strokeWidth={1.2} />
+      <circle cx={32} cy={40} r={10.5} fill="none" stroke="#fff7d1" strokeOpacity={0.6} strokeWidth={1} />
+      <path d="M32 32 l2.4 5 5.4 .6 -4 3.7 1.1 5.3 -4.9 -2.7 -4.9 2.7 1.1 -5.3 -4 -3.7 5.4 -.6 Z" fill="#fff7d1" opacity={0.9} />
+    </>
+  ),
+  crosshair: (u) => (
+    <>
+      {target(u, 32, 32, 22, "c")}
+      <g stroke="#7cf0a8" strokeWidth={2.2} strokeLinecap="round">
+        <path d="M32 4 V18 M32 46 V60 M4 32 H18 M46 32 H60" />
+      </g>
+      <circle cx={32} cy={32} r={14} fill="none" stroke="#7cf0a8" strokeWidth={1.6} />
+    </>
+  ),
+  sight: (u) => (
+    <>
+      <defs>
+        {lin(`${u}b`, [[0, "#5a626c"], [1, "#1d2126"]])}
+        {rad(`${u}l`, [[0, "#c8f2ff", 0.8], [1, "#2a6f8a", 0.5]], 0.4, 0.35, 0.6)}
+      </defs>
+      {shadow(32, 57, 18)}
+      <rect x={8} y={30} width={30} height={6} rx={2} fill={`url(#${u}b)`} />
+      <rect x={26} y={14} width={6} height={40} rx={2} fill={`url(#${u}b)`} />
+      <circle cx={44} cy={33} r={12} fill="#1d2126" />
+      <circle cx={44} cy={33} r={9} fill={`url(#${u}l)`} />
+      <circle cx={44} cy={33} r={2.4} fill="#7cf0a8" />
+      <circle cx={44} cy={33} r={1} fill="#fff" />
+      <path d="M38 27 a8 8 0 0 1 6 -3" stroke="#fff" strokeOpacity={0.6} strokeWidth={1.2} fill="none" />
+    </>
+  ),
+  scan: (u) => (
+    <>
+      <defs>{lin(`${u}p`, [[0, "#ffffff"], [1, "#dfe3e8"]])}</defs>
+      {shadow(32, 57, 18)}
+      <rect x={14} y={10} width={36} height={44} rx={4} fill={`url(#${u}p)`} />
+      {target(u, 32, 30, 11, "s")}
+      <rect x={10} y={34} width={44} height={3} rx={1.5} fill="#7cf0a8" opacity={0.9} />
+      <rect x={10} y={30} width={44} height={11} fill="#7cf0a8" opacity={0.15} />
+      <g stroke="#2f9e6a" strokeWidth={3} strokeLinecap="round" fill="none">
+        <path d="M8 16 V8 H16 M48 8 H56 V16 M56 48 V56 H48 M16 56 H8 V48" />
+      </g>
+    </>
+  ),
+  image: (u) => (
+    <>
+      <defs>
+        {lin(`${u}k`, [[0, "#8fc4ff"], [1, "#d8ecff"]])}
+        {lin(`${u}f`, [[0, "#f4f1ea"], [1, "#d6cfc0"]])}
+      </defs>
+      {shadow(32, 57, 22)}
+      <rect x={6} y={10} width={52} height={42} rx={5} fill={`url(#${u}f)`} />
+      <rect x={10} y={14} width={44} height={34} rx={2} fill={`url(#${u}k)`} />
+      <circle cx={44} cy={22} r={4.5} fill="#fff3b0" />
+      <path d="M10 48 L24 30 L34 40 L40 34 L54 48 Z" fill="#4f8a3a" />
+      <path d="M10 48 L24 30 L28 35 L18 48 Z" fill="#3a6630" />
+    </>
+  ),
+  video: (u) => (
+    <>
+      <defs>
+        {lin(`${u}b`, [[0, "#4b525c"], [1, "#16191d"]])}
+        {rad(`${u}g`, [[0, "#6fb3ff"], [0.5, "#1d4f97"], [1, "#07152b"]], 0.4, 0.35, 0.6)}
+      </defs>
+      {shadow(30, 55, 22)}
+      <rect x={6} y={18} width={36} height={28} rx={6} fill={`url(#${u}b)`} />
+      <path d="M42 28 L58 20 V44 L42 36 Z" fill="#2a2f36" />
+      <circle cx={20} cy={32} r={8} fill="#0b0d10" />
+      <circle cx={20} cy={32} r={6} fill={`url(#${u}g)`} />
+      <circle cx={18} cy={30} r={1.8} fill="#fff" opacity={0.8} />
+      <circle cx={36} cy={23} r={2.2} fill="#e5484d" />
+      <path d="M8 21 h32" stroke="#fff" strokeOpacity={0.15} />
+    </>
+  ),
+  gear: (u) => (
+    <>
+      <defs>{lin(`${u}m`, [[0, "#e7ebf0"], [0.5, "#9aa3ad"], [1, "#4a5058"]], 0, 0, 1, 1)}</defs>
+      {shadow(32, 57, 18)}
+      <g transform="translate(32 31)">
+        {Array.from({ length: 8 }, (_, i) => <rect key={i} x={-4} y={-23} width={8} height={10} rx={1.5} fill={`url(#${u}m)`} transform={`rotate(${i * 45})`} />)}
+        <circle r={16} fill={`url(#${u}m)`} stroke="#3a4048" strokeWidth={1} />
+        <circle r={6.5} fill="#1d2126" />
+        <circle r={16} fill="none" stroke="#fff" strokeOpacity={0.35} strokeDasharray="20 80" />
+      </g>
+    </>
+  ),
+  key: (u) => (
+    <>
+      <defs>{lin(`${u}g`, [[0, "#fff1b8"], [0.5, "#e2b04a"], [1, "#8a5e0e"]], 0, 0, 1, 1)}</defs>
+      {shadow(32, 56, 18)}
+      <circle cx={20} cy={26} r={12} fill={`url(#${u}g)`} />
+      <circle cx={20} cy={26} r={5} fill="#1d2126" opacity={0.85} />
+      <path d="M29 33 L52 52 L48 56 L44 52 L41 55 L37 51 L40 48 L26 36 Z" fill={`url(#${u}g)`} />
+      <path d="M12 20 a10 10 0 0 1 8 -5" stroke="#fff" strokeOpacity={0.7} strokeWidth={1.4} fill="none" />
+    </>
+  ),
+  link: (u) => (
+    <>
+      <defs>{lin(`${u}m`, [[0, "#e7ebf0"], [0.5, "#9aa3ad"], [1, "#4a5058"]], 0, 0, 1, 1)}</defs>
+      {shadow(32, 56, 18)}
+      <rect x={6} y={22} width={30} height={16} rx={8} fill="none" stroke={`url(#${u}m)`} strokeWidth={6} transform="rotate(-30 21 30)" />
+      <rect x={28} y={26} width={30} height={16} rx={8} fill="none" stroke={`url(#${u}m)`} strokeWidth={6} transform="rotate(-30 43 34)" />
+    </>
+  ),
+  stack: (u) => (
+    <>
+      <defs>{lin(`${u}p`, [[0, "#ffffff"], [1, "#d6dbe1"]])}</defs>
+      {shadow(32, 57, 20)}
+      {[0, 1, 2].map((i) => (
+        <g key={i} transform={`translate(${8 - i * 2} ${-i * 7})`}>
+          <rect x={10} y={30} width={40} height={22} rx={4} fill={`url(#${u}p)`} stroke="#000" strokeOpacity={0.15} />
+          {i === 2 ? target(u, 30, 41, 8, "st") : null}
+        </g>
+      ))}
+    </>
+  ),
+  play: (u) => (
+    <>
+      <defs>{lin(`${u}g`, [[0, "#9ef0b8"], [1, "#2f9e6a"]], 0, 0, 1, 1)}</defs>
+      {shadow(32, 57, 18)}
+      <circle cx={32} cy={31} r={22} fill={`url(#${u}g)`} />
+      <path d="M26 20 L45 31 L26 42 Z" fill="#fff" />
+      <path d="M14 22 a20 20 0 0 1 14 -11" stroke="#fff" strokeOpacity={0.5} strokeWidth={2} fill="none" strokeLinecap="round" />
+    </>
+  ),
+  save: (u) => (
+    <>
+      <defs>{lin(`${u}b`, [[0, "#3a7bd5"], [1, "#1f4a8a"]])}</defs>
+      {shadow(32, 57, 18)}
+      <path d="M10 10 H46 L54 18 V54 H10 Z" fill={`url(#${u}b)`} />
+      <rect x={18} y={10} width={24} height={14} rx={1} fill="#dfe6ee" />
+      <rect x={34} y={13} width={5} height={8} fill="#1f4a8a" />
+      <rect x={16} y={32} width={32} height={18} rx={2} fill="#f4f1ea" />
+      <path d="M20 38 h24 M20 43 h18" stroke="#9aa3ad" strokeWidth={1.4} />
+    </>
+  ),
+  trash: (u) => (
+    <>
+      <defs>{lin(`${u}m`, [[0, "#9aa3ad"], [0.5, "#d9dee4"], [1, "#6b737d"]], 0, 0, 1, 0)}</defs>
+      {shadow(32, 58, 16)}
+      <path d="M16 18 H48 L45 55 H19 Z" fill={`url(#${u}m)`} />
+      <rect x={12} y={12} width={40} height={6} rx={2} fill="#6b737d" />
+      <rect x={26} y={8} width={12} height={5} rx={1.5} fill="#6b737d" />
+      <path d="M25 24 V49 M32 24 V49 M39 24 V49" stroke="#4a5058" strokeWidth={2} strokeLinecap="round" />
+    </>
+  ),
+  edit: (u) => (
+    <>
+      <defs>
+        {lin(`${u}p`, [[0, "#ffd166"], [1, "#e2a925"]], 0, 0, 1, 0)}
+        {lin(`${u}c`, [[0, "#ffffff"], [1, "#dfe3e8"]])}
+      </defs>
+      {shadow(32, 57, 18)}
+      <rect x={10} y={12} width={34} height={42} rx={3} fill={`url(#${u}c)`} />
+      <path d="M16 22 h22 M16 29 h22 M16 36 h14" stroke="#9aa3ad" strokeWidth={1.6} />
+      <g transform="rotate(45 42 30)">
+        <rect x={38} y={4} width={8} height={36} rx={1.5} fill={`url(#${u}p)`} />
+        <rect x={38} y={4} width={8} height={5} fill="#e5848d" />
+        <path d="M38 40 L42 48 L46 40 Z" fill="#e9d4b0" />
+        <path d="M41 45 L42 48 L43 45 Z" fill="#1d2126" />
+      </g>
+    </>
+  ),
   bolt: (u) => (
     <>
       {target(u, 42, 30, 16)}

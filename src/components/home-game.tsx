@@ -30,6 +30,7 @@ const randomDist = (not?: number): Dist => {
 };
 const RINGS = ["#f4f1ea", "#f4f1ea", "#1a1c1e", "#1a1c1e", "#2a6294", "#2a6294", "#c4473d", "#c4473d", "#e6b325", "#e6b325"];
 const DRAW_S = 0.75;
+const STATIONS = 20;
 
 type Hit = { dx: number; dy: number; score: number; x10: boolean };
 type Flight = { from: { x: number; y: number }; to: { x: number; y: number }; hit: Hit; t0: number; dur: number; arc: number; demo: boolean };
@@ -46,7 +47,7 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
   // il bersaglio si muove sempre da solo: ampiezza e velocità cambiano a ogni volée
   const [motion, setMotion] = useState(() => ({ amp: 18 + Math.random() * 18, speed: 0.45 + Math.random() * 0.5, phase: Math.random() * 6 }));
   const moving = true;
-  const [best, setBest] = useLocalState<number>("aa-game-best-all", 0);
+  const [best, setBest] = useLocalState<number>("aa-game-best-giro", 0);
   const [hits, setHits] = useState<Hit[]>([]);
   const [demoHits, setDemoHits] = useState<Hit[]>([]);
   const [flight, setFlight] = useState<Flight | null>(null);
@@ -61,9 +62,15 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
   const lastTouch = useRef(0);
   const landed = useRef(0);
   const hitsRef = useRef<Hit[]>([]);
+  const stationsRef = useRef<number[]>([]);
   const R = radiusOf(dist);
-  const done = playing && hits.length >= 3 && !flight;
-  const total = hits.reduce((a, h) => a + h.score, 0);
+  // un giro è di 20 piazzole da 3 frecce: alla fine di ogni piazzola si passa alla successiva
+  const [station, setStation] = useState(1);
+  const [stations, setStations] = useState<number[]>([]);
+  const stationDone = playing && hits.length >= 3 && !flight;
+  const done = stationDone && station >= STATIONS;
+  const piazzola = hits.reduce((a, h) => a + h.score, 0);
+  const total = stations.reduce((a, b) => a + b, 0) + (stationDone ? 0 : piazzola);
 
   // posizione del bersaglio: fermo, o su un carrello che va avanti e indietro
   const amp = motion.amp;
@@ -169,13 +176,22 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
 
   const finish = (list: Hit[]) => {
     const sum = list.reduce((a, h) => a + h.score, 0);
-    if (sum > best) setBest(sum);
-    // punti esperienza: al massimo cinque volée al giorno, di più se il bersaglio si muove
+    const all = [...stationsRef.current, sum];
+    stationsRef.current = all;
+    setStations(all);
+    if (all.length < STATIONS) {
+      // breve riepilogo della piazzola, poi si cammina alla prossima
+      window.setTimeout(() => nextStation(), 1700);
+      return;
+    }
+    const round = all.reduce((a, b) => a + b, 0);
+    if (round > best) setBest(round);
+    // punti esperienza: al massimo tre giri al giorno
     const day = today();
-    for (let i = 1; i <= 5; i++) {
-      const once = `gioco-${day}-${i}`;
+    for (let i = 1; i <= 3; i++) {
+      const once = `giro-${day}-${i}`;
       if (readXp().log.some((l) => l.why === once)) continue;
-      award((sum >= 27 ? 3 : sum >= 20 ? 2 : 1) + (moving ? 1 : 0), "Volée nel gioco", once);
+      award(round >= 540 ? 8 : round >= 450 ? 6 : round >= 350 ? 4 : 2, "Giro di 20 piazzole", once);
       break;
     }
   };
@@ -196,7 +212,7 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
       if (draw?.demo) setDraw(null);
     }
     if (flight && !flight.demo) return;
-    if (done || (draw && !draw.demo)) return;
+    if (stationDone || (draw && !draw.demo)) return;
     (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
     const w = toWorld(e.clientX, e.clientY);
     const ax = T.x + (Math.random() - 0.5) * R * 1.6;
@@ -219,13 +235,25 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
     shoot(draw, now());
   };
 
-  const again = () => {
+  // nuova piazzola: distanza, vento e movimento del bersaglio cambiano
+  const freshStation = () => {
     hitsRef.current = [];
     setHits([]);
     setPop(null);
     setWind(Math.round((Math.random() * 6 - 3) * 10) / 10);
     setDist((d) => randomDist(d));
     setMotion({ amp: 18 + Math.random() * 18, speed: 0.45 + Math.random() * 0.5, phase: Math.random() * 6 });
+  };
+  const nextStation = () => {
+    if (stationsRef.current.length >= STATIONS) return;
+    setStation(stationsRef.current.length + 1);
+    freshStation();
+  };
+  const again = () => {
+    stationsRef.current = [];
+    setStations([]);
+    setStation(1);
+    freshStation();
   };
   const stop = () => {
     setPlaying(false);
@@ -354,10 +382,10 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
         <div className="min-w-0 text-white [text-shadow:0_1px_8px_rgba(0,0,0,0.55)]">{info}</div>
         <div className="grid shrink-0 justify-items-end gap-1.5 text-right text-white">
           <p className="aa-game-score text-4xl font-black leading-none">{playing ? total : "—"}</p>
-          <p className="text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-white/75">record {bestHere}/30</p>
+          <p className="text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-white/75">record {bestHere}/{STATIONS * 30}</p>
           <span className="aa-game-pill">
             {[0, 1, 2].map((i) => <span key={i} className={`inline-block h-3.5 w-1.5 rounded-full ${i < hits.length ? "bg-white/25" : "bg-[#ffd27a]"}`} />)}
-            <span className="ml-1">Volée</span>
+            <span className="ml-1">Piazzola {station}/{STATIONS}</span>
           </span>
           <span className="aa-game-pill">
             {Math.abs(wind).toFixed(1)} m/s {wind === 0 ? "" : wind > 0 ? "→" : "←"}
@@ -374,7 +402,7 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
           </p>
         </div>
       ) : null}
-      {playing && !draw && !flight && !done && hits.length === 0 ? (
+      {playing && !draw && !flight && !stationDone && hits.length === 0 && station === 1 ? (
         <button data-ui type="button" onPointerDown={(e) => e.stopPropagation()} onClick={stop} className="absolute left-3 top-[44%] rounded-full bg-black/45 px-3 py-1.5 text-[0.7rem] font-semibold text-white backdrop-blur">
           Guarda tirare
         </button>
@@ -383,16 +411,24 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
         <p className="pointer-events-none absolute inset-x-0 top-[30%] text-center text-xs font-semibold text-white [text-shadow:0_1px_6px_rgba(0,0,0,0.6)]">Il braccio si stanca: tira o rilassa</p>
       ) : null}
 
+      {stationDone && !done ? (
+        <div className="aa-rise pointer-events-none absolute inset-x-6 top-[30%] rounded-3xl bg-[#101814]/75 p-3 text-center text-white backdrop-blur-md">
+          <p className="text-[0.66rem] font-semibold uppercase tracking-[0.2em] text-white/70">Piazzola {station} di {STATIONS}</p>
+          <p className="aa-game-score text-4xl font-black">{piazzola}<span className="text-lg text-white/60">/30</span></p>
+          <p className="text-xs text-white/80">{hits.map((h) => (h.score === 0 ? "M" : h.x10 ? "X" : h.score)).join(" · ")} · totale {total}</p>
+          <p className="mt-1 text-[0.66rem] text-white/60">Si va alla prossima piazzola…</p>
+        </div>
+      ) : null}
       {done ? (
-        <div data-ui className="absolute inset-x-4 top-[28%] rounded-3xl bg-[#101814]/80 p-4 text-center text-white backdrop-blur-md" onPointerDown={(e) => e.stopPropagation()}>
-          <p className="text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-white/70">Volée finita</p>
-          <p className="aa-game-score mt-1 text-5xl font-black">{total}<span className="text-xl text-white/60">/30</span></p>
-          <p className="mt-1 text-sm text-white/85">
-            {hits.map((h) => (h.score === 0 ? "M" : h.x10 ? "X" : h.score)).join(" · ")}
-            {total >= bestHere && total > 0 ? " · nuovo record" : ""}
-          </p>
+        <div data-ui className="absolute inset-x-4 top-[20%] rounded-3xl bg-[#101814]/85 p-4 text-center text-white backdrop-blur-md" onPointerDown={(e) => e.stopPropagation()}>
+          <p className="text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-white/70">Giro finito · {STATIONS} piazzole</p>
+          <p className="aa-game-score mt-1 text-5xl font-black">{total}<span className="text-xl text-white/60">/{STATIONS * 30}</span></p>
+          <p className="mt-1 text-sm text-white/85">media {(total / (STATIONS * 3)).toFixed(2).replace(".", ",")} a freccia{total >= bestHere && total > 0 ? " · nuovo record" : ""}</p>
+          <div className="mx-auto mt-3 grid max-w-[16rem] grid-cols-10 gap-1">
+            {stations.map((v, i) => <span key={i} className="grid h-6 place-items-center rounded-md text-[0.62rem] font-bold" style={{ background: v >= 27 ? "#ffd27a" : v >= 21 ? "#ff7a6e" : v >= 15 ? "#5aa6ff" : "rgba(255,255,255,0.15)", color: v >= 27 ? "#2a1d0c" : "#fff" }}>{v}</span>)}
+          </div>
           <div className="mt-3 grid grid-cols-2 gap-2">
-            <button type="button" onClick={again} className="rounded-full bg-[#ffd27a] px-4 py-2.5 text-sm font-bold text-[#2a1d0c]">Altra volée</button>
+            <button type="button" onClick={again} className="rounded-full bg-[#ffd27a] px-4 py-2.5 text-sm font-bold text-[#2a1d0c]">Nuovo giro</button>
             <button type="button" onClick={stop} className="rounded-full bg-white/15 px-4 py-2.5 text-sm font-bold">Guarda tirare</button>
           </div>
         </div>

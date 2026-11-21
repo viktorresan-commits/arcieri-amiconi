@@ -155,7 +155,7 @@ function readRecent() {
 }
 
 /** Menu: cerca, riprendi una pagina recente, oppure scegli dalle sezioni, tutte in vista. */
-export function PathMap({ onPick, current, onPersonalize }: { onPick?: () => void; current?: string; onPersonalize?: () => void }) {
+export function PathMap({ onPick, current, showSearch = false }: { onPick?: () => void; current?: string; showSearch?: boolean }) {
   const [q, setQ] = useState("");
   const [recent] = useState(readRecent);
   const query = q.trim().toLowerCase();
@@ -167,11 +167,11 @@ export function PathMap({ onPick, current, onPersonalize }: { onPick?: () => voi
   };
   return (
     <div className="grid gap-4">
-      <label className="flex items-center gap-2 rounded-2xl border border-hair bg-white/[0.05] px-3 focus-within:border-primary/60">
+      {showSearch ? <label className="aa-rise flex items-center gap-2 rounded-2xl border border-hair bg-white/[0.05] px-3 focus-within:border-primary/60">
         <Glyph name="eye" size={16} className="text-muted" />
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Cerca tra ${SHORTCUTS.length} voci`} className="min-h-12 w-full bg-transparent text-sm outline-none" />
+        <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Cerca tra ${SHORTCUTS.length} voci`} className="min-h-12 w-full bg-transparent text-sm outline-none" />
         {q ? <button type="button" aria-label="Cancella" onClick={() => setQ("")} className="text-muted"><Glyph name="close" size={16} /></button> : null}
-      </label>
+      </label> : null}
       {query ? (
         <ul className="grid gap-1">
           {found.map((s, i) => {
@@ -209,11 +209,6 @@ export function PathMap({ onPick, current, onPersonalize }: { onPick?: () => voi
           <CategoryCarousel current={current} onGo={go} isHere={isHere} />
         </>
       )}
-      {onPersonalize ? (
-        <button type="button" onClick={onPersonalize} className="flex items-center justify-center gap-2 py-2 text-xs font-semibold text-muted">
-          <Glyph name="palette" size={15} /> Personalizza colori, icone e Home
-        </button>
-      ) : null}
     </div>
   );
 }
@@ -229,7 +224,6 @@ function CategoryCarousel({ current, onGo, isHere }: { current?: string; onGo: (
   const here = current ? SHORTCUTS.filter((s) => s.to !== "/" && current.startsWith(s.to)).sort((x, y) => y.to.length - x.to.length)[0] : undefined;
   const startAt = Math.max(0, STATIONS.findIndex((st) => st.id === (here?.group ?? "allena")));
   const ref = useRef<HTMLDivElement>(null);
-  const tabs = useRef<HTMLDivElement>(null);
   const timer = useRef<number | null>(null);
   const [active, setActive] = useState(startAt);
   const pageW = () => (ref.current?.firstElementChild as HTMLElement | null)?.offsetWidth ?? 1;
@@ -245,10 +239,6 @@ function CategoryCarousel({ current, onGo, isHere }: { current?: string; onGo: (
     jump(mid + startAt, false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  useEffect(() => {
-    const tab = tabs.current?.children[active] as HTMLElement | undefined;
-    tab?.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
-  }, [active]);
   const onScroll = () => {
     const el = ref.current;
     if (!el) return;
@@ -264,28 +254,6 @@ function CategoryCarousel({ current, onGo, isHere }: { current?: string; onGo: (
   const pages = Array.from({ length: COPIES * n }, (_, i) => STATIONS[i % n]);
   return (
     <div className="grid gap-3">
-      <div ref={tabs} className="-mx-4 flex gap-1.5 overflow-x-auto px-4 [scrollbar-width:none]">
-        {STATIONS.map((st, k) => (
-          <button
-            key={st.id}
-            type="button"
-            onClick={() => {
-              const el = ref.current;
-              if (!el) return;
-              const cur = Math.round(el.scrollLeft / (pageW() + gap));
-              // vado alla copia più vicina della categoria scelta
-              const base = cur - (((cur % n) + n) % n);
-              const cand = [base + k - n, base + k, base + k + n].sort((x, y) => Math.abs(x - cur) - Math.abs(y - cur))[0];
-              jump(Math.max(0, Math.min(COPIES * n - 1, cand)), true);
-            }}
-            className={cx("flex shrink-0 items-center gap-1.5 rounded-full border py-1 pl-1 pr-3 text-xs font-semibold transition-colors", k === active ? "border-transparent text-[#0b120e]" : "border-white/10 bg-white/[0.04] text-white/80")}
-            style={k === active ? { background: st.color } : undefined}
-          >
-            <AppIcon name={st.icon} color={st.color} size={26} />
-            {st.title}
-          </button>
-        ))}
-      </div>
       <div ref={ref} onScroll={onScroll} className="relative -mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-[7%] pb-2 [scrollbar-width:none]" style={{ overscrollBehaviorX: "contain" }}>
         {pages.map((st, i) => {
           const items = SHORTCUTS.filter((s) => s.group === st.id);
@@ -312,7 +280,9 @@ function CategoryCarousel({ current, onGo, isHere }: { current?: string; onGo: (
           );
         })}
       </div>
-      <p className="text-center text-[0.66rem] text-muted">Scorri a destra o a sinistra per cambiare sezione</p>
+      <div className="flex justify-center gap-1.5" aria-hidden>
+        {STATIONS.map((st, k) => <span key={st.id} className="h-1.5 rounded-full transition-all duration-300" style={{ width: k === active ? 18 : 6, background: k === active ? st.color : "rgb(255 255 255 / 0.2)" }} />)}
+      </div>
     </div>
   );
 }

@@ -115,10 +115,10 @@ export function LastArrows({ shots }: { shots: LastShot[] }) {
             onContextMenu={(e) => e.preventDefault()}
             title={shot.link ? (shot.link.kind === "allenamento" ? "Tieni premuto per aprire l'allenamento" : "Tieni premuto per aprire la gara") : undefined}
           >
-            <div className="aa-shot-track relative h-11 min-w-0 flex-1 overflow-hidden" style={{ ["--trail" as string]: ringOf(shot.miss ? 0 : shot.isX ? max : shot.score, max).trail }}>
-              {/* la scia corre sotto la freccia, dal punto di partenza fino al bersaglio */}
-              <span aria-hidden className="aa-shot-trail" />
-              <div className={`aa-launch aa-launch-far absolute inset-y-0 ${shot.miss ? "right-[34px] top-[7px] bottom-[-7px] opacity-70" : "right-[9px]"}`} style={{ width: `${36 + stagger * 0.4}%` }}>
+            <div className="aa-shot-track relative h-14 min-w-0 flex-1 overflow-hidden" style={{ ["--trail" as string]: ringOf(shot.miss ? 0 : shot.isX ? max : shot.score, max).trail }}>
+              <div className={`aa-launch aa-launch-far absolute inset-y-0 ${shot.miss ? "right-[38px] top-[7px] bottom-[-7px] opacity-70" : "right-[10px]"}`} style={{ width: `${62 + stagger * 0.5}%` }}>
+                {/* la scia sfumata sta sotto la freccia e vola con lei */}
+                <span aria-hidden className="aa-shot-trail" />
                 <ArrowArt
                   material={sp.material || "carbonio"}
                   shaft={sp.shaft}
@@ -131,7 +131,7 @@ export function LastArrows({ shots }: { shots: LastShot[] }) {
                   fletch2={sp.fletch2}
                   point={sp.pointType || "ogiva"}
                   number={num}
-                  className="relative h-10 w-full"
+                  className="relative h-14 w-full"
                 />
               </div>
               <svg aria-hidden viewBox="0 0 16 40" className="aa-shot-butt" preserveAspectRatio="none">
