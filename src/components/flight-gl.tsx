@@ -1,12 +1,13 @@
 import { useRef, useState } from "react";
 import { describeRound, goldOf, releasePoint, type FlightInput } from "@/lib/arcieri/flight";
 import { project, segment, v3, type Vec3 } from "@/lib/arcieri/gl3d";
-import { drawArcher, phaseAt, poseAt, ROUTINE_END, ROUTINE_START } from "@/lib/arcieri/mannequin";
+import { phaseAt, ROUTINE_END, ROUTINE_START } from "@/lib/arcieri/mannequin";
 import { drawArrow3D, drawBoss, drawLane, drawTrees, drawWorld } from "@/lib/arcieri/scene3d";
 import { useAvatar } from "./avatar-hero";
 import { orbit, type Arrow3DLook } from "./foc-3d";
 import { Flight3DCanvas, PRESETS, type Preset } from "./flight-3d";
 import { GLStage, useGLScene } from "./gl-stage";
+import { useAvatarSprite } from "./avatar-sprite";
 import { SkyPicker } from "./archer-3d";
 import { drawSkyOverlay, envOf, useSky } from "@/lib/arcieri/sky3d";
 
@@ -24,6 +25,7 @@ export function Flight3D({ input, round, sighted, look = {}, height = "h-72" }: 
   presetRef.current = preset;
   const { shown } = useAvatar();
   const { sky } = useSky();
+  const sprite = useAvatarSprite(shown);
 
   const { ref, glRef, view, failed } = useGLScene((g, o, w, h, time, v) => {
     const D = input.distanceM;
@@ -82,9 +84,11 @@ export function Flight3D({ input, round, sighted, look = {}, height = "h-72" }: 
     drawBoss(g, cx, gH, D, R * big, big, input.zones === 5 ? 5 : 10);
 
     // arciere: il rilascio coincide con la partenza della freccia
-    const pose = poseAt(tt);
+    // l'arciere è il tuo avatar disegnato (2D, dettagliato) dentro la scena 3D
     const s = (input.heightCm / 175) * big;
-    drawArcher(g, [0.05 * big, 0, -0.62 * s], [0, 0, 1], s, pose, shown, look, 0.75);
+    const foot: Vec3 = [-0.25 * big, 0, -0.62 * s];
+    g.shadow([foot[0] + 0.2 * s, 0, foot[2] + 0.1], 0.45 * s, 0.25 * s, 0.35);
+    sprite.place(project(g.vp, foot, w, h), project(g.vp, [foot[0], 1.82 * s, foot[2]], w, h), tt);
 
     // traiettoria: tratteggio intero e scia fin dove è arrivata
     const pts = path.map((q) => W3(q.x, q.z));
@@ -222,6 +226,7 @@ export function Flight3D({ input, round, sighted, look = {}, height = "h-72" }: 
   return (
     <div className="grid gap-1.5">
       <GLStage glRef={glRef} overlayRef={ref} view={view} className={`w-full ${height}`} label="Tiro in 3D: arciere, traiettoria e bersaglio">
+        {sprite.node}
         <SkyPicker className="absolute bottom-11 left-2" />
       </GLStage>
       <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 [scrollbar-width:none]">

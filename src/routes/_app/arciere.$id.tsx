@@ -1,4 +1,5 @@
-import { useTeamAvatars } from "@/components/avatar-hero";
+import { AvatarScene, useTeamAvatars } from "@/components/avatar-hero";
+import { sceneById } from "@/lib/arcieri/scenes";
 import { createFileRoute } from "@tanstack/react-router";
 import { archerBoard, listGadgets } from "@/lib/arcieri/club.api";
 import { bowLabel, memberLabel } from "@/lib/arcieri/labels";
@@ -32,6 +33,12 @@ function Page() {
           <p className="text-xs text-muted">Nel gruppo dal {data.joinedOn || "—"}</p>
         </div>
       </div>
+      {looks[data.userId] ? (
+        <div className="grid gap-1.5">
+          <AvatarScene look={looks[data.userId]} height="h-80" pose="animata" phase />
+          <p className="px-1 text-xs text-muted">Il suo arciere · ambientazione: {sceneById(looks[data.userId].scene).label}</p>
+        </div>
+      ) : null}
       <div className="grid grid-cols-3 gap-2 text-center">
         <Card className="p-3"><p className="text-xs text-muted">Frecce</p><p className="font-display text-3xl tabular-nums">{arrows}</p></Card>
         <Card className="p-3"><p className="text-xs text-muted">Media</p><p className="font-display text-3xl tabular-nums">{arrows ? fmtAvg(points / arrows) : "—"}</p></Card>

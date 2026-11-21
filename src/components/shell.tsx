@@ -9,14 +9,14 @@ import { greet, romeHour } from "@/lib/arcieri/time";
 import { memberLabel, initials } from "@/lib/arcieri/labels";
 import { Avatar, Loading, Mark, cx } from "./kit";
 import { QUICK_ACTIONS, shortcutById } from "@/lib/arcieri/shortcuts";
-import { NextCard, PathMap, ShortcutEditor, ShortcutTile } from "./shortcuts";
+import { NextCard, PathMap, ShortcutEditor, ShortcutTile, TipCard } from "./shortcuts";
 import { Scene } from "./scene";
 import { levelOf, useXp, useXpToasts } from "@/lib/arcieri/xp";
 import { AvatarFace } from "./archer-avatar";
 import { useAvatar, useAvatarSync } from "./avatar-hero";
 import { RealIcon } from "./real-icons";
 import { PersonalizeSheet } from "./personalize";
-import { applyPrefs, readPrefs } from "@/lib/arcieri/prefs";
+import { applyPrefs, readPrefs, usePrefs } from "@/lib/arcieri/prefs";
 
 type Ctx = { me: PublicMember; reload: () => void };
 const MemberCtx = createContext<Ctx | null>(null);
@@ -85,6 +85,7 @@ export function Shell({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("aa-unread", read);
   }, []);
   const path = useRouterState({ select: (s) => s.location.pathname });
+  const { prefs } = usePrefs();
 
   useLayoutEffect(() => {
     const root = document.querySelector("main");
@@ -224,6 +225,7 @@ export function Shell({ children }: { children: ReactNode }) {
           <main key={path} className="aa-page mx-auto w-full min-w-0 max-w-3xl overflow-x-clip px-4 py-6 pb-28 md:pb-10">
             {children}
             <NextCard path={path} />
+            {prefs.home.tips ? <TipCard key={path} /> : null}
           </main>
           <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 items-end border-t border-line/60 bg-elev/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden">
             {[nav[0], nav[1]].map((item) => <BottomLink key={item.to} item={item} active={path === item.to || (item.to !== "/" && path.startsWith(item.to))} />)}

@@ -1,7 +1,8 @@
 import { useArcherSetup } from "@/lib/arcieri/setup";
+import { CURIOSITA, randomCuriosita } from "@/lib/arcieri/curiosita";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Link } from "@tanstack/react-router";
-import { SHORTCUTS, STATIONS, TIPS, nextShortcut, shortcutById, usePinned, type Shortcut } from "@/lib/arcieri/shortcuts";
+import { SHORTCUTS, STATIONS, nextShortcut, shortcutById, usePinned, type Shortcut } from "@/lib/arcieri/shortcuts";
 import { cx } from "./kit";
 import { AppIcon, Glyph } from "./icons";
 import { RealIcon } from "./real-icons";
@@ -104,32 +105,28 @@ export function ShortcutEditor({ onClose }: { onClose: () => void }) {
   );
 }
 
-/** "Lo sapevi?": un consiglio di tiro o un trucco dell'app; tocca per il prossimo. */
+/** "Lo sapevi?": una curiosità a caso (o, ogni tanto, un consiglio sul tuo arco); tocca per un'altra. */
 export function TipCard() {
   const archer = useArcherSetup();
-  // il primo consiglio è sul tuo arco, se l'attrezzatura principale ha libbre e allungo
-  const list = archer.has
-    ? [
-        { icon: TIPS[0].icon, text: `Con il tuo ${archer.summary}: frecce da ${archer.grains ? `${archer.grains.min}–${archer.grains.max} grani` : "6–9 grani per libbra"}${archer.spineRange ? `, spine ${archer.spineRange}` : ""}, lunghe circa ${(archer.drawIn + 1).toFixed(1).replace(".", ",")}″.` },
-        ...TIPS,
-      ]
-    : TIPS;
-  const [i, setI] = useState(() => Math.floor((Date.now() / 86_400_000) % TIPS.length));
-  const tip = list[i % list.length];
-  const TIPS_N = list.length;
+  const [i, setI] = useState(() => randomCuriosita());
+  // ogni tanto, se l'attrezzatura principale ha libbre e allungo, un consiglio sul tuo arco
+  const [mine, setMine] = useState(() => Math.random() < 0.15);
+  const personal = archer.has && mine;
+  const tip = personal
+    ? { icon: "bow" as const, text: `Con il tuo ${archer.summary}: frecce da ${archer.grains ? `${archer.grains.min}–${archer.grains.max} grani` : "6–9 grani per libbra"}${archer.spineRange ? `, spine ${archer.spineRange}` : ""}, lunghe circa ${(archer.drawIn + 1).toFixed(1).replace(".", ",")}″.` }
+    : CURIOSITA[i];
+  const next = () => {
+    setMine(Math.random() < 0.1);
+    setI((n) => randomCuriosita(n));
+  };
   return (
-    <button
-      type="button"
-      onClick={() => setI((n) => n + 1)}
-      className="aa-tile aa-kpi flex w-full items-start gap-3 text-left"
-      style={{ "--kpi": "#7cf0a8" } as CSSProperties}
-    >
-      <span key={`e${i}`} className="aa-pop"><AppIcon name={tip.icon} color="#2f9e6a" size={40} /></span>
-      <span key={`t${i}`} className="aa-rise min-w-0">
-        <span className="block text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-[#7cf0a8]">{archer.has && i % TIPS_N === 0 ? "Per il tuo arco" : "Lo sapevi?"} · {(i % TIPS_N) + 1}/{TIPS_N}</span>
-        <span className="mt-0.5 block text-[0.8rem] leading-snug">{tip.text}</span>
+    <button type="button" onClick={next} className="mt-6 flex w-full items-start gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5 text-left transition hover:bg-white/[0.05]">
+      <span key={`e${i}${personal}`} className="aa-pop shrink-0 opacity-90"><AppIcon name={tip.icon} color="#2f9e6a" size={32} /></span>
+      <span key={`t${i}${personal}`} className="aa-rise min-w-0">
+        <span className="block text-[0.6rem] font-semibold uppercase tracking-[0.16em] text-[#7cf0a8]/90">{personal ? "Per il tuo arco" : "Lo sapevi?"}</span>
+        <span className="mt-0.5 block text-[0.78rem] leading-snug text-white/85">{tip.text}</span>
       </span>
-      <Glyph name="chevron" size={16} className="ml-auto shrink-0 self-center text-muted" />
+      <Glyph name="sparkle" size={14} className="ml-auto mt-1 shrink-0 text-muted" />
     </button>
   );
 }

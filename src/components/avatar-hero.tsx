@@ -62,7 +62,7 @@ export function AvatarScene({ look, children, height = "h-72", interactive = tru
   };
   return (
     <div ref={stage} className={`aa-avatar-stage ${height}`}>
-      <SceneBackdrop sky={sky} id="hero" />
+      <SceneBackdrop sky={sky} id="hero" scene={look.scene} />
       {/* paglione che riceve i tiri */}
       <div ref={target} className="absolute right-[5%] top-[50%] aspect-[1/1.35] w-[13%]">
         <svg viewBox="0 0 40 54" className="h-full w-full" aria-hidden>

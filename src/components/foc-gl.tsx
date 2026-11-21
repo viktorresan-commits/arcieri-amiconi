@@ -1,10 +1,10 @@
 import { basis, canvasTexture, cylinderGeo, project, segment, trs, v3, type Env, type GL3D, type Vec3 } from "@/lib/arcieri/gl3d";
 import { drawArrow3D, drawBoss, drawLane, drawTrees, drawWorld } from "@/lib/arcieri/scene3d";
-import { drawArcher, poseAt } from "@/lib/arcieri/mannequin";
 import { drawSkyOverlay, envOf, useSky } from "@/lib/arcieri/sky3d";
 import { useAvatar } from "./avatar-hero";
 import { FocBalance3D, FocFlight3D, orbit, type Arrow3DLook } from "./foc-3d";
 import { GLStage, useGLScene } from "./gl-stage";
+import { useAvatarSprite } from "./avatar-sprite";
 
 const ease = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x * x * (3 - 2 * x));
 
@@ -124,6 +124,7 @@ export function FocBalanceGL({ L, B, foc, look = {} }: { L: number; B: number; f
  */
 export function FocFlightGL({ distance, speed, foc, look = {} }: { distance: number; speed: number; foc: number; look?: Arrow3DLook }) {
   const { shown } = useAvatar();
+  const sprite = useAvatarSprite(shown);
   const { sky } = useSky();
   const { ref, glRef, view, failed } = useGLScene((g, o, w, h, time, v) => {
     const G = 9.81;
@@ -151,7 +152,10 @@ export function FocFlightGL({ distance, speed, foc, look = {} }: { distance: num
     // arciere: ancoraggio e mira prima del rilascio (t = 0)
     const s = big;
     const tt = t < 0 ? -2.6 + ((t + pre) / pre) * 2.6 : t;
-    drawArcher(g, [0.05 * big, 0, -0.62 * s], [0, 0, 1], s, poseAt(tt), shown, look, 0.75);
+    // l'arciere è il tuo avatar disegnato, messo nella scena 3D
+    const foot: Vec3 = [-0.25 * big, 0, -0.62 * s];
+    g.shadow([foot[0] + 0.2 * s, 0, foot[2] + 0.1], 0.45 * s, 0.25 * s, 0.35);
+    sprite.place(project(g.vp, foot, w, h), project(g.vp, [foot[0], 1.82 * s, foot[2]], w, h), tt);
     // traiettoria
     const N = 60;
     const pts: Vec3[] = [];
@@ -198,5 +202,9 @@ export function FocFlightGL({ distance, speed, foc, look = {} }: { distance: num
     }
   });
   if (failed) return <FocFlight3D distance={distance} speed={speed} foc={foc} look={look} />;
-  return <GLStage glRef={glRef} overlayRef={ref} view={view} className="h-[28rem] w-full sm:h-72" label="Gittata in 3D con il tuo arciere" />;
+  return (
+    <GLStage glRef={glRef} overlayRef={ref} view={view} className="h-[28rem] w-full sm:h-72" label="Gittata in 3D con il tuo arciere">
+      {sprite.node}
+    </GLStage>
+  );
 }

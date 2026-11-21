@@ -9,7 +9,7 @@ import { useAvatar } from "@/components/avatar-hero";
 import { SkyPicker } from "@/components/archer-3d";
 import { HomeGame } from "@/components/home-game";
 import { MainGearCard } from "@/components/main-gear";
-import { ShortcutRow, TipCard } from "@/components/shortcuts";
+import { ShortcutRow } from "@/components/shortcuts";
 import { JourneyCard } from "@/components/journey";
 import { TodayCard } from "@/components/today-card";
 import { usePrefs } from "@/lib/arcieri/prefs";
@@ -77,21 +77,23 @@ function Home() {
     <div className="grid gap-3">
       <Rise i={0}>
         <div className="grid gap-2">
-          <div className="flex items-end justify-between gap-3 px-1">
-            <div>
-              <p className="text-[0.66rem] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">{new Date().toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" })}</p>
-              <h1 className="font-display text-[2.1rem] leading-none tracking-tight">Oggi</h1>
-              <p className="mt-1 text-xs text-[var(--muted)]">
-                {data.month.sessions} uscite e {num(data.month.arrows)} frecce questo mese
-                {data.since ? ` · ultimo tiro ${data.since.n} ${data.since.unit === "h" ? (data.since.n === 1 ? "ora" : "ore") : data.since.n === 1 ? "giorno" : "giorni"} fa` : ""}
-              </p>
-            </div>
-            {data.streak > 1 ? <p className="shrink-0 rounded-full bg-[var(--accent-soft,rgba(255,210,122,0.18))] px-2.5 py-1 text-[0.7rem] font-semibold">{data.streak} giorni di fila</p> : null}
-          </div>
-          <HomeGame look={avatar.shown}>
-            <div data-ui className="absolute left-3 top-[5.6rem] grid gap-2" onPointerDown={(e) => e.stopPropagation()}>
+          <HomeGame
+            look={avatar.shown}
+            info={
+              <div className="grid justify-items-start gap-0.5">
+                <p className="text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/80">{new Date().toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" })}</p>
+                <h1 className="font-display text-[2rem] leading-none tracking-tight">Oggi</h1>
+                <p className="max-w-[13rem] text-[0.7rem] leading-snug text-white/90">
+                  {data.month.sessions} uscite e {num(data.month.arrows)} frecce questo mese
+                  {data.since ? ` · ultimo tiro ${data.since.n} ${data.since.unit === "h" ? (data.since.n === 1 ? "ora" : "ore") : data.since.n === 1 ? "giorno" : "giorni"} fa` : ""}
+                </p>
+                {data.streak > 1 ? <p className="mt-1 inline-flex rounded-full bg-black/35 px-2.5 py-0.5 text-[0.66rem] font-semibold backdrop-blur">{data.streak} giorni di fila</p> : null}
+              </div>
+            }
+          >
+            <div data-ui className="absolute left-3 top-[8.2rem] grid justify-items-start gap-2" onPointerDown={(e) => e.stopPropagation()}>
               <SkyPicker />
-              <Link to="/avatar" aria-label="Personalizza l'arciere" className="grid h-10 w-10 place-items-center rounded-full bg-black/45 text-white backdrop-blur">
+              <Link to="/avatar" aria-label="Personalizza l'arciere e l'ambientazione" className="grid h-10 w-10 place-items-center rounded-full bg-black/45 text-white backdrop-blur">
                 <Glyph name="palette" size={18} />
               </Link>
             </div>
@@ -120,11 +122,6 @@ function Home() {
           <JourneyCard totalArrows={data.all.arrows} weekArrows={data.weekArrows} streak={data.streak} />
         </Rise>
       ) : null}
-      {prefs.home.tips ? (
-        <Rise i={2}>
-          <TipCard />
-        </Rise>
-      ) : null}
       {prefs.home.numbers ? <div className="grid grid-cols-3 gap-2">
         <Rise i={2}><Link to="/statistiche" className="block"><Meter label="Media mese" value={data.month.arrows ? data.month.avg : null} digits={2} color="#e0b15a" /></Link></Rise>
         <Rise i={3}><Link to="/statistiche" className="block"><Meter label="Precisione" value={data.all.precisePct} digits={1} suffix="%" color="#3d8f5f" /></Link></Rise>
@@ -139,7 +136,12 @@ function Home() {
             <p className="aa-section-title">Ultime frecce</p>
             <Link to="/attrezzatura" className="text-[0.68rem] font-semibold text-muted underline-offset-2 hover:underline"><span className="inline-flex items-center gap-1"><Glyph name="palette" size={13} />Personalizza frecce</span></Link>
           </div>
-          {data.lastShots.length ? <LastArrows shots={data.lastShots} /> : <p className="text-xs text-muted">Le frecce che tiri compaiono qui.</p>}
+          {data.lastShots.length ? (
+            <>
+              <LastSummary shots={data.lastShots} />
+              <LastArrows shots={data.lastShots} />
+            </>
+          ) : <p className="text-xs text-muted">Le frecce che tiri compaiono qui.</p>}
         </Card>
       </Rise> : null}
       <Rise i={9}>
@@ -280,6 +282,35 @@ function specsOf(raw: string): Record<string, string> {
 }
 
 /** Le ultime frecce, disegnate come sono davvero (colori, penne, punta) con numero e distanza. */
+/** Riassunto delle ultime frecce: media, X e colpi nel giallo. */
+function LastSummary({ shots }: { shots: LastShot[] }) {
+  const pts = shots.map((s) => (s.miss ? 0 : s.isX ? (s.max && s.max > 0 ? s.max : 10) : s.score));
+  const avg = pts.reduce((a, b) => a + b, 0) / Math.max(1, pts.length);
+  const xs = shots.filter((s) => s.isX).length;
+  const gold = shots.filter((s) => !s.miss && (s.isX ? 10 : (s.score / (s.max && s.max > 0 ? s.max : 10)) * 10) >= 9).length;
+  return (
+    <div className="mb-2 grid grid-cols-3 gap-1.5 text-center">
+      {[["Media", avg.toFixed(2).replace(".", ","), "#e0b15a"], ["Nel giallo", `${gold}/${shots.length}`, "#f2c94c"], ["X", String(xs), "#7cf0a8"]].map(([k, v, c]) => (
+        <div key={k} className="rounded-xl bg-white/[0.04] py-1.5">
+          <p className="text-[0.58rem] font-semibold uppercase tracking-[0.12em] text-muted">{k}</p>
+          <p className="font-display text-lg tabular-nums" style={{ color: c }}>{v}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Colore dell'anello del colpo, come sul bersaglio: oro, rosso, blu, nero, bianco; grigio se fuori. */
+function ringOf(score: number, max: number) {
+  const r = max > 0 ? (score / max) * 10 : 0;
+  if (r <= 0) return { bg: "linear-gradient(145deg,#4a4f57,#2a2e33)", fg: "#e9e4d8" };
+  if (r >= 9) return { bg: "radial-gradient(circle at 35% 30%,#ffe08a,#e2a925)", fg: "#2a1d0c" };
+  if (r >= 7) return { bg: "radial-gradient(circle at 35% 30%,#ff7a6e,#c4302a)", fg: "#fff" };
+  if (r >= 5) return { bg: "radial-gradient(circle at 35% 30%,#6fb2ff,#1f62b0)", fg: "#fff" };
+  if (r >= 3) return { bg: "radial-gradient(circle at 35% 30%,#4a4f57,#14171a)", fg: "#fff" };
+  return { bg: "radial-gradient(circle at 35% 30%,#ffffff,#d9d4c8)", fg: "#14171a" };
+}
+
 function LastArrows({ shots }: { shots: LastShot[] }) {
   const navigate = useNavigate();
   const hold = useRef<number | null>(null);
@@ -333,7 +364,6 @@ function LastArrows({ shots }: { shots: LastShot[] }) {
         const ratio = shot.miss ? 0 : (shot.isX ? max : shot.score) / max;
         // alone: verde se il colpo è buono, rosso se è debole o fuori, nessuno a metà strada
         const mood = shot.miss || ratio < 0.55 ? "neg" : ratio >= 0.8 ? "pos" : "mid";
-        const tone = mood === "neg" ? "bg-rose-500/20 text-rose-200" : mood === "pos" ? "bg-emerald-400/20 text-emerald-200" : "bg-white/8 text-fg";
         const delay = 150 + i * 220;
         // sfalsate come frecce piantate a profondità diverse
         const stagger = [0, 9, 4, 13, 2, 11, 6, 15][i % 8];
@@ -351,7 +381,15 @@ function LastArrows({ shots }: { shots: LastShot[] }) {
           >
             <div className="aa-shot-track relative h-10 min-w-0 flex-1 overflow-hidden" style={{ paddingLeft: `${stagger}%` }}>
               <span aria-hidden className="aa-shot-streak" style={{ left: `${stagger}%` }} />
-              <span aria-hidden className="aa-shot-butt" />
+              <svg aria-hidden viewBox="0 0 16 40" className="aa-shot-butt" preserveAspectRatio="none">
+                {/* il bersaglio visto di taglio: anelli verticali, la punta entra nel colore del colpo */}
+                <ellipse cx="8" cy="20" rx="7.5" ry="19.5" fill="#f4f1ea" />
+                <ellipse cx="8" cy="20" rx="6" ry="15.6" fill="#1d2126" />
+                <ellipse cx="8" cy="20" rx="4.5" ry="11.7" fill="#2f7fd1" />
+                <ellipse cx="8" cy="20" rx="3" ry="7.8" fill="#d63a2f" />
+                <ellipse cx="8" cy="20" rx="1.5" ry="3.9" fill="#f2c94c" />
+                <ellipse cx="11" cy="20" rx="5" ry="19.5" fill="#000" opacity="0.25" />
+              </svg>
               <div className="aa-launch absolute inset-y-0 right-3" style={{ left: `${stagger}%` }}>
                 <ArrowArt
                   material={sp.material || "carbonio"}
@@ -369,10 +407,14 @@ function LastArrows({ shots }: { shots: LastShot[] }) {
                 />
               </div>
             </div>
-            <span className="aa-shot-label grid w-11 shrink-0 justify-items-end gap-0.5 text-right text-[0.62rem] font-semibold leading-none">
-              <span className={`rounded px-1.5 py-0.5 font-display text-sm tabular-nums ${tone}`}>{shot.miss ? "M" : shot.isX ? "X" : shot.score}</span>
-              <span className="text-white/85">n.{num}</span>
-              <span className="text-muted">{shot.distance ? `${shot.distance} m` : "—"}</span>
+            <span className="aa-shot-label flex w-[4.4rem] shrink-0 items-center justify-end gap-1.5 text-right leading-none">
+              <span className="grid gap-0.5 text-[0.6rem] font-semibold">
+                <span className="text-white/85">n.{num}</span>
+                <span className="text-muted">{shot.distance ? `${shot.distance} m` : "—"}</span>
+              </span>
+              <span className="aa-shot-badge grid h-8 w-8 place-items-center rounded-full font-display text-sm tabular-nums" style={{ background: ringOf(shot.miss ? 0 : shot.isX ? max : shot.score, max).bg, color: ringOf(shot.miss ? 0 : shot.isX ? max : shot.score, max).fg }}>
+                {shot.miss ? "M" : shot.isX ? "X" : shot.score}
+              </span>
             </span>
           </li>
         );

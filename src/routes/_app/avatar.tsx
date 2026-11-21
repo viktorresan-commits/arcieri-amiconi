@@ -7,6 +7,9 @@ import { AvatarPhotoButton } from "@/components/avatar-photo";
 import { BOW_TYPES } from "@/components/gear-icons";
 import { Button, Card, Chips, PageHead, Segmented } from "@/components/kit";
 import { Glyph } from "@/components/icons";
+import { SceneThumb } from "@/components/scene-2d";
+import { FACE_BGS, SCENES } from "@/lib/arcieri/scenes";
+import { useSky } from "@/lib/arcieri/sky3d";
 import {
   AVATAR_DEFAULT,
   AVATAR_PRESETS,
@@ -24,7 +27,7 @@ export const Route = createFileRoute("/_app/avatar")({
   component: Page,
 });
 
-type Tab = "corpo" | "viso" | "capelli" | "abiti" | "attrezzatura" | "posa";
+type Tab = "corpo" | "viso" | "capelli" | "abiti" | "attrezzatura" | "posa" | "scena";
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -59,6 +62,7 @@ function Page() {
   const { look, setLook, shown, main } = useAvatar();
   const [tab, setTab] = useState<Tab>("corpo");
   const [in3d, setIn3d] = useState(false);
+  const { sky } = useSky();
   const set = <K extends keyof AvatarLook>(k: K, v: AvatarLook[K]) => setLook((l) => ({ ...l, [k]: v }));
   const opts = <T extends string>(list: readonly T[]) => list.map((id) => ({ id, label: id.charAt(0).toUpperCase() + id.slice(1) }));
 
@@ -98,6 +102,7 @@ function Page() {
           { id: "abiti", label: "Abiti" },
           { id: "attrezzatura", label: "Arco" },
           { id: "posa", label: "Posa" },
+          { id: "scena", label: "Sfondo" },
         ]}
       />
       <Card className="grid gap-3">
@@ -123,15 +128,22 @@ function Page() {
                 <Toggle on={look.freckles} label="Lentiggini" onChange={(v) => set("freckles", v)} />
                 <Toggle on={look.glasses} label="Occhiali" onChange={(v) => set("glasses", v)} />
                 <Toggle on={look.earring} label="Orecchino" onChange={(v) => set("earring", v)} />
+                <Toggle on={look.mask} label="Maschera sul viso" onChange={(v) => set("mask", v)} />
+                <Toggle on={look.warpaint} label="Pittura" onChange={(v) => set("warpaint", v)} />
+                <Toggle on={look.scar} label="Cicatrice" onChange={(v) => set("scar", v)} />
               </div>
             </Row>
           </>
         ) : null}
         {tab === "capelli" ? (
           <>
-            <Row label="Taglio"><Chips value={look.hair} onChange={(v) => set("hair", v)} options={opts(["corti", "rasati", "mossi", "ricci", "lunghi", "coda", "chignon", "treccia", "codini", "caschetto", "cresta", "calvo"] as const)} /></Row>
+            <Row label="Taglio"><Chips value={look.hair} onChange={(v) => set("hair", v)} options={[
+              { id: "corti", label: "Corti" }, { id: "spettinati", label: "Spettinati" }, { id: "rasati", label: "Rasati" }, { id: "frangia", label: "Con frangia" }, { id: "mossi", label: "Mossi" }, { id: "ricci", label: "Ricci" }, { id: "afro", label: "Afro" },
+              { id: "lunghi", label: "Lunghi" }, { id: "lunghi-mossi", label: "Lunghi mossi" }, { id: "coda", label: "Coda" }, { id: "raccolti", label: "Raccolti in alto" }, { id: "chignon", label: "Chignon" },
+              { id: "treccia", label: "Treccia" }, { id: "trecce", label: "Due trecce" }, { id: "codini", label: "Codini" }, { id: "caschetto", label: "Caschetto" }, { id: "cresta", label: "Cresta" }, { id: "calvo", label: "Calvo" },
+            ] as { id: AvatarLook["hair"]; label: string }[]} /></Row>
             <Row label="Colore (anche della barba)"><Colors value={look.hairColor} colors={HAIR_COLORS} onPick={(c) => set("hairColor", c)} /></Row>
-            <Row label="In testa"><Chips value={look.hat} onChange={(v) => set("hat", v)} options={[{ id: "nessuno", label: "Niente" }, { id: "berretto", label: "Berretto" }, { id: "fascia", label: "Fascia" }, { id: "piuma", label: "Cappello con piuma" }, { id: "cappuccio", label: "Cappuccio" }, { id: "elmo", label: "Elmo" }]} /></Row>
+            <Row label="In testa"><Chips value={look.hat} onChange={(v) => set("hat", v)} options={[{ id: "nessuno", label: "Niente" }, { id: "berretto", label: "Berretto" }, { id: "fascia", label: "Fascia" }, { id: "piuma", label: "Cappello con piuma" }, { id: "cappuccio", label: "Cappuccio" }, { id: "robin", label: "Cappello a punta" }, { id: "tesa", label: "Cappello a tesa larga" }, { id: "bandana", label: "Bandana" }, { id: "cerchietto", label: "Diadema" }, { id: "elmo", label: "Elmo" }]} /></Row>
             {look.hat !== "nessuno" || look.hair === "coda" || look.hair === "treccia" ? <Row label="Colore del copricapo / elastico"><Colors value={look.hatColor} colors={CLOTH_COLORS} onPick={(c) => set("hatColor", c)} /></Row> : null}
           </>
         ) : null}
@@ -142,10 +154,11 @@ function Page() {
             </Row>
             <Row label="Sopra"><Chips value={look.top} onChange={(v) => set("top", v)} options={TOPS[look.style]} /></Row>
             <Row label="Colore"><Colors value={look.shirt} colors={CLOTH_COLORS} onPick={(c) => set("shirt", c)} /></Row>
-            <Row label="Rifiniture (colletto, bordi, maglia sotto)"><Colors value={look.trim} colors={CLOTH_COLORS} onPick={(c) => set("trim", c)} /></Row>
-            <Row label="Sotto"><Chips value={look.bottom} onChange={(v) => set("bottom", v)} options={[{ id: "pantaloni", label: "Pantaloni" }, { id: "jeans", label: "Jeans" }, { id: "pantaloncini", label: "Pantaloncini" }, { id: "calzamaglia", label: "Calzamaglia" }, { id: "brache", label: "Brache" }]} /></Row>
-            <Row label="Colore"><Colors value={look.pants} colors={["#2b3440", "#3a2a1e", "#1f3a5f", "#2a4a7a", "#4b4b4b", "#5b4a2e", "#e9e4d8", "#4b6b2e"]} onPick={(c) => set("pants", c)} /></Row>
-            <Row label="Ai piedi"><Chips value={look.footwear} onChange={(v) => set("footwear", v)} options={[{ id: "sportive", label: "Scarpe sportive" }, { id: "stivaletti", label: "Stivaletti" }, { id: "stivali", label: "Stivali" }, { id: "stivali-risvolto", label: "Stivali con risvolto" }, { id: "sandali", label: "Sandali" }]} /></Row>
+            <Row label="Rifiniture (colletto, bordi, alamari)"><Colors value={look.trim} colors={CLOTH_COLORS} onPick={(c) => set("trim", c)} /></Row>
+            <Row label="Maniche e camicia sotto"><Colors value={look.sleeves} colors={["", ...CLOTH_COLORS]} onPick={(c) => set("sleeves", c)} /></Row>
+            <Row label="Sotto"><Chips value={look.bottom} onChange={(v) => set("bottom", v)} options={[{ id: "pantaloni", label: "Pantaloni" }, { id: "jeans", label: "Jeans" }, { id: "pantaloncini", label: "Pantaloncini" }, { id: "calzamaglia", label: "Calzamaglia" }, { id: "brache", label: "Brache" }, { id: "larghi", label: "Pantaloni larghi" }]} /></Row>
+            <Row label="Colore"><Colors value={look.pants} colors={["#2b3440", "#3a2a1e", "#1f3a5f", "#2a4a7a", "#4b4b4b", "#5b4a2e", "#e9e4d8", "#4b6b2e", "#3f4a2e", "#6b4a2e", "#1b1c1f", "#5a3a22"]} onPick={(c) => set("pants", c)} /></Row>
+            <Row label="Ai piedi"><Chips value={look.footwear} onChange={(v) => set("footwear", v)} options={[{ id: "sportive", label: "Scarpe sportive" }, { id: "stivaletti", label: "Stivaletti" }, { id: "stivali", label: "Stivali" }, { id: "stivali-risvolto", label: "Stivali con risvolto" }, { id: "stivali-alti", label: "Stivali alti" }, { id: "sandali", label: "Sandali" }]} /></Row>
             <Row label="Cintura"><Chips value={look.belt} onChange={(v) => set("belt", v)} options={[{ id: "sottile", label: "Sottile" }, { id: "larga", label: "Larga con fibbia" }, { id: "nessuna", label: "Nessuna" }]} /></Row>
             {look.belt !== "nessuna" ? <Row label="Colore della cintura"><Colors value={look.beltColor} colors={["#5b3a1e", "#4a2c16", "#14181c", "#8a2f2f", "#7a4a26", "#c9a46a"]} onPick={(c) => set("beltColor", c)} /></Row> : null}
             <Row label="Bracciali di cuoio"><Colors value={look.bracers} colors={["", "#6b4224", "#4a2c16", "#14181c", "#8a2f2f", "#c9a46a"]} onPick={(c) => set("bracers", c)} /></Row>
@@ -157,9 +170,19 @@ function Page() {
                 <Toggle on={look.necklace} label="Collana" onChange={(v) => set("necklace", v)} />
                 <Toggle on={look.pouch} label="Borsello" onChange={(v) => set("pouch", v)} />
                 <Toggle on={look.gloves} label="Guanti" onChange={(v) => set("gloves", v)} />
+                <Toggle on={look.cowl} label="Scialle a cappuccio" onChange={(v) => set("cowl", v)} />
+                <Toggle on={look.fur} label="Pelliccia sulle spalle" onChange={(v) => set("fur", v)} />
+                <Toggle on={look.sash} label="Fusciacca" onChange={(v) => set("sash", v)} />
+                <Toggle on={look.straps} label="Cinghie incrociate" onChange={(v) => set("straps", v)} />
+                <Toggle on={look.wraps} label="Fasce alle gambe" onChange={(v) => set("wraps", v)} />
               </div>
             </Row>
+            {look.cape ? <Row label="Mantello"><Chips value={look.capeStyle} onChange={(v) => set("capeStyle", v)} options={[{ id: "liscio", label: "Lungo" }, { id: "frastagliato", label: "Frastagliato" }, { id: "corto", label: "Corto" }]} /></Row> : null}
             {look.cape ? <Row label="Colore del mantello"><Colors value={look.capeColor} colors={CLOTH_COLORS} onPick={(c) => set("capeColor", c)} /></Row> : null}
+            {look.cowl || look.mask ? <Row label="Colore di scialle e maschera"><Colors value={look.cowlColor} colors={CLOTH_COLORS} onPick={(c) => set("cowlColor", c)} /></Row> : null}
+            {look.fur ? <Row label="Colore della pelliccia"><Colors value={look.furColor} colors={["#6b5a48", "#3a2a1e", "#e9e4d8", "#8a7a6a", "#1d1d1f", "#b88a4a"]} onPick={(c) => set("furColor", c)} /></Row> : null}
+            {look.sash ? <Row label="Colore della fusciacca"><Colors value={look.sashColor} colors={CLOTH_COLORS} onPick={(c) => set("sashColor", c)} /></Row> : null}
+            {look.wraps ? <Row label="Colore delle fasce"><Colors value={look.wrapsColor} colors={["#6b5a48", "#7a6a52", "#d8cdb6", "#3a2a1e", "#55585a", "#8a2f2f"]} onPick={(c) => set("wrapsColor", c)} /></Row> : null}
             {look.scarf ? <Row label="Colore della sciarpa"><Colors value={look.scarfColor} colors={CLOTH_COLORS} onPick={(c) => set("scarfColor", c)} /></Row> : null}
             <Row label="Faretra"><Chips value={look.quiverPlace} onChange={(v) => set("quiverPlace", v)} options={[{ id: "fianco", label: "Al fianco" }, { id: "schiena", label: "Sulla schiena" }]} /></Row>
             <Row label="Colore della faretra"><Colors value={look.quiver} colors={["#7a4a26", "#14181c", "#2f6f62", "#8a2f2f", "#1f3a5f", "#c9a46a"]} onPick={(c) => set("quiver", c)} /></Row>
@@ -180,6 +203,30 @@ function Page() {
             <Row label="Frecce per volée">
               <Chips value={look.volley} onChange={(v) => set("volley", v)} options={["1", "3", "6"].map((x) => ({ id: x, label: x }))} />
             </Row>
+          </>
+        ) : null}
+        {tab === "scena" ? (
+          <>
+            <Row label="Ambientazione (Home e profilo)">
+              <div className="grid grid-cols-3 gap-2">
+                {SCENES.map((sc) => (
+                  <button key={sc.id} type="button" aria-pressed={look.scene === sc.id} onClick={() => set("scene", sc.id)} className={`grid gap-1 rounded-2xl p-1 text-left text-[0.7rem] font-semibold ${look.scene === sc.id ? "bg-[#7cf0a8]/15 ring-2 ring-[#7cf0a8]" : "bg-white/[0.04]"}`}>
+                    <SceneThumb scene={sc.id} sky={sky} className="h-14 w-full" />
+                    <span className="truncate px-1">{sc.label}</span>
+                  </button>
+                ))}
+              </div>
+            </Row>
+            <Row label="Sfondo della foto profilo">
+              <Chips value={look.faceBgStyle} onChange={(v) => set("faceBgStyle", v)} options={[{ id: "sfumato", label: "Sfumato" }, { id: "tinta", label: "Tinta unita" }, { id: "bersaglio", label: "Bersaglio" }, { id: "scena", label: "Come l'ambientazione" }]} />
+            </Row>
+            {look.faceBgStyle !== "scena" ? (
+              <Row label="Colore dello sfondo (— = come la veste)"><Colors value={look.faceBg} colors={FACE_BGS} onPick={(c) => set("faceBg", c)} /></Row>
+            ) : null}
+            <div className="flex items-center gap-3">
+              <AvatarFace look={shown} className="h-20 w-20 rounded-full ring-2 ring-white/15" />
+              <p className="text-xs text-muted">Così appari in squadra, nelle gare e nelle classifiche (se usi il volto come foto).</p>
+            </div>
           </>
         ) : null}
         {tab === "attrezzatura" ? (
