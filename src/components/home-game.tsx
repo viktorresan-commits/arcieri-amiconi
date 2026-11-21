@@ -43,7 +43,9 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
   const { sky } = useSky();
   const stage = useRef<HTMLDivElement>(null);
   const [dist, setDist] = useState<Dist>(() => randomDist());
-  const [moving, setMoving] = useLocalState<boolean>("aa-game-moving", false);
+  // il bersaglio si muove sempre da solo: ampiezza e velocità cambiano a ogni volée
+  const [motion, setMotion] = useState(() => ({ amp: 18 + Math.random() * 18, speed: 0.45 + Math.random() * 0.5, phase: Math.random() * 6 }));
+  const moving = true;
   const [best, setBest] = useLocalState<number>("aa-game-best-all", 0);
   const [hits, setHits] = useState<Hit[]>([]);
   const [demoHits, setDemoHits] = useState<Hit[]>([]);
@@ -64,9 +66,9 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
   const total = hits.reduce((a, h) => a + h.score, 0);
 
   // posizione del bersaglio: fermo, o su un carrello che va avanti e indietro
-  const amp = moving ? 30 : 0;
-  const speed = 0.55 + (dist - 18) / 120;
-  const targetAt = (time: number) => ({ x: BASE.x + Math.sin(time * speed) * amp, y: BASE.y });
+  const amp = motion.amp;
+  const speed = motion.speed + (dist - 18) / 160;
+  const targetAt = (time: number) => ({ x: BASE.x + Math.sin(time * speed + motion.phase) * amp, y: BASE.y });
   const T = targetAt(t);
 
   // orologio: fluido mentre si tende o la freccia vola, più lento a riposo (risparmia batteria)
@@ -223,6 +225,7 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
     setPop(null);
     setWind(Math.round((Math.random() * 6 - 3) * 10) / 10);
     setDist((d) => randomDist(d));
+    setMotion({ amp: 18 + Math.random() * 18, speed: 0.45 + Math.random() * 0.5, phase: Math.random() * 6 });
   };
   const stop = () => {
     setPlaying(false);
@@ -363,13 +366,6 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
       </div>
       {children}
 
-      {/* comandi in basso */}
-      <div data-ui className="absolute inset-x-3 bottom-3 flex items-center justify-end gap-1.5" onPointerDown={(e) => e.stopPropagation()}>
-        <button type="button" onClick={() => { setMoving(!moving); again(); }} aria-pressed={moving} className={`rounded-full px-2.5 py-1.5 text-[0.7rem] font-bold backdrop-blur ${moving ? "bg-[#7cf0a8] text-[#0b120e]" : "bg-black/45 text-white"}`}>
-          {moving ? "In movimento" : "Fermo"}
-        </button>
-      </div>
-
       {!playing ? (
         <div className="pointer-events-none absolute inset-x-0 top-[70%] flex justify-center pl-[30%]">
           <p className="aa-game-hint rounded-2xl bg-black/45 px-4 py-2 text-center text-sm font-semibold text-white backdrop-blur">
@@ -389,7 +385,7 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
 
       {done ? (
         <div data-ui className="absolute inset-x-4 top-[28%] rounded-3xl bg-[#101814]/80 p-4 text-center text-white backdrop-blur-md" onPointerDown={(e) => e.stopPropagation()}>
-          <p className="text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-white/70">Volée finita{moving ? " · bersaglio mobile" : ""}</p>
+          <p className="text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-white/70">Volée finita</p>
           <p className="aa-game-score mt-1 text-5xl font-black">{total}<span className="text-xl text-white/60">/30</span></p>
           <p className="mt-1 text-sm text-white/85">
             {hits.map((h) => (h.score === 0 ? "M" : h.x10 ? "X" : h.score)).join(" · ")}
@@ -397,9 +393,8 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
           </p>
           <div className="mt-3 grid grid-cols-2 gap-2">
             <button type="button" onClick={again} className="rounded-full bg-[#ffd27a] px-4 py-2.5 text-sm font-bold text-[#2a1d0c]">Altra volée</button>
-            <button type="button" onClick={() => { setMoving(!moving); again(); }} className="rounded-full bg-white/15 px-4 py-2.5 text-sm font-bold">{moving ? "Bersaglio fermo" : "Bersaglio mobile"}</button>
+            <button type="button" onClick={stop} className="rounded-full bg-white/15 px-4 py-2.5 text-sm font-bold">Guarda tirare</button>
           </div>
-          <button type="button" onClick={stop} className="mt-2 text-xs text-white/70 underline">Torna a guardare</button>
         </div>
       ) : null}
     </div>

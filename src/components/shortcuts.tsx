@@ -1,6 +1,6 @@
 import { useArcherSetup } from "@/lib/arcieri/setup";
 import { CURIOSITA, randomCuriosita } from "@/lib/arcieri/curiosita";
-import { useState, type CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "@tanstack/react-router";
 import { SHORTCUTS, STATIONS, nextShortcut, shortcutById, usePinned, type Shortcut } from "@/lib/arcieri/shortcuts";
@@ -206,28 +206,7 @@ export function PathMap({ onPick, current, onPersonalize }: { onPick?: () => voi
               </div>
             </section>
           ) : null}
-          {STATIONS.map((st, k) => {
-            const items = SHORTCUTS.filter((s) => s.group === st.id);
-            return (
-              <section key={st.id} className="aa-menu-row grid gap-2.5 rounded-3xl border border-white/[0.07] p-3" style={{ animationDelay: `${k * 45}ms`, background: `linear-gradient(160deg, ${st.color}26, transparent 55%)` }}>
-                <div className="flex items-center gap-2.5">
-                  <AppIcon name={st.icon} color={st.color} size={34} />
-                  <div className="min-w-0">
-                    <p className="font-display text-lg leading-none">{st.title}</p>
-                    <p className="truncate text-[0.7rem] text-muted">{st.sub}</p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-4 gap-x-1 gap-y-3">
-                  {items.map((s) => (
-                    <Link key={s.id} to={s.to as "/"} search={(s.search ?? {}) as never} onClick={go} aria-current={isHere(s) ? "page" : undefined} className={cx("aa-short flex min-w-0 flex-col items-center gap-1 text-center", isHere(s) && "is-here")}>
-                      <AppIcon name={s.icon} color={s.color} size={46} className="aa-short-icon" />
-                      <span className="w-full truncate text-[0.66rem] font-semibold leading-tight">{s.label}</span>
-                    </Link>
-                  ))}
-                </div>
-              </section>
-            );
-          })}
+          <CategoryCarousel current={current} onGo={go} isHere={isHere} />
         </>
       )}
       {onPersonalize ? (
@@ -235,6 +214,105 @@ export function PathMap({ onPick, current, onPersonalize }: { onPick?: () => voi
           <Glyph name="palette" size={15} /> Personalizza colori, icone e Home
         </button>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * Sezioni del Menu in un carosello infinito: si scorre a destra e a sinistra senza fine, una
+ * categoria per pagina con tutte le sue voci; in alto le linguette per saltare a una categoria.
+ */
+function CategoryCarousel({ current, onGo, isHere }: { current?: string; onGo: () => void; isHere: (s: Shortcut) => boolean }) {
+  const COPIES = 5;
+  const n = STATIONS.length;
+  const mid = Math.floor(COPIES / 2) * n;
+  const here = current ? SHORTCUTS.filter((s) => s.to !== "/" && current.startsWith(s.to)).sort((x, y) => y.to.length - x.to.length)[0] : undefined;
+  const startAt = Math.max(0, STATIONS.findIndex((st) => st.id === (here?.group ?? "allena")));
+  const ref = useRef<HTMLDivElement>(null);
+  const tabs = useRef<HTMLDivElement>(null);
+  const timer = useRef<number | null>(null);
+  const [active, setActive] = useState(startAt);
+  const pageW = () => (ref.current?.firstElementChild as HTMLElement | null)?.offsetWidth ?? 1;
+  const gap = 12;
+  const leftOf = (i: number) => {
+    const el = ref.current;
+    const page = el?.children[i] as HTMLElement | undefined;
+    if (!el || !page) return 0;
+    return page.offsetLeft - (el.clientWidth - page.offsetWidth) / 2;
+  };
+  const jump = (i: number, smooth: boolean) => ref.current?.scrollTo({ left: leftOf(i), behavior: smooth ? "smooth" : "auto" });
+  useLayoutEffect(() => {
+    jump(mid + startAt, false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    const tab = tabs.current?.children[active] as HTMLElement | undefined;
+    tab?.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
+  }, [active]);
+  const onScroll = () => {
+    const el = ref.current;
+    if (!el) return;
+    const i = Math.round(el.scrollLeft / (pageW() + gap));
+    const st = ((i % n) + n) % n;
+    if (st !== active) setActive(st);
+    if (timer.current) window.clearTimeout(timer.current);
+    // fermo: se sono vicino ai bordi della lista ripetuta, torno al centro senza scatti visibili
+    timer.current = window.setTimeout(() => {
+      if (i < n || i >= (COPIES - 1) * n) jump(mid + st, false);
+    }, 140);
+  };
+  const pages = Array.from({ length: COPIES * n }, (_, i) => STATIONS[i % n]);
+  return (
+    <div className="grid gap-3">
+      <div ref={tabs} className="-mx-4 flex gap-1.5 overflow-x-auto px-4 [scrollbar-width:none]">
+        {STATIONS.map((st, k) => (
+          <button
+            key={st.id}
+            type="button"
+            onClick={() => {
+              const el = ref.current;
+              if (!el) return;
+              const cur = Math.round(el.scrollLeft / (pageW() + gap));
+              // vado alla copia più vicina della categoria scelta
+              const base = cur - (((cur % n) + n) % n);
+              const cand = [base + k - n, base + k, base + k + n].sort((x, y) => Math.abs(x - cur) - Math.abs(y - cur))[0];
+              jump(Math.max(0, Math.min(COPIES * n - 1, cand)), true);
+            }}
+            className={cx("flex shrink-0 items-center gap-1.5 rounded-full border py-1 pl-1 pr-3 text-xs font-semibold transition-colors", k === active ? "border-transparent text-[#0b120e]" : "border-white/10 bg-white/[0.04] text-white/80")}
+            style={k === active ? { background: st.color } : undefined}
+          >
+            <AppIcon name={st.icon} color={st.color} size={26} />
+            {st.title}
+          </button>
+        ))}
+      </div>
+      <div ref={ref} onScroll={onScroll} className="relative -mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-[7%] pb-2 [scrollbar-width:none]" style={{ overscrollBehaviorX: "contain" }}>
+        {pages.map((st, i) => {
+          const items = SHORTCUTS.filter((s) => s.group === st.id);
+          return (
+            <section key={i} className="grid w-[86%] shrink-0 snap-center content-start gap-3 rounded-3xl border border-white/[0.08] p-3.5" style={{ background: `linear-gradient(165deg, ${st.color}33, ${st.color}0d 45%, transparent 75%)` }}>
+              <div className="flex items-center gap-3">
+                <AppIcon name={st.icon} color={st.color} size={44} />
+                <div className="min-w-0">
+                  <p className="font-display text-2xl leading-none">{st.title}</p>
+                  <p className="truncate text-[0.72rem] text-muted">{st.sub}</p>
+                </div>
+                <span className="ml-auto text-[0.66rem] font-semibold text-muted">{items.length} voci</span>
+              </div>
+              <div className="grid grid-cols-3 gap-x-1.5 gap-y-3.5">
+                {items.map((s) => (
+                  <Link key={s.id} to={s.to as "/"} search={(s.search ?? {}) as never} onClick={onGo} aria-current={isHere(s) ? "page" : undefined} className={cx("aa-short flex min-w-0 flex-col items-center gap-1 text-center", isHere(s) && "is-here")}>
+                    <AppIcon name={s.icon} color={s.color} size={52} className="aa-short-icon" />
+                    <span className="w-full truncate text-[0.7rem] font-semibold leading-tight">{s.label}</span>
+                    <span className="line-clamp-2 w-full text-[0.58rem] leading-tight text-muted">{s.hint}</span>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          );
+        })}
+      </div>
+      <p className="text-center text-[0.66rem] text-muted">Scorri a destra o a sinistra per cambiare sezione</p>
     </div>
   );
 }

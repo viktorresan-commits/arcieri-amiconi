@@ -1117,10 +1117,26 @@ html[data-scenes="no"] .aa-scene { display: none; }
 /* anello del livello attorno al volto */
 .aa-facering { background: conic-gradient(#ffd27a var(--lvl, 0deg), rgb(255 255 255 / 0.14) 0); box-shadow: 0 4px 14px -6px rgb(0 0 0 / 0.7); }
 
-/* ultime frecce: scia sfumata del colore del colpo dietro la freccia */
-.aa-shot-trail { position: absolute; right: calc(100% - 6px); top: 50%; height: 4px; width: 160%; transform: translateY(-50%); border-radius: 999px; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--trail, #fff) 15%, transparent) 35%, var(--trail, #fff)); filter: blur(0.4px); box-shadow: 0 0 10px color-mix(in srgb, var(--trail, #fff) 45%, transparent); opacity: 0.9; }
-.aa-shot-trail::after { content: ""; position: absolute; inset: -5px 0; border-radius: 999px; background: linear-gradient(90deg, transparent 40%, color-mix(in srgb, var(--trail, #fff) 25%, transparent)); filter: blur(4px); }
-.aa-shot-track::before { content: ""; position: absolute; left: 0; right: 14px; top: 50%; border-top: 1px dashed rgb(255 255 255 / 0.07); }
+/* ultime frecce: la scia sfumata del colore del colpo corre sotto la freccia fino al bersaglio */
+.aa-shot-trail { position: absolute; left: 0; right: 14px; top: calc(50% + 7px); height: 4px; transform-origin: left; transform: translateY(-50%); border-radius: 999px; z-index: 0;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--trail, #fff) 35%, transparent) 40%, var(--trail, #fff) 92%, transparent);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--trail, #fff) 40%, transparent); }
+.aa-shot-trail::after { content: ""; position: absolute; inset: -5px 0; border-radius: 999px; background: linear-gradient(90deg, transparent 30%, color-mix(in srgb, var(--trail, #fff) 22%, transparent)); filter: blur(4px); }
+.is-wait .aa-shot-trail { opacity: 0; }
+.is-in .aa-shot-trail { animation: aa-trail 0.9s cubic-bezier(0.18, 0.7, 0.2, 1) both; animation-delay: var(--d); }
+@keyframes aa-trail { from { opacity: 0; transform: translateY(-50%) scaleX(0); } 30% { opacity: 1; } to { opacity: 0.9; transform: translateY(-50%) scaleX(1); } }
+.aa-launch-far { z-index: 1; }
+.aa-shot-butt { z-index: 2; }
+.is-in .aa-launch-far { animation-name: aa-fly-far; }
+@keyframes aa-fly-far {
+  0% { opacity: 0; transform: translate3d(-240%, 0, 0); filter: blur(3px); }
+  12% { opacity: 1; }
+  70% { transform: translate3d(2%, 0, 0); filter: blur(0); }
+  80% { transform: translate3d(0.5%, 0, 0) rotate(-1.4deg); }
+  90% { transform: translate3d(1%, 0, 0) rotate(0.8deg); }
+  100% { opacity: 1; transform: translate3d(0.8%, 0, 0); }
+}
+@media (prefers-reduced-motion: reduce) { .is-in .aa-shot-trail, .is-in .aa-launch-far { animation: none; opacity: 1; } }
 .aa-target-glow { animation: aa-target-glow 2.4s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
 @keyframes aa-target-glow { 0%, 100% { opacity: 0.55; transform: scale(0.96); } 50% { opacity: 1; transform: scale(1.04); } }
 @media (prefers-reduced-motion: reduce) { .aa-target-glow { animation: none; } }

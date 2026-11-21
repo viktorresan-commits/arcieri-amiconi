@@ -277,7 +277,7 @@ export function Shell({ children }: { children: ReactNode }) {
           ) : null}
           {menu ? (
             <div className="aa-sheet fixed inset-0 z-40 overflow-y-auto bg-bg pb-[calc(env(safe-area-inset-bottom)+1.5rem)] md:hidden">
-              <div className="sticky top-0 z-10 flex h-14 items-center justify-between bg-bg/90 px-4 backdrop-blur-md">
+              <div className="aa-appheader sticky top-0 z-10 flex h-14 items-center justify-between bg-bg/90 px-4 backdrop-blur-md">
                 <p className="font-display text-xl">Menu</p>
                 <button type="button" className="grid h-11 w-11 place-items-center rounded-full bg-white/5" onClick={() => setMenu(false)} aria-label="Chiudi">
                   <Glyph name="close" size={20} />
