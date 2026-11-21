@@ -1260,3 +1260,15 @@ html .aa-cat-page .aa-appicon, html[data-icons] .aa-cat-page .aa-appicon { --c: 
 @media (prefers-reduced-motion: reduce) {
   .aa-clouds-far, .aa-clouds-near, .aa-sun-spin, .aa-sun-halo, .aa-sun-glow, .aa-blades-1, .aa-blades-2 { animation: none; }
 }
+
+/* cambio di ambientazione tra una piazzola e l'altra */
+.aa-scene-swap { animation: aa-scene-swap 0.9s ease-out both; }
+@keyframes aa-scene-swap { from { opacity: 0; transform: scale(1.04); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .aa-scene-swap { animation: none; } }
+
+/* nuvole su un nastro largo il doppio: traslazione composta dalla GPU, senza ridisegni */
+.aa-cloud-track { position: absolute; left: 0; top: 0; width: 200%; will-change: transform; }
+.aa-cloud-far { animation: aa-cloud-track 160s linear infinite; }
+.aa-cloud-near { animation: aa-cloud-track 90s linear infinite; }
+@keyframes aa-cloud-track { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(-50%, 0, 0); } }
+@media (prefers-reduced-motion: reduce) { .aa-cloud-far, .aa-cloud-near { animation: none; } }

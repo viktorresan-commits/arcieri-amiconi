@@ -1,5 +1,5 @@
 /** L'arciere della Home: aspetto, abiti, accessori e attrezzatura. Salvato sul telefono e sul profilo. */
-export type HairStyle = "corti" | "rasati" | "mossi" | "ricci" | "lunghi" | "coda" | "chignon" | "treccia" | "codini" | "caschetto" | "cresta" | "calvo" | "spettinati" | "lunghi-mossi" | "raccolti" | "afro" | "trecce" | "frangia";
+export type HairStyle = "corti" | "rasati" | "mossi" | "ricci" | "lunghi" | "coda" | "chignon" | "treccia" | "codini" | "caschetto" | "cresta" | "calvo" | "spettinati" | "lunghi-mossi" | "raccolti" | "afro" | "trecce" | "frangia" | "ciuffo" | "undercut" | "dread" | "vichinga" | "coda-alta";
 export type Pose = "animata" | "riposo" | "incocco" | "mira" | "allungo" | "accompagna" | "vittoria" | "fiero" | "saluto";
 
 export type AvatarLook = {
@@ -9,25 +9,29 @@ export type AvatarLook = {
   face: "ovale" | "tondo" | "squadrato" | "allungato";
   eyes: string;
   brows: "sottili" | "normali" | "folte";
-  nose: "piccolo" | "dritto" | "aquilino" | "largo";
+  nose: "piccolo" | "dritto" | "aquilino" | "largo" | "insu" | "patata";
   expression: "sorriso" | "sereno" | "concentrato" | "deciso";
   freckles: boolean;
   glasses: boolean;
   hair: HairStyle;
   hairColor: string;
-  beard: "nessuna" | "accenno" | "corta" | "piena" | "pizzetto" | "baffi";
-  hat: "nessuno" | "berretto" | "fascia" | "piuma" | "cappuccio" | "elmo" | "bandana" | "robin" | "tesa" | "cerchietto";
+  beard: "nessuna" | "accenno" | "corta" | "piena" | "pizzetto" | "baffi" | "lunga" | "barbetta" | "basette" | "mosca";
+  /** baffi scelti a parte, da unire a qualsiasi barba ("auto" = quelli che vanno con la barba) */
+  stache: "auto" | "nessuno" | "sottili" | "classici" | "folti" | "manubrio" | "ferro";
+  /** colore di barba e baffi ("" = come i capelli) */
+  beardColor: string;
+  hat: "nessuno" | "berretto" | "fascia" | "piuma" | "cappuccio" | "elmo" | "bandana" | "robin" | "tesa" | "cerchietto" | "cuffia" | "alloro";
   hatColor: string;
   /** stile degli abiti: moderno o medievale */
   style: "moderno" | "medievale";
-  top: "maglia" | "felpa" | "polo" | "gilet" | "giacca" | "tunica" | "tunica-lunga" | "farsetto" | "corpetto" | "ranger" | "incrociata" | "cappotto" | "giubba" | "cappotto-lungo";
+  top: "maglia" | "felpa" | "polo" | "gilet" | "giacca" | "canotta" | "camicia" | "divisa" | "tunica" | "tunica-lunga" | "farsetto" | "corpetto" | "ranger" | "incrociata" | "cappotto" | "giubba" | "cappotto-lungo" | "cotta";
   /** maniche e sottoveste di un altro colore ("" = come la veste) */
   sleeves: string;
   shirt: string;
   trim: string;
-  bottom: "pantaloni" | "jeans" | "pantaloncini" | "calzamaglia" | "brache" | "larghi";
+  bottom: "pantaloni" | "jeans" | "pantaloncini" | "calzamaglia" | "brache" | "larghi" | "gonna" | "cargo";
   pants: string;
-  footwear: "sportive" | "stivali" | "stivaletti" | "stivali-risvolto" | "sandali" | "stivali-alti";
+  footwear: "sportive" | "stivali" | "stivaletti" | "stivali-risvolto" | "sandali" | "stivali-alti" | "mocassini" | "scarponi" | "stivali-pelliccia";
   shoes: string;
   cape: boolean;
   capeColor: string;
@@ -99,6 +103,16 @@ export type AvatarLook = {
   topLength: string;
   hatRot: string;
   quiverRot: string;
+  /** altre barre: lunghezza della barba, grandezza del naso, volume dei capelli */
+  beardLength: string;
+  noseSize: string;
+  hairVolume: string;
+  /** accessori in più */
+  amulet: boolean;
+  armband: boolean;
+  watch: boolean;
+  hairFeather: boolean;
+  sunglasses: boolean;
 };
 
 /** legge una regolazione numerica salvata come testo */
@@ -121,6 +135,9 @@ export const TOPS: Record<AvatarLook["style"], { id: AvatarLook["top"]; label: s
     { id: "polo", label: "Polo" },
     { id: "gilet", label: "Gilet tecnico" },
     { id: "giacca", label: "Giacca" },
+    { id: "camicia", label: "Camicia" },
+    { id: "canotta", label: "Canotta" },
+    { id: "divisa", label: "Divisa di società" },
   ],
   medievale: [
     { id: "tunica", label: "Tunica" },
@@ -132,6 +149,7 @@ export const TOPS: Record<AvatarLook["style"], { id: AvatarLook["top"]; label: s
     { id: "giubba", label: "Giubba di cuoio con alamari" },
     { id: "cappotto", label: "Cappotto con cinghie" },
     { id: "cappotto-lungo", label: "Cappotto lungo a spacchi" },
+    { id: "cotta", label: "Cotta di maglia" },
   ],
 };
 
@@ -212,6 +230,16 @@ export const AVATAR_DEFAULT: AvatarLook = {
   topLength: "50",
   hatRot: "0",
   quiverRot: "0",
+  stache: "auto",
+  beardColor: "",
+  beardLength: "50",
+  noseSize: "50",
+  hairVolume: "50",
+  amulet: false,
+  armband: false,
+  watch: false,
+  hairFeather: false,
+  sunglasses: false,
 };
 
 export const AVATAR_KEY = "aa-avatar-v1";
@@ -254,7 +282,7 @@ export function randomLook(base: AvatarLook): AvatarLook {
   const r = () => Math.random();
   const body = pick(["uomo", "donna", "ragazzo", "ragazza"] as const, r());
   const style = r() < 0.65 ? "moderno" : "medievale";
-  const hair = pick(["corti", "rasati", "mossi", "ricci", "lunghi", "coda", "chignon", "treccia", "codini", "caschetto", "cresta", "calvo", "spettinati", "lunghi-mossi", "raccolti", "afro", "trecce", "frangia"] as const, r());
+  const hair = pick(["corti", "rasati", "mossi", "ricci", "lunghi", "coda", "chignon", "treccia", "codini", "caschetto", "cresta", "calvo", "spettinati", "lunghi-mossi", "raccolti", "afro", "trecce", "frangia", "ciuffo", "undercut", "dread", "vichinga", "coda-alta"] as const, r());
   return normalizeLook({
     ...base,
     body,
@@ -263,13 +291,16 @@ export function randomLook(base: AvatarLook): AvatarLook {
     face: pick(["ovale", "tondo", "squadrato", "allungato"] as const, r()),
     eyes: pick(EYE_COLORS, r()),
     brows: pick(["sottili", "normali", "folte"] as const, r()),
-    nose: pick(["piccolo", "dritto", "aquilino", "largo"] as const, r()),
     expression: pick(["sorriso", "sereno", "concentrato", "deciso"] as const, r()),
     freckles: r() < 0.25,
     glasses: r() < 0.15,
     hair: (body === "ragazzo" || body === "ragazza") && hair === "calvo" ? "mossi" : hair,
     hairColor: pick(HAIR_COLORS.slice(0, 10), r()),
-    beard: body === "uomo" ? pick(["nessuna", "accenno", "corta", "piena", "pizzetto", "baffi"] as const, r()) : "nessuna",
+    beard: body === "uomo" ? pick(["nessuna", "accenno", "corta", "piena", "pizzetto", "baffi", "lunga", "barbetta", "basette", "mosca"] as const, r()) : "nessuna",
+    stache: body === "uomo" ? pick(["auto", "auto", "nessuno", "sottili", "classici", "folti", "manubrio", "ferro"] as const, r()) : "nessuno",
+    nose: pick(["piccolo", "dritto", "aquilino", "largo", "insu", "patata"] as const, r()),
+    noseSize: String(Math.round(30 + r() * 40)),
+    hairVolume: String(Math.round(30 + r() * 40)),
     hat: pick(["nessuno", "nessuno", "berretto", "fascia", "piuma", "cappuccio", "bandana", "robin", "tesa", "cerchietto"] as const, r()),
     hatColor: pick(CLOTH_COLORS, r()),
     style,

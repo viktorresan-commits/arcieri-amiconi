@@ -31,6 +31,7 @@ export const SceneBackdrop = memo(function SceneBackdrop({ sky, id = "bk", scene
   const sunY = sky.tod === "pomeriggio" ? 46 : sky.tod === "tramonto" ? 150 : sky.tod === "mattina" ? 110 : 60;
   const desert = sc.id === "deserto" || sc.id === "spiaggia";
   return (
+    <>
     <svg viewBox="0 0 400 300" preserveAspectRatio="xMidYMax slice" className="absolute inset-0 h-full w-full" aria-hidden>
       <defs>
         <linearGradient id={`${id}sky`} x1="0" y1="0" x2="0" y2="1">
@@ -52,13 +53,6 @@ export const SceneBackdrop = memo(function SceneBackdrop({ sky, id = "bk", scene
           <stop offset="0" stopColor="#ffffff" />
           <stop offset="1" stopColor="#b9c3dc" />
         </radialGradient>
-        {[0, 1].map((layer) => (
-          <linearGradient key={layer} id={`${id}c${layer}`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor={night ? "#3a4766" : rain ? "#a3acb6" : sky.tod === "tramonto" ? "#ffe3cf" : "#ffffff"} />
-            <stop offset="0.62" stopColor={night ? "#283452" : rain ? "#7f8994" : sky.tod === "tramonto" ? "#f2a98e" : "#f1f5fa"} />
-            <stop offset="1" stopColor={night ? "#18213a" : rain ? "#5d6670" : sky.tod === "tramonto" ? "#b0687a" : "#c3d1e0"} />
-          </linearGradient>
-        ))}
         <linearGradient id={`${id}mist`} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="#fff" stopOpacity="0" />
           <stop offset="1" stopColor={night ? "#9fb4d8" : "#fff"} stopOpacity={night ? 0.08 : 0.22} />
@@ -90,7 +84,7 @@ export const SceneBackdrop = memo(function SceneBackdrop({ sky, id = "bk", scene
           ))}
         </g>
       ) : null}
-      {!rain ? <rect width="400" height="300" fill={`url(#${id}sun)`} className="aa-sun-glow" /> : null}
+      {!rain ? <rect width="400" height="300" fill={`url(#${id}sun)`} /> : null}
       {!rain ? (
         night ? (
           <g>
@@ -103,7 +97,7 @@ export const SceneBackdrop = memo(function SceneBackdrop({ sky, id = "bk", scene
         ) : (
           <g opacity={cloudy ? 0.65 : 1}>
             {/* corona che gira piano e respira */}
-            <g className="aa-sun-spin" style={{ transformOrigin: `${sunX}px ${sunY}px` }}>
+            <g>
               {Array.from({ length: 16 }, (_, i) => {
                 const a = (i / 16) * Math.PI * 2;
                 const r1 = sky.tod === "tramonto" ? 24 : 19;
@@ -111,7 +105,7 @@ export const SceneBackdrop = memo(function SceneBackdrop({ sky, id = "bk", scene
                 return <path key={i} d={`M${(sunX + Math.cos(a - 0.07) * r1).toFixed(1)} ${(sunY + Math.sin(a - 0.07) * r1).toFixed(1)} L${(sunX + Math.cos(a) * r2).toFixed(1)} ${(sunY + Math.sin(a) * r2).toFixed(1)} L${(sunX + Math.cos(a + 0.07) * r1).toFixed(1)} ${(sunY + Math.sin(a + 0.07) * r1).toFixed(1)} Z`} fill={p.sun} opacity={i % 2 ? 0.35 : 0.22} />;
               })}
             </g>
-            <circle cx={sunX} cy={sunY} r={sky.tod === "tramonto" ? 30 : 24} fill={p.sun} opacity="0.18" className="aa-sun-halo" style={{ transformOrigin: `${sunX}px ${sunY}px` }} />
+            <circle cx={sunX} cy={sunY} r={sky.tod === "tramonto" ? 30 : 24} fill={p.sun} opacity="0.18" />
             <circle cx={sunX} cy={sunY} r={sky.tod === "tramonto" ? 20 : 15} fill={`url(#${id}disc)`} />
           </g>
         )
@@ -123,27 +117,7 @@ export const SceneBackdrop = memo(function SceneBackdrop({ sky, id = "bk", scene
           ))}
         </g>
       ) : null}
-      {/* nuvole su due piani: si ripetono ogni 400 unità, così il giro non ha stacchi */}
-      {[0, 1].map((layer) => {
-        const list = cloudy ? CLOUDS_THICK[layer] : CLOUDS_FEW[layer];
-        const tint = night ? "#2a3550" : rain ? "#8b95a0" : sky.tod === "tramonto" ? "#ffd2b4" : "#ffffff";
-        const base = night ? "#141d33" : rain ? "#5d6670" : sky.tod === "tramonto" ? "#b0687a" : "#b9c8d8";
-        return (
-          <g key={layer} className={layer ? "aa-clouds-near" : "aa-clouds-far"} opacity={rain ? 0.95 : cloudy ? 0.9 : desert ? 0.45 : layer ? 0.85 : 0.6}>
-            {[0, 400].map((dx) => (
-              <g key={dx} transform={`translate(${dx} 0)`}>
-                {list.map(([x, y, k], i) => <Cloud key={i} x={x} y={y} k={k} tint={tint} base={base} id={`${id}c${layer}`} />)}
-              </g>
-            ))}
-          </g>
-        );
-      })}
-      {!night && !rain ? (
-        <g className="aa-birds" stroke="#2a3a46" strokeWidth="1.3" fill="none" strokeLinecap="round">
-          <path d="M60 70 q4 -4 8 0 q4 -4 8 0" />
-          <path d="M84 62 q3 -3 6 0 q3 -3 6 0" />
-        </g>
-      ) : null}
+
       {LAYERS[sc.id]?.(id, night) ?? LAYERS.campo(id, night)}
       {/* velo dell'ora: la stessa luce su tutto */}
       {p.shadeA ? <rect width="400" height="300" fill={p.shade} opacity={p.shadeA} style={{ mixBlendMode: night ? "multiply" : "soft-light" }} /> : null}
@@ -159,8 +133,56 @@ export const SceneBackdrop = memo(function SceneBackdrop({ sky, id = "bk", scene
         </g>
       ) : null}
     </svg>
+    <SkyLayer id={id} tod={sky.tod} night={night} rain={rain} cloudy={cloudy} desert={desert} />
+    </>
   );
 });
+
+/**
+ * Nuvole e uccelli in uno strato a parte: scorrono con una traslazione CSS sul
+ * contenitore (gestita dalla scheda grafica), così la scena sotto resta ferma e non
+ * viene ridisegnata a ogni fotogramma. Il nastro è largo il doppio e si sposta di metà:
+ * il giro torna al punto di partenza senza stacchi.
+ */
+function SkyLayer({ id, tod, night, rain, cloudy, desert }: { id: string; tod: Sky["tod"]; night: boolean; rain: boolean; cloudy: boolean; desert: boolean }) {
+  const tint = night ? "#2a3550" : rain ? "#8b95a0" : tod === "tramonto" ? "#ffd2b4" : "#ffffff";
+  const base = night ? "#141d33" : rain ? "#5d6670" : tod === "tramonto" ? "#b0687a" : "#b9c8d8";
+  const top = night ? "#3a4766" : rain ? "#a3acb6" : tod === "tramonto" ? "#ffe3cf" : "#ffffff";
+  const mid = night ? "#283452" : rain ? "#7f8994" : tod === "tramonto" ? "#f2b8a0" : "#f1f5fa";
+  const low = night ? "#18213a" : rain ? "#5d6670" : tod === "tramonto" ? "#c98a90" : "#c3d1e0";
+  return (
+    <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
+      {[0, 1].map((layer) => {
+        const list = cloudy ? CLOUDS_THICK[layer] : CLOUDS_FEW[layer];
+        const gid = `${id}cl${layer}`;
+        return (
+          <div key={layer} className={`aa-cloud-track ${layer ? "aa-cloud-near" : "aa-cloud-far"}`} style={{ opacity: rain ? 0.95 : cloudy ? 0.92 : desert ? 0.45 : layer ? 0.88 : 0.62 }}>
+            <svg viewBox="0 0 560 120" preserveAspectRatio="xMinYMin meet" className="block h-auto w-full">
+              <defs>
+                <linearGradient id={gid} gradientUnits="userSpaceOnUse" x1="0" y1="-34" x2="0" y2="12">
+                  <stop offset="0" stopColor={top} />
+                  <stop offset="0.62" stopColor={mid} />
+                  <stop offset="1" stopColor={low} />
+                </linearGradient>
+              </defs>
+              {[0, 280].map((dx) => (
+                <g key={dx} transform={`translate(${dx} 6)`}>
+                  {list.map(([x, y, k], i) => <Cloud key={i} x={x * 0.7} y={y} k={k * 0.9} tint={tint} base={base} id={gid} />)}
+                  {layer === 1 && !night && !rain ? (
+                    <g stroke="#2a3a46" strokeWidth="1.3" fill="none" strokeLinecap="round">
+                      <path d="M84 84 q4 -4 8 0 q4 -4 8 0" />
+                      <path d="M104 76 q3 -3 6 0 q3 -3 6 0" />
+                    </g>
+                  ) : null}
+                </g>
+              ))}
+            </svg>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 /* ---------- elementi comuni ---------- */
 
@@ -182,8 +204,7 @@ function Cloud({ x, y, k, tint, base, id }: { x: number; y: number; k: number; t
       <ellipse cx="2" cy="6" rx="44" ry="6" fill={base} opacity="0.35" />
       {puffs.map(([px, py, r], i) => <circle key={i} cx={px} cy={py} r={r} fill={`url(#${id})`} />)}
       <path d="M-44 4 C-30 9 30 9 48 4 L48 7 C30 12 -30 12 -44 7 Z" fill={base} opacity="0.5" />
-      <circle cx="-10" cy="-18" r="7" fill={tint} opacity="0.55" />
-      <circle cx="8" cy="-24" r="8" fill={tint} opacity="0.6" />
+      <path d="M-22 -16 C-16 -26 -4 -30 6 -32 C14 -33 20 -28 22 -22" stroke={tint} strokeWidth="2.4" fill="none" opacity="0.55" strokeLinecap="round" />
     </g>
   );
 }
@@ -198,7 +219,7 @@ function Blades({ id, night, grass, y }: { id: string; night: boolean; grass: st
   return (
     <g>
       {rows.map((row) => (
-        <g key={row.k} className={`aa-blades aa-blades-${row.k}`}>
+        <g key={row.k}>
           {Array.from({ length: row.n }, (_, i) => {
             const r1 = rnd(i * 3 + row.k * 101);
             const r2 = rnd(i * 7 + row.k * 53);

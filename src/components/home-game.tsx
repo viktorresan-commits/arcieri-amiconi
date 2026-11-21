@@ -5,6 +5,7 @@ import { useLocalState } from "@/lib/arcieri/local-store";
 import { award, readXp, today } from "@/lib/arcieri/xp";
 import { ArcherAvatar } from "./archer-avatar";
 import { SceneBackdrop } from "./scene-2d";
+import { SCENES } from "@/lib/arcieri/scenes";
 
 /**
  * Gioco della Home con il tuo arciere, nell'ambientazione scelta.
@@ -44,6 +45,13 @@ const now = () => performance.now() / 1000;
 export function HomeGame({ look, children, info, className = "" }: { look: AvatarLook; children?: ReactNode; info?: ReactNode; className?: string }) {
   const { sky } = useSky();
   const lefty = Boolean(look.lefty);
+  // tra una piazzola e l'altra l'ambientazione cambia da sola: si parte da quella scelta
+  const [scene, setScene] = useState(look.scene);
+  useEffect(() => setScene(look.scene), [look.scene]);
+  const nextScene = () => setScene((cur) => {
+    const others = SCENES.filter((sc) => sc.id !== cur);
+    return others[Math.floor(Math.random() * others.length)]?.id ?? cur;
+  });
   const bodyLook = useMemo(() => (look.lefty ? { ...look, lefty: false } : look), [look]);
   const stage = useRef<HTMLDivElement>(null);
   const [dist, setDist] = useState<Dist>(() => randomDist());
@@ -288,10 +296,12 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
   };
   const nextStation = () => {
     if (stationsRef.current.length >= STATIONS) return;
+    nextScene();
     setStation(stationsRef.current.length + 1);
     freshStation();
   };
   const again = () => {
+    nextScene();
     stationsRef.current = [];
     setStations([]);
     setStation(1);
@@ -306,8 +316,8 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
   const aimLift = draw ? clamp((BASE.y - draw.aim.y) / 6, -14, 18) : 0;
   // dopo l'accompagnamento l'arciere torna in posizione: niente pose bloccate
   const since = released != null && !draw ? t - released : null;
-  const active = draw != null || (since != null && since < 1.5);
-  const drive = useMemo(() => (active ? { pull, aim: aimLift, released: since != null && since < 1.5 ? since : null } : null), [active, pull, aimLift, since]);
+  const active = draw != null || (since != null && since < 2.1);
+  const drive = useMemo(() => (active ? { pull, aim: aimLift, released: since != null && since < 2.1 ? since : null } : null), [active, pull, aimLift, since]);
   const bestHere = best;
   const pct = (x: number, y: number) => ({ left: `${((lefty ? W - x : x) / W) * 100}%`, top: `${(y / H) * 100}%` });
   const shownHits = playing ? hits : demoHits;
@@ -327,7 +337,9 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
     >
       {/* mancino: campo, bersaglio e arciere si specchiano; i testi restano dritti */}
       <div className={`pointer-events-none absolute inset-0 ${lefty ? "aa-mirror" : ""}`}>
-      <SceneBackdrop sky={sky} id="game" scene={look.scene} />
+      <div key={scene} className="aa-scene-swap absolute inset-0">
+        <SceneBackdrop sky={sky} id="game" scene={scene} />
+      </div>
       <svg viewBox={`0 0 ${W} ${H}`} className="absolute inset-0 h-full w-full" aria-hidden>
         <defs>
           <radialGradient id="gm-straw" cx="0.4" cy="0.35" r="0.8">
