@@ -1150,3 +1150,5 @@ svg .aa-tree, svg .aa-grass, svg .aa-sun-pulse, svg .aa-ray { animation: none !i
 .aa-cat-icon { animation: aa-cat-float 4s ease-in-out infinite; }
 @keyframes aa-cat-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
 @media (prefers-reduced-motion: reduce) { .aa-cat-rings, .aa-cat-icon { animation: none; } }
+/* nel menu le tessere prendono sempre il colore della sezione, qualunque stile di icone sia scelto */
+html .aa-cat-page .aa-appicon, html[data-icons] .aa-cat-page .aa-appicon { --c: var(--cat) !important; }

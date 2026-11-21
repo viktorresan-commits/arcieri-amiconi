@@ -262,7 +262,7 @@ function CategoryCarousel({ current, onGo, isHere }: { current?: string; onGo: (
           const items = SHORTCUTS.filter((s) => s.group === st.id);
           const k = i % n;
           return (
-            <section key={i} className="grid min-h-[calc(100dvh-15rem)] w-full shrink-0 snap-center content-start gap-4 px-4 pb-8 pt-1" style={{ background: `linear-gradient(180deg, ${st.color}38 0%, ${st.color}1f 35%, ${st.color}12 70%, ${st.color}08 100%)` }}>
+            <section key={i} className="aa-cat-page grid min-h-[calc(100dvh-15rem)] w-full shrink-0 snap-center content-start gap-4 px-4 pb-8 pt-1" style={{ ["--cat" as string]: st.color, background: `linear-gradient(180deg, ${st.color}38 0%, ${st.color}1f 35%, ${st.color}12 70%, ${st.color}08 100%)` }}>
               {/* intestazione illustrata della categoria: grande icona con alone, titolo e bersaglio decorativo */}
               <div className="aa-cat-hero relative overflow-hidden rounded-[1.75rem] p-4" style={{ ["--cat" as string]: st.color, background: `linear-gradient(135deg, ${st.color}55, ${st.color}1a 55%, rgba(255,255,255,0.02))` }}>
                 <svg aria-hidden viewBox="0 0 200 200" className="aa-cat-rings pointer-events-none absolute -right-10 -top-12 h-52 w-52 opacity-[0.22]">
