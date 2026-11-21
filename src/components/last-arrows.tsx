@@ -106,7 +106,7 @@ export function LastArrows({ shots }: { shots: LastShot[] }) {
         return (
           <li
             key={`${shot.day}-${i}`}
-            className={`aa-shot aa-shot-${mood} flex select-none items-center gap-2 ${pressed === i ? "aa-shot-press" : ""}`}
+            className={`aa-shot aa-shot-${mood} flex select-none items-center gap-1 ${pressed === i ? "aa-shot-press" : ""}`}
             style={{ ["--d" as string]: `${delay}ms`, WebkitTouchCallout: "none" }}
             onPointerDown={() => start(i, shot)}
             onPointerUp={stop}
@@ -115,8 +115,8 @@ export function LastArrows({ shots }: { shots: LastShot[] }) {
             onContextMenu={(e) => e.preventDefault()}
             title={shot.link ? (shot.link.kind === "allenamento" ? "Tieni premuto per aprire l'allenamento" : "Tieni premuto per aprire la gara") : undefined}
           >
-            <div className="aa-shot-track relative h-16 min-w-0 flex-1 overflow-hidden" style={{ ["--trail" as string]: ringOf(shot.miss ? 0 : shot.isX ? max : shot.score, max).trail }}>
-              <div className={`aa-launch aa-launch-far absolute inset-y-0 ${shot.miss ? "right-[44px] top-[7px] bottom-[-7px] opacity-70" : "right-[24px]"}`} style={{ width: `${80 + stagger * 0.6}%` }}>
+            <div className="aa-shot-track relative h-[4.5rem] min-w-0 flex-1 overflow-hidden" style={{ ["--trail" as string]: ringOf(shot.miss ? 0 : shot.isX ? max : shot.score, max).trail }}>
+              <div className={`aa-launch aa-launch-far absolute inset-y-0 ${shot.miss ? "right-[18%] top-[7px] bottom-[-7px] opacity-60" : "right-1"}`} style={{ width: `${88 + stagger * 0.5}%` }}>
                 {/* la scia sfumata sta sotto la freccia e vola con lei */}
                 <span aria-hidden className="aa-shot-trail" />
                 <ArrowArt
@@ -131,20 +131,12 @@ export function LastArrows({ shots }: { shots: LastShot[] }) {
                   fletch2={sp.fletch2}
                   point={sp.pointType || "ogiva"}
                   number={num}
-                  className="relative h-16 w-full"
+                  stretch
+                  className="relative top-1/2 h-[2.6rem] w-full -translate-y-1/2"
                 />
               </div>
-              <svg aria-hidden viewBox="0 0 16 40" className="aa-shot-butt" preserveAspectRatio="none">
-                {/* il bersaglio visto di taglio: anelli verticali, la punta entra nel colore del colpo */}
-                <ellipse cx="8" cy="20" rx="7.5" ry="19.5" fill="#f4f1ea" />
-                <ellipse cx="8" cy="20" rx="6" ry="15.6" fill="#1d2126" />
-                <ellipse cx="8" cy="20" rx="4.5" ry="11.7" fill="#2f7fd1" />
-                <ellipse cx="8" cy="20" rx="3" ry="7.8" fill="#d63a2f" />
-                <ellipse cx="8" cy="20" rx="1.5" ry="3.9" fill="#f2c94c" />
-                <ellipse cx="11" cy="20" rx="5" ry="19.5" fill="#000" opacity="0.25" />
-              </svg>
             </div>
-            <span className="aa-shot-label ml-3 grid w-9 shrink-0 justify-items-center gap-0.5 text-center leading-none">
+            <span className="aa-shot-label ml-2 grid w-8 shrink-0 justify-items-center gap-0.5 text-center leading-none">
               <span className="aa-shot-badge grid h-6 w-6 place-items-center rounded-full font-display text-[0.72rem] tabular-nums" style={{ background: ringOf(shot.miss ? 0 : shot.isX ? max : shot.score, max).bg, color: ringOf(shot.miss ? 0 : shot.isX ? max : shot.score, max).fg }}>
                 {shot.miss ? "M" : shot.isX ? "X" : shot.score}
               </span>

@@ -92,7 +92,10 @@ export function ArrowArt({
   shine = true,
   fletchStyle = "pieno",
   fletch2 = "",
+  stretch = false,
 }: {
+  /** riempie il riquadro anche in altezza (freccia più grossa nelle liste) */
+  stretch?: boolean;
   /** decorazione delle penne (FLETCH_STYLES) e secondo colore */
   fletchStyle?: string;
   fletch2?: string;
@@ -124,7 +127,7 @@ export function ArrowArt({
     fletchStyle === "bicolore" ? `url(#fb-${id})` :
     fletchStyle === "punta" ? `url(#ft-${id})` : "";
   return (
-    <svg viewBox="0 0 320 36" className={className} aria-hidden preserveAspectRatio="xMidYMid meet">
+    <svg viewBox="0 0 320 36" className={className} aria-hidden preserveAspectRatio={stretch ? "none" : "xMidYMid meet"}>
       <defs>
         <linearGradient id={`sh-${id}`} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor={sh.a} />

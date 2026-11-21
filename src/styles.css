@@ -1152,3 +1152,6 @@ svg .aa-tree, svg .aa-grass, svg .aa-sun-pulse, svg .aa-ray { animation: none !i
 @media (prefers-reduced-motion: reduce) { .aa-cat-rings, .aa-cat-icon { animation: none; } }
 /* nel menu le tessere prendono sempre il colore della sezione, qualunque stile di icone sia scelto */
 html .aa-cat-page .aa-appicon, html[data-icons] .aa-cat-page .aa-appicon { --c: var(--cat) !important; }
+/* menu: la voce della pagina in cui sei prende il colore della sezione */
+.aa-cat-page .aa-short.is-here .aa-short-icon { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--cat), 0 0 18px -2px var(--cat); }
+.aa-cat-page .aa-short.is-here span { color: color-mix(in srgb, var(--cat) 70%, white 30%); }
