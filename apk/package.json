@@ -1,7 +1,7 @@
 {
   "name": "arcieri-amiconi-apk",
   "private": true,
-  "description": "Guscio Android (Capacitor) dell'app Arcieri Amiconi: apre l'app pubblicata e aggiunge fotocamera, salvataggio file e tasto indietro.",
+  "description": "Guscio Android (Capacitor) dell'app Arcieri Amiconi: apre l'app pubblicata e aggiunge fotocamera, salvataggio file, tasto indietro e schermo intero.",
   "scripts": {
     "configura": "node configure.mjs"
   },
@@ -12,7 +12,8 @@
     "@capacitor/filesystem": "^7.1.0",
     "@capacitor/share": "^7.0.0",
     "@capacitor/splash-screen": "^7.0.0",
-    "@capacitor/browser": "^7.0.0"
+    "@capacitor/browser": "^7.0.0",
+    "@capacitor/status-bar": "^7.0.0"
   },
   "devDependencies": {
     "@capacitor/assets": "^3.0.5",

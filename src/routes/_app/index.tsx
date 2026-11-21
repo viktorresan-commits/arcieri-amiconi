@@ -115,6 +115,50 @@ function Home() {
         </Rise>
       ) : null}
       <Rise i={2}>
+        <section className="grid gap-2">
+          <div className="flex items-baseline justify-between gap-2">
+            <h2 className="aa-section-title">Ultimi allenamenti</h2>
+            <Link to="/allenamento" search={{ vista: "storico" }} className="text-[0.7rem] font-semibold text-muted">Tutti</Link>
+          </div>
+          {data.recent.length ? (
+            data.recent.slice(0, 3).map((s, index) => {
+              const d = new Date(s.startedAt);
+              const good = s.avg >= 8 ? "#7cf0a8" : s.avg >= 6 ? "#ffd27a" : "#ff8a7a";
+              return (
+                <HoldDelete
+                  key={s.id}
+                  hint={index === 0}
+                  label="Eliminare questo allenamento?"
+                  onDelete={() => deleteSession({ data: { id: s.id } }).then(() => setNonce((n) => n + 1))}
+                >
+                  <Link to="/allenamento/$id" params={{ id: String(s.id) }}>
+                    <Card className="aa-tile aa-session flex items-center gap-3 p-2.5" style={{ ["--good" as string]: good }}>
+                      <div className="grid h-14 w-12 shrink-0 place-items-center rounded-2xl bg-white/[0.06] text-center leading-none">
+                        <span className="font-display text-2xl">{d.getDate()}</span>
+                        <span className="text-[0.6rem] font-semibold uppercase tracking-wider text-muted">{d.toLocaleDateString("it-IT", { month: "short" })}</span>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold">{fmtWhen(s.startedAt)}</p>
+                        <p className="truncate text-xs text-muted">{s.distanceM} m · {s.arrows} frecce{s.place ? ` · ${s.place}` : ""}{programById(s.program) ? ` · ${programById(s.program)?.title}` : ""}</p>
+                        <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/10">
+                          <div className="aa-grow h-full rounded-full" style={{ width: `${Math.min(100, (s.avg / 10) * 100)}%`, background: good }} />
+                        </div>
+                      </div>
+                      <div className="grid shrink-0 justify-items-end leading-none">
+                        <span className="font-display text-3xl tabular-nums" style={{ color: good }}>{num(s.avg, 2)}</span>
+                        <span className="text-[0.6rem] uppercase tracking-wider text-muted">media</span>
+                      </div>
+                    </Card>
+                  </Link>
+                </HoldDelete>
+              );
+            })
+          ) : (
+            <Empty title="Quaderno vuoto" />
+          )}
+        </section>
+      </Rise>
+      <Rise i={2}>
         <TodayCard />
       </Rise>
       {prefs.home.journey ? (
@@ -161,32 +205,6 @@ function Home() {
           </Card>
         </Link>
       </Rise>
-      {data.recent.length ? (
-        <div className="grid gap-2">
-          <Rise i={10}><Link to="/allenamento" search={{ vista: "storico" }} className="text-xs uppercase tracking-wide text-muted">Allenamenti · tutti</Link></Rise>
-          {data.recent.map((s, index) => (
-            <Rise key={s.id} i={11 + index}>
-              <HoldDelete
-                hint={index === 0}
-                label="Eliminare questo allenamento?"
-                onDelete={() => deleteSession({ data: { id: s.id } }).then(() => setNonce((n) => n + 1))}
-              >
-                <Link to="/allenamento/$id" params={{ id: String(s.id) }}>
-                  <Card className="aa-tile flex items-center justify-between gap-3 p-3">
-                    <div className="min-w-0">
-                      <p className="truncate font-semibold">{fmtWhen(s.startedAt)}</p>
-                      <p className="truncate text-xs text-muted">{s.distanceM} m · {s.arrows} frecce{s.place ? ` · ${s.place}` : ""}{programById(s.program) ? ` · ${programById(s.program)?.title}` : ""}</p>
-                    </div>
-                    <p className="rounded-xl bg-white/6 px-2.5 py-1 font-display text-2xl tabular-nums">{num(s.avg, 2)}</p>
-                  </Card>
-                </Link>
-              </HoldDelete>
-            </Rise>
-          ))}
-        </div>
-      ) : (
-        <Rise i={10}><Empty title="Quaderno vuoto" /></Rise>
-      )}
       <Rise i={19}>
         <Card>
           <p className="text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted">Note del quaderno</p>
@@ -303,12 +321,12 @@ function LastSummary({ shots }: { shots: LastShot[] }) {
 /** Colore dell'anello del colpo, come sul bersaglio: oro, rosso, blu, nero, bianco; grigio se fuori. */
 function ringOf(score: number, max: number) {
   const r = max > 0 ? (score / max) * 10 : 0;
-  if (r <= 0) return { bg: "linear-gradient(145deg,#4a4f57,#2a2e33)", fg: "#e9e4d8" };
-  if (r >= 9) return { bg: "radial-gradient(circle at 35% 30%,#ffe08a,#e2a925)", fg: "#2a1d0c" };
-  if (r >= 7) return { bg: "radial-gradient(circle at 35% 30%,#ff7a6e,#c4302a)", fg: "#fff" };
-  if (r >= 5) return { bg: "radial-gradient(circle at 35% 30%,#6fb2ff,#1f62b0)", fg: "#fff" };
-  if (r >= 3) return { bg: "radial-gradient(circle at 35% 30%,#4a4f57,#14171a)", fg: "#fff" };
-  return { bg: "radial-gradient(circle at 35% 30%,#ffffff,#d9d4c8)", fg: "#14171a" };
+  if (r <= 0) return { bg: "linear-gradient(145deg,#4a4f57,#2a2e33)", fg: "#e9e4d8", trail: "#8a8f98" };
+  if (r >= 9) return { bg: "radial-gradient(circle at 35% 30%,#ffe08a,#e2a925)", fg: "#2a1d0c", trail: "#ffd166" };
+  if (r >= 7) return { bg: "radial-gradient(circle at 35% 30%,#ff7a6e,#c4302a)", fg: "#fff", trail: "#ff6b5e" };
+  if (r >= 5) return { bg: "radial-gradient(circle at 35% 30%,#6fb2ff,#1f62b0)", fg: "#fff", trail: "#5aa6ff" };
+  if (r >= 3) return { bg: "radial-gradient(circle at 35% 30%,#4a4f57,#14171a)", fg: "#fff", trail: "#9aa3ad" };
+  return { bg: "radial-gradient(circle at 35% 30%,#ffffff,#d9d4c8)", fg: "#14171a", trail: "#f4f1ea" };
 }
 
 function LastArrows({ shots }: { shots: LastShot[] }) {
@@ -379,8 +397,7 @@ function LastArrows({ shots }: { shots: LastShot[] }) {
             onContextMenu={(e) => e.preventDefault()}
             title={shot.link ? (shot.link.kind === "allenamento" ? "Tieni premuto per aprire l'allenamento" : "Tieni premuto per aprire la gara") : undefined}
           >
-            <div className="aa-shot-track relative h-10 min-w-0 flex-1 overflow-hidden" style={{ paddingLeft: `${stagger}%` }}>
-              <span aria-hidden className="aa-shot-streak" style={{ left: `${stagger}%` }} />
+            <div className="aa-shot-track relative h-11 min-w-0 flex-1 overflow-hidden" style={{ ["--trail" as string]: ringOf(shot.miss ? 0 : shot.isX ? max : shot.score, max).trail }}>
               <svg aria-hidden viewBox="0 0 16 40" className="aa-shot-butt" preserveAspectRatio="none">
                 {/* il bersaglio visto di taglio: anelli verticali, la punta entra nel colore del colpo */}
                 <ellipse cx="8" cy="20" rx="7.5" ry="19.5" fill="#f4f1ea" />
@@ -390,7 +407,8 @@ function LastArrows({ shots }: { shots: LastShot[] }) {
                 <ellipse cx="8" cy="20" rx="1.5" ry="3.9" fill="#f2c94c" />
                 <ellipse cx="11" cy="20" rx="5" ry="19.5" fill="#000" opacity="0.25" />
               </svg>
-              <div className="aa-launch absolute inset-y-0 right-3" style={{ left: `${stagger}%` }}>
+              <div className="aa-launch absolute inset-y-0 right-[13px]" style={{ left: `${30 + stagger * 0.6}%` }}>
+                <span aria-hidden className="aa-shot-trail" />
                 <ArrowArt
                   material={sp.material || "carbonio"}
                   shaft={sp.shaft}
@@ -403,7 +421,7 @@ function LastArrows({ shots }: { shots: LastShot[] }) {
                   fletch2={sp.fletch2}
                   point={sp.pointType || "ogiva"}
                   number={num}
-                  className="h-10 w-full"
+                  className="relative h-10 w-full"
                 />
               </div>
             </div>

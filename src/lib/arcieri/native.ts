@@ -116,11 +116,34 @@ async function finishGoogle(link: string) {
   window.location.href = res.ok ? "/" : "/login";
 }
 
+/** L'app a schermo intero: niente ora e batteria sopra l'intestazione. Se il plugin manca, lascio spazio alla barra. */
+async function fullScreen() {
+  const bar = plugin("StatusBar") as unknown as { hide?: () => Promise<void>; setOverlaysWebView?: (o: { overlay: boolean }) => Promise<void>; setBackgroundColor?: (o: { color: string }) => Promise<void> } | undefined;
+  const root = document.documentElement;
+  if (!bar?.hide) {
+    root.classList.add("aa-statusbar");
+    return;
+  }
+  try {
+    await bar.setOverlaysWebView?.({ overlay: true });
+    await bar.hide();
+    root.classList.remove("aa-statusbar");
+  } catch {
+    root.classList.add("aa-statusbar");
+  }
+}
+
 /** Tasto indietro di Android: torna alla pagina precedente, e chiude l'app solo dalla prima. */
 export function initNativeApp() {
   if (started || !isNativeApp()) return;
   started = true;
+  document.documentElement.classList.add("aa-native");
+  void fullScreen();
   const app = plugin("App");
+  // tornando nell'app (dopo un'altra app o il browser) la barra può ricomparire
+  void app?.addListener?.("appStateChange", (data) => {
+    if ((data as unknown as { isActive?: boolean }).isActive) void fullScreen();
+  });
   if (!app?.addListener) return;
   void app.addListener("appUrlOpen", (data) => {
     const url = (data as unknown as { url?: string }).url ?? "";

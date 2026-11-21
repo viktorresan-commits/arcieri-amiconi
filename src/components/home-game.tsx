@@ -20,9 +20,14 @@ const AV = { left: -24, width: 220 };
 const AV_H = (AV.width * 350) / 300;
 const AV_TOP = H - 6 - AV_H;
 const GRIP = { x: AV.left + ((250 - 40) / 300) * AV.width, y: AV_TOP + (124 / 350) * AV_H };
-const BASE = { x: 240, y: 238 };
-const DISTANCES = [18, 30, 50, 70] as const;
+const BASE = { x: 232, y: 236 };
+// a ogni volée una distanza a caso: il bersaglio è più grande o più piccolo, il vento pesa di più o di meno
+const DISTANCES = [18, 25, 30, 40, 50, 60, 70] as const;
 type Dist = (typeof DISTANCES)[number];
+const randomDist = (not?: number): Dist => {
+  const pool = DISTANCES.filter((d) => d !== not);
+  return pool[Math.floor(Math.random() * pool.length)];
+};
 const RINGS = ["#f4f1ea", "#f4f1ea", "#1a1c1e", "#1a1c1e", "#2a6294", "#2a6294", "#c4473d", "#c4473d", "#e6b325", "#e6b325"];
 const DRAW_S = 0.75;
 
@@ -30,16 +35,16 @@ type Hit = { dx: number; dy: number; score: number; x10: boolean };
 type Flight = { from: { x: number; y: number }; to: { x: number; y: number }; hit: Hit; t0: number; dur: number; arc: number; demo: boolean };
 type Draw = { t0: number; sx: number; sy: number; ax: number; ay: number; aim: { x: number; y: number }; demo: boolean; releaseAt?: number };
 
-const radiusOf = (d: Dist) => 30 * Math.sqrt(18 / d);
+const radiusOf = (d: Dist) => 34 * Math.sqrt(18 / d);
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 const now = () => performance.now() / 1000;
 
 export function HomeGame({ look, children, info, className = "" }: { look: AvatarLook; children?: ReactNode; info?: ReactNode; className?: string }) {
   const { sky } = useSky();
   const stage = useRef<HTMLDivElement>(null);
-  const [dist, setDist] = useLocalState<Dist>("aa-game-dist", 18);
+  const [dist, setDist] = useState<Dist>(() => randomDist());
   const [moving, setMoving] = useLocalState<boolean>("aa-game-moving", false);
-  const [best, setBest] = useLocalState<Record<string, number>>("aa-game-best", {});
+  const [best, setBest] = useLocalState<number>("aa-game-best-all", 0);
   const [hits, setHits] = useState<Hit[]>([]);
   const [demoHits, setDemoHits] = useState<Hit[]>([]);
   const [flight, setFlight] = useState<Flight | null>(null);
@@ -162,8 +167,7 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
 
   const finish = (list: Hit[]) => {
     const sum = list.reduce((a, h) => a + h.score, 0);
-    const key = `${dist}${moving ? "m" : ""}`;
-    if (sum > (best[key] ?? 0)) setBest({ ...best, [key]: sum });
+    if (sum > best) setBest(sum);
     // punti esperienza: al massimo cinque volée al giorno, di più se il bersaglio si muove
     const day = today();
     for (let i = 1; i <= 5; i++) {
@@ -218,10 +222,7 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
     setHits([]);
     setPop(null);
     setWind(Math.round((Math.random() * 6 - 3) * 10) / 10);
-  };
-  const pickDist = (d: Dist) => {
-    setDist(d);
-    again();
+    setDist((d) => randomDist(d));
   };
   const stop = () => {
     setPlaying(false);
@@ -230,8 +231,11 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
   };
 
   const aimLift = draw ? clamp((BASE.y - draw.aim.y) / 6, -14, 18) : 0;
-  const drive = useMemo(() => ({ pull, aim: aimLift, released: released != null && !draw ? t - released : null }), [pull, aimLift, released, draw, t]);
-  const bestHere = best[`${dist}${moving ? "m" : ""}`] ?? 0;
+  // dopo l'accompagnamento l'arciere torna in posizione: niente pose bloccate
+  const since = released != null && !draw ? t - released : null;
+  const active = draw != null || (since != null && since < 1.5);
+  const drive = useMemo(() => (active ? { pull, aim: aimLift, released: since != null && since < 1.5 ? since : null } : null), [active, pull, aimLift, since]);
+  const bestHere = best;
   const pct = (x: number, y: number) => ({ left: `${(x / W) * 100}%`, top: `${(y / H) * 100}%` });
   const shownHits = playing ? hits : demoHits;
   // la manica pende quando non c'è vento e si alza quando soffia
@@ -259,6 +263,10 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
             <stop offset="0" stopColor="#fff" stopOpacity="0.04" />
             <stop offset="1" stopColor="#fff" stopOpacity="0.14" />
           </linearGradient>
+          <radialGradient id="gm-glow">
+            <stop offset="0.45" stopColor="#fff6c8" stopOpacity="0.45" />
+            <stop offset="1" stopColor="#fff6c8" stopOpacity="0" />
+          </radialGradient>
           <radialGradient id="gm-vig" cx="0.5" cy="0.45" r="0.75">
             <stop offset="0.6" stopColor="#000" stopOpacity="0" />
             <stop offset="1" stopColor="#000" stopOpacity="0.35" />
@@ -282,6 +290,7 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
         {/* paglione su cavalletto */}
         <g transform={`translate(${T.x - BASE.x} 0)`}>
           <ellipse cx={BASE.x + 3} cy={302} rx={R * 1.6} ry="4" fill="#000" opacity="0.3" />
+          <circle cx={BASE.x} cy={BASE.y} r={R * 1.9} fill="url(#gm-glow)" className="aa-target-glow" />
           <path d={`M${BASE.x - R * 0.8} ${BASE.y + R * 0.8} L${BASE.x - R * 1.05} 302 M${BASE.x + R * 0.8} ${BASE.y + R * 0.8} L${BASE.x + R * 1.05} 302 M${BASE.x} ${BASE.y + R} L${BASE.x + R * 0.3} 300`} stroke="#5b3d22" strokeWidth={Math.max(2, R * 0.09)} strokeLinecap="round" />
           {moving ? [-1, 1].map((s) => <circle key={s} cx={BASE.x + s * R * 0.9} cy="302" r="3" fill="#2a2f35" stroke="#9aa0a6" strokeWidth="0.8" />) : null}
           <rect x={BASE.x - R * 1.18 + 2} y={BASE.y - R * 1.18 + 3} width={R * 2.36} height={R * 2.36} rx={R * 0.25} fill="#5b3d22" opacity="0.6" />
@@ -328,7 +337,7 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
 
       {/* arciere, grande in primo piano */}
       <div className="pointer-events-none absolute" style={{ left: `${(AV.left / W) * 100}%`, top: `${(AV_TOP / H) * 100}%`, width: `${(AV.width / W) * 100}%`, height: `${(AV_H / H) * 100}%` }}>
-        <ArcherAvatar look={look} drive={drive} interactive={false} hideFlight className="h-full w-full drop-shadow-[0_12px_20px_rgba(0,0,0,0.45)]" />
+        <ArcherAvatar look={look} drive={drive} pose="riposo" interactive={false} hideFlight className="h-full w-full drop-shadow-[0_12px_20px_rgba(0,0,0,0.45)]" />
       </div>
 
       {pop ? (
@@ -359,13 +368,6 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
         <button type="button" onClick={() => { setMoving(!moving); again(); }} aria-pressed={moving} className={`rounded-full px-2.5 py-1.5 text-[0.7rem] font-bold backdrop-blur ${moving ? "bg-[#7cf0a8] text-[#0b120e]" : "bg-black/45 text-white"}`}>
           {moving ? "In movimento" : "Fermo"}
         </button>
-        <div className="flex gap-0.5 rounded-full bg-black/45 p-1 backdrop-blur">
-          {DISTANCES.map((d) => (
-            <button key={d} type="button" onClick={() => pickDist(d)} className={`rounded-full px-2 py-1 text-[0.7rem] font-bold ${d === dist ? "bg-[#ffd27a] text-[#2a1d0c]" : "text-white/85"}`}>
-              {d} m
-            </button>
-          ))}
-        </div>
       </div>
 
       {!playing ? (
@@ -387,7 +389,7 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
 
       {done ? (
         <div data-ui className="absolute inset-x-4 top-[28%] rounded-3xl bg-[#101814]/80 p-4 text-center text-white backdrop-blur-md" onPointerDown={(e) => e.stopPropagation()}>
-          <p className="text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-white/70">Volée a {dist} m{moving ? " · bersaglio mobile" : ""}</p>
+          <p className="text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-white/70">Volée finita{moving ? " · bersaglio mobile" : ""}</p>
           <p className="aa-game-score mt-1 text-5xl font-black">{total}<span className="text-xl text-white/60">/30</span></p>
           <p className="mt-1 text-sm text-white/85">
             {hits.map((h) => (h.score === 0 ? "M" : h.x10 ? "X" : h.score)).join(" · ")}
@@ -395,11 +397,7 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
           </p>
           <div className="mt-3 grid grid-cols-2 gap-2">
             <button type="button" onClick={again} className="rounded-full bg-[#ffd27a] px-4 py-2.5 text-sm font-bold text-[#2a1d0c]">Altra volée</button>
-            {dist !== 70 ? (
-              <button type="button" onClick={() => pickDist(DISTANCES[DISTANCES.indexOf(dist) + 1])} className="rounded-full bg-white/15 px-4 py-2.5 text-sm font-bold">Più lontano</button>
-            ) : (
-              <button type="button" onClick={() => setMoving(!moving)} className="rounded-full bg-white/15 px-4 py-2.5 text-sm font-bold">{moving ? "Bersaglio fermo" : "Bersaglio mobile"}</button>
-            )}
+            <button type="button" onClick={() => { setMoving(!moving); again(); }} className="rounded-full bg-white/15 px-4 py-2.5 text-sm font-bold">{moving ? "Bersaglio fermo" : "Bersaglio mobile"}</button>
           </div>
           <button type="button" onClick={stop} className="mt-2 text-xs text-white/70 underline">Torna a guardare</button>
         </div>

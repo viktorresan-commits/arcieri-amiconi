@@ -1111,3 +1111,19 @@ html[data-scenes="no"] .aa-scene { display: none; }
 @media (prefers-reduced-motion: reduce) { .aa-snow, .aa-flag, .aa-fountain, .aa-shimmer, .aa-wave, .aa-smoke, .aa-leaves path { animation: none; } }
 .aa-puff { animation: aa-puff 0.5s ease-out forwards; }
 @keyframes aa-puff { from { opacity: 1; transform: scale(0.6); } to { opacity: 0; transform: scale(2.4); } }
+/* intestazione: spazio per la barra di stato quando l'app non riesce a nasconderla */
+.aa-appheader { padding-top: env(safe-area-inset-top); height: calc(3.5rem + env(safe-area-inset-top)); }
+.aa-statusbar .aa-appheader { padding-top: max(env(safe-area-inset-top), 28px); height: calc(3.5rem + max(env(safe-area-inset-top), 28px)); }
+/* anello del livello attorno al volto */
+.aa-facering { background: conic-gradient(#ffd27a var(--lvl, 0deg), rgb(255 255 255 / 0.14) 0); box-shadow: 0 4px 14px -6px rgb(0 0 0 / 0.7); }
+
+/* ultime frecce: scia sfumata del colore del colpo dietro la freccia */
+.aa-shot-trail { position: absolute; right: calc(100% - 6px); top: 50%; height: 4px; width: 160%; transform: translateY(-50%); border-radius: 999px; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--trail, #fff) 15%, transparent) 35%, var(--trail, #fff)); filter: blur(0.4px); box-shadow: 0 0 10px color-mix(in srgb, var(--trail, #fff) 45%, transparent); opacity: 0.9; }
+.aa-shot-trail::after { content: ""; position: absolute; inset: -5px 0; border-radius: 999px; background: linear-gradient(90deg, transparent 40%, color-mix(in srgb, var(--trail, #fff) 25%, transparent)); filter: blur(4px); }
+.aa-shot-track::before { content: ""; position: absolute; left: 0; right: 14px; top: 50%; border-top: 1px dashed rgb(255 255 255 / 0.07); }
+.aa-target-glow { animation: aa-target-glow 2.4s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes aa-target-glow { 0%, 100% { opacity: 0.55; transform: scale(0.96); } 50% { opacity: 1; transform: scale(1.04); } }
+@media (prefers-reduced-motion: reduce) { .aa-target-glow { animation: none; } }
+/* fluidità: dentro gli sfondi illustrati si animano solo nuvole, uccelli, bandiere, acqua, pioggia e neve
+   (alberi ed erba che ondeggiano costringevano a ridisegnare tutta la scena a ogni fotogramma) */
+svg .aa-tree, svg .aa-grass, svg .aa-sun-pulse, svg .aa-ray { animation: none !important; }

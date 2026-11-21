@@ -28,6 +28,11 @@ const config = {
     captureInput: true,
   },
   plugins: {
+    StatusBar: {
+      overlaysWebView: true,
+      style: "DARK",
+      backgroundColor: "#0C1210",
+    },
     SplashScreen: {
       launchShowDuration: 900,
       backgroundColor: "#0C1210",

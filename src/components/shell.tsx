@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useLayoutEffect, useState, type ReactNode } from "react";
-import { Glyph, type IconName } from "./icons";
-import { Link, useRouterState } from "@tanstack/react-router";
+import { AppIcon, Glyph, type IconName } from "./icons";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { RedirectToSignIn } from "@/lib/auth/gates";
 import { getMe } from "@/lib/arcieri/members.api";
@@ -8,8 +8,8 @@ import type { PublicMember } from "@/lib/arcieri/access";
 import { greet, romeHour } from "@/lib/arcieri/time";
 import { memberLabel, initials } from "@/lib/arcieri/labels";
 import { Avatar, Loading, Mark, cx } from "./kit";
-import { QUICK_ACTIONS, shortcutById } from "@/lib/arcieri/shortcuts";
-import { NextCard, PathMap, ShortcutEditor, ShortcutTile, TipCard } from "./shortcuts";
+import { QUICK_ACTIONS, currentShortcut, shortcutById } from "@/lib/arcieri/shortcuts";
+import { NextCard, PathMap, ShortcutEditor, ShortcutTile, TipCard, rememberPage } from "./shortcuts";
 import { Scene } from "./scene";
 import { levelOf, useXp, useXpToasts } from "@/lib/arcieri/xp";
 import { AvatarFace } from "./archer-avatar";
@@ -59,7 +59,6 @@ const MORE = [
   ["/obiettivi", "Obiettivi"],
   ["/bacheca", "Bacheca"],
   ["/confronta", "Confronta"],
-  ["/gioco", "Giochiamo"],
 ] as const;
 
 
@@ -86,6 +85,11 @@ export function Shell({ children }: { children: ReactNode }) {
   }, []);
   const path = useRouterState({ select: (s) => s.location.pathname });
   const { prefs } = usePrefs();
+  const navigate = useNavigate();
+  const here = currentShortcut(path);
+  useEffect(() => {
+    rememberPage(path);
+  }, [path]);
 
   useLayoutEffect(() => {
     const root = document.querySelector("main");
@@ -197,16 +201,28 @@ export function Shell({ children }: { children: ReactNode }) {
           </Link>
         </aside>
         <div className="aa-main relative z-0 min-w-0 md:ml-60">
-          <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-line/60 bg-bg/85 px-4 backdrop-blur-md">
-            <Link to="/avatar" className="flex min-w-0 items-center gap-3">
-              <span className="aa-pin grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-full ring-2 ring-[#ffd27a]/70">
-                <AvatarFace look={avatar.shown} className="h-10 w-10" />
-              </span>
-              <span className="min-w-0">
-                <p className="truncate text-[11px] leading-tight text-muted">{hour}</p>
-                <p className="truncate font-display text-xl leading-none">{label}</p>
-              </span>
-            </Link>
+          <header className="aa-appheader sticky top-0 z-20 flex h-14 items-center justify-between gap-2 border-b border-line/60 bg-bg/85 px-4 backdrop-blur-md">
+            {path === "/" ? (
+              <Link to="/avatar" className="flex min-w-0 items-center gap-3">
+                <span className="aa-facering relative grid h-11 w-11 shrink-0 place-items-center rounded-full p-[2px]" style={{ ["--lvl" as string]: `${Math.round((lvl.into / Math.max(1, lvl.need)) * 360)}deg` }}>
+                  <span className="grid h-full w-full place-items-center overflow-hidden rounded-full bg-bg">
+                    <AvatarFace look={avatar.shown} className="h-full w-full" />
+                  </span>
+                </span>
+                <span className="min-w-0">
+                  <p className="truncate text-[11px] leading-tight text-muted">{hour}</p>
+                  <p className="truncate font-display text-xl leading-none">{label}</p>
+                </span>
+              </Link>
+            ) : (
+              <div className="flex min-w-0 items-center gap-2">
+                <button type="button" onClick={() => (window.history.length > 1 ? window.history.back() : void navigate({ to: "/" }))} aria-label="Indietro" className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white/[0.06] active:scale-95">
+                  <Glyph name="chevron" size={18} className="rotate-180" />
+                </button>
+                {here ? <AppIcon name={here.icon} color={here.color} size={30} /> : null}
+                <p className="truncate font-display text-xl leading-none">{here?.label ?? "Arcieri Amiconi"}</p>
+              </div>
+            )}
             <div className="flex shrink-0 items-center gap-1.5">
               <Link to="/obiettivi" className="flex h-9 items-center gap-1.5 rounded-full bg-white/[0.06] px-2.5 text-[0.72rem] font-semibold" aria-label={`Livello ${lvl.level}`}>
                 <span className="grid h-6 w-6 place-items-center rounded-full bg-[#ffd27a] font-display text-[0.8rem] text-[#1a1408]">{lvl.level}</span>
@@ -294,7 +310,6 @@ function BottomLink({ item, active }: { item: { to: string; label: string; icon:
 function NavLink({ to, label, active }: { to: string; label: string; active: boolean }) {
   return (
     <Link to={to} className={cx("flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium", active ? "bg-primary text-primary-fg" : "text-muted")}>
-      {to === "/gioco" ? <Mark className="h-6 w-6" /> : null}
       {label}
     </Link>
   );

@@ -3,7 +3,7 @@
  * Sole o luna con alone e raggi, nuvole che scorrono, stelle di notte, pioggia sopra la scena.
  * La luce della scena (sole, cielo, nebbia) segue l'ora scelta.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { basis, canvasTexture, project, trs, v3, type Env, type GL3D, type Vec3 } from "./gl3d";
 import { useLocalState } from "./local-store";
 
@@ -41,7 +41,9 @@ export function useSky() {
     const id = window.setInterval(() => setNow(autoTod()), 60_000);
     return () => window.clearInterval(id);
   }, []);
-  const sky: Sky = { tod: pref.tod === "auto" ? now : pref.tod, weather: pref.weather };
+  const tod = pref.tod === "auto" ? now : pref.tod;
+  // lo stesso oggetto finché ora e meteo non cambiano: gli sfondi non si ridisegnano a ogni fotogramma
+  const sky: Sky = useMemo(() => ({ tod, weather: pref.weather }), [tod, pref.weather]);
   return { sky, pref, setPref };
 }
 

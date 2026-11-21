@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { memo, type ReactNode } from "react";
 import type { Sky } from "@/lib/arcieri/sky3d";
 import { sceneById, type SceneId } from "@/lib/arcieri/scenes";
 
@@ -20,7 +20,7 @@ const rnd = (i: number) => {
   return x - Math.floor(x);
 };
 
-export function SceneBackdrop({ sky, id = "bk", scene = "campo" }: { sky: Sky; id?: string; scene?: string }) {
+export const SceneBackdrop = memo(function SceneBackdrop({ sky, id = "bk", scene = "campo" }: { sky: Sky; id?: string; scene?: string }) {
   const p = SKY[sky.tod];
   const sc = sceneById(scene);
   const rain = sky.weather === "pioggia";
@@ -118,7 +118,7 @@ export function SceneBackdrop({ sky, id = "bk", scene = "campo" }: { sky: Sky; i
       ) : null}
     </svg>
   );
-}
+});
 
 /* ---------- elementi comuni ---------- */
 

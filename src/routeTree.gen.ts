@@ -20,7 +20,6 @@ import { Route as AppCalendarioRouteImport } from './routes/_app/calendario'
 import { Route as AppClassificheRouteImport } from './routes/_app/classifiche'
 import { Route as AppConfrontaRouteImport } from './routes/_app/confronta'
 import { Route as AppGareRouteImport } from './routes/_app/gare'
-import { Route as AppGiocoRouteImport } from './routes/_app/gioco'
 import { Route as AppGuidaRouteImport } from './routes/_app/guida'
 import { Route as AppObiettiviRouteImport } from './routes/_app/obiettivi'
 import { Route as AppProfiloRouteImport } from './routes/_app/profilo'
@@ -86,11 +85,6 @@ const AppGareRoute = AppGareRouteImport.update({
   path: '/gare',
   getParentRoute: () => AppRoute,
 } as any)
-const AppGiocoRoute = AppGiocoRouteImport.update({
-  id: '/gioco',
-  path: '/gioco',
-  getParentRoute: () => AppRoute,
-} as any)
 const AppGuidaRoute = AppGuidaRouteImport.update({
   id: '/guida',
   path: '/guida',
@@ -153,7 +147,6 @@ export interface FileRoutesByFullPath {
   '/classifiche': typeof AppClassificheRoute
   '/confronta': typeof AppConfrontaRoute
   '/gare': typeof AppGareRoute
-  '/gioco': typeof AppGiocoRoute
   '/guida': typeof AppGuidaRoute
   '/obiettivi': typeof AppObiettiviRoute
   '/profilo': typeof AppProfiloRoute
@@ -174,7 +167,6 @@ export interface FileRoutesByTo {
   '/classifiche': typeof AppClassificheRoute
   '/confronta': typeof AppConfrontaRoute
   '/gare': typeof AppGareRoute
-  '/gioco': typeof AppGiocoRoute
   '/guida': typeof AppGuidaRoute
   '/obiettivi': typeof AppObiettiviRoute
   '/profilo': typeof AppProfiloRoute
@@ -199,7 +191,6 @@ export interface FileRoutesById {
   '/_app/classifiche': typeof AppClassificheRoute
   '/_app/confronta': typeof AppConfrontaRoute
   '/_app/gare': typeof AppGareRoute
-  '/_app/gioco': typeof AppGiocoRoute
   '/_app/guida': typeof AppGuidaRoute
   '/_app/obiettivi': typeof AppObiettiviRoute
   '/_app/profilo': typeof AppProfiloRoute
@@ -225,7 +216,6 @@ export interface FileRouteTypes {
     | '/classifiche'
     | '/confronta'
     | '/gare'
-    | '/gioco'
     | '/guida'
     | '/obiettivi'
     | '/profilo'
@@ -246,7 +236,6 @@ export interface FileRouteTypes {
     | '/classifiche'
     | '/confronta'
     | '/gare'
-    | '/gioco'
     | '/guida'
     | '/obiettivi'
     | '/profilo'
@@ -270,7 +259,6 @@ export interface FileRouteTypes {
     | '/_app/classifiche'
     | '/_app/confronta'
     | '/_app/gare'
-    | '/_app/gioco'
     | '/_app/guida'
     | '/_app/obiettivi'
     | '/_app/profilo'
@@ -369,13 +357,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppGareRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/gioco': {
-      id: '/_app/gioco'
-      path: '/gioco'
-      fullPath: '/gioco'
-      preLoaderRoute: typeof AppGiocoRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/_app/guida': {
       id: '/_app/guida'
       path: '/guida'
@@ -472,7 +453,6 @@ interface AppRouteChildren {
   AppClassificheRoute: typeof AppClassificheRoute
   AppConfrontaRoute: typeof AppConfrontaRoute
   AppGareRoute: typeof AppGareRoute
-  AppGiocoRoute: typeof AppGiocoRoute
   AppGuidaRoute: typeof AppGuidaRoute
   AppObiettiviRoute: typeof AppObiettiviRoute
   AppProfiloRoute: typeof AppProfiloRoute
@@ -492,7 +472,6 @@ const AppRouteChildren: AppRouteChildren = {
   AppClassificheRoute: AppClassificheRoute,
   AppConfrontaRoute: AppConfrontaRoute,
   AppGareRoute: AppGareRoute,
-  AppGiocoRoute: AppGiocoRoute,
   AppGuidaRoute: AppGuidaRoute,
   AppObiettiviRoute: AppObiettiviRoute,
   AppProfiloRoute: AppProfiloRoute,

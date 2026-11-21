@@ -35,11 +35,13 @@ type PoseDef = {
   face?: AvatarLook["expression"] | "felice";
   /** quanto la mano sta sulla corda (0–1) durante i passaggi */
   hookW?: number;
+  /** da che parte piega il gomito del braccio della corda (1 = in fuori, verso l'esterno) */
+  bend?: 1 | -1;
 };
 
 const ANCHOR = p(166, 106);
 const POSES: Record<string, PoseDef> = {
-  riposo: { grip: p(186, 214), bowAngle: 6, hand: p(118, 210), pull: 0, hooked: false, arrow: false, fore: 46 },
+  riposo: { grip: p(194, 210), bowAngle: 6, hand: p(108, 204), pull: 0, hooked: false, arrow: false, fore: 44, bend: 1 },
   // incocco: arco basso e quasi orizzontale, la mano porta la freccia sul rest e la incastra
   incocco: { grip: p(206, 192), bowAngle: -66, hand: p(192, 184), pull: 0, hooked: false, arrow: true, fore: 48 },
   // aggancio e presa: tre dita sulla corda, mano dell'arco rilassata sull'impugnatura
@@ -50,10 +52,12 @@ const POSES: Record<string, PoseDef> = {
   mira: { grip: p(250, 124), bowAngle: 0, hand: null, pull: 1.03, hooked: true, arrow: true, fore: 83, face: "concentrato" },
   rilascio: { grip: p(250, 124), bowAngle: 2, hand: p(132, 104), pull: 0, hooked: false, arrow: false, fore: 82, face: "concentrato" },
   accompagna: { grip: p(251, 127), bowAngle: 9, hand: p(126, 106), pull: 0, hooked: false, arrow: false, fore: 80 },
-  rilassa: { grip: p(214, 186), bowAngle: 22, hand: p(122, 196), pull: 0, hooked: false, arrow: false, fore: 50 },
-  vittoria: { grip: p(206, 34), bowAngle: -12, hand: p(104, 52), pull: 0, hooked: false, arrow: false, fore: 46, face: "felice" },
-  fiero: { grip: p(192, 204), bowAngle: 2, hand: p(116, 186), pull: 0, hooked: false, arrow: false, fore: 40, face: "sorriso" },
-  saluto: { grip: p(194, 208), bowAngle: 4, hand: p(150, 150), pull: 0, hooked: false, arrow: false, fore: 40, face: "sorriso" },
+  rilassa: { grip: p(214, 186), bowAngle: 22, hand: p(114, 198), pull: 0, hooked: false, arrow: false, fore: 46, bend: 1 },
+  vittoria: { grip: p(206, 34), bowAngle: -12, hand: p(100, 56), pull: 0, hooked: false, arrow: false, fore: 44, face: "felice", bend: 1 },
+  // fiero: mano sul fianco, gomito in fuori
+  fiero: { grip: p(194, 206), bowAngle: 2, hand: p(122, 190), pull: 0, hooked: false, arrow: false, fore: 40, face: "sorriso", bend: 1 },
+  // saluto: la mano libera si alza aperta accanto alla testa
+  saluto: { grip: p(194, 208), bowAngle: 4, hand: p(92, 60), pull: 0, hooked: false, arrow: false, fore: 40, face: "sorriso", bend: 1 },
 };
 
 export const PHASE_NAMES: Record<string, string> = {
@@ -132,6 +136,7 @@ function mix(a: PoseDef, b: PoseDef, t: number): PoseDef {
     arrow: t < 0.5 ? a.arrow : b.arrow,
     fore: lerp(a.fore, b.fore, t),
     face: t < 0.5 ? a.face : b.face,
+    bend: t < 0.5 ? a.bend : b.bend,
   };
 }
 
@@ -202,7 +207,7 @@ function Figure({ look, def, t, flying, blink, uid }: { look: AvatarLook; def: P
   const stringHand = lerpP(restW, p(ANCHOR.x, ANCHOR.y + tremble), def.pull);
   const hookW = def.hookW ?? (def.hooked ? 1 : 0);
   const handTarget = def.hand ? lerpP(def.hand, stringHand, hookW) : stringHand;
-  const drawArm = ik(SD, handTarget, 40, def.fore, -1);
+  const drawArm = ik(SD, handTarget, 40, def.fore, def.bend ?? -1);
   const drawHand = drawArm.hand;
   const tipTop = rot(p(g.tipX, -g.tipY), def.bowAngle, grip);
   const tipBot = rot(p(g.tipX, g.tipY), def.bowAngle, grip);
@@ -897,6 +902,7 @@ function Head({ look, H, face, blink, uid, t }: { look: AvatarLook; H: P; face: 
         </g>
       ) : null}
       <HairFront look={look} uid={uid} t={t} />
+      <HairStrands look={look} />
       <Hat look={look} />
       {look.glasses ? (
         <g fill="none" stroke="#1d2126" strokeWidth="1.3">
@@ -928,6 +934,29 @@ function Beard({ look }: { look: AvatarLook }) {
     default:
       return null;
   }
+}
+
+/** Ciocche e riflessi sopra i capelli: danno volume e verso alla pettinatura. */
+function HairStrands({ look }: { look: AvatarLook }) {
+  if (["calvo", "rasati"].includes(look.hair) || ["cappuccio", "elmo", "bandana", "tesa", "robin"].includes(look.hat)) return null;
+  const hi = shade(look.hairColor, 0.38);
+  const lo = shade(look.hairColor, -0.42);
+  const curly = look.hair === "ricci" || look.hair === "afro";
+  return (
+    <g fill="none" strokeLinecap="round" pointerEvents="none">
+      {curly ? (
+        <g stroke={lo} strokeOpacity="0.55" strokeWidth="1">
+          {[[138, 62], [148, 58], [158, 60], [166, 66], [134, 72], [144, 66]].map(([x, y]) => <path key={`${x}${y}`} d={`M${x} ${y} q3 -3 6 0 q-3 3 -6 0`} />)}
+        </g>
+      ) : (
+        <>
+          <path d="M136 66 Q148 56 164 62" stroke={hi} strokeOpacity="0.55" strokeWidth="1.6" />
+          <path d="M140 61 Q152 54 166 60" stroke={hi} strokeOpacity="0.35" strokeWidth="1" />
+          <path d="M133 74 Q144 64 158 66 M146 60 Q156 58 168 68 M131 82 Q136 72 146 70" stroke={lo} strokeOpacity="0.45" strokeWidth="0.9" />
+        </>
+      )}
+    </g>
+  );
 }
 
 function HairFront({ look, uid, t }: { look: AvatarLook; uid: string; t: number }) {
@@ -1125,6 +1154,18 @@ export function ArcherAvatar({ look, className = "h-72 w-auto", interactive = tr
   phaseRef.current = onPhase;
   const lastPhase = useRef("");
   const lastRelease = useRef("");
+  const host = useRef<SVGSVGElement>(null);
+  const visible = useRef(true);
+  // fuori dallo schermo l'arciere si ferma: meno lavoro per il telefono
+  useEffect(() => {
+    const el = host.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(([e]) => {
+      visible.current = e.isIntersecting;
+    });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
   useEffect(() => {
     if (typeof window === "undefined") return;
     const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches || document.documentElement.dataset.motion === "ridotta";
@@ -1135,9 +1176,10 @@ export function ArcherAvatar({ look, className = "h-72 w-auto", interactive = tr
     let raf = 0;
     let last = 0;
     const t0 = performance.now();
+    // ~50 fotogrammi al secondo mentre tira, ~30 nelle pose ferme (basta per il respiro)
+    const step = mode === "animata" || mode === "guidata" ? 19 : 33;
     const frame = (now: number) => {
-      // ~50 fotogrammi al secondo: movimento fluido senza pesare sul telefono
-      if (now - last > 19 && !document.hidden) {
+      if (now - last > step && !document.hidden && visible.current) {
         last = now;
         setT((now - t0) / 1000);
       }
@@ -1199,7 +1241,7 @@ export function ArcherAvatar({ look, className = "h-72 w-auto", interactive = tr
     window.setTimeout(() => shotRef.current?.(), 600);
   };
   return (
-    <svg viewBox="40 0 300 350" className={className} role="img" aria-label="Il tuo arciere" onClick={tap} style={{ cursor: interactive && mode !== "animata" ? "pointer" : undefined, overflow: "visible" }}>
+    <svg ref={host} viewBox="40 0 300 350" className={className} role="img" aria-label="Il tuo arciere" onClick={tap} style={{ cursor: interactive && mode !== "animata" ? "pointer" : undefined, overflow: "visible" }}>
       <Defs look={look} uid={uid} />
       <ellipse cx="150" cy="340" rx="80" ry="7" fill="#000" opacity="0.28" />
       <g transform={kid ? "translate(150 342) scale(0.8) translate(-150 -342)" : undefined}>
@@ -1270,6 +1312,12 @@ export function AvatarFace({ look, className = "h-10 w-10" }: { look: AvatarLook
     <g fill={fillH}>
       {[0, 1, 2, 3, 4].map((i) => <ellipse key={`l${i}`} cx={50 - rx - 2} cy={fy + 4 + i * 8} rx={4.6 - i * 0.3} ry="5" stroke={shade(hair, -0.4)} strokeWidth="0.6" />)}
       {[0, 1, 2, 3, 4].map((i) => <ellipse key={`r${i}`} cx={50 + rx + 2} cy={fy + 4 + i * 8} rx={4.6 - i * 0.3} ry="5" stroke={shade(hair, -0.4)} strokeWidth="0.6" />)}
+    </g>
+  );
+  const strands = ["calvo", "rasati", "afro", "ricci"].includes(look.hair) || capOn || ["bandana", "tesa", "robin"].includes(look.hat) ? null : (
+    <g fill="none" strokeLinecap="round">
+      <path d={`M${50 - rx + 4} ${fy - ry + 2} Q50 ${fy - ry - 8} ${50 + rx - 4} ${fy - ry + 2}`} stroke={shade(hair, 0.4)} strokeOpacity="0.55" strokeWidth="1.6" />
+      <path d={`M${50 - rx + 2} ${fy - 6} Q${50 - rx / 2} ${fy - ry} 46 ${fy - ry - 4} M54 ${fy - ry - 4} Q${50 + rx / 2} ${fy - ry} ${50 + rx - 2} ${fy - 6}`} stroke={shade(hair, -0.4)} strokeOpacity="0.5" strokeWidth="0.9" />
     </g>
   );
   const top = (() => {
@@ -1372,6 +1420,7 @@ export function AvatarFace({ look, className = "h-10 w-10" }: { look: AvatarLook
         {look.mask ? null : stache}
         {look.mask ? null : mouth}
         {!capOn ? top : null}
+        {strands}
         {look.hat === "berretto" ? <g><path d={`M${50 - rx - 3} ${fy - 8} C${50 - rx - 3} ${fy - ry - 14} ${50 + rx + 3} ${fy - ry - 14} ${50 + rx + 3} ${fy - 8} Z`} fill={look.hatColor} /><path d={`M30 ${fy - 8} Q50 ${fy - 2} 74 ${fy - 8} L76 ${fy - 4} Q50 ${fy + 2} 28 ${fy - 4} Z`} fill={shade(look.hatColor, -0.3)} /></g> : null}
         {look.hat === "fascia" ? <path d={`M${50 - rx - 1} ${fy - 13} Q50 ${fy - 19} ${50 + rx + 1} ${fy - 13} L${50 + rx + 1} ${fy - 8} Q50 ${fy - 14} ${50 - rx - 1} ${fy - 8} Z`} fill={look.hatColor} /> : null}
         {look.hat === "piuma" ? <g><path d={`M${50 - rx - 6} ${fy - 10} C${50 - rx} ${fy - ry - 16} ${50 + rx} ${fy - ry - 16} ${50 + rx + 6} ${fy - 10} Z`} fill={look.hatColor} /><path d={`M${50 + rx - 2} ${fy - 16} C${50 + rx + 8} ${fy - 30} ${50 + rx + 16} ${fy - 34} 92 ${fy - 36} C${50 + rx + 12} ${fy - 26} ${50 + rx + 6} ${fy - 18} ${50 + rx} ${fy - 12} Z`} fill="#f4f1ea" /></g> : null}

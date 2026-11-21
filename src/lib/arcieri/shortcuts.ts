@@ -37,7 +37,6 @@ export const SHORTCUTS: Shortcut[] = [
   { id: "obiettivi", group: "analizza", label: "Obiettivi", hint: "I tuoi traguardi", icon: "flag", color: "#2a9c66", to: "/obiettivi" },
   { id: "bacheca", group: "squadra", label: "Bacheca", hint: "News del gruppo", icon: "megaphone", color: "#b8508a", to: "/bacheca" },
   { id: "confronta", group: "analizza", label: "Confronta", hint: "Tu contro un compagno", icon: "compare", color: "#5568c2", to: "/confronta" },
-  { id: "gioco", group: "squadra", label: "Giochiamo", hint: "Mini giochi di tiro", icon: "game", color: "#b0802a", to: "/gioco" },
   { id: "acquisti", group: "prepara", label: "Acquisti", hint: "Lista della spesa", icon: "bag", color: "#946f42", to: "/acquisti" },
   { id: "profilo", group: "squadra", label: "Profilo", hint: "Dati, import, impostazioni", icon: "user", color: "#646c7a", to: "/profilo" },
   { id: "avatar", group: "squadra", label: "Il tuo arciere", hint: "Aspetto, abiti e attrezzatura", icon: "archer", color: "#c46b2b", to: "/avatar" },
@@ -159,7 +158,7 @@ const NEXT: Record<string, string> = {
   spine: "tuning", tuning: "assetto", assetto: "manutenzione", manutenzione: "borsa", borsa: "timer", timer: "respiro",
   respiro: "routine", routine: "tempi", tempi: "secco", secco: "gesto", allungo: "spine", vento: "balistica", energia: "balistica",
   unita: "spine", gare: "segnapunti", segnapunti: "classifiche", classifiche: "confronta", confronta: "squadra",
-  calendario: "gare", sfide: "classifiche", squadra: "bacheca", bacheca: "calendario", gioco: "stima", stima: "regole",
+  calendario: "gare", sfide: "classifiche", squadra: "bacheca", bacheca: "calendario", stima: "regole",
   regole: "glossario", glossario: "lezioni", lezioni: "quiz", quiz: "sfida-giorno", avatar: "attrezzatura", "sfida-giorno": "rapido", acquisti: "attrezzatura", profilo: "obiettivi",
 };
 
