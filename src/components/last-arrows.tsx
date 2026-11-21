@@ -18,34 +18,6 @@ function specsOf(raw: string): Record<string, string> {
 }
 
 /** Le ultime frecce, disegnate come sono davvero (colori, penne, punta) con numero e distanza. */
-/** Giorni che mancano a una data (AAAA-MM-GG), contati sul calendario di Roma. */
-function daysTo(day: string) {
-  const [y, m, d] = day.slice(0, 10).split("-").map(Number);
-  if (!y || !m || !d) return null;
-  const today = new Date(new Date().toLocaleString("en-US", { timeZone: "Europe/Rome" }));
-  const a = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
-  return Math.round((Date.UTC(y, m - 1, d) - a) / 86_400_000);
-}
-
-function fmtDay(day: string) {
-  const [y, m, d] = day.slice(0, 10).split("-").map(Number);
-  if (!y || !m || !d) return day;
-  return new Date(Date.UTC(y, m - 1, d, 12)).toLocaleDateString("it-IT", { weekday: "short", day: "numeric", month: "long", timeZone: "UTC" });
-}
-
-/** Il conto alla rovescia della prossima gara: quanti giorni mancano. */
-function CountdownBadge({ day }: { day: string }) {
-  const n = daysTo(day);
-  const label = n == null ? "—" : n <= 0 ? "Oggi" : n === 1 ? "Domani" : String(n);
-  const urgent = n != null && n <= 3;
-  return (
-    <div className={`grid h-16 w-16 shrink-0 place-items-center rounded-2xl text-center leading-none ${urgent ? "bg-[#ffd27a] text-[#2a1d0c]" : "bg-white/[0.07]"}`}>
-      <span className={`font-display ${label.length > 3 ? "text-lg" : "text-3xl"}`}>{label}</span>
-      {n != null && n > 1 ? <span className="-mt-2 text-[0.6rem] font-semibold uppercase tracking-wider opacity-75">giorni</span> : null}
-    </div>
-  );
-}
-
 /** Riassunto delle ultime frecce: media, X e colpi nel giallo. */
 export function LastSummary({ shots }: { shots: LastShot[] }) {
   const pts = shots.map((s) => (s.miss ? 0 : s.isX ? (s.max && s.max > 0 ? s.max : 10) : s.score));
