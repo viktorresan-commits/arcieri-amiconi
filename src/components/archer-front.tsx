@@ -1,6 +1,6 @@
 import { useId } from "react";
 import { tune, type AvatarLook } from "@/lib/arcieri/avatar";
-import { AvatarFace, shade } from "./archer-avatar";
+import { AvatarFace, bodyWidth, shade } from "./archer-avatar";
 
 const OUT = "#1b130d";
 const LONG_TOPS: Record<string, number> = { tunica: 252, "tunica-lunga": 266, ranger: 262, incrociata: 250, cappotto: 258, "cappotto-lungo": 292, giubba: 230, cotta: 240 };
@@ -14,7 +14,7 @@ export function ArcherFront({ look, className = "h-96 w-auto" }: { look: AvatarL
   const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
   const woman = look.body === "donna" || look.body === "ragazza";
   const kid = look.body === "ragazzo" || look.body === "ragazza";
-  const W = look.build === "robusto" ? 1.14 : look.build === "snello" ? 0.9 : 1;
+  const W = bodyWidth(look);
   const tw = (woman ? 0.9 : 1) * W;
   const cx = 100;
   const sh = { l: cx - 38 * tw, r: cx + 38 * tw };
@@ -86,14 +86,14 @@ export function ArcherFront({ look, className = "h-96 w-auto" }: { look: AvatarL
           <stop offset="1" stopColor={shade(limbs, 0.2)} />
         </linearGradient>
       </defs>
-      <g transform={kid ? "translate(100 360) scale(0.84) translate(-100 -360)" : undefined}>
+      <g transform={`translate(100 360) scale(${((kid ? 0.84 : 1) * (0.9 + (tune(look.stature, 50, 0, 100) / 100) * 0.2)).toFixed(3)}) translate(-100 -360)`}>
         <ellipse cx="100" cy="356" rx="58" ry="7" fill="#000" opacity="0.3" />
         {/* dietro: mantello e faretra sulla schiena */}
         {look.cape ? (
           <path d={`M${sh.l - 4} 104 C${sh.l - 18} 180 ${sh.l - 22} 260 ${sh.l - 16} ${look.capeStyle === "corto" ? 230 : 338} L${sh.r + 16} ${look.capeStyle === "corto" ? 230 : 338} C${sh.r + 22} 260 ${sh.r + 18} 180 ${sh.r + 4} 104 Z`} fill={shade(look.capeColor, -0.25)} stroke={OUT} strokeOpacity="0.45" strokeWidth="1.4" />
         ) : null}
         {quiverBack ? (
-          <g transform={`translate(${cx - bowSide * 30} 96) rotate(${-bowSide * 24 + spin})`}>
+          <g transform={`translate(${cx - bowSide * 30} ${96 + tune(look.quiverY, 0, -40, 40)}) rotate(${-bowSide * 24 + spin})`}>
             {[-5, 0, 5].map((dx, i) => (
               <g key={dx}>
                 <line x1={dx} y1={-22} x2={dx} y2={-40} stroke={look.shaft || "#1d1f22"} strokeWidth="2" />
@@ -149,7 +149,7 @@ export function ArcherFront({ look, className = "h-96 w-auto" }: { look: AvatarL
         ) : null}
         {look.pouch ? <rect x={cx - bowSide * 24 - 8} y="192" width="16" height="18" rx="4" fill="#6b4224" stroke={OUT} strokeOpacity="0.45" strokeWidth="1" /> : null}
         {!quiverBack ? (
-          <g transform={`translate(${cx - bowSide * (hip.r - cx + 10)} 222) rotate(${-bowSide * 8 + spin})`}>
+          <g transform={`translate(${cx - bowSide * (hip.r - cx + 10)} ${222 + tune(look.quiverY, 0, -40, 40)}) rotate(${-bowSide * 8 + spin})`}>
             {[-4, 0, 4].map((dx, i) => <path key={dx} d={`M${dx} -42 l-3.4 -9 l3.4 2.6 l3.4 -2.6 z`} fill={i === 1 ? look.cock : look.fletch} />)}
             <rect x="-9" y="-40" width="18" height="70" rx="5" fill={look.quiver} stroke={shade(look.quiver, -0.4)} strokeWidth="1.2" />
             <rect x="-10" y="-42" width="20" height="6" rx="2" fill={shade(look.quiver, -0.3)} />

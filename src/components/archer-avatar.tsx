@@ -37,6 +37,8 @@ type PoseDef = {
   hookW?: number;
   /** da che parte piega il gomito del braccio della corda (1 = in fuori, verso l'esterno) */
   bend?: 1 | -1;
+  /** la mano tiene una freccia appena presa dalla faretra */
+  holding?: boolean;
 };
 
 const ANCHOR = p(166, 106);
@@ -53,6 +55,9 @@ const POSES: Record<string, PoseDef> = {
   rilascio: { grip: p(250, 124), bowAngle: 2, hand: p(132, 104), pull: 0, hooked: false, arrow: false, fore: 82, face: "concentrato" },
   accompagna: { grip: p(251, 127), bowAngle: 9, hand: p(126, 106), pull: 0, hooked: false, arrow: false, fore: 80 },
   rilassa: { grip: p(214, 186), bowAngle: 22, hand: p(114, 198), pull: 0, hooked: false, arrow: false, fore: 46, bend: 1 },
+  // pesca: la mano della corda va a prendere la freccia nella faretra, dietro la spalla o al fianco
+  "pesca-schiena": { grip: p(204, 196), bowAngle: 10, hand: p(116, 70), pull: 0, hooked: false, arrow: false, fore: 46, bend: 1, holding: true },
+  "pesca-fianco": { grip: p(204, 196), bowAngle: 10, hand: p(110, 192), pull: 0, hooked: false, arrow: false, fore: 42, bend: 1, holding: true },
   vittoria: { grip: p(206, 34), bowAngle: -12, hand: p(100, 56), pull: 0, hooked: false, arrow: false, fore: 44, face: "felice", bend: 1 },
   // fiero: mano sul fianco, gomito in fuori
   fiero: { grip: p(194, 206), bowAngle: 2, hand: p(122, 190), pull: 0, hooked: false, arrow: false, fore: 40, face: "sorriso", bend: 1 },
@@ -71,6 +76,8 @@ export const PHASE_NAMES: Record<string, string> = {
   rilascio: "Rilascio",
   accompagna: "Accompagnamento",
   rilassa: "Rilassamento",
+  "pesca-schiena": "Prendo la freccia",
+  "pesca-fianco": "Prendo la freccia",
 };
 
 type Step = [string, number];
@@ -80,14 +87,15 @@ type Plan = { steps: Step[]; cycle: number; releases: number[] };
  * Sequenza di tiro dell'avatar: completa (11 tempi), rapida o da gara (mira lunga), con le frecce
  * della volée in fila e il rilassamento alla fine.
  */
-export function routinePlan(look: Pick<AvatarLook, "routine" | "hold" | "volley">): Plan {
+export function routinePlan(look: Pick<AvatarLook, "routine" | "hold" | "volley"> & { quiverPlace?: string }): Plan {
+  const pesca = look.quiverPlace === "schiena" ? "pesca-schiena" : "pesca-fianco";
   const hold = Math.max(0.6, Math.min(6, Number(look.hold) || 2));
   const n = Math.max(1, Math.min(6, Number(look.volley) || 1));
   const kind = look.routine ?? "completa";
   const one: Step[] =
     kind === "rapida"
-      ? [["aggancio", 0.5], ["predraw", 0.45], ["allungo", 0.75], ["mira", hold * 0.6], ["rilascio", 0.12], ["accompagna", 0.7]]
-      : [["incocco", 0.9], ["aggancio", 0.7], ["predraw", 0.8], ["trazione", 0.7], ["allungo", 0.5], ["mira", kind === "gara" ? hold + 1.2 : hold], ["rilascio", 0.12], ["accompagna", kind === "gara" ? 1.4 : 1.1]];
+      ? [[pesca, 0.55], ["aggancio", 0.5], ["predraw", 0.45], ["allungo", 0.75], ["mira", hold * 0.6], ["rilascio", 0.12], ["accompagna", 0.7]]
+      : [[pesca, 0.8], ["incocco", 0.9], ["aggancio", 0.7], ["predraw", 0.8], ["trazione", 0.7], ["allungo", 0.5], ["mira", kind === "gara" ? hold + 1.2 : hold], ["rilascio", 0.12], ["accompagna", kind === "gara" ? 1.4 : 1.1]];
   const steps: Step[] = [["riposo", kind === "rapida" ? 0.7 : 1.3]];
   for (let i = 0; i < n; i += 1) {
     if (i > 0) steps.push(["rilassa", 0.6]);
@@ -125,6 +133,19 @@ function poseAt(plan: Plan, t: number): { def: PoseDef; release: number | null; 
   return { def: POSES.riposo, release, phase: PHASE_NAMES.riposo };
 }
 
+/** avvicina la posa mostrata a quella voluta: posizioni morbide, stati (freccia, mano sulla corda) subito */
+function smoothTo(a: PoseDef, b: PoseDef, t: number): PoseDef {
+  return {
+    ...b,
+    grip: lerpP(a.grip, b.grip, t),
+    bowAngle: lerp(a.bowAngle, b.bowAngle, t),
+    hand: a.hand && b.hand ? lerpP(a.hand, b.hand, t) : b.hand,
+    pull: lerp(a.pull, b.pull, t),
+    fore: lerp(a.fore, b.fore, t),
+    hookW: lerp(a.hookW ?? (a.hooked ? 1 : 0), b.hookW ?? (b.hooked ? 1 : 0), t),
+  };
+}
+
 function mix(a: PoseDef, b: PoseDef, t: number): PoseDef {
   return {
     grip: lerpP(a.grip, b.grip, t),
@@ -137,6 +158,7 @@ function mix(a: PoseDef, b: PoseDef, t: number): PoseDef {
     fore: lerp(a.fore, b.fore, t),
     face: t < 0.5 ? a.face : b.face,
     bend: t < 0.5 ? a.bend : b.bend,
+    holding: t < 0.5 ? a.holding : b.holding,
   };
 }
 
@@ -183,7 +205,7 @@ function rot(pt: P, deg: number, origin: P): P {
 function Figure({ look, def, t, flying, blink, uid }: { look: AvatarLook; def: PoseDef; t: number; flying: number | null; blink: boolean; uid: string }) {
   const woman = look.body === "donna" || look.body === "ragazza";
   const kid = look.body === "ragazzo" || look.body === "ragazza";
-  const W = look.build === "robusto" ? 1.14 : look.build === "snello" ? 0.9 : 1;
+  const W = bodyWidth(look);
   const skin = look.skin;
   const skinD = shade(skin, -0.2);
   const breath = Math.sin(t * 1.7) * 0.9;
@@ -577,7 +599,8 @@ function Figure({ look, def, t, flying, blink, uid }: { look: AvatarLook; def: P
 
   const quiver = (place: "fianco" | "schiena") => {
     const spin = tune(look.quiverRot, 0, -180, 180);
-    const tr = place === "schiena" ? `translate(118 140) rotate(${24 + spin})` : `translate(116 214) rotate(${-14 + spin})`;
+    const qy = tune(look.quiverY, 0, -40, 40);
+    const tr = place === "schiena" ? `translate(118 ${140 + qy}) rotate(${24 + spin})` : `translate(116 ${214 + qy}) rotate(${-14 + spin})`;
     return (
       <g transform={tr}>
         {[-5, 0, 5].map((dx, i) => (
@@ -737,6 +760,15 @@ function Figure({ look, def, t, flying, blink, uid }: { look: AvatarLook; def: P
         );
       })()}
       {arm(SB, bowArm.elbow, grip, "bow")}
+      {def.holding && !def.arrow ? (() => {
+        // freccia appena presa: la tiene a metà asta, nella direzione del braccio
+        const dx = drawHand.x - drawArm.elbow.x;
+        const dy = drawHand.y - drawArm.elbow.y;
+        const L = Math.hypot(dx, dy) || 1;
+        const ux = dx / L;
+        const uy = dy / L;
+        return arrowNode(p(drawHand.x - ux * 34, drawHand.y - uy * 34), p(drawHand.x + ux, drawHand.y + uy), 72);
+      })() : null}
       {arm(SD, drawArm.elbow, drawHand, "draw")}
     </g>
   );
@@ -1122,7 +1154,7 @@ function Head({ look, H, face, blink, uid, t }: { look: AvatarLook; H: P; face: 
         </g>
       ) : null}
       {!blink ? (
-        <g>
+        <g transform={`translate(163 82) scale(${(0.8 + (tune(look.eyeSize, 50, 0, 100) / 100) * 0.4).toFixed(3)}) translate(-163 -82)`}>
           <path d="M157 83 Q162.5 77.4 168.4 81.6 Q163 86.4 157 83 Z" fill="#fbf7f2" />
           <circle cx="164" cy="82.2" r="3.2" fill={look.eyes} />
           <circle cx="164.4" cy="82.2" r="1.5" fill="#120c08" />
@@ -1134,7 +1166,7 @@ function Head({ look, H, face, blink, uid, t }: { look: AvatarLook; H: P; face: 
       ) : (
         <path d="M157 82.6 Q162.6 85 168.4 81.8" stroke="#2a1d14" strokeWidth="1.3" fill="none" strokeLinecap="round" />
       )}
-      <path d={browD} stroke={shade(hair, -0.15)} strokeWidth={browW} strokeLinecap="round" fill="none" />
+      <path d={browD} stroke={shade(hair, -0.15)} strokeWidth={browW * (0.6 + (tune(look.browSize, 50, 0, 100) / 100) * 0.8)} strokeLinecap="round" fill="none" />
       {look.mask ? null : mouth}
       <path d="M152 95 Q158 98 163 96" stroke={shade(skin, -0.12)} strokeWidth="2" fill="none" opacity="0.4" />
       {look.mask ? null : <Beard look={look} />}
@@ -1162,7 +1194,7 @@ function Head({ look, H, face, blink, uid, t }: { look: AvatarLook; H: P; face: 
           <path d="M2 -30 c1 -3 3 -4 3 -4" stroke="#c4473d" strokeWidth="1.6" strokeLinecap="round" />
         </g>
       ) : null}
-      <g transform={capOn ? undefined : `rotate(${tune(look.hatRot, 0, -180, 180)} 151 66)`}>
+      <g transform={capOn ? undefined : turnHat(look, 151)}>
         <Hat look={look} />
       </g>
       {look.sunglasses ? (
@@ -1180,6 +1212,24 @@ function Head({ look, H, face, blink, uid, t }: { look: AvatarLook; H: P; face: 
       ) : null}
     </g>
   );
+}
+
+/**
+ * Il copricapo gira sulla testa attorno all'asse verticale, come quando si ruota un
+ * berretto: resta calzato e a 180° la visiera guarda dietro.
+ */
+function turnHat(look: AvatarLook, cx: number) {
+  const a = (tune(look.hatRot, 0, -180, 180) * Math.PI) / 180;
+  const c = Math.cos(a);
+  const sx = Math.sign(c || 1) * Math.max(0.55, Math.abs(c));
+  if (Math.abs(sx - 1) < 0.001) return undefined;
+  return `translate(${cx} 0) scale(${sx.toFixed(3)} 1) translate(${-cx} 0)`;
+}
+
+/** larghezza del corpo: dalla barra continua, o dalla scelta snello/normale/robusto */
+export function bodyWidth(look: AvatarLook) {
+  if (look.buildW !== "" && look.buildW != null) return 0.84 + (tune(look.buildW, 50, 0, 100) / 100) * 0.36;
+  return look.build === "robusto" ? 1.14 : look.build === "snello" ? 0.9 : 1;
 }
 
 /** colore di barba e baffi */
@@ -1526,7 +1576,7 @@ export type AvatarDrive = { pull: number; aim: number; released?: number | null 
 export function ArcherAvatar({ look, className = "h-72 w-auto", interactive = true, pose, onShot, hideFlight = false, still = false, drive, onPhase }: { look: AvatarLook; className?: string; interactive?: boolean; pose?: Pose; onShot?: () => void; hideFlight?: boolean; still?: boolean; drive?: AvatarDrive | null; onPhase?: (name: string) => void }) {
   const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
   const mode = drive ? "guidata" : pose ?? look.pose ?? "animata";
-  const plan = useMemo(() => routinePlan(look), [look.routine, look.hold, look.volley]);
+  const plan = useMemo(() => routinePlan(look), [look.routine, look.hold, look.volley, look.quiverPlace]);
   const [t, setT] = useState(0);
   const [tapShot, setTapShot] = useState<number | null>(null);
   const shotRef = useRef(onShot);
@@ -1584,11 +1634,17 @@ export function ArcherAvatar({ look, className = "h-72 w-auto", interactive = tr
     def = { ...base, grip: p(base.grip.x, base.grip.y - lift) };
     if (drive.released != null) {
       const dt = drive.released;
-      def = dt < 0.12 ? mix(POSES.allungo, POSES.rilascio, dt / 0.12) : dt < 1.2 ? mix(POSES.rilascio, POSES.accompagna, Math.min(1, (dt - 0.12) / 0.6)) : mix(POSES.accompagna, POSES.riposo, easeIO(Math.min(1, (dt - 1.2) / 0.8)));
-      const fade = dt > 1.2 ? 1 - Math.min(1, (dt - 1.2) / 0.8) : 1;
+      const pesca = POSES[look.quiverPlace === "schiena" ? "pesca-schiena" : "pesca-fianco"];
+      def =
+        dt < 0.12 ? mix(POSES.allungo, POSES.rilascio, dt / 0.12)
+        : dt < 1.0 ? mix(POSES.rilascio, POSES.accompagna, Math.min(1, (dt - 0.12) / 0.6))
+        : dt < 1.6 ? mix(POSES.accompagna, pesca, easeIO((dt - 1.0) / 0.6))
+        : mix(pesca, POSES.riposo, easeIO(Math.min(1, (dt - 1.6) / 0.7)));
+      if (dt >= 1.6) def = { ...def, holding: true };
+      const fade = dt > 1.0 ? 1 - Math.min(1, (dt - 1.0) / 0.6) : 1;
       def = { ...def, grip: p(def.grip.x, def.grip.y - lift * fade) };
     }
-    phase = drive.released != null ? PHASE_NAMES.accompagna : k > 0.9 ? PHASE_NAMES.mira : k > 0.05 ? PHASE_NAMES.trazione : PHASE_NAMES.predraw;
+    phase = drive.released != null ? (drive.released > 1.1 ? "Prendo la freccia" : PHASE_NAMES.accompagna) : k > 0.9 ? PHASE_NAMES.mira : k > 0.05 ? PHASE_NAMES.trazione : PHASE_NAMES.predraw;
   } else if (mode === "animata") {
     const tc = t % plan.cycle;
     const at = poseAt(plan, tc);
@@ -1621,7 +1677,7 @@ export function ArcherAvatar({ look, className = "h-72 w-auto", interactive = tr
     smoothUntil.current = t + 0.9;
   }
   if (!still && (mode === "guidata" || t < smoothUntil.current) && smoothDef.current) {
-    def = mix(smoothDef.current, def, mode === "guidata" ? 0.4 : 0.22);
+    def = smoothTo(smoothDef.current, def, mode === "guidata" ? 0.4 : 0.22);
   }
   smoothDef.current = def;
   if (phase && phase !== lastPhase.current) {
@@ -1640,7 +1696,7 @@ export function ArcherAvatar({ look, className = "h-72 w-auto", interactive = tr
       <Defs look={look} uid={uid} />
       <g transform={look.lefty ? "translate(380 0) scale(-1 1)" : undefined}>
         <ellipse cx="150" cy="340" rx="80" ry="7" fill="#000" opacity="0.28" />
-        <g transform={kid ? "translate(150 342) scale(0.8) translate(-150 -342)" : undefined}>
+        <g transform={`translate(150 342) scale(${((kid ? 0.8 : 1) * (0.9 + (tune(look.stature, 50, 0, 100) / 100) * 0.2)).toFixed(3)}) translate(-150 -342)`}>
           <Figure look={look} def={def} t={t} flying={hideFlight ? null : flying} blink={blink} uid={uid} />
         </g>
       </g>
@@ -1678,10 +1734,11 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false }: { lo
     const tilt = e === "deciso" ? 2 : e === "concentrato" ? 1 : 0;
     const inner = dir === 1 ? x + 6 : x - 6;
     const outer = dir === 1 ? x - 6 : x + 6;
-    return <path key={`b${x}`} d={`M${outer} ${eyeY - 8} Q${x} ${eyeY - 11} ${inner} ${eyeY - 8 + tilt}`} stroke={shade(hair, -0.15)} strokeWidth={look.brows === "folte" ? 3 : look.brows === "sottili" ? 1.2 : 2} strokeLinecap="round" fill="none" />;
+    return <path key={`b${x}`} d={`M${outer} ${eyeY - 8} Q${x} ${eyeY - 11} ${inner} ${eyeY - 8 + tilt}`} stroke={shade(hair, -0.15)} strokeWidth={(look.brows === "folte" ? 3 : look.brows === "sottili" ? 1.2 : 2) * (0.6 + (tune(look.browSize, 50, 0, 100) / 100) * 0.8)} strokeLinecap="round" fill="none" />;
   };
+  const es = 0.8 + (tune(look.eyeSize, 50, 0, 100) / 100) * 0.4;
   const eye = (x: number) => (
-    <g key={x}>
+    <g key={x} transform={`translate(${x} ${eyeY}) scale(${es.toFixed(3)}) translate(${-x} ${-eyeY})`}>
       <ellipse cx={x} cy={eyeY} rx="5.4" ry={e === "concentrato" ? 3.2 : 4.4} fill="#fbf7f2" />
       <circle cx={x + 0.3} cy={eyeY + 0.2} r="3.2" fill={look.eyes} />
       <circle cx={x + 0.3} cy={eyeY + 0.2} r="1.5" fill="#120c08" />
@@ -1888,7 +1945,7 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false }: { lo
             <path d={`M50 ${fy - ry - 16} C54 ${fy - ry - 6} 54 ${fy - ry - 2} 52 ${fy - ry + 1}`} stroke={shade(look.hatColor, 0.25)} strokeWidth="1" fill="none" opacity="0.6" />
           </g>
         ) : null}
-        <g transform={`rotate(${tune(look.hatRot, 0, -180, 180)} 50 ${fy - ry})`}>
+        <g transform={turnHat(look, 50)}>
         {look.hat === "berretto" ? <g><path d={`M${50 - rx - 3} ${fy - 8} C${50 - rx - 3} ${fy - ry - 14} ${50 + rx + 3} ${fy - ry - 14} ${50 + rx + 3} ${fy - 8} Z`} fill={look.hatColor} /><path d={`M30 ${fy - 8} Q50 ${fy - 2} 74 ${fy - 8} L76 ${fy - 4} Q50 ${fy + 2} 28 ${fy - 4} Z`} fill={shade(look.hatColor, -0.3)} /></g> : null}
         {look.hat === "fascia" ? <path d={`M${50 - rx - 1} ${fy - 13} Q50 ${fy - 19} ${50 + rx + 1} ${fy - 13} L${50 + rx + 1} ${fy - 8} Q50 ${fy - 14} ${50 - rx - 1} ${fy - 8} Z`} fill={look.hatColor} /> : null}
         {look.hat === "piuma" ? <g><path d={`M${50 - rx - 6} ${fy - 10} C${50 - rx} ${fy - ry - 16} ${50 + rx} ${fy - ry - 16} ${50 + rx + 6} ${fy - 10} Z`} fill={look.hatColor} /><path d={`M${50 + rx - 2} ${fy - 16} C${50 + rx + 8} ${fy - 30} ${50 + rx + 16} ${fy - 34} 92 ${fy - 36} C${50 + rx + 12} ${fy - 26} ${50 + rx + 6} ${fy - 18} ${50 + rx} ${fy - 12} Z`} fill="#f4f1ea" /></g> : null}

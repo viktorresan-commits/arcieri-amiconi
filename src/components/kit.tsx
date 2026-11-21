@@ -245,7 +245,17 @@ export function HoldDelete({
       onPointerDown={down}
       onPointerUp={up}
       onPointerCancel={up}
-      onContextMenu={(e) => e.preventDefault()}
+      onContextMenu={(e) => {
+        // su Android la pressione lunga arriva come menu contestuale: vale come "tenuto premuto"
+        e.preventDefault();
+        const target = e.target as HTMLElement | null;
+        if (target?.closest?.("[data-hold-actions]") || held.current) return;
+        clearTimer();
+        held.current = true;
+        setArmed(true);
+        if (navigator.vibrate) navigator.vibrate(12);
+      }}
+      onDragStart={(e) => e.preventDefault()}
       onClickCapture={(e) => {
         if (!held.current) return;
         const target = e.target as HTMLElement | null;
@@ -257,7 +267,7 @@ export function HoldDelete({
         e.stopPropagation();
         held.current = false;
       }}
-      className={cx("touch-pan-y select-none", armed && "rounded-2xl ring-2 ring-accent")}
+      className={cx("aa-hold touch-pan-y select-none", armed && "rounded-2xl ring-2 ring-accent")}
       style={{ WebkitTouchCallout: "none" }}
     >
       {children}

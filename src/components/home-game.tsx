@@ -316,8 +316,8 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
   const aimLift = draw ? clamp((BASE.y - draw.aim.y) / 6, -14, 18) : 0;
   // dopo l'accompagnamento l'arciere torna in posizione: niente pose bloccate
   const since = released != null && !draw ? t - released : null;
-  const active = draw != null || (since != null && since < 2.1);
-  const drive = useMemo(() => (active ? { pull, aim: aimLift, released: since != null && since < 2.1 ? since : null } : null), [active, pull, aimLift, since]);
+  const active = draw != null || (since != null && since < 2.4);
+  const drive = useMemo(() => (active ? { pull, aim: aimLift, released: since != null && since < 2.4 ? since : null } : null), [active, pull, aimLift, since]);
   const bestHere = best;
   const pct = (x: number, y: number) => ({ left: `${((lefty ? W - x : x) / W) * 100}%`, top: `${(y / H) * 100}%` });
   const shownHits = playing ? hits : demoHits;
@@ -338,7 +338,7 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
       {/* mancino: campo, bersaglio e arciere si specchiano; i testi restano dritti */}
       <div className={`pointer-events-none absolute inset-0 ${lefty ? "aa-mirror" : ""}`}>
       <div key={scene} className="aa-scene-swap absolute inset-0">
-        <SceneBackdrop sky={sky} id="game" scene={scene} />
+        <SceneBackdrop sky={sky} id="game" scene={scene} wind={wind} />
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} className="absolute inset-0 h-full w-full" aria-hidden>
         <defs>

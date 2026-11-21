@@ -267,7 +267,8 @@ function Page() {
                 ))}
               </div>
             </Row>
-            <Row label="Corporatura"><Chips value={look.build} onChange={(v) => set("build", v)} options={opts(["snello", "normale", "robusto"] as const)} /></Row>
+            <Slider label="Corporatura" value={look.buildW !== "" ? tune(look.buildW, 50, 0, 100) : look.build === "snello" ? 17 : look.build === "robusto" ? 83 : 45} min={0} max={100} onChange={(v) => setLook((l) => ({ ...l, buildW: String(Math.round(v)), build: v < 30 ? "snello" : v > 70 ? "robusto" : "normale" }))} format={(v) => (v < 30 ? "Snella" : v > 70 ? "Robusta" : "Media")} ends={["Snella", "Robusta"]} />
+            <Slider label="Statura" value={tune(look.stature, 50, 0, 100)} min={0} max={100} onChange={(v) => set("stature", String(Math.round(v)))} format={(v) => `${v}%`} ends={["Più basso", "Più alto"]} />
             <Row label="Carnagione"><Tint value={look.skin} onPick={(c) => set("skin", c)} quick={SKINS} /></Row>
             <Row label="Mano dell'arco">
               <Chips value={look.lefty ? "mancino" : "destro"} onChange={(v) => set("lefty", v === "mancino")} options={[{ id: "destro", label: "Destrorso" }, { id: "mancino", label: "Mancino" }]} />
@@ -288,7 +289,9 @@ function Page() {
             </Row>
             <Slider label="Grandezza del naso" value={tune(look.noseSize, 50, 0, 100)} min={0} max={100} onChange={(v) => set("noseSize", String(Math.round(v)))} format={(v) => `${v}%`} ends={["Piccolo", "Grande"]} />
             <Row label="Occhi"><Tint value={look.eyes} onPick={(c) => set("eyes", c)} quick={EYE_COLORS} /></Row>
+            <Slider label="Grandezza degli occhi" value={tune(look.eyeSize, 50, 0, 100)} min={0} max={100} onChange={(v) => set("eyeSize", String(Math.round(v)))} format={(v) => `${v}%`} ends={["Piccoli", "Grandi"]} />
             <Row label="Sopracciglia"><Chips value={look.brows} onChange={(v) => set("brows", v)} options={opts(["sottili", "normali", "folte"] as const)} /></Row>
+            <Slider label="Spessore delle sopracciglia" value={tune(look.browSize, 50, 0, 100)} min={0} max={100} onChange={(v) => set("browSize", String(Math.round(v)))} format={(v) => `${v}%`} ends={["Sottili", "Folte"]} />
             <Row label="Dettagli">
               <div className="flex flex-wrap gap-1.5">
                 <Toggle on={look.freckles} label="Lentiggini" onChange={(v) => set("freckles", v)} />
@@ -326,7 +329,7 @@ function Page() {
               <FaceGrid look={shown} current={look.hat} items={HAT_OPTS.map(([id, label]) => ({ id, label, patch: { hat: id } }))} onPick={(id) => set("hat", id as AvatarLook["hat"])} />
             </Row>
             {look.hat !== "nessuno" ? <Row label="Colore del copricapo"><Tint value={look.hatColor} onPick={(c) => set("hatColor", c)} quick={CLOTH_COLORS} /></Row> : null}
-            {look.hat !== "nessuno" && look.hat !== "cappuccio" ? <Slider label="Rotazione del copricapo" value={tune(look.hatRot, 0, -180, 180)} min={-180} max={180} onChange={(v) => set("hatRot", String(Math.round(v)))} format={(v) => `${v}°`} ends={["-180°", "+180°"]} /> : null}
+            {look.hat !== "nessuno" && look.hat !== "cappuccio" ? <Slider label="Gira il copricapo sulla testa" value={tune(look.hatRot, 0, -180, 180)} min={-180} max={180} onChange={(v) => set("hatRot", String(Math.round(v)))} format={(v) => `${v}°`} ends={["Visiera dietro", "Visiera dietro"]} /> : null}
           </>
         ) : null}
         {tab === "abiti" ? (
@@ -393,6 +396,7 @@ function Page() {
             {look.wraps ? <Row label="Colore delle fasce"><Colors value={look.wrapsColor} colors={["#6b5a48", "#7a6a52", "#d8cdb6", "#3a2a1e", "#55585a", "#8a2f2f"]} onPick={(c) => set("wrapsColor", c)} /></Row> : null}
             {look.scarf ? <Row label="Colore della sciarpa"><Tint value={look.scarfColor} onPick={(c) => set("scarfColor", c)} quick={CLOTH_COLORS} /></Row> : null}
             <Row label="Faretra"><Chips value={look.quiverPlace} onChange={(v) => set("quiverPlace", v)} options={[{ id: "fianco", label: "Al fianco" }, { id: "schiena", label: "Sulla schiena" }]} /></Row>
+            <Slider label="Altezza della faretra" value={tune(look.quiverY, 0, -40, 40)} min={-40} max={40} onChange={(v) => set("quiverY", String(Math.round(v)))} format={(v) => (v === 0 ? "Normale" : v < 0 ? `${-v} più su` : `${v} più giù`)} ends={["Più su", "Più giù"]} />
             <Slider label="Rotazione della faretra" value={tune(look.quiverRot, 0, -180, 180)} min={-180} max={180} onChange={(v) => set("quiverRot", String(Math.round(v)))} format={(v) => `${v}°`} ends={["-180°", "+180°"]} />
             <Row label="Colore della faretra"><Tint value={look.quiver} onPick={(c) => set("quiver", c)} quick={["#7a4a26", "#14181c", "#2f6f62", "#8a2f2f", "#1f3a5f", "#c9a46a"]} /></Row>
           </>

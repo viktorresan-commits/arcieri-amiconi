@@ -10,6 +10,7 @@ import { memberLabel, initials } from "@/lib/arcieri/labels";
 import { Avatar, Loading, Mark, cx } from "./kit";
 import { QUICK_ACTIONS, currentShortcut, shortcutById } from "@/lib/arcieri/shortcuts";
 import { NextCard, PathMap, ShortcutEditor, ShortcutTile, TipCard, rememberPage } from "./shortcuts";
+import { CompanyWelcome } from "./compagnia";
 import { Scene } from "./scene";
 import { levelOf, useXp, useXpToasts } from "@/lib/arcieri/xp";
 import { AvatarFace } from "./archer-avatar";
@@ -243,6 +244,7 @@ export function Shell({ children }: { children: ReactNode }) {
             {children}
             <NextCard path={path} />
             {prefs.home.tips ? <TipCard key={path} /> : null}
+            <CompanyWelcome />
           </main>
           <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 items-end border-t border-line/60 bg-elev/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden">
             {[nav[0], nav[1]].map((item) => <BottomLink key={item.to} item={item} active={path === item.to || (item.to !== "/" && path.startsWith(item.to))} />)}

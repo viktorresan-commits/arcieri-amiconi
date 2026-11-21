@@ -56,11 +56,11 @@ async function homeId(sql: Sql) {
 
 /** la compagnia della persona: se non ne ha scelta una, entra in quella di Fabriano */
 async function myMembership(sql: Sql, userId: string) {
-  const rows = await sql<{ company_id: number; role: string }>`select company_id, role from company_members where user_id = ${userId} limit 1`;
-  if (rows[0]) return { companyId: asNum(rows[0].company_id), role: rows[0].role as "owner" | "member" };
+  const rows = await sql<{ company_id: number; role: string; chosen: boolean }>`select company_id, role, chosen from company_members where user_id = ${userId} limit 1`;
+  if (rows[0]) return { companyId: asNum(rows[0].company_id), role: rows[0].role as "owner" | "member", chosen: Boolean(rows[0].chosen) };
   const home = await homeId(sql);
-  await sql`insert into company_members (user_id, company_id) values (${userId}, ${home}) on conflict (user_id) do nothing`;
-  return { companyId: home, role: "member" as const };
+  await sql`insert into company_members (user_id, company_id, chosen) values (${userId}, ${home}, false) on conflict (user_id) do nothing`;
+  return { companyId: home, role: "member" as const, chosen: false };
 }
 
 /** id degli utenti che stanno nella stessa compagnia di userId */
@@ -177,7 +177,8 @@ export const listCompanies = createServerFn({ method: "GET" })
         points: trainPoints + gareRaw,
         avg: arrows > 0 ? trainPoints / arrows : null,
         owner: crew.find((p) => p.role === "owner")?.user_id ?? null,
-        crew: crew.map((p) => ({
+        // gli iscritti delle altre compagnie li vede solo l'amministratore
+        crew: (id === mine.companyId || me.role === "admin" ? crew : []).map((p) => ({
           userId: p.user_id,
           memberId: asNum(p.member_id),
           givenName: p.given_name,
@@ -192,7 +193,7 @@ export const listCompanies = createServerFn({ method: "GET" })
     });
     const current = board.find((c) => c.id === mine.companyId) ?? board[0];
     const canEdit = mine.role === "owner" || (me.role === "admin" && current?.owner == null);
-    return { companies: board, mine: mine.companyId, myRole: mine.role, canEdit, homeId: home };
+    return { companies: board, mine: mine.companyId, myRole: mine.role, canEdit, homeId: home, isAdmin: me.role === "admin", chosen: mine.chosen };
   });
 
 export const createCompany = createServerFn({ method: "POST" })
@@ -223,8 +224,8 @@ export const createCompany = createServerFn({ method: "POST" })
     const id = asNum(made[0]?.id);
     const old = mine.companyId;
     await sql`
-      insert into company_members (user_id, company_id, role) values (${context.userId}, ${id}, 'owner')
-      on conflict (user_id) do update set company_id = excluded.company_id, role = 'owner', joined_at = now()`;
+      insert into company_members (user_id, company_id, role, chosen) values (${context.userId}, ${id}, 'owner', true)
+      on conflict (user_id) do update set company_id = excluded.company_id, role = 'owner', chosen = true, joined_at = now()`;
     await dropIfEmpty(sql, old);
     return { id, slug };
   });
@@ -266,15 +267,18 @@ export const joinCompany = createServerFn({ method: "POST" })
     const target = await sql<{ id: number }>`select id from companies where id = ${data.id} limit 1`;
     if (!target[0]) throw new Error("Compagnia non trovata.");
     const mine = await myMembership(sql, context.userId);
-    if (mine.companyId === data.id) return { ok: true };
+    if (mine.companyId === data.id) {
+      await sql`update company_members set chosen = true where user_id = ${context.userId}`;
+      return { ok: true };
+    }
     if (mine.role === "owner") {
       const others = await sql<{ user_id: string }>`select user_id from company_members where company_id = ${mine.companyId} and user_id <> ${context.userId} order by joined_at limit 1`;
       // il ruolo di fondatore passa a chi è entrato per primo
       if (others[0]) await sql`update company_members set role = 'owner' where user_id = ${others[0].user_id}`;
     }
     await sql`
-      insert into company_members (user_id, company_id, role) values (${context.userId}, ${data.id}, 'member')
-      on conflict (user_id) do update set company_id = excluded.company_id, role = 'member', joined_at = now()`;
+      insert into company_members (user_id, company_id, role, chosen) values (${context.userId}, ${data.id}, 'member', true)
+      on conflict (user_id) do update set company_id = excluded.company_id, role = 'member', chosen = true, joined_at = now()`;
     await dropIfEmpty(sql, mine.companyId);
     return { ok: true };
   });
@@ -285,3 +289,19 @@ async function dropIfEmpty(sql: Sql, companyId: number) {
   const left = await sql<{ n: number }>`select count(*)::int as n from company_members where company_id = ${companyId}`;
   if (asNum(left[0]?.n) === 0) await sql`delete from companies where id = ${companyId}`;
 }
+
+/** primo accesso: la persona non ha ancora scelto la sua compagnia? (lettura leggera) */
+export const companyWelcome = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    const sql = await db();
+    await ensureMember(sql, context.userId);
+    const mine = await myMembership(sql, context.userId);
+    if (mine.chosen) return { chosen: true as const, companies: [] as { id: number; name: string; city: string; logoUrl: string | null; color: string; members: number }[], homeId: mine.companyId };
+    const home = await homeId(sql);
+    const rows = await sql<{ id: number; name: string; city: string; logo_url: string | null; color: string; members: number }>`
+      select c.id, c.name, c.city, c.logo_url, c.color, count(cm.user_id)::int as members
+      from companies c left join company_members cm on cm.company_id = c.id
+      group by c.id order by (c.id = ${home}) desc, count(cm.user_id) desc, c.name`;
+    return { chosen: false as const, companies: rows.map((r) => ({ id: asNum(r.id), name: r.name, city: r.city, logoUrl: r.logo_url, color: r.color, members: asNum(r.members) })), homeId: home };
+  });

@@ -20,7 +20,7 @@ const rnd = (i: number) => {
   return x - Math.floor(x);
 };
 
-export const SceneBackdrop = memo(function SceneBackdrop({ sky, id = "bk", scene = "campo" }: { sky: Sky; id?: string; scene?: string }) {
+export const SceneBackdrop = memo(function SceneBackdrop({ sky, id = "bk", scene = "campo", wind }: { sky: Sky; id?: string; scene?: string; /** vento in m/s: positivo verso destra. Le nuvole vanno dove tira */ wind?: number }) {
   const p = SKY[sky.tod];
   const sc = sceneById(scene);
   const rain = sky.weather === "pioggia";
@@ -133,7 +133,7 @@ export const SceneBackdrop = memo(function SceneBackdrop({ sky, id = "bk", scene
         </g>
       ) : null}
     </svg>
-    <SkyLayer id={id} tod={sky.tod} night={night} rain={rain} cloudy={cloudy} desert={desert} />
+    <SkyLayer id={id} tod={sky.tod} night={night} rain={rain} cloudy={cloudy} desert={desert} wind={wind} />
     </>
   );
 });
@@ -144,7 +144,10 @@ export const SceneBackdrop = memo(function SceneBackdrop({ sky, id = "bk", scene
  * viene ridisegnata a ogni fotogramma. Il nastro è largo il doppio e si sposta di metà:
  * il giro torna al punto di partenza senza stacchi.
  */
-function SkyLayer({ id, tod, night, rain, cloudy, desert }: { id: string; tod: Sky["tod"]; night: boolean; rain: boolean; cloudy: boolean; desert: boolean }) {
+function SkyLayer({ id, tod, night, rain, cloudy, desert, wind }: { id: string; tod: Sky["tod"]; night: boolean; rain: boolean; cloudy: boolean; desert: boolean; wind?: number }) {
+  // senza vento indicato vanno piano verso sinistra; con il vento seguono la sua direzione
+  const toRight = wind != null && wind > 0;
+  const pace = wind != null ? 0.6 + Math.min(3, Math.abs(wind)) * 0.45 : 1;
   const tint = night ? "#2a3550" : rain ? "#8b95a0" : tod === "tramonto" ? "#ffd2b4" : "#ffffff";
   const base = night ? "#141d33" : rain ? "#5d6670" : tod === "tramonto" ? "#b0687a" : "#b9c8d8";
   const top = night ? "#3a4766" : rain ? "#a3acb6" : tod === "tramonto" ? "#ffe3cf" : "#ffffff";
@@ -156,7 +159,7 @@ function SkyLayer({ id, tod, night, rain, cloudy, desert }: { id: string; tod: S
         const list = cloudy ? CLOUDS_THICK[layer] : CLOUDS_FEW[layer];
         const gid = `${id}cl${layer}`;
         return (
-          <div key={layer} className={`aa-cloud-track ${layer ? "aa-cloud-near" : "aa-cloud-far"}`} style={{ opacity: rain ? 0.95 : cloudy ? 0.92 : desert ? 0.45 : layer ? 0.88 : 0.62 }}>
+          <div key={layer} className={`aa-cloud-track ${layer ? "aa-cloud-near" : "aa-cloud-far"}`} style={{ opacity: rain ? 0.95 : cloudy ? 0.92 : desert ? 0.45 : layer ? 0.88 : 0.62, animationDirection: toRight ? "reverse" : "normal", animationDuration: `${Math.round((layer ? 90 : 160) / pace)}s` }}>
             <svg viewBox="0 0 560 120" preserveAspectRatio="xMinYMin meet" className="block h-auto w-full">
               <defs>
                 <linearGradient id={gid} gradientUnits="userSpaceOnUse" x1="0" y1="-34" x2="0" y2="12">

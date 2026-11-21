@@ -1,8 +1,9 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Link } from "@tanstack/react-router";
 import type { listCompanies } from "@/lib/arcieri/compagnie.api";
-import { createCompany, joinCompany, updateCompany } from "@/lib/arcieri/compagnie.api";
-import { Button, Card, ErrorNote, Field, Segmented, TextInput } from "./kit";
+import { companyWelcome, createCompany, joinCompany, updateCompany } from "@/lib/arcieri/compagnie.api";
+import { Avatar, Button, Card, ErrorNote, Field, Segmented, TextInput } from "./kit";
 import { RankBars } from "./rank-bars";
 
 type Board = Awaited<ReturnType<typeof listCompanies>>;
@@ -210,6 +211,7 @@ type Metric = "points" | "arrows" | "members" | "gare" | "avg";
 
 export function CompanyLeague({ board, onJoin, busy }: { board: Board; onJoin: (id: number) => void; busy: number | null }) {
   const [metric, setMetric] = useState<Metric>("points");
+  const [open, setOpen] = useState<number | null>(null);
   const unit: Record<Metric, string> = { points: "pt", arrows: "frecce", members: "arcieri", gare: "gare", avg: "" };
   const rows = board.companies.map((co) => {
     const value = metric === "avg" ? co.avg ?? 0 : co[metric];
@@ -249,22 +251,64 @@ export function CompanyLeague({ board, onJoin, busy }: { board: Board; onJoin: (
       </Card>
       <Card className="grid grid-cols-[minmax(0,1fr)] gap-2">
         <h2 className="font-display text-2xl">Tutte le compagnie</h2>
-        {board.companies.map((co) => (
-          <div key={co.id} className="flex items-center gap-3 rounded-2xl bg-white/[0.04] p-2.5">
-            {co.logoUrl ? <img src={co.logoUrl} alt="" className="h-12 w-11 shrink-0 object-contain" /> : <span className="h-12 w-11 shrink-0"><DefaultCrest color={co.color} letter={co.name.replace(/^Compagnia (degli |dei |di )?/i, "").slice(0, 1)} /></span>}
-            <div className="min-w-0 flex-1">
-              <p className="truncate font-semibold">{co.name}</p>
-              <p className="truncate text-xs text-muted">{[co.city, `${co.members} arcieri`, `${co.arrows.toLocaleString("it-IT")} frecce`].filter(Boolean).join(" · ")}</p>
+        {board.isAdmin ? <p className="text-xs text-muted">Sei amministratore: tocca una compagnia per vedere contatti e iscritti.</p> : <p className="text-xs text-muted">Tocca una compagnia per vedere i contatti.</p>}
+        {board.companies.map((co) => {
+          const expanded = open === co.id;
+          const kinds = ["phone", "whatsapp", "email", "website", "instagram", "facebook", "youtube", "tiktok", "address"] as const;
+          const links = kinds.map((kind) => ({ kind, href: hrefOf(kind, co[kind]) })).filter((item) => item.href);
+          return (
+            <div key={co.id} className={`rounded-2xl ${expanded ? "bg-white/[0.07] ring-1 ring-white/10" : "bg-white/[0.04]"}`}>
+              <div className="flex items-center gap-3 p-2.5">
+                <button type="button" onClick={() => setOpen(expanded ? null : co.id)} aria-expanded={expanded} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+                  {co.logoUrl ? <img src={co.logoUrl} alt="" className="h-12 w-11 shrink-0 object-contain" /> : <span className="h-12 w-11 shrink-0"><DefaultCrest color={co.color} letter={co.name.replace(/^Compagnia (degli |dei |di )?/i, "").slice(0, 1)} /></span>}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-semibold">{co.name}</span>
+                    <span className="block truncate text-xs text-muted">{[co.city, `${co.members} arcieri`, `${co.arrows.toLocaleString("it-IT")} frecce`].filter(Boolean).join(" · ")}</span>
+                  </span>
+                </button>
+                {co.id === board.mine ? (
+                  <span className="shrink-0 rounded-full bg-primary/20 px-2.5 py-1 text-[0.68rem] font-semibold text-primary">La tua</span>
+                ) : (
+                  <button type="button" disabled={busy != null} onClick={() => onJoin(co.id)} className="aa-press min-h-9 shrink-0 rounded-full border border-line px-3 text-xs font-semibold disabled:opacity-50">
+                    {busy === co.id ? "Entro…" : "Entra"}
+                  </button>
+                )}
+              </div>
+              {expanded ? (
+                <div className="aa-rise grid gap-3 px-3 pb-3">
+                  {co.motto ? <p className="font-display text-base italic">«{co.motto}»</p> : null}
+                  {co.bio ? <p className="text-sm text-muted">{co.bio}</p> : null}
+                  <div className="grid grid-cols-4 gap-1.5 text-center">
+                    {[["Arcieri", co.members], ["Frecce", co.arrows], ["Punti", co.points], ["Gare", co.gare]].map(([k, v]) => (
+                      <div key={String(k)} className="rounded-xl bg-black/20 py-1.5">
+                        <p className="font-display text-base tabular-nums">{Number(v).toLocaleString("it-IT")}</p>
+                        <p className="text-[0.58rem] font-semibold uppercase tracking-wider text-muted">{k}</p>
+                      </div>
+                    ))}
+                  </div>
+                  {links.length ? (
+                    <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1 [scrollbar-width:none]">
+                      {links.map((item) => <ContactButton key={item.kind} kind={item.kind} href={item.href} tint={CONTACT_TINT[item.kind]} />)}
+                    </div>
+                  ) : <p className="text-xs text-muted">Nessun contatto inserito.</p>}
+                  {co.crew.length ? (
+                    <div className="grid gap-1.5">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted">Iscritti</p>
+                      {co.crew.map((m) => (
+                        <Link key={m.userId} to="/arciere/$id" params={{ id: String(m.memberId) }} className="flex items-center gap-2.5 rounded-xl bg-black/15 p-2">
+                          <Avatar size="sm" label={[m.givenName, m.familyName].filter(Boolean).join(" ") || m.nickname} color={m.avatarColor} photo={m.photoUrl} />
+                          <span className="min-w-0 flex-1 truncate text-sm font-semibold">{m.nickname || [m.givenName, m.familyName].filter(Boolean).join(" ")}</span>
+                          {m.owner ? <span className="rounded-full bg-[#d9b45a]/20 px-2 py-0.5 text-[0.62rem] font-semibold text-[#e8c870]">Fondatore</span> : null}
+                          <span className="text-xs tabular-nums text-muted">{m.arrows} frecce</span>
+                        </Link>
+                      ))}
+                    </div>
+                  ) : co.members > 0 && co.id !== board.mine ? <p className="text-xs text-muted">Gli iscritti li vede l'amministratore.</p> : null}
+                </div>
+              ) : null}
             </div>
-            {co.id === board.mine ? (
-              <span className="shrink-0 rounded-full bg-primary/20 px-2.5 py-1 text-[0.68rem] font-semibold text-primary">La tua</span>
-            ) : (
-              <button type="button" disabled={busy != null} onClick={() => onJoin(co.id)} className="aa-press min-h-9 shrink-0 rounded-full border border-line px-3 text-xs font-semibold disabled:opacity-50">
-                {busy === co.id ? "Entro…" : "Entra"}
-              </button>
-            )}
-          </div>
-        ))}
+          );
+        })}
       </Card>
     </div>
   );
@@ -404,4 +448,115 @@ function shrink(file: File) {
     img.onerror = () => reject(new Error("Immagine non letta"));
     img.src = URL.createObjectURL(file);
   });
+}
+
+/* ---------------- primo accesso: scelta della compagnia ---------------- */
+
+type Welcome = Awaited<ReturnType<typeof companyWelcome>>;
+
+/**
+ * Al primo accesso chiede in quale compagnia entrare: quella di Fabriano, un'altra già
+ * esistente o una nuova da fondare. Compare una volta sola; poi si cambia da Compagnia.
+ */
+export function CompanyWelcome() {
+  const [w, setW] = useState<Welcome | null>(null);
+  const [mode, setMode] = useState<"scegli" | "fonda">("scegli");
+  const [busy, setBusy] = useState<number | null>(null);
+  const [err, setErr] = useState("");
+  useEffect(() => {
+    let off = false;
+    try {
+      if (sessionStorage.getItem("aa-company-ok") === "1") return;
+    } catch {
+      /* niente memoria di sessione */
+    }
+    companyWelcome()
+      .then((res) => {
+        if (off) return;
+        if (res.chosen) {
+          try {
+            sessionStorage.setItem("aa-company-ok", "1");
+          } catch {
+            /* niente */
+          }
+        } else setW(res);
+      })
+      .catch(() => undefined);
+    return () => {
+      off = true;
+    };
+  }, []);
+  if (!w || w.chosen || typeof document === "undefined") return null;
+  const done = () => {
+    try {
+      sessionStorage.setItem("aa-company-ok", "1");
+    } catch {
+      /* niente */
+    }
+    setW(null);
+  };
+  async function join(id: number) {
+    setBusy(id);
+    setErr("");
+    try {
+      await joinCompany({ data: { id } });
+      done();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Non riuscito");
+    } finally {
+      setBusy(null);
+    }
+  }
+  const home = w.companies.find((c) => c.id === w.homeId) ?? w.companies[0];
+  const others = w.companies.filter((c) => c.id !== home?.id);
+  return createPortal(
+    <div className="fixed inset-0 z-[80] overflow-y-auto bg-[#07100b]/92 backdrop-blur-md" role="dialog" aria-modal="true" aria-label="Scegli la tua compagnia">
+      <div className="mx-auto grid max-w-md gap-4 px-4 pb-10 pt-[calc(env(safe-area-inset-top)+2rem)]">
+        <div className="text-center">
+          <p className="text-[0.66rem] font-semibold uppercase tracking-[0.2em] text-white/60">Benvenuto</p>
+          <h2 className="font-display text-3xl text-white">Scegli la tua compagnia</h2>
+          <p className="mt-1 text-sm text-white/70">Ti alleni con loro, compari nelle loro classifiche e la tua compagnia sfida le altre. Potrai cambiarla quando vuoi.</p>
+        </div>
+        {mode === "scegli" ? (
+          <>
+            {home ? (
+              <button type="button" disabled={busy != null} onClick={() => void join(home.id)} className="aa-company aa-press relative overflow-hidden rounded-[var(--radius-card)] border border-white/15 text-left shadow-card" style={{ ["--co" as string]: home.color }}>
+                <div className="aa-company-bg" aria-hidden />
+                <div className="relative flex items-center gap-4 p-4">
+                  <span className="aa-company-crest relative grid h-28 w-24 shrink-0 place-items-center">
+                    {home.logoUrl ? <img src={home.logoUrl} alt="" className="h-full w-full object-contain" /> : <DefaultCrest color={home.color} letter={home.name.replace(/^Compagnia (degli |dei |di )?/i, "").slice(0, 1)} />}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-display text-2xl leading-tight text-white">{home.name}</span>
+                    <span className="mt-1 block text-xs text-white/75">{[home.city, `${home.members} arcieri`].filter(Boolean).join(" · ")}</span>
+                    <span className="mt-3 inline-flex min-h-10 items-center rounded-full bg-white px-4 text-sm font-bold text-[#0b120e]">{busy === home.id ? "Entro…" : "Entra"}</span>
+                  </span>
+                </div>
+              </button>
+            ) : null}
+            {others.length ? (
+              <div className="grid gap-2">
+                <p className="px-1 text-xs font-semibold uppercase tracking-wider text-white/55">Altre compagnie</p>
+                {others.map((c) => (
+                  <div key={c.id} className="flex items-center gap-3 rounded-2xl bg-white/[0.06] p-2.5">
+                    <span className="h-12 w-11 shrink-0">{c.logoUrl ? <img src={c.logoUrl} alt="" className="h-full w-full object-contain" /> : <DefaultCrest color={c.color} letter={c.name.replace(/^Compagnia (degli |dei |di )?/i, "").slice(0, 1)} />}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-semibold text-white">{c.name}</span>
+                      <span className="block truncate text-xs text-white/60">{[c.city, `${c.members} arcieri`].filter(Boolean).join(" · ")}</span>
+                    </span>
+                    <button type="button" disabled={busy != null} onClick={() => void join(c.id)} className="aa-press min-h-9 shrink-0 rounded-full border border-white/25 px-3 text-xs font-semibold text-white">{busy === c.id ? "Entro…" : "Entra"}</button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            <button type="button" onClick={() => setMode("fonda")} className="aa-press min-h-12 rounded-2xl border border-dashed border-white/30 text-sm font-semibold text-white">Fonda una nuova compagnia</button>
+            {err ? <p className="text-center text-sm text-red-300">{err}</p> : null}
+          </>
+        ) : (
+          <CompanyForm onCancel={() => setMode("scegli")} onDone={done} />
+        )}
+      </div>
+    </div>,
+    document.body,
+  );
 }

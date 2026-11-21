@@ -113,6 +113,14 @@ export type AvatarLook = {
   watch: boolean;
   hairFeather: boolean;
   sunglasses: boolean;
+  /** corporatura continua (0 snello – 100 robusto; "" = segue la scelta a pulsanti) */
+  buildW: string;
+  /** statura, grandezza degli occhi e spessore delle sopracciglia (0-100, 50 = normale) */
+  stature: string;
+  eyeSize: string;
+  browSize: string;
+  /** altezza della faretra (-40 su, +40 giù) */
+  quiverY: string;
 };
 
 /** legge una regolazione numerica salvata come testo */
@@ -240,6 +248,11 @@ export const AVATAR_DEFAULT: AvatarLook = {
   watch: false,
   hairFeather: false,
   sunglasses: false,
+  buildW: "",
+  stature: "50",
+  eyeSize: "50",
+  browSize: "50",
+  quiverY: "0",
 };
 
 export const AVATAR_KEY = "aa-avatar-v1";

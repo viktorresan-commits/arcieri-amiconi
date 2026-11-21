@@ -28,25 +28,58 @@ export function ShortcutTile({ s, size = "md", onClick, index = 0 }: { s: Shortc
   );
 }
 
-/** Le scorciatoie scelte, in fila scorrevole, con il pulsante per personalizzarle. */
+/** pastiglia con icona e nome: come i "Recenti" del menu, si tocca e si arriva */
+function ShortcutChip({ s }: { s: Shortcut }) {
+  return (
+    <Link
+      to={s.to as "/"}
+      search={(s.search ?? {}) as never}
+      hash={s.hash}
+      onClick={() => {
+        if (navigator.vibrate) navigator.vibrate(8);
+      }}
+      className="aa-chipnav flex shrink-0 items-center gap-2 rounded-full border border-white/10 bg-white/[0.05] py-1 pl-1 pr-3.5 text-[0.8rem] font-semibold active:scale-[0.97]"
+      style={{ "--c": s.color } as CSSProperties}
+    >
+      <AppIcon name={s.icon} color={s.color} size={32} />
+      <span className="whitespace-nowrap">{s.label}</span>
+    </Link>
+  );
+}
+
+/**
+ * "In un tocco": le ultime pagine aperte (si aggiornano da sole) e, sotto, le scorciatoie
+ * scelte. Pastiglie in fila, senza animazioni d'ingresso: niente spazi vuoti.
+ */
 export function ShortcutRow() {
   const { pinned } = usePinned();
   const [edit, setEdit] = useState(false);
+  const [recent, setRecent] = useState<Shortcut[]>([]);
+  useEffect(() => setRecent(readRecent().slice(0, 6)), []);
+  const mine = pinned.map((id) => shortcutById(id)).filter((x): x is Shortcut => Boolean(x));
   return (
-    <section className="grid gap-2">
+    <section className="grid gap-2.5">
       <div className="flex items-center justify-between">
         <h2 className="aa-section-title">In un tocco</h2>
         <button type="button" className="aa-chip" onClick={() => setEdit(true)}><Glyph name="edit" size={14} /> Personalizza</button>
       </div>
-      <div className="-mx-4 flex gap-2.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none]">
-        {pinned.map((id, i) => {
-          const s = shortcutById(id);
-          return s ? <ShortcutTile key={id} s={s} index={i} /> : null;
-        })}
-        <button type="button" onClick={() => setEdit(true)} className="aa-short flex w-[4.6rem] shrink-0 flex-col items-center gap-1.5" style={{ "--c": "#8a8f98" } as CSSProperties}>
-          <span className="grid h-[54px] w-[54px] place-items-center rounded-[16px] border border-dashed border-white/25 text-muted"><Glyph name="plus" size={22} /></span>
-          <span className="text-[0.7rem] font-semibold text-muted">Aggiungi</span>
-        </button>
+      {recent.length ? (
+        <div className="grid gap-1.5">
+          <p className="text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-muted">Ultime aperte</p>
+          <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none]">
+            {recent.map((s) => <ShortcutChip key={`r${s.id}`} s={s} />)}
+          </div>
+        </div>
+      ) : null}
+      <div className="grid gap-1.5">
+        <p className="text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-muted">Le tue scorciatoie</p>
+        <div className="flex flex-wrap gap-2">
+          {mine.map((s) => <ShortcutChip key={s.id} s={s} />)}
+          <button type="button" onClick={() => setEdit(true)} className="flex shrink-0 items-center gap-2 rounded-full border border-dashed border-white/25 py-1 pl-1 pr-3.5 text-[0.8rem] font-semibold text-muted">
+            <span className="grid h-8 w-8 place-items-center rounded-full bg-white/[0.06]"><Glyph name="plus" size={16} /></span>
+            Aggiungi
+          </button>
+        </div>
       </div>
       {edit ? <ShortcutEditor onClose={() => setEdit(false)} /> : null}
     </section>
@@ -284,10 +317,10 @@ function CategoryCarousel({ current, onGo, isHere }: { current?: string; onGo: (
                 </div>
                 <span className="absolute right-3 top-3 rounded-full bg-black/30 px-2 py-0.5 text-[0.62rem] font-semibold text-white/85 backdrop-blur">{items.length} voci</span>
               </div>
-              <div className="grid grid-cols-3 gap-x-2 gap-y-6 pt-1">
-                {items.map((s, j) => (
-                  <Link key={s.id} to={s.to as "/"} search={(s.search ?? {}) as never} onClick={onGo} aria-current={isHere(s) ? "page" : undefined} className={cx("aa-short flex min-w-0 flex-col items-center gap-1.5 text-center", isHere(s) && "is-here")} style={{ animationDelay: `${j * 35}ms` }}>
-                    <AppIcon name={s.icon} color={st.color} size={72} className="aa-short-icon" />
+              <div className="grid grid-cols-3 gap-2.5 pt-1">
+                {items.map((s) => (
+                  <Link key={s.id} to={s.to as "/"} search={(s.search ?? {}) as never} onClick={onGo} aria-current={isHere(s) ? "page" : undefined} className={cx("aa-short aa-cat-tile flex min-w-0 flex-col items-center gap-1.5 rounded-[1.4rem] px-1.5 pb-2.5 pt-3 text-center", isHere(s) && "is-here")}>
+                    <AppIcon name={s.icon} color={st.color} size={64} className="aa-short-icon" />
                     <span className="w-full truncate text-[0.78rem] font-semibold leading-tight">{s.label}</span>
                     <span className="line-clamp-2 w-full text-[0.6rem] leading-tight text-muted">{s.hint}</span>
                   </Link>
