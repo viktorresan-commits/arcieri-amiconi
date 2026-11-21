@@ -116,7 +116,7 @@ export function LastArrows({ shots }: { shots: LastShot[] }) {
             title={shot.link ? (shot.link.kind === "allenamento" ? "Tieni premuto per aprire l'allenamento" : "Tieni premuto per aprire la gara") : undefined}
           >
             <div className="aa-shot-track relative h-16 min-w-0 flex-1 overflow-hidden" style={{ ["--trail" as string]: ringOf(shot.miss ? 0 : shot.isX ? max : shot.score, max).trail }}>
-              <div className={`aa-launch aa-launch-far absolute inset-y-0 ${shot.miss ? "right-[38px] top-[7px] bottom-[-7px] opacity-70" : "right-[10px]"}`} style={{ width: `${80 + stagger * 0.6}%` }}>
+              <div className={`aa-launch aa-launch-far absolute inset-y-0 ${shot.miss ? "right-[44px] top-[7px] bottom-[-7px] opacity-70" : "right-[24px]"}`} style={{ width: `${80 + stagger * 0.6}%` }}>
                 {/* la scia sfumata sta sotto la freccia e vola con lei */}
                 <span aria-hidden className="aa-shot-trail" />
                 <ArrowArt
