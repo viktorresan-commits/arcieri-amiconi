@@ -230,7 +230,7 @@ export const AVATAR_DEFAULT: AvatarLook = {
   scar: false,
   faceBg: "",
   faceBgStyle: "sfumato",
-  scene: "campo",
+  scene: "fabriano",
   sleeves: "",
   necklace: false,
   earring: false,
@@ -348,7 +348,7 @@ export function normalizeLook(raw: unknown): AvatarLook {
 /** Partenze già pronte: si cambia tutto dopo. */
 export const AVATAR_PRESETS: { id: string; label: string; look: Partial<AvatarLook> }[] = [
   // la divisa degli Arcieri di Fabriano: giubbetto nero bordato d'argento, camicia del colore che si vuole, stemma sul petto
-  { id: "fabriano", label: "Divisa Arcieri di Fabriano", look: { style: "medievale", top: "giubbetto", shirt: "#15171a", trim: "#e9e6de", sleeves: "#f1ece0", emblem: "compagnia", crest: "", bottom: "calzamaglia", pants: "#15171a", footwear: "stivali-alti", shoes: "#2b2420", belt: "larga", beltColor: "#7a4a24", bracers: "#8a5a2e", gloves: true, pouch: true, pouchType: "tascapane", necklace: true, quiverPlace: "fianco", quiver: "#9a6234", quiverStyle: "cuoio", bowType: "longbow", useMain: false, chestguard: false, cape: false, hat: "nessuno", scene: "villaggio" } },
+  { id: "fabriano", label: "Divisa Arcieri di Fabriano", look: { style: "medievale", top: "giubbetto", shirt: "#15171a", trim: "#e9e6de", sleeves: "#f1ece0", emblem: "compagnia", crest: "", bottom: "calzamaglia", pants: "#15171a", footwear: "stivali-alti", shoes: "#2b2420", belt: "larga", beltColor: "#7a4a24", bracers: "#8a5a2e", gloves: true, pouch: true, pouchType: "tascapane", necklace: true, quiverPlace: "fianco", quiver: "#9a6234", quiverStyle: "cuoio", bowType: "longbow", useMain: false, chestguard: false, cape: false, hat: "nessuno", scene: "fabriano" } },
   { id: "uomo", label: "Arciere", look: { body: "uomo", hair: "corti", beard: "corta", hairColor: "#3b2a1d", skin: "#eec5a4", style: "moderno", top: "polo", hat: "nessuno", cape: false } },
   { id: "donna", label: "Arciera", look: { body: "donna", hair: "coda", beard: "nessuna", hairColor: "#16110d", skin: "#dba57d", style: "moderno", top: "gilet", shirt: "#1f3a5f", hat: "nessuno", cape: false } },
   { id: "ragazzo", label: "Giovane", look: { body: "ragazzo", hair: "mossi", beard: "nessuna", hairColor: "#b88a4a", skin: "#f8dcc8", style: "moderno", top: "felpa", shirt: "#c46b2b", chestguard: false, bottom: "pantaloncini" } },

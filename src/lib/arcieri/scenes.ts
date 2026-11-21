@@ -1,5 +1,6 @@
 /** Ambientazioni della Home e del profilo: nome, colori del prato e un colore di riferimento per la foto profilo. */
 export type SceneId =
+  | "fabriano"
   | "campo"
   | "foresta"
   | "castello"
@@ -20,6 +21,7 @@ export type SceneId =
   | "salone";
 
 export const SCENES: { id: SceneId; label: string; ground: [string, string]; tone: string; indoor?: boolean }[] = [
+  { id: "fabriano", label: "Piazza del Comune, Fabriano", ground: ["#86827b", "#5f5c57"], tone: "#a8402f" },
   { id: "campo", label: "Campo di tiro", ground: ["#5d8a45", "#4c7639"], tone: "#3f6a3a" },
   { id: "foresta", label: "Foresta", ground: ["#3f6a32", "#33592a"], tone: "#24452a" },
   { id: "castello", label: "Castello", ground: ["#5f7d42", "#4e6a36"], tone: "#5a5f6a" },

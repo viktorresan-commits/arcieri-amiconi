@@ -401,7 +401,190 @@ function Floor({ c1, c2, y = 214, lines = "#000", planks = true }: { c1: string;
 
 /* ---------- ambientazioni ---------- */
 
+/**
+ * Piazza del Comune di Fabriano: il Palazzo del Podestà con i merli e il grande arco a sesto acuto,
+ * la Fontana Sturinalto, i palazzi in mattoni ai lati e i drappi rossi con la croce bianca.
+ */
+function FabrianoPiazza({ id, night }: { id: string; night: boolean }) {
+  const N = (day: string, nt: string) => (night ? nt : day);
+  const wall = N("#dcd6c8", "#7c786f");
+  const wallD = N("#b9b2a2", "#5e5a53");
+  const joint = N("#a89f8c", "#4a4640");
+  const glass = N("#3a4656", "#ffd27a");
+  const brick = N("#9c4a33", "#4a2a20");
+  const brickD = N("#7e3a28", "#3a2018");
+  const stuc = N("#c98a66", "#5e4234");
+  const shutter = N("#7d8a78", "#3c443a");
+  const stone = N("#d3cbb9", "#7a746a");
+  const bronze = N("#4f6a5c", "#2e3e36");
+  // finestra a sesto acuto (bifora o trifora), con la cornice in pietra
+  const lancet = (x: number, y: number, w: number, h: number) => `M${x} ${y + h} V${y + w * 0.55} Q${x} ${y} ${x + w / 2} ${y - w * 0.15} Q${x + w} ${y} ${x + w} ${y + w * 0.55} V${y + h} Z`;
+  return (
+    <g>
+      <defs>
+        <linearGradient id={`${id}fbw`} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stopColor={N("#e9e4d8", "#8a857b")} />
+          <stop offset="0.55" stopColor={wall} />
+          <stop offset="1" stopColor={wallD} />
+        </linearGradient>
+        <linearGradient id={`${id}fbarch`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor={N("#2a2621", "#120f0c")} />
+          <stop offset="1" stopColor={N("#4a4540", "#2a2420")} />
+        </linearGradient>
+        <linearGradient id={`${id}fbpave`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor={N("#8e8a83", "#3c3a37")} />
+          <stop offset="1" stopColor={N("#5c5954", "#232220")} />
+        </linearGradient>
+        <radialGradient id={`${id}fbsheen`} cx="0.5" cy="0" r="0.6">
+          <stop offset="0" stopColor={N("#f4efe4", "#ffd27a")} stopOpacity={night ? 0.2 : 0.26} />
+          <stop offset="1" stopColor={N("#f4efe4", "#ffd27a")} stopOpacity="0" />
+        </radialGradient>
+      </defs>
+
+      {/* in fondo, a sinistra: il fianco di un palazzo, dietro i drappi */}
+      <rect x="50" y="96" width="82" height="136" fill={N("#cdb48e", "#5a4e3e")} />
+      <path d="M48 96 H134 V90 H50 Z" fill={N("#e2d2b0", "#6a5e4e")} />
+      {[0, 1, 2].map((r) => [100, 116].map((x) => <rect key={`${r}${x}`} x={x} y={110 + r * 30} width="8" height="14" fill={N("#5a4a3a", "#ffd27a")} opacity={night ? 0.7 : 0.9} />))}
+      <rect x="96" y="200" width="20" height="32" fill={N("#4a3424", "#2a1a12")} />
+      {/* in fondo, a destra: case gialle oltre il voltone */}
+      <rect x="296" y="150" width="50" height="82" fill={N("#e2c25c", "#6a5a2e")} />
+      <path d="M294 150 h54 l-4 -8 h-46 Z" fill={N("#a8543a", "#4a2a20")} />
+      {[302, 318, 334].map((x) => <rect key={x} x={x} y="160" width="6" height="10" fill={N("#8a6a3a", "#ffd27a")} opacity="0.8" />)}
+
+      {/* Palazzo del Podestà: corpo principale con merli guelfi */}
+      <rect x="128" y="74" width="136" height="158" fill={`url(#${id}fbw)`} />
+      {Array.from({ length: 12 }, (_, i) => <rect key={i} x={129 + i * 11.3} y="62" width="7" height="13" fill={i % 2 ? wall : N("#e4dfd2", "#848076")} />)}
+      {/* torre a destra, più bassa, con i suoi merli */}
+      <rect x="262" y="96" width="38" height="136" fill={wallD} />
+      {Array.from({ length: 4 }, (_, i) => <rect key={i} x={263 + i * 9.8} y="86" width="6" height="11" fill={wallD} />)}
+      {/* corsi di pietra */}
+      <g stroke={joint} strokeWidth="0.5" opacity="0.55">
+        {Array.from({ length: 26 }, (_, i) => <path key={i} d={`M128 ${80 + i * 6} H300`} />)}
+        {Array.from({ length: 26 }, (_, i) => Array.from({ length: 9 }, (_, k) => <path key={`${i}-${k}`} d={`M${132 + k * 19 + (i % 2) * 9} ${74 + i * 6} v6`} />))}
+      </g>
+      <path d="M262 96 V232" stroke={N("#9c9482", "#3e3a34")} strokeWidth="1.2" />
+      {/* bifore in alto */}
+      {[150, 196].map((x) => (
+        <g key={x}>
+          <path d={lancet(x - 2, 92, 22, 32)} fill={N("#c9c1ae", "#6a655c")} />
+          <path d={lancet(x, 94, 18, 30)} fill={glass} opacity={night ? 0.85 : 1} />
+          <path d={`M${x + 9} 96 V124 M${x} 108 H${x + 18}`} stroke={N("#6a7a8a", "#a8823a")} strokeWidth="0.6" />
+          <path d={`M${x + 2} 112 h14 M${x + 2} 118 h14`} stroke={N("#6a7a8a", "#a8823a")} strokeWidth="0.4" opacity="0.7" />
+        </g>
+      ))}
+      {/* trifore a metà facciata */}
+      {[150, 204].map((x) => (
+        <g key={x}>
+          <path d={`M${x - 3} 154 V138 Q${x - 3} 124 ${x + 16} 122 Q${x + 35} 124 ${x + 35} 138 V154 Z`} fill={N("#cfc7b4", "#6e695f")} />
+          {[0, 1, 2].map((k) => <path key={k} d={lancet(x + 1 + k * 10.5, 134, 8, 18)} fill={glass} opacity={night ? 0.8 : 1} />)}
+          <path d={`M${x - 4} 154 h40`} stroke={N("#b2aa96", "#4a463f")} strokeWidth="1.6" />
+        </g>
+      ))}
+      {/* finestre della torre e loggetta */}
+      <path d={lancet(274, 104, 12, 18)} fill={glass} opacity={night ? 0.85 : 1} />
+      <path d="M268 196 V176 Q268 160 279 158 Q290 160 290 176 V196 Z" fill={N("#3a3632", "#2a241c")} />
+      <path d="M268 186 H290 M272 186 V196 M279 186 V196 M286 186 V196" stroke={N("#2a2622", "#a8823a")} strokeWidth="0.9" />
+      <path d={lancet(276, 208, 8, 14)} fill={glass} opacity="0.9" />
+      <rect x="230" y="166" width="6" height="7" fill={N("#3a3632", "#ffd27a")} opacity="0.8" />
+      <path d={lancet(222, 196, 10, 18)} fill={glass} opacity="0.9" />
+
+      {/* il grande voltone a sesto acuto, con la via che prosegue */}
+      <path d="M138 232 V190 Q138 160 173 150 Q208 160 208 190 V232 Z" fill={N("#c9c1ae", "#6a655c")} />
+      <path d="M142 232 V190 Q142 163 173 154 Q204 163 204 190 V232 Z" fill={`url(#${id}fbarch)`} />
+      <g>
+        <rect x="167" y="172" width="12" height="60" fill={N("#a9c6e2", "#1d2a44")} />
+        {[[150, 196, 14, "#d98a4a"], [160, 204, 9, "#e8c46a"], [178, 202, 10, "#d9a08a"], [186, 194, 14, "#c96a4a"]].map(([x, y, w, c]) => (
+          <g key={x as number}>
+            <rect x={x as number} y={y as number} width={w as number} height={232 - (y as number)} fill={night ? "#3a2e24" : (c as string)} />
+            <rect x={(x as number) + 2} y={(y as number) + 4} width="3" height="4" fill={N("#5a3a22", "#ffd27a")} />
+            <rect x={(x as number) + 2} y={(y as number) + 14} width="3" height="4" fill={N("#5a3a22", "#ffd27a")} />
+          </g>
+        ))}
+        {[158, 186].map((x) => <path key={x} d={`M${x} 200 h5 v8 h-5 Z`} fill="#c8262c" className="aa-flag" />)}
+        <path d="M142 232 L166 214 H180 L204 232 Z" fill={N("#6e6a63", "#2a2826")} />
+        <path d="M142 190 Q142 163 173 154 Q204 163 204 190 L196 196 Q194 170 173 164 Q152 170 150 196 Z" fill="#000" opacity="0.35" />
+      </g>
+      {/* il voltone piccolo verso destra */}
+      <path d="M300 172 L344 186 V232 H300 Z" fill={wallD} />
+      <path d="M306 232 V208 Q306 192 322 190 Q338 192 338 208 V232 Z" fill={`url(#${id}fbarch)`} />
+      <rect x="312" y="204" width="20" height="28" fill={N("#e2c25c", "#4a3e22")} opacity="0.8" />
+
+      {/* a sinistra: palazzo in mattoni con il drappo della città */}
+      <rect x="0" y="0" width="56" height="232" fill={brick} />
+      <g stroke={brickD} strokeWidth="0.5" opacity="0.7">
+        {Array.from({ length: 58 }, (_, i) => <path key={i} d={`M0 ${i * 4} H56`} />)}
+      </g>
+      <rect x="50" y="0" width="6" height="232" fill={brickD} />
+      <rect x="20" y="150" width="18" height="30" fill={N("#3a2a20", "#ffd27a")} opacity={night ? 0.75 : 1} />
+      <path d="M18 150 h22 v-4 h-22 Z M18 180 h22 v3 h-22 Z" fill={N("#d9cbb0", "#6a5e4e")} />
+      <rect x="20" y="196" width="22" height="36" fill={N("#4a2e1e", "#2a1a12")} />
+      <path d="M56 6 H118" stroke="#3a2a1e" strokeWidth="1.6" />
+      <g>
+        <path d="M60 6 H122 V112 Q91 118 60 112 Z" fill={N("#c8262c", "#6a1418")} />
+        <path d="M86 6 H96 V114 H86 Z M60 40 H122 V52 H60 Z" fill={N("#f3efe6", "#9c968c")} />
+        {[[72, 22, "#e6b325"], [108, 22, "#2f7a4a"], [72, 78, "#2f4fa8"], [108, 78, "#c8262c"]].map(([x, y, c]) => (
+          <path key={`${x}${y}`} d={`M${(x as number) - 8} ${(y as number) - 9} H${(x as number) + 8} V${(y as number) + 1} Q${(x as number) + 8} ${(y as number) + 9} ${x} ${(y as number) + 12} Q${(x as number) - 8} ${(y as number) + 9} ${(x as number) - 8} ${(y as number) + 1} Z`} fill={night ? "#3a3a3a" : (c as string)} stroke={N("#d9b45a", "#6a5a2a")} strokeWidth="1" />
+        ))}
+        <path d={`M60 112 ${Array.from({ length: 15 }, (_, i) => `L${62 + i * 4} ${i % 2 ? 118 : 114}`).join(" ")} L122 112`} stroke={N("#d9b45a", "#6a5a2a")} strokeWidth="1.6" fill="none" />
+        <path d="M60 6 V112" stroke="#000" strokeOpacity="0.15" strokeWidth="3" />
+      </g>
+      {/* secondo drappo più in basso */}
+      <g>
+        <path d="M58 124 H92 V176 Q75 180 58 176 Z" fill={N("#c8262c", "#6a1418")} />
+        <path d="M71 124 H78 V178 H71 Z M58 142 H92 V148 H58 Z" fill={N("#f3efe6", "#9c968c")} />
+        <path d="M60 128 h8 v6 q0 4 -4 5 q-4 -1 -4 -5 Z" fill={N("#e6b325", "#3a3a3a")} />
+        <path d="M81 128 h8 v6 q0 4 -4 5 q-4 -1 -4 -5 Z" fill={N("#2f7a4a", "#3a3a3a")} />
+      </g>
+
+      {/* a destra: palazzo intonacato con persiane e portone */}
+      <rect x="344" y="112" width="56" height="120" fill={stuc} />
+      <path d="M340 112 H400 V104 H344 Z" fill={N("#e6dccb", "#6a6258")} />
+      {[0, 1].map((r) => [352, 378].map((x) => (
+        <g key={`${r}${x}`}>
+          <rect x={x} y={124 + r * 34} width="14" height="20" fill={N("#3a3632", "#ffd27a")} opacity={night ? 0.7 : 1} />
+          <rect x={x - 4} y={124 + r * 34} width="4" height="20" fill={shutter} />
+          <rect x={x + 14} y={124 + r * 34} width="4" height="20" fill={shutter} />
+          <path d={`M${x - 5} ${122 + r * 34} h24 v-3 h-24 Z`} fill={N("#e6dccb", "#6a6258")} />
+        </g>
+      )))}
+      <path d="M368 232 V206 Q368 192 384 190 Q400 192 400 206 V232 Z" fill={N("#6a3e22", "#2a1a10")} />
+      <path d="M364 232 V206 Q364 188 384 186 Q404 188 404 206" stroke={N("#e6dccb", "#6a6258")} strokeWidth="2" fill="none" />
+
+      {/* il selciato bagnato della piazza */}
+      <rect x="0" y="230" width="400" height="70" fill={`url(#${id}fbpave)`} />
+      <g stroke={N("#4c4944", "#161514")} strokeWidth="0.6" opacity="0.55">
+        {[236, 243, 251, 260, 270, 281, 293].map((y) => <path key={y} d={`M0 ${y} H400`} />)}
+        {Array.from({ length: 15 }, (_, i) => <path key={i} d={`M${173 + (i - 7) * 8} 230 L${173 + (i - 7) * 60} 300`} />)}
+      </g>
+      {/* riflesso del palazzo sulla pietra bagnata */}
+      <ellipse cx="214" cy="232" rx="110" ry="34" fill={`url(#${id}fbsheen)`} />
+
+      {/* Fontana Sturinalto: vasche di pietra e coppa di bronzo */}
+      <g transform="translate(252 0)">
+        <ellipse cx="0" cy="244" rx="40" ry="5" fill="#000" opacity="0.2" />
+        <path d="M-38 228 L-34 242 H34 L38 228 Z" fill={stone} />
+        <path d="M-38 228 H38 L34 224 H-34 Z" fill={N("#e6dfcf", "#8a8478")} />
+        <path d="M-34 236 H34" stroke={N("#a89f8a", "#4a463f")} strokeWidth="0.8" />
+        {[-24, -8, 8, 24].map((x) => <path key={x} d={`M${x} 228 V242`} stroke={N("#b2aa96", "#4a463f")} strokeWidth="0.6" />)}
+        <path d="M-22 224 L-18 212 H18 L22 224 Z" fill={stone} />
+        <path d="M-24 212 H24 L20 208 H-20 Z" fill={N("#e6dfcf", "#8a8478")} />
+        <path d="M-4 208 V196 H4 V208 Z" fill={bronze} />
+        <path d="M-12 196 Q0 202 12 196 L10 192 H-10 Z" fill={bronze} />
+        <path d="M-2 192 V182 H2 V192 Z" fill={bronze} />
+        <ellipse cx="0" cy="182" rx="6" ry="2" fill={N("#6a8a78", "#3a4a42")} />
+        <path className="aa-fountain" d="M0 180 q-9 -6 -14 14 M0 180 q9 -6 14 14 M-10 194 q-8 2 -12 14 M10 194 q8 2 12 14" stroke={N("#d6ecff", "#9fb4d8")} strokeWidth="1.1" fill="none" opacity="0.85" />
+        <ellipse cx="0" cy="226" rx="30" ry="1.8" fill={N("#9cc4e2", "#2a3a54")} opacity="0.8" />
+        {/* colonnine con le catene */}
+        {[-46, -30, -14, 2, 18, 34, 50].map((x) => <rect key={x} x={x - 1.6} y="244" width="3.2" height="9" rx="1.4" fill={N("#eae6dc", "#8a857b")} />)}
+        <path d="M-46 246 Q-38 250 -30 246 Q-22 250 -14 246 Q-6 250 2 246 Q10 250 18 246 Q26 250 34 246 Q42 250 50 246" stroke={N("#4a4640", "#2a2826")} strokeWidth="0.8" fill="none" />
+      </g>
+      {night ? <circle cx="173" cy="200" r="40" fill="#ffd27a" opacity="0.08" /> : null}
+    </g>
+  );
+}
+
 const LAYERS: Record<SceneId, (id: string, night: boolean) => ReactNode> = {
+  fabriano: (id, night) => <FabrianoPiazza id={id} night={night} />,
   campo: (id, night) => (
     <g>
       <Hills far={night ? "#1c2a44" : "#9db3c6"} near={night ? "#141f33" : "#6e8f86"} night={night} />
