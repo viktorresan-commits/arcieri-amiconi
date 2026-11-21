@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent, type ReactNode } from "react";
+import { Component, useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent, type ReactNode } from "react";
 import type { AvatarLook } from "@/lib/arcieri/avatar";
 import { useSky } from "@/lib/arcieri/sky3d";
 import { useLocalState } from "@/lib/arcieri/local-store";
@@ -404,4 +404,30 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
       ) : null}
     </div>
   );
+}
+
+/** Se il gioco dovesse rompersi, il resto della Home continua a funzionare. */
+export class GameGuard extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  componentDidCatch(err: unknown) {
+    console.error(err);
+  }
+  render() {
+    if (this.state.failed) {
+      return (
+        <div className="grid aspect-[3/4] w-full place-items-center rounded-[1.75rem] bg-white/[0.04] p-6 text-center text-sm text-muted">
+          <p>
+            Il gioco non è partito.{" "}
+            <button type="button" className="underline" onClick={() => this.setState({ failed: false })}>
+              Riprova
+            </button>
+          </p>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
 }

@@ -7,7 +7,7 @@ import { programById } from "@/lib/arcieri/program";
 import { useLoad } from "@/lib/arcieri/use-load";
 import { useAvatar } from "@/components/avatar-hero";
 import { SkyPicker } from "@/components/archer-3d";
-import { HomeGame } from "@/components/home-game";
+import { GameGuard, HomeGame } from "@/components/home-game";
 import { MainGearCard } from "@/components/main-gear";
 import { ShortcutRow } from "@/components/shortcuts";
 import { JourneyCard } from "@/components/journey";
@@ -77,6 +77,7 @@ function Home() {
     <div className="grid gap-3">
       <Rise i={0}>
         <div className="grid gap-2">
+          <GameGuard>
           <HomeGame
             look={avatar.shown}
             info={
@@ -98,6 +99,7 @@ function Home() {
               </Link>
             </div>
           </HomeGame>
+          </GameGuard>
           <div className="grid grid-cols-[1.4fr_1fr] gap-2">
             <Link to="/allenamento" search={{ avvia: "rapido" }} className="block">
               <Button className="aa-glow w-full"><Glyph name="bolt" size={18} /> Tiro rapido</Button>

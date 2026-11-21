@@ -1,5 +1,14 @@
 import { useEffect, useId, useRef, useState } from "react";
 
+const isPlain = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
+
+/** Valore salvato con i campi nuovi presi dall'iniziale; numeri, testi, liste e vero/falso restano come sono. */
+function restore<T>(initial: T, saved: unknown): T {
+  if (isPlain(initial)) return (isPlain(saved) ? { ...initial, ...saved } : initial) as T;
+  if (Array.isArray(initial)) return (Array.isArray(saved) ? saved : initial) as T;
+  return (typeof saved === typeof initial ? saved : initial) as T;
+}
+
 /**
  * Stato salvato sul telefono: si legge all'apertura e si scrive a ogni modifica, senza pulsanti.
  * Più componenti con la stessa chiave restano allineati (evento "aa-local").
@@ -13,7 +22,7 @@ export function useLocalState<T>(key: string, initial: T) {
   useEffect(() => {
     try {
       const raw = localStorage.getItem(key);
-      if (raw != null) setValue({ ...(initial as object), ...(JSON.parse(raw) as object) } as T);
+      if (raw != null) setValue(restore(initial, JSON.parse(raw)));
     } catch {
       /* dato rovinato: si riparte dai valori iniziali */
     }
