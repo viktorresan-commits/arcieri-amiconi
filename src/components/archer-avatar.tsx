@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
-import type { AvatarLook, Pose } from "@/lib/arcieri/avatar";
+import { tune, type AvatarLook, type Pose } from "@/lib/arcieri/avatar";
 import { sceneById } from "@/lib/arcieri/scenes";
 
 /**
@@ -224,8 +224,10 @@ function Figure({ look, def, t, flying, blink, uid }: { look: AvatarLook; def: P
   const hipR = cx + (woman ? 23 : 21) * W;
   const torso = `M${f(shoulderL)} 124 C${f(shoulderL + 6)} 116 ${f(shoulderR - 6)} 116 ${f(shoulderR)} 124 C${f(shoulderR + 2)} 150 ${f(waistR + 2)} 172 ${f(waistR)} 186 C${f(hipR)} 196 ${f(hipR)} 204 ${f(hipR)} 210 L${f(hipL)} 210 C${f(hipL)} 204 ${f(hipL)} 196 ${f(waistL)} 186 C${f(waistL - 2)} 172 ${f(shoulderL - 2)} 150 ${f(shoulderL)} 124 Z`;
   const TUNIC: Record<string, number> = { tunica: 252, "tunica-lunga": 266, ranger: 262, incrociata: 250, cappotto: 258, "cappotto-lungo": 292, giubba: 230 };
-  const tunicLen = TUNIC[look.top] ?? 214;
-  const longTunic = look.top in TUNIC;
+  // la barra "lunghezza" allunga o accorcia la veste; anche una maglia può scendere sui fianchi
+  const stretch = (tune(look.topLength, 50, 0, 100) - 50) * 1.3;
+  const tunicLen = Math.round(Math.max(206, Math.min(312, (TUNIC[look.top] ?? 200) + stretch)));
+  const longTunic = tunicLen > 216;
 
   // gambe
   const kneeB = 2 + Math.sin(t * 1.7) * 0.6;
@@ -451,7 +453,8 @@ function Figure({ look, def, t, flying, blink, uid }: { look: AvatarLook; def: P
   };
 
   const quiver = (place: "fianco" | "schiena") => {
-    const tr = place === "schiena" ? "translate(118 140) rotate(24)" : "translate(116 214) rotate(-14)";
+    const spin = tune(look.quiverRot, 0, -180, 180);
+    const tr = place === "schiena" ? `translate(118 140) rotate(${24 + spin})` : `translate(116 214) rotate(${-14 + spin})`;
     return (
       <g transform={tr}>
         {[-5, 0, 5].map((dx, i) => (
@@ -833,7 +836,26 @@ function HairBack({ look, uid, t }: { look: AvatarLook; uid: string; t: number }
     default:
       node = null;
   }
-  return node ? <g transform={tr}>{node}</g> : null;
+  // barra della lunghezza: i capelli lunghi scendono o salgono partendo dalla nuca
+  const sy = 0.5 + (tune(look.hairLength, 50, 0, 100) / 100) * 1.0;
+  const len = `translate(0 74) scale(1 ${sy.toFixed(3)}) translate(0 -74)`;
+  return node ? <g transform={tr}><g transform={len}>{node}</g></g> : null;
+}
+
+/**
+ * Base dei capelli sulla testa: copre nuca, tempia e basetta davanti all'orecchio, così
+ * tra capelli e pelle non resta mai uno spazio scoperto. Sopra vanno le pettinature.
+ */
+function HairCap({ look, uid }: { look: AvatarLook; uid: string }) {
+  if (["calvo", "rasati", "cresta"].includes(look.hair) || look.hat === "cappuccio" || look.hat === "elmo") return null;
+  const nape = 96 + (tune(look.hairLength, 50, 0, 100) - 50) * 0.12;
+  const d = `M127.6 90 C126.2 70 137 58.6 151 57.6 C163 57.6 170.6 64 171.6 74.5 C166.2 70.8 159.2 69.8 153.2 71.8 C148.6 70.4 144.8 73.2 144.2 79 C145.2 84 146 88.6 146.6 93 C144.4 95 142 95.6 139.8 95.2 C137.4 ${f(nape + 1)} 133.4 ${f(nape + 3.5)} 130.4 ${f(nape + 2.5)} C128.6 ${f(nape - 1)} 127.6 94 127.6 90 Z`;
+  return (
+    <g>
+      <path d={d} fill={`url(#${uid}hair)`} stroke="#1b130d" strokeOpacity="0.35" strokeWidth="1.2" />
+      <path d="M146.4 80 C147 86 147.4 90 147 93.4" stroke={shade(look.hairColor, -0.35)} strokeWidth="0.9" fill="none" opacity="0.7" />
+    </g>
+  );
 }
 
 /** Testa di profilo verso il bersaglio, con espressione. */
@@ -862,6 +884,7 @@ function Head({ look, H, face, blink, uid, t }: { look: AvatarLook; H: P; face: 
     <g transform={`translate(0 ${f(dy)})`}>
       {look.hair !== "calvo" && look.hair !== "rasati" && look.hair !== "cresta" && !capOn ? <path d="M131 84 C127 66 138 57 150 57 C140 64 136 76 138 92 Z" fill={`url(#${uid}hair)`} /> : null}
       <path d={headPath} fill={`url(#${uid}face)`} stroke="#1b130d" strokeOpacity="0.45" strokeWidth="1.6" />
+      <HairCap look={look} uid={uid} />
       <ellipse cx="141" cy="88" rx="4.4" ry="6.6" fill={skinD} />
       <path d="M141 84 Q138 88 141 92" stroke={shade(skin, -0.38)} strokeWidth="0.9" fill="none" />
       {look.earring ? <circle cx="141.5" cy="96" r="1.8" fill="#d9b45a" stroke="#8a6a20" strokeWidth="0.5" /> : null}
@@ -903,7 +926,9 @@ function Head({ look, H, face, blink, uid, t }: { look: AvatarLook; H: P; face: 
       ) : null}
       <HairFront look={look} uid={uid} t={t} />
       <HairStrands look={look} />
-      <Hat look={look} />
+      <g transform={capOn ? undefined : `rotate(${tune(look.hatRot, 0, -180, 180)} 151 66)`}>
+        <Hat look={look} />
+      </g>
       {look.glasses ? (
         <g fill="none" stroke="#1d2126" strokeWidth="1.3">
           <circle cx="163.6" cy="82.4" r="5.6" fill="#a8d8ff" fillOpacity="0.16" />
@@ -1243,16 +1268,18 @@ export function ArcherAvatar({ look, className = "h-72 w-auto", interactive = tr
   return (
     <svg ref={host} viewBox="40 0 300 350" className={className} role="img" aria-label="Il tuo arciere" onClick={tap} style={{ cursor: interactive && mode !== "animata" ? "pointer" : undefined, overflow: "visible" }}>
       <Defs look={look} uid={uid} />
-      <ellipse cx="150" cy="340" rx="80" ry="7" fill="#000" opacity="0.28" />
-      <g transform={kid ? "translate(150 342) scale(0.8) translate(-150 -342)" : undefined}>
-        <Figure look={look} def={def} t={t} flying={hideFlight ? null : flying} blink={blink} uid={uid} />
+      <g transform={look.lefty ? "translate(380 0) scale(-1 1)" : undefined}>
+        <ellipse cx="150" cy="340" rx="80" ry="7" fill="#000" opacity="0.28" />
+        <g transform={kid ? "translate(150 342) scale(0.8) translate(-150 -342)" : undefined}>
+          <Figure look={look} def={def} t={t} flying={hideFlight ? null : flying} blink={blink} uid={uid} />
+        </g>
       </g>
     </svg>
   );
 }
 
 /** Volto di fronte (per l'intestazione, il podio e le classifiche). */
-export function AvatarFace({ look, className = "h-10 w-10" }: { look: AvatarLook; className?: string }) {
+export function AvatarFace({ look, className = "h-10 w-10", bare = false }: { look: AvatarLook; className?: string; /** solo la testa, senza sfondo né spalle: per il ritratto a figura intera */ bare?: boolean }) {
   const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
   const skin = look.skin;
   const skinD = shade(skin, -0.2);
@@ -1367,7 +1394,7 @@ export function AvatarFace({ look, className = "h-10 w-10" }: { look: AvatarLook
     look.beard === "pizzetto" ? <path d={`M45 ${fy + 17} C46 ${fy + 25} 54 ${fy + 25} 55 ${fy + 17} C52 ${fy + 19} 48 ${fy + 19} 45 ${fy + 17} Z`} fill={beardC} /> : null;
   const stache = look.beard === "piena" || look.beard === "corta" || look.beard === "baffi" ? <path d={`M42 ${fy + 10.5} C46 ${fy + 7} 54 ${fy + 7} 58 ${fy + 10.5} C54 ${fy + 9.6} 46 ${fy + 9.6} 42 ${fy + 10.5} Z`} fill={beardC} /> : null;
   return (
-    <svg viewBox="0 0 100 100" className={className} role="img" aria-label="Volto dell'arciere">
+    <svg viewBox="0 0 100 100" className={className} role="img" aria-label="Volto dell'arciere" overflow={bare ? "visible" : undefined}>
       <defs>
         <radialGradient id={`${uid}bg`} cx="50%" cy="35%" r="75%">
           <stop offset="0" stopColor={shade(bgBase, 0.35)} />
@@ -1391,21 +1418,21 @@ export function AvatarFace({ look, className = "h-10 w-10" }: { look: AvatarLook
           <circle cx="50" cy="50" r="50" />
         </clipPath>
       </defs>
-      <g clipPath={`url(#${uid}c)`}>
-        {look.faceBgStyle === "tinta" ? <rect width="100" height="100" fill={bgBase} /> : look.faceBgStyle === "scena" ? <rect width="100" height="100" fill={`url(#${uid}sc)`} /> : <rect width="100" height="100" fill={`url(#${uid}bg)`} />}
-        {look.faceBgStyle === "bersaglio" ? (
+      <g clipPath={bare ? undefined : `url(#${uid}c)`}>
+        {bare ? null : look.faceBgStyle === "tinta" ? <rect width="100" height="100" fill={bgBase} /> : look.faceBgStyle === "scena" ? <rect width="100" height="100" fill={`url(#${uid}sc)`} /> : <rect width="100" height="100" fill={`url(#${uid}bg)`} />}
+        {!bare && look.faceBgStyle === "bersaglio" ? (
           <g opacity="0.55">
             {["#f4f1ea", "#1d2126", "#2f7fd1", "#d63a2f", "#f2c94c"].map((c, i) => <circle key={c} cx="50" cy="50" r={50 - i * 10} fill={c} />)}
           </g>
         ) : null}
-        {look.cape ? <path d="M10 100 C14 82 30 74 50 74 C70 74 86 82 90 100 Z" fill={shade(look.capeColor, -0.1)} /> : null}
-        {capOn ? <path d="M18 100 C16 60 26 22 50 20 C74 22 84 60 82 100 Z" fill={look.hat === "elmo" ? "#9aa3ad" : look.hatColor} /> : null}
-        {!capOn ? hairBack[look.hair] ?? null : null}
-        <path d="M22 100 C24 84 36 78 50 78 C64 78 76 84 78 100 Z" fill={look.shirt} />
-        <path d="M42 78 L50 88 L58 78" stroke={look.trim} strokeWidth="3" fill="none" />
+        {look.cape && !bare ? <path d="M10 100 C14 82 30 74 50 74 C70 74 86 82 90 100 Z" fill={shade(look.capeColor, -0.1)} /> : null}
+        {capOn ? <path d={look.hat === "elmo" ? "M18 100 C16 60 26 22 50 20 C74 22 84 60 82 100 Z" : `M14 100 C10 58 22 ${fy - ry - 14} 50 ${fy - ry - 16} C78 ${fy - ry - 14} 90 58 86 100 Z`} fill={look.hat === "elmo" ? "#9aa3ad" : shade(look.hatColor, -0.35)} /> : null}
+        {!capOn && hairBack[look.hair] ? <g transform={`translate(0 ${fy - 6}) scale(1 ${(0.5 + tune(look.hairLength, 50, 0, 100) / 100).toFixed(3)}) translate(0 ${-(fy - 6)})`}>{hairBack[look.hair]}</g> : null}
+        {bare ? null : <path d="M22 100 C24 84 36 78 50 78 C64 78 76 84 78 100 Z" fill={look.shirt} />}
+        {bare ? null : <path d="M42 78 L50 88 L58 78" stroke={look.trim} strokeWidth="3" fill="none" />}
         <rect x="43" y={fy + 14} width="14" height="16" fill={skinD} />
-        <ellipse cx={50 - rx - 1} cy={eyeY + 4} rx="3.5" ry="5" fill={skinD} />
-        <ellipse cx={50 + rx + 1} cy={eyeY + 4} rx="3.5" ry="5" fill={skinD} />
+        {capOn ? null : <ellipse cx={50 - rx - 1} cy={eyeY + 4} rx="3.5" ry="5" fill={skinD} />}
+        {capOn ? null : <ellipse cx={50 + rx + 1} cy={eyeY + 4} rx="3.5" ry="5" fill={skinD} />}
         {look.earring ? <circle cx={50 - rx - 1} cy={eyeY + 10} r="1.6" fill="#d9b45a" /> : null}
         <path d={faceD} fill={`url(#${uid}f)`} />
         <ellipse cx="38" cy={fy + 7} rx="4.5" ry="2.6" fill="#e0726b" opacity="0.22" />
@@ -1421,22 +1448,31 @@ export function AvatarFace({ look, className = "h-10 w-10" }: { look: AvatarLook
         {look.mask ? null : mouth}
         {!capOn ? top : null}
         {strands}
+        {look.hat === "cappuccio" ? (
+          <g>
+            {/* il cappuccio avvolge tutta la testa: sopra e ai lati non si vede più il cranio */}
+            <path d={`M${50 - rx - 9} ${fy + 26} C${50 - rx - 13} ${fy - ry - 30} ${50 + rx + 13} ${fy - ry - 30} ${50 + rx + 9} ${fy + 26} C${50 + rx + 3} ${fy + 2} ${50 + rx + 2} ${fy - ry + 2} 50 ${fy - ry + 1} C${50 - rx - 2} ${fy - ry + 2} ${50 - rx - 3} ${fy + 2} ${50 - rx - 9} ${fy + 26} Z`} fill={shade(look.hatColor, -0.1)} stroke="#1b130d" strokeOpacity="0.35" strokeWidth="1" />
+            <path d={`M${50 + rx + 3} ${fy + 6} C${50 + rx + 2} ${fy - ry + 2} ${50 - rx - 2} ${fy - ry + 2} ${50 - rx - 3} ${fy + 6}`} stroke={shade(look.hatColor, -0.5)} strokeWidth="3" fill="none" opacity="0.55" />
+            <path d={`M50 ${fy - ry - 16} C54 ${fy - ry - 6} 54 ${fy - ry - 2} 52 ${fy - ry + 1}`} stroke={shade(look.hatColor, 0.25)} strokeWidth="1" fill="none" opacity="0.6" />
+          </g>
+        ) : null}
+        <g transform={`rotate(${tune(look.hatRot, 0, -180, 180)} 50 ${fy - ry})`}>
         {look.hat === "berretto" ? <g><path d={`M${50 - rx - 3} ${fy - 8} C${50 - rx - 3} ${fy - ry - 14} ${50 + rx + 3} ${fy - ry - 14} ${50 + rx + 3} ${fy - 8} Z`} fill={look.hatColor} /><path d={`M30 ${fy - 8} Q50 ${fy - 2} 74 ${fy - 8} L76 ${fy - 4} Q50 ${fy + 2} 28 ${fy - 4} Z`} fill={shade(look.hatColor, -0.3)} /></g> : null}
         {look.hat === "fascia" ? <path d={`M${50 - rx - 1} ${fy - 13} Q50 ${fy - 19} ${50 + rx + 1} ${fy - 13} L${50 + rx + 1} ${fy - 8} Q50 ${fy - 14} ${50 - rx - 1} ${fy - 8} Z`} fill={look.hatColor} /> : null}
         {look.hat === "piuma" ? <g><path d={`M${50 - rx - 6} ${fy - 10} C${50 - rx} ${fy - ry - 16} ${50 + rx} ${fy - ry - 16} ${50 + rx + 6} ${fy - 10} Z`} fill={look.hatColor} /><path d={`M${50 + rx - 2} ${fy - 16} C${50 + rx + 8} ${fy - 30} ${50 + rx + 16} ${fy - 34} 92 ${fy - 36} C${50 + rx + 12} ${fy - 26} ${50 + rx + 6} ${fy - 18} ${50 + rx} ${fy - 12} Z`} fill="#f4f1ea" /></g> : null}
-        {look.hat === "cappuccio" ? <path d={`M${50 - rx - 6} ${fy + 20} C${50 - rx - 8} ${fy - ry - 4} ${50 + rx + 8} ${fy - ry - 4} ${50 + rx + 6} ${fy + 20} C${50 + rx + 2} ${fy - ry + 10} ${50 - rx - 2} ${fy - ry + 10} ${50 - rx - 6} ${fy + 20} Z`} fill={shade(look.hatColor, -0.15)} /> : null}
         {look.hat === "elmo" ? <g><path d={`M${50 - rx - 3} ${fy - 6} C${50 - rx - 3} ${fy - ry - 12} ${50 + rx + 3} ${fy - ry - 12} ${50 + rx + 3} ${fy - 6} Z`} fill="#9aa3ad" /><rect x="48" y={fy - 8} width="4" height="16" fill="#7d8690" /></g> : null}
         {look.hat === "bandana" ? <g><path d={`M${50 - rx - 2} ${fy - 8} C${50 - rx - 3} ${fy - ry - 12} ${50 + rx + 3} ${fy - ry - 12} ${50 + rx + 2} ${fy - 8} Q50 ${fy - 14} ${50 - rx - 2} ${fy - 8} Z`} fill={look.hatColor} />{[38, 50, 62].map((x) => <circle key={x} cx={x} cy={fy - ry - 2} r="1.4" fill="#f4f1ea" opacity="0.7" />)}</g> : null}
         {look.hat === "robin" ? <g><path d={`M${50 - rx - 6} ${fy - 8} C${50 - rx} ${fy - ry - 10} 60 ${fy - ry - 22} 86 ${fy - ry - 26} C74 ${fy - ry - 10} ${50 + rx + 4} ${fy - ry - 2} ${50 + rx + 6} ${fy - 8} Z`} fill={look.hatColor} /><path d={`M60 ${fy - ry - 6} C70 ${fy - ry - 22} 80 ${fy - ry - 30} 90 ${fy - ry - 34} C82 ${fy - ry - 22} 72 ${fy - ry - 12} 64 ${fy - ry - 2} Z`} fill="#c4473d" /></g> : null}
         {look.hat === "tesa" ? <g><ellipse cx="50" cy={fy - 10} rx="44" ry="8" fill={shade(look.hatColor, -0.15)} /><path d={`M${50 - rx} ${fy - 10} C${50 - rx} ${fy - ry - 16} ${50 + rx} ${fy - ry - 16} ${50 + rx} ${fy - 10} Z`} fill={look.hatColor} /><path d={`M${50 - rx} ${fy - 15} H${50 + rx}`} stroke={shade(look.hatColor, -0.45)} strokeWidth="3" /></g> : null}
         {look.hat === "cerchietto" ? <g><path d={`M${50 - rx} ${fy - 14} Q50 ${fy - 20} ${50 + rx} ${fy - 14}`} stroke={look.hatColor} strokeWidth="2.2" fill="none" /><path d={`M50 ${fy - 22} l3 3 l-3 3 l-3 -3 z`} fill="#3fae6a" stroke={look.hatColor} strokeWidth="0.8" /></g> : null}
+        </g>
         {look.warpaint ? <g stroke="#2a3a5a" strokeOpacity="0.75" strokeWidth="2.2" strokeLinecap="round"><path d={`M30 ${fy + 2} L40 ${fy + 4} M60 ${fy + 4} L70 ${fy + 2} M31 ${fy + 7} L39 ${fy + 9} M61 ${fy + 9} L69 ${fy + 7}`} /></g> : null}
         {look.scar ? <path d={`M56 ${eyeY - 12} L62 ${eyeY + 10} M57 ${eyeY - 6} l3 -1 M59 ${eyeY + 3} l3 -1`} stroke={shade(skin, -0.42)} strokeWidth="1.2" strokeLinecap="round" /> : null}
         {look.mask ? <path d={`M${50 - rx} ${fy + 3} Q50 ${fy} ${50 + rx} ${fy + 3} C${50 + rx} ${fy + ry} ${50 - rx} ${fy + ry} ${50 - rx} ${fy + 3} Z`} fill={look.cowlColor} /> : null}
-        {look.cowl ? <path d={`M18 100 C18 84 28 ${fy + 22} 50 ${fy + 24} C72 ${fy + 22} 82 84 82 100 Z`} fill={look.cowlColor} stroke={shade(look.cowlColor, -0.35)} strokeWidth="1" /> : null}
-        {look.fur ? <g fill={look.furColor}>{[14, 24, 34, 66, 76, 86].map((x, i) => <circle key={x} cx={x} cy={90 + (i % 2) * 3} r="8" />)}</g> : null}
+        {look.cowl && !bare ? <path d={`M18 100 C18 84 28 ${fy + 22} 50 ${fy + 24} C72 ${fy + 22} 82 84 82 100 Z`} fill={look.cowlColor} stroke={shade(look.cowlColor, -0.35)} strokeWidth="1" /> : null}
+        {look.fur && !bare ? <g fill={look.furColor}>{[14, 24, 34, 66, 76, 86].map((x, i) => <circle key={x} cx={x} cy={90 + (i % 2) * 3} r="8" />)}</g> : null}
         {look.glasses ? <g fill="#a8d8ff" fillOpacity="0.15" stroke="#1d2126" strokeWidth="1.4"><circle cx="41" cy={eyeY} r="6.6" /><circle cx="59" cy={eyeY} r="6.6" /><path d={`M47.6 ${eyeY} H52.4`} /></g> : null}
-        {look.necklace ? <path d="M40 84 Q50 94 60 84" stroke="#d9b45a" strokeWidth="1.2" fill="none" /> : null}
+        {look.necklace && !bare ? <path d="M40 84 Q50 94 60 84" stroke="#d9b45a" strokeWidth="1.2" fill="none" /> : null}
       </g>
     </svg>
   );

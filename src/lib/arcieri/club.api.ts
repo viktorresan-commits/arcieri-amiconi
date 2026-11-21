@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { asBool, asIso, asNum, asNumOrNull, canScore, clip, db, ensureMember, PRIZES, type MemberRow } from "./access";
 import { syncBadges } from "./badges";
+import { companyPeers } from "./compagnie.api";
 import { challengeScores, rulesFair, teamMeans, type Metric, type Rule } from "./challenge";
 import { romeMidnightUtc, ymdAdd } from "./time";
 import { divisionOf } from "./labels";
@@ -918,7 +919,7 @@ export const squadBoard = createServerFn({ method: "GET" })
       where m.id is null`;
     for (const person of missing) await ensureMember(sql, person.id);
 
-    const people = await sql<{
+    const everyone = await sql<{
       id: number; user_id: string; given_name: string; family_name: string; nickname: string; slug: string;
       avatar_color: string; photo_url: string | null; bow_type: string; user_image: string | null;
     }>`
@@ -927,6 +928,9 @@ export const squadBoard = createServerFn({ method: "GET" })
       join "user" u on u.id = m.user_id
       where m.user_id is not null
       order by m.given_name, m.id`;
+    // si vedono solo gli arcieri della propria compagnia
+    const peers = await companyPeers(sql, context.userId);
+    const people = everyone.filter((row) => peers.has(row.user_id));
 
     const train = await sql<{ user_id: string; sessions: number; arrows: number; points: number }>`
       select s.user_id,

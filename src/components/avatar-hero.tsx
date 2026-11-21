@@ -37,14 +37,18 @@ export function useAvatar() {
 export function AvatarScene({ look, children, height = "h-72", interactive = true, pose, phase = false }: { look: AvatarLook; children?: ReactNode; height?: string; interactive?: boolean; pose?: Pose; phase?: boolean }) {
   const { sky } = useSky();
   const [phaseName, setPhaseName] = useState("");
+  const unmirrored = useMemo(() => (look.lefty ? { ...look, lefty: false } : look), [look]);
   const stage = useRef<HTMLDivElement>(null);
   const target = useRef<HTMLDivElement>(null);
   const [shots, setShots] = useState<{ id: number; x: number; y: number; dx: number; dy: number; score: number; hx: number; hy: number }[]>([]);
   const [marks, setMarks] = useState<{ id: number; hx: number; hy: number }[]>([]);
   const onShot = () => {
-    const st = stage.current?.getBoundingClientRect();
-    const tg = target.current?.getBoundingClientRect();
-    if (!st || !tg) return;
+    // misure di impaginazione (non quelle a schermo): restano giuste anche con la scena specchiata
+    const sEl = stage.current;
+    const tEl = target.current;
+    if (!sEl || !tEl) return;
+    const st = { width: sEl.offsetWidth, height: sEl.offsetHeight, left: 0, top: 0 };
+    const tg = { left: tEl.offsetLeft, top: tEl.offsetTop, width: tEl.offsetWidth, height: tEl.offsetHeight };
     // dove finisce: quasi sempre nel giallo o nel rosso, ogni tanto più fuori
     const r = Math.random() ** 1.6 * 0.42;
     const a = Math.random() * Math.PI * 2;
@@ -62,6 +66,8 @@ export function AvatarScene({ look, children, height = "h-72", interactive = tru
   };
   return (
     <div ref={stage} className={`aa-avatar-stage ${height}`}>
+      {/* mancino: tutta la scena si specchia, il paglione passa a sinistra */}
+      <div className={`absolute inset-0 ${look.lefty ? "aa-mirror" : ""}`}>
       <SceneBackdrop sky={sky} id="hero" scene={look.scene} />
       {/* paglione che riceve i tiri */}
       <div ref={target} className="absolute right-[5%] top-[50%] aspect-[1/1.35] w-[13%]">
@@ -89,12 +95,13 @@ export function AvatarScene({ look, children, height = "h-72", interactive = tru
             </svg>
           </span>
           <span className="aa-scene-hit pointer-events-none absolute font-display text-lg text-white" style={{ left: s2.x + s2.dx, top: s2.y + s2.dy }}>
-            {s2.score === 10 ? "X" : s2.score}
+            <span className={look.lefty ? "aa-mirror inline-block" : "inline-block"}>{s2.score === 10 ? "X" : s2.score}</span>
           </span>
         </div>
       ))}
       <div className="absolute bottom-0 left-[-6%] h-[96%]">
-        <ArcherAvatar look={look} pose={pose} className="h-full w-auto drop-shadow-[0_10px_18px_rgba(0,0,0,0.35)]" interactive={interactive} onShot={onShot} hideFlight onPhase={phase ? setPhaseName : undefined} />
+        <ArcherAvatar look={unmirrored} pose={pose} className="h-full w-auto drop-shadow-[0_10px_18px_rgba(0,0,0,0.35)]" interactive={interactive} onShot={onShot} hideFlight onPhase={phase ? setPhaseName : undefined} />
+      </div>
       </div>
       {phase && phaseName ? (
         <p className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-black/45 px-3 py-1 text-xs font-semibold text-white backdrop-blur" aria-live="polite">

@@ -171,7 +171,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const nav = [
     { to: "/", label: "Casa", icon: "home" as IconName },
     { to: "/allenamento", label: "Tiro", icon: "bow" as IconName },
-    { to: "/squadra", label: "Squadra", icon: "team" as IconName },
+    { to: "/squadra", label: "Compagnia", icon: "team" as IconName },
   ] as const;
 
   return (

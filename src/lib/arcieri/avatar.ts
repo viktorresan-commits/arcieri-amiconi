@@ -92,7 +92,21 @@ export type AvatarLook = {
   volley: string;
   /** il volto dell'arciere fa da foto profilo */
   facePhoto: boolean;
+  /** arciere mancino: tiene l'arco con la destra e guarda dall'altra parte */
+  lefty: boolean;
+  /** barre di regolazione (0-100, 50 = normale) e rotazioni in gradi, salvate come testo */
+  hairLength: string;
+  topLength: string;
+  hatRot: string;
+  quiverRot: string;
 };
+
+/** legge una regolazione numerica salvata come testo */
+export function tune(value: string | number | undefined, fallback: number, min: number, max: number) {
+  const n = typeof value === "number" ? value : Number.parseFloat(String(value ?? ""));
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(min, Math.min(max, n));
+}
 
 export const SKINS = ["#f8dcc8", "#eec5a4", "#dba57d", "#c0865c", "#9a6440", "#6e4429", "#4a2c1a"];
 export const HAIR_COLORS = ["#16110d", "#3b2a1d", "#5e3b22", "#8a5a2e", "#b88a4a", "#e2c48a", "#f1e6c8", "#8a8a8a", "#e8e8e8", "#a0301f", "#2c3e66", "#7c3aed", "#2f9e7a"];
@@ -193,6 +207,11 @@ export const AVATAR_DEFAULT: AvatarLook = {
   hold: "2",
   volley: "3",
   facePhoto: false,
+  lefty: false,
+  hairLength: "50",
+  topLength: "50",
+  hatRot: "0",
+  quiverRot: "0",
 };
 
 export const AVATAR_KEY = "aa-avatar-v1";

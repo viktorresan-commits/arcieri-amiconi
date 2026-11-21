@@ -38,13 +38,11 @@ export function LastSummary({ shots }: { shots: LastShot[] }) {
 
 /** Colore dell'anello del colpo, come sul bersaglio: oro, rosso, blu, nero, bianco; grigio se fuori. */
 function ringOf(score: number, max: number) {
+  // semaforo: verde per i centri, giallo per i colpi medi, rosso per quelli bassi e gli errori
   const r = max > 0 ? (score / max) * 10 : 0;
-  if (r <= 0) return { bg: "linear-gradient(145deg,#4a4f57,#2a2e33)", fg: "#e9e4d8", trail: "#8a8f98" };
-  if (r >= 9) return { bg: "radial-gradient(circle at 35% 30%,#ffe08a,#e2a925)", fg: "#2a1d0c", trail: "#ffd166" };
-  if (r >= 7) return { bg: "radial-gradient(circle at 35% 30%,#ff7a6e,#c4302a)", fg: "#fff", trail: "#ff6b5e" };
-  if (r >= 5) return { bg: "radial-gradient(circle at 35% 30%,#6fb2ff,#1f62b0)", fg: "#fff", trail: "#5aa6ff" };
-  if (r >= 3) return { bg: "radial-gradient(circle at 35% 30%,#4a4f57,#14171a)", fg: "#fff", trail: "#9aa3ad" };
-  return { bg: "radial-gradient(circle at 35% 30%,#ffffff,#d9d4c8)", fg: "#14171a", trail: "#f4f1ea" };
+  if (r >= 8) return { bg: "radial-gradient(circle at 35% 30%,#7ee2a0,#1f9d55)", fg: "#06240f", trail: "#3ccf74" };
+  if (r >= 5) return { bg: "radial-gradient(circle at 35% 30%,#ffe58a,#e2a925)", fg: "#2a1d0c", trail: "#ffd23f" };
+  return { bg: "radial-gradient(circle at 35% 30%,#ff8a7e,#c4302a)", fg: "#fff", trail: "#ff5a4c" };
 }
 
 export function LastArrows({ shots }: { shots: LastShot[] }) {

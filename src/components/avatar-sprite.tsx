@@ -51,7 +51,7 @@ export function useAvatarSprite(look: AvatarLook) {
   };
   const node: ReactNode = (
     <div ref={box} className="pointer-events-none absolute left-0 top-0 will-change-transform" style={{ opacity: 0 }} aria-hidden>
-      <ArcherAvatar look={look} drive={drive} interactive={false} hideFlight className="h-full w-full drop-shadow-[0_6px_10px_rgba(0,0,0,0.45)]" />
+      <ArcherAvatar look={look.lefty ? { ...look, lefty: false } : look} drive={drive} interactive={false} hideFlight className="h-full w-full drop-shadow-[0_6px_10px_rgba(0,0,0,0.45)]" />
     </div>
   );
   return { node, place };

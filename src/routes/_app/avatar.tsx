@@ -5,10 +5,11 @@ import { Archer3D } from "@/components/archer-3d";
 import { AvatarFace } from "@/components/archer-avatar";
 import { AvatarPhotoButton } from "@/components/avatar-photo";
 import { BOW_TYPES } from "@/components/gear-icons";
-import { Button, Card, Chips, PageHead, Segmented } from "@/components/kit";
+import { Button, Card, Chips, Segmented } from "@/components/kit";
 import { Glyph } from "@/components/icons";
-import { SceneThumb } from "@/components/scene-2d";
-import { FACE_BGS, SCENES } from "@/lib/arcieri/scenes";
+import { SceneBackdrop, SceneThumb } from "@/components/scene-2d";
+import { ArcherFront } from "@/components/archer-front";
+import { FACE_BGS, SCENES, sceneById } from "@/lib/arcieri/scenes";
 import { useSky } from "@/lib/arcieri/sky3d";
 import {
   AVATAR_DEFAULT,
@@ -20,12 +21,17 @@ import {
   HAIR_COLORS,
   SKINS,
   randomLook,
+  tune,
   type AvatarLook,
 } from "@/lib/arcieri/avatar";
 
 export const Route = createFileRoute("/_app/avatar")({
   component: Page,
 });
+
+const STYLE_NAME: Record<AvatarLook["style"], string> = { moderno: "Moderno", medievale: "Medievale" };
+const BODY_NAME: Record<AvatarLook["body"], string> = { uomo: "arciere", donna: "arciera", ragazzo: "giovane arciere", ragazza: "giovane arciera" };
+const sceneLabel = (id: string) => sceneById(id).label;
 
 type Tab = "corpo" | "viso" | "capelli" | "abiti" | "attrezzatura" | "posa" | "scena";
 
@@ -48,6 +54,71 @@ function Colors({ value, colors, onPick }: { value: string; colors: string[]; on
   );
 }
 
+/** barra a scorrimento con il valore accanto */
+function Slider({ label, value, min, max, step = 1, onChange, format, ends }: { label: string; value: number; min: number; max: number; step?: number; onChange: (v: number) => void; format?: (v: number) => string; ends?: [string, string] }) {
+  const pct = ((value - min) / (max - min)) * 100;
+  return (
+    <label className="grid gap-1">
+      <span className="flex items-baseline justify-between text-xs font-semibold text-muted">
+        <span>{label}</span>
+        <span className="font-display text-sm tabular-nums text-fg">{format ? format(value) : value}</span>
+      </span>
+      <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} className="aa-range" style={{ ["--pct" as string]: `${pct}%` }} />
+      {ends ? <span className="flex justify-between text-[0.62rem] text-muted"><span>{ends[0]}</span><span>{ends[1]}</span></span> : null}
+    </label>
+  );
+}
+
+function hexToHsl(hex: string) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  const n = m ? Number.parseInt(m[1], 16) : 0x777777;
+  const r = ((n >> 16) & 255) / 255;
+  const g = ((n >> 8) & 255) / 255;
+  const b = (n & 255) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  if (max === min) return { h: 0, s: 0, l: Math.round(l * 100) };
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  h *= 60;
+  return { h: Math.round(h), s: Math.round(s * 100), l: Math.round(l * 100) };
+}
+
+function hslToHex(h: number, s: number, l: number) {
+  const S = s / 100;
+  const L = l / 100;
+  const k = (n: number) => (n + h / 30) % 12;
+  const a = S * Math.min(L, 1 - L);
+  const c = (n: number) => Math.round(255 * (L - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)))));
+  return `#${[c(0), c(8), c(4)].map((x) => x.toString(16).padStart(2, "0")).join("")}`;
+}
+
+/** colore libero con tre barre (tinta, intensità, luce) e qualche colore pronto sotto */
+function Tint({ value, onPick, quick }: { value: string; onPick: (c: string) => void; quick?: string[] }) {
+  const { h, s, l } = hexToHsl(value || "#777777");
+  return (
+    <div className="grid gap-2 rounded-2xl bg-white/[0.03] p-2.5">
+      <div className="flex items-center gap-2.5">
+        <span className="h-9 w-9 shrink-0 rounded-full border-2 border-white/70 shadow-[0_0_0_2px_rgba(0,0,0,.35)]" style={{ background: value }} />
+        <div className="grid flex-1 gap-1.5">
+          <input aria-label="Tinta" type="range" min={0} max={359} value={h} onChange={(e) => onPick(hslToHex(Number(e.target.value), Math.max(s, 18), l))} className="aa-range aa-range-hue" />
+          <input aria-label="Intensità" type="range" min={0} max={100} value={s} onChange={(e) => onPick(hslToHex(h, Number(e.target.value), l))} className="aa-range" style={{ background: `linear-gradient(90deg, ${hslToHex(h, 0, l)}, ${hslToHex(h, 100, l)})` }} />
+          <input aria-label="Chiaro o scuro" type="range" min={4} max={96} value={l} onChange={(e) => onPick(hslToHex(h, s, Number(e.target.value)))} className="aa-range" style={{ background: `linear-gradient(90deg, #000, ${hslToHex(h, s, 50)}, #fff)` }} />
+        </div>
+      </div>
+      {quick ? (
+        <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none]">
+          {quick.filter(Boolean).map((c) => (
+            <button key={c} type="button" aria-label={c} onClick={() => onPick(c)} className={`h-7 w-7 shrink-0 rounded-full border-2 ${value === c ? "border-white" : "border-transparent"}`} style={{ background: c }} />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function Toggle({ on, label, onChange }: { on: boolean; label: string; onChange: (v: boolean) => void }) {
   return (
     <button type="button" aria-pressed={on} onClick={() => onChange(!on)} className="aa-chip">
@@ -61,27 +132,46 @@ function Toggle({ on, label, onChange }: { on: boolean; label: string; onChange:
 function Page() {
   const { look, setLook, shown, main } = useAvatar();
   const [tab, setTab] = useState<Tab>("corpo");
-  const [in3d, setIn3d] = useState(false);
+  const [view, setView] = useState<"lato" | "fronte" | "3d">("lato");
   const { sky } = useSky();
   const set = <K extends keyof AvatarLook>(k: K, v: AvatarLook[K]) => setLook((l) => ({ ...l, [k]: v }));
   const opts = <T extends string>(list: readonly T[]) => list.map((id) => ({ id, label: id.charAt(0).toUpperCase() + id.slice(1) }));
 
   return (
     <div className="grid gap-3">
-      <div className="flex items-center gap-3">
-        <AvatarFace look={shown} className="h-14 w-14 shrink-0 rounded-full ring-2 ring-white/15" />
-        <PageHead kicker="Home" title="Il tuo arciere" lede="Aspetto, abiti, attrezzatura e sequenza di tiro. Si salva da sé." />
+      <div className="aa-avatar-head relative overflow-hidden rounded-[var(--radius-card)] border border-hair p-3.5" style={{ ["--av" as string]: shown.shirt }}>
+        <div className="flex items-center gap-3.5">
+          <div className="relative shrink-0">
+            <AvatarFace look={shown} className="h-20 w-20 rounded-full ring-[3px] ring-white/25 shadow-[0_10px_24px_-10px_rgba(0,0,0,.8)]" />
+            {shown.lefty ? <span className="absolute -bottom-1 -right-1 rounded-full bg-[#ffd27a] px-1.5 py-0.5 text-[0.55rem] font-black uppercase text-[#2a1d0c]">Mancino</span> : null}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/60">Il tuo arciere</p>
+            <p className="truncate font-display text-2xl leading-tight text-white">{STYLE_NAME[shown.style]} · {BODY_NAME[shown.body]}</p>
+            <p className="truncate text-xs text-white/70">{[sceneLabel(shown.scene), BOW_TYPES.find((b) => b.id === shown.bowType)?.label].filter(Boolean).join(" · ")}</p>
+          </div>
+        </div>
+        <p className="mt-2 text-xs text-white/65">Aspetto, abiti, attrezzatura e sequenza di tiro. Si salva da sé.</p>
       </div>
       <div className="sticky top-16 z-10">
         <div className="relative">
-          {in3d ? (
+          {view === "3d" ? (
             <Archer3D look={shown} height="h-72" />
+          ) : view === "fronte" ? (
+            <div className="aa-avatar-stage relative h-72 overflow-hidden">
+              <SceneBackdrop sky={sky} id="edfront" scene={shown.scene} />
+              <div className="absolute inset-x-0 bottom-[2%] top-[3%] flex justify-center">
+                <ArcherFront look={shown} className="h-full w-auto drop-shadow-[0_12px_20px_rgba(0,0,0,0.45)]" />
+              </div>
+            </div>
           ) : (
             <AvatarScene look={shown} height="h-72" phase />
           )}
-          <button type="button" aria-pressed={in3d} onClick={() => setIn3d((x) => !x)} className={`absolute right-2 top-2 z-10 min-h-9 rounded-full px-3 text-xs font-bold backdrop-blur ${in3d ? "bg-[#7cf0a8] text-[#0b120e]" : "bg-black/55 text-white"}`}>
-            {in3d ? "Vista 2D" : "Vista 3D"}
-          </button>
+          <div className="absolute right-2 top-2 z-10 flex gap-1 rounded-full bg-black/45 p-1 backdrop-blur">
+            {([["lato", "Profilo"], ["fronte", "Fronte"], ["3d", "3D"]] as const).map(([id, label]) => (
+              <button key={id} type="button" aria-pressed={view === id} onClick={() => setView(id)} className={`min-h-8 rounded-full px-2.5 text-[0.7rem] font-bold ${view === id ? "bg-[#7cf0a8] text-[#0b120e]" : "text-white"}`}>{label}</button>
+            ))}
+          </div>
         </div>
       </div>
       <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 [scrollbar-width:none]">
@@ -113,6 +203,10 @@ function Page() {
             </Row>
             <Row label="Corporatura"><Chips value={look.build} onChange={(v) => set("build", v)} options={opts(["snello", "normale", "robusto"] as const)} /></Row>
             <Row label="Carnagione"><Colors value={look.skin} colors={SKINS} onPick={(c) => set("skin", c)} /></Row>
+            <Row label="Mano dell'arco">
+              <Chips value={look.lefty ? "mancino" : "destro"} onChange={(v) => set("lefty", v === "mancino")} options={[{ id: "destro", label: "Destrorso" }, { id: "mancino", label: "Mancino" }]} />
+              <p className="text-xs text-muted">Il mancino tiene l'arco con la destra e tende con la sinistra: in Home tira verso sinistra.</p>
+            </Row>
           </>
         ) : null}
         {tab === "viso" ? (
@@ -142,9 +236,11 @@ function Page() {
               { id: "lunghi", label: "Lunghi" }, { id: "lunghi-mossi", label: "Lunghi mossi" }, { id: "coda", label: "Coda" }, { id: "raccolti", label: "Raccolti in alto" }, { id: "chignon", label: "Chignon" },
               { id: "treccia", label: "Treccia" }, { id: "trecce", label: "Due trecce" }, { id: "codini", label: "Codini" }, { id: "caschetto", label: "Caschetto" }, { id: "cresta", label: "Cresta" }, { id: "calvo", label: "Calvo" },
             ] as { id: AvatarLook["hair"]; label: string }[]} /></Row>
-            <Row label="Colore (anche della barba)"><Colors value={look.hairColor} colors={HAIR_COLORS} onPick={(c) => set("hairColor", c)} /></Row>
+            <Slider label="Lunghezza" value={tune(look.hairLength, 50, 0, 100)} min={0} max={100} onChange={(v) => set("hairLength", String(Math.round(v)))} format={(v) => `${v}%`} ends={["Più corti", "Più lunghi"]} />
+            <Row label="Colore (anche della barba)"><Tint value={look.hairColor} onPick={(c) => set("hairColor", c)} quick={HAIR_COLORS} /></Row>
             <Row label="In testa"><Chips value={look.hat} onChange={(v) => set("hat", v)} options={[{ id: "nessuno", label: "Niente" }, { id: "berretto", label: "Berretto" }, { id: "fascia", label: "Fascia" }, { id: "piuma", label: "Cappello con piuma" }, { id: "cappuccio", label: "Cappuccio" }, { id: "robin", label: "Cappello a punta" }, { id: "tesa", label: "Cappello a tesa larga" }, { id: "bandana", label: "Bandana" }, { id: "cerchietto", label: "Diadema" }, { id: "elmo", label: "Elmo" }]} /></Row>
-            {look.hat !== "nessuno" || look.hair === "coda" || look.hair === "treccia" ? <Row label="Colore del copricapo / elastico"><Colors value={look.hatColor} colors={CLOTH_COLORS} onPick={(c) => set("hatColor", c)} /></Row> : null}
+            {look.hat !== "nessuno" || look.hair === "coda" || look.hair === "treccia" ? <Row label="Colore del copricapo / elastico"><Tint value={look.hatColor} onPick={(c) => set("hatColor", c)} quick={CLOTH_COLORS} /></Row> : null}
+            {look.hat !== "nessuno" && look.hat !== "cappuccio" ? <Slider label="Rotazione del copricapo" value={tune(look.hatRot, 0, -180, 180)} min={-180} max={180} onChange={(v) => set("hatRot", String(Math.round(v)))} format={(v) => `${v}°`} ends={["-180°", "+180°"]} /> : null}
           </>
         ) : null}
         {tab === "abiti" ? (
@@ -153,11 +249,12 @@ function Page() {
               <Chips value={look.style} onChange={(v) => setLook((l) => ({ ...l, style: v, top: TOPS[v][0].id, bottom: v === "medievale" ? "calzamaglia" : "pantaloni", footwear: v === "medievale" ? "stivali" : "sportive" }))} options={[{ id: "moderno", label: "Moderno" }, { id: "medievale", label: "Medievale" }]} />
             </Row>
             <Row label="Sopra"><Chips value={look.top} onChange={(v) => set("top", v)} options={TOPS[look.style]} /></Row>
-            <Row label="Colore"><Colors value={look.shirt} colors={CLOTH_COLORS} onPick={(c) => set("shirt", c)} /></Row>
+            <Slider label="Lunghezza della veste" value={tune(look.topLength, 50, 0, 100)} min={0} max={100} onChange={(v) => set("topLength", String(Math.round(v)))} format={(v) => `${v}%`} ends={["Corta, in vita", "Lunga, al ginocchio"]} />
+            <Row label="Colore"><Tint value={look.shirt} onPick={(c) => set("shirt", c)} quick={CLOTH_COLORS} /></Row>
             <Row label="Rifiniture (colletto, bordi, alamari)"><Colors value={look.trim} colors={CLOTH_COLORS} onPick={(c) => set("trim", c)} /></Row>
             <Row label="Maniche e camicia sotto"><Colors value={look.sleeves} colors={["", ...CLOTH_COLORS]} onPick={(c) => set("sleeves", c)} /></Row>
             <Row label="Sotto"><Chips value={look.bottom} onChange={(v) => set("bottom", v)} options={[{ id: "pantaloni", label: "Pantaloni" }, { id: "jeans", label: "Jeans" }, { id: "pantaloncini", label: "Pantaloncini" }, { id: "calzamaglia", label: "Calzamaglia" }, { id: "brache", label: "Brache" }, { id: "larghi", label: "Pantaloni larghi" }]} /></Row>
-            <Row label="Colore"><Colors value={look.pants} colors={["#2b3440", "#3a2a1e", "#1f3a5f", "#2a4a7a", "#4b4b4b", "#5b4a2e", "#e9e4d8", "#4b6b2e", "#3f4a2e", "#6b4a2e", "#1b1c1f", "#5a3a22"]} onPick={(c) => set("pants", c)} /></Row>
+            <Row label="Colore"><Tint value={look.pants} onPick={(c) => set("pants", c)} quick={["#2b3440", "#3a2a1e", "#1f3a5f", "#2a4a7a", "#4b4b4b", "#5b4a2e", "#e9e4d8", "#4b6b2e", "#3f4a2e", "#6b4a2e", "#1b1c1f", "#5a3a22"]} /></Row>
             <Row label="Ai piedi"><Chips value={look.footwear} onChange={(v) => set("footwear", v)} options={[{ id: "sportive", label: "Scarpe sportive" }, { id: "stivaletti", label: "Stivaletti" }, { id: "stivali", label: "Stivali" }, { id: "stivali-risvolto", label: "Stivali con risvolto" }, { id: "stivali-alti", label: "Stivali alti" }, { id: "sandali", label: "Sandali" }]} /></Row>
             <Row label="Cintura"><Chips value={look.belt} onChange={(v) => set("belt", v)} options={[{ id: "sottile", label: "Sottile" }, { id: "larga", label: "Larga con fibbia" }, { id: "nessuna", label: "Nessuna" }]} /></Row>
             {look.belt !== "nessuna" ? <Row label="Colore della cintura"><Colors value={look.beltColor} colors={["#5b3a1e", "#4a2c16", "#14181c", "#8a2f2f", "#7a4a26", "#c9a46a"]} onPick={(c) => set("beltColor", c)} /></Row> : null}
@@ -178,14 +275,15 @@ function Page() {
               </div>
             </Row>
             {look.cape ? <Row label="Mantello"><Chips value={look.capeStyle} onChange={(v) => set("capeStyle", v)} options={[{ id: "liscio", label: "Lungo" }, { id: "frastagliato", label: "Frastagliato" }, { id: "corto", label: "Corto" }]} /></Row> : null}
-            {look.cape ? <Row label="Colore del mantello"><Colors value={look.capeColor} colors={CLOTH_COLORS} onPick={(c) => set("capeColor", c)} /></Row> : null}
+            {look.cape ? <Row label="Colore del mantello"><Tint value={look.capeColor} onPick={(c) => set("capeColor", c)} quick={CLOTH_COLORS} /></Row> : null}
             {look.cowl || look.mask ? <Row label="Colore di scialle e maschera"><Colors value={look.cowlColor} colors={CLOTH_COLORS} onPick={(c) => set("cowlColor", c)} /></Row> : null}
             {look.fur ? <Row label="Colore della pelliccia"><Colors value={look.furColor} colors={["#6b5a48", "#3a2a1e", "#e9e4d8", "#8a7a6a", "#1d1d1f", "#b88a4a"]} onPick={(c) => set("furColor", c)} /></Row> : null}
             {look.sash ? <Row label="Colore della fusciacca"><Colors value={look.sashColor} colors={CLOTH_COLORS} onPick={(c) => set("sashColor", c)} /></Row> : null}
             {look.wraps ? <Row label="Colore delle fasce"><Colors value={look.wrapsColor} colors={["#6b5a48", "#7a6a52", "#d8cdb6", "#3a2a1e", "#55585a", "#8a2f2f"]} onPick={(c) => set("wrapsColor", c)} /></Row> : null}
             {look.scarf ? <Row label="Colore della sciarpa"><Colors value={look.scarfColor} colors={CLOTH_COLORS} onPick={(c) => set("scarfColor", c)} /></Row> : null}
             <Row label="Faretra"><Chips value={look.quiverPlace} onChange={(v) => set("quiverPlace", v)} options={[{ id: "fianco", label: "Al fianco" }, { id: "schiena", label: "Sulla schiena" }]} /></Row>
-            <Row label="Colore della faretra"><Colors value={look.quiver} colors={["#7a4a26", "#14181c", "#2f6f62", "#8a2f2f", "#1f3a5f", "#c9a46a"]} onPick={(c) => set("quiver", c)} /></Row>
+            <Slider label="Rotazione della faretra" value={tune(look.quiverRot, 0, -180, 180)} min={-180} max={180} onChange={(v) => set("quiverRot", String(Math.round(v)))} format={(v) => `${v}°`} ends={["-180°", "+180°"]} />
+            <Row label="Colore della faretra"><Tint value={look.quiver} onPick={(c) => set("quiver", c)} quick={["#7a4a26", "#14181c", "#2f6f62", "#8a2f2f", "#1f3a5f", "#c9a46a"]} /></Row>
           </>
         ) : null}
         {tab === "posa" ? (

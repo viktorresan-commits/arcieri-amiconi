@@ -1,15 +1,21 @@
 import { removeTeamMember } from "@/lib/arcieri/account.api";
 import { TargetGL } from "@/components/target-gl";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
+import { listCompanies } from "@/lib/arcieri/compagnie.api";
+import { CompanyForm, CompanyHero, CompanyLeague, joinAndReload } from "@/components/compagnia";
+import { RankBars } from "@/components/rank-bars";
+import { Heat } from "@/components/shot-lab";
+import { useLocalState } from "@/lib/arcieri/local-store";
 import { Podium } from "@/components/podium";
 import { useTeamAvatars } from "@/components/avatar-hero";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { listClubOrders, listGadgets, saveClubOrder, setClubOrder, skillBoard, squadBoard } from "@/lib/arcieri/club.api";
 import { memberLabel, DIVISIONS } from "@/lib/arcieri/labels";
+import type { AvatarLook } from "@/lib/arcieri/avatar";
 import { fmtAvg } from "@/lib/arcieri/scoring";
 import { useLoad } from "@/lib/arcieri/use-load";
 import { ANIMALS, animalByLabel } from "@/lib/arcieri/sagome";
-import { DistBars, MultiBars, useThemeInk } from "@/components/charts";
+import { MultiBars, useThemeInk } from "@/components/charts";
 import { SagomaLab } from "@/components/sagoma-lab";
 import { faceById } from "@/lib/arcieri/scoring";
 
@@ -20,6 +26,8 @@ import { useMember } from "@/components/shell";
 import { PrizeMark, prizeTier } from "@/components/prize-mark";
 
 export const Route = createFileRoute("/_app/squadra")({ component: Page });
+
+type Section = "compagnia" | "statistiche" | "classifica";
 
 type Archer = Awaited<ReturnType<typeof squadBoard>>["people"][number] & { name: string; color: string; mark: string; skill: number };
 
@@ -55,11 +63,16 @@ function Page() {
   const ink = useThemeInk();
   const palette = [ink.primary, ink.accent, ink.soft];
   const { me } = useMember();
-  const { data, error, loading } = useLoad("squad-board", () => squadBoard());
+  const [nonce, setNonce] = useState(0);
+  const { data, error, loading } = useLoad(`squad-board-${nonce}`, () => squadBoard());
+  const companies = useLoad(`companies-${nonce}`, () => listCompanies());
+  const [section, setSection] = useLocalState<Section>("aa-compagnia-tab", "compagnia");
+  const [editing, setEditing] = useState<"none" | "edit" | "new">("none");
+  const [busy, setBusy] = useState<number | null>(null);
   const looks = useTeamAvatars();
   const [removed, setRemoved] = useState<number[]>([]);
   const [board, setBoard] = useState<"padiglione" | "sagoma">("padiglione");
-  const [look, setLook] = useState<"tre" | "mappa">("tre");
+  const [look, setLook] = useState<"tre" | "calore" | "mappa">("tre");
   const [face, setFace] = useState("io");
   const [picked, setPicked] = useState<string[]>([]);
   const [pick, setPick] = useState<string[]>([]);
@@ -76,7 +89,7 @@ function Page() {
 
   if (loading) return <Loading />;
   if (error || !data) return <ErrorNote text={error || "Errore"} />;
-  if (people.length === 0) return <Empty title="Ancora nessuno" text="Il primo account apre il gruppo. Gli altri si registrano da soli." />;
+  if (people.length === 0) return <Empty title="Ancora nessuno" text="Il primo account apre la compagnia. Gli altri si registrano da soli." />;
 
   const podium = (division: "" | "Madonne" | "Messeri" | "Pueri" | "Juniores") =>
     ranked.filter((row) => row.skill >= 0 && (division === "" || row.division === division)).slice(0, 3);
@@ -104,170 +117,251 @@ function Page() {
   const dots = paint.flatMap((row) => row.shots.map((shot) => ({ ...shot, color: row.userId === me.userId ? "#e07a2f" : row.color })));
   const sagomaShots = paint.flatMap((row) => row.sagoma).map((shot) => ({ score: shot.score, nx: shot.nx, ny: shot.ny }));
 
+  const company = companies.data?.companies.find((co) => co.id === companies.data?.mine) ?? null;
+  const names = people.map((item) => item.name);
+  const rankRow = (row: (typeof people)[number], value: number, extra?: { label?: string; sub?: string }) => ({
+    id: row.userId,
+    name: row.userId === me.userId ? `${axisName(row.name, names)} (tu)` : row.name,
+    value,
+    photo: row.photoUrl,
+    look: looks[row.userId],
+    color: row.color,
+    me: row.userId === me.userId,
+    ...extra,
+  });
+
+  async function join(id: number) {
+    setBusy(id);
+    try {
+      await joinAndReload(id, () => setNonce((n) => n + 1));
+      setSection("compagnia");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   return (
     <div className="grid gap-4">
-      <PageHead title="Squadra" lede="Tutti gli account. Il podio segue i punti campionato. Se mancano, vale la media di gara, poi la media per freccia in allenamento." />
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Podium title="Generale" rows={podium("")} looks={looks} />
-        {DIVISIONS.map((name) => <Podium key={name} title={name} rows={podium(name)} looks={looks} />)}
+      {company ? (
+        <CompanyHero co={company} canEdit={Boolean(companies.data?.canEdit)} onEdit={() => setEditing("edit")} />
+      ) : (
+        <PageHead title="Compagnia" />
+      )}
+      {editing !== "none" ? (
+        <CompanyForm
+          co={editing === "edit" && company ? company : undefined}
+          onCancel={() => setEditing("none")}
+          onDone={() => {
+            setEditing("none");
+            setNonce((n) => n + 1);
+            setSection("compagnia");
+          }}
+        />
+      ) : null}
+      <div className="sticky top-[calc(env(safe-area-inset-top)+3.6rem)] z-20">
+        <Segmented<Section>
+          value={section}
+          onChange={setSection}
+          options={[
+            { id: "compagnia", label: "Arcieri" },
+            { id: "statistiche", label: "Statistiche" },
+            { id: "classifica", label: "Compagnie" },
+          ]}
+        />
       </div>
 
-      <GroupBestPosture />
-
-      <Card>
-        <h2 className="font-display text-2xl">Bersaglio</h2>
-        <div className="mt-2 grid grid-cols-2 gap-2">
-          <button type="button" onClick={() => setBoard("padiglione")} className={`min-h-11 rounded-xl text-sm font-semibold ${board === "padiglione" ? "bg-primary text-primary-fg" : "border border-line"}`}>Padiglione</button>
-          <button type="button" onClick={() => setBoard("sagoma")} className={`min-h-11 rounded-xl text-sm font-semibold ${board === "sagoma" ? "bg-primary text-primary-fg" : "border border-line"}`}>Sagome 3D</button>
-        </div>
-        <p className="mb-3 mt-2 text-sm text-muted">Prima i tuoi tiri, poi tutti, oppure solo chi scegli. Ci sono gli allenamenti e le gare.</p>
-        <div className="mb-3 flex flex-wrap gap-2">
-          {([["io", "I miei"], ["tutti", "Tutti"], ["scelta", "Scegli"]] as const).map(([key, label]) => (
-            <button key={key} type="button" onClick={() => setFace(key)} className={`min-h-11 rounded-full px-3 text-sm font-semibold ${face === key ? "bg-primary text-primary-fg" : "border border-line"}`}>{label}</button>
-          ))}
-        </div>
-        {face === "scelta" ? (
-          <div className="mb-3 flex flex-wrap gap-2">
-            {people.map((row) => {
-              const on = picked.includes(row.userId);
+      {section === "compagnia" ? (
+        <>
+          <div className="grid gap-2">
+            <div className="flex items-baseline justify-between px-1">
+              <h2 className="font-display text-2xl">Gli arcieri</h2>
+              <span className="text-xs text-muted">{people.length} {people.length === 1 ? "iscritto" : "iscritti"}</span>
+            </div>
+            {me.role === "admin" ? <p className="px-1 text-xs text-muted">Tieni premuto su una persona per toglierla dall'app.</p> : null}
+            {people.filter((row) => !removed.includes(row.id)).map((row, i) => {
+              const card = (
+                <Link to="/arciere/$id" params={{ id: String(row.id) }}>
+                  <Card className="aa-menu-row flex items-center gap-3 p-3" style={{ animationDelay: `${Math.min(i, 10) * 40}ms` }}>
+                    <Avatar size="lg" label={row.name} color={row.avatarColor} photo={row.photoUrl} look={looks[row.userId]} />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-display text-2xl leading-none">{row.name}</p>
+                      <p className="mt-1 text-xs text-muted">{[row.division, `${row.sessions} allenamenti`, `${row.arrows} frecce`, `${row.gare} gare`, row.bestDistance != null ? `${row.bestDistance} m` : ""].filter(Boolean).join(" · ")}</p>
+                    </div>
+                  </Card>
+                </Link>
+              );
+              if (me.role !== "admin" || row.userId === me.userId) return <div key={row.id}>{card}</div>;
               return (
-                <button key={row.userId} type="button" onClick={() => setPicked((current) => on ? current.filter((id) => id !== row.userId) : [...current, row.userId])} className={`min-h-11 rounded-full px-3 text-sm font-semibold ${on ? "bg-accent text-accent-fg" : "border border-line"}`}>
-                  {row.userId === me.userId ? "Io" : row.name}
-                  <span className="ml-1 tabular-nums opacity-70">{board === "sagoma" ? row.sagoma.length : row.shots.length}</span>
-                </button>
+                <HoldDelete
+                  key={row.id}
+                  label={`Togliere ${row.name} dall'app? Il suo account e i suoi allenamenti vengono cancellati e non si possono recuperare.`}
+                  onDelete={() => removeTeamMember({ data: { id: row.id } }).then(() => setRemoved((list) => [...list, row.id]))}
+                >
+                  {card}
+                </HoldDelete>
               );
             })}
           </div>
-        ) : null}
-        {board === "sagoma" ? (
-          sagomaShots.length ? <SagomaLab animal="sagome-3d" shots={sagomaShots} initial="tre" /> : <p className="text-sm text-muted">Nessun tiro di sagoma, per ora.</p>
-        ) : look === "tre" && dots.length ? (
-          <div className="grid gap-2">
-            <Segmented value={look} onChange={setLook} options={[{ id: "tre", label: "3D animato" }, { id: "mappa", label: "Mappa" }]} />
-            <TargetGL face={TEAM_FACE} shots={dots.slice(-180).map((d) => ({ x: d.nx, y: d.ny, color: d.color }))} />
+          <GadgetShelf />
+          <ClubSpend />
+        </>
+      ) : null}
+
+      {section === "classifica" ? (
+        <>
+          {companies.data ? <CompanyLeague board={companies.data} onJoin={(id) => void join(id)} busy={busy} /> : companies.error ? <ErrorNote text={companies.error} /> : <Loading />}
+          {editing === "none" ? (
+            <Card className="grid gap-2">
+              <h2 className="font-display text-2xl">Una nuova compagnia</h2>
+              <p className="text-sm text-muted">Fondala tu: scegli nome, stemma, colore, contatti e social. Gli altri arcieri potranno entrare da questa pagina.</p>
+              <Button onClick={() => setEditing("new")}>Fonda una compagnia</Button>
+            </Card>
+          ) : null}
+        </>
+      ) : null}
+
+      {section === "statistiche" ? (
+        <>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Podium title="Generale" rows={podium("")} looks={looks} />
+            {DIVISIONS.map((name) => <Podium key={name} title={name} rows={podium(name)} looks={looks} />)}
           </div>
-        ) : (
-          <>
-          {dots.length ? <Segmented value={look} onChange={setLook} options={[{ id: "tre", label: "3D animato" }, { id: "mappa", label: "Mappa" }]} /> : null}
-          <svg viewBox="-1.12 -1.12 2.24 2.24" className="mx-auto aspect-square w-full max-w-sm" role="img" aria-label="Minimappa dei tiri">
-            <circle cx="0" cy="0" r="1.08" fill="var(--elev)" />
-            {RINGS.map((ring) => <circle key={ring.r} cx="0" cy="0" r={ring.r} fill={ring.fill} />)}
-            <circle cx="0" cy="0" r="0.04" fill="#14181c" />
-            {dots.map((shot, index) => <circle key={index} cx={shot.nx} cy={shot.ny} r="0.03" fill={shot.color} stroke="#14181c" strokeWidth="0.008" />)}
-          </svg>
-          </>
-        )}
-        {board === "padiglione" && dots.length === 0 ? <p className="mt-2 text-sm text-muted">Nessun punto sul bersaglio, per ora.</p> : null}
-        <ul className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs">
-          {shown.map((row) => (
-            <li key={row.userId} className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-full" style={{ background: row.color }} />
-              {row.name}
-              <span className="text-muted">{board === "sagoma" ? row.sagoma.length : row.shots.length}</span>
-            </li>
-          ))}
-        </ul>
-      </Card>
 
-      <Card>
-        <h2 className="mb-2 font-display text-2xl">Chi tira di più</h2>
-        {people.some((row) => row.arrows > 0) ? <DistBars data={people.filter((row) => row.arrows > 0).map((row) => ({ name: axisName(row.name, people.map((item) => item.name)), n: row.arrows }))} /> : <p className="text-sm text-muted">Ancora nessuna freccia.</p>}
-      </Card>
-      <Card>
-        <h2 className="mb-2 font-display text-2xl">Chi si allena di più</h2>
-        {people.some((row) => row.sessions > 0) ? <DistBars data={people.filter((row) => row.sessions > 0).map((row) => ({ name: axisName(row.name, people.map((item) => item.name)), n: row.sessions }))} /> : <p className="text-sm text-muted">Ancora nessun allenamento.</p>}
-      </Card>
-      <Card>
-        <h2 className="mb-2 font-display text-2xl">Distanza migliore</h2>
-        <p className="mb-2 text-sm text-muted">Il tiro più lungo, tra allenamenti e piazzole di gara.</p>
-        {people.some((row) => row.bestDistance != null) ? <DistBars data={people.filter((row) => row.bestDistance != null).map((row) => ({ name: axisName(row.name, people.map((item) => item.name)), n: row.bestDistance ?? 0 }))} /> : <p className="text-sm text-muted">Ancora nessuna distanza segnata.</p>}
-      </Card>
-      <Card>
-        <h2 className="mb-2 font-display text-2xl">Chi fa più gare</h2>
-        {people.some((row) => row.gare > 0) ? <DistBars data={people.filter((row) => row.gare > 0).map((row) => ({ name: axisName(row.name, people.map((item) => item.name)), n: row.gare }))} /> : <p className="text-sm text-muted">Ancora nessuna gara segnata.</p>}
-      </Card>
+          <GroupBestPosture />
 
-      <Card>
-        <h2 className="font-display text-2xl">Confronto</h2>
-        <p className="mb-3 text-sm text-muted">Fino a tre alla volta. {chosen.length >= 3 ? "Togli un nome per cambiarlo." : ""}</p>
-        <div className="flex flex-wrap gap-2">
-          {people.map((row) => {
-            const on = chosen.includes(row.userId);
-            return (
-              <button key={row.userId} type="button" onClick={() => toggle(row.userId)} className={`min-h-11 rounded-full px-3 text-sm font-semibold ${on ? "bg-primary text-primary-fg" : "border border-line"}`}>
-                {row.name}
-              </button>
-            );
-          })}
-        </div>
-        {compared.length < 2 ? <p className="mt-3 text-sm text-muted">Scegli almeno due arcieri.</p> : (
-          <>
-            <div className="mt-4 overflow-x-auto">
-              <table className="w-full min-w-[18rem] text-left text-sm">
-                <thead>
-                  <tr className="text-muted">
-                    <th className="py-2 pr-2 font-medium"> </th>
-                    {compared.map((row) => <th key={row.userId} className="py-2 pr-2 font-semibold text-fg">{axisName(row.name, compared.map((item) => item.name))}</th>)}
-                  </tr>
-                </thead>
-                <tbody>
-                  {[
-                    ["Allenamenti", (row: Archer) => String(row.sessions)],
-                    ["Frecce", (row: Archer) => String(row.arrows)],
-                    ["di cui allenamento", (row: Archer) => String(row.trainArrows)],
-                    ["di cui gare", (row: Archer) => String(row.garaArrows)],
-                    ["Media tiro", (row: Archer) => row.avg == null ? "—" : fmtAvg(row.avg)],
-                    ["Gare", (row: Archer) => String(row.gare)],
-                    ["Distanza migliore", (row: Archer) => row.bestDistance == null ? "—" : `${row.bestDistance} m`],
-                    ["Punti campionato", (row: Archer) => String(row.champ)],
-                    ["Media gara", (row: Archer) => row.compAvg == null ? "—" : fmtAvg(row.compAvg)],
-                  ].map(([label, read]) => (
-                    <tr key={String(label)} className="border-t border-line">
-                      <th className="py-2 pr-2 text-left font-medium">{label as string}</th>
-                      {compared.map((row) => <td key={row.userId} className="py-2 pr-2 tabular-nums">{(read as (row: Archer) => string)(row)}</td>)}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          <Card>
+            <h2 className="font-display text-2xl">Bersaglio della compagnia</h2>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => setBoard("padiglione")} className={`min-h-11 rounded-xl text-sm font-semibold ${board === "padiglione" ? "bg-primary text-primary-fg" : "border border-line"}`}>Padiglione</button>
+              <button type="button" onClick={() => setBoard("sagoma")} className={`min-h-11 rounded-xl text-sm font-semibold ${board === "sagoma" ? "bg-primary text-primary-fg" : "border border-line"}`}>Sagome 3D</button>
             </div>
-            <h3 className="mb-2 mt-4 font-display text-xl">Allenamenti e gare</h3>
-            <MultiBars data={volume} keys={compareKeys} />
-            <h3 className="mb-2 mt-4 font-display text-xl">Punti campionato</h3>
-            <MultiBars data={points} keys={compareKeys} />
-          </>
-        )}
-      </Card>
+            <p className="mb-3 mt-2 text-sm text-muted">Prima i tuoi tiri, poi tutti, oppure solo chi scegli. Ci sono gli allenamenti e le gare.</p>
+            <div className="mb-3 flex flex-wrap gap-2">
+              {([["io", "I miei"], ["tutti", "Tutti"], ["scelta", "Scegli"]] as const).map(([key, label]) => (
+                <button key={key} type="button" onClick={() => setFace(key)} className={`min-h-11 rounded-full px-3 text-sm font-semibold ${face === key ? "bg-primary text-primary-fg" : "border border-line"}`}>{label}</button>
+              ))}
+            </div>
+            {face === "scelta" ? (
+              <div className="mb-3 flex flex-wrap gap-2">
+                {people.map((row) => {
+                  const on = picked.includes(row.userId);
+                  return (
+                    <button key={row.userId} type="button" onClick={() => setPicked((current) => on ? current.filter((id) => id !== row.userId) : [...current, row.userId])} className={`min-h-11 rounded-full px-3 text-sm font-semibold ${on ? "bg-accent text-accent-fg" : "border border-line"}`}>
+                      {row.userId === me.userId ? "Io" : row.name}
+                      <span className="ml-1 tabular-nums opacity-70">{board === "sagoma" ? row.sagoma.length : row.shots.length}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+            {board === "sagoma" ? (
+              sagomaShots.length ? <SagomaLab animal="sagome-3d" shots={sagomaShots} initial="tre" /> : <p className="text-sm text-muted">Nessun tiro di sagoma, per ora.</p>
+            ) : dots.length ? (
+              <div className="grid gap-2">
+                <Segmented value={look} onChange={setLook} options={[{ id: "tre", label: "3D animato" }, { id: "calore", label: "Mappa termica" }, { id: "mappa", label: "Punti" }]} />
+                {look === "tre" ? <TargetGL face={TEAM_FACE} shots={dots.slice(-180).map((d) => ({ x: d.nx, y: d.ny, color: d.color }))} bare /> : null}
+                {look === "calore" ? <Heat face={TEAM_FACE} shots={dots.map((d) => ({ x: d.nx, y: d.ny }))} /> : null}
+                {look === "mappa" ? (
+                  <svg viewBox="-1.12 -1.12 2.24 2.24" className="mx-auto aspect-square w-full max-w-sm" role="img" aria-label="Minimappa dei tiri">
+                    <circle cx="0" cy="0" r="1.08" fill="var(--elev)" />
+                    {RINGS.map((ring) => <circle key={ring.r} cx="0" cy="0" r={ring.r} fill={ring.fill} />)}
+                    <circle cx="0" cy="0" r="0.04" fill="#14181c" />
+                    {dots.map((shot, index) => <circle key={index} cx={shot.nx} cy={shot.ny} r="0.03" fill={shot.color} stroke="#14181c" strokeWidth="0.008" />)}
+                  </svg>
+                ) : null}
+              </div>
+            ) : (
+              <p className="mt-2 text-sm text-muted">Nessun punto sul bersaglio, per ora.</p>
+            )}
+            <ul className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs">
+              {shown.map((row) => (
+                <li key={row.userId} className="flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-full" style={{ background: row.userId === me.userId ? "#e07a2f" : row.color }} />
+                  {row.name}
+                  <span className="text-muted">{board === "sagoma" ? row.sagoma.length : row.shots.length}</span>
+                </li>
+              ))}
+            </ul>
+          </Card>
 
-      <div className="grid gap-2">
-        {me.role === "admin" ? <p className="px-1 text-xs text-muted">Tieni premuto su una persona per toglierla dalla squadra.</p> : null}
-        {people.filter((row) => !removed.includes(row.id)).map((row, i) => {
-          const card = (
-            <Link to="/arciere/$id" params={{ id: String(row.id) }}>
-              <Card className="aa-menu-row flex items-center gap-3 p-3" style={{ animationDelay: `${Math.min(i, 10) * 40}ms` }}>
-                <Avatar size="lg" label={row.name} color={row.avatarColor} photo={row.photoUrl} look={looks[row.userId]} />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-display text-2xl leading-none">{row.name}</p>
-                  <p className="mt-1 text-xs text-muted">{[row.division, `${row.sessions} allenamenti`, `${row.arrows} frecce`, `${row.gare} gare`, row.bestDistance != null ? `${row.bestDistance} m` : ""].filter(Boolean).join(" · ")}</p>
+          <StatCard title="Chi tira di più" hint="Frecce tirate, tra allenamenti e gare." tint="#e07a2f">
+            <RankBars rows={people.map((row) => rankRow(row, row.arrows, { sub: `${row.trainArrows} in allenamento · ${row.garaArrows} in gara` }))} unit="frecce" tint="#e07a2f" empty="Ancora nessuna freccia." />
+          </StatCard>
+          <StatCard title="Chi si allena di più" hint="Allenamenti registrati." tint="#3d8f5f">
+            <RankBars rows={people.map((row) => ({ ...rankRow(row, row.sessions), color: "#3d8f5f" }))} unit="allenamenti" tint="#3d8f5f" empty="Ancora nessun allenamento." />
+          </StatCard>
+          <StatCard title="Distanze migliori" hint="Il tiro più lungo, tra allenamenti e piazzole di gara." tint="#2a6294">
+            <RankBars rows={people.map((row) => ({ ...rankRow(row, row.bestDistance ?? 0), color: "#4b8fd1" }))} unit="m" tint="#4b8fd1" empty="Ancora nessuna distanza segnata." />
+          </StatCard>
+          <StatCard title="Chi partecipa a più gare" hint="Gare con un punteggio segnato." tint="#c9a227">
+            <RankBars rows={people.map((row) => ({ ...rankRow(row, row.gare, { sub: row.compAvg != null ? `media gara ${fmtAvg(row.compAvg)}` : undefined }), color: "#d6a72a" }))} unit="gare" tint="#d6a72a" empty="Ancora nessuna gara segnata." />
+          </StatCard>
+          <SquadAnimals peers={people} looks={looks} meId={me.userId} />
+
+          <Card>
+            <h2 className="font-display text-2xl">Confronto</h2>
+            <p className="mb-3 text-sm text-muted">Fino a tre alla volta. {chosen.length >= 3 ? "Togli un nome per cambiarlo." : ""}</p>
+            <div className="flex flex-wrap gap-2">
+              {people.map((row) => {
+                const on = chosen.includes(row.userId);
+                return (
+                  <button key={row.userId} type="button" onClick={() => toggle(row.userId)} className={`min-h-11 rounded-full px-3 text-sm font-semibold ${on ? "bg-primary text-primary-fg" : "border border-line"}`}>
+                    {row.name}
+                  </button>
+                );
+              })}
+            </div>
+            {compared.length < 2 ? <p className="mt-3 text-sm text-muted">Scegli almeno due arcieri.</p> : (
+              <>
+                <div className="mt-4 overflow-x-auto">
+                  <table className="w-full min-w-[18rem] text-left text-sm">
+                    <thead>
+                      <tr className="text-muted">
+                        <th className="py-2 pr-2 font-medium"> </th>
+                        {compared.map((row) => <th key={row.userId} className="py-2 pr-2 font-semibold text-fg">{axisName(row.name, compared.map((item) => item.name))}</th>)}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[
+                        ["Allenamenti", (row: Archer) => String(row.sessions)],
+                        ["Frecce", (row: Archer) => String(row.arrows)],
+                        ["di cui allenamento", (row: Archer) => String(row.trainArrows)],
+                        ["di cui gare", (row: Archer) => String(row.garaArrows)],
+                        ["Media tiro", (row: Archer) => row.avg == null ? "—" : fmtAvg(row.avg)],
+                        ["Gare", (row: Archer) => String(row.gare)],
+                        ["Distanza migliore", (row: Archer) => row.bestDistance == null ? "—" : `${row.bestDistance} m`],
+                        ["Punti campionato", (row: Archer) => String(row.champ)],
+                        ["Media gara", (row: Archer) => row.compAvg == null ? "—" : fmtAvg(row.compAvg)],
+                      ].map(([label, read]) => (
+                        <tr key={String(label)} className="border-t border-line">
+                          <th className="py-2 pr-2 text-left font-medium">{label as string}</th>
+                          {compared.map((row) => <td key={row.userId} className="py-2 pr-2 tabular-nums">{(read as (row: Archer) => string)(row)}</td>)}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-              </Card>
-            </Link>
-          );
-          if (me.role !== "admin" || row.userId === me.userId) return <div key={row.id}>{card}</div>;
-          return (
-            <HoldDelete
-              key={row.id}
-              label={`Togliere ${row.name} dalla squadra? Il suo account e i suoi allenamenti vengono cancellati e non si possono recuperare.`}
-              onDelete={() => removeTeamMember({ data: { id: row.id } }).then(() => setRemoved((list) => [...list, row.id]))}
-            >
-              {card}
-            </HoldDelete>
-          );
-        })}
-      </div>
-      <SquadAnimals />
-      <GadgetShelf />
-      <ClubSpend />
+                <h3 className="mb-2 mt-4 font-display text-xl">Allenamenti e gare</h3>
+                <MultiBars data={volume} keys={compareKeys} />
+                <h3 className="mb-2 mt-4 font-display text-xl">Punti campionato</h3>
+                <MultiBars data={points} keys={compareKeys} />
+              </>
+            )}
+          </Card>
+        </>
+      ) : null}
     </div>
+  );
+}
+
+function StatCard({ title, hint, tint, children }: { title: string; hint: string; tint: string; children: ReactNode }) {
+  return (
+    <Card className="relative overflow-hidden">
+      <span aria-hidden className="pointer-events-none absolute -right-10 -top-12 h-36 w-36 rounded-full opacity-25 blur-2xl" style={{ background: tint }} />
+      <h2 className="font-display text-2xl">{title}</h2>
+      <p className="mb-3 text-sm text-muted">{hint}</p>
+      {children}
+    </Card>
   );
 }
 
@@ -280,45 +374,40 @@ const ORDER_LABEL: Record<string, string> = {
   altro: "Altro",
 };
 
-function SquadAnimals() {
+function SquadAnimals({ peers, looks, meId }: { peers: { userId: string; name: string; photoUrl: string | null; color: string }[]; looks: Record<string, AvatarLook>; meId: string }) {
   const board = useLoad("skill-board", () => skillBoard());
   const [animal, setAnimal] = useState(ANIMALS[13].id);
   const data = board.data;
   const face = ANIMALS.find((item) => item.id === animal) ?? ANIMALS[0];
-  const people = data?.people ?? [];
-  const nameOf = (userId: string) => {
-    const person = people.find((item) => item.userId === userId);
-    return person ? memberLabel(person, people) : "Arciere";
+  const inCrew = new Map(peers.map((row) => [row.userId, row]));
+  const rowOf = (userId: string, value: number, label: string, sub: string) => {
+    const person = inCrew.get(userId);
+    return { id: userId, name: person?.name ?? "Arciere", value, label, sub, photo: person?.photoUrl, look: looks[userId], color: "#a3496f", me: userId === meId };
   };
-  const ranked = (data?.animals ?? [])
-    .filter((row) => animalByLabel(row.label).id === face.id)
-    .map((row) => ({ ...row, avg: row.n ? row.points / row.n : 0 }))
-    .sort((a, b) => b.avg - a.avg || b.points - a.points);
-  const sagoma = [...(data?.sagoma ?? [])].filter((row) => row.n > 0).sort((a, b) => (b.points / b.n) - (a.points / a.n));
+  const sagoma = (data?.sagoma ?? [])
+    .filter((row) => row.n > 0 && inCrew.has(row.userId))
+    .map((row) => rowOf(row.userId, row.points / row.n, (row.points / row.n).toFixed(1).replace(".", ","), `${row.n} frecce su sagoma`));
+  const onAnimal = (data?.animals ?? [])
+    .filter((row) => animalByLabel(row.label).id === face.id && inCrew.has(row.userId) && row.n > 0)
+    .map((row) => rowOf(row.userId, row.points / row.n, (row.points / row.n).toFixed(1).replace(".", ","), `${row.n} frecce su ${face.label.toLowerCase()}`));
   return (
-    <Card className="grid gap-3">
-      <h2 className="font-display text-2xl">Sagome 3D</h2>
-      <p className="text-sm text-muted">Media di tutti, su piazzole di ogni gara e tiri di sagoma di ogni allenamento.</p>
-      {sagoma[0] ? (
-        <ol className="grid gap-1 text-sm">
-          {sagoma.slice(0, 8).map((row, index) => (
-            <li key={row.userId} className="flex justify-between gap-3">
-              <span className="truncate">{index + 1}. {nameOf(row.userId)}</span>
-              <span className="shrink-0 tabular-nums text-muted">{(row.points / row.n).toFixed(1)} · {row.n}</span>
-            </li>
-          ))}
-        </ol>
-      ) : <p className="text-sm text-muted">Nessun tiro di sagoma, per ora.</p>}
+    <Card className="relative grid gap-3 overflow-hidden">
+      <span aria-hidden className="pointer-events-none absolute -right-10 -top-12 h-36 w-36 rounded-full bg-[#a3496f] opacity-25 blur-2xl" />
+      <div>
+        <h2 className="font-display text-2xl">Sagome 3D</h2>
+        <p className="text-sm text-muted">Media per freccia sulle sagome, tra piazzole di gara e allenamenti.</p>
+      </div>
+      <RankBars rows={sagoma} tint="#a3496f" empty="Nessun tiro di sagoma, per ora." />
       <label className="grid gap-1 text-sm">
-        <span className="text-muted">Chi è più bravo su un animale, tra tutte le gare</span>
+        <span className="text-muted">Chi è più bravo su un animale</span>
         <select value={animal} onChange={(e) => setAnimal(e.target.value)} className="min-h-11 rounded-xl border border-line bg-transparent px-3">
           {ANIMALS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
         </select>
       </label>
-      <div className="flex items-center gap-3">
-        <img src={face.src} alt="" className="h-16 w-24 object-contain" />
-        <div>
-          {ranked[0] ? <p className="font-semibold">{nameOf(ranked[0].userId)} · {ranked[0].avg.toFixed(1)}</p> : <p className="text-sm text-muted">Nessuna piazzola su {face.label}.</p>}
+      <div className="flex items-center gap-3 rounded-2xl bg-white/[0.04] p-2">
+        <img src={face.src} alt="" className="h-16 w-24 shrink-0 object-contain" />
+        <div className="min-w-0 flex-1">
+          <RankBars rows={onAnimal} tint="#a3496f" limit={3} empty={`Nessuna piazzola su ${face.label.toLowerCase()}.`} />
         </div>
       </div>
     </Card>

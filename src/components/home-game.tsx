@@ -43,6 +43,8 @@ const now = () => performance.now() / 1000;
 
 export function HomeGame({ look, children, info, className = "" }: { look: AvatarLook; children?: ReactNode; info?: ReactNode; className?: string }) {
   const { sky } = useSky();
+  const lefty = Boolean(look.lefty);
+  const bodyLook = useMemo(() => (look.lefty ? { ...look, lefty: false } : look), [look]);
   const stage = useRef<HTMLDivElement>(null);
   const [dist, setDist] = useState<Dist>(() => randomDist());
   // il bersaglio si muove sempre da solo: ampiezza e velocità cambiano a ogni volée
@@ -238,7 +240,8 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
   const toWorld = (cx: number, cy: number) => {
     const r = stage.current?.getBoundingClientRect();
     if (!r) return { x: 0, y: 0 };
-    return { x: ((cx - r.left) / r.width) * W, y: ((cy - r.top) / r.height) * H };
+    const x = ((cx - r.left) / r.width) * W;
+    return { x: lefty ? W - x : x, y: ((cy - r.top) / r.height) * H };
   };
 
   const onDown = (e: RPointerEvent) => {
@@ -306,7 +309,7 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
   const active = draw != null || (since != null && since < 1.5);
   const drive = useMemo(() => (active ? { pull, aim: aimLift, released: since != null && since < 1.5 ? since : null } : null), [active, pull, aimLift, since]);
   const bestHere = best;
-  const pct = (x: number, y: number) => ({ left: `${(x / W) * 100}%`, top: `${(y / H) * 100}%` });
+  const pct = (x: number, y: number) => ({ left: `${((lefty ? W - x : x) / W) * 100}%`, top: `${(y / H) * 100}%` });
   const shownHits = playing ? hits : demoHits;
   // la manica pende quando non c'è vento e si alza quando soffia
   const droop = clamp(75 - Math.abs(wind) * 24, 4, 75) + Math.sin(t * 6) * Math.min(4, Math.abs(wind) * 1.5);
@@ -322,6 +325,8 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
       role="application"
       aria-label="Gioco: tieni premuto per tendere, trascina per mirare, lascia per tirare"
     >
+      {/* mancino: campo, bersaglio e arciere si specchiano; i testi restano dritti */}
+      <div className={`pointer-events-none absolute inset-0 ${lefty ? "aa-mirror" : ""}`}>
       <SceneBackdrop sky={sky} id="game" scene={look.scene} />
       <svg viewBox={`0 0 ${W} ${H}`} className="absolute inset-0 h-full w-full" aria-hidden>
         <defs>
@@ -407,7 +412,8 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
 
       {/* arciere, grande in primo piano */}
       <div className="pointer-events-none absolute" style={{ left: `${(AV.left / W) * 100}%`, top: `${(AV_TOP / H) * 100}%`, width: `${(AV.width / W) * 100}%`, height: `${(AV_H / H) * 100}%` }}>
-        <ArcherAvatar look={look} drive={drive} pose="riposo" interactive={false} hideFlight className="h-full w-full drop-shadow-[0_12px_20px_rgba(0,0,0,0.45)]" />
+        <ArcherAvatar look={bodyLook} drive={drive} pose="riposo" interactive={false} hideFlight className="h-full w-full drop-shadow-[0_12px_20px_rgba(0,0,0,0.45)]" />
+      </div>
       </div>
 
       {pop ? (
@@ -427,7 +433,7 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
             <span className="ml-1">Piazzola {station}/{STATIONS}</span>
           </span>
           <span className="aa-game-pill">
-            {Math.abs(wind).toFixed(1)} m/s {wind === 0 ? "" : wind > 0 ? "→" : "←"}
+            {Math.abs(wind).toFixed(1)} m/s {wind === 0 ? "" : (wind > 0) !== lefty ? "→" : "←"}
           </span>
         </div>
       </div>

@@ -30,7 +30,7 @@ export const SHORTCUTS: Shortcut[] = [
   { id: "statistiche", group: "analizza", label: "Statistiche", hint: "Grafici e progressi", icon: "chart", color: "#1b9097", to: "/statistiche" },
   { id: "balistica", group: "prepara", label: "Balistica", hint: "Simulatore di volo e FOC", icon: "ballistics", color: "#cc4f3b", to: "/balistica" },
   { id: "attrezzatura", group: "prepara", label: "Attrezzatura", hint: "Archi, frecce, assetti", icon: "quiver", color: "#8b6a3e", to: "/attrezzatura" },
-  { id: "squadra", group: "squadra", label: "Squadra", hint: "Compagni e podi", icon: "team", color: "#3d8a4e", to: "/squadra" },
+  { id: "squadra", group: "squadra", label: "Compagnia", hint: "Arcieri, contatti e classifiche", icon: "team", color: "#3d8a4e", to: "/squadra" },
   { id: "calendario", group: "gareggia", label: "Calendario", hint: "Uscite in programma", icon: "calendar", color: "#4568d6", to: "/calendario" },
   { id: "classifiche", group: "gareggia", label: "Classifiche", hint: "Chi è davanti", icon: "podium", color: "#c27d1c", to: "/classifiche" },
   { id: "sfide", group: "gareggia", label: "Sfide", hint: "Sfida i compagni", icon: "duel", color: "#c4475a", to: "/sfide" },
@@ -71,7 +71,7 @@ export const STATIONS: { id: StationId; title: string; sub: string; icon: IconNa
   { id: "analizza", title: "Analizza", sub: "Numeri, storico e traguardi", icon: "chart", color: "#1b9097" },
   { id: "gareggia", title: "Gareggia", sub: "Gare, calendario e classifiche", icon: "trophy", color: "#c39320" },
   { id: "impara", title: "Impara", sub: "Sfide, quiz e giochi per crescere", icon: "daily", color: "#d6582a" },
-  { id: "squadra", title: "Squadra", sub: "Compagni, news e profilo", icon: "team", color: "#4568d6" },
+  { id: "squadra", title: "Compagnia", sub: "Arcieri, news e profilo", icon: "team", color: "#4568d6" },
 ];
 
 export const DEFAULT_PINNED = ["rapido", "foto", "gesto", "statistiche", "balistica", "gare", "attrezzatura", "squadra"];

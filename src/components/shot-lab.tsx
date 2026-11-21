@@ -93,7 +93,7 @@ function Mini({ k, v }: { k: string; v: string }) {
   );
 }
 
-function Heat({ face, shots }: { face: Face; shots: { x: number; y: number }[] }) {
+export function Heat({ face, shots }: { face: Face; shots: { x: number; y: number }[] }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const canvas = ref.current;

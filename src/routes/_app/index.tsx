@@ -178,7 +178,7 @@ function Home() {
         <Card>
           <div className="mb-1 flex items-baseline justify-between gap-2">
             <p className="aa-section-title">Ultime frecce</p>
-            <Link to="/attrezzatura" className="text-[0.68rem] font-semibold text-muted underline-offset-2 hover:underline"><span className="inline-flex items-center gap-1"><Glyph name="palette" size={13} />Personalizza frecce</span></Link>
+            <Link to="/attrezzatura" aria-label="Personalizza frecce" className="aa-press grid h-8 w-8 place-items-center rounded-full bg-white/[0.06] text-muted"><Glyph name="palette" size={16} /></Link>
           </div>
           {data.lastShots.length ? (
             <>

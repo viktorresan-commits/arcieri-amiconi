@@ -1,0 +1,407 @@
+import { useState, type ReactNode } from "react";
+import { Link } from "@tanstack/react-router";
+import type { listCompanies } from "@/lib/arcieri/compagnie.api";
+import { createCompany, joinCompany, updateCompany } from "@/lib/arcieri/compagnie.api";
+import { Button, Card, ErrorNote, Field, Segmented, TextInput } from "./kit";
+import { RankBars } from "./rank-bars";
+
+type Board = Awaited<ReturnType<typeof listCompanies>>;
+type Co = Board["companies"][number];
+
+/* ---------------- icone dei contatti (disegni generici, non i marchi) ---------------- */
+
+type ContactKind = "phone" | "whatsapp" | "email" | "website" | "instagram" | "facebook" | "youtube" | "tiktok" | "address" | "board";
+
+function ContactIcon({ kind }: { kind: ContactKind }) {
+  const p = { fill: "none", stroke: "currentColor", strokeWidth: 1.9, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+  return (
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden>
+      {kind === "phone" ? <path {...p} d="M6.6 3.5h2.6l1.4 4-2 1.3a11 11 0 0 0 6.6 6.6l1.3-2 4 1.4v2.6a2 2 0 0 1-2.2 2A16.5 16.5 0 0 1 4.6 5.7a2 2 0 0 1 2-2.2Z" /> : null}
+      {kind === "whatsapp" ? (
+        <>
+          <path {...p} d="M4.5 19.5l1.2-3.6A8 8 0 1 1 8.5 18.6Z" />
+          <path {...p} d="M9.3 9.2c.2 2.3 2.8 4.9 5.2 5.3l1-1.3-1.8-.9-.8.8c-1-.4-2-1.4-2.4-2.4l.8-.8-.9-1.8Z" strokeWidth={1.4} />
+        </>
+      ) : null}
+      {kind === "email" ? (
+        <>
+          <rect {...p} x="3.5" y="5.5" width="17" height="13" rx="2.5" />
+          <path {...p} d="m4.5 7 7.5 6 7.5-6" />
+        </>
+      ) : null}
+      {kind === "website" ? (
+        <>
+          <circle {...p} cx="12" cy="12" r="8.5" />
+          <path {...p} d="M3.5 12h17M12 3.5c2.6 2.6 2.6 14.4 0 17M12 3.5c-2.6 2.6-2.6 14.4 0 17" />
+        </>
+      ) : null}
+      {kind === "instagram" ? (
+        <>
+          <rect {...p} x="4" y="4" width="16" height="16" rx="4.5" />
+          <circle {...p} cx="12" cy="12" r="3.6" />
+          <circle cx="16.7" cy="7.3" r="1.1" fill="currentColor" />
+        </>
+      ) : null}
+      {kind === "facebook" ? (
+        <>
+          <rect {...p} x="4" y="4" width="16" height="16" rx="4" />
+          <path {...p} d="M14.6 8.2h-1.4a1.9 1.9 0 0 0-1.9 1.9V20M9.6 12.6h4.6" />
+        </>
+      ) : null}
+      {kind === "youtube" ? (
+        <>
+          <rect {...p} x="3" y="6" width="18" height="12" rx="4" />
+          <path d="M10.4 9.4v5.2l4.4-2.6Z" fill="currentColor" />
+        </>
+      ) : null}
+      {kind === "tiktok" ? <path {...p} d="M13.5 4v10.6a3.3 3.3 0 1 1-3.3-3.3M13.5 4c.4 2.4 2 3.9 4.6 4.1" /> : null}
+      {kind === "address" ? (
+        <>
+          <path {...p} d="M12 21s-6.5-6-6.5-11a6.5 6.5 0 0 1 13 0c0 5-6.5 11-6.5 11Z" />
+          <circle {...p} cx="12" cy="10" r="2.4" />
+        </>
+      ) : null}
+      {kind === "board" ? (
+        <>
+          <path {...p} d="M4.5 6.5a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H10l-4.5 3.5v-3.5h0a1 1 0 0 1-1-1Z" />
+          <path {...p} d="M8.5 9h7M8.5 12h4.5" />
+        </>
+      ) : null}
+    </svg>
+  );
+}
+
+const LABEL: Record<ContactKind, string> = {
+  phone: "Chiama",
+  whatsapp: "WhatsApp",
+  email: "Email",
+  website: "Sito",
+  instagram: "Instagram",
+  facebook: "Facebook",
+  youtube: "YouTube",
+  tiktok: "TikTok",
+  address: "Mappa",
+  board: "Bacheca",
+};
+
+function hrefOf(kind: ContactKind, value: string) {
+  const v = value.trim();
+  if (!v) return "";
+  const web = (base: string) => (/^https:\/\//i.test(v) ? v : `${base}${v.replace(/^@/, "")}`);
+  switch (kind) {
+    case "phone":
+      return `tel:${v}`;
+    case "whatsapp":
+      return `https://wa.me/${v.replace(/\D/g, "")}`;
+    case "email":
+      return `mailto:${v}`;
+    case "website":
+      return /^https:\/\//i.test(v) ? v : `https://${v}`;
+    case "instagram":
+      return web("https://instagram.com/");
+    case "facebook":
+      return web("https://facebook.com/");
+    case "youtube":
+      return web("https://youtube.com/@");
+    case "tiktok":
+      return web("https://tiktok.com/@");
+    case "address":
+      return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(v)}`;
+    default:
+      return "";
+  }
+}
+
+function ContactButton({ kind, href, tint }: { kind: ContactKind; href: string; tint: string }) {
+  const inner = (
+    <>
+      <span className="grid h-12 w-12 place-items-center rounded-2xl text-white shadow-[0_6px_18px_-8px_rgba(0,0,0,.7)]" style={{ background: `linear-gradient(150deg, color-mix(in srgb, ${tint} 85%, white 15%), color-mix(in srgb, ${tint} 70%, black 30%))` }}>
+        <ContactIcon kind={kind} />
+      </span>
+      <span className="text-[0.66rem] font-semibold text-muted">{LABEL[kind]}</span>
+    </>
+  );
+  if (kind === "board") return <Link to="/bacheca" className="aa-press grid justify-items-center gap-1">{inner}</Link>;
+  const external = /^https:/.test(href);
+  return (
+    <a href={href} target={external ? "_blank" : undefined} rel={external ? "noreferrer" : undefined} className="aa-press grid justify-items-center gap-1">
+      {inner}
+    </a>
+  );
+}
+
+const CONTACT_TINT: Record<ContactKind, string> = {
+  phone: "#2f9e5b",
+  whatsapp: "#1fa855",
+  email: "#3a78c9",
+  website: "#4b5f8a",
+  instagram: "#c1457a",
+  facebook: "#3b5ea8",
+  youtube: "#c8372d",
+  tiktok: "#2b2f3a",
+  address: "#d07a2c",
+  board: "#8a5bc4",
+};
+
+/* ---------------- intestazione della compagnia ---------------- */
+
+export function CompanyHero({ co, canEdit, onEdit }: { co: Co; canEdit: boolean; onEdit: () => void }) {
+  const kinds: ContactKind[] = ["phone", "whatsapp", "email", "website", "instagram", "facebook", "youtube", "tiktok", "address"];
+  const links = kinds.map((kind) => ({ kind, href: hrefOf(kind, co[kind]) })).filter((item) => item.href);
+  return (
+    <section className="aa-company relative overflow-hidden rounded-[var(--radius-card)] border border-hair shadow-card" style={{ ["--co" as string]: co.color }}>
+      <div className="aa-company-bg" aria-hidden />
+      <div className="relative grid gap-4 p-4">
+        <div className="flex items-center gap-4">
+          <div className="aa-company-crest relative grid h-28 w-24 shrink-0 place-items-center">
+            {co.logoUrl ? <img src={co.logoUrl} alt={`Stemma di ${co.name}`} className="h-full w-full object-contain drop-shadow-[0_8px_14px_rgba(0,0,0,.45)]" /> : <DefaultCrest color={co.color} letter={co.name.replace(/^Compagnia (degli |dei |di )?/i, "").slice(0, 1)} />}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/70">{co.city ? `Compagnia · ${co.city}` : "Compagnia"}</p>
+            <h2 className="font-display text-[1.6rem] leading-[1.05] text-white">{co.name}</h2>
+            {co.motto ? <p className="mt-1 font-display text-base italic text-white/85">«{co.motto}»</p> : null}
+          </div>
+        </div>
+        <div className="grid grid-cols-4 gap-1.5">
+          {[
+            ["Arcieri", co.members.toLocaleString("it-IT")],
+            ["Frecce", co.arrows.toLocaleString("it-IT")],
+            ["Punti", co.points.toLocaleString("it-IT")],
+            ["Gare", co.gare.toLocaleString("it-IT")],
+          ].map(([k, v]) => (
+            <div key={k} className="rounded-2xl bg-black/25 px-1 py-2 text-center backdrop-blur-sm">
+              <p className="font-display text-lg leading-none text-white tabular-nums">{v}</p>
+              <p className="mt-1 text-[0.6rem] font-semibold uppercase tracking-wider text-white/65">{k}</p>
+            </div>
+          ))}
+        </div>
+        {co.bio ? <p className="text-sm text-white/85">{co.bio}</p> : null}
+        <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1 [scrollbar-width:none]">
+          {links.map((item) => <ContactButton key={item.kind} kind={item.kind} href={item.href} tint={CONTACT_TINT[item.kind]} />)}
+          <ContactButton kind="board" href="" tint={CONTACT_TINT.board} />
+        </div>
+        {links.length === 0 ? <p className="text-xs text-white/70">{canEdit ? "Aggiungi telefono, WhatsApp e social: compariranno qui per tutti." : "Telefono e social non sono ancora stati inseriti."}</p> : null}
+        {canEdit ? <button type="button" onClick={onEdit} className="aa-press justify-self-start rounded-full bg-white/15 px-3.5 py-2 text-xs font-semibold text-white backdrop-blur">Modifica la compagnia</button> : null}
+      </div>
+    </section>
+  );
+}
+
+function DefaultCrest({ color, letter }: { color: string; letter: string }) {
+  return (
+    <svg viewBox="0 0 96 112" className="h-full w-full drop-shadow-[0_8px_14px_rgba(0,0,0,.45)]" aria-hidden>
+      <defs>
+        <linearGradient id={`cr-${color.slice(1)}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor={color} />
+          <stop offset="1" stopColor="#0d1410" />
+        </linearGradient>
+      </defs>
+      <path d="M6 6h84v44c0 30-20 48-42 56C26 98 6 80 6 50Z" fill={`url(#cr-${color.slice(1)})`} stroke="#e8c870" strokeWidth="3" />
+      <path d="M6 6h84v22H6Z" fill="rgba(255,255,255,.12)" />
+      <path d="M30 70 66 34M58 34h8v8M30 70l-4 6M34 74l-8 2" stroke="#f4e7c2" strokeWidth="3.4" fill="none" strokeLinecap="round" />
+      <text x="48" y="25" textAnchor="middle" fontSize="16" fontWeight="700" fill="#f4e7c2" fontFamily="var(--font-display)">{letter.toUpperCase()}</text>
+    </svg>
+  );
+}
+
+/* ---------------- classifica tra compagnie ---------------- */
+
+type Metric = "points" | "arrows" | "members" | "gare" | "avg";
+
+export function CompanyLeague({ board, onJoin, busy }: { board: Board; onJoin: (id: number) => void; busy: number | null }) {
+  const [metric, setMetric] = useState<Metric>("points");
+  const unit: Record<Metric, string> = { points: "pt", arrows: "frecce", members: "arcieri", gare: "gare", avg: "" };
+  const rows = board.companies.map((co) => {
+    const value = metric === "avg" ? co.avg ?? 0 : co[metric];
+    return {
+      id: String(co.id),
+      name: co.name,
+      value,
+      label: metric === "avg" ? (co.avg == null ? "—" : co.avg.toFixed(2).replace(".", ",")) : undefined,
+      sub: [co.city, `${co.members} arcieri`].filter(Boolean).join(" · "),
+      color: co.color,
+      logo: co.logoUrl,
+      badge: co.logoUrl ? undefined : <DefaultCrest color={co.color} letter={co.name.replace(/^Compagnia (degli |dei |di )?/i, "").slice(0, 1)} />,
+      me: co.id === board.mine,
+    };
+  });
+  return (
+    <div className="grid gap-4">
+      <Card className="grid grid-cols-[minmax(0,1fr)] gap-3">
+        <div>
+          <h2 className="font-display text-2xl">Classifica compagnie</h2>
+          <p className="text-sm text-muted">Tutte le frecce e i punti dei loro arcieri, in allenamento e in gara.</p>
+        </div>
+        <div className="-mx-1 overflow-x-auto px-1 [scrollbar-width:none]">
+        <Segmented<Metric>
+          value={metric}
+          onChange={setMetric}
+          options={[
+            { id: "points", label: "Punti" },
+            { id: "arrows", label: "Frecce" },
+            { id: "members", label: "Iscritti" },
+            { id: "gare", label: "Gare" },
+            { id: "avg", label: "Media" },
+          ]}
+        />
+        </div>
+        <RankBars rows={rows} unit={unit[metric]} limit={12} empty="Ancora nessun dato per questa classifica." />
+      </Card>
+      <Card className="grid grid-cols-[minmax(0,1fr)] gap-2">
+        <h2 className="font-display text-2xl">Tutte le compagnie</h2>
+        {board.companies.map((co) => (
+          <div key={co.id} className="flex items-center gap-3 rounded-2xl bg-white/[0.04] p-2.5">
+            {co.logoUrl ? <img src={co.logoUrl} alt="" className="h-12 w-11 shrink-0 object-contain" /> : <span className="h-12 w-11 shrink-0"><DefaultCrest color={co.color} letter={co.name.replace(/^Compagnia (degli |dei |di )?/i, "").slice(0, 1)} /></span>}
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-semibold">{co.name}</p>
+              <p className="truncate text-xs text-muted">{[co.city, `${co.members} arcieri`, `${co.arrows.toLocaleString("it-IT")} frecce`].filter(Boolean).join(" · ")}</p>
+            </div>
+            {co.id === board.mine ? (
+              <span className="shrink-0 rounded-full bg-primary/20 px-2.5 py-1 text-[0.68rem] font-semibold text-primary">La tua</span>
+            ) : (
+              <button type="button" disabled={busy != null} onClick={() => onJoin(co.id)} className="aa-press min-h-9 shrink-0 rounded-full border border-line px-3 text-xs font-semibold disabled:opacity-50">
+                {busy === co.id ? "Entro…" : "Entra"}
+              </button>
+            )}
+          </div>
+        ))}
+      </Card>
+    </div>
+  );
+}
+
+/* ---------------- modulo per fondare o modificare una compagnia ---------------- */
+
+const COLORS = ["#1f7a46", "#b5302a", "#2a6294", "#c9861f", "#6b3fa0", "#2b2f3a", "#0f7d82", "#a3496f"];
+
+type Draft = { name: string; motto: string; city: string; bio: string; color: string; phone: string; whatsapp: string; email: string; website: string; instagram: string; facebook: string; youtube: string; tiktok: string; address: string; logoUrl?: string | null };
+
+function draftOf(co?: Co): Draft {
+  return {
+    name: co?.name ?? "",
+    motto: co?.motto ?? "",
+    city: co?.city ?? "",
+    bio: co?.bio ?? "",
+    color: co?.color ?? COLORS[0],
+    phone: co?.phone ?? "",
+    whatsapp: co?.whatsapp ?? "",
+    email: co?.email ?? "",
+    website: co?.website ?? "",
+    instagram: co?.instagram ?? "",
+    facebook: co?.facebook ?? "",
+    youtube: co?.youtube ?? "",
+    tiktok: co?.tiktok ?? "",
+    address: co?.address ?? "",
+  };
+}
+
+export function CompanyForm({ co, onDone, onCancel }: { co?: Co; onDone: () => void; onCancel: () => void }) {
+  const [d, setD] = useState<Draft>(() => draftOf(co));
+  const [err, setErr] = useState("");
+  const [saving, setSaving] = useState(false);
+  const set = (k: keyof Draft) => (e: { target: { value: string } }) => setD((cur) => ({ ...cur, [k]: e.target.value }));
+  const logo = d.logoUrl !== undefined ? d.logoUrl : co?.logoUrl ?? null;
+  async function pickLogo(file: File) {
+    try {
+      setD((cur) => ({ ...cur, logoUrl: "" }));
+      const data = await shrink(file);
+      setD((cur) => ({ ...cur, logoUrl: data }));
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Immagine non letta");
+    }
+  }
+  async function save() {
+    setErr("");
+    setSaving(true);
+    try {
+      if (co) await updateCompany({ data: { id: co.id, ...d } });
+      else await createCompany({ data: d });
+      onDone();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Salvataggio non riuscito");
+    } finally {
+      setSaving(false);
+    }
+  }
+  const row = (children: ReactNode) => <div className="grid grid-cols-2 gap-2">{children}</div>;
+  return (
+    <Card className="grid gap-3">
+      <h2 className="font-display text-2xl">{co ? "Modifica la compagnia" : "Fonda una compagnia"}</h2>
+      {!co ? <p className="text-sm text-muted">Diventi il fondatore e lasci la compagnia di adesso. Gli altri potranno entrare dalla classifica.</p> : null}
+      <div className="flex items-center gap-3">
+        <div className="grid h-24 w-20 shrink-0 place-items-center rounded-2xl bg-white/[0.05]">
+          {logo ? <img src={logo} alt="" className="h-full w-full object-contain" /> : <DefaultCrest color={d.color} letter={d.name.replace(/^Compagnia (degli |dei |di )?/i, "").slice(0, 1) || "?"} />}
+        </div>
+        <div className="grid gap-2">
+          <label className="aa-press inline-flex min-h-10 cursor-pointer items-center rounded-full border border-line px-3 text-sm font-semibold">
+            Carica lo stemma
+            <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void pickLogo(f); }} />
+          </label>
+          {logo ? <button type="button" className="text-left text-xs text-muted underline" onClick={() => setD((cur) => ({ ...cur, logoUrl: null }))}>Togli lo stemma</button> : null}
+        </div>
+      </div>
+      <Field label="Nome"><TextInput value={d.name} onChange={set("name")} placeholder="Compagnia degli Arcieri di…" maxLength={70} /></Field>
+      {row(<>
+        <Field label="Motto"><TextInput value={d.motto} onChange={set("motto")} placeholder="In animo iuncti" maxLength={80} /></Field>
+        <Field label="Città"><TextInput value={d.city} onChange={set("city")} placeholder="Fabriano" maxLength={50} /></Field>
+      </>)}
+      <Field label="Presentazione"><TextInput value={d.bio} onChange={set("bio")} placeholder="Dove vi allenate, quando, chi può entrare" maxLength={500} /></Field>
+      <div className="grid gap-1 text-sm">
+        <span>Colore</span>
+        <div className="flex flex-wrap gap-2">
+          {COLORS.map((c) => (
+            <button key={c} type="button" aria-label={`Colore ${c}`} aria-pressed={d.color === c} onClick={() => setD((cur) => ({ ...cur, color: c }))} className={`h-9 w-9 rounded-full ring-offset-2 ring-offset-[var(--color-bg)] ${d.color === c ? "ring-2 ring-white" : ""}`} style={{ background: c }} />
+          ))}
+        </div>
+      </div>
+      <h3 className="mt-1 font-display text-lg">Contatti e social</h3>
+      {row(<>
+        <Field label="Telefono"><TextInput inputMode="tel" value={d.phone} onChange={set("phone")} placeholder="+39 …" /></Field>
+        <Field label="WhatsApp"><TextInput inputMode="tel" value={d.whatsapp} onChange={set("whatsapp")} placeholder="+39 …" /></Field>
+      </>)}
+      {row(<>
+        <Field label="Email"><TextInput inputMode="email" value={d.email} onChange={set("email")} placeholder="info@…" /></Field>
+        <Field label="Sito"><TextInput value={d.website} onChange={set("website")} placeholder="www.…" /></Field>
+      </>)}
+      {row(<>
+        <Field label="Instagram"><TextInput value={d.instagram} onChange={set("instagram")} placeholder="nome utente" /></Field>
+        <Field label="Facebook"><TextInput value={d.facebook} onChange={set("facebook")} placeholder="nome pagina" /></Field>
+      </>)}
+      {row(<>
+        <Field label="YouTube"><TextInput value={d.youtube} onChange={set("youtube")} placeholder="canale" /></Field>
+        <Field label="TikTok"><TextInput value={d.tiktok} onChange={set("tiktok")} placeholder="nome utente" /></Field>
+      </>)}
+      <Field label="Campo di tiro (indirizzo)"><TextInput value={d.address} onChange={set("address")} placeholder="Via…, città" /></Field>
+      {err ? <ErrorNote text={err} /> : null}
+      <div className="grid grid-cols-2 gap-2">
+        <Button variant="ghost" onClick={onCancel}>Annulla</Button>
+        <Button onClick={() => void save()} disabled={saving}>{saving ? "Salvo…" : co ? "Salva" : "Fonda"}</Button>
+      </div>
+    </Card>
+  );
+}
+
+export async function joinAndReload(id: number, reload: () => void) {
+  await joinCompany({ data: { id } });
+  reload();
+}
+
+function shrink(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, 320 / Math.max(img.width, img.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(img.width * scale));
+      canvas.height = Math.max(1, Math.round(img.height * scale));
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return reject(new Error("Canvas non disponibile"));
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      // png per tenere la trasparenza dello stemma, jpeg se diventa troppo pesante
+      const png = canvas.toDataURL("image/png");
+      resolve(png.length < 170_000 ? png : canvas.toDataURL("image/jpeg", 0.8));
+    };
+    img.onerror = () => reject(new Error("Immagine non letta"));
+    img.src = URL.createObjectURL(file);
+  });
+}

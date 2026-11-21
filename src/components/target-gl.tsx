@@ -2,7 +2,9 @@ import { useMemo, useRef, useState } from "react";
 import type { Face } from "@/lib/arcieri/scoring";
 import { basis, project, v3, type Vec3 } from "@/lib/arcieri/gl3d";
 import { drawArrow3D, drawBoss, drawTrees, drawWorld, ringsTexture, type ArrowLook as Look3D } from "@/lib/arcieri/scene3d";
-import { drawSkyOverlay, envOf, useSky } from "@/lib/arcieri/sky3d";
+import { drawSkyOverlay, envOf, useSky, type Sky } from "@/lib/arcieri/sky3d";
+
+const CLEAR_DAY: Sky = { tod: "pomeriggio", weather: "sereno" };
 import { useMainArrowLook } from "@/lib/arcieri/main-gear";
 import { orbit } from "./foc-3d";
 import { GLStage, useGLScene } from "./gl-stage";
@@ -45,8 +47,9 @@ const hash = (n: number) => {
  * dell'ora scelta, frecce dettagliate dell'arciere che arrivano una dopo l'altra e restano piantate;
  * quelle fuori passano oltre e finiscono nel prato dietro. Se WebGL manca, resta la versione 2D.
  */
-export function TargetGL({ face, shots, picture, look }: { face: Face; shots: Shot[]; picture?: Picture | null; look?: ArrowLook }) {
-  const { sky } = useSky();
+export function TargetGL({ face, shots, picture, look, bare }: { face: Face; shots: Shot[]; picture?: Picture | null; look?: ArrowLook; /** senza ora e meteo: cielo sereno di giorno, niente comandi del cielo */ bare?: boolean }) {
+  const { sky: chosenSky } = useSky();
+  const sky = bare ? CLEAR_DAY : chosenSky;
   const avatar = useAvatar();
   const main = useMainArrowLook();
   const [preset, setPreset] = useState("tre");
@@ -168,7 +171,7 @@ export function TargetGL({ face, shots, picture, look }: { face: Face; shots: Sh
       drawArrow3D(g, v3.sub(v3.add(hit, v3.scale(dir, depthIn)), v3.scale(dir, len)), dir, len, roll, r, lk);
       if (!off && t - s0 - FLY < 0.45) flashes.push({ p: hit, k: (t - s0 - FLY) / 0.45 });
     });
-    drawSkyOverlay(o, g, sky, w, h, time);
+    if (!bare) drawSkyOverlay(o, g, sky, w, h, time);
     for (const f of flashes) {
       const q = project(g.vp, f.p, w, h);
       if (!q) continue;
@@ -195,7 +198,7 @@ export function TargetGL({ face, shots, picture, look }: { face: Face; shots: Sh
         <div className="absolute left-2 top-2 flex gap-1.5">
           <button type="button" onClick={() => setNonce((x) => x + 1)} className="min-h-9 rounded-full bg-black/55 px-3 text-xs font-semibold text-white backdrop-blur">Rivedi i tiri</button>
         </div>
-        <SkyPicker className="absolute bottom-11 left-2" />
+        {bare ? null : <SkyPicker className="absolute bottom-11 left-2" />}
       </GLStage>
       <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 [scrollbar-width:none]">
         {PRESETS.map((item) => (
