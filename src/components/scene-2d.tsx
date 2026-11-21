@@ -30,6 +30,7 @@ export const SceneBackdrop = memo(function SceneBackdrop({ sky, id = "bk", scene
   const sunX = sky.tod === "mattina" ? 70 : sky.tod === "tramonto" ? 330 : 300;
   const sunY = sky.tod === "pomeriggio" ? 46 : sky.tod === "tramonto" ? 150 : sky.tod === "mattina" ? 110 : 60;
   const desert = sc.id === "deserto" || sc.id === "spiaggia";
+  const indoor = Boolean(sc.indoor);
   return (
     <>
     <svg viewBox="0 0 400 300" preserveAspectRatio="xMidYMax slice" className="absolute inset-0 h-full w-full" aria-hidden>
@@ -77,6 +78,7 @@ export const SceneBackdrop = memo(function SceneBackdrop({ sky, id = "bk", scene
         </linearGradient>
       </defs>
       <rect width="400" height="300" fill={`url(#${id}sky)`} />
+      {indoor ? null : <>
       {night ? (
         <g fill="#fff">
           {Array.from({ length: 70 }, (_, i) => (
@@ -118,7 +120,11 @@ export const SceneBackdrop = memo(function SceneBackdrop({ sky, id = "bk", scene
         </g>
       ) : null}
 
+      </>}
+
       {LAYERS[sc.id]?.(id, night) ?? LAYERS.campo(id, night)}
+      {indoor ? <IndoorLight id={id} /> : <Atmosphere id={id} sunX={sunX} sunY={sunY} sun={p.sun} night={night} tod={sky.tod} />}
+      {indoor ? null : <>
       {/* velo dell'ora: la stessa luce su tutto */}
       {p.shadeA ? <rect width="400" height="300" fill={p.shade} opacity={p.shadeA} style={{ mixBlendMode: night ? "multiply" : "soft-light" }} /> : null}
       {rain ? <rect width="400" height="300" fill="#3a4450" opacity={0.2} /> : cloudy ? <rect width="400" height="300" fill="#3a4450" opacity={0.08} /> : null}
@@ -132,8 +138,9 @@ export const SceneBackdrop = memo(function SceneBackdrop({ sky, id = "bk", scene
           {Array.from({ length: 60 }, (_, i) => <circle key={i} cx={(i * 67.3) % 400} cy={(i * 29.1) % 300} r={0.8 + rnd(i) * 1.4} />)}
         </g>
       ) : null}
+      </>}
     </svg>
-    <SkyLayer id={id} tod={sky.tod} night={night} rain={rain} cloudy={cloudy} desert={desert} wind={wind} />
+    {indoor ? null : <SkyLayer id={id} tod={sky.tod} night={night} rain={rain} cloudy={cloudy} desert={desert} wind={wind} />}
     </>
   );
 });
@@ -258,9 +265,16 @@ function TreeLine({ y = 207, colors, n = 18, pines = 3 }: { y?: number; colors: 
         <g key={i} transform={`translate(${i * (400 / (n - 1)) + (i % 2) * 6} ${y - (i % 3) * 2})`}>
           <rect x="-1.2" y="0" width="2.4" height="8" fill="#3a2a1e" />
           {i % pines === 0 ? (
-            <path d={`M0 ${-22 - (i % 2) * 4} L9 2 L-9 2 Z`} fill={colors[1]} className="aa-tree" style={{ animationDelay: `${(i % 5) * 0.4}s` }} />
+            <g>
+              <path d={`M0 ${-22 - (i % 2) * 4} L9 2 L-9 2 Z`} fill={colors[1]} />
+              <path d={`M0 ${-22 - (i % 2) * 4} L9 2 L2 2 Z`} fill="#000" opacity="0.14" />
+            </g>
           ) : (
-            <ellipse cx="0" cy="-3" rx={7 + (i % 3)} ry={9 + (i % 2) * 2} fill={i % 2 ? colors[0] : colors[1]} className="aa-tree" style={{ animationDelay: `${(i % 5) * 0.4}s` }} />
+            <g>
+              <ellipse cx="0" cy="-3" rx={7 + (i % 3)} ry={9 + (i % 2) * 2} fill={i % 2 ? colors[0] : colors[1]} />
+              <ellipse cx="-2.4" cy={-6 - (i % 2)} rx={(7 + (i % 3)) * 0.55} ry={(9 + (i % 2) * 2) * 0.5} fill="#fff" opacity="0.1" />
+              <ellipse cx="2" cy="2.4" rx={(7 + (i % 3)) * 0.8} ry="3.4" fill="#000" opacity="0.16" />
+            </g>
           )}
         </g>
       ))}
@@ -302,6 +316,85 @@ function Banner({ x, y, c, h = 14 }: { x: number; y: number; c: string; h?: numb
     <g>
       <line x1={x} y1={y} x2={x} y2={y - h} stroke="#3a2a1e" strokeWidth="0.8" />
       <path d={`M${x} ${y - h} l9 2 l-3 2.5 l3 2.5 l-9 1 Z`} fill={c} className="aa-flag" />
+    </g>
+  );
+}
+
+/** profondità all'aperto: foschia verso l'orizzonte, luce dal lato del sole, primo piano più scuro, vignetta */
+function Atmosphere({ id, sunX, sunY, sun, night, tod }: { id: string; sunX: number; sunY: number; sun: string; night: boolean; tod: Sky["tod"] }) {
+  return (
+    <g pointerEvents="none">
+      <defs>
+        <linearGradient id={`${id}haze`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0.38" stopColor={night ? "#8ea4cc" : tod === "tramonto" ? "#ffc89a" : "#eaf3fb"} stopOpacity="0" />
+          <stop offset="0.7" stopColor={night ? "#8ea4cc" : tod === "tramonto" ? "#ffc89a" : "#eaf3fb"} stopOpacity={night ? 0.06 : 0.16} />
+          <stop offset="0.74" stopColor={night ? "#8ea4cc" : tod === "tramonto" ? "#ffc89a" : "#eaf3fb"} stopOpacity="0" />
+        </linearGradient>
+        <radialGradient id={`${id}warm`} cx={sunX / 400} cy={Math.min(0.9, sunY / 300 + 0.2)} r="0.9">
+          <stop offset="0" stopColor={sun} stopOpacity={night ? 0.05 : 0.16} />
+          <stop offset="1" stopColor={sun} stopOpacity="0" />
+        </radialGradient>
+        <linearGradient id={`${id}fore`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0.78" stopColor="#000" stopOpacity="0" />
+          <stop offset="1" stopColor="#000" stopOpacity={night ? 0.35 : 0.24} />
+        </linearGradient>
+        <radialGradient id={`${id}vig`} cx="0.5" cy="0.45" r="0.8">
+          <stop offset="0.65" stopColor="#000" stopOpacity="0" />
+          <stop offset="1" stopColor="#000" stopOpacity="0.22" />
+        </radialGradient>
+      </defs>
+      <rect width="400" height="300" fill={`url(#${id}haze)`} />
+      <rect width="400" height="300" fill={`url(#${id}warm)`} />
+      <rect width="400" height="300" fill={`url(#${id}fore)`} />
+      <rect width="400" height="300" fill={`url(#${id}vig)`} />
+    </g>
+  );
+}
+
+/** al chiuso: coni di luce dalle lampade, pavimento lucido e angoli in ombra */
+function IndoorLight({ id }: { id: string }) {
+  return (
+    <g pointerEvents="none">
+      <defs>
+        <radialGradient id={`${id}ivig`} cx="0.5" cy="0.4" r="0.85">
+          <stop offset="0.55" stopColor="#000" stopOpacity="0" />
+          <stop offset="1" stopColor="#000" stopOpacity="0.38" />
+        </radialGradient>
+        <linearGradient id={`${id}shine`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#fff" stopOpacity="0.12" />
+          <stop offset="1" stopColor="#fff" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <rect y="214" width="400" height="22" fill={`url(#${id}shine)`} />
+      <rect width="400" height="300" fill={`url(#${id}ivig)`} />
+    </g>
+  );
+}
+
+/** paglione al chiuso: battifreccia su cavalletto con visuale da 40 cm */
+function IndoorButt({ x, y, s = 1, n }: { x: number; y: number; s?: number; n?: number }) {
+  return (
+    <g transform={`translate(${x} ${y}) scale(${s})`}>
+      <path d="M-8 0 L-12 22 M8 0 L12 22 M0 2 L0 22" stroke="#4a3220" strokeWidth="1.6" />
+      <rect x="-14" y="-24" width="28" height="26" rx="2" fill="#d9c08a" stroke="#8a6a3a" strokeWidth="0.8" />
+      {[0, 1, 2, 3].map((k) => <path key={k} d={`M-14 ${-20 + k * 6} h28`} stroke="#b89a62" strokeWidth="0.6" />)}
+      {[9, 7, 5, 3, 1.4].map((r, k) => <circle key={r} cx="0" cy="-11" r={r} fill={["#f4f1ea", "#14181c", "#2f7fd0", "#d0302a", "#f2c84b"][k]} />)}
+      {n != null ? <text x="0" y="12" textAnchor="middle" fontSize="6" fontWeight="700" fill="#fff" opacity="0.85">{n}</text> : null}
+    </g>
+  );
+}
+
+/** pavimento a tavole o a piastrelle in prospettiva verso il fondo */
+function Floor({ c1, c2, y = 214, lines = "#000", planks = true }: { c1: string; c2: string; y?: number; lines?: string; planks?: boolean }) {
+  return (
+    <g>
+      <rect y={y} width="400" height={300 - y} fill={c1} />
+      <path d={`M0 ${y + 40} H400 V300 H0 Z`} fill={c2} opacity="0.6" />
+      {planks ? Array.from({ length: 22 }, (_, i) => {
+        const xb = -60 + i * 25;
+        return <path key={i} d={`M${200 + (xb - 200) * 0.28} ${y} L${xb} 300`} stroke={lines} strokeOpacity="0.14" strokeWidth="0.8" />;
+      }) : null}
+      {[0, 1, 2, 3, 4].map((k) => <path key={k} d={`M0 ${y + 6 + k * k * 4.2} H400`} stroke={lines} strokeOpacity={planks ? 0.08 : 0.14} strokeWidth="0.7" />)}
     </g>
   );
 }
@@ -607,6 +700,116 @@ const LAYERS: Record<SceneId, (id: string, night: boolean) => ReactNode> = {
         {Array.from({ length: 16 }, (_, i) => <path key={i} d={`M${(i * 61) % 400} ${(i * 37) % 260} q3 -3 6 0 q-3 3 -6 0`} fill={["#d9822a", "#c4473d", "#e6b325"][i % 3]} style={{ animationDelay: `${(i % 8) * 0.6}s` }} />)}
       </g>
       {Array.from({ length: 20 }, (_, i) => <circle key={i} cx={(i * 43) % 400} cy={250 + (i * 13) % 46} r="2" fill={["#d9822a", "#c4473d", "#e6b325"][i % 3]} opacity="0.8" />)}
+    </g>
+  ),
+  // ---------- al chiuso ----------
+  palestra: (id) => (
+    <g>
+      <rect width="400" height="214" fill="#c9cfd4" />
+      <rect width="400" height="60" fill="#e6e9ec" />
+      {/* soffitto con plafoniere accese */}
+      {[50, 150, 250, 350].map((x) => (
+        <g key={x}>
+          <rect x={x - 28} y="10" width="56" height="7" rx="1.5" fill="#fffbe6" />
+          <path d={`M${x - 28} 17 L${x - 60} 120 L${x + 60} 120 L${x + 28} 17 Z`} fill="#fffbe6" opacity="0.08" />
+        </g>
+      ))}
+      <path d="M0 40 H400" stroke="#9aa3ad" strokeWidth="1.2" />
+      {/* spalliere di legno a sinistra, finestre alte, rete verde dietro i paglioni */}
+      <g>{Array.from({ length: 6 }, (_, i) => <rect key={i} x={6 + i * 9} y="70" width="3" height="144" fill="#b5895a" />)}{Array.from({ length: 12 }, (_, k) => <rect key={k} x="4" y={76 + k * 11.6} width="56" height="2.2" fill="#9a7048" />)}</g>
+      {[110, 200, 290].map((x) => <g key={x}><rect x={x - 26} y="48" width="52" height="22" fill="#9fc4e0" stroke="#7a8590" strokeWidth="1.6" /><path d={`M${x} 48 V70 M${x - 26} 59 H${x + 26}`} stroke="#7a8590" strokeWidth="1" /></g>)}
+      <rect x="80" y="120" width="320" height="94" fill="#2f5a3e" opacity="0.88" />
+      {Array.from({ length: 30 }, (_, i) => <path key={i} d={`M${80 + i * 11} 120 V214`} stroke="#1f3a28" strokeWidth="0.5" opacity="0.6" />)}
+      {[0, 1, 2, 3, 4, 5, 6, 7].map((k) => <path key={k} d={`M80 ${124 + k * 12} H400`} stroke="#1f3a28" strokeWidth="0.5" opacity="0.6" />)}
+      {[120, 180, 240, 300, 360].map((x, i) => <IndoorButt key={x} x={x} y={190} s={0.9} n={i + 1} />)}
+      <Floor c1="#c49a62" c2="#a87d48" lines="#3a2410" />
+      {/* righe del campo e linea di tiro */}
+      <path d="M0 236 H400" stroke="#fff" strokeOpacity="0.7" strokeWidth="1.6" />
+      <path d="M40 262 L200 216 L360 262" stroke="#e0533a" strokeOpacity="0.5" strokeWidth="1.2" fill="none" />
+      <rect y="280" width="400" height="4" fill="#e6c84a" opacity="0.8" />
+    </g>
+  ),
+  palazzetto: (id) => (
+    <g>
+      <rect width="400" height="214" fill="#1d2a3a" />
+      {/* capriate d'acciaio e fari */}
+      {Array.from({ length: 9 }, (_, i) => <path key={i} d={`M${i * 50} 0 L${i * 50 + 25} 34 L${i * 50 + 50} 0`} stroke="#5d6b7a" strokeWidth="1.4" fill="none" />)}
+      <path d="M0 34 H400 M0 2 H400" stroke="#6b7a8a" strokeWidth="2" />
+      {[40, 120, 200, 280, 360].map((x) => <g key={x}><circle cx={x} cy="40" r="4" fill="#fffbe6" /><path d={`M${x - 4} 42 L${x - 46} 214 L${x + 46} 214 L${x + 4} 42 Z`} fill="#fffbe6" opacity="0.05" /></g>)}
+      {/* tribune con il pubblico */}
+      {[0, 1, 2, 3, 4].map((r) => (
+        <g key={r}>
+          <rect y={62 + r * 13} width="400" height="13" fill={r % 2 ? "#2a3a4e" : "#24344a"} />
+          {Array.from({ length: 46 }, (_, i) => <circle key={i} cx={4 + i * 8.7 + (r % 2) * 4} cy={68 + r * 13} r="2.6" fill={["#c4473d", "#e6c84a", "#3f8fd0", "#f4f1ea", "#3fae6a", "#8a5bc4"][(i * 7 + r * 3) % 6]} opacity="0.75" />)}
+        </g>
+      ))}
+      {/* tabellone luminoso */}
+      <rect x="150" y="44" width="100" height="16" rx="2" fill="#0a0f14" stroke="#3a4a5a" />
+      <text x="200" y="56" textAnchor="middle" fontSize="9" fontWeight="700" fill="#ffd23f" fontFamily="monospace">10 · 9 · X</text>
+      <rect y="127" width="400" height="87" fill="#16202c" />
+      {[0, 1, 2, 3, 4, 5].map((i) => <rect key={i} x={i * 70} y="127" width="66" height="6" fill={["#2f6fbe", "#c4473d", "#e6c84a", "#3fae6a", "#2f6fbe", "#c4473d"][i]} opacity="0.85" />)}
+      {[70, 140, 210, 280, 350].map((x, i) => <IndoorButt key={x} x={x} y={190} s={0.85} n={i + 1} />)}
+      <Floor c1="#2f5f8a" c2="#234a6c" lines="#fff" planks={false} />
+      {Array.from({ length: 6 }, (_, i) => <path key={i} d={`M${105 + i * 70 * 0.28 * 2.5} 214 L${-40 + i * 96} 300`} stroke="#fff" strokeOpacity="0.35" strokeWidth="1" />)}
+      <rect y="268" width="400" height="5" fill="#f4f1ea" opacity="0.85" />
+    </g>
+  ),
+  capannone: (id) => (
+    <g>
+      <rect width="400" height="214" fill="#6a4a2e" />
+      {Array.from({ length: 20 }, (_, i) => <rect key={i} x={i * 20} y="0" width="19" height="214" fill={i % 2 ? "#6e4d30" : "#654529"} />)}
+      {Array.from({ length: 20 }, (_, i) => <path key={i} d={`M${i * 20} 0 V214`} stroke="#3a2614" strokeWidth="0.8" />)}
+      {/* capriate di legno e lampade calde */}
+      <path d="M0 30 H400" stroke="#3e2a18" strokeWidth="8" />
+      {[60, 200, 340].map((x) => <g key={x}><path d={`M${x - 60} 30 L${x} 4 L${x + 60} 30`} stroke="#3e2a18" strokeWidth="5" fill="none" /><path d={`M${x} 30 V56`} stroke="#222" strokeWidth="0.8" /><path d={`M${x - 8} 56 h16 l-4 -6 h-8 Z`} fill="#2a2a2a" /><circle cx={x} cy="58" r="3" fill="#ffd27a" /><path d={`M${x - 8} 58 L${x - 70} 214 L${x + 70} 214 L${x + 8} 58 Z`} fill="#ffcf7a" opacity="0.1" /></g>)}
+      {/* balle di fieno come battifreccia */}
+      {[0, 1].map((row) => Array.from({ length: 9 }, (_, i) => (
+        <g key={`${row}${i}`}>
+          <rect x={i * 46 - 6} y={170 - row * 26} width="44" height="26" rx="3" fill={row ? "#d8b25a" : "#caa04a"} stroke="#8a6a2a" strokeWidth="0.8" />
+          {[0, 1, 2].map((k) => <path key={k} d={`M${i * 46 - 2} ${175 - row * 26 + k * 7} h36`} stroke="#a87e34" strokeWidth="0.6" />)}
+        </g>
+      )))}
+      {[110, 200, 290].map((x) => <g key={x}>{[8, 6, 4, 2.4, 1].map((r, k) => <circle key={r} cx={x} cy={170} r={r} fill={["#f4f1ea", "#14181c", "#2f7fd0", "#d0302a", "#f2c84b"][k]} />)}</g>)}
+      <Floor c1="#8a6a42" c2="#6e5232" lines="#2a1a0a" planks={false} />
+      {Array.from({ length: 40 }, (_, i) => <path key={i} d={`M${rnd(i) * 400} ${220 + rnd(i + 9) * 78} l${4 + rnd(i + 3) * 6} ${-1 - rnd(i + 5) * 2}`} stroke="#d8b25a" strokeWidth="0.8" opacity="0.7" />)}
+    </g>
+  ),
+  salone: (id) => (
+    <g>
+      <rect width="400" height="214" fill="#6e6a64" />
+      {/* muro di pietra a blocchi */}
+      {Array.from({ length: 12 }, (_, r) => Array.from({ length: 11 }, (_, i) => (
+        <rect key={`${r}-${i}`} x={i * 38 - (r % 2) * 19} y={r * 18} width="37" height="17" rx="1.5" fill={["#7a7670", "#726e68", "#827d76"][(i + r) % 3]} stroke="#4e4a46" strokeWidth="0.6" />
+      )))}
+      {/* finestre ad arco con la luce che entra */}
+      {[100, 300].map((x) => (
+        <g key={x}>
+          <path d={`M${x - 16} 110 V60 A16 16 0 0 1 ${x + 16} 60 V110 Z`} fill="#bcd8ee" stroke="#3e3a36" strokeWidth="2" />
+          <path d={`M${x} 44 V110 M${x - 16} 80 H${x + 16}`} stroke="#3e3a36" strokeWidth="1.2" />
+          <path d={`M${x - 16} 110 L${x - 60} 214 L${x + 10} 214 L${x + 16} 110 Z`} fill="#fff6d8" opacity="0.1" />
+        </g>
+      ))}
+      {/* stendardi e torce */}
+      {[40, 200, 360].map((x, i) => (
+        <g key={x}>
+          <path d={`M${x - 14} 20 H${x + 14} V86 L${x} 78 L${x - 14} 86 Z`} fill={["#8a2f2f", "#1f3a5f", "#2f5a3e"][i]} />
+          <path d={`M${x - 14} 20 H${x + 14}`} stroke="#d9b45a" strokeWidth="2" />
+          <circle cx={x} cy="48" r="6" fill="none" stroke="#d9b45a" strokeWidth="1.4" />
+          <path d={`M${x - 4} 52 L${x} 42 L${x + 4} 52`} stroke="#d9b45a" strokeWidth="1.2" fill="none" />
+        </g>
+      ))}
+      {[150, 250].map((x) => (
+        <g key={x}>
+          <circle cx={x} cy="96" r="22" fill="#ffb04a" opacity="0.14" />
+          <path d={`M${x - 3} 104 h6 l-1 14 h-4 Z`} fill="#3a2a1e" />
+          <path d={`M${x} 90 C${x + 5} 96 ${x + 4} 103 ${x} 104 C${x - 4} 103 ${x - 5} 96 ${x} 90 Z`} fill="#ffb04a" className="aa-flame" />
+          <path d={`M${x} 95 C${x + 2} 98 ${x + 2} 102 ${x} 103 C${x - 2} 102 ${x - 2} 98 ${x} 95 Z`} fill="#fff1a8" />
+        </g>
+      ))}
+      {[90, 200, 310].map((x) => <g key={x}><path d={`M${x - 8} 190 L${x - 12} 214 M${x + 8} 190 L${x + 12} 214`} stroke="#3a2614" strokeWidth="1.8" /><circle cx={x} cy="180" r="16" fill="#d8b25a" stroke="#8a6a2a" strokeWidth="1" />{[11, 8, 5, 2.4].map((r, k) => <circle key={r} cx={x} cy="180" r={r} fill={["#f4f1ea", "#2f7fd0", "#d0302a", "#f2c84b"][k]} />)}</g>)}
+      <Floor c1="#6a4a30" c2="#573c26" lines="#1a0e06" />
+      <path d="M120 300 L170 214 H230 L280 300 Z" fill="#7a1f24" opacity="0.75" />
+      <path d="M128 300 L174 214 M272 300 L226 214" stroke="#d9b45a" strokeWidth="1.2" opacity="0.8" />
     </g>
   ),
 };

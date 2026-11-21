@@ -1286,3 +1286,8 @@ html .aa-cat-page .aa-appicon, html[data-icons] .aa-cat-page .aa-appicon { --c: 
 .aa-cat-tile:active { transform: scale(0.96); background: color-mix(in srgb, var(--cat) 26%, transparent); }
 .aa-cat-tile.is-here { box-shadow: inset 0 0 0 2px var(--cat), 0 0 22px -6px var(--cat); }
 .aa-chipnav { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 25%, transparent); }
+
+/* fiamma delle torce nella sala d'armi */
+.aa-flame { transform-box: fill-box; transform-origin: 50% 100%; animation: aa-flame 0.9s ease-in-out infinite alternate; }
+@keyframes aa-flame { from { transform: scale(1, 1); } to { transform: scale(0.88, 1.12); } }
+@media (prefers-reduced-motion: reduce) { .aa-flame { animation: none; } }

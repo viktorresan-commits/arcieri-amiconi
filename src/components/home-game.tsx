@@ -5,7 +5,7 @@ import { useLocalState } from "@/lib/arcieri/local-store";
 import { award, readXp, today } from "@/lib/arcieri/xp";
 import { ArcherAvatar } from "./archer-avatar";
 import { SceneBackdrop } from "./scene-2d";
-import { SCENES } from "@/lib/arcieri/scenes";
+import { SCENES, isIndoor } from "@/lib/arcieri/scenes";
 
 /**
  * Gioco della Home con il tuo arciere, nell'ambientazione scelta.
@@ -47,6 +47,8 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
   const lefty = Boolean(look.lefty);
   // tra una piazzola e l'altra l'ambientazione cambia da sola: si parte da quella scelta
   const [scene, setScene] = useState(look.scene);
+  // al chiuso non c'è vento: niente deriva e niente manica a vento
+  const indoor = isIndoor(scene);
   useEffect(() => setScene(look.scene), [look.scene]);
   const nextScene = () => setScene((cur) => {
     const others = SCENES.filter((sc) => sc.id !== cur);
@@ -68,7 +70,8 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
   const [pop, setPop] = useState<{ id: number; x: number; y: number; text: string } | null>(null);
   const [puff, setPuff] = useState<{ id: number; x: number; y: number } | null>(null);
   const [shake, setShake] = useState(0);
-  const [wind, setWind] = useState(() => Math.round((Math.random() * 6 - 3) * 10) / 10);
+  const [rawWind, setWind] = useState(() => Math.round((Math.random() * 6 - 3) * 10) / 10);
+  const wind = indoor ? 0 : rawWind;
   const [playing, setPlaying] = useState(false);
   const lastTouch = useRef(0);
   const landed = useRef(0);
@@ -112,11 +115,11 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
     if (!restored.current) return;
     try {
       if (!playing || stations.length >= STATIONS || (stations.length === 0 && hits.length === 0)) localStorage.removeItem(ROUND_KEY);
-      else localStorage.setItem(ROUND_KEY, JSON.stringify({ station, stations, hits: hits.length >= 3 ? [] : hits, dist, wind, at: Date.now() }));
+      else localStorage.setItem(ROUND_KEY, JSON.stringify({ station, stations, hits: hits.length >= 3 ? [] : hits, dist, wind: rawWind, at: Date.now() }));
     } catch {
       /* memoria non disponibile */
     }
-  }, [playing, station, stations, hits, dist, wind]);
+  }, [playing, station, stations, hits, dist, rawWind]);
   // il record si aggiorna subito, anche a giro non finito
   useEffect(() => {
     if (playing && total > best) setBest(total);
@@ -365,8 +368,8 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
           const y = 300 + u * 100;
           return <line key={u} x1={BASE.x - 30 + (40 - (BASE.x - 30)) * u} y1={y} x2={BASE.x + 30 + (320 - (BASE.x + 30)) * u} y2={y} stroke="#fff" strokeOpacity="0.16" strokeWidth={1 + u} strokeDasharray="5 6" />;
         })}
-        {/* manica a vento: indica direzione e forza */}
-        <g transform="translate(286 300)">
+        {/* manica a vento: indica direzione e forza (al chiuso non serve) */}
+        <g transform="translate(286 300)" opacity={indoor ? 0 : 1}>
           <line x1="0" y1="0" x2="0" y2="-46" stroke="#d9d4c8" strokeWidth="1.6" />
           <g transform={`translate(0 -44) rotate(${wind >= 0 ? droop : 180 - droop})`}>
             {[0, 1, 2, 3].map((i) => <path key={i} d={`M${i * 5} -3 L${i * 5 + 5} -2.6 L${i * 5 + 5} 2.6 L${i * 5} 3 Z`} fill={i % 2 ? "#f4f1ea" : "#e06a2a"} />)}
@@ -445,7 +448,7 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
             <span className="ml-1">Piazzola {station}/{STATIONS}</span>
           </span>
           <span className="aa-game-pill">
-            {Math.abs(wind).toFixed(1)} m/s {wind === 0 ? "" : (wind > 0) !== lefty ? "→" : "←"}
+            {indoor ? "Al chiuso, niente vento" : <>{Math.abs(wind).toFixed(1)} m/s {wind === 0 ? "" : (wind > 0) !== lefty ? "→" : "←"}</>}
           </span>
         </div>
       </div>
