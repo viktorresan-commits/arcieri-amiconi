@@ -37,8 +37,16 @@ export const listAvatars = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const sql = await db();
     await ensureMember(sql, context.userId);
-    const rows = await sql<{ user_id: string; look: unknown }>`select user_id, look from avatars`;
+    const rows = await sql<{ user_id: string; look: unknown; company_id: number | null }>`
+      select a.user_id, a.look, cm.company_id
+      from avatars a left join company_members cm on cm.user_id = a.user_id`;
     const out: Record<string, Record<string, string | boolean>> = {};
-    for (const r of rows) out[r.user_id] = cleanLook(typeof r.look === "string" ? JSON.parse(r.look) : r.look);
+    for (const r of rows) {
+      const look = cleanLook(typeof r.look === "string" ? JSON.parse(r.look) : r.look);
+      // lo stemma "della compagnia" è quello della compagnia di chi lo porta, non di chi guarda
+      const emblem = typeof look.emblem === "string" ? look.emblem : AVATAR_DEFAULT.emblem;
+      if ((emblem === "compagnia" || look.capePattern === "stemma") && r.company_id != null) look.crest = String(r.company_id);
+      out[r.user_id] = look;
+    }
     return out;
   });

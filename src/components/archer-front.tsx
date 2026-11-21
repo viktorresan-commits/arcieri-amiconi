@@ -1,11 +1,11 @@
 import { useId } from "react";
 import { tune, type AvatarLook } from "@/lib/arcieri/avatar";
 import { AvatarFace, bodyWidth, shade } from "./archer-avatar";
-import { Buckle, ChestEmblem, Clasp, ClothPattern, Pouch, QuiverBody } from "./avatar-extras";
+import { Buckle, ChestEmblem, Clasp, ClothPattern, Pouch, QuiverBody, zigQ } from "./avatar-extras";
 
 const OUT = "#1b130d";
-const LONG_TOPS: Record<string, number> = { tunica: 252, "tunica-lunga": 266, ranger: 262, incrociata: 250, cappotto: 258, "cappotto-lungo": 292, giubba: 230, cotta: 240 };
-const LONG_SLEEVES = ["felpa", "giacca", "camicia", "tunica", "tunica-lunga", "farsetto", "ranger", "incrociata", "cappotto", "giubba", "cappotto-lungo", "cotta"];
+const LONG_TOPS: Record<string, number> = { tunica: 252, "tunica-lunga": 266, ranger: 262, incrociata: 250, cappotto: 258, "cappotto-lungo": 292, giubba: 230, cotta: 240, giubbetto: 234 };
+const LONG_SLEEVES = ["felpa", "giacca", "camicia", "tunica", "tunica-lunga", "farsetto", "ranger", "incrociata", "cappotto", "giubba", "cappotto-lungo", "cotta", "giubbetto"];
 
 /**
  * L'arciere visto di fronte, fermo e in piedi, con l'arco in mano: per il profilo degli
@@ -23,7 +23,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop }: { look: A
   const hip = { l: cx - (woman ? 33 : 30) * W, r: cx + (woman ? 33 : 30) * W };
   const skin = look.skin;
   const shirt = look.shirt;
-  const sleeve = look.top === "cotta" ? look.sleeves || "#8d949b" : LONG_SLEEVES.includes(look.top) ? look.sleeves || shirt : skin;
+  const sleeve = look.top === "cotta" ? look.sleeves || "#8d949b" : look.top === "giubbetto" ? look.sleeves || "#f1ece0" : LONG_SLEEVES.includes(look.top) ? look.sleeves || shirt : skin;
   // lunghezza della veste: stessa barra della figura di profilo
   const stretch = (tune(look.topLength, 50, 0, 100) - 50) * 1.3;
   const sideLen = Math.max(206, Math.min(312, (LONG_TOPS[look.top] ?? 200) + stretch));
@@ -132,11 +132,21 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop }: { look: A
         ) : null}
         {/* veste */}
         {longTop ? <path d={tunicD} fill={`url(#${uid}sh)`} stroke={OUT} strokeOpacity="0.5" strokeWidth="1.8" /> : null}
-        {longTop ? <path d={`M${hip.l - 14} ${hem - 3} Q${cx} ${hem + 3} ${hip.r + 14} ${hem - 3}`} stroke={look.trim} strokeWidth="3" fill="none" /> : null}
+        {longTop && look.top === "giubbetto" ? <path d={zigQ([hip.l - 14, hem - 3], [cx, hem + 3], [hip.r + 14, hem - 3], 26, 2.2)} stroke={look.trim} strokeWidth="1.6" fill="none" strokeLinejoin="round" /> : longTop ? <path d={`M${hip.l - 14} ${hem - 3} Q${cx} ${hem + 3} ${hip.r + 14} ${hem - 3}`} stroke={look.trim} strokeWidth="3" fill="none" /> : null}
         {longTop && ["cappotto-lungo", "ranger", "tunica-lunga", "incrociata"].includes(look.top) ? <path d={`M${cx} 200 L${cx} ${hem + 2}`} stroke={shade(shirt, -0.45)} strokeWidth="1.6" /> : null}
         <path d={torsoD} fill={`url(#${uid}sh)`} stroke={OUT} strokeOpacity="0.5" strokeWidth="1.8" />
         <ClothPattern kind={look.pattern} shapes={longTop ? [torsoD, tunicD] : [torsoD]} base={shirt} trim={look.trim} uid={`${uid}f`} box={[sh.l - 16, 94, sh.r + 16, (longTop ? hem : 208) + 6]} />
-        <path d={`M${cx - 12} 97 L${cx} 116 L${cx + 12} 97`} stroke={look.trim} strokeWidth="3.2" fill="none" strokeLinejoin="round" />
+        {look.top === "giubbetto" ? (
+          // scollo tondo del giubbetto: si vede la camicia, bordo a zig-zag d'argento
+          <g>
+            <path d={`M${cx - 17} 98 Q${cx} 130 ${cx + 17} 98 Z`} fill={sleeve} />
+            <path d={`M${cx - 6} 99 L${cx} 112 L${cx + 6} 99`} stroke={shade(sleeve, -0.3)} strokeWidth="1" fill="none" />
+            <path d={zigQ([cx - 17, 98], [cx, 130], [cx + 17, 98], 14, 2)} stroke={look.trim} strokeWidth="1.6" fill="none" strokeLinejoin="round" />
+            <path d={`M${sh.l + 4} 108 C${sh.l + 8} 126 ${sh.l + 8} 140 ${sh.l + 4} 150 M${sh.r - 4} 108 C${sh.r - 8} 126 ${sh.r - 8} 140 ${sh.r - 4} 150`} stroke={look.trim} strokeWidth="1.2" strokeDasharray="2.4 1.8" fill="none" opacity="0.85" />
+          </g>
+        ) : (
+          <path d={`M${cx - 12} 97 L${cx} 116 L${cx + 12} 97`} stroke={look.trim} strokeWidth="3.2" fill="none" strokeLinejoin="round" />
+        )}
         {["tunica-lunga", "farsetto", "giubba", "polo"].includes(look.top) ? [124, 140, 156, 172].map((y) => <circle key={y} cx={cx} cy={y} r="1.8" fill={look.trim} />) : null}
         {look.top === "ranger" || look.top === "incrociata" ? <path d={`M${cx - 18} 100 L${cx + 14} 196`} stroke={look.trim} strokeWidth="2.6" /> : null}
         {look.top === "gilet" ? <path d={`M${cx - 10} 100 L${cx - 6} 200 M${cx + 10} 100 L${cx + 6} 200`} stroke={shade(shirt, -0.4)} strokeWidth="1.4" /> : null}
@@ -150,7 +160,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop }: { look: A
           </g>
         ) : null}
         {look.pouch ? <Pouch kind={look.pouchType} x={cx - bowSide * 24} y={192} /> : null}
-        <ChestEmblem kind={look.emblem} x={cx - bowSide * 14} y={134} s={0.85} base={shirt} trim={look.trim} />
+        <ChestEmblem kind={look.emblem} crest={look.crest} x={look.emblem === "compagnia" ? cx : cx - bowSide * 14} y={look.emblem === "compagnia" ? 150 : 134} s={look.emblem === "compagnia" ? 1.25 : 0.85} base={shirt} trim={look.trim} />
         {look.cape && look.clasp !== "nessuno" ? <><Clasp kind={look.clasp} x={sh.l + 6} y={104} /><Clasp kind={look.clasp} x={sh.r - 6} y={104} /></> : null}
         {!quiverBack ? (
           <g transform={`translate(${cx - bowSide * (hip.r - cx + 10)} ${222 + tune(look.quiverY, 0, -40, 40)}) rotate(${-bowSide * 8 + spin})`}>
@@ -167,7 +177,12 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop }: { look: A
         {look.top === "canotta" ? <path d={`M${cx - 16} 98 Q${cx} 124 ${cx + 16} 98`} fill={skin} stroke={look.trim} strokeWidth="2" /> : null}
         {look.top === "camicia" ? <path d={`M${cx - 12} 96 L${cx} 108 L${cx - 5} 116 L${cx - 15} 104 Z M${cx + 12} 96 L${cx} 108 L${cx + 5} 116 L${cx + 15} 104 Z`} fill={shade(shirt, 0.18)} stroke={shade(shirt, -0.4)} strokeWidth="0.8" /> : null}
         {look.top === "divisa" ? <path d={`M${sh.l + 2} 150 L${sh.r - 2} 134 L${sh.r - 2} 146 L${sh.l + 2} 162 Z`} fill={look.trim} opacity="0.9" /> : null}
-        {look.necklace ? <path d={`M${cx - 10} 100 Q${cx} 114 ${cx + 10} 100`} stroke="#d9b45a" strokeWidth="1.4" fill="none" /> : null}
+        {look.necklace && look.top === "giubbetto" ? (
+          <g>
+            <path d={`M${cx - 18} 99 Q${cx} 134 ${cx + 18} 99`} stroke="#5d6168" strokeWidth="3" fill="none" />
+            <path d={`M${cx - 18} 99 Q${cx} 134 ${cx + 18} 99`} stroke="#d7dbe1" strokeWidth="2" strokeDasharray="1.8 1.2" fill="none" />
+          </g>
+        ) : look.necklace ? <path d={`M${cx - 10} 100 Q${cx} 114 ${cx + 10} 100`} stroke="#d9b45a" strokeWidth="1.4" fill="none" /> : null}
 
         {/* arco tenuto in verticale, corda, braccia */}
         <path d={bowPath} stroke={OUT} strokeOpacity="0.5" strokeWidth="7.6" fill="none" strokeLinecap="round" />

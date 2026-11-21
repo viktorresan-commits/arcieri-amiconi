@@ -1,4 +1,5 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { useCrests } from "@/lib/arcieri/crest";
 import { createFileRoute } from "@tanstack/react-router";
 import { AvatarScene, useAvatar } from "@/components/avatar-hero";
 import { Archer3D } from "@/components/archer-3d";
@@ -286,6 +287,15 @@ function Page() {
       /* niente */
     }
   };
+  // stemma della compagnia: si fissa quello della propria compagnia, così gli altri vedono il tuo e non il loro
+  const crests = useCrests();
+  const myCrest = crests?.mine != null ? String(crests.mine) : "";
+  const wantsCrest = look.emblem === "compagnia" || look.capePattern === "stemma";
+  useEffect(() => {
+    if (wantsCrest && myCrest && look.crest !== myCrest) setLook((l) => ({ ...l, crest: myCrest }));
+  }, [wantsCrest, look.crest, myCrest, setLook]);
+  const crestOnChest = look.emblem === "compagnia";
+  const crestOnCape = look.cape && look.capePattern === "stemma";
   // alcune scelte si vedono solo se c'è l'oggetto: lo accendo insieme
   const setX = (k: ExtraKey, v: string) => setLook((l) => ({ ...l, [k]: v, ...(k === "earringType" ? { earring: true } : k === "pouchType" ? { pouch: true } : k === "clasp" && v !== "nessuno" ? { cape: true } : {}) }));
   const [view, setView] = useState<"lato" | "fronte" | "3d">("lato");
@@ -353,6 +363,12 @@ function Page() {
           <Strip title="Capelli" current={look.hair} onPick={(id) => set("hair", id as AvatarLook["hair"])} items={HAIR_OPTS.map(([id, label]) => ({ id, label, preview: <AvatarFace look={{ ...shown, hair: id, hat: "nessuno", frame: "nessuna" }} className="h-full w-full" /> }))} />
           <Row label="Colore dei capelli"><Tint value={look.hairColor} onPick={(c) => set("hairColor", c)} quick={HAIR_COLORS} /></Row>
           {look.body === "uomo" ? <Strip title="Barba" current={look.beard} onPick={(id) => set("beard", id as AvatarLook["beard"])} items={BEARD_OPTS.map(([id, label]) => ({ id, label, preview: <AvatarFace look={{ ...shown, beard: id, frame: "nessuna" }} className="absolute left-[-30%] top-[-26%] h-[160%] w-[160%]" /> }))} /> : null}
+          <Row label="Stemma della compagnia">
+            <div className="flex flex-wrap gap-1.5">
+              <Toggle on={crestOnChest} label="Sul petto" onChange={(v) => setLook((l) => ({ ...l, emblem: v ? "compagnia" : "nessuno", crest: v ? l.crest || myCrest : l.crest }))} />
+              <Toggle on={crestOnCape} label="Sul mantello" onChange={(v) => setLook((l) => ({ ...l, cape: v ? true : l.cape, capePattern: v ? "stemma" : "liscio", crest: v ? l.crest || myCrest : l.crest }))} />
+            </div>
+          </Row>
           <Row label="Sul viso">
             <div className="flex flex-wrap gap-1.5">
               <Toggle on={look.mask} label="Maschera" onChange={(v) => set("mask", v)} />

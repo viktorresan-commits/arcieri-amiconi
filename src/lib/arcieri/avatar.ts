@@ -24,7 +24,7 @@ export type AvatarLook = {
   hatColor: string;
   /** stile degli abiti: moderno o medievale */
   style: "moderno" | "medievale";
-  top: "maglia" | "felpa" | "polo" | "gilet" | "giacca" | "canotta" | "camicia" | "divisa" | "tunica" | "tunica-lunga" | "farsetto" | "corpetto" | "ranger" | "incrociata" | "cappotto" | "giubba" | "cappotto-lungo" | "cotta";
+  top: "maglia" | "felpa" | "polo" | "gilet" | "giacca" | "canotta" | "camicia" | "divisa" | "tunica" | "tunica-lunga" | "farsetto" | "corpetto" | "ranger" | "incrociata" | "cappotto" | "giubba" | "cappotto-lungo" | "cotta" | "giubbetto";
   /** maniche e sottoveste di un altro colore ("" = come la veste) */
   sleeves: string;
   shirt: string;
@@ -124,6 +124,8 @@ export type AvatarLook = {
   /** dettagli in più (vedi EXTRA_OPTIONS) */
   pattern: string;
   emblem: string;
+  /** compagnia di cui portare lo stemma ("" = la propria) */
+  crest: string;
   paint: string;
   tattoo: string;
   earringType: string;
@@ -173,6 +175,7 @@ export const TOPS: Record<AvatarLook["style"], { id: AvatarLook["top"]; label: s
     { id: "divisa", label: "Divisa di società" },
   ],
   medievale: [
+    { id: "giubbetto", label: "Giubbetto della compagnia" },
     { id: "tunica", label: "Tunica" },
     { id: "tunica-lunga", label: "Tunica lunga con bottoni" },
     { id: "farsetto", label: "Farsetto" },
@@ -279,7 +282,8 @@ export const AVATAR_DEFAULT: AvatarLook = {
   browSize: "50",
   quiverY: "0",
   pattern: "nessuno",
-  emblem: "nessuno",
+  emblem: "compagnia",
+  crest: "",
   paint: "nessuna",
   tattoo: "nessuno",
   earringType: "cerchio",
@@ -307,7 +311,7 @@ export const AVATAR_DEFAULT: AvatarLook = {
  */
 export const EXTRA_OPTIONS = {
   pattern: { label: "Fantasia della veste", tab: "abiti", items: [["nessuno", "Tinta unita"], ["righe", "A righe"], ["righe-verticali", "Righe verticali"], ["quadri", "A quadri"], ["scozzese", "Scozzese"], ["pois", "A pois"], ["rombi", "A rombi"], ["chevron", "A spina"], ["mimetico", "Mimetico"], ["ricamo", "Ricamata"], ["bordure", "Con bordure"], ["fasce", "A fasce"], ["sfumata", "Sfumata"]] },
-  emblem: { label: "Stemma sul petto", tab: "abiti", items: [["nessuno", "Nessuno"], ["cervo", "Cervo"], ["lupo", "Lupo"], ["drago", "Drago"], ["freccia", "Freccia"], ["bersaglio", "Bersaglio"], ["giglio", "Giglio"], ["stella", "Stella"], ["scudo", "Scudo"], ["quercia", "Quercia"], ["aquila", "Aquila"], ["falco", "Falco"], ["leone", "Leone"], ["croce", "Croce"], ["sole", "Sole"], ["luna", "Luna"], ["corona", "Corona"]] },
+  emblem: { label: "Stemma sul petto", tab: "abiti", items: [["nessuno", "Nessuno"], ["compagnia", "Stemma della compagnia"], ["cervo", "Cervo"], ["lupo", "Lupo"], ["drago", "Drago"], ["freccia", "Freccia"], ["bersaglio", "Bersaglio"], ["giglio", "Giglio"], ["stella", "Stella"], ["scudo", "Scudo"], ["quercia", "Quercia"], ["aquila", "Aquila"], ["falco", "Falco"], ["leone", "Leone"], ["croce", "Croce"], ["sole", "Sole"], ["luna", "Luna"], ["corona", "Corona"]] },
   paint: { label: "Pittura sul viso", tab: "viso", items: [["nessuna", "Nessuna"], ["strisce", "Strisce"], ["maschera", "Maschera sugli occhi"], ["punti", "Punti"], ["tribale", "Tribale"], ["fulmine", "Fulmine"], ["mezza", "Mezzo viso"], ["naso", "Riga sul naso"], ["guance", "Guance"], ["volpe", "Volpe"], ["lupo", "Lupo"]] },
   tattoo: { label: "Tatuaggio", tab: "viso", items: [["nessuno", "Nessuno"], ["rune", "Rune sul braccio"], ["onde", "Onde sul braccio"], ["freccia", "Freccia sul braccio"], ["stelle", "Stelle sul collo"], ["lacrima", "Lacrima sul viso"], ["punti", "Punti sulla mano"], ["drago", "Drago sul braccio"], ["sole", "Sole sulla spalla"]] },
   earringType: { label: "Tipo di orecchino", tab: "accessori", items: [["cerchio", "Cerchio"], ["perla", "Perla"], ["pendente", "Pendente"], ["piuma", "Piuma"], ["doppio", "Doppio"], ["croce", "Croce"], ["zanna", "Zanna"]] },
@@ -343,6 +347,8 @@ export function normalizeLook(raw: unknown): AvatarLook {
 
 /** Partenze già pronte: si cambia tutto dopo. */
 export const AVATAR_PRESETS: { id: string; label: string; look: Partial<AvatarLook> }[] = [
+  // la divisa degli Arcieri di Fabriano: giubbetto nero bordato d'argento, camicia del colore che si vuole, stemma sul petto
+  { id: "fabriano", label: "Divisa Arcieri di Fabriano", look: { style: "medievale", top: "giubbetto", shirt: "#15171a", trim: "#e9e6de", sleeves: "#f1ece0", emblem: "compagnia", crest: "", bottom: "calzamaglia", pants: "#15171a", footwear: "stivali-alti", shoes: "#2b2420", belt: "larga", beltColor: "#7a4a24", bracers: "#8a5a2e", gloves: true, pouch: true, pouchType: "tascapane", necklace: true, quiverPlace: "fianco", quiver: "#9a6234", quiverStyle: "cuoio", bowType: "longbow", useMain: false, chestguard: false, cape: false, hat: "nessuno", scene: "villaggio" } },
   { id: "uomo", label: "Arciere", look: { body: "uomo", hair: "corti", beard: "corta", hairColor: "#3b2a1d", skin: "#eec5a4", style: "moderno", top: "polo", hat: "nessuno", cape: false } },
   { id: "donna", label: "Arciera", look: { body: "donna", hair: "coda", beard: "nessuna", hairColor: "#16110d", skin: "#dba57d", style: "moderno", top: "gilet", shirt: "#1f3a5f", hat: "nessuno", cape: false } },
   { id: "ragazzo", label: "Giovane", look: { body: "ragazzo", hair: "mossi", beard: "nessuna", hairColor: "#b88a4a", skin: "#f8dcc8", style: "moderno", top: "felpa", shirt: "#c46b2b", chestguard: false, bottom: "pantaloncini" } },
@@ -388,9 +394,17 @@ function pick<T>(list: readonly T[], r: number) {
 }
 
 /** Un arciere a caso, per chi non sa da dove partire. */
-/** Stile pronto: riparte da zero, così non restano pezzi del modello precedente (maschera, corone...). Resta la mano. */
+/** tratti della persona: uno stile pronto li cambia solo se li indica lui */
+const PERSONAL: (keyof AvatarLook)[] = ["body", "build", "skin", "face", "eyes", "brows", "nose", "noseSize", "hair", "hairColor", "hairLength", "hairVolume", "beard", "beardColor", "beardLength", "stache", "expression", "eyeSize", "browSize", "eyeShape", "mouth", "ears", "freckles", "buildW", "stature", "age", "lefty"];
+
+/**
+ * Stile pronto: abiti e accessori ripartono da zero, così non restano pezzi del modello
+ * precedente (maschera, corone...). Il viso e il corpo restano i tuoi, se lo stile non li cambia.
+ */
 export function presetLook(base: AvatarLook, preset: Partial<AvatarLook>): AvatarLook {
-  return normalizeLook({ ...AVATAR_DEFAULT, ...preset, lefty: base.lefty });
+  const keep: Partial<AvatarLook> = {};
+  for (const k of PERSONAL) if (!(k in preset)) (keep as Record<string, unknown>)[k] = base[k];
+  return normalizeLook({ ...AVATAR_DEFAULT, ...keep, ...preset, lefty: base.lefty });
 }
 
 export function randomLook(base: AvatarLook): AvatarLook {

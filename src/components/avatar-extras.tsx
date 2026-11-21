@@ -4,7 +4,8 @@
  * orecchie, età, segni particolari, fibbie, borselli, fermagli e fantasie del mantello,
  * cornici della foto profilo. Tutto disegnato in SVG, in coordinate locali.
  */
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
+import { useCrest } from "@/lib/arcieri/crest";
 import type { AvatarLook } from "@/lib/arcieri/avatar";
 
 const f = (n: number) => n.toFixed(1);
@@ -175,15 +176,68 @@ export function EmblemGlyph({ kind, color, bg }: { kind: string; color: string; 
   return g;
 }
 
+/** bordo a zig-zag lungo una curva quadratica (ricamo d'argento della divisa) */
+export function zigQ(a: [number, number], c: [number, number], b: [number, number], n: number, amp: number) {
+  const pts: string[] = [];
+  for (let i = 0; i <= n; i++) {
+    const t = i / n;
+    const u = 1 - t;
+    const x = u * u * a[0] + 2 * u * t * c[0] + t * t * b[0];
+    const y = u * u * a[1] + 2 * u * t * c[1] + t * t * b[1];
+    const dx = 2 * u * (c[0] - a[0]) + 2 * t * (b[0] - c[0]);
+    const dy = 2 * u * (c[1] - a[1]) + 2 * t * (b[1] - c[1]);
+    const len = Math.hypot(dx, dy) || 1;
+    const k = i % 2 ? amp : -amp;
+    pts.push(`${f(x - (dy / len) * k)} ${f(y + (dx / len) * k)}`);
+  }
+  return `M${pts.join(" L")}`;
+}
+
 /** stemma cucito sulla veste, su una toppa */
-export function ChestEmblem({ kind, x, y, s = 1, base, trim }: { kind: string; x: number; y: number; s?: number; base: string; trim: string }) {
+export function ChestEmblem({ kind, x, y, s = 1, base, trim, crest }: { kind: string; x: number; y: number; s?: number; base: string; trim: string; crest?: string }) {
   if (!kind || kind === "nessuno") return null;
+  if (kind === "compagnia") return <CompanyCrest id={crest} x={x} y={y} s={s} />;
   return (
     <g transform={`translate(${f(x)} ${f(y)}) scale(${s})`}>
       <path d="M-11 -11 H11 V2 C11 8 5 11 0 13 C-5 11 -11 8 -11 2 Z" fill={shadeHex(base, -0.3)} stroke={trim} strokeWidth="1.4" />
       <g transform="scale(0.82)">
         <EmblemGlyph kind={kind} color={trim} bg={shadeHex(base, -0.3)} />
       </g>
+    </g>
+  );
+}
+
+const SHIELD = "M-11 -12 H11 V2 C11 8.5 5 11.5 0 14 C-5 11.5 -11 8.5 -11 2 Z";
+
+/**
+ * Stemma della compagnia cucito sulla veste: il logo vero, ritagliato a scudo su fondo chiaro.
+ * Finché il logo non è pronto (o se la compagnia non ne ha uno) uno scudo col capo merlato nel suo colore.
+ */
+export function CompanyCrest({ id, x, y, s = 1 }: { id?: string; x: number; y: number; s?: number }) {
+  const crest = useCrest(id);
+  const clip = `cc${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
+  const chief = crest?.color || "#b3262a";
+  return (
+    <g transform={`translate(${f(x)} ${f(y)}) scale(${s})`}>
+      <defs>
+        <clipPath id={clip}>
+          <path d={SHIELD} />
+        </clipPath>
+      </defs>
+      {crest?.logo ? (
+        // il logo ha già la sua forma (di solito uno scudo): si cuce così com'è
+        <image href={crest.logo} x="-15" y="-13" width="30" height="28" preserveAspectRatio="xMidYMid meet" />
+      ) : (
+        <g clipPath={`url(#${clip})`}>
+          <path d={SHIELD} fill="#f3ecda" />
+          <path d="M-12 -13 H12 V-4 H-12 Z" fill={chief} />
+          <path d="M-7.5 -9.5 h3 v-2 h3 v2 h3 v-2 h3 v2 h3 v3 h-15 Z" fill="#f3ecda" opacity="0.9" />
+          <g transform="translate(0 4) scale(0.55)">
+            <EmblemGlyph kind="drago" color="#2f6b3a" />
+          </g>
+        </g>
+      )}
+      {crest?.logo ? null : <path d={SHIELD} fill="none" stroke="#c9a24a" strokeWidth="0.9" />}
     </g>
   );
 }

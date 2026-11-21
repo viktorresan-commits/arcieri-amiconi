@@ -305,3 +305,18 @@ export const companyWelcome = createServerFn({ method: "GET" })
       group by c.id order by (c.id = ${home}) desc, count(cm.user_id) desc, c.name`;
     return { chosen: false as const, companies: rows.map((r) => ({ id: asNum(r.id), name: r.name, city: r.city, logoUrl: r.logo_url, color: r.color, members: asNum(r.members) })), homeId: home };
   });
+
+/**
+ * Stemmi di tutte le compagnie, per disegnarli sulla veste e sul mantello degli avatar,
+ * e la compagnia di chi chiede (per mettere il proprio stemma con un tocco).
+ */
+export const companyCrests = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    const sql = await db();
+    await ensureMember(sql, context.userId);
+    const mine = await myMembership(sql, context.userId);
+    const rows = await sql<{ id: number; name: string; logo_url: string | null; color: string }>`
+      select id, name, logo_url, color from companies order by id`;
+    return { mine: mine.companyId, crests: rows.map((r) => ({ id: asNum(r.id), name: r.name, logoUrl: r.logo_url, color: r.color })) };
+  });

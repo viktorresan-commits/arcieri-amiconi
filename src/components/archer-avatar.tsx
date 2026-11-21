@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { tune, type AvatarLook, type Pose } from "@/lib/arcieri/avatar";
-import { BowDeco, Buckle, ChestEmblem, Clasp, ClothPattern, Earring, FaceFrame, FacePaintFront, FacePaintProfile, Fletching, HairOrnament, Pouch, QuiverBody } from "./avatar-extras";
+import { zigQ, BowDeco, Buckle, ChestEmblem, Clasp, ClothPattern, Earring, FaceFrame, FacePaintFront, FacePaintProfile, Fletching, HairOrnament, Pouch, QuiverBody } from "./avatar-extras";
 import { sceneById } from "@/lib/arcieri/scenes";
 
 /**
@@ -213,7 +213,7 @@ function Figure({ look, def, t, flying, blink, uid }: { look: AvatarLook; def: P
   const skin = look.skin;
   const skinD = shade(skin, -0.2);
   const breath = look.idle === "fermo" ? 0 : Math.sin(t * 1.7) * 0.9;
-  const longSleeves = ["felpa", "giacca", "camicia", "tunica", "tunica-lunga", "farsetto", "ranger", "incrociata", "cappotto", "giubba", "cappotto-lungo", "cotta"].includes(look.top);
+  const longSleeves = ["felpa", "giacca", "camicia", "tunica", "tunica-lunga", "farsetto", "ranger", "incrociata", "cappotto", "giubba", "cappotto-lungo", "cotta", "giubbetto"].includes(look.top);
   const medievalTop = ["tunica", "tunica-lunga", "farsetto", "ranger", "incrociata", "cappotto", "giubba", "cappotto-lungo", "cotta"].includes(look.top);
   const shirt = look.shirt;
   const capeSway = Math.sin(t * 1.3) * 2.5;
@@ -249,7 +249,7 @@ function Figure({ look, def, t, flying, blink, uid }: { look: AvatarLook; def: P
   const hipL = cx - (woman ? 23 : 21) * W;
   const hipR = cx + (woman ? 23 : 21) * W;
   const torso = `M${f(shoulderL)} 124 C${f(shoulderL + 6)} 116 ${f(shoulderR - 6)} 116 ${f(shoulderR)} 124 C${f(shoulderR + 2)} 150 ${f(waistR + 2)} 172 ${f(waistR)} 186 C${f(hipR)} 196 ${f(hipR)} 204 ${f(hipR)} 210 L${f(hipL)} 210 C${f(hipL)} 204 ${f(hipL)} 196 ${f(waistL)} 186 C${f(waistL - 2)} 172 ${f(shoulderL - 2)} 150 ${f(shoulderL)} 124 Z`;
-  const TUNIC: Record<string, number> = { tunica: 252, "tunica-lunga": 266, ranger: 262, incrociata: 250, cappotto: 258, "cappotto-lungo": 292, giubba: 230, cotta: 240 };
+  const TUNIC: Record<string, number> = { tunica: 252, "tunica-lunga": 266, ranger: 262, incrociata: 250, cappotto: 258, "cappotto-lungo": 292, giubba: 230, cotta: 240, giubbetto: 234 };
   // la barra "lunghezza" allunga o accorcia la veste; anche una maglia può scendere sui fianchi
   const stretch = (tune(look.topLength, 50, 0, 100) - 50) * 1.3;
   const tunicLen = Math.round(Math.max(206, Math.min(312, (TUNIC[look.top] ?? 200) + stretch)));
@@ -399,7 +399,7 @@ function Figure({ look, def, t, flying, blink, uid }: { look: AvatarLook; def: P
   const arm = (s: P, e: P, h: P, which: "bow" | "draw") => {
     const sleeveLong = longSleeves || look.top === "corpetto" || look.top === "gilet";
     const sleeveless = look.top === "canotta";
-    const sleeve = sleeveless ? skin : look.top === "gilet" || look.top === "corpetto" ? look.sleeves || look.trim : look.top === "giubba" ? look.sleeves || "#c9b48a" : look.top === "cotta" ? look.sleeves || "#8d949b" : look.sleeves || shirt;
+    const sleeve = sleeveless ? skin : look.top === "gilet" || look.top === "corpetto" ? look.sleeves || look.trim : look.top === "giubba" ? look.sleeves || "#c9b48a" : look.top === "giubbetto" ? look.sleeves || "#f1ece0" : look.top === "cotta" ? look.sleeves || "#8d949b" : look.sleeves || shirt;
     const upW = 15 * W;
     const foreW = 11 * W;
     return (
@@ -651,7 +651,7 @@ function Figure({ look, def, t, flying, blink, uid }: { look: AvatarLook; def: P
         </g>
       );
     }
-    return <g opacity="0.85"><ChestEmblem kind={look.emblem !== "nessuno" ? look.emblem : "drago"} x={(box[0] + box[2]) / 2 - 6} y={box[1] + (box[3] - box[1]) * 0.45} s={1.4} base={look.capeColor} trim={look.trim} /></g>;
+    return <g opacity="0.85"><ChestEmblem kind={look.emblem !== "nessuno" ? look.emblem : "compagnia"} crest={look.crest} x={box[0] + 17} y={box[1] + (box[3] - box[1]) * 0.62} s={1.05} base={look.capeColor} trim={look.trim} /></g>;
   };
 
   return (
@@ -698,7 +698,7 @@ function Figure({ look, def, t, flying, blink, uid }: { look: AvatarLook; def: P
       <path d={torso} fill={`url(#${uid}shirt)`} stroke={OUT} strokeOpacity="0.5" strokeWidth="2.2" />
       <ClothPattern kind={look.pattern} shapes={longTunic ? [torso, tunicD] : [torso]} base={look.shirt} trim={look.trim} uid={uid} box={[shoulderL - 16, 112, shoulderR + 16, (longTunic ? tunicLen : 210) + 6]} />
       <Outfit look={look} cx={cx} shoulderL={shoulderL} shoulderR={shoulderR} hipL={hipL} hipR={hipR} tunicLen={tunicLen} W={W} woman={woman} />
-      <ChestEmblem kind={look.emblem} x={cx + 9} y={150} s={0.72} base={look.shirt} trim={look.trim} />
+      <ChestEmblem kind={look.emblem} crest={look.crest} x={cx + 9} y={look.top === "giubbetto" ? 160 : 150} s={look.emblem === "compagnia" ? 0.95 : 0.72} base={look.shirt} trim={look.trim} />
       {look.tattoo === "sole" && look.top === "canotta" ? <g transform={`translate(${f(shoulderR - 7)} 130) scale(0.4)`} opacity="0.8"><circle r="5" fill="none" stroke="#24324a" strokeWidth="2" />{[0, 1, 2, 3, 4, 5, 6, 7].map((k) => <path key={k} d={`M${f(Math.cos(k * 0.785) * 7)} ${f(Math.sin(k * 0.785) * 7)} L${f(Math.cos(k * 0.785) * 10)} ${f(Math.sin(k * 0.785) * 10)}`} stroke="#24324a" strokeWidth="2" />)}</g> : null}
       {look.cape && look.clasp !== "nessuno" ? <Clasp kind={look.clasp} x={shoulderR - 4} y={124} s={0.9} /> : null}
       {look.amulet ? (
@@ -744,10 +744,18 @@ function Figure({ look, def, t, flying, blink, uid }: { look: AvatarLook; def: P
         </g>
       ) : null}
       {look.necklace ? (
-        <g>
-          <path d={`M${f(cx - 9)} 120 Q${f(cx)} 140 ${f(cx + 9)} 120`} stroke="#d9b45a" strokeWidth="1.3" fill="none" />
-          <path d={`M${f(cx)} 137 l3 4 l-3 4 l-3 -4 z`} fill="#3fae6a" stroke="#d9b45a" strokeWidth="0.8" />
-        </g>
+        look.top === "giubbetto" ? (
+          // catena d'argento a maglie, come sulla divisa della compagnia
+          <g>
+            <path d={`M${f(cx - 11)} 118 Q${f(cx)} 142 ${f(cx + 11)} 118`} stroke="#5d6168" strokeWidth="2.6" fill="none" />
+            <path d={`M${f(cx - 11)} 118 Q${f(cx)} 142 ${f(cx + 11)} 118`} stroke="#d7dbe1" strokeWidth="1.8" strokeDasharray="1.6 1.1" fill="none" />
+          </g>
+        ) : (
+          <g>
+            <path d={`M${f(cx - 9)} 120 Q${f(cx)} 140 ${f(cx + 9)} 120`} stroke="#d9b45a" strokeWidth="1.3" fill="none" />
+            <path d={`M${f(cx)} 137 l3 4 l-3 4 l-3 -4 z`} fill="#3fae6a" stroke="#d9b45a" strokeWidth="0.8" />
+          </g>
+        )
       ) : null}
 
       <path d={`M${f(neck.x - 8)} 100 L${f(neck.x + 8)} 100 L${f(neck.x + 9)} 124 L${f(neck.x - 9)} 124 Z`} fill={skinD} />
@@ -911,6 +919,26 @@ function Outfit({ look, cx, shoulderL, shoulderR, hipL, hipR, tunicLen, W, woman
           {belt}
         </g>
       );
+    case "giubbetto": {
+      // giubbetto nero senza maniche della compagnia: scollo tondo sulla camicia, bordi a zig-zag d'argento
+      const shirtC = look.sleeves || "#f1ece0";
+      const neck = zigQ([cx - 13, 114], [cx, 138], [cx + 13, 114], 12, 1.8);
+      const hem = zigQ([hipL - 11, tunicLen - 3], [cx, tunicLen + 2], [hipR + 11, tunicLen - 3], 18, 1.8);
+      return (
+        <g>
+          <path d={`M${f(cx - 13)} 114 Q${f(cx)} 138 ${f(cx + 13)} 114 Z`} fill={shirtC} />
+          <path d={`M${f(cx - 9)} 113 Q${f(cx)} 121 ${f(cx + 9)} 113`} stroke={shade(shirtC, -0.25)} strokeWidth="1" fill="none" />
+          <path d={`M${f(cx - 4)} 118 L${f(cx)} 126 L${f(cx + 4)} 118`} stroke={shade(shirtC, -0.3)} strokeWidth="0.9" fill="none" />
+          <path d={neck} stroke={tr} strokeWidth="1.3" fill="none" strokeLinejoin="round" />
+          <path d={`M${f(cx - 15)} 112 Q${f(cx)} 141 ${f(cx + 15)} 112`} stroke={tr} strokeWidth="0.8" fill="none" opacity="0.7" />
+          <path d={`M${f(shoulderL + 3)} 124 C${f(shoulderL + 6)} 140 ${f(shoulderL + 6)} 152 ${f(shoulderL + 3)} 162 M${f(shoulderR - 3)} 124 C${f(shoulderR - 6)} 140 ${f(shoulderR - 6)} 152 ${f(shoulderR - 3)} 162`} stroke={tr} strokeWidth="1" strokeDasharray="2 1.6" fill="none" opacity="0.85" />
+          <path d={`M${f(cx + 1)} 140 L${f(cx + 1)} 196 M${f(cx + 1)} 210 L${f(cx + 2)} ${tunicLen - 4}`} stroke={shade(sh, 0.18)} strokeWidth="0.8" />
+          <path d={hem} stroke={tr} strokeWidth="1.3" fill="none" strokeLinejoin="round" />
+          <path d={`M${f(hipL - 11)} ${tunicLen - 7} Q${f(cx)} ${tunicLen - 2} ${f(hipR + 11)} ${tunicLen - 7}`} stroke={tr} strokeWidth="0.7" fill="none" opacity="0.6" />
+          {belt}
+        </g>
+      );
+    }
     case "corpetto":
       return (
         <g>
@@ -2090,7 +2118,7 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false }: { lo
         {look.glasses && !look.sunglasses ? <g fill="#a8d8ff" fillOpacity="0.15" stroke="#1d2126" strokeWidth="1.4"><circle cx="41" cy={eyeY} r="6.6" /><circle cx="59" cy={eyeY} r="6.6" /><path d={`M47.6 ${eyeY} H52.4`} /></g> : null}
         {look.necklace && !bare ? <path d="M40 84 Q50 94 60 84" stroke="#d9b45a" strokeWidth="1.2" fill="none" /> : null}
         {look.amulet && !bare ? <g><path d="M41 82 Q50 96 59 82" stroke="#c9a46a" strokeWidth="0.9" fill="none" /><path d="M50 91 l3.4 4.4 l-3.4 4.4 l-3.4 -4.4 Z" fill="#d9b45a" /><circle cx="50" cy="95.4" r="1.3" fill="#2f9e7a" /></g> : null}
-        {look.emblem && look.emblem !== "nessuno" && !bare ? <ChestEmblem kind={look.emblem} x={62} y={93} s={0.42} base={look.shirt} trim={look.trim} /> : null}
+        {look.emblem && look.emblem !== "nessuno" && !bare ? <ChestEmblem kind={look.emblem} crest={look.crest} x={62} y={93} s={0.42} base={look.shirt} trim={look.trim} /> : null}
         {look.hairAcc && look.hairAcc !== "nessuno" && !capOn && look.hair !== "calvo" ? <HairOrnament kind={look.hairAcc} x={50 - rx + 3} y={fy - ry + 10} tilt={-24} s={0.9} color={look.hatColor} /> : null}
       </g>
       {bare ? null : <FaceFrame kind={look.frame} />}

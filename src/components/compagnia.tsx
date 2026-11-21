@@ -1,3 +1,4 @@
+import { refreshCrests } from "@/lib/arcieri/crest";
 import { useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "@tanstack/react-router";
@@ -360,6 +361,7 @@ export function CompanyForm({ co, onDone, onCancel }: { co?: Co; onDone: () => v
     try {
       if (co) await updateCompany({ data: { id: co.id, ...d } });
       else await createCompany({ data: d });
+      refreshCrests();
       onDone();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Salvataggio non riuscito");
@@ -427,6 +429,7 @@ export function CompanyForm({ co, onDone, onCancel }: { co?: Co; onDone: () => v
 
 export async function joinAndReload(id: number, reload: () => void) {
   await joinCompany({ data: { id } });
+  refreshCrests();
   reload();
 }
 
