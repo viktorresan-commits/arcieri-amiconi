@@ -123,7 +123,7 @@ export function TipCard() {
     setI((n) => randomCuriosita(n));
   };
   return (
-    <button type="button" onClick={next} className="mt-6 flex w-full items-start gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5 text-left transition hover:bg-white/[0.05]">
+    <button type="button" onClick={next} className="mb-4 mt-8 flex w-full items-start gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5 text-left transition hover:bg-white/[0.05]">
       <span key={`e${i}${personal}`} className="aa-pop shrink-0 opacity-90"><AppIcon name={tip.icon} color="#2f9e6a" size={32} /></span>
       <span key={`t${i}${personal}`} className="aa-rise min-w-0">
         <span className="block text-[0.6rem] font-semibold uppercase tracking-[0.16em] text-[#7cf0a8]/90">{personal ? "Per il tuo arco" : "Lo sapevi?"}</span>
@@ -227,7 +227,7 @@ function CategoryCarousel({ current, onGo, isHere }: { current?: string; onGo: (
   const timer = useRef<number | null>(null);
   const [active, setActive] = useState(startAt);
   const pageW = () => (ref.current?.firstElementChild as HTMLElement | null)?.offsetWidth ?? 1;
-  const gap = 12;
+  const gap = 0;
   const leftOf = (i: number) => {
     const el = ref.current;
     const page = el?.children[i] as HTMLElement | undefined;
@@ -254,11 +254,14 @@ function CategoryCarousel({ current, onGo, isHere }: { current?: string; onGo: (
   const pages = Array.from({ length: COPIES * n }, (_, i) => STATIONS[i % n]);
   return (
     <div className="grid gap-3">
-      <div ref={ref} onScroll={onScroll} className="relative -mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-[7%] pb-2 [scrollbar-width:none]" style={{ overscrollBehaviorX: "contain" }}>
+      <div className="flex justify-center gap-1.5" aria-hidden>
+        {STATIONS.map((st, k) => <span key={st.id} className="h-1.5 rounded-full transition-all duration-300" style={{ width: k === active ? 18 : 6, background: k === active ? st.color : "rgb(255 255 255 / 0.2)" }} />)}
+      </div>
+      <div ref={ref} onScroll={onScroll} className="relative -mx-4 flex snap-x snap-mandatory overflow-x-auto [scrollbar-width:none]" style={{ overscrollBehaviorX: "contain" }}>
         {pages.map((st, i) => {
           const items = SHORTCUTS.filter((s) => s.group === st.id);
           return (
-            <section key={i} className="grid w-[86%] shrink-0 snap-center content-start gap-3 rounded-3xl border border-white/[0.08] p-3.5" style={{ background: `linear-gradient(165deg, ${st.color}33, ${st.color}0d 45%, transparent 75%)` }}>
+            <section key={i} className="grid min-h-[calc(100dvh-15rem)] w-full shrink-0 snap-center content-start gap-4 px-4 pb-6 pt-1" style={{ background: `radial-gradient(120% 60% at 50% 0%, ${st.color}2e, transparent 70%)` }}>
               <div className="flex items-center gap-3">
                 <AppIcon name={st.icon} color={st.color} size={44} />
                 <div className="min-w-0">
@@ -267,7 +270,7 @@ function CategoryCarousel({ current, onGo, isHere }: { current?: string; onGo: (
                 </div>
                 <span className="ml-auto text-[0.66rem] font-semibold text-muted">{items.length} voci</span>
               </div>
-              <div className="grid grid-cols-3 gap-x-1.5 gap-y-3.5">
+              <div className="grid grid-cols-3 gap-x-2 gap-y-5">
                 {items.map((s) => (
                   <Link key={s.id} to={s.to as "/"} search={(s.search ?? {}) as never} onClick={onGo} aria-current={isHere(s) ? "page" : undefined} className={cx("aa-short flex min-w-0 flex-col items-center gap-1 text-center", isHere(s) && "is-here")}>
                     <AppIcon name={s.icon} color={s.color} size={52} className="aa-short-icon" />
@@ -279,9 +282,6 @@ function CategoryCarousel({ current, onGo, isHere }: { current?: string; onGo: (
             </section>
           );
         })}
-      </div>
-      <div className="flex justify-center gap-1.5" aria-hidden>
-        {STATIONS.map((st, k) => <span key={st.id} className="h-1.5 rounded-full transition-all duration-300" style={{ width: k === active ? 18 : 6, background: k === active ? st.color : "rgb(255 255 255 / 0.2)" }} />)}
       </div>
     </div>
   );

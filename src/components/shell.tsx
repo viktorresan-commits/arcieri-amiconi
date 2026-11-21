@@ -239,7 +239,7 @@ export function Shell({ children }: { children: ReactNode }) {
             </div>
           </header>
           {offline ? <p className="bg-accent px-4 py-2 text-sm text-accent-fg">Sei offline. Il tiro resta sul telefono e si sincronizza al ritorno della rete.</p> : null}
-          <main key={path} className="aa-page mx-auto w-full min-w-0 max-w-3xl overflow-x-clip px-4 py-6 pb-28 md:pb-10">
+          <main key={path} className="aa-page mx-auto w-full min-w-0 max-w-3xl overflow-x-clip px-4 py-6 pb-[calc(9rem+env(safe-area-inset-bottom))] md:pb-12">
             {children}
             <NextCard path={path} />
             {prefs.home.tips ? <TipCard key={path} /> : null}

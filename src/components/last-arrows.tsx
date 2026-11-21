@@ -115,8 +115,8 @@ export function LastArrows({ shots }: { shots: LastShot[] }) {
             onContextMenu={(e) => e.preventDefault()}
             title={shot.link ? (shot.link.kind === "allenamento" ? "Tieni premuto per aprire l'allenamento" : "Tieni premuto per aprire la gara") : undefined}
           >
-            <div className="aa-shot-track relative h-14 min-w-0 flex-1 overflow-hidden" style={{ ["--trail" as string]: ringOf(shot.miss ? 0 : shot.isX ? max : shot.score, max).trail }}>
-              <div className={`aa-launch aa-launch-far absolute inset-y-0 ${shot.miss ? "right-[38px] top-[7px] bottom-[-7px] opacity-70" : "right-[10px]"}`} style={{ width: `${62 + stagger * 0.5}%` }}>
+            <div className="aa-shot-track relative h-16 min-w-0 flex-1 overflow-hidden" style={{ ["--trail" as string]: ringOf(shot.miss ? 0 : shot.isX ? max : shot.score, max).trail }}>
+              <div className={`aa-launch aa-launch-far absolute inset-y-0 ${shot.miss ? "right-[38px] top-[7px] bottom-[-7px] opacity-70" : "right-[10px]"}`} style={{ width: `${80 + stagger * 0.6}%` }}>
                 {/* la scia sfumata sta sotto la freccia e vola con lei */}
                 <span aria-hidden className="aa-shot-trail" />
                 <ArrowArt
@@ -131,7 +131,7 @@ export function LastArrows({ shots }: { shots: LastShot[] }) {
                   fletch2={sp.fletch2}
                   point={sp.pointType || "ogiva"}
                   number={num}
-                  className="relative h-14 w-full"
+                  className="relative h-16 w-full"
                 />
               </div>
               <svg aria-hidden viewBox="0 0 16 40" className="aa-shot-butt" preserveAspectRatio="none">
@@ -144,14 +144,12 @@ export function LastArrows({ shots }: { shots: LastShot[] }) {
                 <ellipse cx="11" cy="20" rx="5" ry="19.5" fill="#000" opacity="0.25" />
               </svg>
             </div>
-            <span className="aa-shot-label flex w-[4.4rem] shrink-0 items-center justify-end gap-1.5 text-right leading-none">
-              <span className="grid gap-0.5 text-[0.6rem] font-semibold">
-                <span className="text-white/85">n.{num}</span>
-                <span className="text-muted">{shot.distance ? `${shot.distance} m` : "—"}</span>
-              </span>
-              <span className="aa-shot-badge grid h-8 w-8 place-items-center rounded-full font-display text-sm tabular-nums" style={{ background: ringOf(shot.miss ? 0 : shot.isX ? max : shot.score, max).bg, color: ringOf(shot.miss ? 0 : shot.isX ? max : shot.score, max).fg }}>
+            <span className="aa-shot-label ml-3 grid w-9 shrink-0 justify-items-center gap-0.5 text-center leading-none">
+              <span className="aa-shot-badge grid h-6 w-6 place-items-center rounded-full font-display text-[0.72rem] tabular-nums" style={{ background: ringOf(shot.miss ? 0 : shot.isX ? max : shot.score, max).bg, color: ringOf(shot.miss ? 0 : shot.isX ? max : shot.score, max).fg }}>
                 {shot.miss ? "M" : shot.isX ? "X" : shot.score}
               </span>
+              <span className="text-[0.5rem] font-semibold text-white/70">n.{num}</span>
+              <span className="text-[0.5rem] text-muted">{shot.distance ? `${shot.distance} m` : "—"}</span>
             </span>
           </li>
         );
