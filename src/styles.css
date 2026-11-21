@@ -1143,3 +1143,10 @@ html[data-scenes="no"] .aa-scene { display: none; }
 /* fluidità: dentro gli sfondi illustrati si animano solo nuvole, uccelli, bandiere, acqua, pioggia e neve
    (alberi ed erba che ondeggiano costringevano a ridisegnare tutta la scena a ogni fotogramma) */
 svg .aa-tree, svg .aa-grass, svg .aa-sun-pulse, svg .aa-ray { animation: none !important; }
+/* menu: intestazione illustrata delle categorie */
+.aa-cat-hero { box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12), 0 18px 40px -24px var(--cat, #000); }
+.aa-cat-rings { animation: aa-cat-spin 40s linear infinite; }
+@keyframes aa-cat-spin { to { transform: rotate(360deg); } }
+.aa-cat-icon { animation: aa-cat-float 4s ease-in-out infinite; }
+@keyframes aa-cat-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+@media (prefers-reduced-motion: reduce) { .aa-cat-rings, .aa-cat-icon { animation: none; } }

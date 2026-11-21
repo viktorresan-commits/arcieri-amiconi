@@ -31,6 +31,7 @@ const randomDist = (not?: number): Dist => {
 const RINGS = ["#f4f1ea", "#f4f1ea", "#1a1c1e", "#1a1c1e", "#2a6294", "#2a6294", "#c4473d", "#c4473d", "#e6b325", "#e6b325"];
 const DRAW_S = 0.75;
 const STATIONS = 20;
+const ROUND_KEY = "aa-game-round";
 
 type Hit = { dx: number; dy: number; score: number; x10: boolean };
 type Flight = { from: { x: number; y: number }; to: { x: number; y: number }; hit: Hit; t0: number; dur: number; arc: number; demo: boolean };
@@ -71,6 +72,45 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
   const done = stationDone && station >= STATIONS;
   const piazzola = hits.reduce((a, h) => a + h.score, 0);
   const total = stations.reduce((a, b) => a + b, 0) + (stationDone ? 0 : piazzola);
+
+  // il giro resta salvato sul telefono: cambiando pagina e tornando si riparte dalla stessa piazzola
+  const restored = useRef(false);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(ROUND_KEY);
+      if (raw) {
+        const r = JSON.parse(raw) as { station?: number; stations?: number[]; hits?: Hit[]; dist?: Dist; wind?: number; at?: number };
+        const fresh = typeof r.at === "number" && Date.now() - r.at < 7 * 86_400_000;
+        if (fresh && Array.isArray(r.stations) && r.stations.length < STATIONS && (r.stations.length > 0 || (r.hits?.length ?? 0) > 0)) {
+          stationsRef.current = r.stations.map(Number).filter((v) => Number.isFinite(v));
+          setStations(stationsRef.current);
+          setStation(Math.min(STATIONS, stationsRef.current.length + 1));
+          const hs = Array.isArray(r.hits) ? r.hits.filter((h) => h && typeof h.score === "number").slice(0, 2) : [];
+          hitsRef.current = hs;
+          setHits(hs);
+          if (r.dist && DISTANCES.includes(r.dist)) setDist(r.dist);
+          if (typeof r.wind === "number") setWind(r.wind);
+          setPlaying(true);
+        }
+      }
+    } catch {
+      /* giro salvato rovinato: si ricomincia */
+    }
+    restored.current = true;
+  }, []);
+  useEffect(() => {
+    if (!restored.current) return;
+    try {
+      if (!playing || stations.length >= STATIONS || (stations.length === 0 && hits.length === 0)) localStorage.removeItem(ROUND_KEY);
+      else localStorage.setItem(ROUND_KEY, JSON.stringify({ station, stations, hits: hits.length >= 3 ? [] : hits, dist, wind, at: Date.now() }));
+    } catch {
+      /* memoria non disponibile */
+    }
+  }, [playing, station, stations, hits, dist, wind]);
+  // il record si aggiorna subito, anche a giro non finito
+  useEffect(() => {
+    if (playing && total > best) setBest(total);
+  }, [playing, total, best]);
 
   // posizione del bersaglio: fermo, o su un carrello che va avanti e indietro
   const amp = motion.amp;
@@ -185,7 +225,6 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
       return;
     }
     const round = all.reduce((a, b) => a + b, 0);
-    if (round > best) setBest(round);
     // punti esperienza: al massimo tre giri al giorno
     const day = today();
     for (let i = 1; i <= 3; i++) {

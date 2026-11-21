@@ -260,22 +260,36 @@ function CategoryCarousel({ current, onGo, isHere }: { current?: string; onGo: (
       <div ref={ref} onScroll={onScroll} className="relative -mx-4 flex snap-x snap-mandatory overflow-x-auto [scrollbar-width:none]" style={{ overscrollBehaviorX: "contain" }}>
         {pages.map((st, i) => {
           const items = SHORTCUTS.filter((s) => s.group === st.id);
+          const k = i % n;
           return (
-            <section key={i} className="grid min-h-[calc(100dvh-15rem)] w-full shrink-0 snap-center content-start gap-4 px-4 pb-6 pt-1" style={{ background: `radial-gradient(120% 60% at 50% 0%, ${st.color}2e, transparent 70%)` }}>
-              <div className="flex items-center gap-3">
-                <AppIcon name={st.icon} color={st.color} size={44} />
-                <div className="min-w-0">
-                  <p className="font-display text-2xl leading-none">{st.title}</p>
-                  <p className="truncate text-[0.72rem] text-muted">{st.sub}</p>
+            <section key={i} className="grid min-h-[calc(100dvh-15rem)] w-full shrink-0 snap-center content-start gap-4 px-4 pb-8 pt-1" style={{ background: `radial-gradient(130% 55% at 50% 8%, ${st.color}24, transparent 72%)` }}>
+              {/* intestazione illustrata della categoria: grande icona con alone, titolo e bersaglio decorativo */}
+              <div className="aa-cat-hero relative overflow-hidden rounded-[1.75rem] p-4" style={{ ["--cat" as string]: st.color, background: `linear-gradient(135deg, ${st.color}55, ${st.color}1a 55%, rgba(255,255,255,0.02))` }}>
+                <svg aria-hidden viewBox="0 0 200 200" className="aa-cat-rings pointer-events-none absolute -right-10 -top-12 h-52 w-52 opacity-[0.22]">
+                  {[96, 78, 60, 42, 24].map((r, k) => <circle key={r} cx="100" cy="100" r={r} fill="none" stroke="#fff" strokeWidth={k === 4 ? 10 : 6} />)}
+                  <path d="M0 160 L120 96" stroke="#fff" strokeWidth="4" strokeLinecap="round" />
+                  <path d="M10 150 l-14 -2 m14 2 l-6 12" stroke="#fff" strokeWidth="4" strokeLinecap="round" />
+                </svg>
+                <span aria-hidden className="pointer-events-none absolute -left-16 -bottom-20 h-48 w-48 rounded-full blur-3xl" style={{ background: `${st.color}66` }} />
+                <div className="relative flex items-center gap-4">
+                  <span className="aa-cat-icon relative grid place-items-center">
+                    <span aria-hidden className="absolute inset-[-10px] rounded-[2rem] blur-xl" style={{ background: `${st.color}88` }} />
+                    <AppIcon name={st.icon} color={st.color} size={76} className="relative" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-[0.62rem] font-semibold uppercase tracking-[0.22em] text-white/70">Sezione {k + 1} di {n}</p>
+                    <p className="font-display text-[2.1rem] leading-none text-white [text-shadow:0_2px_10px_rgba(0,0,0,0.35)]">{st.title}</p>
+                    <p className="mt-1 text-[0.78rem] leading-snug text-white/80">{st.sub}</p>
+                  </div>
                 </div>
-                <span className="ml-auto text-[0.66rem] font-semibold text-muted">{items.length} voci</span>
+                <span className="absolute right-3 top-3 rounded-full bg-black/30 px-2 py-0.5 text-[0.62rem] font-semibold text-white/85 backdrop-blur">{items.length} voci</span>
               </div>
-              <div className="grid grid-cols-3 gap-x-2 gap-y-5">
-                {items.map((s) => (
-                  <Link key={s.id} to={s.to as "/"} search={(s.search ?? {}) as never} onClick={onGo} aria-current={isHere(s) ? "page" : undefined} className={cx("aa-short flex min-w-0 flex-col items-center gap-1 text-center", isHere(s) && "is-here")}>
-                    <AppIcon name={s.icon} color={s.color} size={52} className="aa-short-icon" />
-                    <span className="w-full truncate text-[0.7rem] font-semibold leading-tight">{s.label}</span>
-                    <span className="line-clamp-2 w-full text-[0.58rem] leading-tight text-muted">{s.hint}</span>
+              <div className="grid grid-cols-3 gap-x-2 gap-y-6 pt-1">
+                {items.map((s, j) => (
+                  <Link key={s.id} to={s.to as "/"} search={(s.search ?? {}) as never} onClick={onGo} aria-current={isHere(s) ? "page" : undefined} className={cx("aa-short flex min-w-0 flex-col items-center gap-1.5 text-center", isHere(s) && "is-here")} style={{ animationDelay: `${j * 35}ms` }}>
+                    <AppIcon name={s.icon} color={s.color} size={72} className="aa-short-icon" />
+                    <span className="w-full truncate text-[0.78rem] font-semibold leading-tight">{s.label}</span>
+                    <span className="line-clamp-2 w-full text-[0.6rem] leading-tight text-muted">{s.hint}</span>
                   </Link>
                 ))}
               </div>
