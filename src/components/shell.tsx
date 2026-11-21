@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useLayoutEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { AppIcon, Glyph, type IconName } from "./icons";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
@@ -8,7 +8,7 @@ import type { PublicMember } from "@/lib/arcieri/access";
 import { greet, romeHour } from "@/lib/arcieri/time";
 import { memberLabel, initials } from "@/lib/arcieri/labels";
 import { Avatar, Loading, Mark, cx } from "./kit";
-import { QUICK_ACTIONS, currentShortcut, shortcutById } from "@/lib/arcieri/shortcuts";
+import { QUICK_ACTIONS, SHORTCUTS, STATIONS, currentShortcut, shortcutById } from "@/lib/arcieri/shortcuts";
 import { NextCard, PathMap, ShortcutEditor, ShortcutTile, TipCard, rememberPage } from "./shortcuts";
 import { CompanyWelcome } from "./compagnia";
 import { Scene } from "./scene";
@@ -17,6 +17,7 @@ import { AvatarFace } from "./archer-avatar";
 import { useAvatar, useAvatarSync } from "./avatar-hero";
 import { RealIcon } from "./real-icons";
 import { PersonalizeSheet } from "./personalize";
+import { HelpSheet } from "./help-sheet";
 import { applyPrefs, readPrefs, usePrefs } from "@/lib/arcieri/prefs";
 
 type Ctx = { me: PublicMember; reload: () => void };
@@ -28,39 +29,6 @@ export function useMember() {
   return ctx;
 }
 
-const MORE = [
-  ["/profilo", "Profilo"],
-  ["/calendario", "Calendario"],
-  ["/classifiche", "Classifiche"],
-  ["/statistiche", "Statistiche"],
-  ["/balistica", "Balistica"],
-  ["/timer", "Timer di tiro"],
-  ["/borsa", "Prima di partire"],
-  ["/manutenzione", "Manutenzione"],
-  ["/secco", "Allenamento a secco"],
-  ["/routine", "Routine di tiro"],
-  ["/tempi", "Tempo di allungo"],
-  ["/respiro", "Respiro"],
-  ["/segnapunti", "Segnapunti"],
-  ["/spine", "Spine e libbre"],
-  ["/vento", "Vento"],
-  ["/energia", "Velocità ed energia"],
-  ["/allungo", "Allungo"],
-  ["/tuning", "Asta nuda"],
-  ["/assetto", "Assetto arco"],
-  ["/unita", "Convertitore"],
-  ["/sfida-giorno", "Sfida del giorno"],
-  ["/quiz", "Quiz"],
-  ["/stima", "Stima distanze"],
-  ["/glossario", "Glossario"],
-  ["/regole", "Distanze e bersagli"],
-  ["/sfide", "Sfide"],
-  ["/attrezzatura", "Attrezzatura"],
-  ["/gare", "Gare"],
-  ["/obiettivi", "Obiettivi"],
-  ["/bacheca", "Bacheca"],
-  ["/confronta", "Confronta"],
-] as const;
 
 
 export function Shell({ children }: { children: ReactNode }) {
@@ -73,6 +41,24 @@ export function Shell({ children }: { children: ReactNode }) {
   const [quick, setQuick] = useState(false);
   const [editShort, setEditShort] = useState(false);
   const [prefsOpen, setPrefsOpen] = useState(false);
+  const [help, setHelp] = useState(false);
+  const [helpSeen, setHelpSeen] = useState(true);
+  useEffect(() => {
+    try {
+      setHelpSeen(localStorage.getItem("aa-help-seen") === "1");
+    } catch {
+      /* archivio non disponibile */
+    }
+  }, []);
+  const openHelp = () => {
+    setHelp(true);
+    setHelpSeen(true);
+    try {
+      localStorage.setItem("aa-help-seen", "1");
+    } catch {
+      /* archivio non disponibile */
+    }
+  };
   const [offline, setOffline] = useState(false);
   const avatar = useAvatar();
   useAvatarSync(avatar.shown);
@@ -193,9 +179,26 @@ export function Shell({ children }: { children: ReactNode }) {
             {nav.map((item) => (
               <NavLink key={item.to} to={item.to} label={item.label} active={item.to === "/squadra" ? path === "/squadra" || path.startsWith("/arciere/") : path === item.to || (item.to !== "/" && path.startsWith(item.to))} />
             ))}
-            {MORE.map(([to, text]) => (
-              <NavLink key={to} to={to} label={text} active={path === to} />
-            ))}
+            {STATIONS.map((st) => {
+              const seen = new Set<string>();
+              const items = SHORTCUTS.filter((sc) => sc.group === st.id && !sc.search && !sc.hash && sc.to !== "/allenamento" && sc.to !== "/squadra" && !seen.has(sc.to) && seen.add(sc.to));
+              if (!items.length) return null;
+              return (
+                <div key={st.id} className="mt-3 grid gap-0.5">
+                  <p className="px-3 pb-1 text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-muted/80">{st.title}</p>
+                  {items.map((sc) => (
+                    <Link key={sc.id} to={sc.to as "/"} className={cx("aa-sidelink flex items-center gap-2.5 rounded-xl px-2.5 py-1.5 text-sm font-medium", path.startsWith(sc.to) ? "is-active" : "text-muted")} style={{ "--c": sc.color } as CSSProperties}>
+                      <AppIcon name={sc.icon} color={sc.color} size={26} />
+                      <span className="truncate">{sc.label}</span>
+                    </Link>
+                  ))}
+                </div>
+              );
+            })}
+            <Link to="/guida" className={cx("aa-sidelink mt-3 flex items-center gap-2.5 rounded-xl px-2.5 py-1.5 text-sm font-medium", path === "/guida" ? "is-active" : "text-muted")} style={{ "--c": "#646c7a" } as CSSProperties}>
+              <AppIcon name="book" color="#646c7a" size={26} />
+              Guida
+            </Link>
           </nav>
           <Link to="/profilo" className="mt-auto flex items-center gap-3 pt-4">
             <Avatar label={initials(label)} color={me.avatarColor} photo={me.photoUrl} size="lg" className="aa-pin" />
@@ -230,6 +233,9 @@ export function Shell({ children }: { children: ReactNode }) {
                 <span className="grid h-6 w-6 place-items-center rounded-full bg-[#ffd27a] font-display text-[0.8rem] text-[#1a1408]">{lvl.level}</span>
                 <span className="h-1.5 w-9 overflow-hidden rounded-full bg-white/15"><span className="block h-full rounded-full bg-[#ffd27a]" style={{ width: `${Math.round((lvl.into / Math.max(1, lvl.need)) * 100)}%` }} /></span>
               </Link>
+              <button type="button" onClick={openHelp} className={cx("aa-helpbtn grid h-9 w-9 place-items-center rounded-full bg-white/[0.06]", helpSeen ? "" : "is-new")} aria-label="Aiuto su questa pagina">
+                <Glyph name="help" size={18} />
+              </button>
               <Link to="/bacheca" className="relative grid h-9 w-9 place-items-center rounded-full bg-white/[0.06]" aria-label="News">
                 <Glyph name="megaphone" size={17} />
                 {unread > 0 ? <span className="absolute -right-0.5 -top-0.5 grid min-h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[0.58rem] font-bold text-accent-fg">{unread > 9 ? "9+" : unread}</span> : null}
@@ -284,7 +290,7 @@ export function Shell({ children }: { children: ReactNode }) {
                 <p className="font-display text-xl">Menu</p>
                 <div className="flex items-center gap-2">
                   <button type="button" className={cx("grid h-11 w-11 place-items-center rounded-full", menuSearch ? "bg-primary text-primary-fg" : "bg-white/5")} onClick={() => setMenuSearch((v) => !v)} aria-label="Cerca" aria-pressed={menuSearch}>
-                    <Glyph name="eye" size={19} />
+                    <Glyph name="search" size={19} />
                   </button>
                   <button type="button" className="grid h-11 w-11 place-items-center rounded-full bg-white/5" onClick={() => setMenu(false)} aria-label="Chiudi">
                     <Glyph name="close" size={20} />
@@ -296,6 +302,7 @@ export function Shell({ children }: { children: ReactNode }) {
               </div>
             </div>
           ) : null}
+          {help ? <HelpSheet path={path} onClose={() => setHelp(false)} onMenu={() => setMenu(true)} /> : null}
           {prefsOpen ? <PersonalizeSheet onClose={() => setPrefsOpen(false)} /> : null}
           {editShort ? <ShortcutEditor onClose={() => setEditShort(false)} /> : null}
         </div>

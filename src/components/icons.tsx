@@ -15,7 +15,7 @@ export type IconName =
   | "eye" | "save" | "share" | "close" | "chevron" | "broom" | "medal" | "crosshair" | "mountain" | "home" | "grid"
   | "sight" | "checklist" | "stopwatch" | "foc" | "wrench" | "hold"
   | "steps" | "lungs" | "scorecard" | "spine" | "windsock" | "energy" | "span" | "bareshaft" | "caliper" | "ruler"
-  | "daily" | "quiz" | "binoculars" | "book" | "rules" | "lock" | "expand";
+  | "daily" | "quiz" | "binoculars" | "book" | "rules" | "lock" | "expand" | "search" | "help";
 
 const A = 0.32; // opacità del secondo tono
 
@@ -435,6 +435,21 @@ const ICONS: Partial<Record<IconName, ReactNode>> = {
     </>
   ),
   close: <path d="M6 6l12 12M18 6 6 18" />,
+  search: (
+    <>
+      <circle cx="10.5" cy="10.5" r="6.5" fill="currentColor" fillOpacity={A} />
+      <circle cx="10.5" cy="10.5" r="6.5" />
+      <path d="m15.4 15.4 5.1 5.1" />
+    </>
+  ),
+  help: (
+    <>
+      <circle cx="12" cy="12" r="9.2" fill="currentColor" fillOpacity={A} />
+      <circle cx="12" cy="12" r="9.2" />
+      <path d="M9.4 9.4a2.7 2.7 0 1 1 3.7 2.5c-.7.3-1.1.9-1.1 1.6v.6" />
+      <circle cx="12" cy="17" r=".6" fill="currentColor" />
+    </>
+  ),
   chevron: <path d="m9 5 7 7-7 7" />,
   broom: (
     <>

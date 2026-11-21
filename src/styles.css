@@ -1295,3 +1295,79 @@ html .aa-cat-page .aa-appicon, html[data-icons] .aa-cat-page .aa-appicon { --c: 
 /* nastri di scelte dell'editor: le miniature fuori schermo non si disegnano finché non servono */
 .aa-lazy { content-visibility: auto; contain-intrinsic-size: 90px 112px; }
 .aa-strip { scroll-padding-left: 1rem; }
+
+/* ── Rifinitura generale ─────────────────────────────────────────── */
+
+/* selettore a pastiglia: la voce scelta scivola invece di saltare */
+.aa-seg-thumb {
+  position: absolute; left: 0; top: 3px; bottom: 3px; border-radius: 999px;
+  background: var(--fg);
+  box-shadow: 0 4px 14px -6px rgb(0 0 0 / 0.6);
+  transition: transform 0.34s cubic-bezier(0.22, 1, 0.36, 1), width 0.34s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s;
+  pointer-events: none;
+  animation: none !important; /* l'ingresso di pagina non deve bloccarne lo spostamento */
+}
+.aa-seg.has-thumb > button { position: relative; z-index: 1; }
+.aa-seg.has-thumb > button[aria-pressed="true"] { background: transparent; color: var(--bg); }
+.aa-seg > button:active { transform: scale(0.95); }
+
+/* testata di pagina col colore e l'icona della sezione */
+.aa-hero.has-page {
+  background:
+    radial-gradient(120% 140% at 100% 0%, color-mix(in srgb, var(--page) 58%, transparent) 0%, transparent 58%),
+    radial-gradient(90% 120% at 0% 100%, color-mix(in srgb, var(--glow) 60%, transparent) 0%, transparent 60%),
+    linear-gradient(135deg, color-mix(in srgb, var(--surface) 88%, var(--page)) 0%, var(--bg-elev) 100%);
+}
+.aa-hero.has-page::after { background: repeating-radial-gradient(circle, transparent 0 13px, color-mix(in srgb, var(--page) 22%, transparent) 13px 14px); }
+.aa-hero-mark { z-index: -1; animation-delay: 0s; opacity: 0.09; animation: aa-mark-float 9s ease-in-out infinite alternate; }
+@keyframes aa-mark-float { from { transform: translate3d(0, 0, 0) rotate(-6deg); } to { transform: translate3d(-6px, -8px, 0) rotate(2deg); } }
+
+/* stato vuoto: un bersaglio che pulsa piano */
+.aa-empty-ring {
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 16%, transparent);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary) 40%, transparent);
+  animation: aa-ring-pulse 2.6s ease-out infinite;
+}
+@keyframes aa-ring-pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary) 40%, transparent); } 70%, 100% { box-shadow: 0 0 0 12px transparent; } }
+
+/* aiuto in contesto */
+.aa-helpbtn { position: relative; transition: transform 0.15s ease, background-color 0.2s; }
+.aa-helpbtn:active { transform: scale(0.9); }
+.aa-helpbtn.is-new::after {
+  content: ""; position: absolute; right: 1px; top: 1px; width: 9px; height: 9px; border-radius: 50%;
+  background: var(--accent); box-shadow: 0 0 0 2px var(--bg);
+  animation: aa-ring-pulse 2s ease-out infinite;
+}
+.aa-help-backdrop { animation: aa-fade-in 0.2s ease both; }
+@keyframes aa-fade-in { from { opacity: 0; } to { opacity: 1; } }
+.aa-help-head {
+  background:
+    radial-gradient(120% 160% at 100% 0%, color-mix(in srgb, var(--c) 70%, transparent), transparent 62%),
+    linear-gradient(135deg, color-mix(in srgb, var(--c) 34%, var(--bg-elev)), var(--bg-elev));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12), inset 0 0 0 1px color-mix(in srgb, var(--c) 30%, transparent);
+}
+.aa-help-tip { animation: aa-rise 0.4s cubic-bezier(0.22, 1, 0.36, 1) both; box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.05); }
+
+/* barra laterale (computer): voci con icona, divise per categoria */
+.aa-sidelink { transition: background-color 0.18s ease, color 0.18s ease, transform 0.15s ease; }
+.aa-sidelink:hover { background: rgb(255 255 255 / 0.05); color: var(--fg); }
+.aa-sidelink:active { transform: scale(0.98); }
+.aa-sidelink.is-active { background: color-mix(in srgb, var(--c) 22%, transparent); color: var(--fg); box-shadow: inset 3px 0 0 var(--c); }
+
+/* schede: sollevamento al passaggio del puntatore (solo dove c'è un puntatore) */
+@media (hover: hover) and (pointer: fine) {
+  a.aa-glow-panel:hover, button.aa-glow-panel:hover, .aa-cat-tile:hover, .aa-chipnav:hover { transform: translateY(-2px); }
+  .aa-short:hover .aa-short-icon { transform: translateY(-2px) scale(1.04); }
+}
+
+/* fuoco da tastiera ben visibile */
+:where(a, button, [role="button"], input, select, textarea):focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--primary) 80%, white);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aa-seg-thumb, .aa-hero-mark, .aa-empty-ring, .aa-helpbtn.is-new::after, .aa-help-backdrop, .aa-help-tip { animation: none; transition: none; }
+}
+html[data-motion="ridotta"] .aa-hero-mark, html[data-motion="ridotta"] .aa-empty-ring, html[data-motion="ridotta"] .aa-help-tip { animation: none; }

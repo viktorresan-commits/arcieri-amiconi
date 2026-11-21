@@ -163,7 +163,9 @@ const NEXT: Record<string, string> = {
 };
 
 export function currentShortcut(path: string) {
-  return [...SHORTCUTS].sort((a, b) => b.to.length - a.to.length).find((s) => s.to !== "/" && path.startsWith(s.to)) ?? null;
+  // a parità di indirizzo vince la voce "pulita" (senza parametri): su /allenamento è "Allenamento"
+  const plain = (s: Shortcut) => (s.search || s.hash ? 1 : 0);
+  return [...SHORTCUTS].sort((a, b) => b.to.length - a.to.length || plain(a) - plain(b)).find((s) => s.to !== "/" && path.startsWith(s.to)) ?? null;
 }
 
 export function nextShortcut(path: string) {

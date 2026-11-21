@@ -1,7 +1,10 @@
-import { useRef, useState, type ButtonHTMLAttributes, type CSSProperties, type InputHTMLAttributes, type ReactNode, type PointerEvent as ReactPointerEvent, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import { useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type CSSProperties, type InputHTMLAttributes, type ReactNode, type PointerEvent as ReactPointerEvent, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
 import { clsx } from "clsx";
 import type { AvatarLook } from "@/lib/arcieri/avatar";
 import { AvatarFace } from "./archer-avatar";
+import { useRouterState } from "@tanstack/react-router";
+import { currentShortcut } from "@/lib/arcieri/shortcuts";
+import { Glyph } from "./icons";
 
 export function cx(...parts: Array<string | false | null | undefined>) {
   return clsx(parts);
@@ -70,8 +73,16 @@ export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
 }
 
 export function PageHead({ title, lede, action, kicker, children }: { title: string; lede?: string; action?: ReactNode; kicker?: string; children?: ReactNode }) {
+  // ogni sezione prende il colore e l'icona della sua voce di menu
+  const path = useRouterState({ select: (st) => st.location.pathname });
+  const here = currentShortcut(path);
   return (
-    <div className="aa-hero mb-3 px-4 pb-4 pt-4">
+    <div className={cx("aa-hero mb-3 px-4 pb-4 pt-4", here ? "has-page" : "")} style={here ? ({ "--page": here.color } as CSSProperties) : undefined}>
+      {here ? (
+        <span aria-hidden className="aa-hero-mark pointer-events-none absolute -bottom-6 right-2 text-white">
+          <Glyph name={here.icon} size={118} strokeWidth={1.1} detailed />
+        </span>
+      ) : null}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           {kicker ? <p className="text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-white/60">{kicker}</p> : null}
@@ -100,10 +111,33 @@ export function Chips<T extends string>({ value, options, onChange, className }:
 
 /** Controllo segmentato compatto. */
 export function Segmented<T extends string>({ value, options, onChange }: { value: T; options: { id: T; label: ReactNode }[]; onChange: (v: T) => void }) {
+  // pastiglia che scivola sotto la voce scelta
+  const box = useRef<HTMLDivElement>(null);
+  const [thumb, setThumb] = useState<{ x: number; w: number } | null>(null);
+  const idx = options.findIndex((o) => o.id === value);
+  useLayoutEffect(() => {
+    const measure = () => {
+      const btn = box.current?.children[idx + 1] as HTMLElement | undefined;
+      setThumb(btn ? { x: btn.offsetLeft, w: btn.offsetWidth } : null);
+    };
+    measure();
+    const ro = typeof ResizeObserver !== "undefined" && box.current ? new ResizeObserver(measure) : null;
+    if (ro && box.current) ro.observe(box.current);
+    return () => ro?.disconnect();
+  }, [idx, options.length]);
   return (
-    <div className="aa-seg">
+    <div ref={box} className={cx("aa-seg relative", thumb ? "has-thumb" : "")} role="group">
+      <span aria-hidden className="aa-seg-thumb" style={thumb ? { transform: `translateX(${thumb.x}px)`, width: thumb.w } : { opacity: 0 }} />
       {options.map((o) => (
-        <button key={o.id} type="button" aria-pressed={o.id === value} onClick={() => onChange(o.id)}>
+        <button
+          key={o.id}
+          type="button"
+          aria-pressed={o.id === value}
+          onClick={() => {
+            if (o.id !== value && typeof navigator !== "undefined" && navigator.vibrate) navigator.vibrate(6);
+            onChange(o.id);
+          }}
+        >
           {o.label}
         </button>
       ))}
@@ -148,9 +182,16 @@ export function Kpi({ label, value, unit, delta, color, icon }: { label: string;
 
 export function Empty({ title, text }: { title: string; text?: string }) {
   return (
-    <Card>
-      <h2 className="aa-section-title">{title}</h2>
-      {text ? <p className="mt-1 text-xs text-muted">{text}</p> : null}
+    <Card className="aa-empty">
+      <div className="flex items-center gap-3">
+        <span className="aa-empty-ring grid h-11 w-11 shrink-0 place-items-center rounded-full">
+          <Glyph name="target" size={22} />
+        </span>
+        <div className="min-w-0">
+          <h2 className="aa-section-title">{title}</h2>
+          {text ? <p className="mt-1 text-xs text-muted">{text}</p> : null}
+        </div>
+      </div>
     </Card>
   );
 }

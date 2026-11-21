@@ -201,7 +201,7 @@ export function PathMap({ onPick, current, showSearch = false }: { onPick?: () =
   return (
     <div className="grid gap-4">
       {showSearch ? <label className="aa-rise flex items-center gap-2 rounded-2xl border border-hair bg-white/[0.05] px-3 focus-within:border-primary/60">
-        <Glyph name="eye" size={16} className="text-muted" />
+        <Glyph name="search" size={16} className="text-muted" />
         <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Cerca tra ${SHORTCUTS.length} voci`} className="min-h-12 w-full bg-transparent text-sm outline-none" />
         {q ? <button type="button" aria-label="Cancella" onClick={() => setQ("")} className="text-muted"><Glyph name="close" size={16} /></button> : null}
       </label> : null}
