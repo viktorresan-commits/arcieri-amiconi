@@ -146,7 +146,7 @@ const CONTACT_TINT: Record<ContactKind, string> = {
 /* ---------------- intestazione della compagnia ---------------- */
 
 export function CompanyHero({ co, canEdit, onEdit }: { co: Co; canEdit: boolean; onEdit: () => void }) {
-  const kinds: ContactKind[] = ["phone", "whatsapp", "email", "website", "instagram", "facebook", "youtube", "tiktok", "address"];
+  const kinds = ["phone", "whatsapp", "email", "website", "instagram", "facebook", "youtube", "tiktok", "address"] as const;
   const links = kinds.map((kind) => ({ kind, href: hrefOf(kind, co[kind]) })).filter((item) => item.href);
   return (
     <section className="aa-company relative overflow-hidden rounded-[var(--radius-card)] border border-hair shadow-card" style={{ ["--co" as string]: co.color }}>

@@ -296,7 +296,7 @@ function Page() {
           <StatCard title="Chi partecipa a più gare" hint="Gare con un punteggio segnato." tint="#c9a227">
             <RankBars rows={people.map((row) => ({ ...rankRow(row, row.gare, { sub: row.compAvg != null ? `media gara ${fmtAvg(row.compAvg)}` : undefined }), color: "#d6a72a" }))} unit="gare" tint="#d6a72a" empty="Ancora nessuna gara segnata." />
           </StatCard>
-          <SquadAnimals peers={people} looks={looks} meId={me.userId} />
+          <SquadAnimals peers={people} looks={looks} meId={me.userId ?? ""} />
 
           <Card>
             <h2 className="font-display text-2xl">Confronto</h2>
