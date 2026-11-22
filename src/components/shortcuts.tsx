@@ -28,8 +28,8 @@ export function ShortcutTile({ s, size = "md", onClick, index = 0 }: { s: Shortc
   );
 }
 
-/** pastiglia con icona e nome: come i "Recenti" del menu, si tocca e si arriva */
-function ShortcutChip({ s }: { s: Shortcut }) {
+/** icona grande della fila "In un tocco": niente animazioni d'ingresso, così non restano buchi mentre si scorre */
+function BigTile({ s, recent = false }: { s: Shortcut; recent?: boolean }) {
   return (
     <Link
       to={s.to as "/"}
@@ -38,49 +38,43 @@ function ShortcutChip({ s }: { s: Shortcut }) {
       onClick={() => {
         if (navigator.vibrate) navigator.vibrate(8);
       }}
-      className="aa-chipnav flex shrink-0 items-center gap-2 rounded-full border border-white/10 bg-white/[0.05] py-1 pl-1 pr-3.5 text-[0.8rem] font-semibold active:scale-[0.97]"
+      className="aa-bigtile relative flex w-[5.4rem] shrink-0 flex-col items-center gap-1.5 rounded-[1.4rem] px-1 pb-2 pt-2.5 text-center"
       style={{ "--c": s.color } as CSSProperties}
     >
-      <AppIcon name={s.icon} color={s.color} size={32} />
-      <span className="whitespace-nowrap">{s.label}</span>
+      <AppIcon name={s.icon} color={s.color} size={62} />
+      <span className="line-clamp-2 w-full text-[0.72rem] font-semibold leading-tight">{s.label}</span>
+      {recent ? (
+        <span className="absolute right-1.5 top-1.5 grid h-5 w-5 place-items-center rounded-full bg-black/55 text-white" title="Aperta di recente">
+          <Glyph name="history" size={11} />
+        </span>
+      ) : null}
     </Link>
   );
 }
 
-/**
- * "In un tocco": le ultime pagine aperte (si aggiornano da sole) e, sotto, le scorciatoie
- * scelte. Pastiglie in fila, senza animazioni d'ingresso: niente spazi vuoti.
- */
 export function ShortcutRow() {
   const { pinned } = usePinned();
   const [edit, setEdit] = useState(false);
   const [recent, setRecent] = useState<Shortcut[]>([]);
   useEffect(() => setRecent(readRecent().slice(0, 6)), []);
   const mine = pinned.map((id) => shortcutById(id)).filter((x): x is Shortcut => Boolean(x));
+  // un'unica fila: prima le ultime aperte che non sono già tra le tue, poi le tue scorciatoie. Nessun doppione.
+  const extra = recent.filter((r) => !mine.some((m) => m.id === r.id || (m.to === r.to && !m.search && !r.search))).slice(0, 4);
   return (
-    <section className="grid gap-2.5">
+    <section className="grid gap-2">
       <div className="flex items-center justify-between">
         <h2 className="aa-section-title">In un tocco</h2>
         <button type="button" className="aa-chip" onClick={() => setEdit(true)}><Glyph name="edit" size={14} /> Personalizza</button>
       </div>
-      {recent.length ? (
-        <div className="grid gap-1.5">
-          <p className="text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-muted">Ultime aperte</p>
-          <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none]">
-            {recent.map((s) => <ShortcutChip key={`r${s.id}`} s={s} />)}
-          </div>
-        </div>
-      ) : null}
-      <div className="grid gap-1.5">
-        <p className="text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-muted">Le tue scorciatoie</p>
-        <div className="flex flex-wrap gap-2">
-          {mine.map((s) => <ShortcutChip key={s.id} s={s} />)}
-          <button type="button" onClick={() => setEdit(true)} className="flex shrink-0 items-center gap-2 rounded-full border border-dashed border-white/25 py-1 pl-1 pr-3.5 text-[0.8rem] font-semibold text-muted">
-            <span className="grid h-8 w-8 place-items-center rounded-full bg-white/[0.06]"><Glyph name="plus" size={16} /></span>
-            Aggiungi
-          </button>
-        </div>
+      <div className="aa-bigrow -mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none]">
+        {extra.map((s) => <BigTile key={`r${s.id}`} s={s} recent />)}
+        {mine.map((s) => <BigTile key={s.id} s={s} />)}
+        <button type="button" onClick={() => setEdit(true)} className="aa-bigtile flex w-[5.4rem] shrink-0 flex-col items-center gap-1.5 rounded-[1.4rem] border border-dashed border-white/20 px-1 pb-2 pt-2.5 text-center text-muted">
+          <span className="grid h-[62px] w-[62px] place-items-center rounded-[1.1rem] bg-white/[0.06]"><Glyph name="plus" size={24} /></span>
+          <span className="text-[0.72rem] font-semibold leading-tight">Aggiungi</span>
+        </button>
       </div>
+      {extra.length ? <p className="flex items-center gap-1.5 px-0.5 text-[0.66rem] text-muted"><Glyph name="history" size={11} /> = aperta di recente</p> : null}
       {edit ? <ShortcutEditor onClose={() => setEdit(false)} /> : null}
     </section>
   );
