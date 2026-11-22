@@ -1,3 +1,4 @@
+import { useEntryState } from "@/lib/arcieri/back-restore";
 import { Glyph, IconLabel } from "@/components/icons";
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
@@ -34,7 +35,7 @@ function mondayKey(iso: string) {
 function Page() {
   const [nonce] = useState(0);
   const [period, setPeriod] = useState<Period>("90");
-  const [tab, setTab] = useState<"allenamento" | "corpo" | "gare">("allenamento");
+  const [tab, setTab] = useEntryState<"allenamento" | "corpo" | "gare">("stat-tab", "allenamento");
   const { me } = useMember();
   const { data, error, loading } = useLoad(`stats-${nonce}`, () => statsSeries({ data: {} }));
   const comps = useLoad(`comps-${nonce}`, () => listCompetitions());

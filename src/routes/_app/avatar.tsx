@@ -1,3 +1,4 @@
+import { useEntryState } from "@/lib/arcieri/back-restore";
 import { useEffect, useState, type ReactNode } from "react";
 import { useCrests } from "@/lib/arcieri/crest";
 import { createFileRoute } from "@tanstack/react-router";
@@ -271,7 +272,7 @@ function Toggle({ on, label, onChange }: { on: boolean; label: string; onChange:
 /** Personalizzazione dell'arciere della Home: aspetto, abiti e attrezzatura. Si salva da sé. */
 function Page() {
   const { look, setLook, shown, main } = useAvatar();
-  const [tab, setTab] = useState<Tab>("corpo");
+  const [tab, setTab] = useEntryState<Tab>("avatar-tab", "corpo");
   const [mode, setMode] = useState<"semplice" | "completa">(() => {
     try {
       return (localStorage.getItem("aa-avatar-mode") as "semplice" | "completa") || "semplice";
@@ -298,7 +299,7 @@ function Page() {
   const crestOnCape = look.cape && look.capePattern === "stemma";
   // alcune scelte si vedono solo se c'è l'oggetto: lo accendo insieme
   const setX = (k: ExtraKey, v: string) => setLook((l) => ({ ...l, [k]: v, ...(k === "earringType" ? { earring: true } : k === "pouchType" ? { pouch: true } : k === "clasp" && v !== "nessuno" ? { cape: true } : {}) }));
-  const [view, setView] = useState<"lato" | "fronte" | "3d">("lato");
+  const [view, setView] = useEntryState<"lato" | "fronte" | "3d">("avatar-view", "lato");
   const { sky } = useSky();
   const set = <K extends keyof AvatarLook>(k: K, v: AvatarLook[K]) => setLook((l) => ({ ...l, [k]: v }));
   const opts = <T extends string>(list: readonly T[]) => list.map((id) => ({ id, label: id.charAt(0).toUpperCase() + id.slice(1) }));

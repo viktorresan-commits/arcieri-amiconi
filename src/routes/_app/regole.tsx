@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEntryState } from "@/lib/arcieri/back-restore";
 import { createFileRoute } from "@tanstack/react-router";
 import { Card, Chips, PageHead } from "@/components/kit";
 
@@ -29,7 +29,7 @@ const DATA: Record<string, { title: string; rows: [string, string, string][]; no
 };
 
 function Page() {
-  const [tab, setTab] = useState("targa");
+  const [tab, setTab] = useEntryState("regole-tab", "targa");
   const d = DATA[tab];
   return (
     <div className="grid gap-3">

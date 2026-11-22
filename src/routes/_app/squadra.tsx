@@ -1,3 +1,4 @@
+import { useEntryState } from "@/lib/arcieri/back-restore";
 import { AvatarChallenge } from "@/components/avatar-challenge";
 import { removeTeamMember } from "@/lib/arcieri/account.api";
 import { TargetGL } from "@/components/target-gl";
@@ -72,8 +73,8 @@ function Page() {
   const [busy, setBusy] = useState<number | null>(null);
   const looks = useTeamAvatars();
   const [removed, setRemoved] = useState<number[]>([]);
-  const [board, setBoard] = useState<"padiglione" | "sagoma">("padiglione");
-  const [look, setLook] = useState<"tre" | "calore" | "mappa">("tre");
+  const [board, setBoard] = useEntryState<"padiglione" | "sagoma">("squadra-board", "padiglione");
+  const [look, setLook] = useEntryState<"tre" | "calore" | "mappa">("squadra-look", "tre");
   const [face, setFace] = useState("io");
   const [picked, setPicked] = useState<string[]>([]);
   const [pick, setPick] = useState<string[]>([]);

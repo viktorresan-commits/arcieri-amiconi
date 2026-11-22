@@ -133,7 +133,17 @@ async function fullScreen() {
   }
 }
 
-/** Tasto indietro di Android: torna alla pagina precedente, e chiude l'app solo dalla prima. */
+/** chi ha qualcosa aperto sopra la pagina (menu, fogli) lo chiude col tasto indietro prima di cambiare pagina */
+const backStack: (() => boolean)[] = [];
+export function onBack(fn: () => boolean) {
+  backStack.push(fn);
+  return () => {
+    const i = backStack.lastIndexOf(fn);
+    if (i >= 0) backStack.splice(i, 1);
+  };
+}
+
+/** Tasto indietro di Android: chiude ciò che è aperto, poi torna alla pagina precedente; chiude l'app solo dalla prima. */
 export function initNativeApp() {
   if (started || !isNativeApp()) return;
   started = true;
@@ -150,6 +160,7 @@ export function initNativeApp() {
     if (url.startsWith("arcieriamiconi://")) void finishGoogle(url);
   });
   void app.addListener("backButton", ({ canGoBack }) => {
+    for (let i = backStack.length - 1; i >= 0; i--) if (backStack[i]()) return;
     if (canGoBack && window.history.length > 1) window.history.back();
     else void (app.exitApp as unknown as () => Promise<void>)?.();
   });

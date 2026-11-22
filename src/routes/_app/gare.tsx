@@ -1,3 +1,4 @@
+import { useEntryState } from "@/lib/arcieri/back-restore";
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, useRouterState } from "@tanstack/react-router";
 import { deleteEntry, listCompetitions, saveCompetition, setPresence } from "@/lib/arcieri/club.api";
@@ -57,8 +58,8 @@ function Page() {
   const { me } = useMember();
   const today = romeDayKey(new Date().toISOString());
   const [nonce, setNonce] = useState(0);
-  const [tab, setTab] = useState<"past" | "next">("past");
-  const [scope, setScope] = useState<"mine" | "rest">("mine");
+  const [tab, setTab] = useEntryState<"past" | "next">("gare-tab", "past");
+  const [scope, setScope] = useEntryState<"mine" | "rest">("gare-scope", "mine");
   const [open, setOpen] = useState<number | null>(null);
   const [focus, setFocus] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);

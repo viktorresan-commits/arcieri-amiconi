@@ -1,3 +1,4 @@
+import { useEntryState } from "@/lib/arcieri/back-restore";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { authClient } from "@/lib/auth/client";
@@ -31,7 +32,7 @@ function Page() {
   const [nick, setNick] = useState(me.nickname);
   const [bow, setBow] = useState(me.bowType);
   const [bio, setBio] = useState(me.bio);
-  const [tab, setTab] = useState<string>("io");
+  const [tab, setTab] = useEntryState<string>("profilo-tab", "io");
   useEffect(() => {
     try {
       const t = localStorage.getItem("aa-profilo-tab");

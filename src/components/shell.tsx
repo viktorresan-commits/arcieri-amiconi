@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useLayoutEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { AppIcon, Glyph, type IconName } from "./icons";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
@@ -18,6 +18,8 @@ import { useAvatar, useAvatarSync } from "./avatar-hero";
 import { RealIcon } from "./real-icons";
 import { PersonalizeSheet } from "./personalize";
 import { HelpSheet } from "./help-sheet";
+import { rememberMenu, takeMenu, useBackRestore } from "@/lib/arcieri/back-restore";
+import { onBack } from "@/lib/arcieri/native";
 import { redeemCode } from "@/lib/arcieri/staff.api";
 import { refreshCrests } from "@/lib/arcieri/crest";
 import { applyPrefs, readPrefs, usePrefs } from "@/lib/arcieri/prefs";
@@ -85,6 +87,40 @@ export function Shell({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("aa-unread", read);
   }, []);
   const path = useRouterState({ select: (s) => s.location.pathname });
+  const href = useRouterState({ select: (s) => s.location.href });
+  // indietro = esattamente dove si era: scorrimento della pagina e, se si era partiti dal Menu, il Menu aperto allo stesso punto
+  const menuBox = useRef<HTMLDivElement>(null);
+  const menuTop = useRef<number | null>(null);
+  useBackRestore(href, (key) => {
+    const m = takeMenu(key);
+    setHelp(false);
+    setQuick(false);
+    if (m) {
+      menuTop.current = m.top;
+      setMenuSearch(m.search);
+      setMenu(true);
+    } else {
+      setMenu(false);
+    }
+  });
+  useLayoutEffect(() => {
+    if (menu && menuTop.current != null && menuBox.current) {
+      menuBox.current.scrollTop = menuTop.current;
+      menuTop.current = null;
+    }
+  }, [menu]);
+  // tasto indietro di Android: prima chiude ciò che è aperto sopra la pagina
+  useEffect(() => {
+    if (!(menu || help || quick || prefsOpen || editShort)) return;
+    return onBack(() => {
+      if (editShort) setEditShort(false);
+      else if (prefsOpen) setPrefsOpen(false);
+      else if (help) setHelp(false);
+      else if (quick) setQuick(false);
+      else setMenu(false);
+      return true;
+    });
+  }, [menu, help, quick, prefsOpen, editShort]);
   const { prefs } = usePrefs();
   const navigate = useNavigate();
   const here = currentShortcut(path);
@@ -327,7 +363,7 @@ export function Shell({ children }: { children: ReactNode }) {
             </div>
           ) : null}
           {menu ? (
-            <div className="aa-sheet fixed inset-0 z-40 overflow-y-auto bg-bg pb-[calc(env(safe-area-inset-bottom)+1.5rem)] md:hidden">
+            <div ref={menuBox} className="aa-sheet fixed inset-0 z-40 overflow-y-auto bg-bg pb-[calc(env(safe-area-inset-bottom)+1.5rem)] md:hidden">
               <div className="aa-appheader sticky top-0 z-10 flex h-14 items-center justify-between bg-bg/90 px-4 backdrop-blur-md">
                 <p className="font-display text-xl">Menu</p>
                 <div className="flex items-center gap-2">
@@ -340,7 +376,14 @@ export function Shell({ children }: { children: ReactNode }) {
                 </div>
               </div>
               <div className="grid gap-3 px-4">
-                <PathMap current={path} showSearch={menuSearch} onPick={() => setMenu(false)} />
+                <PathMap
+                  current={path}
+                  showSearch={menuSearch}
+                  onPick={() => {
+                    rememberMenu(menuBox.current?.scrollTop ?? 0, menuSearch);
+                    setMenu(false);
+                  }}
+                />
               </div>
             </div>
           ) : null}

@@ -1,3 +1,4 @@
+import { useEntryState } from "@/lib/arcieri/back-restore";
 import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Card, Chips, PageHead } from "@/components/kit";
@@ -61,7 +62,7 @@ const ROUTINES: Record<string, { name: string; steps: Step[] }> = {
 const ringPath = (r: number) => 2 * Math.PI * r;
 
 function Page() {
-  const [tab, setTab] = useState<"borsa" | "riscaldamento">("borsa");
+  const [tab, setTab] = useEntryState<"borsa" | "riscaldamento">("borsa-tab", "borsa");
   return (
     <div className="grid gap-3">
       <PageHead kicker="Prima di partire" title={tab === "borsa" ? "La borsa" : "Riscaldamento"} lede={tab === "borsa" ? "Spunta mentre prepari. Si salva da solo." : "Segui il tempo: un fischio a ogni cambio."} />
