@@ -11,7 +11,8 @@ import { sceneById, type SceneId } from "@/lib/arcieri/scenes";
 const SKY: Record<Sky["tod"], { top: string; mid: string; low: string; sun: string; shade: string; shadeA: number }> = {
   mattina: { top: "#5b8fd6", mid: "#a9cdea", low: "#ffe2b8", sun: "#fff1c9", shade: "#ffd9a0", shadeA: 0.06 },
   pomeriggio: { top: "#2f6db8", mid: "#7fb2e0", low: "#d8ecf6", sun: "#fffbe8", shade: "#ffffff", shadeA: 0 },
-  tramonto: { top: "#2a2e63", mid: "#c9617a", low: "#ffb065", sun: "#ffd27a", shade: "#ff8a4a", shadeA: 0.16 },
+  // sera: cielo grigio che schiarisce verso l'orizzonte, senza rosa
+  tramonto: { top: "#3b4149", mid: "#858c96", low: "#cfcac1", sun: "#ffe0b0", shade: "#a4a9b0", shadeA: 0.12 },
   notte: { top: "#050a1a", mid: "#0f1e3d", low: "#22355c", sun: "#e8eeff", shade: "#0a1430", shadeA: 0.5 },
 };
 
@@ -37,7 +38,7 @@ export const SceneBackdrop = memo(function SceneBackdrop({ sky, id = "bk", scene
       <defs>
         <linearGradient id={`${id}sky`} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor={p.top} />
-          <stop offset="0.55" stopColor={desert && !night ? (sky.tod === "tramonto" ? "#e08a5a" : "#a8d0ea") : p.mid} />
+          <stop offset="0.55" stopColor={desert && !night ? (sky.tod === "tramonto" ? "#b9b3a8" : "#a8d0ea") : p.mid} />
           <stop offset="0.78" stopColor={desert && !night && sky.tod !== "tramonto" ? "#f6e6c4" : p.low} />
         </linearGradient>
         <radialGradient id={`${id}sun`} cx={sunX / 400} cy={sunY / 300} r="0.45">
@@ -48,7 +49,7 @@ export const SceneBackdrop = memo(function SceneBackdrop({ sky, id = "bk", scene
         <radialGradient id={`${id}disc`} cx="0.42" cy="0.38" r="0.62">
           <stop offset="0" stopColor="#ffffff" />
           <stop offset="0.55" stopColor={p.sun} />
-          <stop offset="1" stopColor={sky.tod === "tramonto" ? "#ff9a4a" : "#ffe08a"} />
+          <stop offset="1" stopColor={sky.tod === "tramonto" ? "#ffc78a" : "#ffe08a"} />
         </radialGradient>
         <radialGradient id={`${id}moon`} cx="0.38" cy="0.35" r="0.7">
           <stop offset="0" stopColor="#ffffff" />
@@ -140,7 +141,7 @@ export const SceneBackdrop = memo(function SceneBackdrop({ sky, id = "bk", scene
       ) : null}
       </>}
     </svg>
-    {indoor ? null : <SkyLayer id={id} tod={sky.tod} night={night} rain={rain} cloudy={cloudy} desert={desert} wind={wind} />}
+    {indoor ? null : <SkyLayer id={id} tod={sky.tod} night={night} rain={rain} cloudy={cloudy} desert={desert} wind={wind} high={sc.id === "fabriano"} />}
     </>
   );
 });
@@ -151,17 +152,20 @@ export const SceneBackdrop = memo(function SceneBackdrop({ sky, id = "bk", scene
  * viene ridisegnata a ogni fotogramma. Il nastro è largo il doppio e si sposta di metà:
  * il giro torna al punto di partenza senza stacchi.
  */
-function SkyLayer({ id, tod, night, rain, cloudy, desert, wind }: { id: string; tod: Sky["tod"]; night: boolean; rain: boolean; cloudy: boolean; desert: boolean; wind?: number }) {
+function SkyLayer({ id, tod, night, rain, cloudy, desert, wind, high = false }: { id: string; tod: Sky["tod"]; night: boolean; rain: boolean; cloudy: boolean; desert: boolean; wind?: number; /** in piazza le nuvole stanno sopra i tetti, piccole e lontane */ high?: boolean }) {
   // senza vento indicato vanno piano verso sinistra; con il vento seguono la sua direzione
   const toRight = wind != null && wind > 0;
   const pace = wind != null ? 0.6 + Math.min(3, Math.abs(wind)) * 0.45 : 1;
-  const tint = night ? "#2a3550" : rain ? "#8b95a0" : tod === "tramonto" ? "#ffd2b4" : "#ffffff";
-  const base = night ? "#141d33" : rain ? "#5d6670" : tod === "tramonto" ? "#b0687a" : "#b9c8d8";
-  const top = night ? "#3a4766" : rain ? "#a3acb6" : tod === "tramonto" ? "#ffe3cf" : "#ffffff";
-  const mid = night ? "#283452" : rain ? "#7f8994" : tod === "tramonto" ? "#f2b8a0" : "#f1f5fa";
-  const low = night ? "#18213a" : rain ? "#5d6670" : tod === "tramonto" ? "#c98a90" : "#c3d1e0";
+  // di sera nuvole grigie (niente rosa)
+  const tint = night ? "#2a3550" : rain ? "#8b95a0" : tod === "tramonto" ? "#e3e5e9" : "#ffffff";
+  const base = night ? "#141d33" : rain ? "#5d6670" : tod === "tramonto" ? "#6c737d" : "#b9c8d8";
+  const top = night ? "#3a4766" : rain ? "#a3acb6" : tod === "tramonto" ? "#eef0f3" : "#ffffff";
+  const mid = night ? "#283452" : rain ? "#7f8994" : tod === "tramonto" ? "#c5c9cf" : "#f1f5fa";
+  const low = night ? "#18213a" : rain ? "#5d6670" : tod === "tramonto" ? "#8b929b" : "#c3d1e0";
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
+      {/* in piazza le nuvole restano piccole e alte, sopra i merli del palazzo */}
+      <div className="absolute left-0 top-0" style={high ? { width: "222%", transform: "scale(0.45)", transformOrigin: "0 0" } : { width: "100%" }}>
       {[0, 1].map((layer) => {
         const list = cloudy ? CLOUDS_THICK[layer] : CLOUDS_FEW[layer];
         const gid = `${id}cl${layer}`;
@@ -190,6 +194,7 @@ function SkyLayer({ id, tod, night, rain, cloudy, desert, wind }: { id: string; 
           </div>
         );
       })}
+      </div>
     </div>
   );
 }
@@ -326,9 +331,9 @@ function Atmosphere({ id, sunX, sunY, sun, night, tod }: { id: string; sunX: num
     <g pointerEvents="none">
       <defs>
         <linearGradient id={`${id}haze`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0.38" stopColor={night ? "#8ea4cc" : tod === "tramonto" ? "#ffc89a" : "#eaf3fb"} stopOpacity="0" />
-          <stop offset="0.7" stopColor={night ? "#8ea4cc" : tod === "tramonto" ? "#ffc89a" : "#eaf3fb"} stopOpacity={night ? 0.06 : 0.16} />
-          <stop offset="0.74" stopColor={night ? "#8ea4cc" : tod === "tramonto" ? "#ffc89a" : "#eaf3fb"} stopOpacity="0" />
+          <stop offset="0.38" stopColor={night ? "#8ea4cc" : tod === "tramonto" ? "#dcdee2" : "#eaf3fb"} stopOpacity="0" />
+          <stop offset="0.7" stopColor={night ? "#8ea4cc" : tod === "tramonto" ? "#dcdee2" : "#eaf3fb"} stopOpacity={night ? 0.06 : 0.16} />
+          <stop offset="0.74" stopColor={night ? "#8ea4cc" : tod === "tramonto" ? "#dcdee2" : "#eaf3fb"} stopOpacity="0" />
         </linearGradient>
         <radialGradient id={`${id}warm`} cx={sunX / 400} cy={Math.min(0.9, sunY / 300 + 0.2)} r="0.9">
           <stop offset="0" stopColor={sun} stopOpacity={night ? 0.05 : 0.16} />

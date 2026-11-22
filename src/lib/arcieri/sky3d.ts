@@ -65,7 +65,7 @@ export function envOf(sky: Sky): Env {
   const base: Record<TimeOfDay, Env> = {
     mattina: { sun: SUN.mattina, sunCol: [1.0, 0.9, 0.74], sky: [0.42, 0.5, 0.6], ground: [0.2, 0.22, 0.15], fog: [0.78, 0.82, 0.86], fogNear: 30, fogFar: 170 },
     pomeriggio: { sun: SUN.pomeriggio, sunCol: [1.0, 0.96, 0.88], sky: [0.42, 0.52, 0.64], ground: [0.22, 0.25, 0.16], fog: [0.72, 0.8, 0.88], fogNear: 40, fogFar: 200 },
-    tramonto: { sun: SUN.tramonto, sunCol: [1.0, 0.62, 0.36], sky: [0.42, 0.36, 0.46], ground: [0.2, 0.15, 0.12], fog: [0.92, 0.66, 0.5], fogNear: 25, fogFar: 150 },
+    tramonto: { sun: SUN.tramonto, sunCol: [1.0, 0.8, 0.6], sky: [0.4, 0.42, 0.46], ground: [0.19, 0.19, 0.17], fog: [0.62, 0.64, 0.67], fogNear: 25, fogFar: 150 },
     notte: { sun: SUN.notte, sunCol: [0.42, 0.5, 0.72], sky: [0.1, 0.13, 0.22], ground: [0.05, 0.06, 0.07], fog: [0.06, 0.08, 0.14], fogNear: 15, fogFar: 110 },
   };
   const e = base[sky.tod];
@@ -77,7 +77,7 @@ export function envOf(sky: Sky): Env {
 const PAL: Record<TimeOfDay, { top: string; mid: string; hor: string; hills: [string, string, string]; ground: string }> = {
   mattina: { top: "#3d6fa3", mid: "#9cc0d9", hor: "#f2dcc0", hills: ["#9fb3b2", "#6f8b78", "#4e6a45"], ground: "#43603a" },
   pomeriggio: { top: "#2c5583", mid: "#7fa6c4", hor: "#d9e3df", hills: ["#8ea6a8", "#5f7d6c", "#46613f"], ground: "#3f5a35" },
-  tramonto: { top: "#2b2f5c", mid: "#c76a5a", hor: "#ffb36b", hills: ["#7a5a6a", "#4e3d48", "#2f2a2c"], ground: "#2c2522" },
+  tramonto: { top: "#2f343b", mid: "#7d838c", hor: "#c9c4bb", hills: ["#6f747a", "#4f5459", "#33373b"], ground: "#2b2d2c" },
   notte: { top: "#03060f", mid: "#0c1a33", hor: "#1d2c48", hills: ["#141d2c", "#0e1520", "#090d14"], ground: "#070a0e" },
 };
 
@@ -124,7 +124,7 @@ function skyTexture(g: GL3D, sky: Sky) {
         }
         // velature e nuvole dipinte nel cielo
         const clouds = sky.weather === "sereno" ? 16 : sky.weather === "nuvoloso" ? 44 : 70;
-        const cloudCol = sky.tod === "notte" ? "60,70,90" : sky.tod === "tramonto" ? "255,190,160" : sky.weather === "pioggia" ? "120,126,134" : "255,255,255";
+        const cloudCol = sky.tod === "notte" ? "60,70,90" : sky.tod === "tramonto" ? "214,218,224" : sky.weather === "pioggia" ? "120,126,134" : "255,255,255";
         for (let i = 0; i < clouds; i += 1) {
           const x = r() * s;
           const y = h * (0.3 + r() * 0.62);
@@ -234,7 +234,7 @@ export function drawSky(g: GL3D, sky: Sky, time: number) {
   // nuvole in movimento
   const n = sky.weather === "sereno" ? 7 : sky.weather === "nuvoloso" ? 14 : 18;
   const r = rand(5);
-  const cloudCol: Vec3 = sky.tod === "notte" ? [0.22, 0.25, 0.32] : sky.tod === "tramonto" ? [1, 0.72, 0.6] : sky.weather === "pioggia" ? [0.5, 0.52, 0.56] : [1, 1, 1];
+  const cloudCol: Vec3 = sky.tod === "notte" ? [0.22, 0.25, 0.32] : sky.tod === "tramonto" ? [0.84, 0.86, 0.9] : sky.weather === "pioggia" ? [0.5, 0.52, 0.56] : [1, 1, 1];
   const ct = cloudTexture(g);
   for (let i = 0; i < n; i += 1) {
     const az = r() * Math.PI * 2 + time * 0.004 * (0.6 + r());
