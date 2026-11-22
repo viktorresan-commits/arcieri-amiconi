@@ -1333,8 +1333,8 @@ export const listGadgets = createServerFn({ method: "GET" })
     await ensureMember(sql, context.userId);
     const members = await sql<{ user_id: string }>`select user_id from members where user_id is not null`;
     for (const member of members) await syncBadges(sql, member.user_id);
-    const rows = await sql<{ user_id: string; code: string; given_name: string; family_name: string; nickname: string; slug: string }>`
-      select u.user_id, u.code, m.given_name, m.family_name, m.nickname, m.slug
+    const rows = await sql<{ user_id: string; code: string; given_name: string; family_name: string; nickname: string; slug: string; unlocked_at: unknown }>`
+      select u.user_id, u.code, m.given_name, m.family_name, m.nickname, m.slug, u.unlocked_at
       from user_achievements u
       join members m on m.user_id = u.user_id
       order by u.unlocked_at desc`;
@@ -1347,6 +1347,7 @@ export const listGadgets = createServerFn({ method: "GET" })
           familyName: row.family_name,
           nickname: row.nickname,
           slug: row.slug,
+          unlockedAt: row.unlocked_at instanceof Date ? row.unlocked_at.toISOString() : String(row.unlocked_at ?? ""),
         })),
       })),
     };

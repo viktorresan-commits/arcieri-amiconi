@@ -1390,3 +1390,8 @@ html[data-motion="ridotta"] .aa-hero-mark, html[data-motion="ridotta"] .aa-empty
 }
 .aa-staff-step { background: rgb(255 255 255 / 0.03); animation: aa-rise 0.4s cubic-bezier(0.22, 1, 0.36, 1) both; }
 .aa-staff-step.is-mine { background: color-mix(in srgb, var(--primary) 16%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 45%, transparent); }
+
+/* profilo di un arciere: palco grande e premi che arrivano dall'alto */
+.aa-profile-stage { box-shadow: 0 24px 48px -24px rgb(0 0 0 / 0.8), inset 0 0 0 1px rgb(255 255 255 / 0.06); }
+.aa-prize-float { animation: aa-prize-in 0.6s cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes aa-prize-in { from { opacity: 0; transform: translateY(-14px) scale(0.85); } to { opacity: 1; transform: none; } }
