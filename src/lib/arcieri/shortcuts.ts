@@ -39,6 +39,9 @@ export const SHORTCUTS: Shortcut[] = [
   { id: "confronta", group: "analizza", label: "Confronta", hint: "Tu contro un compagno", icon: "compare", color: "#5568c2", to: "/confronta" },
   { id: "acquisti", group: "prepara", label: "Acquisti", hint: "Lista della spesa", icon: "bag", color: "#946f42", to: "/acquisti" },
   { id: "profilo", group: "squadra", label: "Profilo", hint: "Dati, import, impostazioni", icon: "user", color: "#646c7a", to: "/profilo" },
+  { id: "istruttore", group: "squadra", label: "I miei atleti", hint: "Pannello per chi allena", icon: "team", color: "#2f6fd1", to: "/istruttore" },
+  { id: "segreteria", group: "squadra", label: "Segreteria", hint: "Quote, certificati e presenze", icon: "checklist", color: "#3f8a76", to: "/segreteria" },
+  { id: "riepilogo", group: "analizza", label: "Il mio mese", hint: "Riepilogo da condividere", icon: "share", color: "#c46b2b", to: "/riepilogo" },
   { id: "staff", group: "squadra", label: "Squadra admin", hint: "Ruoli, codici, capigruppo e inviti", icon: "shield", color: "#8a5bd1", to: "/staff" },
   { id: "avatar", group: "squadra", label: "Il tuo arciere", hint: "Aspetto, abiti e attrezzatura", icon: "archer", color: "#c46b2b", to: "/avatar" },
   { id: "timer", group: "allena", label: "Timer di tiro", hint: "Semaforo e tempi da gara", icon: "stopwatch", color: "#d6582a", to: "/timer" },
@@ -161,6 +164,7 @@ const NEXT: Record<string, string> = {
   unita: "spine", gare: "segnapunti", segnapunti: "classifiche", classifiche: "confronta", confronta: "squadra",
   calendario: "gare", sfide: "classifiche", squadra: "bacheca", bacheca: "calendario", stima: "regole",
   regole: "glossario", glossario: "lezioni", lezioni: "quiz", quiz: "sfida-giorno", avatar: "attrezzatura", "sfida-giorno": "rapido", acquisti: "attrezzatura", profilo: "obiettivi",
+  riepilogo: "statistiche", istruttore: "segreteria", segreteria: "staff",
 };
 
 export function currentShortcut(path: string) {

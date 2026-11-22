@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { publishNews } from "./news";
+import { myMembership } from "./compagnie.api";
 import {
   asNum,
   canScore,
@@ -9,6 +10,7 @@ import {
   db,
   ensureMember,
   jsonSafe,
+  staffLevel,
   toMember,
   type MemberRow,
   type PublicMember,
@@ -23,7 +25,17 @@ export const getMe = createServerFn({ method: "GET" })
     const sql = await db();
     const row = await ensureMember(sql, context.userId);
     const email = await sql<{ email: string }>`select email from "user" where id = ${context.userId} limit 1`;
-    return toMember(row, true, email[0]?.email ?? null);
+    const out = toMember(row, true, email[0]?.email ?? null);
+    const staff = staffLevel(row);
+    const mine = await myMembership(sql, context.userId);
+    const leader = mine.role === "owner";
+    // percorso essenziale: solo per chi ha scelto un percorso al primo accesso, finché non ha 5 allenamenti
+    let essenziale = false;
+    if (["principiante", "compagnia", "istruttore"].includes(out.percorso)) {
+      const n = await sql<{ n: number }>`select count(*)::int as n from sessions where user_id = ${context.userId}`;
+      essenziale = asNum(n[0]?.n) < 5;
+    }
+    return { ...out, essenziale, canCoach: staff != null || leader || out.percorso === "istruttore", canSegreteria: staff != null || leader };
   });
 
 export const listRoster = createServerFn({ method: "GET" })

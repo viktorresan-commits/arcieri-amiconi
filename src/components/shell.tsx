@@ -11,6 +11,8 @@ import { Avatar, Loading, Mark, cx } from "./kit";
 import { QUICK_ACTIONS, SHORTCUTS, STATIONS, currentShortcut, shortcutById } from "@/lib/arcieri/shortcuts";
 import { NextCard, PathMap, ShortcutEditor, ShortcutTile, TipCard, rememberPage } from "./shortcuts";
 import { CompanyWelcome } from "./compagnia";
+import { PercorsoWelcome } from "./percorso-welcome";
+import { percorsoOf } from "@/lib/arcieri/percorso";
 import { Scene } from "./scene";
 import { levelOf, useXp, useXpToasts } from "@/lib/arcieri/xp";
 import { AvatarFace } from "./archer-avatar";
@@ -223,6 +225,9 @@ export function Shell({ children }: { children: ReactNode }) {
   if (!me) return <main className="p-6 text-sm text-danger">{error || "Profilo non disponibile."}</main>;
 
   const label = memberLabel(me, [me]);
+  // voci che questa persona non può aprire, e il percorso dei nuovi (prime 6 funzioni)
+  const hide = [...(me.canCoach ? [] : ["istruttore"]), ...(me.canSegreteria ? [] : ["segreteria"])];
+  const focus = me.essenziale ? percorsoOf(me.percorso)?.focus ?? null : null;
   const hour = greet(romeHour());
   const lvl = levelOf(xp.xp);
 
@@ -253,7 +258,7 @@ export function Shell({ children }: { children: ReactNode }) {
             ))}
             {STATIONS.map((st) => {
               const seen = new Set<string>();
-              const items = SHORTCUTS.filter((sc) => sc.group === st.id && !sc.search && !sc.hash && sc.to !== "/allenamento" && sc.to !== "/squadra" && !seen.has(sc.to) && seen.add(sc.to));
+              const items = SHORTCUTS.filter((sc) => sc.group === st.id && !hide.includes(sc.id) && !sc.search && !sc.hash && sc.to !== "/allenamento" && sc.to !== "/squadra" && !seen.has(sc.to) && seen.add(sc.to));
               if (!items.length) return null;
               return (
                 <div key={st.id} className="mt-3 grid gap-0.5">
@@ -329,6 +334,7 @@ export function Shell({ children }: { children: ReactNode }) {
             <NextCard path={path} />
             {prefs.home.tips ? <TipCard key={path} /> : null}
             <CompanyWelcome />
+            {me.percorso === "" ? <PercorsoWelcome onDone={() => setNonce((n) => n + 1)} /> : null}
           </main>
           <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 items-end border-t border-line/60 bg-elev/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden">
             {[nav[0], nav[1]].map((item) => <BottomLink key={item.to} item={item} active={path === item.to || (item.to !== "/" && path.startsWith(item.to))} />)}
@@ -379,6 +385,8 @@ export function Shell({ children }: { children: ReactNode }) {
                 <PathMap
                   current={path}
                   showSearch={menuSearch}
+                  focus={focus}
+                  hide={hide}
                   onPick={() => {
                     rememberMenu(menuBox.current?.scrollTop ?? 0, menuSearch);
                     setMenu(false);

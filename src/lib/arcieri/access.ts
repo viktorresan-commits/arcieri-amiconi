@@ -27,6 +27,10 @@ export type MemberRow = {
   is_super?: boolean;
   /** incarico nello staff oltre al ruolo: "" oppure "editor" */
   staff?: string;
+  /** percorso scelto al primo accesso: "" (da scegliere), principiante, compagnia, istruttore, esistente */
+  percorso?: string;
+  /** gli istruttori della compagnia vedono i suoi allenamenti */
+  share_coach?: boolean;
 };
 
 export type PublicMember = {
@@ -51,6 +55,14 @@ export type PublicMember = {
   notifyComps: boolean;
   isSuper: boolean;
   staff: string;
+  percorso: string;
+  shareCoach: boolean;
+  /** solo in getMe: percorso essenziale ancora attivo (meno di 5 allenamenti) */
+  essenziale?: boolean;
+  /** solo in getMe: può aprire il pannello istruttori */
+  canCoach?: boolean;
+  /** solo in getMe: può aprire la segreteria della compagnia */
+  canSegreteria?: boolean;
 };
 
 export const PRIZES: Array<{ code: string; title: string; hint: string }> = [
@@ -183,6 +195,8 @@ export function toMember(row: MemberRow, claim: boolean, email: string | null = 
     notifyComps: row.notify_comps !== false,
     isSuper: asBool(row.is_super),
     staff: row.staff ?? "",
+    percorso: row.percorso ?? "esistente",
+    shareCoach: row.share_coach !== false,
   };
 }
 

@@ -8,6 +8,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { asNum, clip, db, ensureMember } from "./access";
+import { dropIfEmpty, myMembership } from "./compagnie.api";
 import type { Sql } from "../db";
 
 type Row = Record<string, unknown>;
@@ -199,7 +200,7 @@ export const importReportSessions = createServerFn({ method: "POST" })
 
 type Scope = "allenamenti" | "gare" | "attrezzatura" | "tutto";
 
-async function wipeUser(sql: Sql, userId: string, memberId: number, scope: Scope) {
+export async function wipeUser(sql: Sql, userId: string, memberId: number, scope: Scope) {
   const counts: Record<string, number> = {};
   const run = async (label: string, text: string, params: unknown[]) => {
     try {
@@ -283,6 +284,72 @@ export const removeTeamMember = createServerFn({ method: "POST" })
     // l'account sparisce del tutto: sessioni e accessi vanno via a cascata
     if (target.user_id) await sql`delete from "user" where id = ${target.user_id}`;
     return { ok: true as const, name: target.given_name };
+  });
+
+/* ---------------- eliminare il proprio account (richiesto da Google Play) ---------------- */
+
+export const deleteMyAccount = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: unknown) => {
+    const confirm = String((input as { confirm?: unknown })?.confirm ?? "").trim().toUpperCase();
+    if (confirm !== "ELIMINA") throw new Error("Per confermare scrivi ELIMINA.");
+    return { confirm };
+  })
+  .handler(async ({ context }) => {
+    const sql = await db();
+    const me = await ensureMember(sql, context.userId);
+    // il fondatore tiene in piedi l'app: prima deve passare il ruolo a qualcun altro
+    if (me.is_super) throw new Error("Sei il fondatore dell'app: prima di eliminare l'account passa il ruolo a un altro amministratore.");
+    const memberId = asNum(me.id);
+    await wipeUser(sql, context.userId, memberId, "tutto");
+    const tidy = async (text: string, params: unknown[]) => {
+      try {
+        await sql.query(text, params);
+      } catch {
+        /* tabella assente: si va avanti */
+      }
+    };
+    await tidy("delete from gestures where member_id = $1", [memberId]);
+    await tidy("delete from company_dues where user_id = $1", [context.userId]);
+    await tidy("delete from company_certs where user_id = $1", [context.userId]);
+    await tidy("delete from course_presence where user_id = $1", [context.userId]);
+    await tidy("delete from role_requests where user_id = $1", [context.userId]);
+    await tidy("delete from avatars where user_id = $1", [context.userId]);
+    const mine = await myMembership(sql, context.userId);
+    await sql`delete from company_members where user_id = ${context.userId}`;
+    await dropIfEmpty(sql, mine.companyId);
+    await sql`delete from members where id = ${memberId}`;
+    // l'account sparisce del tutto: sessioni e accessi vanno via a cascata
+    await sql`delete from "user" where id = ${context.userId}`;
+    return { ok: true as const };
+  });
+
+/* ---------------- percorso del primo accesso e condivisione con gli istruttori ---------------- */
+
+export const setPercorso = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: unknown) => {
+    const p = String((input as { percorso?: unknown })?.percorso ?? "");
+    if (!["principiante", "compagnia", "istruttore"].includes(p)) throw new Error("Scegli un percorso.");
+    return { percorso: p };
+  })
+  .handler(async ({ context, data }) => {
+    const sql = await db();
+    const me = await ensureMember(sql, context.userId);
+    // chi c'era già non segue il percorso: le regole valgono solo per i nuovi accessi
+    if (me.percorso === "esistente") return { ok: true as const, percorso: "esistente" };
+    await sql`update members set percorso = ${data.percorso} where id = ${me.id}`;
+    return { ok: true as const, percorso: data.percorso };
+  });
+
+export const setShareCoach = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: unknown) => ({ share: Boolean((input as { share?: unknown })?.share) }))
+  .handler(async ({ context, data }) => {
+    const sql = await db();
+    const me = await ensureMember(sql, context.userId);
+    await sql`update members set share_coach = ${data.share} where id = ${me.id}`;
+    return { ok: true as const, share: data.share };
   });
 
 /* ---------------- squadra: elenco completo per l'amministratore ---------------- */

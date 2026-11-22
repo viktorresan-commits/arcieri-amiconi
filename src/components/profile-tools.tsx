@@ -1,6 +1,6 @@
 import { useState, type CSSProperties } from "react";
 import { IconLabel, IconTitle } from "./icons";
-import { removeTeamMember, resetMyData, teamList } from "@/lib/arcieri/account.api";
+import { deleteMyAccount, removeTeamMember, resetMyData, setShareCoach, teamList } from "@/lib/arcieri/account.api";
 import { claimRoster, resetMemberPassword, updateMember } from "@/lib/arcieri/members.api";
 import { APK_URL, SITE_URL, inviteText, openExternal, whatsappLink } from "@/lib/arcieri/native";
 import { useLoad } from "@/lib/arcieri/use-load";
@@ -104,6 +104,87 @@ export function ResetCard({ onDone }: { onDone: () => void }) {
       <Button disabled={busy || confirm.trim().toUpperCase() !== "AZZERA"} onClick={() => void go()} className="!bg-rose-600 !text-white">
         {busy ? "Cancello…" : `Azzera ${pick?.label.toLowerCase()}`}
       </Button>
+      {msg ? <p className="text-xs text-muted">{msg}</p> : null}
+    </Card>
+  );
+}
+
+/* ---------------- privacy, condivisione con gli istruttori, eliminazione dell'account ---------------- */
+
+export function PrivacyCard({ share, onDone }: { share: boolean; onDone: () => void }) {
+  const [on, setOn] = useState(share);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  async function flip(next: boolean) {
+    setBusy(true);
+    setMsg("");
+    try {
+      await setShareCoach({ data: { share: next } });
+      setOn(next);
+      onDone();
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "Non salvato");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Card className="grid gap-2">
+      <IconTitle icon="lock" color="#3f8a76" sub="Chi vede cosa, e come togliere tutto">Privacy</IconTitle>
+      <label className="flex min-h-12 items-center gap-3 rounded-xl bg-white/[0.04] px-3 text-sm">
+        <input type="checkbox" checked={on} disabled={busy} onChange={(e) => void flip(e.target.checked)} />
+        <span className="min-w-0 flex-1">
+          <span className="block font-semibold">Gli istruttori vedono i miei allenamenti</span>
+          <span className="block text-xs text-muted">Media, andamento e ultimo tiro, solo nella tua compagnia.</span>
+        </span>
+      </label>
+      <a href="/privacy" className="flex min-h-11 items-center justify-between rounded-xl bg-white/[0.04] px-3 text-sm font-semibold">
+        Leggi l'informativa sulla privacy
+        <span aria-hidden className="text-muted">›</span>
+      </a>
+      {msg ? <ErrorNote text={msg} /> : null}
+    </Card>
+  );
+}
+
+export function DeleteAccountCard({ founder }: { founder: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [confirm, setConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  async function go() {
+    setBusy(true);
+    setMsg("");
+    try {
+      await deleteMyAccount({ data: { confirm } });
+      try {
+        localStorage.clear();
+      } catch {
+        /* niente */
+      }
+      window.location.href = "/login";
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "Non riuscito");
+      setBusy(false);
+    }
+  }
+  return (
+    <Card className="grid gap-2 border-rose-500/30">
+      <IconTitle icon="trash" color="#c4475a">Elimina il mio account</IconTitle>
+      <p className="text-xs text-muted">Cancella l'account, il profilo, gli allenamenti, le gare, l'attrezzatura, l'arciere e tutto il resto. Non si può annullare: prima, se vuoi, scarica il JSON qui sopra.</p>
+      {founder ? <p className="text-xs text-amber-300">Sei il fondatore dell'app: prima di eliminare l'account passa il ruolo a un altro amministratore.</p> : null}
+      {!open ? (
+        <Button variant="ghost" onClick={() => setOpen(true)} disabled={founder}>Voglio eliminare l'account</Button>
+      ) : (
+        <>
+          <Field label="Per confermare scrivi ELIMINA">
+            <TextInput value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="ELIMINA" autoCapitalize="characters" />
+          </Field>
+          <Button disabled={busy || confirm.trim().toUpperCase() !== "ELIMINA"} onClick={() => void go()} className="!bg-rose-600 !text-white">
+            {busy ? "Elimino…" : "Elimina definitivamente"}
+          </Button>
+        </>
+      )}
       {msg ? <p className="text-xs text-muted">{msg}</p> : null}
     </Card>
   );

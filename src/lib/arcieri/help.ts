@@ -66,6 +66,20 @@ export const PAGE_HELP: Record<string, string[]> = {
     "Il capogruppo crea un invito e lo manda su WhatsApp: chi apre il link entra nella compagnia.",
     "Lo staff nomina amministratori, editor e capigruppo con codici che valgono 7 giorni.",
   ],
+  "/istruttore": [
+    "In alto chi ha bisogno di attenzione: media in calo o assente da più di 10 giorni.",
+    "Tocca un atleta per aprire il suo profilo e i suoi allenamenti.",
+    "Chi ha tolto la condivisione dal profilo compare senza numeri.",
+  ],
+  "/segreteria": [
+    "Quote: tocca «Segna pagata»; l'importo è facoltativo.",
+    "Certificati: basta la data di scadenza. Arancione = scade entro 30 giorni.",
+    "Presenze: aggiungi la giornata e tocca chi c'era. «Esporta tabella» crea un CSV per Excel.",
+  ],
+  "/riepilogo": [
+    "Scorri i mesi con le frecce: l'immagine si aggiorna da sola.",
+    "«Condividi» apre WhatsApp, Instagram e le altre app; sul computer scarica l'immagine.",
+  ],
   "/timer": ["Semaforo, fischi e turni AB/CD come in gara.", "Lo schermo resta acceso mentre il timer corre."],
   "/borsa": ["Spunta la borsa prima di uscire, poi avvia il riscaldamento guidato."],
   "/manutenzione": ["Tocca Fatto quando sistemi una parte: l'app conta giorni e frecce da allora."],

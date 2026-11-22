@@ -20,7 +20,7 @@ import { Migrazione } from "@/components/migrazione";
 import { PersonalizePanel } from "@/components/personalize";
 import { Glyph, IconTitle } from "@/components/icons";
 import { unlockAdmin } from "@/lib/arcieri/account.api";
-import { ClaimCard, InviteCard, ResetCard, TeamAdmin } from "@/components/profile-tools";
+import { ClaimCard, DeleteAccountCard, InviteCard, PrivacyCard, ResetCard, TeamAdmin } from "@/components/profile-tools";
 
 export const Route = createFileRoute("/_app/profilo")({ component: Page });
 
@@ -326,7 +326,9 @@ function Page() {
               </div>
             </Card>
             <Migrazione myEmail={me.email} />
+            <PrivacyCard share={me.shareCoach} onDone={reload} />
             <ResetCard onDone={reload} />
+            <DeleteAccountCard founder={me.isSuper} />
             <div className="flex justify-center pt-1"><UserButton /></div>
           </>
         ) : null}

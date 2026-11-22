@@ -115,6 +115,7 @@ function Login() {
             <TextInput type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} autoComplete={mode === "up" ? "new-password" : "current-password"} />
           </Field>
           <p className="text-xs text-muted">Utente e password bastano, anche dall'app installata. Appena entri sei in squadra e nelle statistiche. Se hai già un'email, puoi usarla al posto del nome.</p>
+          {mode === "up" ? <p className="text-xs text-muted">Creando l'account accetti l'<a href="/privacy" className="font-semibold underline">informativa sulla privacy</a>. Sotto i 14 anni serve un genitore.</p> : null}
           {error ? <ErrorNote text={error} /> : null}
           <Button disabled={busy || !authEnabled}>{busy ? "Attendi" : mode === "up" ? "Crea account" : "Entra"}</Button>
           {authEnabled ? (
@@ -135,6 +136,7 @@ function Login() {
             <p className="text-sm text-muted">Accesso disattivato.</p>
           )}
         </form>
+        <a href="/privacy" className="text-center text-xs text-muted underline">Informativa sulla privacy</a>
       </div>
     </main>
   );

@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { Link } from "@tanstack/react-router";
 import { SHORTCUTS, STATIONS, nextShortcut, shortcutById, usePinned, type Shortcut } from "@/lib/arcieri/shortcuts";
 import { cx } from "./kit";
+import { menuAllOpen, setMenuAllOpen } from "@/lib/arcieri/percorso";
 import { AppIcon, Glyph } from "./icons";
 
 /** Una scorciatoia: icona colorata che rimbalza al tocco. */
@@ -182,11 +183,14 @@ function readRecent() {
 }
 
 /** Menu: cerca, riprendi una pagina recente, oppure scegli dalle sezioni, tutte in vista. */
-export function PathMap({ onPick, current, showSearch = false }: { onPick?: () => void; current?: string; showSearch?: boolean }) {
+export function PathMap({ onPick, current, showSearch = false, focus = null, hide = [] }: { onPick?: () => void; current?: string; showSearch?: boolean; /** percorso dei nuovi: le voci da mostrare prima di tutte */ focus?: string[] | null; /** voci che questa persona non può aprire */ hide?: string[] }) {
   const [q, setQ] = useState("");
-  const [recent] = useState(readRecent);
+  const [recent] = useState(() => readRecent().filter((s) => !hide.includes(s.id)));
+  const [all, setAll] = useState(() => !focus || menuAllOpen());
   const query = q.trim().toLowerCase();
-  const found = query ? SHORTCUTS.filter((s) => `${s.label} ${s.hint}`.toLowerCase().includes(query)) : [];
+  const visible = SHORTCUTS.filter((s) => !hide.includes(s.id));
+  const found = query ? visible.filter((s) => `${s.label} ${s.hint}`.toLowerCase().includes(query)) : [];
+  const mine = focus ? focus.map((id) => shortcutById(id)).filter((s): s is Shortcut => !!s && !hide.includes(s.id)) : [];
   const isHere = (s: Shortcut) => !!current && s.to !== "/" && current.startsWith(s.to);
   const go = () => {
     if (navigator.vibrate) navigator.vibrate(8);
@@ -196,7 +200,7 @@ export function PathMap({ onPick, current, showSearch = false }: { onPick?: () =
     <div className="grid gap-4">
       {showSearch ? <label className="aa-rise flex items-center gap-2 rounded-2xl border border-hair bg-white/[0.05] px-3 focus-within:border-primary/60">
         <Glyph name="search" size={16} className="text-muted" />
-        <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Cerca tra ${SHORTCUTS.length} voci`} className="min-h-12 w-full bg-transparent text-sm outline-none" />
+        <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Cerca tra ${visible.length} voci`} className="min-h-12 w-full bg-transparent text-sm outline-none" />
         {q ? <button type="button" aria-label="Cancella" onClick={() => setQ("")} className="text-muted"><Glyph name="close" size={16} /></button> : null}
       </label> : null}
       {query ? (
@@ -233,7 +237,29 @@ export function PathMap({ onPick, current, showSearch = false }: { onPick?: () =
               </div>
             </section>
           ) : null}
-          <CategoryCarousel current={current} onGo={go} isHere={isHere} />
+          {mine.length ? (
+            <section className="aa-rise grid gap-3 rounded-[1.6rem] border border-primary/30 bg-primary/[0.08] p-3">
+              <div>
+                <p className="text-[0.66rem] font-semibold uppercase tracking-[0.16em] text-primary">Per te</p>
+                <p className="text-xs text-muted">Le funzioni giuste per iniziare. Le altre compaiono da sole dopo 5 allenamenti.</p>
+              </div>
+              <div className="grid grid-cols-3 gap-2.5">
+                {mine.map((s) => (
+                  <Link key={s.id} to={s.to as "/"} search={(s.search ?? {}) as never} onClick={go} aria-current={isHere(s) ? "page" : undefined} className={cx("aa-short aa-cat-tile flex min-w-0 flex-col items-center gap-1.5 rounded-[1.4rem] px-1.5 pb-2.5 pt-3 text-center", isHere(s) && "is-here")}>
+                    <AppIcon name={s.icon} color={s.color} size={60} className="aa-short-icon" />
+                    <span className="w-full truncate text-[0.78rem] font-semibold leading-tight">{s.label}</span>
+                    <span className="line-clamp-2 w-full text-[0.6rem] leading-tight text-muted">{s.hint}</span>
+                  </Link>
+                ))}
+              </div>
+              {!all ? (
+                <button type="button" onClick={() => { setAll(true); setMenuAllOpen(true); }} className="aa-press min-h-11 rounded-2xl border border-white/15 text-sm font-semibold">
+                  Mostra tutte le {visible.length} voci
+                </button>
+              ) : null}
+            </section>
+          ) : null}
+          {all ? <CategoryCarousel current={current} onGo={go} isHere={isHere} hide={hide} /> : null}
         </>
       )}
     </div>
@@ -244,7 +270,7 @@ export function PathMap({ onPick, current, showSearch = false }: { onPick?: () =
  * Sezioni del Menu in un carosello infinito: si scorre a destra e a sinistra senza fine, una
  * categoria per pagina con tutte le sue voci; in alto le linguette per saltare a una categoria.
  */
-function CategoryCarousel({ current, onGo, isHere }: { current?: string; onGo: () => void; isHere: (s: Shortcut) => boolean }) {
+function CategoryCarousel({ current, onGo, isHere, hide = [] }: { current?: string; onGo: () => void; isHere: (s: Shortcut) => boolean; hide?: string[] }) {
   const COPIES = 5;
   const n = STATIONS.length;
   const mid = Math.floor(COPIES / 2) * n;
@@ -286,7 +312,7 @@ function CategoryCarousel({ current, onGo, isHere }: { current?: string; onGo: (
       </div>
       <div ref={ref} onScroll={onScroll} className="relative -mx-4 flex snap-x snap-mandatory overflow-x-auto [scrollbar-width:none]" style={{ overscrollBehaviorX: "contain" }}>
         {pages.map((st, i) => {
-          const items = SHORTCUTS.filter((s) => s.group === st.id);
+          const items = SHORTCUTS.filter((s) => s.group === st.id && !hide.includes(s.id));
           const k = i % n;
           return (
             <section key={i} className="aa-cat-page grid min-h-[calc(100dvh-15rem)] w-full shrink-0 snap-center content-start gap-4 px-4 pb-8 pt-1" style={{ ["--cat" as string]: st.color, background: `linear-gradient(180deg, ${st.color}38 0%, ${st.color}1f 35%, ${st.color}12 70%, ${st.color}08 100%)` }}>
