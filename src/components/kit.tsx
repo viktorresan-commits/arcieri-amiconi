@@ -211,7 +211,14 @@ export function ErrorNote({ text }: { text: string }) {
   return <p className="rounded-xl border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">{text}</p>;
 }
 
-export function Avatar({ label, color, photo, className, size = "md", look }: { label: string; color: string; photo?: string | null; className?: string; size?: "sm" | "md" | "lg" | "xl"; look?: AvatarLook | null }) {
+export function Avatar({ label, color, photo, className, size = "md", look, admin = false }: { label: string; color: string; photo?: string | null; className?: string; size?: "sm" | "md" | "lg" | "xl"; look?: AvatarLook | null; /** privilegio dello staff: anello che gira attorno alla foto */ admin?: boolean }) {
+  if (admin) {
+    return (
+      <span className={cx("aa-admin-ring relative inline-grid shrink-0 place-items-center rounded-full", size === "sm" ? "p-[2px]" : "p-[3px]", className)} title="Staff">
+        <Avatar label={label} color={color} photo={photo} size={size} look={look} className="relative z-[1] ring-2 ring-bg" />
+      </span>
+    );
+  }
   const box = size === "xl" ? "h-24 w-24 text-2xl" : size === "lg" ? "h-14 w-14 text-base" : size === "sm" ? "h-8 w-8 text-[10px]" : "h-10 w-10 text-sm";
   if (photo) return <img src={photo} alt="" className={cx(box, "rounded-full object-cover", className)} />;
   // senza foto: il volto del suo arciere, se l'ha creato

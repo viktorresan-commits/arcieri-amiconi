@@ -61,6 +61,11 @@ export const PAGE_HELP: Record<string, string[]> = {
   "/confronta": ["Prima vedi tutti; il filtro serve dopo, se vuoi restringere."],
   "/acquisti": ["La lista è tua: gli altri non la vedono."],
   "/profilo": ["Dati personali, importazioni, password e preferenze dell'app."],
+  "/staff": [
+    "Hai ricevuto un codice? Scrivilo in «Hai un codice?»: vale per incarichi e inviti.",
+    "Il capogruppo crea un invito e lo manda su WhatsApp: chi apre il link entra nella compagnia.",
+    "Lo staff nomina amministratori, editor e capigruppo con codici che valgono 7 giorni.",
+  ],
   "/timer": ["Semaforo, fischi e turni AB/CD come in gara.", "Lo schermo resta acceso mentre il timer corre."],
   "/borsa": ["Spunta la borsa prima di uscire, poi avvia il riscaldamento guidato."],
   "/manutenzione": ["Tocca Fatto quando sistemi una parte: l'app conta giorni e frecce da allora."],

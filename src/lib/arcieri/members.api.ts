@@ -125,6 +125,8 @@ export const updateMember = createServerFn({ method: "POST" })
     const row = rows[0];
     if (!row) throw new Error("Profilo assente.");
     if (data.role && data.role !== row.role && me.role !== "admin") throw new Error("Non puoi cambiare il ruolo.");
+    if (data.role && data.role !== row.role && row.is_super && row.id !== me.id) throw new Error("Il ruolo del fondatore non si può cambiare.");
+    if (data.role && data.role !== row.role && (data.role === "admin" || row.role === "admin") && !me.is_super) throw new Error("Solo il fondatore nomina o toglie gli amministratori.");
     if (data.role && data.role !== "admin" && row.role === "admin") {
       const left = await sql<{ n: number }>`
         select count(*)::int as n from members

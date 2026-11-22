@@ -23,6 +23,10 @@ export type MemberRow = {
   notify_goals: boolean;
   notify_comps: boolean;
   created_at: unknown;
+  /** il fondatore: nessuno lo può togliere o declassare */
+  is_super?: boolean;
+  /** incarico nello staff oltre al ruolo: "" oppure "editor" */
+  staff?: string;
 };
 
 export type PublicMember = {
@@ -45,6 +49,8 @@ export type PublicMember = {
   notifyChallenges: boolean;
   notifyGoals: boolean;
   notifyComps: boolean;
+  isSuper: boolean;
+  staff: string;
 };
 
 export const PRIZES: Array<{ code: string; title: string; hint: string }> = [
@@ -127,6 +133,13 @@ export function clip(value: unknown, max: number) {
   return String(value ?? "").replace(/\s+/g, " ").trim().slice(0, max);
 }
 
+/** livello nello staff: fondatore, amministratore, editor delle compagnie, oppure nessuno */
+export function staffLevel(me: Pick<MemberRow, "role" | "is_super" | "staff">): "super" | "admin" | "editor" | null {
+  if (me.role === "admin") return asBool(me.is_super) ? "super" : "admin";
+  if (me.staff === "editor") return "editor";
+  return null;
+}
+
 export function canScore(role: string) {
   return role === "admin" || role === "archer";
 }
@@ -168,6 +181,8 @@ export function toMember(row: MemberRow, claim: boolean, email: string | null = 
     notifyChallenges: row.notify_challenges !== false,
     notifyGoals: row.notify_goals !== false,
     notifyComps: row.notify_comps !== false,
+    isSuper: asBool(row.is_super),
+    staff: row.staff ?? "",
   };
 }
 

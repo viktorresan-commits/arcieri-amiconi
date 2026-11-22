@@ -6,7 +6,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 import type { Sql } from "@/lib/db";
-import { asNum, cleanPhoto, clip, db, ensureMember } from "./access";
+import { asNum, cleanPhoto, clip, db, ensureMember, staffLevel } from "./access";
 
 export const HOME_SLUG = "fabriano";
 
@@ -43,7 +43,7 @@ function toCompany(row: CompanyRow) {
 
 export type Company = ReturnType<typeof toCompany>;
 
-async function homeId(sql: Sql) {
+export async function homeId(sql: Sql) {
   const rows = await sql<{ id: number }>`select id from companies where slug = ${HOME_SLUG} limit 1`;
   if (rows[0]) return asNum(rows[0].id);
   const made = await sql<{ id: number }>`
@@ -55,7 +55,7 @@ async function homeId(sql: Sql) {
 }
 
 /** la compagnia della persona: se non ne ha scelta una, entra in quella di Fabriano */
-async function myMembership(sql: Sql, userId: string) {
+export async function myMembership(sql: Sql, userId: string) {
   const rows = await sql<{ company_id: number; role: string; chosen: boolean }>`select company_id, role, chosen from company_members where user_id = ${userId} limit 1`;
   if (rows[0]) return { companyId: asNum(rows[0].company_id), role: rows[0].role as "owner" | "member", chosen: Boolean(rows[0].chosen) };
   const home = await homeId(sql);
@@ -177,8 +177,8 @@ export const listCompanies = createServerFn({ method: "GET" })
         points: trainPoints + gareRaw,
         avg: arrows > 0 ? trainPoints / arrows : null,
         owner: crew.find((p) => p.role === "owner")?.user_id ?? null,
-        // gli iscritti delle altre compagnie li vede solo l'amministratore
-        crew: (id === mine.companyId || me.role === "admin" ? crew : []).map((p) => ({
+        // gli iscritti delle altre compagnie li vede solo lo staff (amministratori ed editor)
+        crew: (id === mine.companyId || staffLevel(me) ? crew : []).map((p) => ({
           userId: p.user_id,
           memberId: asNum(p.member_id),
           givenName: p.given_name,
@@ -192,8 +192,9 @@ export const listCompanies = createServerFn({ method: "GET" })
       };
     });
     const current = board.find((c) => c.id === mine.companyId) ?? board[0];
-    const canEdit = mine.role === "owner" || (me.role === "admin" && current?.owner == null);
-    return { companies: board, mine: mine.companyId, myRole: mine.role, canEdit, homeId: home, isAdmin: me.role === "admin", chosen: mine.chosen };
+    const staff = staffLevel(me);
+    const canEdit = mine.role === "owner" || staff != null || (me.role === "admin" && current?.owner == null);
+    return { companies: board, mine: mine.companyId, myRole: mine.role, canEdit, homeId: home, isAdmin: staff != null, staff, chosen: mine.chosen };
   });
 
 export const createCompany = createServerFn({ method: "POST" })
@@ -240,10 +241,12 @@ export const updateCompany = createServerFn({ method: "POST" })
     const sql = await db();
     const me = await ensureMember(sql, context.userId);
     const mine = await myMembership(sql, context.userId);
-    if (mine.companyId !== data.id) throw new Error("Puoi modificare solo la tua compagnia.");
+    // lo staff (amministratori ed editor) segue tutte le compagnie; il capogruppo solo la sua
+    const staff = staffLevel(me);
+    if (!staff && mine.companyId !== data.id) throw new Error("Puoi modificare solo la tua compagnia.");
     const owners = await sql<{ user_id: string }>`select user_id from company_members where company_id = ${data.id} and role = 'owner'`;
-    const allowed = mine.role === "owner" || (me.role === "admin" && owners.length === 0);
-    if (!allowed) throw new Error("Solo il fondatore della compagnia può modificarla.");
+    const allowed = staff != null || (mine.role === "owner" && mine.companyId === data.id) || (me.role === "admin" && owners.length === 0);
+    if (!allowed) throw new Error("Solo il capogruppo della compagnia o lo staff possono modificarla.");
     const clash = await sql<{ id: number }>`select id from companies where lower(name) = lower(${data.fields.name}) and id <> ${data.id} limit 1`;
     if (clash[0]) throw new Error("Esiste già una compagnia con questo nome.");
     const f = data.fields;
@@ -283,7 +286,7 @@ export const joinCompany = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-async function dropIfEmpty(sql: Sql, companyId: number) {
+export async function dropIfEmpty(sql: Sql, companyId: number) {
   const home = await homeId(sql);
   if (companyId === home) return;
   const left = await sql<{ n: number }>`select count(*)::int as n from company_members where company_id = ${companyId}`;

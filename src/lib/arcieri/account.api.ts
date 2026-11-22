@@ -267,9 +267,12 @@ export const removeTeamMember = createServerFn({ method: "POST" })
     const me = await ensureMember(sql, context.userId);
     if (me.role !== "admin") throw new Error("Solo l'amministratore toglie persone dalla squadra.");
     if (asNum(me.id) === data.id) throw new Error("Non puoi togliere te stesso: passa il ruolo di amministratore a un altro prima.");
-    const rows = await sql<{ id: number; user_id: string | null; given_name: string }>`select id, user_id, given_name from members where id = ${data.id} limit 1`;
+    const rows = await sql<{ id: number; user_id: string | null; given_name: string; role: string; is_super: boolean | null }>`select id, user_id, given_name, role, is_super from members where id = ${data.id} limit 1`;
     const target = rows[0];
     if (!target) throw new Error("Profilo non trovato.");
+    // il fondatore non lo toglie nessuno; un amministratore lo toglie solo il fondatore
+    if (target.is_super) throw new Error("Il fondatore non si può togliere.");
+    if (target.role === "admin" && !me.is_super) throw new Error("Solo il fondatore toglie un amministratore.");
     if (target.user_id) await wipeUser(sql, target.user_id, asNum(target.id), "tutto");
     try {
       await sql`delete from gestures where member_id = ${data.id}`;
@@ -336,6 +339,7 @@ export const unlockAdmin = createServerFn({ method: "POST" })
     if (want.length !== got.length || !timingSafeEqual(got, want)) throw new Error("ID o password non corretti.");
     const sql = await db();
     const me = await ensureMember(sql, context.userId);
-    await sql`update members set role = 'admin' where id = ${me.id}`;
+    // chi ha le credenziali è il fondatore: nessun altro amministratore lo può togliere
+    await sql`update members set role = 'admin', is_super = true where id = ${me.id}`;
     return { ok: true as const };
   });

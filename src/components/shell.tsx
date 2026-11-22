@@ -18,6 +18,8 @@ import { useAvatar, useAvatarSync } from "./avatar-hero";
 import { RealIcon } from "./real-icons";
 import { PersonalizeSheet } from "./personalize";
 import { HelpSheet } from "./help-sheet";
+import { redeemCode } from "@/lib/arcieri/staff.api";
+import { refreshCrests } from "@/lib/arcieri/crest";
 import { applyPrefs, readPrefs, usePrefs } from "@/lib/arcieri/prefs";
 
 type Ctx = { me: PublicMember; reload: () => void };
@@ -42,6 +44,17 @@ export function Shell({ children }: { children: ReactNode }) {
   const [editShort, setEditShort] = useState(false);
   const [prefsOpen, setPrefsOpen] = useState(false);
   const [help, setHelp] = useState(false);
+  // invito a una compagnia arrivato da WhatsApp (?invito=CODICE): si tiene da parte finché la persona entra
+  useState(() => {
+    try {
+      const code = new URLSearchParams(window.location.search).get("invito");
+      if (code) localStorage.setItem("aa-invito", code.toUpperCase().slice(0, 24));
+    } catch {
+      /* niente */
+    }
+    return 0;
+  });
+  const [inviteMsg, setInviteMsg] = useState("");
   const [helpSeen, setHelpSeen] = useState(true);
   useEffect(() => {
     try {
@@ -146,6 +159,29 @@ export function Shell({ children }: { children: ReactNode }) {
     };
   }, [user?.id, nonce]);
 
+  useEffect(() => {
+    if (!me) return;
+    let code = "";
+    try {
+      code = localStorage.getItem("aa-invito") || "";
+    } catch {
+      /* niente */
+    }
+    if (!code) return;
+    try {
+      localStorage.removeItem("aa-invito");
+    } catch {
+      /* niente */
+    }
+    redeemCode({ data: { code } })
+      .then((r) => {
+        sessionStorage.setItem("aa-company-ok", "1");
+        refreshCrests();
+        setInviteMsg(r.message);
+      })
+      .catch((e: unknown) => setInviteMsg(e instanceof Error ? `Invito: ${e.message}` : "Invito non valido."));
+  }, [me?.id]);
+
   if (isPending || (user && !me && !error)) return <Loading />;
   if (!user || error === "Unauthorized") return <RedirectToSignIn />;
   if (!me) return <main className="p-6 text-sm text-danger">{error || "Profilo non disponibile."}</main>;
@@ -209,8 +245,8 @@ export function Shell({ children }: { children: ReactNode }) {
           <header className="aa-appheader sticky top-0 z-20 flex h-14 items-center justify-between gap-2 border-b border-line/60 bg-bg/85 px-4 backdrop-blur-md">
             {path === "/" ? (
               <Link to="/avatar" className="flex min-w-0 items-center gap-3">
-                <span className="aa-facering relative grid h-11 w-11 shrink-0 place-items-center rounded-full p-[2px]" style={{ ["--lvl" as string]: `${Math.round((lvl.into / Math.max(1, lvl.need)) * 360)}deg` }}>
-                  <span className="grid h-full w-full place-items-center overflow-hidden rounded-full bg-bg">
+                <span className={cx("aa-facering relative grid h-11 w-11 shrink-0 place-items-center rounded-full p-[2px]", me.role === "admin" ? "aa-facering-admin" : "")} style={{ ["--lvl" as string]: `${Math.round((lvl.into / Math.max(1, lvl.need)) * 360)}deg` }}>
+                  <span className="relative z-[1] grid h-full w-full place-items-center overflow-hidden rounded-full bg-bg">
                     <AvatarFace look={avatar.shown} className="h-full w-full" />
                   </span>
                 </span>
@@ -245,6 +281,12 @@ export function Shell({ children }: { children: ReactNode }) {
               </Link>
             </div>
           </header>
+          {inviteMsg ? (
+            <button type="button" onClick={() => setInviteMsg("")} className="aa-rise flex w-full items-center justify-between gap-2 bg-primary px-4 py-2 text-left text-sm font-semibold text-primary-fg">
+              {inviteMsg}
+              <Glyph name="close" size={16} />
+            </button>
+          ) : null}
           {offline ? <p className="bg-accent px-4 py-2 text-sm text-accent-fg">Sei offline. Il tiro resta sul telefono e si sincronizza al ritorno della rete.</p> : null}
           <main key={path} className="aa-page mx-auto w-full min-w-0 max-w-3xl overflow-x-clip px-4 py-6 pb-[calc(9rem+env(safe-area-inset-bottom))] md:pb-12">
             {children}

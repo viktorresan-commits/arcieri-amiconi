@@ -703,6 +703,7 @@ export const archerBoard = createServerFn({ method: "POST" })
       bowType: member.bow_type,
       photoUrl: member.photo_url,
       avatarColor: member.avatar_color,
+      admin: member.role === "admin",
       joinedOn: String(member.joined_on ?? "").slice(0, 10),
       mine: member.user_id === context.userId,
       trainings,
@@ -921,9 +922,9 @@ export const squadBoard = createServerFn({ method: "GET" })
 
     const everyone = await sql<{
       id: number; user_id: string; given_name: string; family_name: string; nickname: string; slug: string;
-      avatar_color: string; photo_url: string | null; bow_type: string; user_image: string | null;
+      avatar_color: string; photo_url: string | null; bow_type: string; user_image: string | null; role: string;
     }>`
-      select m.id, m.user_id, m.given_name, m.family_name, m.nickname, m.slug, m.avatar_color, m.photo_url, m.bow_type, u.image as user_image
+      select m.id, m.user_id, m.given_name, m.family_name, m.nickname, m.slug, m.avatar_color, m.photo_url, m.bow_type, u.image as user_image, m.role
       from members m
       join "user" u on u.id = m.user_id
       where m.user_id is not null
@@ -1082,6 +1083,7 @@ export const squadBoard = createServerFn({ method: "GET" })
           nickname: row.nickname,
           slug: row.slug,
           avatarColor: row.avatar_color,
+          admin: row.role === "admin",
           photoUrl: row.photo_url || remote,
           bowType: row.bow_type,
           sessions: asNum(shot?.sessions),

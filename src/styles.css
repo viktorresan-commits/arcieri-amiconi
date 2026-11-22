@@ -1371,3 +1371,22 @@ html .aa-cat-page .aa-appicon, html[data-icons] .aa-cat-page .aa-appicon { --c: 
   .aa-seg-thumb, .aa-hero-mark, .aa-empty-ring, .aa-helpbtn.is-new::after, .aa-help-backdrop, .aa-help-tip { animation: none; transition: none; }
 }
 html[data-motion="ridotta"] .aa-hero-mark, html[data-motion="ridotta"] .aa-empty-ring, html[data-motion="ridotta"] .aa-help-tip { animation: none; }
+
+/* privilegio dello staff: anello d'oro che gira attorno alla foto */
+.aa-admin-ring { isolation: isolate; }
+.aa-admin-ring::before {
+  content: ""; position: absolute; inset: 0; border-radius: 999px; z-index: 0;
+  background: conic-gradient(from 0deg, #ffd27a, #ff8a3d, #c44bd1, #3aa7ff, #7cf0a8, #ffd27a);
+  animation: aa-admin-spin 3.2s linear infinite;
+  box-shadow: 0 0 14px -2px rgb(255 210 122 / 0.55);
+}
+@keyframes aa-admin-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .aa-admin-ring::before { animation-duration: 12s; } }
+.aa-facering.aa-facering-admin { background: none; isolation: isolate; }
+.aa-facering-admin::before {
+  content: ""; position: absolute; inset: 0; border-radius: 999px; z-index: 0;
+  background: conic-gradient(from 0deg, #ffd27a, #ff8a3d, #c44bd1, #3aa7ff, #7cf0a8, #ffd27a);
+  animation: aa-admin-spin 3.2s linear infinite;
+}
+.aa-staff-step { background: rgb(255 255 255 / 0.03); animation: aa-rise 0.4s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.aa-staff-step.is-mine { background: color-mix(in srgb, var(--primary) 16%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 45%, transparent); }
