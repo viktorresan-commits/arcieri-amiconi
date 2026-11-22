@@ -1,3 +1,4 @@
+import type { Form } from "@/lib/arcieri/coach";
 import { Component, useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent, type ReactNode } from "react";
 import type { AvatarLook } from "@/lib/arcieri/avatar";
 import { useSky } from "@/lib/arcieri/sky3d";
@@ -42,7 +43,19 @@ const radiusOf = (d: Dist) => 34 * Math.sqrt(18 / d);
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 const now = () => performance.now() / 1000;
 
-export function HomeGame({ look, children, info, className = "" }: { look: AvatarLook; children?: ReactNode; info?: ReactNode; className?: string }) {
+export function HomeGame({ look, children, info, className = "", form, perks = [], banner }: {
+  look: AvatarLook;
+  children?: ReactNode;
+  info?: ReactNode;
+  className?: string;
+  /** dove finiscono davvero le tue frecce: l'arciere, quando tira da solo, tira come te */
+  form?: Form | null;
+  /** privilegi attivi: "fuoco" (scia di fuoco), "aura" (luce d'oro), "stendardo" (bandiera della compagnia), "corona" */
+  perks?: string[];
+  /** colore dello stendardo della compagnia */
+  banner?: string;
+}) {
+  const fire = perks.includes("fuoco");
   const { sky } = useSky();
   const lefty = Boolean(look.lefty);
   // tra una piazzola e l'altra l'ambientazione cambia da sola: si parte da quella scelta
@@ -184,9 +197,21 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
     if (t - lastTouch.current < 2.5) return;
     const start = now();
     const land = targetAt(start + 1.6 + 0.36 + dist / 170);
-    const err = R * 0.32;
-    const ax = land.x - wind * (dist / 18) * 1.1 + (Math.random() - 0.5) * err * 2;
-    const ay = land.y + (Math.random() - 0.5) * err * 2;
+    let ax: number;
+    let ay: number;
+    if (form && form.n >= 6) {
+      // tira come te: stesso spostamento medio e stessa larghezza del gruppo delle tue ultime frecce
+      const g = () => Math.sqrt(-2 * Math.log(1 - Math.random())) * Math.cos(2 * Math.PI * Math.random());
+      const sx = lefty ? -form.offX : form.offX;
+      const out = Math.random() < form.missRate ? 1.25 : 0;
+      const ang = Math.random() * Math.PI * 2;
+      ax = land.x - wind * (dist / 18) * 1.1 + sx * R + g() * form.spread * R * 0.72 + Math.cos(ang) * out * R;
+      ay = land.y + form.offY * R + g() * form.spread * R * 0.72 + Math.sin(ang) * out * R;
+    } else {
+      const err = R * 0.32;
+      ax = land.x - wind * (dist / 18) * 1.1 + (Math.random() - 0.5) * err * 2;
+      ay = land.y + (Math.random() - 0.5) * err * 2;
+    }
     setDraw({ t0: start, sx: 0, sy: 0, ax, ay, aim: { x: ax, y: ay }, demo: true, releaseAt: start + DRAW_S + 0.9 + Math.random() * 0.5 });
   }, [t, playing, draw, flight, released]);
   useEffect(() => {
@@ -413,7 +438,17 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
         {/* freccia in volo con scia */}
         {flyPos ? (
           <g transform={`translate(${flyPos.x} ${flyPos.y}) rotate(${flyPos.ang}) scale(${flyPos.k})`}>
-            <path d="M-46 0 L-8 0" stroke="#fff" strokeOpacity="0.22" strokeWidth="3.4" strokeLinecap="round" />
+            {fire ? (
+              // privilegio "Freccia infuocata": scia di fuoco
+              <g>
+                <path d="M-64 0 L-8 0" stroke="#ff6a1a" strokeOpacity="0.35" strokeWidth="7" strokeLinecap="round" />
+                <path d="M-52 0 L-8 0" stroke="#ffb02e" strokeOpacity="0.7" strokeWidth="3.6" strokeLinecap="round" />
+                <path d="M-36 0 L-8 0" stroke="#fff3b0" strokeOpacity="0.9" strokeWidth="1.6" strokeLinecap="round" />
+                {[0, 1, 2, 3].map((i) => <circle key={i} cx={-20 - i * 11 - ((t * 60) % 11)} cy={Math.sin(t * 30 + i * 2) * 2.2} r={1.6 - i * 0.3} fill="#ffcf5a" opacity={0.8 - i * 0.18} />)}
+              </g>
+            ) : (
+              <path d="M-46 0 L-8 0" stroke="#fff" strokeOpacity="0.22" strokeWidth="3.4" strokeLinecap="round" />
+            )}
             <line x1="-30" y1="0" x2="6" y2="0" stroke={look.shaft || "#1d1f22"} strokeWidth="1.6" />
             <path d="M6 -1.6 L11 0 L6 1.6 Z" fill="#cfd6dd" />
             <path d="M-30 0 L-25 -3.6 L-19 -3 L-18 0 Z" fill={look.cock} />
@@ -434,6 +469,17 @@ export function HomeGame({ look, children, info, className = "" }: { look: Avata
 
       {/* arciere, grande in primo piano */}
       <div className="pointer-events-none absolute" style={{ left: `${(AV.left / W) * 100}%`, top: `${(AV_TOP / H) * 100}%`, width: `${(AV.width / W) * 100}%`, height: `${(AV_H / H) * 100}%` }}>
+        {perks.includes("aura") ? <span aria-hidden className="aa-perk-aura absolute inset-[-6%_8%_2%_4%] rounded-full" /> : null}
+        {perks.includes("stendardo") ? (
+          // privilegio "Stendardo della compagnia": la bandiera sventola dietro l'arciere
+          <svg aria-hidden viewBox="0 0 40 90" className="absolute left-[2%] top-[6%] h-[46%] w-auto">
+            <path d="M5 2 V88" stroke="#5a4632" strokeWidth="2.2" />
+            <circle cx="5" cy="2.5" r="2.2" fill="#d9b45a" />
+            <path className="aa-perk-flag" d="M6 6 H34 Q30 16 34 26 Q30 36 34 44 H6 Z" fill={banner || "#1f7a46"} />
+            <path d="M6 6 H34 Q30 16 34 26 Q30 36 34 44 H6 Z" fill="none" stroke="#d9b45a" strokeWidth="1" />
+            <path d="M14 18 h12 v8 q0 6 -6 9 q-6 -3 -6 -9 Z" fill="#f3ecda" opacity="0.9" />
+          </svg>
+        ) : null}
         <ArcherAvatar look={bodyLook} drive={drive} pose="riposo" interactive={false} hideFlight className="h-full w-full drop-shadow-[0_12px_20px_rgba(0,0,0,0.45)]" />
       </div>
       </div>

@@ -1404,3 +1404,37 @@ html[data-motion="ridotta"] .aa-hero-mark, html[data-motion="ridotta"] .aa-empty
   -webkit-tap-highlight-color: transparent;
 }
 .aa-bigtile:active { transform: scale(0.94); }
+
+/* privilegi in Home */
+.aa-perk-aura {
+  background: radial-gradient(closest-side, rgb(255 214 110 / 0.55), rgb(255 190 60 / 0.18) 60%, transparent);
+  animation: aa-perk-glow 2.8s ease-in-out infinite alternate;
+  will-change: opacity;
+}
+@keyframes aa-perk-glow { from { opacity: 0.55; } to { opacity: 1; } }
+.aa-perk-flag { transform-origin: 6px 25px; animation: aa-perk-wave 2.4s ease-in-out infinite alternate; }
+@keyframes aa-perk-wave { from { transform: skewY(-3deg) scaleX(0.96); } to { transform: skewY(3deg) scaleX(1); } }
+@media (prefers-reduced-motion: reduce) { .aa-perk-aura, .aa-perk-flag { animation: none; } }
+
+/* sfida degli avatar e privilegi */
+.aa-perk { background: rgb(255 255 255 / 0.04); box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.05); }
+.aa-perk.is-on {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--c) 26%, transparent), rgb(255 255 255 / 0.03));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 45%, transparent), 0 8px 22px -14px var(--c);
+}
+.aa-perk.is-on::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(110deg, transparent 30%, rgb(255 255 255 / 0.16) 45%, transparent 60%);
+  transform: translateX(-100%); animation: aa-perk-shine 3.6s ease-in-out infinite;
+}
+@keyframes aa-perk-shine { 0%, 55% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+.aa-duel-hero {
+  background:
+    radial-gradient(120% 120% at 100% 0%, color-mix(in srgb, var(--c) 60%, transparent), transparent 60%),
+    linear-gradient(160deg, color-mix(in srgb, var(--c) 30%, #10151a), #0c1013);
+}
+.aa-duel-step { animation: aa-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.aa-duel-step.is-first > div:last-child { background: linear-gradient(180deg, #ffd27a, #c9962e); color: #1a1408; }
+.aa-duel-bar { transform-origin: left; animation: aa-bar-grow 0.8s cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes aa-bar-grow { from { transform: scaleX(0); } }
+@media (prefers-reduced-motion: reduce) { .aa-perk.is-on::after, .aa-duel-bar, .aa-duel-step { animation: none; } }

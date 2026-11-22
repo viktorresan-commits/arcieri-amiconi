@@ -7,6 +7,8 @@ import { programById } from "@/lib/arcieri/program";
 import { useLoad } from "@/lib/arcieri/use-load";
 import { useAvatar } from "@/components/avatar-hero";
 import { GameGuard, HomeGame } from "@/components/home-game";
+import { CoachCard } from "@/components/avatar-challenge";
+import { avatarChallenge } from "@/lib/arcieri/challenge.api";
 import { MainGearCard } from "@/components/main-gear";
 import { ShortcutRow } from "@/components/shortcuts";
 import { JourneyCard } from "@/components/journey";
@@ -59,6 +61,9 @@ function Home() {
   const { prefs } = usePrefs();
   const notes = useLoad(`notes-${nonce}`, () => openNotes());
   const avatar = useAvatar();
+  // l'arciere della Home tira come te; i privilegi attivi si vedono nel gioco
+  const duel = useLoad(`duel-${nonce}`, () => avatarChallenge());
+  const activePerks = (duel.data?.perks ?? []).filter((p) => p.active).map((p) => p.id);
   useEffect(() => {
     if (!data) return;
     try {
@@ -79,6 +84,9 @@ function Home() {
           <GameGuard>
           <HomeGame
             look={avatar.shown}
+            form={duel.data?.form ?? null}
+            perks={activePerks}
+            banner={duel.data?.company.color}
             info={
               <div className="grid justify-items-start gap-0.5">
                 <p className="text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/80">{new Date().toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" })}</p>
@@ -88,6 +96,7 @@ function Home() {
                   {data.since ? ` · ultimo tiro ${data.since.n} ${data.since.unit === "h" ? (data.since.n === 1 ? "ora" : "ore") : data.since.n === 1 ? "giorno" : "giorni"} fa` : ""}
                 </p>
                 {data.streak > 1 ? <p className="mt-1 inline-flex rounded-full bg-black/35 px-2.5 py-0.5 text-[0.66rem] font-semibold backdrop-blur">{data.streak} giorni di fila</p> : null}
+                {activePerks.includes("corona") ? <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-[#ffcf5a] px-2.5 py-0.5 text-[0.66rem] font-bold text-[#1a1408]"><Glyph name="trophy" size={12} /> Corona della settimana</p> : null}
               </div>
             }
           >
@@ -107,6 +116,7 @@ function Home() {
             </Link>
           </div>
           <MainGearCard compact />
+          {duel.data ? <CoachCard form={duel.data.form} perks={duel.data.perks} lefty={Boolean(avatar.shown.lefty)} look={avatar.shown} /> : null}
         </div>
       </Rise>
       {prefs.home.shortcuts ? (

@@ -1,3 +1,4 @@
+import { AvatarChallenge } from "@/components/avatar-challenge";
 import { removeTeamMember } from "@/lib/arcieri/account.api";
 import { TargetGL } from "@/components/target-gl";
 import { useMemo, useState, type ReactNode } from "react";
@@ -27,7 +28,7 @@ import { PrizeMark, prizeTier } from "@/components/prize-mark";
 
 export const Route = createFileRoute("/_app/squadra")({ component: Page });
 
-type Section = "compagnia" | "statistiche" | "classifica";
+type Section = "compagnia" | "statistiche" | "classifica" | "sfida";
 
 type Archer = Awaited<ReturnType<typeof squadBoard>>["people"][number] & { name: string; color: string; mark: string; skill: number };
 
@@ -166,6 +167,7 @@ function Page() {
             { id: "compagnia", label: "Arcieri" },
             { id: "statistiche", label: "Statistiche" },
             { id: "classifica", label: "Compagnie" },
+            { id: "sfida", label: "Sfida" },
           ]}
         />
       </div>
@@ -206,6 +208,8 @@ function Page() {
           <ClubSpend />
         </>
       ) : null}
+
+      {section === "sfida" ? <AvatarChallenge looks={looks} /> : null}
 
       {section === "classifica" ? (
         <>
