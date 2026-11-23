@@ -1537,7 +1537,7 @@ function Beard({ look, uid }: { look: AvatarLook; uid: string }) {
 
 /** Ciocche e riflessi sopra i capelli: danno volume e verso alla pettinatura. */
 function HairStrands({ look }: { look: AvatarLook }) {
-  if (["calvo", "rasati", "undercut", "vichinga", "dread"].includes(look.hair) || ["cappuccio", "elmo", "bandana", "tesa", "robin", "cuffia"].includes(look.hat)) return null;
+  if (["calvo", "rasati", "cresta", "undercut", "vichinga", "dread"].includes(look.hair) || ["cappuccio", "elmo", "bandana", "tesa", "robin", "cuffia"].includes(look.hat)) return null;
   const hi = shade(look.hairColor, 0.38);
   const lo = shade(look.hairColor, -0.42);
   const curly = look.hair === "ricci" || look.hair === "afro";
@@ -1573,7 +1573,8 @@ function HairFront({ look, uid, t }: { look: AvatarLook; uid: string; t: number 
       return (
         <g>
           <path d="M131 84 C129 67 139 59 151 59 C163 59 171 66 170 76 C164 71 157 70 151 72 C146 69 141 73 141 82 Z" fill={h} opacity="0.35" />
-          <path d="M136 66 L138 48 L144 62 L148 44 L153 60 L159 46 L161 62 L168 54 L167 70 C158 64 146 62 136 66 Z" fill={fill} />
+          <path d="M136 66 L138 48 L144 62 L148 44 L153 60 L159 46 L161 62 L168 54 L167 70 C158 64 146 62 136 66 Z" fill={fill} stroke="#1b130d" strokeOpacity="0.8" strokeWidth="1.1" strokeLinejoin="round" />
+          <path d="M140 60 L139 52 M148.6 58 L148.4 49 M157.6 59 L158.6 51" stroke={shade(h, 0.35)} strokeOpacity="0.5" strokeWidth="0.8" fill="none" strokeLinecap="round" />
         </g>
       );
     case "ricci":
@@ -2061,7 +2062,7 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false, part }
       {[0, 1, 2, 3, 4].map((i) => <ellipse key={`r${i}`} cx={50 + rx + 2} cy={fy + 4 + i * 8} rx={4.6 - i * 0.3} ry="5" stroke={shade(hair, -0.4)} strokeWidth="0.6" />)}
     </g>
   );
-  const strands = ["calvo", "rasati", "afro", "ricci", "undercut", "vichinga", "dread"].includes(look.hair) || capOn || ["bandana", "tesa", "robin", "cuffia"].includes(look.hat) ? null : (
+  const strands = ["calvo", "rasati", "cresta", "afro", "ricci", "undercut", "vichinga", "dread"].includes(look.hair) || capOn || ["bandana", "tesa", "robin", "cuffia"].includes(look.hat) ? null : (
     <g fill="none" strokeLinecap="round">
       <path d={`M${50 - rx + 5} ${fy - ry + 4} Q50 ${fy - ry - 4} ${50 + rx - 5} ${fy - ry + 4}`} stroke={shade(hair, 0.4)} strokeOpacity="0.5" strokeWidth="1.6" />
       <path d={`M${50 - rx + 2} ${fy - 6} Q${50 - rx / 2 + 1} ${fy - ry + 3} 46 ${fy - ry + 1} M54 ${fy - ry + 1} Q${50 + rx / 2 - 1} ${fy - ry + 3} ${50 + rx - 2} ${fy - 6}`} stroke={shade(hair, -0.4)} strokeOpacity="0.45" strokeWidth="0.8" />
@@ -2074,8 +2075,17 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false, part }
         return null;
       case "rasati":
         return <path d={`M${50 - rx} ${fy - 6} C${50 - rx} ${fy - ry - 6} ${50 + rx} ${fy - ry - 6} ${50 + rx} ${fy - 6} C${50 + rx - 6} ${fy - ry + 4} ${50 - rx + 6} ${fy - ry + 4} ${50 - rx} ${fy - 6} Z`} fill={hair} opacity="0.55" />;
-      case "cresta":
-        return <path d={`M42 ${fy - ry + 4} L44 ${fy - ry - 14} L48 ${fy - ry - 4} L50 ${fy - ry - 18} L53 ${fy - ry - 4} L56 ${fy - ry - 14} L58 ${fy - ry + 4} Z`} fill={fillH} />;
+      case "cresta": {
+        // come di profilo: lati rasati e cresta alta di ciuffi a punta, vista di fronte più stretta
+        const t = fy - ry;
+        return (
+          <g>
+            <path d={`M${50 - rx} ${fy - 6} C${50 - rx} ${t - 6} ${50 + rx} ${t - 6} ${50 + rx} ${fy - 6} C${50 + rx - 6} ${t + 4} ${50 - rx + 6} ${t + 4} ${50 - rx} ${fy - 6} Z`} fill={hair} opacity="0.35" />
+            <path d={`M42.6 ${t + 6} L41.4 ${t - 10} L45.4 ${t - 4} L46.6 ${t - 20} L49.4 ${t - 7} L51.4 ${t - 22} L53.6 ${t - 7} L56.6 ${t - 18} L57 ${t - 3} L60 ${t - 11} L57.6 ${t + 6} C54 ${t + 3} 46 ${t + 3} 42.6 ${t + 6} Z`} fill={fillH} stroke="#1b130d" strokeOpacity="0.8" strokeWidth="0.8" strokeLinejoin="round" />
+            <path d={`M46.6 ${t - 16} L48 ${t + 2} M51.4 ${t - 18} L50.6 ${t + 2} M56 ${t - 14} L54 ${t + 2}`} stroke={shade(hair, 0.35)} strokeOpacity="0.5" strokeWidth="0.6" fill="none" strokeLinecap="round" />
+          </g>
+        );
+      }
       case "ricci":
         return (
           <g fill={fillH}>
@@ -2246,8 +2256,9 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false, part }
         {part === "front" ? null : backNode}
         {bare ? null : <path d="M22 100 C24 84 36 78 50 78 C64 78 76 84 78 100 Z" fill={look.shirt} />}
         {bare ? null : <path d="M42 78 L50 88 L58 78" stroke={look.trim} strokeWidth="3" fill="none" />}
-        <rect x="43" y={fy + 14} width="14" height="16" fill={skinD} />
-        <path d={`M43 ${fy + 14} V${fy + 30} M57 ${fy + 14} V${fy + 30}`} stroke="#1b130d" strokeOpacity="0.8" strokeWidth="0.8" />
+        {/* nel ritratto a figura intera il collo lo disegna il corpo, dietro la veste */}
+        {bare ? null : <rect x="43" y={fy + 14} width="14" height="16" fill={skinD} />}
+        {bare ? null : <path d={`M43 ${fy + 14} V${fy + 30} M57 ${fy + 14} V${fy + 30}`} stroke="#1b130d" strokeOpacity="0.8" strokeWidth="0.8" />}
         {capOn ? null : look.ears === "punta" ? (
           <g fill={skinD} stroke="#1b130d" strokeOpacity="0.8" strokeWidth="0.8" strokeLinejoin="round">
             <path d={`M${50 - rx + 1} ${eyeY - 1} Q${50 - rx - 5} ${eyeY - 4} ${50 - rx - 9} ${eyeY - 10} Q${50 - rx - 6} ${eyeY + 2} ${50 - rx - 3} ${eyeY + 9} Z`} />

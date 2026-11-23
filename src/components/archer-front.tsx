@@ -166,6 +166,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop }: { look: A
         <DetailDefs uid={`${uid}cd`} />
         <DetailDefs uid={`${uid}1`} />
         <DetailDefs uid={`${uid}-1`} />
+        <clipPath id={`${uid}tcl`}><path d={torsoD} />{longTop ? <path d={tunicD} /> : null}</clipPath>
       </defs>
       <g transform={`translate(100 360) scale(${((kid ? 0.84 : 1) * (0.9 + (tune(look.stature, 50, 0, 100) / 100) * 0.2)).toFixed(3)}) translate(-100 -360)`}>
         <ellipse cx="100" cy="356" rx="62" ry="7" fill="#000" opacity="0.3" />
@@ -290,27 +291,21 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop }: { look: A
         <svg x={cx - 65} y="-8" width="130" height="130" viewBox="0 0 100 100" overflow="visible">
           <AvatarFace look={look} className="" bare part="back" />
         </svg>
+        {/* collo: disegnato prima della veste, così colletti e scolli lo coprono come di profilo */}
+        <g className={live ? "aa-front-head" : undefined}>
+          {/* collo: più stretto sotto il mento, si allarga nelle spalle; ombra del mento, muscoli appena segnati */}
+          <path d={`M${cx - 7.5} 76 L${cx + 7.5} 76 C${cx + 8} 88 ${cx + 9.5} 96 ${cx + 16} 103 L${cx - 16} 103 C${cx - 9.5} 96 ${cx - 8} 88 ${cx - 7.5} 76 Z`} fill={shade(skin, -0.2)} />
+          <path d={`M${cx - 7.5} 76 C${cx - 8} 88 ${cx - 9.5} 96 ${cx - 16} 103 L${cx - 10} 103 C${cx - 6} 96 ${cx - 5} 88 ${cx - 5} 78 Z M${cx + 7.5} 76 C${cx + 8} 88 ${cx + 9.5} 96 ${cx + 16} 103 L${cx + 10} 103 C${cx + 6} 96 ${cx + 5} 88 ${cx + 5} 78 Z`} fill={shade(skin, -0.36)} opacity="0.5" />
+          <ellipse cx={cx} cy="83" rx="9" ry="5" fill={`url(#${uid}sd)`} opacity="0.75" />
+          <path d={`M${cx - 6} 84 Q${cx - 4} 94 ${cx - 1.4} 101 M${cx + 6} 84 Q${cx + 4} 94 ${cx + 1.4} 101`} stroke={shade(skin, -0.4)} strokeOpacity="0.3" strokeWidth="0.7" fill="none" />
+          <path d={`M${cx - 7.5} 76 C${cx - 8} 88 ${cx - 9.5} 96 ${cx - 16} 103 M${cx + 7.5} 76 C${cx + 8} 88 ${cx + 9.5} 96 ${cx + 16} 103`} stroke={OUT} strokeOpacity="0.75" strokeWidth="1.2" fill="none" />
+        </g>
         {/* veste */}
         {longTop ? <path d={tunicD} fill={`url(#${uid}sh)`} stroke={OUT} strokeOpacity="0.8" strokeWidth="1.8" /> : null}
-        {longTop && look.top === "giubbetto" ? <path d={zigQ([hip.l - 14, hem - 3], [cx, hem + 3], [hip.r + 14, hem - 3], 26, 2.2)} stroke={look.trim} strokeWidth="1.6" fill="none" strokeLinejoin="round" /> : longTop ? <path d={`M${hip.l - 14} ${hem - 3} Q${cx} ${hem + 3} ${hip.r + 14} ${hem - 3}`} stroke={look.trim} strokeWidth="3" fill="none" /> : null}
-        {longTop && ["cappotto-lungo", "ranger", "tunica-lunga", "incrociata"].includes(look.top) ? <path d={`M${cx} 200 L${cx} ${hem + 2}`} stroke={shade(shirt, -0.45)} strokeWidth="1.6" /> : null}
         <path d={torsoD} fill={`url(#${uid}sh)`} stroke={OUT} strokeOpacity="0.8" strokeWidth="1.8" />
         <ClothPattern kind={look.pattern} shapes={longTop ? [torsoD, tunicD] : [torsoD]} base={shirt} trim={look.trim} uid={`${uid}f`} box={[sh.l - 16, 94, sh.r + 16, (longTop ? hem : 208) + 6]} />
         <ClothDetail uid={`${uid}cd`} shapes={longTop ? [torsoD, tunicD] : [torsoD]} cx={cx} shoulderL={sh.l} shoulderR={sh.r} hipL={hip.l} hipR={hip.r} tunicLen={longTop ? hem : 206} longTunic={longTop} seam={seamOf(shirt)} />
-        {look.top === "giubbetto" ? (
-          // scollo tondo del giubbetto: si vede la camicia, bordo a zig-zag d'argento
-          <g>
-            <path d={`M${cx - 17} 98 Q${cx} 130 ${cx + 17} 98 Z`} fill={sleeve} />
-            <path d={`M${cx - 6} 99 L${cx} 112 L${cx + 6} 99`} stroke={shade(sleeve, -0.3)} strokeWidth="1" fill="none" />
-            <path d={zigQ([cx - 17, 98], [cx, 130], [cx + 17, 98], 14, 2)} stroke={look.trim} strokeWidth="1.6" fill="none" strokeLinejoin="round" />
-            <path d={`M${sh.l + 4} 108 C${sh.l + 8} 126 ${sh.l + 8} 140 ${sh.l + 4} 150 M${sh.r - 4} 108 C${sh.r - 8} 126 ${sh.r - 8} 140 ${sh.r - 4} 150`} stroke={look.trim} strokeWidth="1.2" strokeDasharray="2.4 1.8" fill="none" opacity="0.85" />
-          </g>
-        ) : (
-          <path d={`M${cx - 12} 97 L${cx} 116 L${cx + 12} 97`} stroke={look.trim} strokeWidth="3.2" fill="none" strokeLinejoin="round" />
-        )}
-        {["tunica-lunga", "farsetto", "giubba", "polo"].includes(look.top) ? [124, 140, 156, 172].map((y) => <circle key={y} cx={cx} cy={y} r="1.8" fill={look.trim} />) : null}
-        {look.top === "ranger" || look.top === "incrociata" ? <path d={`M${cx - 18} 100 L${cx + 14} 196`} stroke={look.trim} strokeWidth="2.6" /> : null}
-        {look.top === "gilet" ? <path d={`M${cx - 10} 100 L${cx - 6} 200 M${cx + 10} 100 L${cx + 6} 200`} stroke={shade(shirt, -0.4)} strokeWidth="1.4" /> : null}
+        <FrontTop look={look} cx={cx} sh={sh} waist={waist} hip={hip} hem={hem} sideLen={sideLen} longTop={longTop} skin={skin} shirt={shirt} sleeve={sleeve} uid={uid} tw={tw} />
         {look.chestguard ? <path d={`M${cx + bowSide * 6} 118 C${cx + bowSide * 30} 116 ${cx + bowSide * 34} 150 ${cx + bowSide * 26} 168 L${cx + bowSide * 6} 164 Z`} fill={look.chestColor} opacity="0.92" stroke={OUT} strokeOpacity="0.7" strokeWidth="1" /> : null}
         {look.straps ? <path d={`M${sh.l + 8} 106 L${hip.r - 6} 196 M${sh.r - 8} 106 L${hip.l + 6} 196`} stroke="#3a2414" strokeWidth="4.4" /> : null}
         {look.sash ? <path d={`M${waist.l - 2} 182 Q${cx} 192 ${waist.r + 2} 182 L${waist.r + 2} 194 Q${cx} 204 ${waist.l - 2} 194 Z M${waist.l + 6} 192 l-6 34 l10 -4 Z`} fill={look.sashColor} /> : null}
@@ -345,10 +340,6 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop }: { look: A
         {look.scarf ? <path d={`M${cx - 18} 96 Q${cx} 108 ${cx + 18} 96 L${cx + 16} 104 Q${cx} 116 ${cx - 16} 104 Z M${cx + 8} 106 l4 30 l8 -2 l-6 -28 Z`} fill={look.scarfColor} /> : null}
         {look.cowl ? <path d={`M${sh.l + 4} 104 C${cx - 20} 92 ${cx + 20} 92 ${sh.r - 4} 104 C${cx + 22} 124 ${cx - 22} 124 ${sh.l + 4} 104 Z`} fill={look.cowlColor} stroke={shade(look.cowlColor, -0.35)} strokeWidth="1" /> : null}
         {look.amulet ? <g><path d={`M${cx - 11} 100 Q${cx} 126 ${cx + 11} 100`} stroke="#c9a46a" strokeWidth="1" fill="none" /><path d={`M${cx} 122 l5 7 l-5 7 l-5 -7 Z`} fill="#d9b45a" stroke="#7a5a1a" strokeWidth="0.8" /><circle cx={cx} cy="129" r="2" fill="#2f9e7a" /></g> : null}
-        {look.top === "cotta" ? <g opacity="0.85">{Array.from({ length: Math.floor((hem - 112) / 5) }, (_, r) => <path key={r} d={`M${cx - 28.8} ${112 + r * 5} ${Array.from({ length: 16 }, () => "q1.8 2.6 3.6 0").join(" ")}`} stroke="#5d646b" strokeWidth="0.7" fill="none" />)}</g> : null}
-        {look.top === "canotta" ? <path d={`M${cx - 16} 98 Q${cx} 124 ${cx + 16} 98`} fill={skin} stroke={look.trim} strokeWidth="2" /> : null}
-        {look.top === "camicia" ? <path d={`M${cx - 12} 96 L${cx} 108 L${cx - 5} 116 L${cx - 15} 104 Z M${cx + 12} 96 L${cx} 108 L${cx + 5} 116 L${cx + 15} 104 Z`} fill={shade(shirt, 0.18)} stroke={shade(shirt, -0.4)} strokeWidth="0.8" /> : null}
-        {look.top === "divisa" ? <path d={`M${sh.l + 2} 150 L${sh.r - 2} 134 L${sh.r - 2} 146 L${sh.l + 2} 162 Z`} fill={look.trim} opacity="0.9" /> : null}
         {look.necklace && look.top === "giubbetto" ? (
           <g>
             <path d={`M${cx - 18} 99 Q${cx} 134 ${cx + 18} 99`} stroke="#5d6168" strokeWidth="3" fill="none" />
@@ -414,11 +405,6 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop }: { look: A
 
         {/* testa di fronte, la stessa della foto profilo */}
         <g className={live ? "aa-front-head" : undefined}>
-          {/* collo: più stretto sotto il mento, si allarga nelle spalle; ombra del mento, muscoli appena segnati */}
-          <path d={`M${cx - 7.5} 76 L${cx + 7.5} 76 C${cx + 8} 88 ${cx + 9.5} 96 ${cx + 16} 103 L${cx - 16} 103 C${cx - 9.5} 96 ${cx - 8} 88 ${cx - 7.5} 76 Z`} fill={shade(skin, -0.2)} />
-          <path d={`M${cx - 7.5} 76 C${cx - 8} 88 ${cx - 9.5} 96 ${cx - 16} 103 L${cx - 10} 103 C${cx - 6} 96 ${cx - 5} 88 ${cx - 5} 78 Z M${cx + 7.5} 76 C${cx + 8} 88 ${cx + 9.5} 96 ${cx + 16} 103 L${cx + 10} 103 C${cx + 6} 96 ${cx + 5} 88 ${cx + 5} 78 Z`} fill={shade(skin, -0.36)} opacity="0.5" />
-          <ellipse cx={cx} cy="83" rx="9" ry="5" fill={`url(#${uid}sd)`} opacity="0.75" />
-          <path d={`M${cx - 6} 84 Q${cx - 4} 94 ${cx - 1.4} 101 M${cx + 6} 84 Q${cx + 4} 94 ${cx + 1.4} 101`} stroke={shade(skin, -0.4)} strokeOpacity="0.3" strokeWidth="0.7" fill="none" />
           <svg x={cx - 65} y="-8" width="130" height="130" viewBox="0 0 100 100" overflow="visible">
             <AvatarFace look={look} className="" bare part="front" />
           </svg>
@@ -440,4 +426,235 @@ function lerpP(a: { x: number; y: number }, b: { x: number; y: number }, t: numb
 
 function f(n: number) {
   return n.toFixed(1);
+}
+
+/**
+ * Dettagli della veste vista di fronte: gli stessi della figura di profilo (Outfit), uno per uno,
+ * riportati nelle coordinate del busto frontale. Scollo, colletti, chiusure, alamari, bordi e balze.
+ */
+function FrontTop({ look, cx, sh, waist, hip, hem, sideLen, longTop, skin, shirt, sleeve, uid, tw }: { look: AvatarLook; cx: number; sh: { l: number; r: number }; waist: { l: number; r: number }; hip: { l: number; r: number }; hem: number; sideLen: number; longTop: boolean; skin: string; shirt: string; sleeve: string; uid: string; tw: number }) {
+  const tr = look.trim;
+  const neckC = shade(skin, -0.2);
+  // dal profilo al fronte: sopra la cintura e sulla falda
+  const yt = (y: number) => 97 + (y - 116) * 1.0714;
+  const yb = (y: number) => 196 + (y - 210) * (hem - 196) / Math.max(1, sideLen - 210);
+  const clip = `url(#${uid}tcl)`;
+  /** scollo aperto: pelle del collo dentro, bordo sopra */
+  const scoop = (w: number, depth: number, stroke: string, sw: number, v = false) => {
+    const d = v ? `M${cx - w} 97.4 L${cx} ${97 + depth} L${cx + w} 97.4` : `M${cx - w} 97.4 Q${cx} ${97 + depth * 2} ${cx + w} 97.4`;
+    return (
+      <g>
+        <path d={`${d} Q${cx} 95.6 ${cx - w} 97.4 Z`} fill={neckC} />
+        <path d={`M${cx - w * 0.7} 98 Q${cx} ${97 + depth * 0.9} ${cx + w * 0.7} 98`} stroke={shade(skin, -0.38)} strokeOpacity="0.4" strokeWidth="0.8" fill="none" />
+        <path d={d} stroke={stroke} strokeWidth={sw} fill="none" strokeLinejoin="round" strokeLinecap="round" />
+      </g>
+    );
+  };
+  const hemTrim = (w: number) => (longTop ? <path d={`M${hip.l - 14} ${hem - 3} Q${cx} ${hem + 3} ${hip.r + 14} ${hem - 3}`} stroke={tr} strokeWidth={w} fill="none" /> : <path d={`M${hip.l} 205 L${hip.r} 205`} stroke={tr} strokeWidth={w * 0.8} />);
+  const folds = (xs: number[]) => (longTop ? xs.map((k) => <path key={k} d={`M${cx + k * 14 * tw} 200 Q${cx + k * 15 * tw + 2} ${(200 + hem) / 2} ${cx + k * 18 * tw} ${hem - 4}`} stroke={shade(shirt, -0.22)} strokeWidth="1" fill="none" />) : null);
+  switch (look.top) {
+    case "polo":
+      return (
+        <g>
+          {scoop(8, 7, shade(shirt, -0.3), 1, true)}
+          <path d={`M${cx - 11} 96.6 L${cx} 110 L${cx + 11} 96.6 L${cx + 7} 95.6 L${cx} 104 L${cx - 7} 95.6 Z`} fill={tr} stroke={OUT} strokeOpacity="0.6" strokeWidth="0.6" />
+          <path d={`M${cx} 104 v14`} stroke={shade(shirt, -0.3)} strokeWidth="1" />
+          {[110, 116].map((y) => <circle key={y} cx={cx} cy={y} r="1.1" fill={tr} />)}
+        </g>
+      );
+    case "felpa":
+      return (
+        <g>
+          <path d={`M${cx - 19} 99 C${cx - 15} 91 ${cx + 15} 91 ${cx + 19} 99 C${cx + 10} 109 ${cx - 10} 109 ${cx - 19} 99 Z`} fill={shade(shirt, -0.3)} stroke={OUT} strokeOpacity="0.6" strokeWidth="0.8" />
+          <path d={`M${cx - 9} 99 Q${cx} 104 ${cx + 9} 99`} fill="none" stroke={shade(shirt, -0.5)} strokeWidth="1" />
+          <path d={`M${cx - 5} 105 v17 M${cx + 5} 105 v15`} stroke={tr} strokeWidth="1.3" strokeLinecap="round" />
+          <path d={`M${cx - 18} ${yt(176)} h36 l4 ${yt(196) - yt(176)} h-44 Z`} fill={shade(shirt, -0.12)} stroke={shade(shirt, -0.35)} strokeWidth="0.8" />
+          <rect x={hip.l} y="198" width={hip.r - hip.l} height="10" rx="3" fill={shade(shirt, -0.3)} />
+        </g>
+      );
+    case "gilet":
+      return (
+        <g>
+          {scoop(10, 10, tr, 3.6, true)}
+          <path d={`M${cx - 10} 104 L${cx - 6} 196 M${cx + 10} 104 L${cx + 6} 196`} stroke={shade(shirt, -0.4)} strokeWidth="1.4" />
+          <path d={`M${cx} 106 v90`} stroke={shade(shirt, 0.4)} strokeWidth="1.2" strokeDasharray="2 1.5" />
+          <path d={`M${sh.l + 10} ${yt(150)} h14 M${sh.r - 24} ${yt(150)} h14`} stroke={shade(shirt, -0.35)} strokeWidth="2" />
+        </g>
+      );
+    case "giacca":
+      return (
+        <g>
+          {scoop(13, 12, shade(shirt, -0.3), 0.8, true)}
+          <path d={`M${cx} 110 V196`} stroke={shade(shirt, 0.45)} strokeWidth="1.4" />
+          <path d={`M${cx - 16} 96 L${cx} 110 L${cx + 16} 96 L${cx + 17} 104 L${cx} 118 L${cx - 17} 104 Z`} fill={shade(shirt, -0.3)} stroke={OUT} strokeOpacity="0.6" strokeWidth="0.7" />
+          <path d={`M${cx - 22} ${yt(160)} h12 M${cx + 10} ${yt(160)} h12`} stroke={shade(shirt, -0.3)} strokeWidth="1.6" />
+        </g>
+      );
+    case "tunica":
+      return (
+        <g>
+          {scoop(13, 9, tr, 3.5)}
+          <path d={`M${cx} 106 v15`} stroke={shade(shirt, -0.35)} strokeWidth="1.2" />
+          {longTop ? <path d={`M${cx} 198 L${cx} ${hem}`} stroke={shade(shirt, -0.25)} strokeWidth="1.2" /> : null}
+          {hemTrim(4)}
+        </g>
+      );
+    case "tunica-lunga":
+      return (
+        <g>
+          {scoop(13, 6, shade(shirt, -0.3), 2.4)}
+          <path d={`M${cx + 1} 103 L${cx + 1} 186`} stroke={shade(shirt, -0.25)} strokeWidth="1.4" />
+          {[128, 141, 154, 167, 180].map((y) => (
+            <g key={y}>
+              <circle cx={cx + 3.5} cy={yt(y)} r="2" fill={tr} stroke={shade(tr, -0.4)} strokeWidth="0.6" />
+              <circle cx={cx + 3} cy={yt(y) - 0.6} r="0.6" fill="#fff" opacity="0.6" />
+            </g>
+          ))}
+          {folds([-1, -0.3, 0.4, 1])}
+          <path d={`M${sh.l + 10} ${yt(152)} q8 4 16 0 M${sh.r - 26} ${yt(152)} q8 4 16 0`} stroke={shade(shirt, -0.2)} strokeWidth="1" fill="none" />
+        </g>
+      );
+    case "farsetto":
+      return (
+        <g>
+          <g clipPath={clip}>
+            {[-2, -1, 0, 1, 2].map((k) => <path key={k} d={`M${cx + k * 12 * tw} 100 L${cx + k * 12.6 * tw} 208`} stroke={shade(shirt, -0.25)} strokeWidth="1" />)}
+            {[146, 166, 186].map((y) => <path key={y} d={`M${sh.l - 4} ${yt(y)} H${sh.r + 4}`} stroke={shade(shirt, -0.2)} strokeWidth="0.8" />)}
+          </g>
+          {[124, 140, 156, 172].map((y) => <circle key={y} cx={cx} cy={y} r="1.8" fill={tr} />)}
+          {/* colletto ritto che avvolge la base del collo */}
+          <path d={`M${cx - 12} 90 Q${cx} 92.6 ${cx + 12} 90 L${cx + 13} 99 Q${cx} 102 ${cx - 13} 99 Z`} fill={tr} stroke={OUT} strokeOpacity="0.75" strokeWidth="0.9" />
+          <path d={`M${cx - 11} 91.4 Q${cx} 93.8 ${cx + 11} 91.4`} stroke="#fff" strokeOpacity="0.25" strokeWidth="0.7" fill="none" />
+        </g>
+      );
+    case "corpetto":
+      return (
+        <g>
+          {scoop(11, 8, tr, 3)}
+          <path d={`M${sh.l + 10} 112 C${cx - 12} 106 ${cx + 12} 106 ${sh.r - 10} 112 L${waist.r - 2} 186 L${waist.l + 2} 186 Z`} fill="#6b4224" stroke={OUT} strokeOpacity="0.7" strokeWidth="1" />
+          <path d={`M${sh.l + 10} 112 C${cx - 12} 106 ${cx + 12} 106 ${sh.r - 10} 112 L${waist.r - 2} 186 L${waist.l + 2} 186 Z`} fill={`url(#${uid}grain)`} />
+          {[122, 135, 148, 161, 174].map((y) => <path key={y} d={`M${cx - 4} ${y} L${cx + 4} ${y + 6} M${cx + 4} ${y} L${cx - 4} ${y + 6}`} stroke="#e8d9b0" strokeWidth="0.9" />)}
+        </g>
+      );
+    case "ranger": {
+      // lembo incrociato: scende in diagonale dalla spalla al fianco e sulla falda
+      const edge = `M${cx - 14} 98 C${cx - 4} 124 ${cx + 10} 160 ${hip.r} 196 L${hip.r + 12} ${longTop ? hem : 206}`;
+      return (
+        <g>
+          {scoop(13, 8, shade(shirt, -0.3), 1.4)}
+          <g clipPath={clip}>
+            <path d={`${edge} L${sh.r + 30} ${hem + 10} L${sh.r + 30} 90 Z`} fill={shade(shirt, -0.12)} opacity="0.55" />
+            <path d={edge} stroke={OUT} strokeOpacity="0.6" strokeWidth="1" fill="none" transform="translate(-2 1)" />
+          </g>
+          <path d={edge} stroke={tr} strokeWidth="3" fill="none" />
+        </g>
+      );
+    }
+    case "incrociata":
+      return (
+        <g>
+          <path d={`M${cx - 14} 97.4 L${cx + 1} 132 L${cx + 14} 97.4 Q${cx} 95.6 ${cx - 14} 97.4 Z`} fill={neckC} />
+          <path d={`M${cx - 14} 97 L${cx + 8} 150 M${cx + 14} 97 L${cx - 4} 136`} stroke={tr} strokeWidth="5" strokeLinecap="round" />
+          <path d={`M${cx - 14} 97 L${cx + 8} 150`} stroke={shade(tr, -0.35)} strokeWidth="1" transform="translate(2 0)" />
+          {look.sash ? null : <rect x={waist.l - 3} y="172" width={waist.r - waist.l + 6} height="20" rx="3" fill={shade(tr, -0.1)} stroke={OUT} strokeOpacity="0.7" strokeWidth="1.2" />}
+          {longTop ? <path d={`M${hip.l - 4} ${yb(232)} Q${cx} ${yb(238)} ${hip.r + 6} ${yb(230)}`} stroke={shade(shirt, -0.3)} strokeWidth="1.4" fill="none" /> : null}
+          {folds([-1, 0, 1])}
+        </g>
+      );
+    case "giubba":
+      // giubba di cuoio sopra la camicia, chiusa da alamari
+      return (
+        <g>
+          <path d={`M${cx - 11} 96.6 Q${cx} 102 ${cx + 11} 96.6 L${cx + 12} 104 Q${cx} 110 ${cx - 12} 104 Z`} fill={look.sleeves || "#c9b48a"} stroke={OUT} strokeOpacity="0.6" strokeWidth="0.7" />
+          <path d={`M${cx} 104 L${cx} 186`} stroke={shade(shirt, -0.45)} strokeWidth="1.4" />
+          {longTop ? <path d={`M${cx} 198 L${cx} ${hem}`} stroke={shade(shirt, -0.5)} strokeWidth="2" /> : null}
+          {[136, 150, 164, 178].map((y) => (
+            <g key={y}>
+              <rect x={cx - 6} y={yt(y) - 1.7} width="12" height="3.4" rx="1.7" fill={tr} stroke={shade(tr, -0.45)} strokeWidth="0.6" />
+              <path d={`M${cx - 10} ${yt(y)} h3.4 M${cx + 6.6} ${yt(y)} h3.4`} stroke={shade(shirt, -0.5)} strokeWidth="1.2" />
+            </g>
+          ))}
+          <path d={`M${sh.l + 4} 110 C${sh.l + 6} 136 ${sh.l + 4} 160 ${waist.l + 2} 184 M${sh.r - 4} 110 C${sh.r - 6} 136 ${sh.r - 4} 160 ${waist.r - 2} 184`} stroke={shade(shirt, 0.25)} strokeWidth="1" strokeDasharray="2.5 2" fill="none" />
+        </g>
+      );
+    case "cappotto":
+    case "cappotto-lungo": {
+      // collo alto che avvolge la base del collo, chiusura bordata, bottoni del colore del bordo
+      const long = look.top === "cappotto-lungo";
+      return (
+        <g>
+          <path d={`M${cx + 2} 100 L${cx + 4} ${longTop ? hem : 206}`} stroke={tr} strokeWidth="2.4" />
+          <path d={`M${cx + 2} 100 L${cx + 4} ${longTop ? hem : 206}`} stroke={OUT} strokeOpacity="0.7" strokeWidth="0.8" transform="translate(-2 0)" />
+          {[132, 146, 160, 174].map((y) => <circle key={y} cx={cx + 9} cy={yt(y)} r="1.7" fill={tr} stroke={shade(tr, -0.4)} strokeWidth="0.5" />)}
+          <path d={`M${sh.l + 6} ${yt(140)} L${cx - 8} ${yt(140)} M${sh.r - 6} ${yt(140)} L${cx + 14} ${yt(140)}`} stroke={shade(shirt, -0.4)} strokeWidth="1.2" />
+          {hemTrim(2)}
+          {long && longTop ? (
+            <g>
+              {[-1, 1].map((k) => <path key={k} d={`M${cx + k * 18 * tw} 198 L${cx + k * 23 * tw} ${hem}`} stroke={shade(shirt, -0.5)} strokeWidth="1.6" />)}
+              {[-1, 1].map((k) => <path key={`t${k}`} d={`M${cx + k * 18 * tw + 2} 198 L${cx + k * 23 * tw + 2} ${hem}`} stroke={tr} strokeWidth="1" opacity="0.7" />)}
+              {[-1, 1].map((k) => <path key={`v${k}`} d={`M${cx + k * 30 * tw - 6} ${hem - 2} l6 9 l6 -9 Z`} fill={shade(shirt, -0.15)} stroke={tr} strokeWidth="1" strokeLinejoin="round" />)}
+            </g>
+          ) : folds([-1, 1])}
+          <path d={`M${cx - 12} 86 Q${cx} 88.6 ${cx + 12} 86 L${cx + 14.5} 100 Q${cx} 103.6 ${cx - 14.5} 100 Z`} fill={shade(shirt, -0.15)} stroke={tr} strokeWidth="1.2" strokeLinejoin="round" />
+          <path d={`M${cx - 12} 86 Q${cx} 88.6 ${cx + 12} 86`} stroke={OUT} strokeOpacity="0.7" strokeWidth="0.8" fill="none" />
+          <path d={`M${cx + 2} 88 L${cx + 2} 102`} stroke={tr} strokeWidth="1.2" />
+        </g>
+      );
+    }
+    case "canotta":
+      return (
+        <g>
+          {scoop(16, 13, tr, 2)}
+          <path d={`M${sh.l + 4} 108 Q${sh.l + 10} 132 ${sh.l + 4} 152 M${sh.r - 4} 108 Q${sh.r - 10} 132 ${sh.r - 4} 152`} stroke={tr} strokeWidth="2" fill="none" />
+        </g>
+      );
+    case "camicia":
+      return (
+        <g>
+          {scoop(10, 10, shade(shirt, -0.3), 0.8, true)}
+          <path d={`M${cx} 108 L${cx} 196`} stroke={shade(shirt, -0.3)} strokeWidth="1.2" />
+          {[134, 148, 162, 176].map((y) => <circle key={y} cx={cx + 2} cy={yt(y)} r="1.3" fill={tr} />)}
+          <rect x={cx + 8} y={yt(138)} width="13" height="12" rx="1.5" fill="none" stroke={shade(shirt, -0.35)} strokeWidth="1" />
+          <path d={`M${cx - 12} 96 L${cx} 108 L${cx - 5} 116 L${cx - 15} 104 Z M${cx + 12} 96 L${cx} 108 L${cx + 5} 116 L${cx + 15} 104 Z`} fill={shade(shirt, 0.18)} stroke={shade(shirt, -0.4)} strokeWidth="0.8" />
+        </g>
+      );
+    case "divisa":
+      return (
+        <g>
+          {scoop(11, 7, tr, 3.2)}
+          <path d={`M${sh.l + 2} 150 L${sh.r - 2} 134 L${sh.r - 2} 146 L${sh.l + 2} 162 Z`} fill={tr} opacity="0.9" />
+          <path d={`M${sh.l + 2} 166 L${sh.r - 2} 150`} stroke={tr} strokeWidth="1.6" opacity="0.7" />
+          <circle cx={cx + 16} cy={yt(128)} r="4.2" fill={shade(shirt, 0.3)} stroke={tr} strokeWidth="1" />
+          <path d={`M${cx + 13.6} ${yt(128) + 1.6} l2.4 -4 l2.4 4`} stroke={tr} strokeWidth="0.9" fill="none" />
+        </g>
+      );
+    case "cotta":
+      return (
+        <g>
+          <path d={`M${sh.l - 6} 104 L${sh.r + 6} 104 L${hip.r + 16} ${longTop ? hem + 4 : 210} L${hip.l - 16} ${longTop ? hem + 4 : 210} Z`} fill="#8d949b" opacity="0.92" clipPath={clip} />
+          <g opacity="0.85" clipPath={clip}>{Array.from({ length: Math.floor((hem - 104) / 5) }, (_, r) => <path key={r} d={`M${sh.l - 6} ${104 + r * 5} ${Array.from({ length: 26 }, () => "q1.8 2.6 3.6 0").join(" ")}`} stroke="#5d646b" strokeWidth="0.7" fill="none" />)}</g>
+          {scoop(14, 8, sleeve, 5)}
+          {hemTrim(2)}
+        </g>
+      );
+    case "giubbetto":
+      // scollo tondo del giubbetto: si vede la camicia, bordo a zig-zag d'argento
+      return (
+        <g>
+          <path d={`M${cx - 17} 98 Q${cx} 130 ${cx + 17} 98 Q${cx} 95.6 ${cx - 17} 98 Z`} fill={sleeve} />
+          <path d={`M${cx - 10} 97.4 Q${cx} 106 ${cx + 10} 97.4 Q${cx} 95.6 ${cx - 10} 97.4 Z`} fill={neckC} />
+          <path d={`M${cx - 6} 99 L${cx} 112 L${cx + 6} 99`} stroke={shade(sleeve, -0.3)} strokeWidth="1" fill="none" />
+          <path d={zigQ([cx - 17, 98], [cx, 130], [cx + 17, 98], 14, 2)} stroke={tr} strokeWidth="1.6" fill="none" strokeLinejoin="round" />
+          <path d={`M${sh.l + 4} 108 C${sh.l + 8} 126 ${sh.l + 8} 140 ${sh.l + 4} 150 M${sh.r - 4} 108 C${sh.r - 8} 126 ${sh.r - 8} 140 ${sh.r - 4} 150`} stroke={tr} strokeWidth="1.2" strokeDasharray="2.4 1.8" fill="none" opacity="0.85" />
+          {longTop ? <path d={zigQ([hip.l - 14, hem - 3], [cx, hem + 3], [hip.r + 14, hem - 3], 26, 2.2)} stroke={tr} strokeWidth="1.6" fill="none" strokeLinejoin="round" /> : null}
+        </g>
+      );
+    default:
+      return (
+        <g>
+          {scoop(11, look.body === "donna" || look.body === "ragazza" ? 11 : 7, shade(shirt, -0.35), 2.5)}
+          <path d={`M${cx - 15} ${yt(150)} h30`} stroke={tr} strokeWidth="5" opacity="0.85" />
+        </g>
+      );
+  }
 }
