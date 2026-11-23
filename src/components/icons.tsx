@@ -1,4 +1,5 @@
-import type { CSSProperties, ReactNode } from "react";
+import { useId, type CSSProperties, type ReactNode } from "react";
+import { DETAILED_MORE } from "./icons-more";
 
 /**
  * Set di icone dell'app, disegnato apposta (griglia 24×24, tratto 1.7, due toni).
@@ -794,6 +795,13 @@ const DETAILED: Partial<Record<IconName, ReactNode>> = {
   ),
 };
 
+Object.assign(DETAILED, DETAILED_MORE);
+
+/** Il disegno di un'icona (versione dettagliata se c'è), da incidere dentro altri SVG. */
+export function glyphArt(name: IconName): ReactNode {
+  return DETAILED[name] ?? ICONS[name];
+}
+
 export function Glyph({ name, size = 20, className, strokeWidth = 1.7, title, detailed = false }: { name: IconName; size?: number; className?: string; strokeWidth?: number; title?: string; detailed?: boolean }) {
   return (
     <svg
@@ -815,15 +823,33 @@ export function Glyph({ name, size = 20, className, strokeWidth = 1.7, title, de
   );
 }
 
-/** Tessera d'icona: placca scura con la cornice e il disegno nel colore scelto per l'app.
- *  Stesso aspetto ovunque (Home, menu, sezioni, categorie): `color` resta per compatibilità ma non cambia più la tinta. */
-export function AppIcon({ name, size = 52, className }: { name: IconName; color?: string; size?: number; className?: string }) {
+/** Tessera d'icona: placca scura con riflesso e cornice, disegno inciso in metallo del colore dell'app.
+ *  Stesso aspetto ovunque. `accent` (solo nel Menu) dà a una sezione la sua tinta, sullo stesso materiale. */
+export function AppIcon({ name, size = 52, className, accent, fluid = false }: { name: IconName; color?: string; size?: number; className?: string; accent?: string; /** riempie il contenitore invece di una misura fissa */ fluid?: boolean }) {
+  const id = `ai${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
+  const art = DETAILED[name] ?? ICONS[name];
+  const sw = size >= 56 ? 1.45 : size >= 40 ? 1.6 : 1.75;
+  const g = Math.round(size * 0.6);
   return (
     <span
       className={["aa-appicon relative grid shrink-0 place-items-center", className].filter(Boolean).join(" ")}
-      style={{ width: size, height: size, borderRadius: size * 0.3 } as CSSProperties}
+      data-accent={accent ? "" : undefined}
+      style={{ width: fluid ? "100%" : size, height: fluid ? "100%" : size, borderRadius: fluid ? "30%" : size * 0.3, ...(accent ? { "--acc": accent } : null) } as CSSProperties}
     >
-      <Glyph name={name} detailed size={Math.round(size * 0.56)} strokeWidth={size >= 48 ? 1.5 : 1.7} className="aa-line relative z-[1]" />
+      <svg id={id} viewBox="0 0 24 24" width={fluid ? "60%" : g} height={fluid ? "60%" : g} fill="none" stroke="currentColor" strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" className="aa-line relative z-[1]" aria-hidden>
+        <defs>
+          {/* metallo: luce in alto, tinta piena al centro, tono scuro in basso */}
+          <linearGradient id={`${id}s`} gradientUnits="userSpaceOnUse" x1="6" y1="2" x2="16" y2="23">
+            <stop offset="0" style={{ stopColor: "var(--ig-a)" }} />
+            <stop offset="0.5" style={{ stopColor: "var(--ig-b)" }} />
+            <stop offset="1" style={{ stopColor: "var(--ig-c)" }} />
+          </linearGradient>
+        </defs>
+<style>{`#${id} .m{stroke:url(#${id}s)}#${id} .m [fill="currentColor"]{fill:url(#${id}s)}#${id} .m [stroke="currentColor"]{stroke:url(#${id}s)}`}</style>
+        {/* incisione: copia scura spostata in basso, poi il disegno in metallo */}
+        <g className="aa-ig-shadow" transform="translate(0 0.7)" style={{ color: "rgb(0 0 0 / 0.55)" }}>{art}</g>
+        <g className="m">{art}</g>
+      </svg>
     </span>
   );
 }

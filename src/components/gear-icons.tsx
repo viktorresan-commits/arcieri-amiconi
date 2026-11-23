@@ -1,6 +1,6 @@
 import { useId } from "react";
 import { ArrowArt, FLETCH_SHAPES, POINT_TYPES } from "./arrow-art";
-import { Glyph, type IconName } from "./icons";
+import { AppIcon, type IconName } from "./icons";
 /** Disegni dell'attrezzatura: archi per tipo, frecce con i loro colori, icone per categoria. */
 
 export const BOW_TYPES = [
@@ -215,8 +215,8 @@ const CATEGORY_GLYPH: Record<string, IconName> = {
 
 export function CategoryIcon({ category, className = "h-8 w-8" }: { category: string; className?: string }) {
   return (
-    <span className={["aa-appicon relative grid shrink-0 place-items-center rounded-[30%]", className].filter(Boolean).join(" ")}>
-      <Glyph name={CATEGORY_GLYPH[category] ?? "bag"} detailed size={24} strokeWidth={1.6} className="aa-line relative z-[1] h-[60%] w-[60%]" />
+    <span className={["inline-grid shrink-0", className].filter(Boolean).join(" ")}>
+      <AppIcon name={CATEGORY_GLYPH[category] ?? "bag"} size={48} fluid />
     </span>
   );
 }

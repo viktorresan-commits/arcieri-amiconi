@@ -214,7 +214,7 @@ export function PathMap({ onPick, current, showSearch = false, focus = null, hid
             return (
               <li key={s.id} className="aa-menu-row" style={{ animationDelay: `${Math.min(i, 10) * 30}ms` }}>
                 <Link to={s.to as "/"} search={(s.search ?? {}) as never} onClick={go} className="aa-short flex items-center gap-3 rounded-2xl px-2 py-1.5 active:bg-white/[0.05]">
-                  <AppIcon name={s.icon} color={s.color} size={42} className="aa-short-icon" />
+                  <AppIcon name={s.icon} accent={sta?.color} size={42} className="aa-short-icon" />
                   <span className="min-w-0 flex-1">
                     <span className="block text-[0.95rem] font-semibold">{s.label}</span>
                     <span className="block truncate text-xs text-muted">{sta ? `${sta.title} · ` : ""}{s.hint}</span>
@@ -311,27 +311,41 @@ function CategoryCarousel({ current, onGo, isHere, hide = [] }: { current?: stri
   const pages = Array.from({ length: COPIES * n }, (_, i) => STATIONS[i % n]);
   return (
     <div className="grid gap-3">
-      <div className="flex justify-center gap-1.5" aria-hidden>
-        {STATIONS.map((st, k) => <span key={st.id} className="h-1.5 rounded-full transition-all duration-300" style={{ width: k === active ? 18 : 6, background: k === active ? "var(--tone)" : "rgb(255 255 255 / 0.2)" }} />)}
+      {/* linguette delle sezioni: nome e icona nella tinta della sezione, quella aperta in evidenza */}
+      <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-0.5 [scrollbar-width:none]" role="tablist" aria-label="Sezioni del menu">
+        {STATIONS.map((st, k) => (
+          <button
+            key={st.id}
+            type="button"
+            role="tab"
+            aria-selected={k === active}
+            onClick={() => jump(mid + k, true)}
+            className={cx("aa-sec-tab flex shrink-0 items-center gap-1.5 rounded-full py-1 pl-1 pr-3 text-[0.72rem] font-semibold transition", k === active && "is-on")}
+            style={{ ["--acc" as string]: st.color }}
+          >
+            <AppIcon name={st.icon} accent={st.color} size={24} />
+            {st.title}
+          </button>
+        ))}
       </div>
       <div ref={ref} onScroll={onScroll} className="relative -mx-4 flex snap-x snap-mandatory overflow-x-auto [scrollbar-width:none]" style={{ overscrollBehaviorX: "contain" }}>
         {pages.map((st, i) => {
           const items = SHORTCUTS.filter((s) => s.group === st.id && !hide.includes(s.id));
           const k = i % n;
           return (
-            <section key={i} className="aa-cat-page grid min-h-[calc(100dvh-15rem)] w-full shrink-0 snap-center content-start gap-4 px-4 pb-8 pt-1" style={{ ["--cat" as string]: "var(--tone)", background: "linear-gradient(180deg, color-mix(in srgb, var(--tone) 20%, transparent) 0%, color-mix(in srgb, var(--tone) 11%, transparent) 35%, color-mix(in srgb, var(--tone) 6%, transparent) 70%, color-mix(in srgb, var(--tone) 3%, transparent) 100%)" }}>
+            <section key={i} className="aa-cat-page grid min-h-[calc(100dvh-15rem)] w-full shrink-0 snap-center content-start gap-4 px-4 pb-8 pt-1" style={{ ["--cat" as string]: st.color, background: `linear-gradient(180deg, color-mix(in srgb, ${st.color} 16%, transparent) 0%, color-mix(in srgb, ${st.color} 9%, transparent) 35%, color-mix(in srgb, ${st.color} 5%, transparent) 70%, color-mix(in srgb, ${st.color} 2%, transparent) 100%)` }}>
               {/* intestazione illustrata della categoria: grande icona con alone, titolo e bersaglio decorativo */}
-              <div className="aa-cat-hero relative overflow-hidden rounded-[1.75rem] p-4" style={{ ["--cat" as string]: "var(--tone)", background: "linear-gradient(135deg, color-mix(in srgb, var(--tone) 30%, transparent), color-mix(in srgb, var(--tone) 9%, transparent) 55%, rgba(255,255,255,0.02))" }}>
+              <div className="aa-cat-hero relative overflow-hidden rounded-[1.75rem] p-4" style={{ ["--cat" as string]: st.color, background: `linear-gradient(135deg, color-mix(in srgb, ${st.color} 28%, transparent), color-mix(in srgb, ${st.color} 8%, transparent) 55%, rgba(255,255,255,0.02))` }}>
                 <svg aria-hidden viewBox="0 0 200 200" className="aa-cat-rings pointer-events-none absolute -right-10 -top-12 h-52 w-52 opacity-[0.22]">
                   {[96, 78, 60, 42, 24].map((r, k) => <circle key={r} cx="100" cy="100" r={r} fill="none" stroke="#fff" strokeWidth={k === 4 ? 10 : 6} />)}
                   <path d="M0 160 L120 96" stroke="#fff" strokeWidth="4" strokeLinecap="round" />
                   <path d="M10 150 l-14 -2 m14 2 l-6 12" stroke="#fff" strokeWidth="4" strokeLinecap="round" />
                 </svg>
-                <span aria-hidden className="pointer-events-none absolute -left-16 -bottom-20 h-48 w-48 rounded-full blur-3xl" style={{ background: "color-mix(in srgb, var(--tone) 38%, transparent)" }} />
+                <span aria-hidden className="pointer-events-none absolute -left-16 -bottom-20 h-48 w-48 rounded-full blur-3xl" style={{ background: `color-mix(in srgb, ${st.color} 34%, transparent)` }} />
                 <div className="relative flex items-center gap-4">
                   <span className="aa-cat-icon relative grid place-items-center">
-                    <span aria-hidden className="absolute inset-[-10px] rounded-[2rem] blur-xl" style={{ background: "color-mix(in srgb, var(--tone) 45%, transparent)" }} />
-                    <AppIcon name={st.icon} color={st.color} size={76} className="relative" />
+                    <span aria-hidden className="absolute inset-[-10px] rounded-[2rem] blur-xl" style={{ background: `color-mix(in srgb, ${st.color} 40%, transparent)` }} />
+                    <AppIcon name={st.icon} accent={st.color} size={76} className="relative" />
                   </span>
                   <div className="min-w-0">
                     <p className="text-[0.62rem] font-semibold uppercase tracking-[0.22em] text-white/70">Sezione {k + 1} di {n}</p>
@@ -344,7 +358,7 @@ function CategoryCarousel({ current, onGo, isHere, hide = [] }: { current?: stri
               <div className="grid grid-cols-3 gap-2.5 pt-1">
                 {items.map((s) => (
                   <Link key={s.id} to={s.to as "/"} search={(s.search ?? {}) as never} onClick={onGo} aria-current={isHere(s) ? "page" : undefined} className={cx("aa-short aa-cat-tile flex min-w-0 flex-col items-center gap-1.5 rounded-[1.4rem] px-1.5 pb-2.5 pt-3 text-center", isHere(s) && "is-here")}>
-                    <AppIcon name={s.icon} color={st.color} size={64} className="aa-short-icon" />
+                    <AppIcon name={s.icon} accent={st.color} size={64} className="aa-short-icon" />
                     <span className="w-full truncate text-[0.78rem] font-semibold leading-tight">{s.label}</span>
                     <span className="line-clamp-2 w-full text-[0.6rem] leading-tight text-muted">{s.hint}</span>
                   </Link>

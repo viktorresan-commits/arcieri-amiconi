@@ -69,13 +69,13 @@ export const SHORTCUTS: Shortcut[] = [
 
 /** Le tappe della mappa: il percorso naturale di un arciere, dalla preparazione alla squadra. */
 export const STATIONS: { id: StationId; title: string; sub: string; icon: IconName; color: string }[] = [
-  { id: "prepara", title: "Preparati", sub: "Arco, frecce e simulatore di volo", icon: "quiver", color: "#8b6a3e" },
-  { id: "allena", title: "Allenati", sub: "Tira, fotografa, riprendi il gesto", icon: "bow", color: "#2c8a57" },
-  { id: "strumenti", title: "Strumenti", sub: "Calcoli e messa a punto", icon: "caliper", color: "#2f6fd1" },
-  { id: "analizza", title: "Analizza", sub: "Numeri, storico e traguardi", icon: "chart", color: "#1b9097" },
-  { id: "gareggia", title: "Gareggia", sub: "Gare, calendario e classifiche", icon: "trophy", color: "#c39320" },
-  { id: "impara", title: "Impara", sub: "Sfide, quiz e giochi per crescere", icon: "daily", color: "#d6582a" },
-  { id: "squadra", title: "Compagnia", sub: "Arcieri, news e profilo", icon: "team", color: "#4568d6" },
+  { id: "prepara", title: "Preparati", sub: "Arco, frecce e simulatore di volo", icon: "quiver", color: "#c08a52" },
+  { id: "allena", title: "Allenati", sub: "Tira, fotografa, riprendi il gesto", icon: "bow", color: "#4fb37a" },
+  { id: "strumenti", title: "Strumenti", sub: "Calcoli e messa a punto", icon: "caliper", color: "#5b93d6" },
+  { id: "analizza", title: "Analizza", sub: "Numeri, storico e traguardi", icon: "chart", color: "#3bb3b0" },
+  { id: "gareggia", title: "Gareggia", sub: "Gare, calendario e classifiche", icon: "trophy", color: "#d9ad3c" },
+  { id: "impara", title: "Impara", sub: "Sfide, quiz e giochi per crescere", icon: "daily", color: "#e57f45" },
+  { id: "squadra", title: "Compagnia", sub: "Arcieri, news e profilo", icon: "team", color: "#9a7be0" },
 ];
 
 export const DEFAULT_PINNED = ["rapido", "foto", "gesto", "statistiche", "balistica", "gare", "attrezzatura", "squadra"];

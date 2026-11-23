@@ -7,7 +7,7 @@ import { fmtDay } from "@/lib/arcieri/time";
 import { useLoad } from "@/lib/arcieri/use-load";
 import { useMember } from "@/components/shell";
 import { Button, Card, ErrorNote, Field, Loading, PageHead, Select, TextInput } from "@/components/kit";
-import { PrizeMark, prizeTier } from "@/components/prize-mark";
+import { MetalCoin, PrizeMark, prizeTier } from "@/components/prize-mark";
 import { Confetti, Sparkle } from "@/components/celebrate";
 import { AppIcon, Glyph, type IconName } from "@/components/icons";
 
@@ -50,12 +50,13 @@ function Page() {
           return (
             <Card key={g.id} className={`aa-prize relative flex items-center gap-3 ${done ? "aa-prize-on" : ""}`} style={{ animationDelay: `${i * 60}ms` }}>
               {done ? <Confetti count={14} /> : null}
-              <div className="relative grid h-16 w-16 shrink-0 place-items-center">
+              <div className="relative grid h-[4.5rem] w-[4.5rem] shrink-0 place-items-center">
                 <svg viewBox="0 0 56 56" className="absolute inset-0 -rotate-90">
                   <circle cx="28" cy="28" r="24" fill="none" stroke="currentColor" strokeOpacity={0.1} strokeWidth="5" />
                   <circle cx="28" cy="28" r="24" fill="none" stroke={done ? "#e2b340" : "var(--primary)"} strokeWidth="5" strokeLinecap="round" strokeDasharray={C} strokeDashoffset={C * (1 - pct / 100)} style={{ transition: "stroke-dashoffset 1s cubic-bezier(.22,1,.36,1)" }} />
                 </svg>
-                <AppIcon name={done ? "trophy" : icon} size={34} />
+                {/* moneta del traguardo: bronzo all'inizio, argento a metà strada, oro raggiunto (platino se di gruppo) */}
+                <MetalCoin metal={done ? (g.collective ? "platinum" : "gold") : pct >= 50 ? "silver" : "bronze"} icon={done ? "trophy" : icon} size={50} ribbon={false} />
               </div>
               <div className="min-w-0 flex-1">
                 <p className="font-semibold">{g.title}{g.collective ? " · gruppo" : ""}</p>
@@ -109,7 +110,7 @@ function Page() {
       <Card className="grid gap-1">
         {(data?.albo ?? []).map((b, i) => (
           <div key={`${b.title}-${i}`} className="aa-menu-row flex items-center gap-2 border-b border-white/5 py-1.5 text-sm last:border-0" style={{ animationDelay: `${Math.min(i, 12) * 30}ms` }}>
-            <Glyph name="trophy" size={20} className="aa-tone-hi shrink-0" />
+            <span className="shrink-0"><MetalCoin metal="gold" icon="trophy" size={26} ribbon={false} /></span>
             <span className="min-w-0 flex-1 truncate">{b.title}</span>
             <span className="text-xs text-muted">{memberLabel(b, data?.albo ?? [])}</span>
           </div>

@@ -745,6 +745,29 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4 }: { look: Avata
         </g>
       ) : null}
 
+      {/* collo: disegnato prima del busto, così la scollatura lo chiude in modo naturale.
+          Nuca che scende morbida nel trapezio, gola leggermente inclinata in avanti,
+          pomo d'Adamo appena accennato negli uomini adulti, ombra sotto la mandibola */}
+      {(() => {
+        const nx = neck.x;
+        const adam = woman || kid ? 0 : 1.3;
+        const shape = `M${f(nx - 8)} 95 C${f(nx - 8.6)} 104 ${f(nx - 10)} 111 ${f(nx - 13)} 116 C${f(nx - 15)} 119.5 ${f(nx - 18)} 122 ${f(nx - 22)} 125 L${f(nx + 12.5)} 125 C${f(nx + 9.6)} 120 ${f(nx + 7.8)} 116 ${f(nx + 7.4)} 112.5 C${f(nx + 7.2 + adam)} 110 ${f(nx + 6.4)} 106 ${f(nx + 6)} 100 Z`;
+        return (
+          <g>
+            <path d={shape} fill={skinD} stroke={OUT} strokeOpacity="0.45" strokeWidth="1.8" strokeLinejoin="round" />
+            {/* lato in ombra verso la nuca e trapezio */}
+            <path d={`M${f(nx - 8)} 95 C${f(nx - 8.6)} 104 ${f(nx - 10)} 111 ${f(nx - 13)} 116 C${f(nx - 15)} 119.5 ${f(nx - 18)} 122 ${f(nx - 22)} 125 L${f(nx - 10)} 125 C${f(nx - 6)} 119 ${f(nx - 4.6)} 110 ${f(nx - 4)} 99 Z`} fill={shade(skin, -0.32)} opacity="0.45" />
+            {/* ombra portata dalla mandibola */}
+            <path d={`M${f(nx - 5)} 99 C${f(nx - 1)} 104 ${f(nx + 3)} 106 ${f(nx + 6.6)} 105 L${f(nx + 6)} 100 Z`} fill={shade(skin, -0.42)} opacity="0.5" />
+            {/* muscolo che scende da dietro l'orecchio alla fossetta della gola */}
+            <path d={`M${f(nx - 4)} 101 C${f(nx - 1)} 109 ${f(nx + 3)} 116 ${f(nx + 8)} 122`} stroke={shade(skin, -0.36)} strokeOpacity="0.32" strokeWidth="1.1" fill="none" strokeLinecap="round" />
+            <path d={`M${f(nx - 2.6)} 101 C${f(nx)} 108 ${f(nx + 4)} 115 ${f(nx + 9)} 121`} stroke={shade(skin, 0.25)} strokeOpacity="0.25" strokeWidth="0.9" fill="none" strokeLinecap="round" />
+            {adam ? <path d={`M${f(nx + 7.4)} 109.4 q${f(0.9)} 1.6 0 3.2`} stroke={shade(skin, -0.4)} strokeOpacity="0.5" strokeWidth="0.8" fill="none" strokeLinecap="round" /> : null}
+            {/* clavicola appena sopra la scollatura */}
+            <path d={`M${f(nx - 2)} 121.5 Q${f(nx + 4)} 120 ${f(nx + 10)} 122.5`} stroke={shade(skin, -0.3)} strokeOpacity="0.3" strokeWidth="0.8" fill="none" />
+          </g>
+        );
+      })()}
       {longTunic ? <path d={tunicD} fill={`url(#${uid}shirt)`} stroke={OUT} strokeOpacity="0.5" strokeWidth="2.2" /> : null}
       <path d={torso} fill={`url(#${uid}shirt)`} stroke={OUT} strokeOpacity="0.5" strokeWidth="2.2" />
       <ClothPattern kind={look.pattern} shapes={longTunic ? [torso, tunicD] : [torso]} base={look.shirt} trim={look.trim} uid={uid} box={[shoulderL - 16, 112, shoulderR + 16, (longTunic ? tunicLen : 210) + 6]} />
@@ -756,12 +779,12 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4 }: { look: Avata
         // il mantello si vede anche sopra le spalle: un lembo di stoffa che parte dal fermaglio sul davanti,
         // passa sopra la spalla e scende sulla schiena, con la piega e il bordo in luce
         const kx = cx + 12, ky = 121;
-        const drape = `M${f(kx)} ${ky - 3} C${f(cx + 2)} 109 ${f(shoulderL + 10)} 109 ${f(shoulderL - 3)} 119 C${f(shoulderL - 6)} 132 ${f(shoulderL - 5)} 146 ${f(shoulderL - 2)} 158 C${f(shoulderL + 6)} 150 ${f(shoulderL + 12)} 136 ${f(cx - 4)} 128 C${f(cx + 2)} 125 ${f(kx - 4)} ${ky + 3} ${f(kx)} ${ky + 3} Z`;
+        const drape = `M${f(kx)} ${ky - 3} C${f(cx + 2)} 117 ${f(cx - 10)} 115.5 ${f(cx - 16)} 115.5 C${f(shoulderL + 6)} 115.5 ${f(shoulderL - 1)} 116 ${f(shoulderL - 3)} 119 C${f(shoulderL - 6)} 132 ${f(shoulderL - 5)} 146 ${f(shoulderL - 2)} 158 C${f(shoulderL + 6)} 150 ${f(shoulderL + 12)} 136 ${f(cx - 4)} 128 C${f(cx + 2)} 125 ${f(kx - 4)} ${ky + 3} ${f(kx)} ${ky + 3} Z`;
         return (
           <g>
             <path d={drape} fill={`url(#${uid}cape)`} stroke={OUT} strokeOpacity="0.45" strokeWidth="1.4" />
             <path d={`M${f(shoulderL + 2)} 122 C${f(shoulderL + 2)} 134 ${f(shoulderL + 4)} 144 ${f(shoulderL + 2)} 152`} stroke={shade(look.capeColor, -0.55)} strokeOpacity="0.7" strokeWidth="2" fill="none" strokeLinecap="round" />
-            <path d={`M${f(cx - 8)} 116 C${f(cx - 16)} 114 ${f(shoulderL + 4)} 115 ${f(shoulderL - 1)} 121`} stroke={shade(look.capeColor, 0.55)} strokeOpacity="0.55" strokeWidth="1.4" fill="none" strokeLinecap="round" />
+            <path d={`M${f(cx - 10)} 117.5 C${f(cx - 16)} 117 ${f(shoulderL + 4)} 117.5 ${f(shoulderL - 1)} 121.5`} stroke={shade(look.capeColor, 0.55)} strokeOpacity="0.55" strokeWidth="1.4" fill="none" strokeLinecap="round" />
             <path d={`M${f(shoulderL - 2)} 158 C${f(shoulderL + 6)} 150 ${f(shoulderL + 12)} 136 ${f(cx - 4)} 128 C${f(cx + 2)} 125 ${f(kx - 4)} ${ky + 3} ${f(kx)} ${ky + 3}`} stroke={look.trim} strokeOpacity="0.85" strokeWidth="1.5" fill="none" />
             {look.clasp !== "nessuno" ? (
               <g>
@@ -829,12 +852,6 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4 }: { look: Avata
         )
       ) : null}
 
-      {/* collo: nuca che scende nel trapezio, gola appena incavata, pomo d'Adamo negli uomini */}
-      <path d={`M${f(neck.x - 9)} 98 C${f(neck.x - 9)} 108 ${f(neck.x - 11)} 117 ${f(neck.x - 15)} 125 L${f(neck.x + 11)} 125 C${f(neck.x + 9)} 118 ${f(neck.x + 7.4)} 112 ${f(neck.x + 7.6)} 103 Z`} fill={skinD} />
-      <path d={`M${f(neck.x - 9)} 98 C${f(neck.x - 9)} 108 ${f(neck.x - 11)} 117 ${f(neck.x - 15)} 125 L${f(neck.x - 6)} 125 C${f(neck.x - 4)} 116 ${f(neck.x - 4)} 108 ${f(neck.x - 4)} 100 Z`} fill={shade(skin, -0.34)} opacity="0.55" />
-      <ellipse cx={f(neck.x + 2)} cy="106" rx="8" ry="5" fill={`url(#${uid}sd)`} opacity="0.6" />
-      {woman || kid ? null : <path d={`M${f(neck.x + 7.6)} 109 q1.6 1.8 0.2 3.8`} stroke={shade(skin, -0.38)} strokeOpacity="0.55" strokeWidth="0.8" fill="none" strokeLinecap="round" />}
-      <path d={`M${f(neck.x + 5)} 106 Q${f(neck.x + 2)} 114 ${f(neck.x - 3)} 123`} stroke={shade(skin, -0.38)} strokeOpacity="0.22" strokeWidth="0.8" fill="none" />
       {look.scarf ? (
         <g>
           <path d={`M${f(neck.x - 13)} 114 C${f(neck.x - 6)} 122 ${f(neck.x + 8)} 122 ${f(neck.x + 13)} 114 L${f(neck.x + 13)} 124 C${f(neck.x + 6)} 130 ${f(neck.x - 6)} 130 ${f(neck.x - 13)} 124 Z`} fill={look.scarfColor} />
