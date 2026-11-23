@@ -207,7 +207,7 @@ function rot(pt: P, deg: number, origin: P): P {
 }
 
 /** Il disegno dell'arciere in una posa data (calcolata dall'animazione o fissa). */
-function Figure({ look, def, t, flying, blink, uid }: { look: AvatarLook; def: PoseDef; t: number; flying: number | null; blink: boolean; uid: string }) {
+function Figure({ look, def, t, flying, blink, uid, wind = -1.4 }: { look: AvatarLook; def: PoseDef; t: number; flying: number | null; blink: boolean; uid: string; wind?: number }) {
   const woman = look.body === "donna" || look.body === "ragazza";
   const kid = look.body === "ragazzo" || look.body === "ragazza";
   const W = bodyWidth(look);
@@ -217,7 +217,10 @@ function Figure({ look, def, t, flying, blink, uid }: { look: AvatarLook; def: P
   const longSleeves = ["felpa", "giacca", "camicia", "tunica", "tunica-lunga", "farsetto", "ranger", "incrociata", "cappotto", "giubba", "cappotto-lungo", "cotta", "giubbetto"].includes(look.top);
   const medievalTop = ["tunica", "tunica-lunga", "farsetto", "ranger", "incrociata", "cappotto", "giubba", "cappotto-lungo", "cotta"].includes(look.top);
   const shirt = look.shirt;
-  const capeSway = Math.sin(t * 1.3) * 2.5;
+  // il vento fa ondeggiare il mantello a raffiche: a favore lo spinge sotto il corpo, contro lo fa
+  // svolazzare indietro e lo solleva; senza vento oscilla appena
+  const gust = 0.65 + 0.25 * Math.sin(t * 0.9) + 0.15 * Math.sin(t * 2.3 + 1);
+  const capeSway = Math.sin(t * 1.3) * 2.5 + Math.max(-30, Math.min(12, wind * 5.2 * gust));
 
   // scheletro
   const SD = p(124 - 4 * (W - 1) * 10, 128 + breath * 0.3);
@@ -663,24 +666,57 @@ function Figure({ look, def, t, flying, blink, uid }: { look: AvatarLook; def: P
     <g>
       {/* mantello dietro */}
       {look.cape ? (() => {
-        const bottom = look.capeStyle === "corto" ? 222 : 296;
-        const k = look.capeStyle === "corto" ? 0.45 : 1;
-        const xl = shoulderL - 26 * k + capeSway * 2;
-        const xr = shoulderR + 4 + capeSway;
-        // orlo: dritto, oppure a punte strappate
-        const hem = look.capeStyle === "frastagliato"
-          ? Array.from({ length: 7 }, (_, i) => {
-              const u = (i + 1) / 7;
-              const x = xr + (xl - xr) * u;
-              const y = bottom - 6 * u + (i % 2 ? -14 : 6);
-              return `L${f(x)} ${f(y)}`;
-            }).join(" ")
-          : `L${f(xl)} ${bottom}`;
+        const short = look.capeStyle === "corto";
+        const w = Math.max(-8, Math.min(8, wind));
+        const strength = Math.abs(w) * gust;
+        // spostamento laterale a una certa altezza (u: 0 alle spalle, 1 all'orlo) e sollevamento dell'orlo
+        const push = Math.max(-34, Math.min(12, w * 5.4 * gust)) + Math.sin(t * 1.3) * 2.2;
+        const dx = (u: number) => push * Math.pow(u, 1.35) + Math.sin(t * 2.1 + u * 3) * (1 + strength * 0.35) * u;
+        const lift = Math.min(26, strength * 3.4);
+        const bottom = (short ? 222 : 298) - lift;
+        const k = short ? 0.5 : 1;
+        const top = 120;
+        const yAt = (u: number) => top + (bottom - top) * u;
+        // bordo dietro (sinistra) che si apre verso il basso, bordo davanti che resta vicino al corpo
+        const back = (u: number) => shoulderL + 2 - (16 + 30 * k) * Math.pow(u, 0.8) + dx(u) * 1.15;
+        const front = (u: number) => shoulderR - 2 + 6 * u + dx(u) * 0.55;
+        const hemPts = Array.from({ length: 9 }, (_, i) => {
+          const v = i / 8;
+          const x = lerp(front(1), back(1), v);
+          const wave = Math.sin(t * (3.2 + strength * 0.5) + i * 1.25) * (1.6 + strength * 0.9) * (0.4 + v * 0.8);
+          const frayed = look.capeStyle === "frastagliato" ? (i % 2 ? -12 : 5) : 0;
+          return { x, y: bottom + wave + frayed - v * (lift * 0.6) };
+        });
+        const hem = hemPts.map((q, i) => (i === 0 ? `L${f(q.x)} ${f(q.y)}` : `Q${f((hemPts[i - 1].x + q.x) / 2 + (i % 2 ? 2 : -2))} ${f((hemPts[i - 1].y + q.y) / 2 + (i % 2 ? 3 : -2))} ${f(q.x)} ${f(q.y)}`)).join(" ");
+        const backEdge = [0.92, 0.7, 0.45, 0.2, 0].map((u) => `${f(back(u))} ${f(yAt(u))}`);
+        const d = `M${f(front(0))} ${top} C${f(front(0.35))} ${f(yAt(0.35))} ${f(front(0.7))} ${f(yAt(0.7))} ${f(front(0.98))} ${f(yAt(0.98))} ${hem} C${backEdge[0]} ${backEdge[1]} ${backEdge[2]} S${backEdge[3]} ${backEdge[4]} Z`;
+        // fodera: la parte interna, più scura, si vede dove il mantello si gonfia all'indietro
+        const lining = `M${f(back(0.25) + 2)} ${f(yAt(0.25))} C${f(back(0.55) - 3)} ${f(yAt(0.55))} ${f(back(0.85) - 4)} ${f(yAt(0.85))} ${f(hemPts[8].x - 3)} ${f(hemPts[8].y + 1)} L${f(hemPts[6].x)} ${f(hemPts[6].y + 2)} C${f(back(0.8) + 8)} ${f(yAt(0.8))} ${f(back(0.5) + 6)} ${f(yAt(0.5))} ${f(back(0.25) + 2)} ${f(yAt(0.25))} Z`;
+        const folds = [0.14, 0.3, 0.46, 0.62, 0.78, 0.92];
         return (
           <g>
-            <path d={`M${f(shoulderR - 2)} 122 C${f(shoulderR + 6)} 170 ${f(shoulderR + 8)} ${bottom - 50} ${f(xr)} ${bottom - 6} ${hem} C${f(shoulderL - 30 * k + capeSway * 1.6)} ${bottom - 46} ${f(shoulderL - 18 * k + capeSway)} 180 ${f(shoulderL + 2)} 122 Z`} fill={`url(#${uid}cape)`} stroke={OUT} strokeOpacity="0.4" strokeWidth="1.6" />
-            {capeDecor(`M${f(shoulderR - 2)} 122 C${f(shoulderR + 6)} 170 ${f(shoulderR + 8)} ${bottom - 50} ${f(xr)} ${bottom - 6} ${hem} C${f(shoulderL - 30 * k + capeSway * 1.6)} ${bottom - 46} ${f(shoulderL - 18 * k + capeSway)} 180 ${f(shoulderL + 2)} 122 Z`, [xl - 6, 118, xr + 10, bottom + 4])}
-            {[0.3, 0.55, 0.78].map((u) => <path key={u} d={`M${f(lerp(shoulderL, shoulderR, u))} 128 Q${f(lerp(xl, xr, u) + capeSway)} ${(128 + bottom) / 2} ${f(lerp(xl, xr, u) + capeSway * 1.4)} ${bottom - 14}`} stroke={shade(look.capeColor, -0.45)} strokeOpacity="0.55" strokeWidth="1.2" fill="none" />)}
+            <path d={d} fill={shade(look.capeColor, -0.55)} transform="translate(-2.4 1.6)" opacity="0.9" />
+            <path d={d} fill={`url(#${uid}cape)`} stroke={OUT} strokeOpacity="0.4" strokeWidth="1.6" />
+            {capeDecor(d, [Math.min(back(1), back(0.6)) - 8, 116, front(1) + 12, bottom + 16])}
+            {/* pieghe: solchi in ombra con il bordo in luce, che seguono il vento */}
+            {folds.map((v, i) => {
+              const x0 = lerp(front(0), back(0), v * 0.8 + 0.1);
+              const x1 = lerp(front(0.55), back(0.55), v);
+              const x2 = lerp(hemPts[0].x, hemPts[8].x, v);
+              const y2 = hemPts[Math.round(v * 8)].y - 2;
+              const fd = `M${f(x0)} ${top + 6} Q${f(x1)} ${f(yAt(0.55))} ${f(x2)} ${f(y2)}`;
+              return (
+                <g key={i}>
+                  <path d={fd} stroke={shade(look.capeColor, -0.6)} strokeOpacity="0.55" strokeWidth={1.6 + (i % 2) * 1.2} fill="none" strokeLinecap="round" />
+                  <path d={fd} stroke={shade(look.capeColor, 0.35)} strokeOpacity="0.28" strokeWidth="1" fill="none" strokeLinecap="round" transform="translate(1.8 0)" />
+                </g>
+              );
+            })}
+            <path d={lining} fill={shade(look.capeColor, -0.65)} opacity={Math.min(0.9, 0.35 + strength * 0.12)} />
+            {/* orlo: bordo appena più chiaro e ombra sotto */}
+            <path d={`M${f(hemPts[0].x)} ${f(hemPts[0].y)} ${hem.replace(/^L[^QL]*/, "")}`} stroke={shade(look.capeColor, 0.25)} strokeOpacity="0.45" strokeWidth="1.2" fill="none" />
+            {/* collo del mantello raccolto sulle spalle */}
+            <path d={`M${f(shoulderL - 2)} 124 C${f(shoulderL + 8)} 114 ${f(shoulderR - 8)} 114 ${f(shoulderR + 2)} 124 C${f(shoulderR - 6)} 128 ${f(shoulderL + 6)} 130 ${f(shoulderL - 2)} 124 Z`} fill={shade(look.capeColor, -0.2)} stroke={OUT} strokeOpacity="0.35" strokeWidth="1" />
           </g>
         );
       })() : null}
@@ -706,7 +742,13 @@ function Figure({ look, def, t, flying, blink, uid }: { look: AvatarLook; def: P
       <Outfit look={look} cx={cx} shoulderL={shoulderL} shoulderR={shoulderR} hipL={hipL} hipR={hipR} tunicLen={tunicLen} W={W} woman={woman} uid={uid} />
       <ChestEmblem kind={look.emblem} crest={look.crest} x={cx + 9} y={look.top === "giubbetto" ? 160 : 150} s={look.emblem === "compagnia" ? 0.95 : 0.72} base={look.shirt} trim={look.trim} />
       {look.tattoo === "sole" && look.top === "canotta" ? <g transform={`translate(${f(shoulderR - 7)} 130) scale(0.4)`} opacity="0.8"><circle r="5" fill="none" stroke="#24324a" strokeWidth="2" />{[0, 1, 2, 3, 4, 5, 6, 7].map((k) => <path key={k} d={`M${f(Math.cos(k * 0.785) * 7)} ${f(Math.sin(k * 0.785) * 7)} L${f(Math.cos(k * 0.785) * 10)} ${f(Math.sin(k * 0.785) * 10)}`} stroke="#24324a" strokeWidth="2" />)}</g> : null}
-      {look.cape && look.clasp !== "nessuno" ? <Clasp kind={look.clasp} x={shoulderR - 4} y={124} s={0.9} /> : null}
+      {look.cape && look.clasp !== "nessuno" ? (
+        // il fermaglio chiude il mantello sul davanti, sotto il collo; il cordone gira dietro la spalla
+        <g>
+          <path d={`M${f(cx + 13)} 120 Q${f(cx + 4)} 114 ${f(cx - 6)} 116 M${f(cx + 13)} 120 Q${f(shoulderR - 6)} 124 ${f(shoulderR - 2)} 130`} stroke={shade(look.capeColor, -0.35)} strokeWidth="2.2" fill="none" strokeLinecap="round" />
+          <Clasp kind={look.clasp} x={cx + 13} y={120} s={0.85} />
+        </g>
+      ) : null}
       {look.amulet ? (
         <g>
           <path d={`M${f(cx - 11)} 116 Q${f(cx - 2)} 140 ${f(cx + 4)} 142 Q${f(cx + 10)} 138 ${f(cx + 12)} 116`} stroke="#c9a46a" strokeWidth="1" fill="none" />
@@ -764,8 +806,12 @@ function Figure({ look, def, t, flying, blink, uid }: { look: AvatarLook; def: P
         )
       ) : null}
 
-      <path d={`M${f(neck.x - 8)} 100 L${f(neck.x + 8)} 100 L${f(neck.x + 9)} 124 L${f(neck.x - 9)} 124 Z`} fill={skinD} />
-      <ellipse cx={f(neck.x + 2)} cy="107" rx="8" ry="6" fill={`url(#${uid}sd)`} opacity="0.75" />
+      {/* collo: nuca che scende nel trapezio, gola appena incavata, pomo d'Adamo negli uomini */}
+      <path d={`M${f(neck.x - 9)} 98 C${f(neck.x - 9)} 108 ${f(neck.x - 11)} 117 ${f(neck.x - 15)} 125 L${f(neck.x + 11)} 125 C${f(neck.x + 9)} 118 ${f(neck.x + 7.4)} 112 ${f(neck.x + 7.6)} 103 Z`} fill={skinD} />
+      <path d={`M${f(neck.x - 9)} 98 C${f(neck.x - 9)} 108 ${f(neck.x - 11)} 117 ${f(neck.x - 15)} 125 L${f(neck.x - 6)} 125 C${f(neck.x - 4)} 116 ${f(neck.x - 4)} 108 ${f(neck.x - 4)} 100 Z`} fill={shade(skin, -0.34)} opacity="0.55" />
+      <ellipse cx={f(neck.x + 2)} cy="106" rx="8" ry="5" fill={`url(#${uid}sd)`} opacity="0.6" />
+      {woman || kid ? null : <path d={`M${f(neck.x + 7.6)} 109 q1.6 1.8 0.2 3.8`} stroke={shade(skin, -0.38)} strokeOpacity="0.55" strokeWidth="0.8" fill="none" strokeLinecap="round" />}
+      <path d={`M${f(neck.x + 5)} 106 Q${f(neck.x + 2)} 114 ${f(neck.x - 3)} 123`} stroke={shade(skin, -0.38)} strokeOpacity="0.22" strokeWidth="0.8" fill="none" />
       {look.scarf ? (
         <g>
           <path d={`M${f(neck.x - 13)} 114 C${f(neck.x - 6)} 122 ${f(neck.x + 8)} 122 ${f(neck.x + 13)} 114 L${f(neck.x + 13)} 124 C${f(neck.x + 6)} 130 ${f(neck.x - 6)} 130 ${f(neck.x - 13)} 124 Z`} fill={look.scarfColor} />
@@ -1702,7 +1748,7 @@ export type AvatarDrive = { pull: number; aim: number; released?: number | null 
  * frecce della volée); le altre sono pose ferme con respiro e battito delle palpebre. Toccandolo, in
  * una posa ferma, scocca una freccia. Con `drive` lo muove il giocatore (tendere, mirare, rilasciare).
  */
-export function ArcherAvatar({ look, className = "h-72 w-auto", interactive = true, pose, onShot, hideFlight = false, still = false, drive, onPhase }: { look: AvatarLook; className?: string; interactive?: boolean; pose?: Pose; onShot?: () => void; hideFlight?: boolean; still?: boolean; drive?: AvatarDrive | null; onPhase?: (name: string) => void }) {
+export function ArcherAvatar({ look, className = "h-72 w-auto", interactive = true, pose, onShot, hideFlight = false, still = false, drive, onPhase, wind = -1.4 }: { look: AvatarLook; className?: string; interactive?: boolean; pose?: Pose; onShot?: () => void; hideFlight?: boolean; still?: boolean; drive?: AvatarDrive | null; onPhase?: (name: string) => void; /** vento in m/s, positivo verso dove guarda l'arciere: muove il mantello */ wind?: number }) {
   const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
   const mode = drive ? "guidata" : pose ?? look.pose ?? "animata";
   const plan = useMemo(() => routinePlan(look), [look.routine, look.hold, look.volley, look.quiverPlace]);
@@ -1840,7 +1886,7 @@ export function ArcherAvatar({ look, className = "h-72 w-auto", interactive = tr
       <g transform={look.lefty ? "translate(380 0) scale(-1 1)" : undefined}>
         <ellipse cx="150" cy="340" rx="80" ry="7" fill="#000" opacity="0.28" />
         <g transform={`translate(150 342) scale(${((kid ? 0.8 : 1) * (0.9 + (tune(look.stature, 50, 0, 100) / 100) * 0.2)).toFixed(3)}) translate(-150 -342)`}>
-          <Figure look={look} def={def} t={t} flying={hideFlight ? null : flying} blink={blink} uid={uid} />
+          <Figure look={look} def={def} t={t} flying={hideFlight ? null : flying} blink={blink} uid={uid} wind={wind} />
         </g>
       </g>
     </svg>

@@ -20,8 +20,8 @@ import { Button, Card, Empty, ErrorNote, HoldDelete, Loading, cx } from "@/compo
 
 export const Route = createFileRoute("/_app/")({ component: Home });
 
-/** già sul gioco (Tiro rapido, Da foto, Sfide, Classifiche) o nella barra in basso (Gare, Compagnia): la fila non li ripete */
-const HOME_HIDE = ["rapido", "foto", "sfide", "classifiche", "gare", "squadra"];
+/** già sul gioco (Tiro rapido, Da foto, Segnapunti, Statistiche) o nella barra in basso (Gare, Compagnia): la fila non li ripete */
+const HOME_HIDE = ["rapido", "foto", "segnapunti", "statistiche", "gare", "squadra"];
 
 /** Pulsante a tema sul prolungamento del gioco: placca di cuoio bordata d'oro, medaglione con l'icona. */
 function Plaque({ to, search, icon, label, sub }: { to: string; search?: Record<string, string>; icon: IconName; label: string; sub?: string }) {
@@ -119,8 +119,8 @@ function Home() {
               <Plaque to="/allenamento" search={{ avvia: "foto" }} icon="camera" label="Da foto" sub="leggo il bersaglio" />
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <Plaque to="/sfide" icon="duel" label="Sfide" sub={data.challenges.length ? `${data.challenges.length} ${data.challenges.length === 1 ? "aperta" : "aperte"}` : "sfida i compagni"} />
-              <Plaque to="/classifiche" icon="podium" label="Classifiche" sub={data.rank ? `${data.rank.position}° su ${data.rank.of}` : "chi è davanti"} />
+              <Plaque to="/segnapunti" icon="scorecard" label="Segnapunti" sub="punti con gli amici" />
+              <Plaque to="/statistiche" icon="chart" label="Statistiche" sub={data.all.avg ? `media ${data.all.avg.toFixed(2).replace(".", ",")}` : "grafici e progressi"} />
             </div>
               </>
             }

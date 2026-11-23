@@ -1617,3 +1617,7 @@ html[data-motion="ridotta"] .aa-hero-mark, html[data-motion="ridotta"] .aa-empty
   .aa-front-sway, .aa-front-breath, .aa-front-head, .aa-front-cape, .aa-front-bow, .aa-front-arm { animation: none; }
 }
 html[data-motion="ridotta"] :is(.aa-front-sway, .aa-front-breath, .aa-front-head, .aa-front-cape, .aa-front-bow, .aa-front-arm) { animation: none; }
+.aa-front-flap { transform-box: view-box; animation: aa-front-flap 3.4s ease-in-out infinite; }
+@keyframes aa-front-flap { 0%, 100% { transform: rotate(-1.2deg) skewY(0.4deg); } 50% { transform: rotate(1.4deg) skewY(-0.6deg); } }
+@media (prefers-reduced-motion: reduce) { .aa-front-flap { animation: none; } }
+html[data-motion="ridotta"] .aa-front-flap { animation: none; }

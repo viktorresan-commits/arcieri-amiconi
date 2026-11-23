@@ -4,7 +4,7 @@ import { bodyRes, drawRealBody, loadBodyAsset, solveBody } from "@/lib/arcieri/b
 import { AvatarFace } from "./archer-avatar";
 import { drawArcher, drawBody, phaseAt, poseAt, realistic, ROUTINE_END, ROUTINE_START, type Joints } from "@/lib/arcieri/mannequin";
 import { drawArrow3D, drawBoss, drawTrees, drawWorld } from "@/lib/arcieri/scene3d";
-import { drawSkyOverlay, envOf, TODS, useSky, WEATHERS } from "@/lib/arcieri/sky3d";
+import { drawSkyOverlay, envOf, TODS, useSky, WEATHER_PREFS as WEATHERS } from "@/lib/arcieri/sky3d";
 import { useEffect, useState, type ReactNode } from "react";
 import { orbit } from "./foc-3d";
 import { useMainArrowLook } from "@/lib/arcieri/main-gear";
@@ -188,6 +188,7 @@ function SkyIcon({ kind }: { kind: string }) {
       {kind === "notte" ? <><path d="M15 3 a8 8 0 1 0 6 13 a6.5 6.5 0 0 1-6-13z" fill="#e6ecff" /><circle cx={6} cy={6} r={0.9} fill="#fff" /><circle cx={9} cy={3.5} r={0.6} fill="#fff" /></> : null}
       {kind === "auto" ? <><circle cx={12} cy={12} r={8} fill="none" stroke="#fff" strokeWidth={1.6} /><path d="M12 7 V12 L15.5 14" stroke="#fff" strokeWidth={1.6} strokeLinecap="round" fill="none" /></> : null}
       {kind === "sereno" ? <>{sun(9, 9, 3.4)}{cloud()}</> : null}
+      {kind === "variabile" ? <>{sun(8, 8, 3)}{cloud("#e8eef5")}<path d="M18 4 l2 2 M20 4 l-2 2" stroke="#fff" strokeWidth={1.2} strokeLinecap="round" /></> : null}
       {kind === "nuvoloso" ? <>{cloud("#c9d3dd")}<path d="M4 12 h7 a3 3 0 0 0-1.5-5.5 a4 4 0 0 0-6 2.5" fill="#9aa8b6" /></> : null}
       {kind === "pioggia" ? <>{cloud("#9aa8b6")}<path d="M8 19 l-1.2 3 M12 19 l-1.2 3 M16 19 l-1.2 3" stroke="#7cc4ff" strokeWidth={1.6} strokeLinecap="round" /></> : null}
     </svg>

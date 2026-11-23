@@ -355,7 +355,7 @@ export function Shell({ children }: { children: ReactNode }) {
             <CompanyWelcome />
             {me.percorso === "" ? <PercorsoWelcome onDone={() => setNonce((n) => n + 1)} /> : null}
           </main>
-          {/* barra in basso: solo voci che in Home non ci sono già (Tiro rapido, Da foto, Sfide e Classifiche stanno sul gioco) */}
+          {/* barra in basso: solo voci che in Home non ci sono già (Tiro rapido, Da foto, Segnapunti e Statistiche stanno sul gioco) */}
           <nav className="aa-bottomnav aa-bar-bottom fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 items-end border-t pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden">
             {bottom.map((item) => <BottomLink key={item.to} item={item} active={item.match(path)} />)}
             <button type="button" className={cx("flex min-h-16 flex-col items-center justify-center gap-0.5 text-[11px] font-medium", menu ? "aa-tone-hi" : "text-white/75")} onClick={() => setMenu(true)}>

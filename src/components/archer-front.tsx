@@ -153,6 +153,13 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop }: { look: A
           <stop offset="0.45" stopColor={shade(riser, 0.25)} />
           <stop offset="1" stopColor={shade(riser, -0.5)} />
         </linearGradient>
+        <linearGradient id={`${uid}cp`} x1="0" x2="1">
+          <stop offset="0" stopColor={shade(look.capeColor, -0.35)} />
+          <stop offset="0.3" stopColor={shade(look.capeColor, 0.08)} />
+          <stop offset="0.5" stopColor={shade(look.capeColor, -0.5)} />
+          <stop offset="0.7" stopColor={shade(look.capeColor, 0.08)} />
+          <stop offset="1" stopColor={shade(look.capeColor, -0.35)} />
+        </linearGradient>
         <DetailDefs uid={uid} />
         <DetailDefs uid={`${uid}cd`} />
         <DetailDefs uid={`${uid}1`} />
@@ -162,12 +169,56 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop }: { look: A
         <ellipse cx="100" cy="356" rx="62" ry="7" fill="#000" opacity="0.3" />
         <g className={live ? "aa-front-sway" : undefined}>
         {/* dietro: mantello e faretra sulla schiena */}
-        {look.cape ? (
-          <g className={live ? "aa-front-cape" : undefined}>
-            <path d={`M${sh.l - 4} 104 C${sh.l - 18} 180 ${sh.l - 22} 260 ${sh.l - 16} ${look.capeStyle === "corto" ? 230 : 338} L${sh.r + 16} ${look.capeStyle === "corto" ? 230 : 338} C${sh.r + 22} 260 ${sh.r + 18} 180 ${sh.r + 4} 104 Z`} fill={shade(look.capeColor, -0.25)} stroke={OUT} strokeOpacity="0.45" strokeWidth="1.4" />
-            {[0.2, 0.5, 0.8].map((u) => <path key={u} d={`M${f(lerp(sh.l, sh.r, u))} 112 Q${f(lerp(sh.l - 18, sh.r + 18, u))} 220 ${f(lerp(sh.l - 16, sh.r + 16, u))} ${look.capeStyle === "corto" ? 226 : 334}`} stroke={shade(look.capeColor, -0.5)} strokeOpacity="0.5" strokeWidth="1.4" fill="none" />)}
-          </g>
-        ) : null}
+        {look.cape ? (() => {
+          const hemY = look.capeStyle === "corto" ? 232 : 340;
+          const frayed = look.capeStyle === "frastagliato";
+          // due lembi, uno per lato: si allargano verso il basso, con l'orlo mosso, la fodera scura sul bordo e le pieghe
+          const flap = (side: -1 | 1) => {
+            const sx = side < 0 ? sh.l : sh.r;
+            const outX = sx + side * (look.capeStyle === "corto" ? 16 : 26);
+            const inX = cx + side * 6;
+            const n = 6;
+            const hem = Array.from({ length: n + 1 }, (_, i) => {
+              const v = i / n;
+              const x = lerp(outX, inX, v);
+              const y = hemY + Math.sin(i * 1.7 + side) * 2.2 + (frayed ? (i % 2 ? -10 : 4) : 0) - (1 - v) * 4;
+              return `${i ? "L" : ""}${f(x)} ${f(y)}`;
+            }).join(" ");
+            const d = `M${f(cx + side * 12)} 100 C${f(sx + side * 2)} 98 ${f(sx + side * 6)} 106 ${f(sx + side * 6)} 116 C${f(sx + side * 14)} 180 ${f(outX + side * 4)} ${f(hemY - 70)} ${f(outX)} ${f(hemY - 4)} L${hem} L${f(inX)} 104 Z`;
+            const lining = `M${f(sx + side * 7)} 124 C${f(sx + side * 15)} 186 ${f(outX + side * 4)} ${f(hemY - 70)} ${f(outX)} ${f(hemY - 4)} L${f(outX - side * 6)} ${f(hemY - 2)} C${f(outX - side * 4)} ${f(hemY - 70)} ${f(sx + side * 8)} 190 ${f(sx + side * 2)} 126 Z`;
+            return (
+              <g key={side} className={live ? "aa-front-flap" : undefined} style={live ? { transformOrigin: `${f(sx)}px 104px`, animationDelay: side < 0 ? "0s" : "-2.4s" } : undefined}>
+                <path d={d} fill={`url(#${uid}cp)`} stroke={OUT} strokeOpacity="0.45" strokeWidth="1.4" />
+                {look.capePattern && look.capePattern !== "liscio" && look.capePattern !== "stemma" ? (
+                  look.capePattern === "stelle" ? (
+                    <g>
+                      <defs><clipPath id={`${uid}cs${side}`}><path d={d} /></clipPath></defs>
+                      <g clipPath={`url(#${uid}cs${side})`} fill="#f4e7c2" opacity="0.75">
+                        {Array.from({ length: 18 }, (_, i) => <circle key={i} cx={f(lerp(sx - side * 4, outX + side * 4, ((i * 37) % 100) / 100))} cy={f(110 + (((i * 61) % 100) / 100) * (hemY - 110))} r={i % 4 ? 0.9 : 1.6} />)}
+                      </g>
+                    </g>
+                  ) : (
+                    <ClothPattern kind={look.capePattern === "scacchi" ? "quadri" : look.capePattern === "bordato" ? "bordure" : "righe-verticali"} shapes={[d]} base={look.capeColor} trim={look.trim} uid={`${uid}cpp${side}`} box={[Math.min(sx, outX) - 8, 96, Math.max(sx, outX) + 8, hemY + 8]} />
+                  )
+                ) : null}
+                <path d={lining} fill={shade(look.capeColor, -0.6)} opacity="0.85" />
+                {[0.25, 0.5, 0.75].map((u) => {
+                  const x0 = lerp(sx + side * 4, inX, 1 - u);
+                  const x1 = lerp(outX, inX, 1 - u) + side * 2;
+                  const fd = `M${f(x0)} 120 Q${f((x0 + x1) / 2 + side * 6)} ${f((120 + hemY) / 2)} ${f(x1)} ${f(hemY - 3)}`;
+                  return (
+                    <g key={u}>
+                      <path d={fd} stroke={shade(look.capeColor, -0.6)} strokeOpacity="0.6" strokeWidth="1.8" fill="none" strokeLinecap="round" />
+                      <path d={fd} stroke={shade(look.capeColor, 0.35)} strokeOpacity="0.25" strokeWidth="1" fill="none" transform={`translate(${-side * 1.6} 0)`} />
+                    </g>
+                  );
+                })}
+                <path d={`M${hem.replace(/^/, "")}`} stroke={shade(look.capeColor, 0.3)} strokeOpacity="0.4" strokeWidth="1.1" fill="none" />
+              </g>
+            );
+          };
+          return <g className={live ? "aa-front-cape" : undefined}>{flap(-1)}{flap(1)}</g>;
+        })() : null}
         {quiverBack ? (
           <g transform={`translate(${cx - bowSide * 30} ${96 + tune(look.quiverY, 0, -40, 40)}) rotate(${-bowSide * 24 + spin})`}>
             {[-5, 0, 5].map((dx, i) => (
@@ -270,7 +321,15 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop }: { look: A
         ) : null}
         {look.pouch ? <Pouch kind={look.pouchType} x={cx - bowSide * 24} y={192} /> : null}
         <ChestEmblem kind={look.emblem} crest={look.crest} x={look.emblem === "compagnia" ? cx : cx - bowSide * 14} y={look.emblem === "compagnia" ? 150 : 134} s={look.emblem === "compagnia" ? 1.25 : 0.85} base={shirt} trim={look.trim} />
-        {look.cape && look.clasp !== "nessuno" ? <><Clasp kind={look.clasp} x={sh.l + 6} y={104} /><Clasp kind={look.clasp} x={sh.r - 6} y={104} /></> : null}
+        {look.cape && look.clasp !== "nessuno" ? (
+          // due fermagli sul davanti, uniti da una catenella che pende sul petto
+          <g>
+            <path d={`M${cx - 16} 102 Q${cx} 112 ${cx + 16} 102`} stroke="#5d5040" strokeWidth="2" fill="none" />
+            <path d={`M${cx - 16} 102 Q${cx} 112 ${cx + 16} 102`} stroke={look.clasp === "argento" ? "#d7dbe1" : "#d9b45a"} strokeWidth="1.4" strokeDasharray="1.6 1" fill="none" />
+            <Clasp kind={look.clasp} x={cx - 16} y={102} s={0.85} />
+            <Clasp kind={look.clasp} x={cx + 16} y={102} s={0.85} />
+          </g>
+        ) : null}
         {!quiverBack ? (
           <g transform={`translate(${cx - bowSide * (hip.r - cx + 10)} ${222 + tune(look.quiverY, 0, -40, 40)}) rotate(${-bowSide * 8 + spin})`}>
             {[-4, 0, 4].map((dx, i) => <path key={dx} d={`M${dx} -42 l-3.4 -9 l3.4 2.6 l3.4 -2.6 z`} fill={i === 1 ? look.cock : look.fletch} />)}
@@ -351,8 +410,11 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop }: { look: A
 
         {/* testa di fronte, la stessa della foto profilo */}
         <g className={live ? "aa-front-head" : undefined}>
-          <rect x={cx - 9} y="78" width="18" height="26" rx="4" fill={shade(skin, -0.2)} />
-          <ellipse cx={cx} cy="84" rx="9" ry="5" fill={`url(#${uid}sd)`} opacity="0.7" />
+          {/* collo: più stretto sotto il mento, si allarga nelle spalle; ombra del mento, muscoli appena segnati */}
+          <path d={`M${cx - 7.5} 76 L${cx + 7.5} 76 C${cx + 8} 88 ${cx + 9.5} 96 ${cx + 16} 103 L${cx - 16} 103 C${cx - 9.5} 96 ${cx - 8} 88 ${cx - 7.5} 76 Z`} fill={shade(skin, -0.2)} />
+          <path d={`M${cx - 7.5} 76 C${cx - 8} 88 ${cx - 9.5} 96 ${cx - 16} 103 L${cx - 10} 103 C${cx - 6} 96 ${cx - 5} 88 ${cx - 5} 78 Z M${cx + 7.5} 76 C${cx + 8} 88 ${cx + 9.5} 96 ${cx + 16} 103 L${cx + 10} 103 C${cx + 6} 96 ${cx + 5} 88 ${cx + 5} 78 Z`} fill={shade(skin, -0.36)} opacity="0.5" />
+          <ellipse cx={cx} cy="83" rx="9" ry="5" fill={`url(#${uid}sd)`} opacity="0.75" />
+          <path d={`M${cx - 6} 84 Q${cx - 4} 94 ${cx - 1.4} 101 M${cx + 6} 84 Q${cx + 4} 94 ${cx + 1.4} 101`} stroke={shade(skin, -0.4)} strokeOpacity="0.3" strokeWidth="0.7" fill="none" />
           <svg x={cx - 65} y="-8" width="130" height="130" viewBox="0 0 100 100" overflow="visible">
             <AvatarFace look={look} className="" bare part="front" />
           </svg>

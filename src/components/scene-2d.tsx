@@ -16,6 +16,12 @@ export const SKY: Record<Sky["tod"], { top: string; mid: string; low: string; su
   notte: { top: "#050a1a", mid: "#0f1e3d", low: "#22355c", sun: "#e8eeff", shade: "#0a1430", shadeA: 0.5 },
 };
 
+const shadeHex = (hex: string, k: number) => {
+  const n = parseInt(hex.slice(1), 16);
+  const c = [n >> 16, (n >> 8) & 255, n & 255].map((v) => Math.round(k < 0 ? v * (1 + k) : v + (255 - v) * k));
+  return `#${c.map((v) => Math.max(0, Math.min(255, v)).toString(16).padStart(2, "0")).join("")}`;
+};
+
 export const rnd = (i: number) => {
   const x = Math.sin(i * 127.1 + 311.7) * 43758.5453;
   return x - Math.floor(x);
@@ -141,7 +147,7 @@ export const SceneBackdrop = memo(function SceneBackdrop({ sky, id = "bk", scene
       ) : null}
       </>}
     </svg>
-    {indoor ? null : <SkyLayer id={id} tod={sky.tod} night={night} rain={rain} cloudy={cloudy} desert={desert} wind={wind} high={sc.id === "fabriano"} />}
+    {indoor ? null : <SkyLayer id={id} tod={sky.tod} night={night} rain={rain} cloudy={cloudy} desert={desert} wind={wind} high={sc.id === "fabriano"} amount={sky.clouds ?? (cloudy ? 0.75 : 0.15)} seed={sky.seed ?? 1} />}
     </>
   );
 });
@@ -152,25 +158,42 @@ export const SceneBackdrop = memo(function SceneBackdrop({ sky, id = "bk", scene
  * viene ridisegnata a ogni fotogramma. Il nastro è largo il doppio e si sposta di metà:
  * il giro torna al punto di partenza senza stacchi.
  */
-function SkyLayer({ id, tod, night, rain, cloudy, desert, wind, high = false }: { id: string; tod: Sky["tod"]; night: boolean; rain: boolean; cloudy: boolean; desert: boolean; wind?: number; /** in piazza le nuvole stanno sopra i tetti, piccole e lontane */ high?: boolean }) {
+function SkyLayer({ id, tod, night, rain, cloudy, desert, wind, high = false, amount, seed }: { id: string; tod: Sky["tod"]; night: boolean; rain: boolean; cloudy: boolean; desert: boolean; wind?: number; /** in piazza le nuvole stanno sopra i tetti, piccole e lontane */ high?: boolean; /** quante nuvole, da 0 (limpido) a 1 (coperto) */ amount: number; seed: number }) {
   // senza vento indicato vanno piano verso sinistra; con il vento seguono la sua direzione
   const toRight = wind != null && wind > 0;
   const pace = wind != null ? 0.6 + Math.min(3, Math.abs(wind)) * 0.45 : 1;
   // di sera nuvole grigie (niente rosa)
-  const tint = night ? "#2a3550" : rain ? "#8b95a0" : tod === "tramonto" ? "#e3e5e9" : "#ffffff";
-  const base = night ? "#141d33" : rain ? "#5d6670" : tod === "tramonto" ? "#6c737d" : "#b9c8d8";
-  const top = night ? "#3a4766" : rain ? "#a3acb6" : tod === "tramonto" ? "#eef0f3" : "#ffffff";
-  const mid = night ? "#283452" : rain ? "#7f8994" : tod === "tramonto" ? "#c5c9cf" : "#f1f5fa";
-  const low = night ? "#18213a" : rain ? "#5d6670" : tod === "tramonto" ? "#8b929b" : "#c3d1e0";
+  // il grigio solo quando è davvero coperto; col bel tempo nuvole bianche, al tramonto appena dorate
+  const grey = rain || (cloudy && amount > 0.55);
+  const tint = night ? "#3a4870" : rain ? "#8b95a0" : tod === "tramonto" ? "#fff1dc" : "#ffffff";
+  const base = night ? "#1a2440" : rain ? "#5d6670" : grey ? "#8e9aa8" : tod === "tramonto" ? "#c79a8a" : "#c9d8e8";
+  const top = night ? "#46557a" : rain ? "#a3acb6" : grey ? "#e6eaee" : tod === "tramonto" ? "#fff4e6" : "#ffffff";
+  const mid = night ? "#2e3b5c" : rain ? "#7f8994" : grey ? "#c3cad2" : tod === "tramonto" ? "#f2d6c4" : "#f6f9fc";
+  const low = night ? "#1e2844" : rain ? "#5d6670" : grey ? "#9aa5b1" : tod === "tramonto" ? "#d9aa98" : "#d8e4f0";
+  // nuvole diverse a ogni visita: quante, dove, quanto grandi e quanto trasparenti
+  const R = (i: number) => rnd(seed * 0.731 + i * 1.37);
+  const make = (layer: number): [number, number, number, number, number][] => {
+    const n = Math.max(0, Math.round((layer ? 4.2 : 5.5) * amount + (R(layer * 50) - 0.3) * 1.6));
+    return Array.from({ length: n }, (_, i) => {
+      const j = layer * 100 + i * 7;
+      return [
+        ((i + 0.15 + R(j + 1) * 0.7) * 400) / Math.max(1, n),
+        layer ? 34 + R(j + 2) * 34 : 14 + R(j + 2) * 30,
+        (layer ? 0.55 : 0.38) + R(j + 3) * (layer ? 0.75 : 0.42) + amount * 0.35,
+        Math.min(1, 0.3 + R(j + 4) * 0.55 + amount * 0.3),
+        j,
+      ];
+    });
+  };
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
       {/* in piazza le nuvole restano piccole e alte, sopra i merli del palazzo */}
       <div className="absolute left-0 top-0" style={high ? { width: "222%", transform: "scale(0.45)", transformOrigin: "0 0" } : { width: "100%" }}>
       {[0, 1].map((layer) => {
-        const list = cloudy ? CLOUDS_THICK[layer] : CLOUDS_FEW[layer];
+        const list = make(layer);
         const gid = `${id}cl${layer}`;
         return (
-          <div key={layer} className={`aa-cloud-track ${layer ? "aa-cloud-near" : "aa-cloud-far"}`} style={{ opacity: rain ? 0.95 : cloudy ? 0.92 : desert ? 0.45 : layer ? 0.88 : 0.62, animationDirection: toRight ? "reverse" : "normal", animationDuration: `${Math.round((layer ? 90 : 160) / pace)}s` }}>
+          <div key={layer} className={`aa-cloud-track ${layer ? "aa-cloud-near" : "aa-cloud-far"}`} style={{ opacity: rain ? 0.95 : desert ? 0.6 : 1, animationDirection: toRight ? "reverse" : "normal", animationDuration: `${Math.round((layer ? 90 : 160) / pace)}s` }}>
             <svg viewBox="0 0 560 120" preserveAspectRatio="xMinYMin meet" className="block h-auto w-full">
               <defs>
                 <linearGradient id={gid} gradientUnits="userSpaceOnUse" x1="0" y1="-34" x2="0" y2="12">
@@ -181,7 +204,7 @@ function SkyLayer({ id, tod, night, rain, cloudy, desert, wind, high = false }: 
               </defs>
               {[0, 280].map((dx) => (
                 <g key={dx} transform={`translate(${dx} 6)`}>
-                  {list.map(([x, y, k], i) => <Cloud key={i} x={x * 0.7} y={y} k={k * 0.9} tint={tint} base={base} id={gid} />)}
+                  {list.map(([x, y, k, a, j], i) => <Cloud key={i} x={x * 0.7} y={y} k={k * 0.9} tint={tint} base={base} id={gid} alpha={a} shape={j + seed} />)}
                   {layer === 1 && !night && !rain ? (
                     <g stroke="#2a3a46" strokeWidth="1.3" fill="none" strokeLinecap="round">
                       <path d="M84 84 q4 -4 8 0 q4 -4 8 0" />
@@ -201,21 +224,14 @@ function SkyLayer({ id, tod, night, rain, cloudy, desert, wind, high = false }: 
 
 /* ---------- elementi comuni ---------- */
 
-// [x, y, scala] in un tratto di cielo largo 400: la stessa fila si ripete a destra
-const CLOUDS_FEW: [number, number, number][][] = [
-  [[30, 34, 0.55], [150, 20, 0.45], [262, 44, 0.6], [350, 26, 0.5]],
-  [[70, 52, 1], [230, 30, 0.85], [330, 62, 1.1]],
-];
-const CLOUDS_THICK: [number, number, number][][] = [
-  [[10, 30, 0.7], [100, 18, 0.6], [190, 36, 0.75], [290, 22, 0.65], [370, 40, 0.7]],
-  [[40, 50, 1.25], [150, 34, 1.1], [260, 56, 1.3], [360, 38, 1.15]],
-];
-
 /** nuvola a cumulo: sbuffi tondi in alto, base piatta e ombreggiata */
-function Cloud({ x, y, k, tint, base, id }: { x: number; y: number; k: number; tint: string; base: string; id: string }) {
-  const puffs: [number, number, number][] = [[-30, -2, 13], [-14, -11, 16], [4, -16, 19], [22, -9, 15], [36, -1, 11], [-2, -2, 17]];
+function Cloud({ x, y, k, tint, base, id, alpha = 1, shape = 0 }: { x: number; y: number; k: number; tint: string; base: string; id: string; alpha?: number; shape?: number }) {
+  // ogni nuvola ha sbuffi un po' diversi: più lunga, più alta, più gonfia
+  const w = 0.75 + rnd(shape * 1.3) * 0.6;
+  const h = 0.75 + rnd(shape * 2.1 + 5) * 0.5;
+  const puffs: [number, number, number][] = ([[-30, -2, 13], [-14, -11, 16], [4, -16, 19], [22, -9, 15], [36, -1, 11], [-2, -2, 17]] as [number, number, number][]).map(([px, py, r], i) => [px * w, py * h, r * (0.8 + rnd(shape + i * 3.3) * 0.45)]);
   return (
-    <g transform={`translate(${x} ${y}) scale(${k})`}>
+    <g transform={`translate(${x} ${y}) scale(${k})`} opacity={alpha}>
       <ellipse cx="2" cy="6" rx="44" ry="6" fill={base} opacity="0.35" />
       {puffs.map(([px, py, r], i) => <circle key={i} cx={px} cy={py} r={r} fill={`url(#${id})`} />)}
       <path d="M-44 4 C-30 9 30 9 48 4 L48 7 C30 12 -30 12 -44 7 Z" fill={base} opacity="0.5" />
@@ -225,7 +241,7 @@ function Cloud({ x, y, k, tint, base, id }: { x: number; y: number; k: number; t
 }
 
 /** fili d'erba veri: affusolati, curvi, più scuri alla base, su tre file con un po' di vento */
-function Blades({ id, night, grass, y }: { id: string; night: boolean; grass: string; y: number }) {
+function Blades({ id, night, grass, y, fill, density = 1 }: { id: string; night: boolean; grass: string; y: number; /** riempimento dei fili, se non è l'erba verde */ fill?: string; /** quanta erba: 1 prato pieno, 0.2 qualche ciuffo */ density?: number }) {
   const rows = [
     { n: 70, top: y + 12, h: 7, w: 1.1, k: 0 },
     { n: 80, top: y + 38, h: 12, w: 1.6, k: 1 },
@@ -236,6 +252,7 @@ function Blades({ id, night, grass, y }: { id: string; night: boolean; grass: st
       {rows.map((row) => (
         <g key={row.k}>
           {Array.from({ length: row.n }, (_, i) => {
+            if (density < 1 && rnd(i * 11 + row.k * 7) > density) return null;
             const r1 = rnd(i * 3 + row.k * 101);
             const r2 = rnd(i * 7 + row.k * 53);
             const x = (i / row.n) * 404 - 2 + (r1 - 0.5) * 6;
@@ -245,7 +262,7 @@ function Blades({ id, night, grass, y }: { id: string; night: boolean; grass: st
             const w = row.w * (0.7 + r1 * 0.6);
             const d = `M${(x - w).toFixed(1)} ${by.toFixed(1)} Q${(x - w * 0.2 + lean * 0.35).toFixed(1)} ${(by - h * 0.6).toFixed(1)} ${(x + lean).toFixed(1)} ${(by - h).toFixed(1)} Q${(x + w * 0.3 + lean * 0.4).toFixed(1)} ${(by - h * 0.55).toFixed(1)} ${(x + w).toFixed(1)} ${by.toFixed(1)} Z`;
             const tinted = i % 5 === 0;
-            return <path key={i} d={d} fill={tinted ? (night ? "#2f5a3e" : grass) : `url(#${id}blade)`} opacity={row.k === 0 ? 0.75 : 1} />;
+            return <path key={i} d={d} fill={fill ? (tinted ? grass : fill) : tinted ? (night ? "#2f5a3e" : grass) : `url(#${id}blade)`} opacity={row.k === 0 ? 0.75 : 1} />;
           })}
         </g>
       ))}
@@ -287,12 +304,22 @@ function TreeLine({ y = 207, colors, n = 18, pines = 3 }: { y?: number; colors: 
   );
 }
 
-function Ground({ id, night, grass = "#86ab5e", flowers = true, y = 216 }: { id: string; night: boolean; grass?: string; flowers?: boolean; y?: number }) {
+function Ground({ id, night, grass = "#86ab5e", flowers = true, y = 216, blade, density = 1 }: { id: string; night: boolean; grass?: string; flowers?: boolean; y?: number; /** colori dei fili [base, metà, punta]: sabbia, neve, foglie secche */ blade?: [string, string, string]; density?: number }) {
+  const bid = `${id}bl2`;
   return (
     <g>
+      {blade ? (
+        <defs>
+          <linearGradient id={bid} x1="0" y1="1" x2="0" y2="0">
+            <stop offset="0" stopColor={night ? shadeHex(blade[0], -0.55) : blade[0]} />
+            <stop offset="0.55" stopColor={night ? shadeHex(blade[1], -0.55) : blade[1]} />
+            <stop offset="1" stopColor={night ? shadeHex(blade[2], -0.5) : blade[2]} />
+          </linearGradient>
+        </defs>
+      ) : null}
       <rect y={y} width="400" height={300 - y} fill={`url(#${id}ground)`} />
       {[0, 1, 2, 3].map((i) => <rect key={i} y={y + 6 + i * 20} width="400" height="10" fill="#000" opacity="0.06" />)}
-      <Blades id={id} night={night} grass={grass} y={y} />
+      <Blades id={id} night={night} grass={night && blade ? shadeHex(grass, -0.5) : grass} y={y} fill={blade ? `url(#${bid})` : undefined} density={density} />
       {flowers && !night ? (
         <g>{Array.from({ length: 14 }, (_, i) => <circle key={i} cx={(i * 53) % 400} cy={262 + ((i * 17) % 34)} r="1.6" fill={["#ffd166", "#f4f1ea", "#c084fc", "#ff8fa3"][i % 4]} />)}</g>
       ) : null}
@@ -736,20 +763,44 @@ const LAYERS: Record<SceneId, (id: string, night: boolean) => ReactNode> = {
   ),
   deserto: (id, night) => (
     <g>
-      <path d="M220 200 L240 150 L300 150 L318 200 Z M40 200 L52 166 L92 166 L100 200 Z" fill={night ? "#3a2a2a" : "#c27a4a"} />
-      <path d="M240 150 L300 150 L298 158 L242 158 Z" fill={night ? "#4a3434" : "#d99060"} />
-      <path d="M0 210 C60 186 120 196 180 206 C240 188 320 186 400 204 V232 H0 Z" fill={night ? "#4a3c2a" : "#e8c48a"} />
-      <path d="M0 222 C80 204 160 214 220 220 C290 206 350 210 400 218 V240 H0 Z" fill={night ? "#3e3222" : "#dcb27a"} />
-      <Ground id={id} night={night} grass="#c9a066" flowers={false} />
-      {[[70, 230, 1], [350, 224, 0.8]].map(([x, y, k]) => (
-        <g key={x} transform={`translate(${x} ${y}) scale(${k})`}>
-          <g className="aa-tree">
-          <path d="M0 0 C2 -20 -2 -40 2 -60" stroke="#6a4a2a" strokeWidth="4" fill="none" />
-          {[-60, -30, 0, 30, 60, 90].map((a) => <path key={a} d={`M2 -60 q${Math.cos((a * Math.PI) / 180) * 14} ${-8 + Math.sin((a * Math.PI) / 180) * 6} ${Math.cos((a * Math.PI) / 180) * 26} ${8 + Math.abs(Math.sin((a * Math.PI) / 180)) * 6}`} stroke={night ? "#1f3a2a" : "#3f7a3a"} strokeWidth="4" fill="none" strokeLinecap="round" />)}
-          </g>
+      {/* mese lontane a strati, dune con il lato in luce e quello in ombra, cactus, rocce e tremolio del caldo */}
+      {[[196, 150, 96, 1], [96, 170, 70, 0.8], [300, 176, 60, 0.7]].map(([x, y, w, k], i) => (
+        <g key={i} opacity={k}>
+          <path d={`M${x} 204 L${x + w * 0.16} ${y} L${x + w * 0.84} ${y} L${x + w} 204 Z`} fill={night ? "#3a2a2a" : ["#c27a4a", "#b8704a", "#c88a5a"][i]} />
+          <path d={`M${x + w * 0.16} ${y} L${x + w * 0.84} ${y} L${x + w * 0.83} ${y + 6} L${x + w * 0.17} ${y + 6} Z`} fill={night ? "#4a3434" : "#e0a070"} />
+          {[16, 26, 36].map((dy) => <path key={dy} d={`M${x + w * 0.14 - dy * 0.05} ${y + dy} H${x + w * 0.86 + dy * 0.05}`} stroke={night ? "#2a1e1e" : "#a8603a"} strokeWidth="1.2" opacity="0.6" />)}
+          <path d={`M${x + w * 0.6} ${y + 6} L${x + w * 0.84} ${y} L${x + w} 204 L${x + w * 0.7} 204 Z`} fill="#000" opacity="0.14" />
         </g>
       ))}
-      <path d="M0 270 q60 -8 120 0 t120 0 t160 0" stroke="#fff" strokeOpacity="0.15" strokeWidth="2" fill="none" />
+      <path d="M0 206 C50 186 110 190 170 204 C230 184 300 182 400 200 V232 H0 Z" fill={night ? "#4a3c2a" : "#ecca90"} />
+      <path d="M170 204 C230 184 300 182 400 200 V210 C330 196 260 198 170 204 Z" fill="#fff" opacity="0.18" />
+      <path d="M0 218 C70 200 150 208 220 218 C290 204 350 206 400 214 V240 H0 Z" fill={night ? "#3e3222" : "#ddb27a"} />
+      <path d="M0 218 C70 200 150 208 220 218 L220 226 C150 216 70 210 0 226 Z" fill="#000" opacity="0.08" />
+      <Ground id={id} night={night} grass="#a8864a" flowers={false} blade={["#7a5a2a", "#b0905a", "#e2c48a"]} density={0.18} />
+      {/* increspature della sabbia */}
+      <g fill="none" strokeLinecap="round">
+        {[244, 256, 270, 286].map((y, i) => <path key={y} d={`M-10 ${y} q30 -${3 + i} 60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0`} stroke="#fff" strokeOpacity={0.14 + i * 0.03} strokeWidth={1 + i * 0.4} />)}
+      </g>
+      {/* saguari */}
+      {[[124, 240, 1], [286, 226, 0.66]].map(([x, y, k]) => (
+        <g key={x} transform={`translate(${x} ${y}) scale(${k})`}>
+          <ellipse cx="0" cy="1" rx="14" ry="2.6" fill="#000" opacity="0.2" />
+          <path d="M-5 0 V-52 C-5 -60 5 -60 5 -52 V0 Z" fill={night ? "#1f3a2a" : "#4f8a4a"} />
+          <path d="M-5 -24 H-14 C-18 -24 -18 -28 -18 -32 V-44 C-18 -48 -12 -48 -12 -44 V-30 H-5 Z" fill={night ? "#1f3a2a" : "#4f8a4a"} />
+          <path d="M5 -32 H12 V-50 C12 -54 18 -54 18 -50 V-30 C18 -26 16 -26 12 -26 H5 Z" fill={night ? "#1f3a2a" : "#4f8a4a"} />
+          {[-3, 0, 3].map((dx) => <path key={dx} d={`M${dx} -2 V-54`} stroke={night ? "#14281a" : "#3a6a36"} strokeWidth="0.7" />)}
+          <path d="M-3.4 -54 V-4" stroke="#fff" strokeOpacity="0.2" strokeWidth="1.2" />
+          <circle cx="0" cy="-58" r="2" fill={night ? "#4a2a30" : "#f27a9a"} />
+        </g>
+      ))}
+      {[[170, 266, 12, 7], [250, 250, 8, 5], [276, 278, 14, 8]].map(([x, y, w, h]) => (
+        <g key={x}>
+          <ellipse cx={x + 1} cy={y + 1} rx={w * 1.1} ry={h * 0.3} fill="#000" opacity="0.2" />
+          <path d={`M${x - w} ${y} Q${x - w * 0.8} ${y - h} ${x} ${y - h} Q${x + w * 0.9} ${y - h * 0.9} ${x + w} ${y} Z`} fill={night ? "#3a2a22" : "#b07a4a"} />
+          <path d={`M${x - w * 0.6} ${y - h * 0.6} Q${x} ${y - h * 1.05} ${x + w * 0.4} ${y - h * 0.7}`} stroke="#fff" strokeOpacity="0.25" strokeWidth="1.2" fill="none" />
+        </g>
+      ))}
+      {night ? null : <g className="aa-shimmer" stroke="#fff" strokeOpacity="0.12" strokeWidth="1.2" fill="none">{[0, 1, 2].map((i) => <path key={i} d={`M${40 + i * 120} ${210 + i * 3} q20 -3 40 0 t40 0`} />)}</g>}
     </g>
   ),
   villaggio: (id, night) => (
@@ -781,11 +832,20 @@ const LAYERS: Record<SceneId, (id: string, night: boolean) => ReactNode> = {
   ),
   neve: (id, night) => (
     <g>
-      <path d="M0 176 L40 140 L70 160 L110 120 L150 156 L190 130 L240 166 L290 128 L340 158 L400 136 V220 H0 Z" fill={night ? "#2a3a54" : "#c9d6e2"} />
-      <path d="M0 196 C40 176 80 180 120 188 C170 168 220 174 260 186 C300 170 350 172 400 188 V230 H0 Z" fill={night ? "#3a4a64" : "#e2eaf1"} />
+      {/* montagne innevate con il lato in luce e quello in ombra, poi colline morbide, abeti carichi di neve */}
+      {[[-20, 176, 70, 124], [60, 182, 90, 108], [170, 178, 80, 120], [250, 182, 100, 104], [330, 178, 90, 126]].map(([x, base, w, peak], i) => (
+        <g key={i}>
+          <path d={`M${x} ${base} L${x + w * 0.5} ${peak} L${x + w} ${base} Z`} fill={night ? "#2a3a54" : "#b9c8d8"} />
+          <path d={`M${x + w * 0.5} ${peak} L${x + w} ${base} L${x + w * 0.62} ${base} Z`} fill="#000" opacity="0.12" />
+          <path d={`M${x + w * 0.5} ${peak} L${x + w * 0.66} ${peak + (base - peak) * 0.38} L${x + w * 0.58} ${peak + (base - peak) * 0.3} L${x + w * 0.5} ${peak + (base - peak) * 0.42} L${x + w * 0.42} ${peak + (base - peak) * 0.3} L${x + w * 0.34} ${peak + (base - peak) * 0.38} Z`} fill={night ? "#c9d4e6" : "#f8fbfd"} />
+        </g>
+      ))}
+      <path d="M0 196 C40 176 80 180 120 188 C170 168 220 174 260 186 C300 170 350 172 400 188 V230 H0 Z" fill={night ? "#3a4a64" : "#e6edf3"} />
+      <path d="M0 196 C40 176 80 180 120 188 L120 194 C80 186 40 184 0 202 Z" fill="#fff" opacity="0.5" />
       {Array.from({ length: 16 }, (_, i) => <Pine key={i} x={i * 27 + 4} y={214} h={40 + rnd(i + 3) * 26} c={night ? "#16302a" : "#2f5038"} snow />)}
-      <Ground id={id} night={night} grass="#c9d6e2" flowers={false} />
-      <path d="M0 250 q80 -10 160 0 t240 0" stroke="#fff" strokeOpacity="0.6" strokeWidth="3" fill="none" />
+      <Ground id={id} night={night} grass="#dfe7ef" flowers={false} blade={["#9aaab8", "#c9d6e2", "#ffffff"]} density={0.22} />
+      <path d="M0 248 C60 238 120 244 180 248 C240 252 320 238 400 246 V256 C320 248 240 262 180 256 C120 252 60 248 0 256 Z" fill="#fff" opacity="0.55" />
+      <path d="M0 272 C80 262 160 268 240 274 C300 278 360 266 400 270" stroke="#b9c8d8" strokeOpacity="0.5" strokeWidth="2" fill="none" />
     </g>
   ),
   campagna: (id, night) => (
@@ -841,7 +901,17 @@ const LAYERS: Record<SceneId, (id: string, night: boolean) => ReactNode> = {
       {/* colonnato e arco */}
       <g transform="translate(160 140)" fill={night ? "#5a5650" : "#d8cfbd"} stroke={night ? "#3a3632" : "#a89a7a"} strokeWidth="0.8">
         <rect x="0" y="0" width="140" height="8" />
-        {[6, 36, 66, 96, 126].map((x, i) => <rect key={x} x={x} y="8" width="10" height={i === 3 ? 40 : 72} />)}
+        {[6, 36, 66, 96, 126].map((x, i) => (
+          <g key={x}>
+            <rect x={x} y="8" width="10" height={i === 3 ? 40 : 72} />
+            {[2.5, 5, 7.5].map((d) => <path key={d} d={`M${x + d} 12 V${i === 3 ? 46 : 78}`} stroke={night ? "#3a3632" : "#b8ac90"} strokeWidth="0.6" />)}
+            <rect x={x - 2.5} y="8" width="15" height="4" fill={night ? "#66625a" : "#e6dcc8"} />
+            {i === 3 ? <path d={`M${x} 48 l3 -5 l3 4 l4 -3 V48 Z`} /> : <rect x={x - 2.5} y="76" width="15" height="4" fill={night ? "#66625a" : "#e6dcc8"} />}
+            <rect x={x + 6.5} y="12" width="3.5" height={i === 3 ? 36 : 64} fill="#000" opacity="0.12" stroke="none" />
+          </g>
+        ))}
+        <path d="M0 0 H140 V3 H0 Z" fill={night ? "#66625a" : "#e6dcc8"} />
+        <path d="M70 0 l8 -6 l10 6 Z" />
         <path d="M100 48 L106 40 L112 46 Z" />
       </g>
       <g transform="translate(40 150)" fill={night ? "#5a5650" : "#cfc5b0"} stroke={night ? "#3a3632" : "#a89a7a"} strokeWidth="0.8">
@@ -856,22 +926,58 @@ const LAYERS: Record<SceneId, (id: string, night: boolean) => ReactNode> = {
   ),
   spiaggia: (id, night) => (
     <g>
-      <rect y="180" width="400" height="40" fill={`url(#${id}water)`} />
-      <path d="M300 180 L330 168 L370 172 L400 160 V180 Z" fill={night ? "#1c2a44" : "#7a9a8a"} />
-      <g className="aa-shimmer" stroke="#fff" strokeOpacity="0.55" strokeWidth="1">
-        {Array.from({ length: 18 }, (_, i) => <path key={i} d={`M${(i * 47) % 400} ${186 + (i % 5) * 6} h${8 + (i % 3) * 4}`} />)}
+      {/* mare con l'orizzonte netto, una vela lontana, scogli, onde che arrivano sulla sabbia bagnata */}
+      <rect y="178" width="400" height="44" fill={`url(#${id}water)`} />
+      <rect y="178" width="400" height="2" fill="#fff" opacity="0.35" />
+      <path d="M300 180 L322 168 L344 172 L366 164 L400 170 V180 Z" fill={night ? "#1c2a44" : "#7a9a8a"} />
+      <path d="M322 168 L344 172 L366 164 L366 168 L344 175 L322 171 Z" fill="#000" opacity="0.15" />
+      <g transform="translate(150 176)">
+        <path d="M0 0 L0 -12 L7 0 Z" fill={night ? "#8a90a0" : "#f4f1ea"} />
+        <path d="M-4 0 H9 L7 2.4 H-2 Z" fill={night ? "#3a3a44" : "#7a4a2a"} />
       </g>
-      <path className="aa-wave" d="M0 218 q20 -6 40 0 t40 0 t40 0 t40 0 t40 0 t40 0 t40 0 t40 0 t40 0 t40 0 V224 H0 Z" fill="#fff" opacity="0.6" />
-      <Ground id={id} night={night} y={220} grass="#d9bf86" flowers={false} />
-      {[[60, 236, 1], [96, 248, 0.8]].map(([x, y, k]) => (
+      <g className="aa-shimmer" stroke="#fff" strokeOpacity="0.55" strokeWidth="1">
+        {Array.from({ length: 22 }, (_, i) => <path key={i} d={`M${(i * 47) % 400} ${184 + (i % 6) * 6} h${6 + (i % 3) * 5}`} />)}
+      </g>
+      <path d="M0 214 C60 208 120 216 200 212 C280 208 340 214 400 210 V226 H0 Z" fill={night ? "#2a3a4a" : "#c9b07a"} opacity="0.9" />
+      <path className="aa-wave" d="M0 214 q20 -6 40 0 t40 0 t40 0 t40 0 t40 0 t40 0 t40 0 t40 0 t40 0 t40 0 V219 H0 Z" fill="#fff" opacity="0.7" />
+      <Ground id={id} night={night} y={222} grass="#c9b07a" flowers={false} blade={["#7a8a4a", "#a8b06a", "#e0dca0"]} density={0.1} />
+      <g fill="none" strokeLinecap="round">
+        {[246, 262, 280].map((y, i) => <path key={y} d={`M-10 ${y} q30 -${2 + i} 60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0`} stroke="#fff" strokeOpacity={0.16 + i * 0.03} strokeWidth={1 + i * 0.4} />)}
+      </g>
+      {/* palme: tronco ad anelli che si piega, foglie piene con le foglioline, noci di cocco */}
+      {[[112, 266, 1, 1], [292, 246, 0.66, -1]].map(([x, y, k, lean]) => (
         <g key={x} transform={`translate(${x} ${y}) scale(${k})`}>
+          <ellipse cx={lean * 22} cy="2" rx="34" ry="4" fill="#000" opacity="0.18" />
           <g className="aa-tree">
-          <path d="M0 0 C4 -20 0 -40 8 -64" stroke="#7a5a3a" strokeWidth="4" fill="none" />
-          {[-50, -20, 10, 40, 70, 100].map((a) => <path key={a} d={`M8 -64 q${Math.cos((a * Math.PI) / 180) * 14} -8 ${Math.cos((a * Math.PI) / 180) * 28} 10`} stroke={night ? "#1f3a2a" : "#3f8a3a"} strokeWidth="4" fill="none" strokeLinecap="round" />)}
+            <path d={`M-4 0 C${-4 + lean * 4} -30 ${lean * 10} -60 ${lean * 22} -88 L${lean * 22 + 6} -86 C${lean * 14 + 6} -60 ${4 + lean * 4} -30 4 0 Z`} fill={night ? "#3a2a1e" : "#8a6a42"} />
+            {Array.from({ length: 11 }, (_, i) => {
+              const u = i / 11;
+              const cx = lean * 22 * Math.pow(u, 1.4);
+              return <path key={i} d={`M${cx - 4 + u * 1} ${-u * 86} q4 2 8 0`} stroke={night ? "#2a1e14" : "#5a4028"} strokeWidth="1.2" fill="none" />;
+            })}
+            <g transform={`translate(${lean * 22 + 3} -88)`}>
+              {[-150, -110, -70, -30, 10, 50, 200].map((a, i) => {
+                const r = (a * Math.PI) / 180;
+                const ex = Math.cos(r) * 40;
+                const ey = Math.sin(r) * 16 + 14;
+                const leaf = `M0 0 Q${ex * 0.5} ${ey * 0.5 - 14} ${ex} ${ey} Q${ex * 0.55} ${ey * 0.5 - 6} 0 0 Z`;
+                return (
+                  <g key={a}>
+                    <path d={leaf} fill={night ? "#1f3a2a" : i % 2 ? "#3f8a3a" : "#4f9a44"} />
+                    {[0.3, 0.5, 0.7, 0.88].map((t) => <path key={t} d={`M${ex * t} ${(ey * t) - 14 * t * (1 - t) * 2} l${ex > 0 ? 3 : -3} 6`} stroke={night ? "#14281a" : "#2f6a2a"} strokeWidth="0.9" />)}
+                  </g>
+                );
+              })}
+              {[[-3, 4], [3, 5], [0, 7]].map(([cx, cy]) => <circle key={`${cx}${cy}`} cx={cx} cy={cy} r="2.6" fill={night ? "#2a1e14" : "#6a4a2a"} />)}
+            </g>
           </g>
         </g>
       ))}
-      {[[300, 270], [330, 282]].map(([x, y]) => <path key={x} d={`M${x} ${y} q4 -6 8 0 q-4 3 -8 0`} fill="#f4c6a8" />)}
+      <g transform="translate(236 262)">
+        <path d="M-18 4 C-20 -6 18 -6 16 4 Z" fill={night ? "#3a3a44" : "#8a8a84"} />
+        <path d="M-10 -1 C-4 -4 4 -4 10 -1" stroke="#fff" strokeOpacity="0.3" strokeWidth="1.2" fill="none" />
+      </g>
+      {[[230, 272], [262, 286], [180, 284]].map(([x, y], i) => <path key={x} d={`M${x} ${y} q4 -6 8 0 q-4 3 -8 0`} fill={["#f4c6a8", "#f4e6d4", "#e8b090"][i]} />)}
     </g>
   ),
   autunno: (id, night) => (
@@ -883,7 +989,7 @@ const LAYERS: Record<SceneId, (id: string, night: boolean) => ReactNode> = {
           <ellipse cx="0" cy="-8" rx={9 + (i % 3)} ry={11 + (i % 2) * 2} fill={night ? "#2a1a10" : ["#d9822a", "#c4473d", "#e6b325", "#b0602a"][i % 4]} className="aa-tree" style={{ animationDelay: `${(i % 5) * 0.4}s` }} />
         </g>
       ))}
-      <Ground id={id} night={night} grass="#c9a04a" flowers={false} />
+      <Ground id={id} night={night} grass="#c9a04a" flowers={false} blade={["#6a5424", "#a8883a", "#e6c46a"]} density={0.85} />
       <g className="aa-leaves">
         {Array.from({ length: 16 }, (_, i) => <path key={i} d={`M${(i * 61) % 400} ${(i * 37) % 260} q3 -3 6 0 q-3 3 -6 0`} fill={["#d9822a", "#c4473d", "#e6b325"][i % 3]} style={{ animationDelay: `${(i % 8) * 0.6}s` }} />)}
       </g>

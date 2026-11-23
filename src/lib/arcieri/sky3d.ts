@@ -9,7 +9,10 @@ import { useLocalState } from "./local-store";
 
 export type TimeOfDay = "mattina" | "pomeriggio" | "tramonto" | "notte";
 export type Weather = "sereno" | "nuvoloso" | "pioggia";
-export type Sky = { tod: TimeOfDay; weather: Weather };
+/** clouds: quante nuvole (0–1); seed: per disporle ogni volta in modo diverso */
+export type Sky = { tod: TimeOfDay; weather: Weather; clouds?: number; seed?: number };
+/** "variabile": a ogni visita il cielo si sceglie da sé (per lo più sereno o poco nuvoloso) */
+export type WeatherPref = Weather | "variabile";
 
 export const TODS: { id: TimeOfDay; label: string }[] = [
   { id: "mattina", label: "Mattina" },
@@ -23,6 +26,24 @@ export const WEATHERS: { id: Weather; label: string }[] = [
   { id: "pioggia", label: "Pioggia" },
 ];
 
+export const WEATHER_PREFS: { id: WeatherPref; label: string }[] = [{ id: "variabile", label: "Variabile" }, ...WEATHERS];
+
+type Roll = { weather: Weather; clouds: number; seed: number };
+let lastRoll: { at: number; r: Roll } | null = null;
+/** Il cielo di questa visita: tenuto un paio di minuti, così passando da una pagina all'altra resta lo stesso. */
+function rollSky(): Roll {
+  if (lastRoll && Date.now() - lastRoll.at < 120_000) return lastRoll.r;
+  const x = Math.random();
+  const seed = Math.floor(Math.random() * 100000);
+  const r: Roll =
+    x < 0.42 ? { weather: "sereno", clouds: Math.random() * 0.18, seed }
+    : x < 0.8 ? { weather: "sereno", clouds: 0.22 + Math.random() * 0.3, seed }
+    : x < 0.95 ? { weather: "nuvoloso", clouds: 0.6 + Math.random() * 0.3, seed }
+    : { weather: "pioggia", clouds: 0.95, seed };
+  lastRoll = { at: Date.now(), r };
+  return r;
+}
+
 export function autoTod(d = new Date()): TimeOfDay {
   const h = d.getHours() + d.getMinutes() / 60;
   if (h >= 6 && h < 11) return "mattina";
@@ -31,19 +52,26 @@ export function autoTod(d = new Date()): TimeOfDay {
   return "notte";
 }
 
-type SkyPref = { tod: TimeOfDay | "auto"; weather: Weather };
+type SkyPref = { tod: TimeOfDay | "auto"; weather: WeatherPref };
 
 /** Preferenza condivisa da tutte le scene: ora (o automatica) e meteo. */
 export function useSky() {
-  const [pref, setPref] = useLocalState<SkyPref>("aa-sky", { tod: "auto", weather: "sereno" });
+  // chiave nuova: chi aveva lasciato "nuvoloso" riparte dal cielo variabile
+  const [pref, setPref] = useLocalState<SkyPref>("aa-sky2", { tod: "auto", weather: "variabile" });
   const [now, setNow] = useState(() => autoTod());
+  // il tiro del cielo avviene dopo il montaggio: server e primo disegno restano uguali
+  const [roll, setRoll] = useState<Roll | null>(null);
   useEffect(() => {
     const id = window.setInterval(() => setNow(autoTod()), 60_000);
+    setRoll(rollSky());
     return () => window.clearInterval(id);
   }, []);
   const tod = pref.tod === "auto" ? now : pref.tod;
+  const weather: Weather = pref.weather === "variabile" ? roll?.weather ?? "sereno" : pref.weather;
+  const clouds = pref.weather === "variabile" ? roll?.clouds ?? 0.1 : weather === "sereno" ? 0.12 + ((roll?.seed ?? 0) % 7) / 40 : weather === "nuvoloso" ? 0.75 : 0.95;
+  const seed = roll?.seed ?? 1;
   // lo stesso oggetto finché ora e meteo non cambiano: gli sfondi non si ridisegnano a ogni fotogramma
-  const sky: Sky = useMemo(() => ({ tod, weather: pref.weather }), [tod, pref.weather]);
+  const sky: Sky = useMemo(() => ({ tod, weather, clouds, seed }), [tod, weather, clouds, seed]);
   return { sky, pref, setPref };
 }
 

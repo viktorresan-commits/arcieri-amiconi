@@ -682,7 +682,7 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
             <path d="M14 18 h12 v8 q0 6 -6 9 q-6 -3 -6 -9 Z" fill="#f3ecda" opacity="0.9" />
           </svg>
         ) : null}
-        <ArcherAvatar look={bodyLook} drive={drive} pose="riposo" interactive={false} hideFlight className="h-full w-full drop-shadow-[0_12px_20px_rgba(0,0,0,0.45)]" />
+        <ArcherAvatar look={bodyLook} drive={drive} pose="riposo" interactive={false} hideFlight wind={indoor ? 0 : wind} className="h-full w-full drop-shadow-[0_12px_20px_rgba(0,0,0,0.45)]" />
       </div>
       </div>
 
