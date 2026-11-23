@@ -53,14 +53,18 @@ function BigTile({ s, recent = false }: { s: Shortcut; recent?: boolean }) {
   );
 }
 
-export function ShortcutRow() {
+/** `hide`: scorciatoie già a portata di mano sulla pagina (per id), così la fila non le ripete. */
+export function ShortcutRow({ hide = [] }: { hide?: string[] } = {}) {
   const { pinned } = usePinned();
   const [edit, setEdit] = useState(false);
   const [recent, setRecent] = useState<Shortcut[]>([]);
-  useEffect(() => setRecent(readRecent().slice(0, 6)), []);
-  const mine = pinned.map((id) => shortcutById(id)).filter((x): x is Shortcut => Boolean(x));
+  useEffect(() => setRecent(readRecent().slice(0, 8)), []);
+  // un percorso nascosto vale per tutte le scorciatoie che portano lì senza parametri (es. /sfide)
+  const hiddenTo = new Set(hide.map((id) => shortcutById(id)).filter((x): x is Shortcut => Boolean(x && !x.search)).map((x) => x.to));
+  const shown = (x: Shortcut) => !hide.includes(x.id) && !(hiddenTo.has(x.to) && !x.search);
+  const mine = pinned.map((id) => shortcutById(id)).filter((x): x is Shortcut => Boolean(x)).filter(shown);
   // un'unica fila: prima le ultime aperte che non sono già tra le tue, poi le tue scorciatoie. Nessun doppione.
-  const extra = recent.filter((r) => !mine.some((m) => m.id === r.id || (m.to === r.to && !m.search && !r.search))).slice(0, 4);
+  const extra = recent.filter(shown).filter((r) => !mine.some((m) => m.id === r.id || (m.to === r.to && !m.search && !r.search))).slice(0, 4);
   return (
     <section className="grid gap-2">
       <div className="flex items-center justify-between">

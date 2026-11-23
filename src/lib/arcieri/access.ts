@@ -71,7 +71,17 @@ export type PublicMember = {
   canCoach?: boolean;
   /** solo in getMe: può aprire la segreteria della compagnia */
   canSegreteria?: boolean;
+  /** solo in getMe: categoria dell'ultima gara a cui si è iscritto, al singolare (Messere, Madonna, Junior, Puer); vuota se non c'è */
+  category?: string;
 };
+
+/** Categoria di gara al singolare, per il titolo sotto il nome. Se non la riconosco la lascio com'è. */
+export function categorySingular(raw: string) {
+  const c = raw.trim();
+  const key = c.toLowerCase();
+  const map: Record<string, string> = { messeri: "Messere", madonne: "Madonna", juniores: "Junior", pueri: "Puer" };
+  return map[key] ?? c;
+}
 
 export const PRIZES: Array<{ code: string; title: string; hint: string }> = [
   { code: "first_session", title: "Primo allenamento", hint: "1 allenamento" },

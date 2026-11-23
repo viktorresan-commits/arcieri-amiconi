@@ -14,11 +14,52 @@ import { ShortcutRow } from "@/components/shortcuts";
 import { JourneyCard } from "@/components/journey";
 import { TodayCard } from "@/components/today-card";
 import { usePrefs } from "@/lib/arcieri/prefs";
-import { Glyph } from "@/components/icons";
+import { Glyph, type IconName } from "@/components/icons";
+import { sceneById } from "@/lib/arcieri/scenes";
 import { LastArrows, LastSummary } from "@/components/last-arrows";
 import { Button, Card, Empty, ErrorNote, HoldDelete, Loading, cx } from "@/components/kit";
 
 export const Route = createFileRoute("/_app/")({ component: Home });
+
+/** già sul gioco (Tiro rapido, Da foto, Sfide, Classifiche) o nella barra in basso (Gare, Compagnia): la fila non li ripete */
+const HOME_HIDE = ["rapido", "foto", "sfide", "classifiche", "gare", "squadra"];
+
+/** Scurisce un colore esadecimale verso il nero (f tra 0 e 1). */
+function shade(hex: string, f: number) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex);
+  if (!m) return hex;
+  const n = parseInt(m[1], 16);
+  const c = [n >> 16, (n >> 8) & 255, n & 255].map((v) => Math.round(v * (1 - f)));
+  return `#${c.map((v) => v.toString(16).padStart(2, "0")).join("")}`;
+}
+
+/** Il prolungamento del gioco: il terreno della scena continua, scurendosi, con un selciato appena accennato. */
+function GameApron({ ground, children }: { ground: string; children: ReactNode }) {
+  return (
+    <div
+      className="aa-apron relative px-3 pb-5 pt-3 md:mt-2 md:rounded-[1.75rem] md:pb-3"
+      style={{ background: `linear-gradient(180deg, ${shade(ground, 0.52)} 0%, ${shade(ground, 0.64)} 30%, ${shade(ground, 0.74)} 72%, var(--bg) 100%)` }}
+    >
+      <svg className="pointer-events-none absolute inset-x-0 top-0 h-28 w-full opacity-[0.16]" viewBox="0 0 390 96" preserveAspectRatio="none" aria-hidden>
+        {Array.from({ length: 6 }, (_, r) => Array.from({ length: 9 }, (_, c) => <rect key={`${r}-${c}`} x={c * 46 + (r % 2) * 23 - 10} y={r * 16} width="42" height="13" rx="4" fill="none" stroke="#c8c0b0" strokeWidth="1" />))}
+      </svg>
+      <div className="relative grid gap-2">{children}</div>
+    </div>
+  );
+}
+
+/** Pulsante a tema sul prolungamento del gioco: placca di cuoio bordata d'oro, medaglione con l'icona. */
+function Plaque({ to, search, icon, label, sub }: { to: string; search?: Record<string, string>; icon: IconName; label: string; sub?: string }) {
+  return (
+    <Link to={to as "/"} search={search as never} className="aa-press flex min-h-[64px] min-w-0 items-center gap-2.5 rounded-2xl border-[1.5px] border-[#c9a15a] bg-[linear-gradient(180deg,#3b2b19,#1a130b)] px-2.5 text-left shadow-[0_8px_16px_-8px_rgba(0,0,0,0.9),inset_0_1px_0_rgba(255,226,160,0.25),inset_0_-2px_0_rgba(0,0,0,0.4)]">
+      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-[#e6b85c]/70 bg-[radial-gradient(circle_at_35%_30%,#5a4122,#24180c)] text-[#f3d48a]"><Glyph name={icon} size={20} /></span>
+      <span className="min-w-0">
+        <b className="block truncate font-display text-[1.05rem] leading-tight text-[#f6ead0]">{label}</b>
+        {sub ? <span className="block truncate text-[0.66rem] text-[#e9dcc0]/70">{sub}</span> : null}
+      </span>
+    </Link>
+  );
+}
 
 
 
@@ -78,7 +119,7 @@ function Home() {
   if (!data) return null;
   const rankFill = data.rank && data.rank.of > 1 ? ((data.rank.of - data.rank.position) / (data.rank.of - 1)) * 100 : data.rank ? 100 : 0;
   return (
-    <div className="grid gap-3">
+    <div className="aa-home grid gap-3">
       <Rise i={0}>
         <div className="grid gap-2">
           {/* sul telefono il gioco va da bordo a bordo e sale fino sotto la barra in alto */}
@@ -103,21 +144,28 @@ function Home() {
               </div>
             }
           >
-            <div data-ui className="absolute bottom-3 right-3 grid justify-items-end gap-2" onPointerDown={(e) => e.stopPropagation()}>
-              <Link to="/avatar" aria-label="Personalizza l'arciere e l'ambientazione" className="grid h-10 w-10 place-items-center rounded-full bg-black/45 text-white backdrop-blur">
-                <Glyph name="palette" size={18} />
+            {/* solo l'icona per vestire l'arciere, piccola, a sinistra sotto i suoi piedi */}
+            <div data-ui className="absolute bottom-1.5 left-2" onPointerDown={(e) => e.stopPropagation()}>
+              <Link to="/avatar" aria-label="Personalizza l'arciere e l'ambientazione" className="grid h-8 w-8 place-items-center rounded-full border border-[#e6b85c]/45 bg-black/45 text-[#f3d48a] backdrop-blur">
+                <Glyph name="palette" size={15} />
               </Link>
             </div>
           </HomeGame>
           </GameGuard>
-          </div>
-          <div className="grid grid-cols-[1.4fr_1fr] gap-2">
-            <Link to="/allenamento" search={{ avvia: "rapido" }} className="block">
-              <Button className="aa-glow w-full"><Glyph name="bolt" size={18} /> Tiro rapido</Button>
-            </Link>
-            <Link to="/allenamento" search={{ avvia: "foto" }} className="block">
-              <Button variant="ghost" className="w-full"><Glyph name="camera" size={18} /> Da foto</Button>
-            </Link>
+          {/* il gioco si allunga: continua il terreno e i pulsanti ci stanno sopra senza coprire il tiro */}
+          <GameApron ground={sceneById(avatar.shown.scene).ground[1]}>
+            <div className="grid grid-cols-[1.45fr_1fr] gap-2">
+              <Link to="/allenamento" search={{ avvia: "rapido" }} className="aa-plaque-gold aa-press flex min-h-[64px] items-center gap-2.5 rounded-2xl border-[1.5px] border-[#fff0c4]/70 bg-[linear-gradient(180deg,#f6d98e,#c8902c)] px-3 text-left text-[#2a1a08] shadow-[0_10px_18px_-8px_rgba(0,0,0,0.9),inset_0_1px_0_rgba(255,255,255,0.6),inset_0_-3px_0_rgba(120,70,10,0.45)]">
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#2a1a08] text-[#f6d98e]"><Glyph name="bolt" size={20} /></span>
+                <span className="min-w-0"><b className="block truncate font-display text-[1.25rem] leading-none">Tiro rapido</b><span className="block truncate text-[0.68rem] font-semibold opacity-75">segna le frecce di oggi</span></span>
+              </Link>
+              <Plaque to="/allenamento" search={{ avvia: "foto" }} icon="camera" label="Da foto" sub="leggo il bersaglio" />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Plaque to="/sfide" icon="duel" label="Sfide" sub={data.challenges.length ? `${data.challenges.length} ${data.challenges.length === 1 ? "aperta" : "aperte"}` : "sfida i compagni"} />
+              <Plaque to="/classifiche" icon="podium" label="Classifiche" sub={data.rank ? `${data.rank.position}° su ${data.rank.of}` : "chi è davanti"} />
+            </div>
+          </GameApron>
           </div>
           <MainGearCard compact />
           {duel.data ? <CoachCard form={duel.data.form} perks={duel.data.perks} lefty={Boolean(avatar.shown.lefty)} look={avatar.shown} /> : null}
@@ -125,7 +173,7 @@ function Home() {
       </Rise>
       {prefs.home.shortcuts ? (
         <Rise i={1}>
-          <ShortcutRow />
+          <ShortcutRow hide={HOME_HIDE} />
         </Rise>
       ) : null}
       <Rise i={2}>
@@ -205,7 +253,7 @@ function Home() {
       <Rise i={9}>
         <Link to="/classifiche" className="block">
           <Card>
-            <p className="text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted">Classifica del tuo tiro più frequente</p>
+            <p className="aa-home-label">Classifica del tuo tiro più frequente</p>
             {data.rank ? (
               <>
                 <p className="font-display text-[2rem]"><Count value={data.rank.position} />° <span className="text-xl text-muted">su {data.rank.of}</span></p>
@@ -221,7 +269,7 @@ function Home() {
       </Rise>
       <Rise i={19}>
         <Card>
-          <p className="text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted">Note del quaderno</p>
+          <p className="aa-home-label">Note del quaderno</p>
           {notes.data?.items.length ? (
             <ul className="mt-2 grid gap-2">
               {notes.data.items.map((item) => (
@@ -250,7 +298,7 @@ function Home() {
             <Card className="flex items-center gap-3">
               <CountdownBadge day={data.nextComp.startsOn} />
               <div className="min-w-0 flex-1">
-                <p className="text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted">Prossima gara</p>
+                <p className="aa-home-label">Prossima gara</p>
                 <p className="truncate font-display text-2xl">{data.nextComp.name}</p>
                 <p className="text-sm text-muted">{fmtDay(data.nextComp.startsOn)}{data.nextComp.place ? ` · ${data.nextComp.place}` : ""}{data.nextComp.signupDeadline ? ` · iscrizioni entro ${fmtDay(data.nextComp.signupDeadline)}` : ""}</p>
               </div>
@@ -262,7 +310,7 @@ function Home() {
         <Rise i={21}>
           <Link to="/sfide" className="block">
             <Card>
-              <p className="text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted">Sfide aperte</p>
+              <p className="aa-home-label">Sfide aperte</p>
               <ul className="mt-2 grid gap-2">
                 {data.challenges.map((c) => (
                   <li key={c.id} className="flex items-center justify-between gap-2 text-sm">
@@ -279,7 +327,7 @@ function Home() {
         <Rise i={22}>
           <Link to="/obiettivi" className="block">
             <Card>
-              <p className="text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted">Obiettivi</p>
+              <p className="aa-home-label">Obiettivi</p>
               <ul className="mt-2 text-sm">
                 {data.goals.map((g) => <li key={g.id}>{g.title}{g.collective ? " · gruppo" : ""}</li>)}
               </ul>

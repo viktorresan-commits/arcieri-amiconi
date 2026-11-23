@@ -5,11 +5,10 @@ import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { RedirectToSignIn } from "@/lib/auth/gates";
 import { getMe } from "@/lib/arcieri/members.api";
 import type { PublicMember } from "@/lib/arcieri/access";
-import { greet, romeHour } from "@/lib/arcieri/time";
 import { memberLabel, initials } from "@/lib/arcieri/labels";
 import { Avatar, Loading, Mark, cx } from "./kit";
-import { QUICK_ACTIONS, SHORTCUTS, STATIONS, currentShortcut, shortcutById } from "@/lib/arcieri/shortcuts";
-import { NextCard, PathMap, ShortcutEditor, ShortcutTile, TipCard, rememberPage } from "./shortcuts";
+import { SHORTCUTS, STATIONS, currentShortcut } from "@/lib/arcieri/shortcuts";
+import { NextCard, PathMap, ShortcutEditor, TipCard, rememberPage } from "./shortcuts";
 import { CompanyWelcome } from "./compagnia";
 import { PercorsoWelcome } from "./percorso-welcome";
 import { percorsoOf } from "@/lib/arcieri/percorso";
@@ -49,7 +48,6 @@ export function Shell({ children }: { children: ReactNode }) {
   const [nonce, setNonce] = useState(0);
   const [menu, setMenu] = useState(false);
   const [menuSearch, setMenuSearch] = useState(false);
-  const [quick, setQuick] = useState(false);
   const [editShort, setEditShort] = useState(false);
   const [prefsOpen, setPrefsOpen] = useState(false);
   const [help, setHelp] = useState(false);
@@ -101,7 +99,6 @@ export function Shell({ children }: { children: ReactNode }) {
   useBackRestore(href, (key) => {
     const m = takeMenu(key);
     setHelp(false);
-    setQuick(false);
     if (m) {
       menuTop.current = m.top;
       setMenuSearch(m.search);
@@ -118,16 +115,15 @@ export function Shell({ children }: { children: ReactNode }) {
   }, [menu]);
   // tasto indietro di Android: prima chiude ciò che è aperto sopra la pagina
   useEffect(() => {
-    if (!(menu || help || quick || prefsOpen || editShort)) return;
+    if (!(menu || help || prefsOpen || editShort)) return;
     return onBack(() => {
       if (editShort) setEditShort(false);
       else if (prefsOpen) setPrefsOpen(false);
       else if (help) setHelp(false);
-      else if (quick) setQuick(false);
       else setMenu(false);
       return true;
     });
-  }, [menu, help, quick, prefsOpen, editShort]);
+  }, [menu, help, prefsOpen, editShort]);
   const { prefs } = usePrefs();
   const navigate = useNavigate();
   const here = currentShortcut(path);
@@ -234,7 +230,6 @@ export function Shell({ children }: { children: ReactNode }) {
   // squadra admin, istruttori e segreteria li vede solo chi ha un incarico
   const hide = [...(me.canCoach ? [] : ["istruttore"]), ...(me.canSegreteria ? [] : ["segreteria"]), ...(me.canStaff ? [] : ["staff"])];
   const focus = me.essenziale ? percorsoOf(me.percorso)?.focus ?? null : null;
-  const hour = greet(romeHour());
   const lvl = levelOf(xp.xp);
 
 
@@ -243,6 +238,11 @@ export function Shell({ children }: { children: ReactNode }) {
     { to: "/allenamento", label: "Tiro", icon: "bow" as IconName },
     { to: "/squadra", label: "Compagnia", icon: "team" as IconName },
   ] as const;
+  const bottom = [
+    { to: "/", label: "Casa", icon: "home" as IconName, match: (p: string) => p === "/" },
+    { to: "/gare", label: "Gare", icon: "flag" as IconName, match: (p: string) => p.startsWith("/gare") },
+    { to: "/squadra", label: "Compagnia", icon: "team" as IconName, match: (p: string) => p === "/squadra" || p.startsWith("/arciere/") || p.startsWith("/compagnia") },
+  ];
 
   return (
     <MemberCtx.Provider value={{ me, reload: () => setNonce((n) => n + 1) }}>
@@ -289,20 +289,33 @@ export function Shell({ children }: { children: ReactNode }) {
           </Link>
         </aside>
         <div className="aa-main relative z-0 min-w-0 md:ml-60">
-          <header className="aa-appheader sticky top-0 z-20 flex h-14 items-center justify-between gap-2 border-b border-line/60 bg-bg/85 px-4 backdrop-blur-md">
-            {path === "/" ? (
-              <Link to="/avatar" className="flex min-w-0 items-center gap-3">
-                <span className={cx("aa-facering relative grid h-11 w-11 shrink-0 place-items-center rounded-full p-[2px]", me.role === "admin" ? "aa-facering-admin" : "")} style={{ ["--lvl" as string]: `${Math.round((lvl.into / Math.max(1, lvl.need)) * 360)}deg` }}>
-                  <span className="relative z-[1] grid h-full w-full place-items-center overflow-hidden rounded-full bg-bg">
-                    <AvatarFace look={avatar.shown} className="h-full w-full" />
-                  </span>
-                </span>
-                <span className="min-w-0">
-                  <p className="truncate text-[11px] leading-tight text-muted">{hour}</p>
-                  <p className="truncate font-display text-xl leading-none">{label}</p>
+          {path === "/" ? (
+            /* Home: in alto il profilo (volto, nome, categoria e livello, esperienza) e gli avvisi */
+            <header className="aa-appheader aa-homehead sticky top-0 z-20 flex items-center gap-3 border-b border-[#e6b85c]/25 bg-[linear-gradient(180deg,rgba(13,18,16,0.96),rgba(13,18,16,0.86))] px-3 py-2 backdrop-blur-md md:px-4">
+              <Link to="/avatar" aria-label="Il tuo arciere" className={cx("relative grid h-[3.25rem] w-[3.25rem] shrink-0 place-items-center rounded-full p-[2.5px]", me.role === "admin" ? "aa-facering aa-facering-admin" : "bg-[linear-gradient(135deg,#f3d48a,#a8782c)] shadow-[0_4px_14px_-6px_rgba(0,0,0,0.8)]")}>
+                <span className="relative z-[1] grid h-full w-full place-items-center overflow-hidden rounded-full bg-bg">
+                  <AvatarFace look={avatar.shown} className="h-full w-full" />
                 </span>
               </Link>
-            ) : (
+              <Link to="/obiettivi" className="min-w-0 flex-1" aria-label={`${label}, livello ${lvl.level}`}>
+                <p className="flex min-w-0 items-baseline gap-2">
+                  <b className="truncate font-display text-[1.3rem] leading-none">{label}</b>
+                  <span className="shrink-0 text-[0.74rem] font-semibold text-[#e6b85c]">{me.category ? `${me.category} · ` : ""}Livello {lvl.level}</span>
+                </p>
+                <span className="mt-1.5 flex items-center gap-2">
+                  <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
+                    <span className="block h-full rounded-full bg-[linear-gradient(90deg,#f3d48a,#d69a2c)]" style={{ width: `${Math.round((lvl.into / Math.max(1, lvl.need)) * 100)}%` }} />
+                  </span>
+                  <span className="shrink-0 text-[0.62rem] tabular-nums text-white/70">{lvl.into.toLocaleString("it-IT")}/{lvl.need.toLocaleString("it-IT")}</span>
+                </span>
+              </Link>
+              <Link to="/bacheca" aria-label={unread > 0 ? `Avvisi, ${unread} da leggere` : "Avvisi"} className="relative grid h-11 w-11 shrink-0 place-items-center rounded-full border border-[#e6b85c]/45 bg-[linear-gradient(180deg,#3b2b19,#1a130b)] text-[#f3d48a]">
+                <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15Z" /><path d="M10 20a2 2 0 0 0 4 0" /></svg>
+                {unread > 0 ? <span className="absolute -right-0.5 -top-0.5 grid h-5 min-w-5 place-items-center rounded-full bg-[#d6402f] px-1 text-[0.66rem] font-bold text-white">{unread > 9 ? "9+" : unread}</span> : null}
+              </Link>
+            </header>
+          ) : (
+          <header className="aa-appheader sticky top-0 z-20 flex h-14 items-center justify-between gap-2 border-b border-line/60 bg-bg/85 px-4 backdrop-blur-md">
               <div className="flex min-w-0 items-center gap-2">
                 <button type="button" onClick={() => (window.history.length > 1 ? window.history.back() : void navigate({ to: "/" }))} aria-label="Indietro" className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white/[0.06] active:scale-95">
                   <Glyph name="chevron" size={18} className="rotate-180" />
@@ -310,7 +323,6 @@ export function Shell({ children }: { children: ReactNode }) {
                 {here ? <AppIcon name={here.icon} color={here.color} size={30} /> : null}
                 <p className="truncate font-display text-xl leading-none">{here?.label ?? "Arcieri Amiconi"}</p>
               </div>
-            )}
             <div className="flex shrink-0 items-center gap-1.5">
               <Link to="/obiettivi" className="flex h-9 items-center gap-1.5 rounded-full bg-white/[0.06] px-2.5 text-[0.72rem] font-semibold" aria-label={`Livello ${lvl.level}`}>
                 <span className="grid h-6 w-6 place-items-center rounded-full bg-[#ffd27a] font-display text-[0.8rem] text-[#1a1408]">{lvl.level}</span>
@@ -328,6 +340,7 @@ export function Shell({ children }: { children: ReactNode }) {
               </Link>
             </div>
           </header>
+          )}
           {inviteMsg ? (
             <button type="button" onClick={() => setInviteMsg("")} className="aa-rise flex w-full items-center justify-between gap-2 bg-primary px-4 py-2 text-left text-sm font-semibold text-primary-fg">
               {inviteMsg}
@@ -342,38 +355,14 @@ export function Shell({ children }: { children: ReactNode }) {
             <CompanyWelcome />
             {me.percorso === "" ? <PercorsoWelcome onDone={() => setNonce((n) => n + 1)} /> : null}
           </main>
-          <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 items-end border-t border-line/60 bg-elev/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden">
-            {[nav[0], nav[1]].map((item) => <BottomLink key={item.to} item={item} active={path === item.to || (item.to !== "/" && path.startsWith(item.to))} />)}
-            <div className="flex justify-center">
-              <button
-                type="button"
-                onClick={() => setQuick(true)}
-                aria-label="Nuovo tiro"
-                className="-mt-7 mb-2 grid h-16 w-16 place-items-center rounded-full border-4 border-bg bg-primary text-primary-fg shadow-[0_8px_24px_-6px_rgba(0,0,0,0.6)] active:scale-95"
-              >
-                <Glyph name="plus" size={30} strokeWidth={2.6} />
-              </button>
-            </div>
-            <BottomLink item={nav[2]} active={path === "/squadra" || path.startsWith("/arciere/")} />
-            <button type="button" className="flex min-h-16 flex-col items-center justify-center gap-0.5 text-[11px] text-muted" onClick={() => setMenu(true)}>
-              <Glyph name="grid" size={22} />
+          {/* barra in basso: solo voci che in Home non ci sono già (Tiro rapido, Da foto, Sfide e Classifiche stanno sul gioco) */}
+          <nav className="aa-bottomnav fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 items-end border-t border-[#e6b85c]/30 bg-[linear-gradient(180deg,rgba(27,23,18,0.97),rgba(12,11,9,0.98))] pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden">
+            {bottom.map((item) => <BottomLink key={item.to} item={item} active={item.match(path)} />)}
+            <button type="button" className={cx("flex min-h-16 flex-col items-center justify-center gap-0.5 text-[11px] font-medium", menu ? "text-[#f3c766]" : "text-white/75")} onClick={() => setMenu(true)}>
+              <span className="grid h-8 w-14 place-items-center"><Glyph name="grid" size={22} /></span>
               Menu
             </button>
           </nav>
-          {quick ? (
-            <div className="fixed inset-0 z-40 flex items-end bg-black/55 backdrop-blur-[2px] md:hidden" onClick={() => setQuick(false)}>
-              <div className="aa-sheet grid w-full gap-3 rounded-t-3xl border-t border-hair bg-elev p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)]" onClick={(e) => e.stopPropagation()}>
-                <div className="mx-auto h-1.5 w-10 rounded-full bg-white/20" />
-                <p className="aa-section-title">Cosa fai adesso?</p>
-                <div className="grid grid-cols-3 gap-x-2 gap-y-4">
-                  {QUICK_ACTIONS.map((id, i) => {
-                    const sc = shortcutById(id);
-                    return sc ? <ShortcutTile key={id} s={sc} size="lg" index={i} onClick={() => setQuick(false)} /> : null;
-                  })}
-                </div>
-              </div>
-            </div>
-          ) : null}
           {menu ? (
             <div ref={menuBox} className="aa-sheet fixed inset-0 z-40 overflow-y-auto bg-bg pb-[calc(env(safe-area-inset-bottom)+1.5rem)] md:hidden">
               <div className="aa-appheader sticky top-0 z-10 flex h-14 items-center justify-between bg-bg/90 px-4 backdrop-blur-md">
@@ -412,7 +401,7 @@ export function Shell({ children }: { children: ReactNode }) {
 
 function BottomLink({ item, active }: { item: { to: string; label: string; icon: IconName }; active: boolean }) {
   return (
-    <Link to={item.to} className={cx("aa-tab flex min-h-16 flex-col items-center justify-center gap-0.5 text-[11px] font-medium", active ? "is-active text-primary" : "text-muted")}>
+    <Link to={item.to} className={cx("aa-tab flex min-h-16 flex-col items-center justify-center gap-0.5 text-[11px] font-medium", active ? "is-active text-[#f3c766]" : "text-white/75")}>
       <span className="aa-tab-pill relative grid h-8 w-14 place-items-center rounded-full">
         <Glyph name={item.icon} size={22} strokeWidth={active ? 2.1 : 1.7} className="relative transition-transform duration-300" />
       </span>

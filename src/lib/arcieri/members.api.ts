@@ -5,6 +5,7 @@ import { myMembership } from "./compagnie.api";
 import {
   asNum,
   canScore,
+  categorySingular,
   cleanPhoto,
   clip,
   db,
@@ -37,7 +38,13 @@ export const getMe = createServerFn({ method: "GET" })
     }
     // squadra admin, istruttori e segreteria: solo per chi ha un incarico
     const role = staff != null || leader || out.coach;
-    return { ...out, essenziale, leader, canStaff: role, canCoach: role, canSegreteria: role };
+    // categoria: solo quella dichiarata nell'ultima gara, mai dedotta da altro
+    const cat = await sql<{ category: string; starts_on: string }>`
+      select e.category, c.starts_on::text as starts_on
+      from competition_entries e join competitions c on c.id = e.competition_id
+      where e.user_id = ${context.userId}`;
+    const last = cat.filter((r) => r.category.trim()).sort((a, b) => b.starts_on.localeCompare(a.starts_on))[0];
+    return { ...out, essenziale, leader, canStaff: role, canCoach: role, canSegreteria: role, category: last ? categorySingular(last.category) : "" };
   });
 
 export const listRoster = createServerFn({ method: "GET" })
