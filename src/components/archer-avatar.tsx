@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { tune, type AvatarLook, type Pose } from "@/lib/arcieri/avatar";
-import { zigQ, BowDeco, Buckle, ChestEmblem, Clasp, ClothPattern, Earring, FaceFrame, FacePaintFront, FacePaintProfile, Fletching, HairOrnament, Pouch, QuiverBody } from "./avatar-extras";
+import { zigQ, BowDeco, Buckle, ChestEmblem, Clasp, ClothPattern, Earring, FaceFrame, FacePaintFront, FacePaintProfile, Fletching, HairOrnament, PaintStroke, Pouch, QuiverBody } from "./avatar-extras";
 import { sceneById } from "@/lib/arcieri/scenes";
 import { seamOf, BeardTexture, BeltDetail, BootDetail, BrowHairs, ClothDetail, DetailDefs, EyeDetail, FaceShade, HairFineStrands, HandDetail, LeatherBand, LipDetail, SleeveDetail } from "./avatar-detail";
 
@@ -1360,9 +1360,9 @@ function Head({ look, H, face, blink, uid, t }: { look: AvatarLook; H: P; face: 
       <path d="M152 95 Q158 98 163 96" stroke={shade(skin, -0.12)} strokeWidth="2" fill="none" opacity="0.4" />
       {look.mask ? null : <Beard look={look} uid={uid} />}
       {look.warpaint ? (
-        <g stroke="#2a3a5a" strokeOpacity="0.75" strokeWidth="2.2" strokeLinecap="round">
-          <path d="M150 86 L166 88" />
-          <path d="M151 91 L165 93" />
+        <g>
+          <PaintStroke a={[150, 86]} b={[167, 88.4]} bend={-1} w={2.5} color="#2a3a5a" />
+          <PaintStroke a={[151, 91.2]} b={[165.5, 93.6]} bend={-0.8} w={2.2} color="#2a3a5a" />
         </g>
       ) : null}
       {look.scar ? <path d="M158 72 L162 80 M157 85 L161 92 M159.5 76 l2 -1 M159 88 l2 -1" stroke={shade(skin, -0.42)} strokeWidth="1.1" strokeLinecap="round" /> : null}
@@ -2262,7 +2262,7 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false, part }
         {look.hat === "alloro" ? <g>{Array.from({ length: 10 }, (_, i) => { const a = Math.PI * (0.15 + (i / 9) * 0.7); const x = 50 - Math.cos(a) * (rx + 1); const y = fy - 10 - Math.sin(a) * 9; return <ellipse key={i} cx={x} cy={y} rx="1.8" ry="3.6" fill={i % 2 ? "#6f9a3a" : "#4f7a2a"} transform={`rotate(${(i - 4.5) * 14} ${x} ${y})`} />; })}</g> : null}
         {look.hat === "cerchietto" ? <g><path d={`M${50 - rx} ${fy - 14} Q50 ${fy - 20} ${50 + rx} ${fy - 14}`} stroke={look.hatColor} strokeWidth="2.2" fill="none" /><path d={`M50 ${fy - 22} l3 3 l-3 3 l-3 -3 z`} fill="#3fae6a" stroke={look.hatColor} strokeWidth="0.8" /></g> : null}
         </g>
-        {look.warpaint ? <g stroke="#2a3a5a" strokeOpacity="0.75" strokeWidth="2.2" strokeLinecap="round"><path d={`M30 ${fy + 2} L40 ${fy + 4} M60 ${fy + 4} L70 ${fy + 2} M31 ${fy + 7} L39 ${fy + 9} M61 ${fy + 9} L69 ${fy + 7}`} /></g> : null}
+        {look.warpaint ? <g>{[0, 5].map((d) => <g key={d}><PaintStroke a={[41, fy + 3.5 + d]} b={[32.5, fy + 1.5 + d]} bend={0.8} w={2.3 - d * 0.05} color="#2a3a5a" /><PaintStroke a={[59, fy + 3.5 + d]} b={[67.5, fy + 1.5 + d]} bend={-0.8} w={2.3 - d * 0.05} color="#2a3a5a" /></g>)}</g> : null}
         {look.scar ? <path d={`M56 ${eyeY - 12} L62 ${eyeY + 10} M57 ${eyeY - 6} l3 -1 M59 ${eyeY + 3} l3 -1`} stroke={shade(skin, -0.42)} strokeWidth="1.2" strokeLinecap="round" /> : null}
         {look.mask ? <path d={`M${50 - rx} ${fy + 3} Q50 ${fy} ${50 + rx} ${fy + 3} C${50 + rx} ${fy + ry} ${50 - rx} ${fy + ry} ${50 - rx} ${fy + 3} Z`} fill={look.cowlColor} /> : null}
         {look.cowl && !bare ? <path d={`M18 100 C18 84 28 ${fy + 22} 50 ${fy + 24} C72 ${fy + 22} 82 84 82 100 Z`} fill={look.cowlColor} stroke={shade(look.cowlColor, -0.35)} strokeWidth="1" /> : null}

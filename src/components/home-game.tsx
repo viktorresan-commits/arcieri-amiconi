@@ -5,6 +5,7 @@ import { useSky } from "@/lib/arcieri/sky3d";
 import { useLocalState } from "@/lib/arcieri/local-store";
 import { award, readXp, today } from "@/lib/arcieri/xp";
 import { ArcherAvatar } from "./archer-avatar";
+import { Glyph, type IconName } from "./icons";
 import { SceneBackdrop } from "./scene-2d";
 import { GameApron } from "./scene-apron";
 import { SCENES, isIndoor } from "@/lib/arcieri/scenes";
@@ -129,6 +130,8 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
   // con i pulsanti sotto: se lo schermo è basso, il cielo in cima si accorcia quanto basta perché
   // gioco e pulsanti si vedano interi tra la barra in alto e quella in basso, senza scorrere
   const [crop, setCrop] = useState(0);
+  // schermo basso: il cielo è stato accorciato e il pannello del campo finirebbe sul bersaglio
+  const [tight, setTight] = useState(false);
   useLayoutEffect(() => {
     if (!apron) return;
     const calc = () => {
@@ -142,7 +145,11 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
       const navH = nav && getComputedStyle(nav).display !== "none" ? nav.getBoundingClientRect().height : 0;
       const top = box.getBoundingClientRect().top + window.scrollY;
       const over = top + gh + below + 10 - (window.innerHeight - navH);
-      setCrop(Math.round(Math.max(0, Math.min(gh * 0.3, over))));
+      // mai tanto da far finire la testa dell'arciere sotto il blocco di oggi (ridotto a due righe):
+      // su telefoni molto bassi piuttosto si scorre un poco per l'ultima riga di pulsanti
+      const headTop = gh * ((AV_TOP + AV_H * 0.08) / H);
+      setCrop(Math.round(Math.max(0, Math.min(gh * 0.34, headTop - 78, over))));
+      setTight(over > gh * 0.1);
     };
     calc();
     const t = window.setTimeout(calc, 400);
@@ -162,6 +169,11 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
   const mode = modeOf(modeId);
   const level = levelOf(levelId);
   const [picker, setPicker] = useState(false);
+  // il pannello del campo si può ridurre a un bottone, e resta come lo si è lasciato
+  const [hudOpen, setHudOpen] = useLocalState<boolean>("aa-hud-open", true);
+  const [hudForce, setHudForce] = useState(false);
+  // su schermi bassi parte ridotto, così il bersaglio resta libero; se lo si apre, resta aperto
+  const hudShown = hudOpen && (!tight || hudForce);
   const [dist, setDist] = useState<Dist>(() => randomDist(level.distances));
   // il bersaglio si muove da solo (se il livello lo prevede): ampiezza e velocità cambiano a ogni volée
   const newMotion = (k: number) => ({ amp: (18 + Math.random() * 18) * k, speed: (0.45 + Math.random() * 0.5) * Math.max(1, k), phase: Math.random() * 6 });
@@ -693,23 +705,38 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
         </span>
       ) : null}
 
-      {/* HUD: a sinistra le informazioni di oggi, a destra punteggio, volée e vento */}
-      <div className="aa-game-hud pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-3" style={crop ? { top: crop } : undefined}>
-        <div className="min-w-0 text-white [text-shadow:0_1px_8px_rgba(0,0,0,0.55)]">{info}</div>
-        <div className="grid shrink-0 justify-items-end gap-1.5 text-right text-white">
-          <p className="aa-game-score text-4xl font-black leading-none">{playing ? total : "—"}</p>
-          <p className="text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-white/75">record {bestHere}/{maxRound(modeId)}</p>
-          <button data-ui type="button" onPointerDown={(e) => e.stopPropagation()} onClick={() => setPicker((v) => !v)} className="aa-game-pill pointer-events-auto" aria-expanded={picker}>
-            {mode.label} · {level.label} <span aria-hidden>▾</span>
-          </button>
-          <span className="aa-game-pill">
-            {[0, 1, 2].map((i) => <span key={i} className={`inline-block h-3.5 w-1.5 rounded-full ${i < hits.length ? "bg-white/25" : "bg-[#ffd27a]"}`} />)}
-            <span className="ml-1">Piazzola {station}/{STATIONS}</span>
-          </span>
-          <span className="aa-game-pill">
-            {indoor ? "Al chiuso, niente vento" : <>{Math.abs(wind).toFixed(1)} m/s {wind === 0 ? "" : (wind > 0) !== lefty ? "→" : "←"}</>}
-          </span>
-          <span className="aa-game-pill">{dist} m{box ? ` · ${animal.label}` : ""}</span>
+      {/* HUD: a sinistra il blocco di oggi; a destra il record e un solo pannello del campo
+          (bersaglio, piazzola, vento, distanza), in vetro scuro, riducibile a un bottone */}
+      <div className={`aa-game-hud pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-3 ${tight ? "aa-hud-tight" : ""}`} style={crop ? { top: crop } : undefined}>
+        <div className="min-w-0 text-white">{info}</div>
+        <div className="grid w-[8.4rem] shrink-0 justify-items-stretch gap-1.5 text-white">
+          <div className="aa-hud flex items-center gap-2 rounded-2xl px-2.5 py-1.5">
+            <Glyph name="trophy" size={20} className="aa-hud-ico shrink-0" />
+            <span className="grid min-w-0 flex-1 justify-items-end leading-none">
+              <b className="aa-game-score text-[1.9rem] tabular-nums">{playing ? total : bestHere}</b>
+              <span className="mt-0.5 text-[0.56rem] font-semibold uppercase tracking-[0.18em] text-white/70">{playing ? `punti · rec. ${bestHere}` : "record"}</span>
+            </span>
+          </div>
+          {hudShown ? (
+            <div data-ui className="aa-hud aa-hud-panel pointer-events-auto relative grid rounded-2xl py-1" onPointerDown={(e) => e.stopPropagation()}>
+              <button type="button" onClick={() => { setHudOpen(false); setHudForce(false); }} aria-label="Riduci il pannello del campo" className="absolute right-1 top-1 z-[1] grid h-6 w-6 place-items-center rounded-full bg-white/10 text-white/80">
+                <Glyph name="chevron" size={12} className="-rotate-90" />
+              </button>
+              <HudRow icon="target" label="Bersaglio" onClick={() => setPicker((v) => !v)} expanded={picker}>{mode.label}<span className="ml-1 font-semibold text-white/70">· {level.label} ▾</span></HudRow>
+              <HudRow icon="pin" label="Piazzola">
+                <span className="tabular-nums">{station} / {STATIONS}</span>
+                <span className="ml-1.5 inline-flex gap-0.5" aria-label={`${3 - hits.length} frecce rimaste`}>{[0, 1, 2].map((i) => <span key={i} className={`inline-block h-2.5 w-1 rounded-full ${i < hits.length ? "bg-white/25" : "aa-hud-pip"}`} />)}</span>
+              </HudRow>
+              <HudRow icon="wind" label="Vento">{indoor ? "al chiuso" : <>{Math.abs(wind).toFixed(1).replace(".", ",")} m/s {wind === 0 ? "" : (wind > 0) !== lefty ? "→" : "←"}</>}</HudRow>
+              <HudRow icon="arrow" label="Distanza" last>{dist} m{box ? ` · ${animal.label}` : ""}</HudRow>
+            </div>
+          ) : (
+            <button data-ui type="button" onPointerDown={(e) => e.stopPropagation()} onClick={() => { setHudOpen(true); setHudForce(true); }} aria-label="Apri il pannello del campo" className="aa-hud pointer-events-auto flex items-center justify-between gap-1.5 rounded-full px-2.5 py-1.5 text-[0.7rem] font-semibold">
+              <span className="flex items-center gap-1"><Glyph name="wind" size={14} className="aa-hud-ico" />{indoor ? "—" : `${Math.abs(wind).toFixed(1).replace(".", ",")}`}</span>
+              <span className="tabular-nums">{dist} m</span>
+              <Glyph name="chevron" size={12} className="rotate-90 text-white/70" />
+            </button>
+          )}
         </div>
       </div>
       {children}
@@ -789,6 +816,25 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
       </div>
       <GameApron sky={sky} scene={scene} lefty={lefty}>{apron}</GameApron>
     </div>
+  );
+}
+
+/** Una riga del pannello del campo: icona, etichetta piccola, valore. */
+function HudRow({ icon, label, children, onClick, expanded, last = false }: { icon: IconName; label: string; children: ReactNode; onClick?: () => void; expanded?: boolean; last?: boolean }) {
+  const body = (
+    <>
+      <Glyph name={icon} size={16} className="aa-hud-ico mt-0.5 shrink-0" />
+      <span className="grid min-w-0 flex-1 text-left leading-tight">
+        <span className="text-[0.55rem] font-semibold uppercase tracking-[0.16em] text-white/60">{label}</span>
+        <span className="flex flex-wrap items-center text-[0.74rem] font-bold">{children}</span>
+      </span>
+    </>
+  );
+  const cls = `flex items-start gap-2 px-2.5 py-1.5 ${last ? "" : "border-b border-white/[0.08]"}`;
+  return onClick ? (
+    <button type="button" onClick={onClick} aria-expanded={expanded} className={`${cls} pr-7 active:bg-white/5`}>{body}<span className="sr-only">cambia</span></button>
+  ) : (
+    <div className={`${cls} pr-2.5`}>{body}</div>
   );
 }
 

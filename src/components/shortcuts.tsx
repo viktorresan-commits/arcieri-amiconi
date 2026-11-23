@@ -189,7 +189,6 @@ function readRecent() {
 /** Menu: cerca, riprendi una pagina recente, oppure scegli dalle sezioni, tutte in vista. */
 export function PathMap({ onPick, current, showSearch = false, focus = null, hide = [] }: { onPick?: () => void; current?: string; showSearch?: boolean; /** percorso dei nuovi: le voci da mostrare prima di tutte */ focus?: string[] | null; /** voci che questa persona non può aprire */ hide?: string[] }) {
   const [q, setQ] = useState("");
-  const [recent] = useState(() => readRecent().filter((s) => !hide.includes(s.id)));
   const [all, setAll] = useState(() => !focus || menuAllOpen());
   const query = q.trim().toLowerCase();
   const visible = SHORTCUTS.filter((s) => !hide.includes(s.id));
@@ -228,19 +227,6 @@ export function PathMap({ onPick, current, showSearch = false, focus = null, hid
         </ul>
       ) : (
         <>
-          {recent.length ? (
-            <section className="grid gap-2">
-              <p className="px-1 text-[0.66rem] font-semibold uppercase tracking-[0.16em] text-muted">Recenti</p>
-              <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none]">
-                {recent.map((s) => (
-                  <Link key={s.id} to={s.to as "/"} search={(s.search ?? {}) as never} onClick={go} className="flex shrink-0 items-center gap-2 rounded-full border border-white/10 bg-white/[0.05] py-1 pl-1 pr-3 text-xs font-semibold">
-                    <AppIcon name={s.icon} color={s.color} size={28} />
-                    {s.label}
-                  </Link>
-                ))}
-              </div>
-            </section>
-          ) : null}
           {mine.length ? (
             <section className="aa-rise grid gap-3 rounded-[1.6rem] border border-primary/30 bg-primary/[0.08] p-3">
               <div>
@@ -283,6 +269,12 @@ function CategoryCarousel({ current, onGo, isHere, hide = [] }: { current?: stri
   const ref = useRef<HTMLDivElement>(null);
   const timer = useRef<number | null>(null);
   const [active, setActive] = useState(startAt);
+  const tabs = useRef<HTMLDivElement>(null);
+  // la linguetta della sezione aperta resta sempre in vista
+  useEffect(() => {
+    const el = tabs.current?.children[active] as HTMLElement | undefined;
+    el?.scrollIntoView({ block: "nearest", inline: "center", behavior: "smooth" });
+  }, [active]);
   const pageW = () => (ref.current?.firstElementChild as HTMLElement | null)?.offsetWidth ?? 1;
   const gap = 0;
   const leftOf = (i: number) => {
@@ -312,7 +304,7 @@ function CategoryCarousel({ current, onGo, isHere, hide = [] }: { current?: stri
   return (
     <div className="grid gap-3">
       {/* linguette delle sezioni: nome e icona nella tinta della sezione, quella aperta in evidenza */}
-      <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-0.5 [scrollbar-width:none]" role="tablist" aria-label="Sezioni del menu">
+      <div ref={tabs} className="aa-sec-tabs sticky top-14 z-[5] -mx-4 flex gap-1.5 overflow-x-auto px-4 py-2 [scrollbar-width:none]" role="tablist" aria-label="Sezioni del menu">
         {STATIONS.map((st, k) => (
           <button
             key={st.id}
@@ -335,7 +327,7 @@ function CategoryCarousel({ current, onGo, isHere, hide = [] }: { current?: stri
           return (
             <section key={i} className="aa-cat-page grid min-h-[calc(100dvh-15rem)] w-full shrink-0 snap-center content-start gap-4 px-4 pb-8 pt-1" style={{ ["--cat" as string]: st.color, background: `linear-gradient(180deg, color-mix(in srgb, ${st.color} 16%, transparent) 0%, color-mix(in srgb, ${st.color} 9%, transparent) 35%, color-mix(in srgb, ${st.color} 5%, transparent) 70%, color-mix(in srgb, ${st.color} 2%, transparent) 100%)` }}>
               {/* intestazione illustrata della categoria: grande icona con alone, titolo e bersaglio decorativo */}
-              <div className="aa-cat-hero relative overflow-hidden rounded-[1.75rem] p-4" style={{ ["--cat" as string]: st.color, background: `linear-gradient(135deg, color-mix(in srgb, ${st.color} 28%, transparent), color-mix(in srgb, ${st.color} 8%, transparent) 55%, rgba(255,255,255,0.02))` }}>
+              <div className="aa-cat-hero relative overflow-hidden rounded-[1.5rem] p-3.5" style={{ ["--cat" as string]: st.color, background: `linear-gradient(135deg, color-mix(in srgb, ${st.color} 28%, transparent), color-mix(in srgb, ${st.color} 8%, transparent) 55%, rgba(255,255,255,0.02))` }}>
                 <svg aria-hidden viewBox="0 0 200 200" className="aa-cat-rings pointer-events-none absolute -right-10 -top-12 h-52 w-52 opacity-[0.22]">
                   {[96, 78, 60, 42, 24].map((r, k) => <circle key={r} cx="100" cy="100" r={r} fill="none" stroke="#fff" strokeWidth={k === 4 ? 10 : 6} />)}
                   <path d="M0 160 L120 96" stroke="#fff" strokeWidth="4" strokeLinecap="round" />
@@ -345,11 +337,11 @@ function CategoryCarousel({ current, onGo, isHere, hide = [] }: { current?: stri
                 <div className="relative flex items-center gap-4">
                   <span className="aa-cat-icon relative grid place-items-center">
                     <span aria-hidden className="absolute inset-[-10px] rounded-[2rem] blur-xl" style={{ background: `color-mix(in srgb, ${st.color} 40%, transparent)` }} />
-                    <AppIcon name={st.icon} accent={st.color} size={76} className="relative" />
+                    <AppIcon name={st.icon} accent={st.color} size={60} className="relative" />
                   </span>
                   <div className="min-w-0">
                     <p className="text-[0.62rem] font-semibold uppercase tracking-[0.22em] text-white/70">Sezione {k + 1} di {n}</p>
-                    <p className="font-display text-[2.1rem] leading-none text-white [text-shadow:0_2px_10px_rgba(0,0,0,0.35)]">{st.title}</p>
+                    <p className="font-display text-[1.8rem] leading-none text-white [text-shadow:0_2px_10px_rgba(0,0,0,0.35)]">{st.title}</p>
                     <p className="mt-1 text-[0.78rem] leading-snug text-white/80">{st.sub}</p>
                   </div>
                 </div>
@@ -362,6 +354,16 @@ function CategoryCarousel({ current, onGo, isHere, hide = [] }: { current?: stri
                     <span className="w-full truncate text-[0.78rem] font-semibold leading-tight">{s.label}</span>
                     <span className="line-clamp-2 w-full text-[0.6rem] leading-tight text-muted">{s.hint}</span>
                   </Link>
+                ))}
+              </div>
+              {/* in fondo alla sezione: le due sezioni vicine, per continuare senza tornare su */}
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                {[STATIONS[(k + n - 1) % n], STATIONS[(k + 1) % n]].map((nb, j) => (
+                  <button key={nb.id + j} type="button" onClick={() => jump(i + (j ? 1 : -1), true)} className={cx("aa-sec-next flex min-h-12 items-center gap-2 rounded-2xl px-2.5 text-left", j ? "flex-row-reverse text-right" : "")} style={{ ["--acc" as string]: nb.color }}>
+                    <Glyph name="chevron" size={14} className={cx("shrink-0 opacity-70", j ? "" : "rotate-180")} />
+                    <AppIcon name={nb.icon} accent={nb.color} size={30} />
+                    <span className="min-w-0 flex-1"><span className="block text-[0.56rem] font-semibold uppercase tracking-[0.16em] text-muted">{j ? "Avanti" : "Indietro"}</span><span className="block truncate text-sm font-semibold">{nb.title}</span></span>
+                  </button>
                 ))}
               </div>
             </section>

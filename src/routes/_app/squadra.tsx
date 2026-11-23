@@ -14,6 +14,9 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { listClubOrders, listGadgets, saveClubOrder, setClubOrder, skillBoard, squadBoard } from "@/lib/arcieri/club.api";
 import { memberLabel, DIVISIONS } from "@/lib/arcieri/labels";
 import type { AvatarLook } from "@/lib/arcieri/avatar";
+import { SceneBackdrop } from "@/components/scene-2d";
+import type { Sky } from "@/lib/arcieri/sky3d";
+import { Glyph } from "@/components/icons";
 import { fmtAvg } from "@/lib/arcieri/scoring";
 import { useLoad } from "@/lib/arcieri/use-load";
 import { ANIMALS, animalByLabel } from "@/lib/arcieri/sagome";
@@ -26,6 +29,9 @@ import { GroupBestPosture } from "@/components/gesture-gallery";
 import { Avatar, Button, Card, Empty, ErrorNote, Field, HoldDelete, Loading, PageHead, Segmented, Select, TextInput } from "@/components/kit";
 import { useMember } from "@/components/shell";
 import { PrizeMark, prizeTier } from "@/components/prize-mark";
+
+/** cielo fisso e limpido per le ambientazioni nelle schede degli arcieri */
+const MEMBER_SKY: Sky = { tod: "pomeriggio", weather: "sereno", clouds: 0.25, seed: 3 };
 
 export const Route = createFileRoute("/_app/squadra")({ component: Page });
 
@@ -184,12 +190,21 @@ function Page() {
             {people.filter((row) => !removed.includes(row.id)).map((row, i) => {
               const card = (
                 <Link to="/arciere/$id" params={{ id: String(row.id) }}>
-                  <Card className="aa-menu-row flex items-center gap-3 p-3" style={{ animationDelay: `${Math.min(i, 10) * 40}ms` }}>
-                    <Avatar size="lg" label={row.name} color={row.avatarColor} photo={row.photoUrl} look={looks[row.userId]} admin={row.admin} />
-                    <div className="min-w-0 flex-1">
+                  <Card className="aa-menu-row aa-member relative flex items-center gap-3 overflow-hidden p-3" style={{ animationDelay: `${Math.min(i, 10) * 40}ms` }}>
+                    {/* l'ambientazione scelta da ognuno, a destra, che sfuma nella scheda */}
+                    {looks[row.userId]?.scene ? (
+                      <span aria-hidden className="aa-member-bg pointer-events-none absolute inset-y-0 right-0 w-[70%]">
+                        <span className="absolute inset-x-0 -bottom-[30%] -top-[72%]">
+                          <SceneBackdrop sky={MEMBER_SKY} scene={looks[row.userId]?.scene} id={`mb${row.id}`} />
+                        </span>
+                      </span>
+                    ) : null}
+                    <span className="relative z-[1]"><Avatar size="lg" label={row.name} color={row.avatarColor} photo={row.photoUrl} look={looks[row.userId]} admin={row.admin} /></span>
+                    <div className="relative z-[1] min-w-0 flex-1 [text-shadow:0_1px_6px_rgba(0,0,0,0.7)]">
                       <p className="truncate font-display text-2xl leading-none">{row.name}</p>
-                      <p className="mt-1 text-xs text-muted">{[row.division, `${row.sessions} allenamenti`, `${row.arrows} frecce`, `${row.gare} gare`, row.bestDistance != null ? `${row.bestDistance} m` : ""].filter(Boolean).join(" · ")}</p>
+                      <p className="mt-1 text-xs text-white/75">{[row.division, `${row.sessions} allenamenti`, `${row.arrows} frecce`, `${row.gare} gare`, row.bestDistance != null ? `${row.bestDistance} m` : ""].filter(Boolean).join(" · ")}</p>
                     </div>
+                    <span className="aa-bell relative z-[1] grid h-9 w-9 shrink-0 place-items-center rounded-full"><Glyph name="chevron" size={16} /></span>
                   </Card>
                 </Link>
               );
@@ -197,6 +212,7 @@ function Page() {
               return (
                 <HoldDelete
                   key={row.id}
+                  hint={false}
                   label={`Togliere ${row.name} dall'app? Il suo account e i suoi allenamenti vengono cancellati e non si possono recuperare.`}
                   onDelete={() => removeTeamMember({ data: { id: row.id } }).then(() => setRemoved((list) => [...list, row.id]))}
                 >

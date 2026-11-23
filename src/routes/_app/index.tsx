@@ -26,12 +26,13 @@ const HOME_HIDE = ["rapido", "foto", "segnapunti", "statistiche", "gare", "squad
 /** Pulsante a tema sul prolungamento del gioco: placca di cuoio bordata d'oro, medaglione con l'icona. */
 function Plaque({ to, search, icon, label, sub }: { to: string; search?: Record<string, string>; icon: IconName; label: string; sub?: string }) {
   return (
-    <Link to={to as "/"} search={search as never} className="aa-plaque aa-press flex min-h-[58px] min-w-0 items-center gap-2.5 rounded-2xl px-2.5 text-left">
-      <AppIcon name={icon} size={40} />
-      <span className="min-w-0">
+    <Link to={to as "/"} search={search as never} className="aa-plaque aa-press flex min-h-[52px] min-w-0 items-center gap-2 rounded-2xl px-2 text-left">
+      <AppIcon name={icon} size={36} />
+      <span className="min-w-0 flex-1">
         <b className="aa-plaque-title block truncate font-display text-[1.05rem] leading-tight">{label}</b>
-        {sub ? <span className="aa-plaque-sub block truncate text-[0.66rem]">{sub}</span> : null}
+        {sub ? <span className="aa-plaque-sub block truncate text-[0.68rem]">{sub}</span> : null}
       </span>
+      <Glyph name="chevron" size={14} className="aa-tone-hi shrink-0 opacity-80" />
     </Link>
   );
 }
@@ -106,22 +107,27 @@ function Home() {
             apron={
               <>
             {/* solo l'icona per vestire l'arciere, piccola, sotto i suoi piedi: non copre la figura */}
-            <div className="flex h-8 items-center pl-[5%]">
+            <div className="aa-home-palette flex h-8 items-center pl-[5%]">
               <Link to="/avatar" aria-label="Personalizza l'arciere e l'ambientazione" className="aa-bell grid h-8 w-8 place-items-center rounded-full shadow-[0_4px_10px_-4px_rgba(0,0,0,0.7)]">
                 <Glyph name="palette" size={15} />
               </Link>
             </div>
-            <div className="grid grid-cols-[1.45fr_1fr] gap-2">
-              <Link to="/allenamento" search={{ avvia: "rapido" }} className="aa-plaque-main aa-press flex min-h-[58px] items-center gap-2.5 rounded-2xl px-3 text-left">
-                <AppIcon name="bolt" size={40} />
-                <span className="min-w-0"><b className="block truncate font-display text-[1.25rem] leading-none">Tiro rapido</b><span className="block truncate text-[0.68rem] font-semibold opacity-75">segna le frecce di oggi</span></span>
-              </Link>
-              <Plaque to="/allenamento" search={{ avvia: "foto" }} icon="camera" label="Da foto" sub="leggo il bersaglio" />
-            </div>
+            {/* azione principale: lo stesso avvio di sempre del tiro rapido */}
+            <Link to="/allenamento" search={{ avvia: "rapido" }} className="aa-cta aa-press flex min-h-[58px] items-center gap-3 rounded-2xl px-3 text-left">
+              <span className="aa-cta-ico grid h-11 w-11 shrink-0 place-items-center rounded-full"><Glyph name="bolt" detailed size={24} /></span>
+              <span className="min-w-0 flex-1"><b className="block truncate font-display text-[1.45rem] uppercase leading-none tracking-wide">Tiro rapido</b><span className="block truncate text-[0.74rem] font-semibold opacity-85">Registra le frecce di oggi</span></span>
+              <Glyph name="chevron" size={18} className="shrink-0 opacity-80" />
+            </Link>
             <div className="grid grid-cols-2 gap-2">
-              <Plaque to="/segnapunti" icon="scorecard" label="Segnapunti" sub="punti con gli amici" />
-              <Plaque to="/statistiche" icon="chart" label="Statistiche" sub={data.all.avg ? `media ${data.all.avg.toFixed(2).replace(".", ",")}` : "grafici e progressi"} />
+              <Plaque to="/allenamento" search={{ avvia: "foto" }} icon="camera" label="Da foto" sub="Leggi il bersaglio" />
+              <Plaque to="/segnapunti" icon="scorecard" label="Segnapunti" sub="Punti con gli amici" />
             </div>
+            <Link to="/statistiche" className="aa-plaque aa-press flex min-h-[46px] items-center gap-2.5 rounded-2xl px-2.5 text-left">
+              <AppIcon name="chart" size={32} />
+              <b className="aa-plaque-title font-display text-[1.05rem] leading-none">Statistiche</b>
+              <span className="aa-plaque-sub ml-auto truncate text-[0.78rem] font-semibold">{data.all.avg ? `Media ${data.all.avg.toFixed(2).replace(".", ",")}` : "Grafici e progressi"}</span>
+              <Glyph name="chevron" size={16} className="aa-tone-hi shrink-0" />
+            </Link>
               </>
             }
             look={avatar.shown}
@@ -129,15 +135,20 @@ function Home() {
             perks={activePerks}
             banner={duel.data?.company.color}
             info={
-              <div className="grid justify-items-start gap-0.5">
-                <p className="text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/80">{new Date().toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" })}</p>
-                <h1 className="font-display text-[2rem] leading-none tracking-tight">Oggi</h1>
-                <p className="max-w-[13rem] text-[0.7rem] leading-snug text-white/90">
-                  {data.month.sessions} uscite e {num(data.month.arrows)} frecce questo mese
-                  {data.since ? ` · ultimo tiro ${data.since.n} ${data.since.unit === "h" ? (data.since.n === 1 ? "ora" : "ore") : data.since.n === 1 ? "giorno" : "giorni"} fa` : ""}
-                </p>
-                {data.streak > 1 ? <p className="mt-1 inline-flex rounded-full bg-black/35 px-2.5 py-0.5 text-[0.66rem] font-semibold backdrop-blur">{data.streak} giorni di fila</p> : null}
-                {activePerks.includes("corona") ? <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-[#ffcf5a] px-2.5 py-0.5 text-[0.66rem] font-bold text-[#1a1408]"><Glyph name="trophy" size={12} /> Corona della settimana</p> : null}
+              /* blocco di oggi: data, il tuo campo, uscite e frecce del mese, ultimo tiro (dati reali) */
+              <div className="aa-hud aa-day grid justify-items-start gap-0.5 rounded-2xl px-3 py-2">
+                <p className="aa-day-date flex items-center gap-1.5 text-[0.58rem] font-semibold uppercase tracking-[0.18em] text-white/75"><Glyph name="calendar" size={12} className="aa-hud-ico" />{new Date().toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" })}</p>
+                <h1 className="aa-day-title font-display text-[1.6rem] leading-none tracking-tight">Il tuo campo</h1>
+                <p className="flex items-center gap-1.5 text-[0.7rem] leading-snug text-white/90"><Glyph name="target" size={12} className="aa-hud-ico shrink-0" />{data.month.sessions} {data.month.sessions === 1 ? "uscita" : "uscite"} · {num(data.month.arrows)} frecce questo mese</p>
+                {data.since ? (
+                  <p className="flex items-center gap-1.5 text-[0.7rem] leading-snug text-white/80"><Glyph name="history" size={12} className="aa-hud-ico shrink-0" />Ultimo tiro {data.since.n} {data.since.unit === "h" ? (data.since.n === 1 ? "ora" : "ore") : data.since.n === 1 ? "giorno" : "giorni"} fa</p>
+                ) : null}
+                {data.streak > 1 || activePerks.includes("corona") ? (
+                  <p className="aa-day-extra mt-0.5 flex flex-wrap gap-1">
+                    {data.streak > 1 ? <span className="rounded-full bg-white/10 px-2 py-0.5 text-[0.62rem] font-semibold">{data.streak} giorni di fila</span> : null}
+                    {activePerks.includes("corona") ? <span className="inline-flex items-center gap-1 rounded-full bg-[#ffcf5a] px-2 py-0.5 text-[0.62rem] font-bold text-[#1a1408]"><Glyph name="trophy" size={11} /> Corona</span> : null}
+                  </p>
+                ) : null}
               </div>
             }
           >

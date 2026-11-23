@@ -245,58 +245,217 @@ export function CompanyCrest({ id, x, y, s = 1 }: { id?: string; x: number; y: n
 /* ---------------- viso di fronte (foto profilo e figura di fronte) ---------------- */
 
 /** pitture sul viso di fronte: occhi in (41, ey) e (59, ey), viso centrato su 50 */
+/* ---------------- pitture sul viso: pennellate dipinte ----------------
+   Ogni segno è una pennellata vera: parte piena, si assottiglia, finisce con le setole aperte;
+   il colore ha un cuore più denso e qualche striatura asciutta, come pigmento steso sulla pelle. */
+
+type Pt = [number, number];
+const qp = (a: Pt, c: Pt, b: Pt, t: number): Pt => [
+  (1 - t) * (1 - t) * a[0] + 2 * (1 - t) * t * c[0] + t * t * b[0],
+  (1 - t) * (1 - t) * a[1] + 2 * (1 - t) * t * c[1] + t * t * b[1],
+];
+const fx = (n: number) => n.toFixed(2);
+
+/** contorno di una pennellata lungo una curva da a a b (c = controllo), larga w */
+function brushPath(a: Pt, c: Pt, b: Pt, w: number, taperStart = 0.35) {
+  const N = 12;
+  const left: Pt[] = [];
+  const right: Pt[] = [];
+  for (let i = 0; i <= N; i += 1) {
+    const t = i / N;
+    const p = qp(a, c, b, t);
+    const q = qp(a, c, b, Math.min(1, t + 0.01));
+    const r = qp(a, c, b, Math.max(0, t - 0.01));
+    const dx = q[0] - r[0];
+    const dy = q[1] - r[1];
+    const len = Math.hypot(dx, dy) || 1;
+    // profilo: attacco arrotondato, pancia piena, coda che si stringe
+    const prof = t < 0.16 ? taperStart + (1 - taperStart) * Math.sin((t / 0.16) * (Math.PI / 2)) : Math.pow(1 - (t - 0.16) / 0.84, 0.7) * 0.72 + 0.28;
+    const h = (w / 2) * prof;
+    left.push([p[0] - (dy / len) * h, p[1] + (dx / len) * h]);
+    right.push([p[0] + (dy / len) * h, p[1] - (dx / len) * h]);
+  }
+  const pts = [...left, ...right.reverse()];
+  return `M${pts.map((pt) => `${fx(pt[0])} ${fx(pt[1])}`).join(" L")} Z`;
+}
+
+export function PaintStroke({ a, b, bend = 0, w, color, op = 0.86 }: { a: Pt; b: Pt; bend?: number; w: number; color: string; op?: number }) {
+  w *= 1.45;
+  const mx = (a[0] + b[0]) / 2;
+  const my = (a[1] + b[1]) / 2;
+  const dx = b[0] - a[0];
+  const dy = b[1] - a[1];
+  const len = Math.hypot(dx, dy) || 1;
+  const c: Pt = [mx - (dy / len) * bend, my + (dx / len) * bend];
+  // setole alla fine: due fili sottili che escono dalla coda
+  const tail = qp(a, c, b, 0.86);
+  const nx = -dy / len;
+  const ny = dx / len;
+  return (
+    <g>
+      <path d={brushPath(a, c, b, w)} fill={color} opacity={op} />
+      {/* cuore più denso del pigmento */}
+      <path d={brushPath(a, c, b, w * 0.55, 0.6)} fill={color} opacity={op * 0.55} />
+      {/* striature asciutte della pennellata */}
+      <path d={`M${fx(a[0] + nx * w * 0.16)} ${fx(a[1] + ny * w * 0.16)} Q${fx(c[0] + nx * w * 0.16)} ${fx(c[1] + ny * w * 0.16)} ${fx(tail[0] + nx * w * 0.06)} ${fx(tail[1] + ny * w * 0.06)}`} stroke="#fff" strokeOpacity="0.16" strokeWidth={Math.max(0.25, w * 0.09)} fill="none" strokeLinecap="round" />
+      <path d={`M${fx(a[0] - nx * w * 0.22)} ${fx(a[1] - ny * w * 0.22)} Q${fx(c[0] - nx * w * 0.22)} ${fx(c[1] - ny * w * 0.22)} ${fx(tail[0] - nx * w * 0.1)} ${fx(tail[1] - ny * w * 0.1)}`} stroke="#000" strokeOpacity="0.14" strokeWidth={Math.max(0.2, w * 0.07)} fill="none" strokeLinecap="round" />
+      <path d={`M${fx(tail[0] + nx * w * 0.12)} ${fx(tail[1] + ny * w * 0.12)} l${fx(dx / len * w * 1.1 + nx * w * 0.2)} ${fx(dy / len * w * 1.1 + ny * w * 0.2)} M${fx(tail[0] - nx * w * 0.1)} ${fx(tail[1] - ny * w * 0.1)} l${fx(dx / len * w * 0.8 - nx * w * 0.16)} ${fx(dy / len * w * 0.8 - ny * w * 0.16)}`} stroke={color} strokeOpacity={op * 0.6} strokeWidth={Math.max(0.2, w * 0.1)} strokeLinecap="round" fill="none" />
+    </g>
+  );
+}
+
+/** macchia dipinta (tamponata col dito): bordo irregolare e centro più scuro */
+function Dab({ x, y, r, color, op = 0.8 }: { x: number; y: number; r: number; color: string; op?: number }) {
+  const pts = Array.from({ length: 9 }, (_, i) => {
+    const a = (i / 9) * Math.PI * 2;
+    const k = 1 + ((i * 37) % 7) / 28 - 0.1;
+    return `${fx(x + Math.cos(a) * r * k)} ${fx(y + Math.sin(a) * r * k * 0.92)}`;
+  });
+  return (
+    <g>
+      <path d={`M${pts.join(" L")} Z`} fill={color} opacity={op} strokeLinejoin="round" stroke={color} strokeOpacity={op * 0.5} strokeWidth={r * 0.25} />
+      <circle cx={x - r * 0.1} cy={y} r={r * 0.5} fill={color} opacity={op * 0.5} />
+    </g>
+  );
+}
+
+/** pitture di fronte: occhi alla quota ey, viso al centro (50, fy), semilarghezza rx */
 export function FacePaintFront({ kind, ey, fy, rx, color }: { kind: string; ey: number; fy: number; rx: number; color: string }) {
-  const st = { stroke: color, strokeLinecap: "round" as const, fill: "none" };
+  const L = 50 - rx;
+  const R = 50 + rx;
+  const pair = (f: (side: 1 | -1) => ReactNode) => <g>{f(-1)}{f(1)}</g>;
   switch (kind) {
     case "strisce":
-      return <g {...st} strokeWidth="2.2" opacity="0.85">{[0, 4, 8].map((d) => <path key={d} d={`M${32 - d * 0.3} ${ey + 5 + d} L${42} ${ey + 6 + d} M${68 + d * 0.3} ${ey + 5 + d} L${58} ${ey + 6 + d}`} />)}</g>;
+      // tre pennellate per guancia, che seguono lo zigomo e si aprono verso l'esterno
+      return pair((sd) => [0, 3.6, 7.2].map((d) => <PaintStroke key={d} a={[50 + sd * 9, ey + 5 + d]} b={[50 + sd * (rx - 4), ey + 6.5 + d * 1.1]} bend={sd * -1.2} w={2.3 - d * 0.08} color={color} />));
     case "maschera":
-      return <path d={`M${50 - rx + 2} ${ey - 4} C40 ${ey - 8} 60 ${ey - 8} ${50 + rx - 2} ${ey - 4} L${50 + rx - 3} ${ey + 5} C58 ${ey + 7} 52 ${ey + 3} 50 ${ey + 5} C48 ${ey + 3} 42 ${ey + 7} ${50 - rx + 3} ${ey + 5} Z`} fill={color} opacity="0.75" />;
+      return (
+        <g>
+          <path d={`M${L + 1.5} ${ey - 3} C${L + 5} ${ey - 8} 45 ${ey - 7} 50 ${ey - 5} C55 ${ey - 7} ${R - 5} ${ey - 8} ${R - 1.5} ${ey - 3} C${R - 1} ${ey + 2} ${R - 3} ${ey + 6} ${R - 6} ${ey + 6} C56 ${ey + 6} 53 ${ey + 3} 50 ${ey + 4.5} C47 ${ey + 3} 44 ${ey + 6} ${L + 6} ${ey + 6} C${L + 3} ${ey + 6} ${L + 1} ${ey + 2} ${L + 1.5} ${ey - 3} Z`} fill={color} opacity="0.78" />
+          <path d={`M${L + 3} ${ey - 3.5} C${L + 7} ${ey - 7} 45 ${ey - 6} 49 ${ey - 4.6}`} stroke="#fff" strokeOpacity="0.18" strokeWidth="0.8" fill="none" strokeLinecap="round" />
+          {pair((sd) => <PaintStroke a={[50 + sd * (rx - 3), ey + 5]} b={[50 + sd * (rx + 1.5), ey + 10]} bend={sd * 1} w={1.8} color={color} op={0.7} />)}
+        </g>
+      );
     case "punti":
-      return <g fill={color} opacity="0.9">{[[35, 6], [38, 9], [41, 6], [59, 6], [62, 9], [65, 6], [50, -12], [47, -10], [53, -10]].map(([x, d]) => <circle key={`${x}${d}`} cx={x} cy={ey + d} r="1.2" />)}</g>;
+      return <g>{[[35, 6, 1.4], [38.5, 9, 1.2], [42, 6.5, 1.1], [58, 6.5, 1.1], [61.5, 9, 1.2], [65, 6, 1.4], [50, -12, 1.3], [47, -9.5, 1], [53, -9.5, 1]].map(([x, d, r]) => <Dab key={`${x}${d}`} x={x} y={ey + d} r={r} color={color} op={0.85} />)}</g>;
     case "tribale":
-      return <g {...st} strokeWidth="1.6" opacity="0.9"><path d={`M50 ${ey - 14} L50 ${ey - 6} M44 ${ey - 12} L50 ${ey - 8} L56 ${ey - 12}`} /><path d={`M33 ${ey + 6} q4 4 8 0 q-4 6 -8 4 M67 ${ey + 6} q-4 4 -8 0 q4 6 8 4`} /></g>;
+      return (
+        <g>
+          <PaintStroke a={[50, ey - 15]} b={[50, ey - 5]} w={2} color={color} />
+          {pair((sd) => <PaintStroke a={[50 + sd * 0.5, ey - 9]} b={[50 + sd * 6, ey - 13]} bend={sd * 0.6} w={1.6} color={color} />)}
+          {pair((sd) => (
+            <g>
+              <PaintStroke a={[50 + sd * (rx - 2), ey + 5]} b={[50 + sd * 8, ey + 8]} bend={sd * -2.4} w={2.2} color={color} />
+              <PaintStroke a={[50 + sd * (rx - 3), ey + 10]} b={[50 + sd * 10, ey + 12]} bend={sd * -1.6} w={1.6} color={color} />
+              <Dab x={50 + sd * (rx - 6)} y={ey + 14.5} r={0.9} color={color} />
+            </g>
+          ))}
+        </g>
+      );
     case "fulmine":
-      return <path d={`M56 ${ey - 14} L52 ${ey - 3} L57 ${ey - 3} L51 ${ey + 12} L53 ${ey + 1} L48 ${ey + 1} Z`} fill={color} opacity="0.9" />;
+      return (
+        <g>
+          <path d={`M56.5 ${ey - 15} L51.5 ${ey - 3} L57.2 ${ey - 3.4} L50.5 ${ey + 13} L53.2 ${ey + 1.2} L47.6 ${ey + 1.6} Z`} fill={color} opacity="0.9" stroke={color} strokeOpacity="0.5" strokeWidth="0.6" strokeLinejoin="round" />
+          <path d={`M55.5 ${ey - 13} L52.2 ${ey - 4}`} stroke="#fff" strokeOpacity="0.25" strokeWidth="0.7" strokeLinecap="round" />
+        </g>
+      );
     case "mezza":
-      return <path d={`M50 ${fy - 22} C${50 + rx * 1.2} ${fy - 22} ${50 + rx * 1.1} ${fy + 20} 50 ${fy + 22} Z`} fill={color} opacity="0.45" />;
+      return (
+        <g>
+          <path d={`M50 ${fy - 23} C${R + 4} ${fy - 24} ${R + 3} ${fy + 20} 50 ${fy + 23} C51.5 ${fy + 8} 50.5 ${fy - 8} 50 ${fy - 23} Z`} fill={color} opacity="0.5" />
+          {[-14, -6, 2, 10].map((d) => <PaintStroke key={d} a={[50.5, fy + d]} b={[R - 1, fy + d + 2]} bend={-1.5} w={1.3} color={color} op={0.25} />)}
+        </g>
+      );
     case "naso":
-      return <path d={`M50 ${ey - 12} V${ey + 10}`} {...st} strokeWidth="2.6" opacity="0.85" />;
+      return <PaintStroke a={[50, ey - 13]} b={[50, ey + 11]} w={3} color={color} />;
     case "guance":
-      return <g fill={color} opacity="0.7"><circle cx="36" cy={ey + 8} r="3.4" /><circle cx="64" cy={ey + 8} r="3.4" /></g>;
+      return pair((sd) => (
+        <g>
+          <ellipse cx={50 + sd * 14} cy={ey + 8} rx="4.6" ry="3.4" fill={color} opacity="0.32" />
+          <Dab x={50 + sd * 14} y={ey + 8} r={2.4} color={color} op={0.55} />
+        </g>
+      ));
     case "volpe":
-      return <g fill={color} opacity="0.65"><path d={`M${50 - rx} ${ey + 2} L42 ${ey + 4} L${50 - rx + 3} ${ey + 14} Z M${50 + rx} ${ey + 2} L58 ${ey + 4} L${50 + rx - 3} ${ey + 14} Z`} /><path d={`M47 ${ey + 9} L50 ${ey + 13} L53 ${ey + 9} Z`} fill="#1b130d" /></g>;
+      return (
+        <g>
+          {pair((sd) => <path d={`M${50 + sd * rx} ${ey + 1} C${50 + sd * (rx - 4)} ${ey + 1} ${50 + sd * 9} ${ey + 3} ${50 + sd * 7.5} ${ey + 4.5} C${50 + sd * 10} ${ey + 8} ${50 + sd * (rx - 2)} ${ey + 13} ${50 + sd * (rx - 2.5)} ${ey + 15} C${50 + sd * (rx + 0.5)} ${ey + 11} ${50 + sd * (rx + 0.5)} ${ey + 5} ${50 + sd * rx} ${ey + 1} Z`} fill={color} opacity="0.72" />)}
+          {pair((sd) => <PaintStroke a={[50 + sd * (rx - 1), ey + 4]} b={[50 + sd * (rx + 2), ey + 1]} w={1.2} color="#f4ead8" op={0.7} />)}
+          <path d={`M47 ${ey + 9} Q50 ${ey + 8} 53 ${ey + 9} L50 ${ey + 13} Z`} fill="#1b130d" opacity="0.9" />
+        </g>
+      );
     case "lupo":
-      return <g {...st} strokeWidth="1.8" opacity="0.85"><path d={`M33 ${ey - 9} L40 ${ey - 4} M67 ${ey - 9} L60 ${ey - 4} M34 ${ey + 8} L42 ${ey + 7} M34 ${ey + 12} L42 ${ey + 10} M66 ${ey + 8} L58 ${ey + 7} M66 ${ey + 12} L58 ${ey + 10}`} /></g>;
+      return (
+        <g>
+          {pair((sd) => <PaintStroke a={[50 + sd * (rx - 1), ey - 10]} b={[50 + sd * 9.5, ey - 4]} bend={sd * 0.8} w={2.2} color={color} />)}
+          {pair((sd) => [0, 4, 8].map((d) => <PaintStroke key={d} a={[50 + sd * (rx - 3), ey + 6 + d]} b={[50 + sd * 9, ey + 6 + d * 0.8]} bend={sd * (d - 4) * 0.3} w={1.8 - d * 0.08} color={color} />))}
+        </g>
+      );
     default:
       return null;
   }
 }
 
-/** pitture sul viso di profilo: occhio intorno a (163, 82), guancia (163, 93) */
+/** pitture sul viso di profilo: occhio intorno a (163, 82), guancia (161, 93); il viso guarda a destra */
 export function FacePaintProfile({ kind, color }: { kind: string; color: string }) {
-  const st = { stroke: color, strokeLinecap: "round" as const, fill: "none" };
   switch (kind) {
     case "strisce":
-      return <g {...st} strokeWidth="1.8" opacity="0.85">{[0, 3.6, 7.2].map((d) => <path key={d} d={`M152 ${88 + d} L166 ${90 + d}`} />)}</g>;
+      return <g>{[0, 3.8, 7.6].map((d) => <PaintStroke key={d} a={[151 + d * 0.3, 87.5 + d]} b={[167 - d * 0.4, 89.5 + d * 1.05]} bend={-1} w={2.3 - d * 0.08} color={color} />)}</g>;
     case "maschera":
-      return <path d="M150 78 C156 74 166 74 171 78 L171 86 C165 88 157 88 150 86 Z" fill={color} opacity="0.7" />;
+      return (
+        <g>
+          <path d="M149 78.5 C153 74.5 160 73.5 166 74.5 C169.5 75 171.5 76.5 172.5 78 L172 85 C170 87.5 166 88.5 162 87.6 C158 87 154 88.4 150.5 87.4 C148.6 85 148.2 81.5 149 78.5 Z" fill={color} opacity="0.78" />
+          <path d="M151 78 C155 75.5 160 75 165 75.6" stroke="#fff" strokeOpacity="0.18" strokeWidth="0.8" fill="none" strokeLinecap="round" />
+          <PaintStroke a={[152, 87]} b={[147, 92]} bend={1} w={1.8} color={color} op={0.7} />
+        </g>
+      );
     case "punti":
-      return <g fill={color} opacity="0.9">{[[155, 90], [159, 92], [163, 90], [160, 70], [164, 71]].map(([x, y]) => <circle key={`${x}${y}`} cx={x} cy={y} r="1.1" />)}</g>;
+      return <g>{[[154.5, 90, 1.3], [158.5, 92.4, 1.15], [162.5, 90.4, 1.05], [160, 69.5, 1.1], [164, 70.8, 0.95]].map(([x, y, r]) => <Dab key={`${x}${y}`} x={x} y={y} r={r} color={color} op={0.85} />)}</g>;
     case "tribale":
-      return <g {...st} strokeWidth="1.4" opacity="0.9"><path d="M156 66 L166 72 M154 90 q5 4 10 0 q-5 6 -10 4" /></g>;
+      return (
+        <g>
+          <PaintStroke a={[155, 65.5]} b={[167, 72]} bend={-1} w={1.8} color={color} />
+          <PaintStroke a={[152, 89]} b={[165, 91]} bend={-2.6} w={2.2} color={color} />
+          <PaintStroke a={[153, 94]} b={[162, 95.5]} bend={-1.6} w={1.6} color={color} />
+          <Dab x={157} y={99} r={0.9} color={color} />
+        </g>
+      );
     case "fulmine":
-      return <path d="M166 66 L162 76 L167 76 L161 92 L163 80 L158 80 Z" fill={color} opacity="0.9" />;
+      return (
+        <g>
+          <path d="M166.5 65.5 L161.6 76.2 L167.2 75.8 L160.6 92.5 L163.4 80.2 L157.8 80.6 Z" fill={color} opacity="0.9" stroke={color} strokeOpacity="0.5" strokeWidth="0.6" strokeLinejoin="round" />
+          <path d="M165.6 67.5 L162.4 75" stroke="#fff" strokeOpacity="0.25" strokeWidth="0.7" strokeLinecap="round" />
+        </g>
+      );
     case "mezza":
-      return <path d="M150 64 C162 62 172 70 173 82 L176 96 C172 102 160 104 150 100 Z" fill={color} opacity="0.4" />;
+      return (
+        <g>
+          <path d="M150 63.5 C162 61.5 172.5 69.5 173.6 81.5 L176.4 95.5 C172.4 102.5 160.5 104.5 150 100.5 C148 88 148 76 150 63.5 Z" fill={color} opacity="0.46" />
+          {[68, 76, 84, 92].map((y) => <PaintStroke key={y} a={[151, y]} b={[171, y + 2]} bend={-1.5} w={1.3} color={color} op={0.22} />)}
+        </g>
+      );
     case "naso":
-      return <path d="M172 78 L177 93" {...st} strokeWidth="2.2" opacity="0.85" />;
+      return <PaintStroke a={[171.5, 77]} b={[177.5, 93.5]} bend={0.8} w={2.6} color={color} />;
     case "guance":
-      return <circle cx="161" cy="93" r="3.6" fill={color} opacity="0.65" />;
+      return (
+        <g>
+          <ellipse cx="160.5" cy="93" rx="5" ry="3.6" fill={color} opacity="0.3" />
+          <Dab x={160.5} y={93} r={2.5} color={color} op={0.55} />
+        </g>
+      );
     case "volpe":
-      return <path d="M150 84 L160 88 L152 98 Z" fill={color} opacity="0.6" />;
+      return (
+        <g>
+          <path d="M149.5 83.5 C154 84 159 86 161.5 87.6 C158 89.5 154.5 94 152.5 99.5 C150.5 95 149.2 89 149.5 83.5 Z" fill={color} opacity="0.72" />
+          <PaintStroke a={[151, 86]} b={[148, 83]} w={1.2} color="#f4ead8" op={0.7} />
+        </g>
+      );
     case "lupo":
-      return <g {...st} strokeWidth="1.5" opacity="0.85"><path d="M152 72 L160 76 M152 90 L162 89 M152 94 L162 92" /></g>;
+      return (
+        <g>
+          <PaintStroke a={[151, 71]} b={[161, 76.5]} bend={-0.6} w={2} color={color} />
+          {[0, 4, 8].map((d) => <PaintStroke key={d} a={[151, 89 + d]} b={[163, 88.5 + d * 0.8]} bend={(d - 4) * 0.25} w={1.8 - d * 0.08} color={color} />)}
+        </g>
+      );
     default:
       return null;
   }

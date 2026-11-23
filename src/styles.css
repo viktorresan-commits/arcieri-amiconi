@@ -1188,8 +1188,8 @@ html[data-scenes="no"] .aa-scene { display: none; }
 .aa-appheader { padding-top: env(safe-area-inset-top); height: calc(3.5rem + env(safe-area-inset-top)); }
 .aa-statusbar .aa-appheader { padding-top: max(env(safe-area-inset-top), 28px); height: calc(3.5rem + max(env(safe-area-inset-top), 28px)); }
 /* Home: la barra in alto è il profilo, più alta della barra delle altre pagine */
-.aa-appheader.aa-homehead { height: auto; padding-top: calc(env(safe-area-inset-top) + 0.5rem); padding-bottom: 0.5rem; }
-.aa-statusbar .aa-appheader.aa-homehead { height: auto; padding-top: calc(max(env(safe-area-inset-top), 28px) + 0.5rem); }
+.aa-appheader.aa-homehead { height: auto; padding-top: calc(env(safe-area-inset-top) + 0.375rem); padding-bottom: 0.375rem; }
+.aa-statusbar .aa-appheader.aa-homehead { height: auto; padding-top: calc(max(env(safe-area-inset-top), 28px) + 0.375rem); }
 /* anello del livello attorno al volto */
 .aa-facering { background: conic-gradient(#ffd27a var(--lvl, 0deg), rgb(255 255 255 / 0.14) 0); box-shadow: 0 4px 14px -6px rgb(0 0 0 / 0.7); }
 
@@ -1666,3 +1666,43 @@ html .aa-appicon::after { inset: 2.5px; border: 1px solid color-mix(in srgb, var
 html .aa-cat-page .aa-cat-tile { --cat-c: var(--cat); }
 html .aa-cat-page .aa-short.is-here .aa-short-icon { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--cat), 0 0 18px -2px var(--cat) !important; }
 html .aa-cat-page .aa-short.is-here span { color: color-mix(in srgb, var(--cat) 60%, #fff); }
+
+/* ── Home V2: vetro scuro per il blocco di oggi e il pannello del campo ── */
+.aa-hud {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--plate-b) 62%, transparent), color-mix(in srgb, var(--plate-b) 78%, transparent));
+  -webkit-backdrop-filter: blur(10px) saturate(1.1);
+  backdrop-filter: blur(10px) saturate(1.1);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tone) 26%, rgb(255 255 255 / 0.06)), 0 8px 20px -12px rgb(0 0 0 / 0.7);
+}
+.aa-hud-ico { color: var(--tone-hi); }
+.aa-hud-pip { background: var(--tone-hi); }
+.aa-game-bleed .aa-game-hud, .aa-game-hud { background: none !important; }
+.aa-day { max-width: 14.2rem; }
+.aa-day-title { text-shadow: 0 2px 10px rgb(0 0 0 / 0.45); }
+/* Tiro rapido: il pulsante più importante, gradiente del colore dell'app, bordo sottile, ombra morbida */
+.aa-cta {
+  color: var(--tone-ink);
+  background: linear-gradient(100deg, var(--tone-lo) 0%, var(--tone) 45%, var(--tone-hi) 100%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.35), inset 0 0 0 1px color-mix(in srgb, var(--tone-hi) 70%, #fff), 0 10px 22px -12px color-mix(in srgb, var(--tone-lo) 80%, #000);
+}
+.aa-cta-ico { background: var(--tone-ink); color: var(--tone-hi); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--tone-hi) 55%, transparent), 0 2px 6px rgb(0 0 0 / 0.35); }
+.aa-cta:active { transform: scale(0.985); filter: brightness(1.06); }
+.aa-sec-tabs { background: linear-gradient(180deg, var(--bg) 70%, color-mix(in srgb, var(--bg) 0%, transparent)); }
+.aa-sec-next { background: color-mix(in srgb, var(--acc) 10%, rgb(255 255 255 / 0.02)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--acc) 30%, transparent); }
+.aa-sec-next:active { transform: scale(0.98); }
+/* Compagnia: ambientazione dell'arciere che sfuma nella scheda */
+.aa-member-bg { -webkit-mask-image: linear-gradient(90deg, transparent 0%, rgb(0 0 0 / 0.5) 30%, #000 70%); mask-image: linear-gradient(90deg, transparent 0%, rgb(0 0 0 / 0.5) 30%, #000 70%); opacity: 0.9; }
+.aa-member-bg::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, rgb(0 0 0 / 0.35), transparent 55%), linear-gradient(0deg, rgb(0 0 0 / 0.25), transparent 60%); }
+/* schermi bassi: pulsanti della Home un po' più compatti, così stanno tutti sopra la barra */
+@media (max-height: 760px) {
+  .aa-home .aa-home-palette { height: 1.6rem; }
+  .aa-home .aa-cta { min-height: 50px; }
+  .aa-home .aa-cta-ico { height: 2.4rem; width: 2.4rem; }
+  .aa-home .aa-apron-inner .aa-plaque { min-height: 42px; }
+  .aa-home .aa-apron-inner { gap: 0.375rem; }
+}
+/* schermo basso: il blocco di oggi si accorcia per non coprire l'arciere */
+.aa-hud-tight .aa-day-extra { display: none; }
+.aa-hud-tight .aa-day-title { font-size: 1.3rem; }
+.aa-hud-tight .aa-day { padding-top: 0.375rem; padding-bottom: 0.375rem; }
+.aa-hud-tight .aa-day-date, .aa-hud-tight .aa-day-title { display: none; }
