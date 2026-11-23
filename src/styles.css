@@ -1735,3 +1735,5 @@ html .aa-cat-page .aa-short.is-here span { color: color-mix(in srgb, var(--cat) 
 .aa-trophy { color: #f2c14e; filter: drop-shadow(0 2px 4px rgb(0 0 0 / 0.5)); }
 /* ombra di contatto dell'arciere */
 .aa-archer-contact { background: radial-gradient(closest-side, rgb(0 0 0 / 0.45), rgb(0 0 0 / 0.18) 60%, transparent); filter: blur(2px); z-index: -1; }
+/* i piedi dell'arciere scendono oltre il bordo del campo: sfumano nell'erba invece di essere tagliati netti */
+.aa-archer-feet { -webkit-mask-image: linear-gradient(180deg, #000 84%, rgb(0 0 0 / 0.35) 92%, transparent 97%); mask-image: linear-gradient(180deg, #000 84%, rgb(0 0 0 / 0.35) 92%, transparent 97%); }

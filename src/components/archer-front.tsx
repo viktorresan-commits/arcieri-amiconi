@@ -81,20 +81,20 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop }: { look: A
     const brB = lerpP(elbow, hand, 0.84);
     return (
       <g key={side} className={live ? (bowArm ? "aa-front-bowarm" : "aa-front-arm") : undefined} style={live ? { transformOrigin: `${f(s0.x)}px ${f(s0.y)}px` } : undefined}>
-        <path d={`${segs} L${f(hand.x)} ${f(hand.y)}`} stroke={OUT} strokeOpacity="0.5" strokeWidth={upW + 2.6} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+        <path d={`${segs} L${f(hand.x)} ${f(hand.y)}`} stroke={OUT} strokeOpacity="0.8" strokeWidth={upW + 2.6} strokeLinecap="round" strokeLinejoin="round" fill="none" />
         <path d={segs} stroke={sleeve} strokeWidth={upW} strokeLinecap="round" fill="none" />
         <path d={`M${f(elbow.x)} ${f(elbow.y)} L${f(sleeveLong ? cuff.x : hand.x)} ${f(sleeveLong ? cuff.y : hand.y)}`} stroke={sleeveLong ? sleeve : skin} strokeWidth={foreW + (sleeveLong ? 1.5 : 0)} strokeLinecap="round" fill="none" />
         {sleeveLong ? <path d={`M${f(cuff.x)} ${f(cuff.y)} L${f(hand.x)} ${f(hand.y)}`} stroke={skin} strokeWidth={foreW - 1} strokeLinecap="round" /> : null}
         {LONG_SLEEVES.includes(look.top) || look.top === "canotta" ? null : <path d={`M${f(s0.x)} ${f(s0.y)} L${f(s0.x + side * 4)} 130`} stroke={look.top === "gilet" || look.top === "corpetto" ? look.sleeves || look.trim : shirt} strokeWidth={19 * W} strokeLinecap="round" />}
         {look.top === "canotta" ? null : <SleeveDetail s={s0} e={elbow} h={hand} w={upW} color={seamOf(sleeve)} long={sleeveLong} />}
         <path d={`M${f(s0.x - side * upW * 0.18)} ${f(s0.y + 4)} L${f(elbow.x - side * upW * 0.18)} ${f(elbow.y)}`} stroke="#fff" strokeOpacity="0.14" strokeWidth={upW * 0.26} strokeLinecap="round" />
-        {medievalTop ? <circle cx={f(cuff.x)} cy={f(cuff.y)} r={6.8 * W} fill={look.trim} stroke={OUT} strokeOpacity="0.3" strokeWidth="0.8" /> : null}
+        {medievalTop ? <circle cx={f(cuff.x)} cy={f(cuff.y)} r={6.8 * W} fill={look.trim} stroke={OUT} strokeOpacity="0.6" strokeWidth="0.8" /> : null}
         {look.armband && !bowArm ? <path d={`M${f(lerp(s0.x, elbow.x, 0.42))} ${f(lerp(s0.y, elbow.y, 0.42))} L${f(lerp(s0.x, elbow.x, 0.58))} ${f(lerp(s0.y, elbow.y, 0.58))}`} stroke={look.trim} strokeWidth={upW + 1.4} /> : null}
         {look.watch && !bowArm ? <g><circle cx={f(lerp(elbow.x, hand.x, 0.8))} cy={f(lerp(elbow.y, hand.y, 0.8))} r="5.4" fill="#1d2126" /><circle cx={f(lerp(elbow.x, hand.x, 0.8))} cy={f(lerp(elbow.y, hand.y, 0.8))} r="3" fill="#dfe6ee" /></g> : null}
         {bowArm && look.armguard ? <path d={`M${f(lerp(elbow.x, hand.x, 0.2))} ${f(lerp(elbow.y, hand.y, 0.2))} L${f(lerp(elbow.x, hand.x, 0.76))} ${f(lerp(elbow.y, hand.y, 0.76))}`} stroke={look.armguard} strokeWidth={foreW + 3} strokeLinecap="round" opacity="0.95" /> : null}
         {look.bracers ? (
           <g>
-            <path d={`M${f(brA.x)} ${f(brA.y)} L${f(brB.x)} ${f(brB.y)}`} stroke={OUT} strokeOpacity="0.5" strokeWidth={foreW + 6} strokeLinecap="round" />
+            <path d={`M${f(brA.x)} ${f(brA.y)} L${f(brB.x)} ${f(brB.y)}`} stroke={OUT} strokeOpacity="0.8" strokeWidth={foreW + 6} strokeLinecap="round" />
             <path d={`M${f(brA.x)} ${f(brA.y)} L${f(brB.x)} ${f(brB.y)}`} stroke={look.bracers} strokeWidth={foreW + 4} strokeLinecap="round" />
             {[0.42, 0.56, 0.7].map((k) => {
               const c = lerpP(elbow, hand, k);
@@ -188,7 +188,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop }: { look: A
             const lining = `M${f(sx + side * 7)} 124 C${f(sx + side * 15)} 186 ${f(outX + side * 4)} ${f(hemY - 70)} ${f(outX)} ${f(hemY - 4)} L${f(outX - side * 6)} ${f(hemY - 2)} C${f(outX - side * 4)} ${f(hemY - 70)} ${f(sx + side * 8)} 190 ${f(sx + side * 2)} 126 Z`;
             return (
               <g key={side} className={live ? "aa-front-flap" : undefined} style={live ? { transformOrigin: `${f(sx)}px 104px`, animationDelay: side < 0 ? "0s" : "-2.4s" } : undefined}>
-                <path d={d} fill={`url(#${uid}cp)`} stroke={OUT} strokeOpacity="0.45" strokeWidth="1.4" />
+                <path d={d} fill={`url(#${uid}cp)`} stroke={OUT} strokeOpacity="0.75" strokeWidth="1.4" />
                 {look.capePattern && look.capePattern !== "liscio" && look.capePattern !== "stemma" ? (
                   look.capePattern === "stelle" ? (
                     <g>
@@ -238,14 +238,14 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop }: { look: A
           const L = (y: number, d: number) => f(lx(y) + d);
           return (
             <g key={x}>
-              <path d={`M${L(206, -legW / 2)} 206 L${L(206, legW / 2)} 206 L${L(330, legW / 2 - (tight ? 2 : 0))} 330 L${L(330, -legW / 2 + (tight ? 2 : 0))} 330 Z`} fill={shorts ? skin : `url(#${uid}pa)`} stroke={OUT} strokeOpacity="0.45" strokeWidth="1.4" />
+              <path d={`M${L(206, -legW / 2)} 206 L${L(206, legW / 2)} 206 L${L(330, legW / 2 - (tight ? 2 : 0))} 330 L${L(330, -legW / 2 + (tight ? 2 : 0))} 330 Z`} fill={shorts ? skin : `url(#${uid}pa)`} stroke={OUT} strokeOpacity="0.75" strokeWidth="1.4" />
               {shorts ? null : <path d={`M${L(268, -legW * 0.3)} 266 q${f(legW * 0.3)} 4 ${f(legW * 0.6)} 0 M${L(274, -legW * 0.25)} 273 q${f(legW * 0.25)} 3 ${f(legW * 0.5)} 0`} stroke="#000" strokeOpacity="0.25" strokeWidth="0.9" fill="none" />}
               {shorts ? null : <path d={`M${L(212, -legW * 0.22)} 212 L${L(326, -legW * 0.22)} 326`} stroke="#fff" strokeOpacity="0.1" strokeWidth={f(legW * 0.18)} strokeLinecap="round" />}
-              {shorts ? <path d={`M${L(206, -legW / 2 - 1)} 206 h${legW + 2} l${f(sp * 0.33)} 46 h${-legW - 2} Z`} fill={`url(#${uid}pa)`} stroke={OUT} strokeOpacity="0.45" strokeWidth="1.2" /> : null}
+              {shorts ? <path d={`M${L(206, -legW / 2 - 1)} 206 h${legW + 2} l${f(sp * 0.33)} 46 h${-legW - 2} Z`} fill={`url(#${uid}pa)`} stroke={OUT} strokeOpacity="0.75" strokeWidth="1.2" /> : null}
               {look.bottom === "jeans" ? <path d={`M${L(214, i ? -3 : 3)} 214 L${L(326, i ? -3 : 3)} 326`} stroke={shade(look.pants, 0.3)} strokeWidth="0.8" strokeDasharray="3 2" /> : null}
               {look.wraps ? [0, 1, 2, 3, 4].map((k) => <path key={k} d={`M${L(246 + k * 12, -legW / 2)} ${246 + k * 12} L${L(240 + k * 12, legW / 2)} ${240 + k * 12}`} stroke={look.wrapsColor} strokeWidth="4" />) : null}
               {/* calzatura */}
-              <path d={`M${L(bootTop, -legW / 2 - 1)} ${bootTop} L${L(bootTop, legW / 2 + 1)} ${bootTop} L${L(340, legW / 2 + 2)} 340 C${L(346, legW / 2 + 4)} 346 ${L(352, legW / 2 + 2)} 352 ${L(352, 0)} 352 C${L(352, -legW / 2 - 2)} 352 ${L(346, -legW / 2 - 4)} 346 ${L(340, -legW / 2 - 2)} 340 Z`} fill={look.footwear === "sandali" ? skin : `url(#${uid}bo)`} stroke={OUT} strokeOpacity="0.55" strokeWidth="1.4" />
+              <path d={`M${L(bootTop, -legW / 2 - 1)} ${bootTop} L${L(bootTop, legW / 2 + 1)} ${bootTop} L${L(340, legW / 2 + 2)} 340 C${L(346, legW / 2 + 4)} 346 ${L(352, legW / 2 + 2)} 352 ${L(352, 0)} 352 C${L(352, -legW / 2 - 2)} 352 ${L(346, -legW / 2 - 4)} 346 ${L(340, -legW / 2 - 2)} 340 Z`} fill={look.footwear === "sandali" ? skin : `url(#${uid}bo)`} stroke={OUT} strokeOpacity="0.85" strokeWidth="1.4" />
               {look.footwear === "sandali" ? null : (
                 <g fill="none" strokeLinecap="round">
                   <path d={`M${L(351, -legW / 2 - 2)} 350.5 Q${L(355, 0)} 355 ${L(351, legW / 2 + 2)} 350.5`} stroke="#14110e" strokeWidth="2.4" />
@@ -257,12 +257,12 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop }: { look: A
               )}
               {look.footwear === "stivali-alti" ? (
                 <g>
-                  <path d={`M${L(bootTop - 3, -legW / 2 - 3)} ${bootTop - 3} L${L(bootTop - 4, legW / 2 + 3)} ${bootTop - 4} L${L(bootTop + 9, legW / 2 + 2)} ${bootTop + 9} L${L(bootTop + 10, -legW / 2 - 2)} ${bootTop + 10} Z`} fill={shade(look.shoes, -0.18)} stroke={OUT} strokeOpacity="0.45" strokeWidth="1" />
+                  <path d={`M${L(bootTop - 3, -legW / 2 - 3)} ${bootTop - 3} L${L(bootTop - 4, legW / 2 + 3)} ${bootTop - 4} L${L(bootTop + 9, legW / 2 + 2)} ${bootTop + 9} L${L(bootTop + 10, -legW / 2 - 2)} ${bootTop + 10} Z`} fill={shade(look.shoes, -0.18)} stroke={OUT} strokeOpacity="0.75" strokeWidth="1" />
                   {[24, 30].map((d) => <path key={d} d={`M${L(bootTop + d, -legW / 2 - 1)} ${bootTop + d} L${L(bootTop + d, legW / 2 + 1)} ${bootTop + d}`} stroke={shade(look.shoes, -0.5)} strokeWidth="1.6" />)}
                   <rect x={L(bootTop + 23, legW * 0.15)} y={bootTop + 22.6} width="5" height="8.4" rx="1" fill="none" stroke="#c9a46a" strokeWidth="1" />
                 </g>
               ) : null}
-              {look.footwear === "stivali-pelliccia" ? [-1, 0, 1].map((k) => <circle key={k} cx={L(bootTop, k * legW * 0.4)} cy={bootTop} r="5.4" fill="#e3d6be" stroke={OUT} strokeOpacity="0.25" strokeWidth="0.6" />) : null}
+              {look.footwear === "stivali-pelliccia" ? [-1, 0, 1].map((k) => <circle key={k} cx={L(bootTop, k * legW * 0.4)} cy={bootTop} r="5.4" fill="#e3d6be" stroke={OUT} strokeOpacity="0.55" strokeWidth="0.6" />) : null}
               {look.footwear === "scarponi" ? (
                 <g>
                   <path d={`M${L(348, -legW / 2 - 3)} 348 h${legW + 6} v4 h${-legW - 6} Z`} fill="#2a2622" />
@@ -270,7 +270,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop }: { look: A
                 </g>
               ) : null}
               {look.bottom === "cargo" ? <rect x={L(244, i ? 2 : -legW / 2 - 2)} y="244" width={legW / 2 + 1} height="16" rx="2" fill={shade(look.pants, -0.15)} stroke={shade(look.pants, -0.45)} strokeWidth="0.8" /> : null}
-              {look.footwear === "stivali-risvolto" ? <path d={`M${L(bootTop, -legW / 2 - 3)} ${bootTop - 4} h${legW + 6} v9 h${-legW - 6} Z`} fill="#eee2c8" stroke={OUT} strokeOpacity="0.35" strokeWidth="1" /> : null}
+              {look.footwear === "stivali-risvolto" ? <path d={`M${L(bootTop, -legW / 2 - 3)} ${bootTop - 4} h${legW + 6} v9 h${-legW - 6} Z`} fill="#eee2c8" stroke={OUT} strokeOpacity="0.65" strokeWidth="1" /> : null}
               {look.footwear === "sportive" ? <path d={`M${L(346, -legW / 2 - 2)} 346 h${legW + 4} v4 h${-legW - 4} Z`} fill="#f2efe8" /> : null}
               {look.footwear === "sandali" ? <path d={`M${L(330, -legW / 2)} 330 L${L(340, legW / 2)} 340 M${L(330, legW / 2)} 330 L${L(340, -legW / 2)} 340`} stroke={look.shoes} strokeWidth="2.4" /> : null}
             </g>
@@ -279,7 +279,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop }: { look: A
 
         {look.bottom === "gonna" ? (
           <g>
-            <path d={`M${hip.l - 2} 200 L${hip.r + 2} 200 L${hip.r + 12} 262 Q${cx} 268 ${hip.l - 12} 262 Z`} fill={`url(#${uid}pa)`} stroke={OUT} strokeOpacity="0.5" strokeWidth="1.4" />
+            <path d={`M${hip.l - 2} 200 L${hip.r + 2} 200 L${hip.r + 12} 262 Q${cx} 268 ${hip.l - 12} 262 Z`} fill={`url(#${uid}pa)`} stroke={OUT} strokeOpacity="0.8" strokeWidth="1.4" />
             {[-0.7, -0.35, 0, 0.35, 0.7].map((k) => <path key={k} d={`M${cx + k * 28} 204 L${cx + k * 38} 262`} stroke={shade(look.pants, -0.35)} strokeWidth="1" />)}
           </g>
         ) : null}
@@ -289,10 +289,10 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop }: { look: A
           <AvatarFace look={look} className="" bare part="back" />
         </svg>
         {/* veste */}
-        {longTop ? <path d={tunicD} fill={`url(#${uid}sh)`} stroke={OUT} strokeOpacity="0.5" strokeWidth="1.8" /> : null}
+        {longTop ? <path d={tunicD} fill={`url(#${uid}sh)`} stroke={OUT} strokeOpacity="0.8" strokeWidth="1.8" /> : null}
         {longTop && look.top === "giubbetto" ? <path d={zigQ([hip.l - 14, hem - 3], [cx, hem + 3], [hip.r + 14, hem - 3], 26, 2.2)} stroke={look.trim} strokeWidth="1.6" fill="none" strokeLinejoin="round" /> : longTop ? <path d={`M${hip.l - 14} ${hem - 3} Q${cx} ${hem + 3} ${hip.r + 14} ${hem - 3}`} stroke={look.trim} strokeWidth="3" fill="none" /> : null}
         {longTop && ["cappotto-lungo", "ranger", "tunica-lunga", "incrociata"].includes(look.top) ? <path d={`M${cx} 200 L${cx} ${hem + 2}`} stroke={shade(shirt, -0.45)} strokeWidth="1.6" /> : null}
-        <path d={torsoD} fill={`url(#${uid}sh)`} stroke={OUT} strokeOpacity="0.5" strokeWidth="1.8" />
+        <path d={torsoD} fill={`url(#${uid}sh)`} stroke={OUT} strokeOpacity="0.8" strokeWidth="1.8" />
         <ClothPattern kind={look.pattern} shapes={longTop ? [torsoD, tunicD] : [torsoD]} base={shirt} trim={look.trim} uid={`${uid}f`} box={[sh.l - 16, 94, sh.r + 16, (longTop ? hem : 208) + 6]} />
         <ClothDetail uid={`${uid}cd`} shapes={longTop ? [torsoD, tunicD] : [torsoD]} cx={cx} shoulderL={sh.l} shoulderR={sh.r} hipL={hip.l} hipR={hip.r} tunicLen={longTop ? hem : 206} longTunic={longTop} seam={seamOf(shirt)} />
         {look.top === "giubbetto" ? (
@@ -309,12 +309,12 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop }: { look: A
         {["tunica-lunga", "farsetto", "giubba", "polo"].includes(look.top) ? [124, 140, 156, 172].map((y) => <circle key={y} cx={cx} cy={y} r="1.8" fill={look.trim} />) : null}
         {look.top === "ranger" || look.top === "incrociata" ? <path d={`M${cx - 18} 100 L${cx + 14} 196`} stroke={look.trim} strokeWidth="2.6" /> : null}
         {look.top === "gilet" ? <path d={`M${cx - 10} 100 L${cx - 6} 200 M${cx + 10} 100 L${cx + 6} 200`} stroke={shade(shirt, -0.4)} strokeWidth="1.4" /> : null}
-        {look.chestguard ? <path d={`M${cx + bowSide * 6} 118 C${cx + bowSide * 30} 116 ${cx + bowSide * 34} 150 ${cx + bowSide * 26} 168 L${cx + bowSide * 6} 164 Z`} fill={look.chestColor} opacity="0.92" stroke={OUT} strokeOpacity="0.4" strokeWidth="1" /> : null}
+        {look.chestguard ? <path d={`M${cx + bowSide * 6} 118 C${cx + bowSide * 30} 116 ${cx + bowSide * 34} 150 ${cx + bowSide * 26} 168 L${cx + bowSide * 6} 164 Z`} fill={look.chestColor} opacity="0.92" stroke={OUT} strokeOpacity="0.7" strokeWidth="1" /> : null}
         {look.straps ? <path d={`M${sh.l + 8} 106 L${hip.r - 6} 196 M${sh.r - 8} 106 L${hip.l + 6} 196`} stroke="#3a2414" strokeWidth="4.4" /> : null}
         {look.sash ? <path d={`M${waist.l - 2} 182 Q${cx} 192 ${waist.r + 2} 182 L${waist.r + 2} 194 Q${cx} 204 ${waist.l - 2} 194 Z M${waist.l + 6} 192 l-6 34 l10 -4 Z`} fill={look.sashColor} /> : null}
         {look.belt !== "nessuna" ? (
           <g>
-            <path d={`M${waist.l - 1} ${look.belt === "larga" ? 184 : 187} L${waist.r + 1} ${look.belt === "larga" ? 184 : 187} L${waist.r + 1} 194 L${waist.l - 1} 194 Z`} fill={look.beltColor} stroke={OUT} strokeOpacity="0.4" strokeWidth="1" />
+            <path d={`M${waist.l - 1} ${look.belt === "larga" ? 184 : 187} L${waist.r + 1} ${look.belt === "larga" ? 184 : 187} L${waist.r + 1} 194 L${waist.l - 1} 194 Z`} fill={look.beltColor} stroke={OUT} strokeOpacity="0.7" strokeWidth="1" />
             <BeltDetail uid={uid} x={waist.l - 1} y={look.belt === "larga" ? 184 : 187} w={waist.r - waist.l + 2} h={look.belt === "larga" ? 10 : 7} cx={cx} />
             {look.buckle && look.buckle !== "semplice" ? <Buckle kind={look.buckle} x={cx} y={190} /> : <rect x={cx - 5} y={look.belt === "larga" ? 183 : 186} width="10" height={look.belt === "larga" ? 12 : 9} rx="1.5" fill="none" stroke="#d9b45a" strokeWidth="1.8" />}
           </g>
@@ -361,11 +361,11 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop }: { look: A
           <g className={live ? "aa-front-bow" : undefined}>
             {([1, -1] as const).map((sg) => (
               <g key={sg}>
-                <path d={limbD(sg)} stroke={OUT} strokeOpacity="0.55" strokeWidth={longbow ? 8 : 7} strokeLinecap="round" fill="none" />
+                <path d={limbD(sg)} stroke={OUT} strokeOpacity="0.85" strokeWidth={longbow ? 8 : 7} strokeLinecap="round" fill="none" />
                 <path d={limbD(sg)} stroke={limbs} strokeWidth={longbow ? 5.8 : 4.8} strokeLinecap="round" fill="none" />
                 <path d={limbD(sg)} stroke={shade(limbs, wood ? 0.35 : 0.55)} strokeOpacity={wood ? 0.6 : 0.4} strokeWidth="1.4" strokeLinecap="round" fill="none" transform="translate(1.2 0)" />
                 <path d={limbD(sg)} stroke="#000" strokeOpacity="0.25" strokeWidth="1.2" strokeLinecap="round" fill="none" transform="translate(-1.4 0)" />
-                <circle cx={tip(sg).x} cy={tip(sg).y} r={longbow ? 2.6 : 2.1} fill={wood ? "#efe3c4" : "#2a2f35"} stroke={OUT} strokeOpacity="0.5" strokeWidth="0.7" />
+                <circle cx={tip(sg).x} cy={tip(sg).y} r={longbow ? 2.6 : 2.1} fill={wood ? "#efe3c4" : "#2a2f35"} stroke={OUT} strokeOpacity="0.8" strokeWidth="0.7" />
                 {compound ? <g transform={`translate(${tipX} ${-half * sg})`}><ellipse rx="7" ry="8" fill="#b7c0c8" stroke="#2a2f35" strokeWidth="1.2" /><ellipse rx="3.6" ry="4.2" fill="#8a939c" /><circle r="1.2" fill="#e3a21a" /></g> : null}
               </g>
             ))}
@@ -375,12 +375,12 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop }: { look: A
             {/* riser */}
             {longbow ? (
               <g>
-                <rect x="-4.6" y="-14" width="9.2" height="28" rx="3.4" fill="#4a2c16" stroke={OUT} strokeOpacity="0.5" strokeWidth="0.8" />
+                <rect x="-4.6" y="-14" width="9.2" height="28" rx="3.4" fill="#4a2c16" stroke={OUT} strokeOpacity="0.8" strokeWidth="0.8" />
                 {[0, 1, 2, 3, 4, 5].map((k) => <path key={k} d={`M-4.4 ${-11 + k * 4.2} L4.4 ${-9 + k * 4.2}`} stroke="#c9a46a" strokeWidth="0.7" opacity="0.8" />)}
               </g>
             ) : (
               <g>
-                <path d={`M-1 ${-rs} L8 ${-rs} C9 ${-rs * 0.5} 10 -12 9 -8 L9 ${rs} L-1 ${rs} C-2 ${rs * 0.6} -2 14 -4 9 C-5 4 -5 -6 -2 -11 Z`} fill={`url(#${uid}ri)`} stroke={OUT} strokeOpacity="0.55" strokeWidth="0.9" />
+                <path d={`M-1 ${-rs} L8 ${-rs} C9 ${-rs * 0.5} 10 -12 9 -8 L9 ${rs} L-1 ${rs} C-2 ${rs * 0.6} -2 14 -4 9 C-5 4 -5 -6 -2 -11 Z`} fill={`url(#${uid}ri)`} stroke={OUT} strokeOpacity="0.85" strokeWidth="0.9" />
                 {wood ? null : <path d={`M3 ${-rs + 6} L7 ${-rs + 6} L7 -10 L3.4 -10 Z`} fill="#000" opacity="0.3" />}
                 <path d="M9 -6 l4 0 l0 2.4" stroke="#c9d0d8" strokeWidth="1.1" fill="none" />
                 {look.bowType === "olimpico" ? (

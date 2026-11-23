@@ -25,9 +25,10 @@ import { myGameRecords, saveGameRound } from "@/lib/arcieri/game.api";
  */
 const W = 300;
 const H = 400;
-const AV = { left: -24, width: 220 };
+// arciere un po' più grande: i piedi possono finire sotto i pulsanti
+const AV = { left: -40, width: 252 };
 const AV_H = (AV.width * 350) / 300;
-const AV_TOP = H - 6 - AV_H;
+const AV_TOP = H + 34 - AV_H;
 const GRIP = { x: AV.left + ((250 - 40) / 300) * AV.width, y: AV_TOP + (124 / 350) * AV_H };
 const BASE = { x: 232, y: 236 };
 // a ogni volée una distanza a caso tra quelle del livello: il bersaglio è più grande o più piccolo, il vento pesa di più o di meno
@@ -697,9 +698,7 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
         ) : null}
         {/* luce dell'ambiente: tinta dell'ora e bordo illuminato dal lato del sole */}
         {indoor ? null : <ArcherLightDefs />}
-        <div className="h-full w-full" style={indoor ? undefined : { filter: `url(#aa-lit-${lightMode(sky)}-${isPainted(scene) || (sky.tod === "mattina") ? "l" : "r"})` }}>
-          <ArcherAvatar look={bodyLook} drive={drive} pose="riposo" interactive={false} hideFlight wind={indoor ? 0 : wind} className="h-full w-full drop-shadow-[0_12px_20px_rgba(0,0,0,0.45)]" />
-        </div>
+        <ArcherAvatar look={bodyLook} drive={drive} pose="riposo" interactive={false} hideFlight wind={indoor ? 0 : wind} light={indoor ? undefined : `aa-lit-${lightMode(sky)}-${isPainted(scene) !== Boolean(look.lefty) || sky.tod === "mattina" ? "l" : "r"}`} className="aa-archer-feet h-full w-full drop-shadow-[0_10px_14px_rgba(0,0,0,0.4)]" />
         {/* ombra di contatto morbida sotto i piedi */}
         <span aria-hidden className="aa-archer-contact pointer-events-none absolute bottom-[1.5%] left-[18%] h-[5%] w-[52%] rounded-[50%]" />
       </div>
