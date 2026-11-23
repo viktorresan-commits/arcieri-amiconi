@@ -46,17 +46,24 @@ export function DetailDefs({ uid }: { uid: string }) {
         <stop offset="0" stopColor="#fff" stopOpacity="0" />
         <stop offset="1" stopColor="#fff" stopOpacity="0.16" />
       </linearGradient>
-      {/* trama del tessuto: diagonali finissime incrociate */}
-      <pattern id={`${uid}weave`} width="2.4" height="2.4" patternUnits="userSpaceOnUse">
-        <path d="M0 2.4 L2.4 0 M-0.6 0.6 L0.6 -0.6 M1.8 3 L3 1.8" stroke="#000" strokeOpacity="0.05" strokeWidth="0.3" />
-        <path d="M0 0 L2.4 2.4" stroke="#fff" strokeOpacity="0.035" strokeWidth="0.25" />
+      {/* trama del tessuto (lana spigata): diagonali fitte, ombra e lume alternati, ben leggibili ma fini */}
+      <pattern id={`${uid}weave`} width="2.2" height="2.2" patternUnits="userSpaceOnUse" patternTransform="rotate(35)">
+        <path d="M0 0.55 H2.2" stroke="#000" strokeOpacity="0.13" strokeWidth="0.45" />
+        <path d="M0 1.65 H2.2" stroke="#fff" strokeOpacity="0.06" strokeWidth="0.35" />
       </pattern>
-      {/* grana del cuoio: puntini irregolari */}
+      {/* lino delle camicie e delle maniche: ordito e trama sottili */}
+      <pattern id={`${uid}linen`} width="1.6" height="1.6" patternUnits="userSpaceOnUse">
+        <path d="M0 0.4 H1.6" stroke="#000" strokeOpacity="0.07" strokeWidth="0.3" />
+        <path d="M0.4 0 V1.6" stroke="#000" strokeOpacity="0.05" strokeWidth="0.28" />
+        <path d="M0 1.2 H1.6" stroke="#fff" strokeOpacity="0.06" strokeWidth="0.25" />
+      </pattern>
+      {/* grana del cuoio: pori e piccoli graffi */}
       <pattern id={`${uid}grain`} width="5" height="5" patternUnits="userSpaceOnUse">
-        <circle cx="1" cy="1.2" r="0.35" fill="#000" fillOpacity="0.18" />
-        <circle cx="3.4" cy="2.6" r="0.3" fill="#000" fillOpacity="0.14" />
-        <circle cx="2" cy="4.1" r="0.28" fill="#fff" fillOpacity="0.1" />
-        <circle cx="4.4" cy="0.6" r="0.25" fill="#fff" fillOpacity="0.08" />
+        <circle cx="1" cy="1.2" r="0.38" fill="#000" fillOpacity="0.26" />
+        <circle cx="3.4" cy="2.6" r="0.32" fill="#000" fillOpacity="0.22" />
+        <circle cx="2" cy="4.1" r="0.3" fill="#fff" fillOpacity="0.14" />
+        <circle cx="4.4" cy="0.6" r="0.26" fill="#fff" fillOpacity="0.12" />
+        <path d="M0.4 3.2 l1.2 -0.5" stroke="#000" strokeOpacity="0.16" strokeWidth="0.25" />
       </pattern>
     </>
   );
@@ -253,16 +260,16 @@ export function EyeDetail({ uid, eyes, skinDeep, lid }: { uid: string; eyes: str
           <stop offset="1" stopColor="#000" stopOpacity="0.55" />
         </radialGradient>
         <clipPath id={`${uid}ec`}>
-          <path d="M157 83 Q162.5 77.4 168.4 81.6 Q163 86.4 157 83 Z" />
+          <path d="M157.4 83 C159.6 79.6 164.6 78.2 168.4 81.4 C165.6 84.6 160.8 85.2 157.4 83 Z" />
         </clipPath>
       </defs>
       <g clipPath={`url(#${uid}ec)`}>
-        <circle cx="164" cy="82.2" r="3.2" fill={`url(#${uid}iris)`} />
+        <ellipse cx="164.6" cy="82" rx="2.4" ry="3.1" fill={`url(#${uid}iris)`} />
         {/* striature dell'iride */}
         <g stroke="#000" strokeOpacity="0.18" strokeWidth="0.25">
           {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
             const a = (i / 8) * Math.PI * 2;
-            return <path key={i} d={`M${f(164.4 + Math.cos(a) * 1.6)} ${f(82.2 + Math.sin(a) * 1.6)} L${f(164 + Math.cos(a) * 3)} ${f(82.2 + Math.sin(a) * 3)}`} />;
+            return <path key={i} d={`M${f(165 + Math.cos(a) * 1.2)} ${f(82 + Math.sin(a) * 1.6)} L${f(164.6 + Math.cos(a) * 2.3)} ${f(82 + Math.sin(a) * 3)}`} />;
           })}
         </g>
         <path d="M156 79 H170 V82.6 Q163 80.4 156 82.6 Z" fill="#000" opacity="0.16" />
@@ -337,29 +344,57 @@ export function HairFineStrands({ color, light, dark, curly }: { color: string; 
 }
 
 /** Barba a pelo: tratti brevi inclinati verso il basso, clip sulla forma della barba. */
-export function BeardTexture({ uid, d, color, light, dark }: { uid: string; d: string; color: string; light: string; dark: string }) {
+export function BeardTexture({ uid, d, color, light, dark, box = [138, 92, 36, 44], k = 1, band = "M140 96 Q150 104 172 100", id = "bc" }: { uid: string; d: string; color: string; light: string; dark: string; /** area dei peli: x, y, larghezza, altezza */ box?: [number, number, number, number]; /** scala dei peli */ k?: number; band?: string; id?: string }) {
   let lt = "";
   let dk = "";
-  for (let i = 0; i < 70; i++) {
-    const x = 138 + ((i * 37) % 36);
-    const y = 92 + ((i * 53) % 44);
-    const l = 1.6 + ((i * 7) % 5) * 0.3;
-    const seg = `M${x} ${y} l${f(0.6 + (i % 3) * 0.3)} ${f(l)}`;
+  const [bx, by, bw, bh] = box;
+  const n = Math.round(70 * (bw * bh) / (36 * 44) / (k * k));
+  for (let i = 0; i < n; i++) {
+    const x = bx + ((i * 37) % 97) / 97 * bw;
+    const y = by + ((i * 53) % 89) / 89 * bh;
+    const l = (1.6 + ((i * 7) % 5) * 0.3) * k;
+    // i peli scendono verso il centro del mento: leggera inclinazione verso l'asse
+    const lean = (x < bx + bw / 2 ? 1 : -1) * (0.2 + (i % 3) * 0.25) * k;
+    const seg = `M${f(x)} ${f(y)} l${f(lean)} ${f(l)}`;
     if (i % 4 === 0) lt += seg;
     else dk += seg;
   }
   return (
     <g pointerEvents="none">
       <defs>
-        <clipPath id={`${uid}bc`}>
+        <clipPath id={`${uid}${id}`}>
           <path d={d} />
         </clipPath>
       </defs>
-      <g clipPath={`url(#${uid}bc)`} strokeWidth="0.45" strokeLinecap="round" fill="none">
-        <path d={dk} stroke={dark} strokeOpacity="0.4" />
-        <path d={lt} stroke={light} strokeOpacity="0.35" />
-        <path d="M140 96 Q150 104 172 100" stroke={color} strokeOpacity="0.3" strokeWidth="3" />
+      <g clipPath={`url(#${uid}${id})`} strokeWidth={0.45 * k} strokeLinecap="round" fill="none">
+        <path d={dk} stroke={dark} strokeOpacity="0.45" />
+        <path d={lt} stroke={light} strokeOpacity="0.4" />
+        {band ? <path d={band} stroke={color} strokeOpacity="0.3" strokeWidth={3 * k} /> : null}
       </g>
+      <path d={d} fill="none" stroke={dark} strokeOpacity="0.6" strokeWidth={0.5 * k} />
+    </g>
+  );
+}
+
+/** Bottone cucito: osso, legno o metallo. Bordo rilevato, ombra sotto, lume in alto e i fori (o la cupola per il metallo). */
+export function ClothButton({ x, y, r = 1.8, color = "#c9b48a", metal = false }: { x: number; y: number; r?: number; color?: string; metal?: boolean }) {
+  return (
+    <g pointerEvents="none">
+      <circle cx={f(x + r * 0.18)} cy={f(y + r * 0.28)} r={f(r)} fill="#000" opacity="0.3" />
+      <circle cx={f(x)} cy={f(y)} r={f(r)} fill={color} stroke="#1b130d" strokeOpacity="0.85" strokeWidth={f(r * 0.26)} />
+      {metal ? (
+        <>
+          <circle cx={f(x - r * 0.28)} cy={f(y - r * 0.3)} r={f(r * 0.38)} fill="#fff" opacity="0.75" />
+          <circle cx={f(x)} cy={f(y)} r={f(r * 0.62)} fill="none" stroke="#000" strokeOpacity="0.18" strokeWidth={f(r * 0.14)} />
+        </>
+      ) : (
+        <>
+          <circle cx={f(x)} cy={f(y)} r={f(r * 0.66)} fill="none" stroke="#000" strokeOpacity="0.2" strokeWidth={f(r * 0.14)} />
+          <circle cx={f(x - r * 0.26)} cy={f(y)} r={f(r * 0.15)} fill="#1b130d" opacity="0.7" />
+          <circle cx={f(x + r * 0.26)} cy={f(y)} r={f(r * 0.15)} fill="#1b130d" opacity="0.7" />
+          <path d={`M${f(x - r * 0.55)} ${f(y - r * 0.5)} A${f(r * 0.75)} ${f(r * 0.75)} 0 0 1 ${f(x + r * 0.2)} ${f(y - r * 0.72)}`} stroke="#fff" strokeOpacity="0.5" strokeWidth={f(r * 0.2)} fill="none" strokeLinecap="round" />
+        </>
+      )}
     </g>
   );
 }

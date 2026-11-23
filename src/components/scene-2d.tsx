@@ -1238,13 +1238,8 @@ export function ArcherLightDefs() {
             return (
               <filter key={`${mode}${dir}`} id={`aa-lit-${mode}-${dir < 0 ? "l" : "r"}`} x="-5%" y="-5%" width="110%" height="110%" colorInterpolationFilters="sRGB">
                 <feColorMatrix in="SourceGraphic" type="matrix" values={L.m} result="graded" />
-                {/* bordo in luce: la parte della sagoma che resta scoperta spostandola via dal sole */}
-                <feOffset in="SourceAlpha" dx={dir < 0 ? 2.2 : -2.2} dy="1.6" result="shifted" />
-                <feComposite in="SourceAlpha" in2="shifted" operator="out" result="edge" />
-                <feGaussianBlur in="edge" stdDeviation="0.7" result="edgeSoft" />
-                <feFlood floodColor={L.rim} floodOpacity={L.rimA} />
-                <feComposite in2="edgeSoft" operator="in" result="rim" />
-                <feMerge><feMergeNode in="graded" /><feMergeNode in="rim" /></feMerge>
+                {/* niente alone sui contorni: solo la tinta dell'ora, il tratto resta pulito */}
+                <feComposite in="graded" in2="SourceGraphic" operator="in" />
               </filter>
             );
           }),

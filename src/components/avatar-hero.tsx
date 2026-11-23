@@ -100,7 +100,7 @@ export function AvatarScene({ look, children, height = "h-72", interactive = tru
         </div>
       ))}
       <div className="absolute bottom-0 left-[-6%] h-[96%]">
-        <ArcherAvatar look={unmirrored} pose={pose} className="h-full w-auto drop-shadow-[0_10px_18px_rgba(0,0,0,0.35)]" interactive={interactive} onShot={onShot} hideFlight onPhase={phase ? setPhaseName : undefined} />
+        <ArcherAvatar look={unmirrored} pose={pose} className="h-full w-auto" interactive={interactive} onShot={onShot} hideFlight onPhase={phase ? setPhaseName : undefined} />
       </div>
       </div>
       {phase && phaseName ? (

@@ -701,7 +701,7 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
         ) : null}
         {/* luce dell'ambiente: tinta dell'ora e bordo illuminato dal lato del sole */}
         {indoor ? null : <ArcherLightDefs />}
-        <ArcherAvatar look={bodyLook} drive={drive} pose="riposo" interactive={false} hideFlight wind={indoor ? 0 : wind} light={indoor ? undefined : `aa-lit-${lightMode(sky)}-${isPainted(scene) !== Boolean(look.lefty) || sky.tod === "mattina" ? "l" : "r"}`} className="h-full w-full drop-shadow-[0_10px_14px_rgba(0,0,0,0.4)]" />
+        <ArcherAvatar look={bodyLook} drive={drive} pose="riposo" interactive={false} hideFlight wind={indoor ? 0 : wind} light={indoor ? undefined : `aa-lit-${lightMode(sky)}-${isPainted(scene) !== Boolean(look.lefty) || sky.tod === "mattina" ? "l" : "r"}`} className="h-full w-full" />
         {/* ombra di contatto morbida sotto i piedi */}
         <span aria-hidden className="aa-archer-contact pointer-events-none absolute bottom-[1.5%] left-[18%] h-[5%] w-[52%] rounded-[50%]" />
       </div>

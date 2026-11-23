@@ -2,7 +2,8 @@ import { useId } from "react";
 import { tune, type AvatarLook } from "@/lib/arcieri/avatar";
 import { AvatarFace, bodyWidth, shade } from "./archer-avatar";
 import { Buckle, ChestEmblem, Clasp, ClothPattern, Fletching, Pouch, QuiverBody, zigQ } from "./avatar-extras";
-import { seamOf, BeltDetail, ClothDetail, DetailDefs, LeatherBand, SleeveDetail } from "./avatar-detail";
+import { seamOf, BeltDetail, ClothButton, ClothDetail, DetailDefs, LeatherBand, SleeveDetail } from "./avatar-detail";
+import { BUTTON_TOPS } from "./archer-avatar";
 
 const OUT = "#1b130d";
 const LONG_TOPS: Record<string, number> = { tunica: 252, "tunica-lunga": 266, ranger: 262, incrociata: 250, cappotto: 258, "cappotto-lungo": 292, giubba: 230, cotta: 240, giubbetto: 234 };
@@ -83,6 +84,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop }: { look: A
       <g key={side} className={live ? (bowArm ? "aa-front-bowarm" : "aa-front-arm") : undefined} style={live ? { transformOrigin: `${f(s0.x)}px ${f(s0.y)}px` } : undefined}>
         <path d={`${segs} L${f(hand.x)} ${f(hand.y)}`} stroke={OUT} strokeOpacity="0.8" strokeWidth={upW + 2.6} strokeLinecap="round" strokeLinejoin="round" fill="none" />
         <path d={segs} stroke={sleeve} strokeWidth={upW} strokeLinecap="round" fill="none" />
+        {sleeve !== skin ? <path d={segs} stroke={`url(#${uid}linen)`} strokeWidth={upW} strokeLinecap="round" fill="none" /> : null}
         <path d={`M${f(elbow.x)} ${f(elbow.y)} L${f(sleeveLong ? cuff.x : hand.x)} ${f(sleeveLong ? cuff.y : hand.y)}`} stroke={sleeveLong ? sleeve : skin} strokeWidth={foreW + (sleeveLong ? 1.5 : 0)} strokeLinecap="round" fill="none" />
         {sleeveLong ? <path d={`M${f(cuff.x)} ${f(cuff.y)} L${f(hand.x)} ${f(hand.y)}`} stroke={skin} strokeWidth={foreW - 1} strokeLinecap="round" /> : null}
         {LONG_SLEEVES.includes(look.top) || look.top === "canotta" ? null : <path d={`M${f(s0.x)} ${f(s0.y)} L${f(s0.x + side * 4)} 130`} stroke={look.top === "gilet" || look.top === "corpetto" ? look.sleeves || look.trim : shirt} strokeWidth={19 * W} strokeLinecap="round" />}
@@ -321,6 +323,8 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop }: { look: A
         ) : null}
         {look.pouch ? <Pouch kind={look.pouchType} x={cx - bowSide * 24} y={192} /> : null}
         <ChestEmblem kind={look.emblem} crest={look.crest} x={look.emblem === "compagnia" ? cx : cx - bowSide * 14} y={look.emblem === "compagnia" ? 150 : 134} s={look.emblem === "compagnia" ? 1.25 : 0.85} base={shirt} trim={look.trim} />
+        {/* bottoni come di profilo: sul petto se non c'è lo stemma, sulla falda sotto la cintura se la veste è lunga */}
+        {BUTTON_TOPS[look.top] ? (look.emblem !== "nessuno" ? (longTop ? [205, 217] : []) : [118, 132, 146, 160, 174, ...(longTop ? [205, 217] : [])]).map((y) => <ClothButton key={y} x={cx} y={y} r={2.2} color={BUTTON_TOPS[look.top]} metal={look.top === "giubbetto" || look.top === "divisa" || look.top === "cappotto-lungo"} />) : null}
         {look.cape && look.clasp !== "nessuno" ? (
           // due fermagli sul davanti, uniti da una catenella che pende sul petto
           <g>
