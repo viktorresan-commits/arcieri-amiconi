@@ -141,7 +141,7 @@ function Home() {
                 <h1 className="aa-day-title font-display text-[1.6rem] leading-none tracking-tight">Il tuo campo</h1>
                 <p className="flex items-center gap-1.5 text-[0.7rem] leading-snug text-white/90"><Glyph name="target" size={12} className="aa-hud-ico shrink-0" />{data.month.sessions} {data.month.sessions === 1 ? "uscita" : "uscite"} · {num(data.month.arrows)} frecce questo mese</p>
                 {data.since ? (
-                  <p className="flex items-center gap-1.5 text-[0.7rem] leading-snug text-white/80"><Glyph name="history" size={12} className="aa-hud-ico shrink-0" />Ultimo tiro {data.since.n} {data.since.unit === "h" ? (data.since.n === 1 ? "ora" : "ore") : data.since.n === 1 ? "giorno" : "giorni"} fa</p>
+                  <p className="aa-day-last flex items-center gap-1.5 text-[0.7rem] leading-snug text-white/80"><Glyph name="history" size={12} className="aa-hud-ico shrink-0" />Ultimo tiro {data.since.n} {data.since.unit === "h" ? (data.since.n === 1 ? "ora" : "ore") : data.since.n === 1 ? "giorno" : "giorni"} fa</p>
                 ) : null}
                 {data.streak > 1 || activePerks.includes("corona") ? (
                   <p className="aa-day-extra mt-0.5 flex flex-wrap gap-1">

@@ -27,9 +27,92 @@ export const rnd = (i: number) => {
   return x - Math.floor(x);
 };
 
+/* ---------------- ambientazioni dipinte ----------------
+   Alcune scene hanno un'illustrazione vera (giorno e notte, più le varianti che ci sono).
+   Sopra, in un solo SVG con le stesse coordinate dell'immagine, solo movimenti leggeri:
+   foschia che scorre, uccelli, lucciole e torce di notte, pioggia e neve. */
+type Painted = { w: number; h: number; /** quota (su 300) del bordo alto dell'illustrazione */ top?: number; day: string; night: string; dusk?: string; rain?: string; torches?: [number, number][]; sky: number; grass: [number, number] };
+const PAINTED: Partial<Record<SceneId, Painted>> = {
+  campo: { w: 843, h: 1264, top: 22, day: "/scene/campo-giorno.webp", night: "/scene/campo-notte.webp", torches: [[258, 522], [748, 520], [97, 518]], sky: 430, grass: [680, 1220] },
+};
+
+function PaintedBackdrop({ sky, id, art, wind = 0 }: { sky: Sky; id: string; art: Painted; wind?: number }) {
+  const night = sky.tod === "notte";
+  const rain = sky.weather === "pioggia";
+  const cloudy = sky.weather !== "sereno";
+  const dusk = sky.tod === "tramonto";
+  const src = night ? art.night : rain && art.rain ? art.rain : dusk && art.dusk ? art.dusk : art.day;
+  const { w, h } = art;
+  const drift = wind < 0 ? -1 : 1;
+  // la scena è 400×300 ma sul gioco (3:4) se ne vede la fascia centrale 87.5–312.5:
+  // l'illustrazione copre esattamente quella fascia, poggiata in basso; ai lati, se lo schermo
+  // è più largo, la stessa immagine sfocata fa da cornice
+  const vw = 225;
+  const k = vw / w;
+  const vh = h * k;
+  const tx = 87.5;
+  // abbassata quanto basta perché il castello stia fra i due pannelli in alto: sotto si perde solo prato
+  const ty = Math.max(300 - vh, art.top ?? 0);
+  return (
+    <svg viewBox="0 0 400 300" preserveAspectRatio="xMidYMax slice" className="absolute inset-0 h-full w-full" aria-hidden>
+      <defs>
+        <filter id={`${id}wide`} x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="9" /></filter>
+      </defs>
+      <image href={src} x="-10" y={300 - 420 * 1.5} width="420" height={420 * 1.5} preserveAspectRatio="xMidYMax slice" filter={`url(#${id}wide)`} opacity="0.9" />
+      <g transform={`translate(${tx} ${ty}) scale(${k})`}>
+      <defs>
+        <filter id={`${id}soft`} x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="18" /></filter>
+        <radialGradient id={`${id}glow`}><stop offset="0" stopColor="#ffd27a" stopOpacity="0.85" /><stop offset="0.35" stopColor="#ff9a3a" stopOpacity="0.35" /><stop offset="1" stopColor="#ff9a3a" stopOpacity="0" /></radialGradient>
+        <radialGradient id={`${id}fly`}><stop offset="0" stopColor="#fff6b0" /><stop offset="0.4" stopColor="#e8f27a" stopOpacity="0.7" /><stop offset="1" stopColor="#e8f27a" stopOpacity="0" /></radialGradient>
+        <linearGradient id={`${id}vig`} x1="0" y1="0" x2="0" y2="1"><stop offset="0.55" stopColor="#000" stopOpacity="0" /><stop offset="1" stopColor="#000" stopOpacity="0.28" /></linearGradient>
+      </defs>
+      <image href={src} width={w} height={h} preserveAspectRatio="xMidYMid slice" />
+      {/* luce dell'ora sopra l'illustrazione di giorno: mattino più fresco, tramonto caldo se manca la sua */}
+      {!night && sky.tod === "mattina" ? <rect width={w} height={h} fill="#ffe2b8" opacity="0.12" style={{ mixBlendMode: "soft-light" }} /> : null}
+      {dusk && !art.dusk ? <rect width={w} height={h} fill="#ff8a3a" opacity="0.35" style={{ mixBlendMode: "soft-light" }} /> : null}
+      {dusk && !art.dusk ? <rect width={w} height={h * 0.5} fill="#6a3a6a" opacity="0.12" /> : null}
+      {cloudy && !(rain && art.rain) && !night ? <rect width={w} height={h} fill="#4a5664" opacity={rain ? 0.32 : 0.14} style={{ mixBlendMode: "multiply" }} /> : null}
+      {/* foschia che scorre nel cielo, nel verso del vento */}
+      {!night ? (
+        <g className="aa-paint-mist" style={{ ["--drift" as string]: `${drift * 120}px` }} filter={`url(#${id}soft)`} fill="#fff" opacity={rain ? 0.22 : 0.16}>
+          <ellipse cx={w * 0.25} cy={art.sky * 0.42} rx={w * 0.22} ry="34" />
+          <ellipse cx={w * 0.72} cy={art.sky * 0.3} rx={w * 0.18} ry="26" />
+          <ellipse cx={w * 0.55} cy={art.sky * 0.78} rx={w * 0.3} ry="30" />
+        </g>
+      ) : null}
+      {/* uccelli lontani di giorno */}
+      {!night && !rain ? (
+        <g className="aa-paint-birds" fill="none" stroke="#2a2a2a" strokeOpacity="0.55" strokeWidth="2.4" strokeLinecap="round">
+          {[[0, 0], [26, 12], [52, -6]].map(([dx, dy], i) => <path key={i} className="aa-wing" style={{ animationDelay: `${i * 0.15}s` }} d={`M${w * 0.18 + dx} ${art.sky * 0.55 + dy} q7 -7 14 0 q7 -7 14 0`} />)}
+        </g>
+      ) : null}
+      {/* di notte: torce che tremolano e lucciole sull'erba */}
+      {night ? (
+        <g>
+          {(art.torches ?? []).map(([x, y], i) => <circle key={i} className="aa-torch" style={{ animationDelay: `${i * 0.37}s` }} cx={x} cy={y} r="46" fill={`url(#${id}glow)`} />)}
+          {Array.from({ length: 16 }, (_, i) => {
+            const x = 40 + rnd(i * 3 + 1) * (w - 80);
+            const y = art.grass[0] + rnd(i * 7 + 2) * (art.grass[1] - art.grass[0]);
+            return <circle key={i} className="aa-firefly-p" style={{ animationDelay: `${(i % 8) * 0.6}s`, animationDuration: `${4 + (i % 5)}s` }} cx={x} cy={y} r={6 + (i % 3) * 2} fill={`url(#${id}fly)`} />;
+          })}
+        </g>
+      ) : null}
+      {rain ? (
+        <g className="aa-rain" stroke="#dce8f2" strokeOpacity="0.45" strokeWidth="2">
+          {Array.from({ length: 110 }, (_, i) => <path key={i} d={`M${(i * 79.3) % (w + 40)} ${(i * 53.9) % h} l-7 26`} />)}
+        </g>
+      ) : null}
+      <rect width={w} height={h} fill={`url(#${id}vig)`} />
+      </g>
+    </svg>
+  );
+}
+
 export const SceneBackdrop = memo(function SceneBackdrop({ sky, id = "bk", scene = "campo", wind }: { sky: Sky; id?: string; scene?: string; /** vento in m/s: positivo verso destra. Le nuvole vanno dove tira */ wind?: number }) {
   const p = SKY[sky.tod];
   const sc = sceneById(scene);
+  const art = PAINTED[sc.id];
+  if (art) return <PaintedBackdrop sky={sky} id={id} art={art} wind={wind} />;
   const rain = sky.weather === "pioggia";
   const cloudy = sky.weather !== "sereno";
   const night = sky.tod === "notte";

@@ -1694,7 +1694,7 @@ html .aa-cat-page .aa-short.is-here span { color: color-mix(in srgb, var(--cat) 
 .aa-member-bg { -webkit-mask-image: linear-gradient(90deg, transparent 0%, rgb(0 0 0 / 0.5) 30%, #000 70%); mask-image: linear-gradient(90deg, transparent 0%, rgb(0 0 0 / 0.5) 30%, #000 70%); opacity: 0.9; }
 .aa-member-bg::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, rgb(0 0 0 / 0.35), transparent 55%), linear-gradient(0deg, rgb(0 0 0 / 0.25), transparent 60%); }
 /* schermi bassi: pulsanti della Home un po' più compatti, così stanno tutti sopra la barra */
-@media (max-height: 760px) {
+@media (max-height: 820px) {
   .aa-home .aa-home-palette { height: 1.6rem; }
   .aa-home .aa-cta { min-height: 50px; }
   .aa-home .aa-cta-ico { height: 2.4rem; width: 2.4rem; }
@@ -1703,6 +1703,21 @@ html .aa-cat-page .aa-short.is-here span { color: color-mix(in srgb, var(--cat) 
 }
 /* schermo basso: il blocco di oggi si accorcia per non coprire l'arciere */
 .aa-hud-tight .aa-day-extra { display: none; }
-.aa-hud-tight .aa-day-title { font-size: 1.3rem; }
+.aa-hud-tight .aa-day-title { font-size: 1.25rem; }
+.aa-hud-tight .aa-day p { line-height: 1.25; }
 .aa-hud-tight .aa-day { padding-top: 0.375rem; padding-bottom: 0.375rem; }
-.aa-hud-tight .aa-day-date, .aa-hud-tight .aa-day-title { display: none; }
+
+/* ambientazioni dipinte: movimenti leggeri sopra l'illustrazione */
+.aa-paint-mist { animation: aa-paint-mist 38s ease-in-out infinite alternate; }
+@keyframes aa-paint-mist { from { transform: translateX(calc(var(--drift) * -0.5)); } to { transform: translateX(calc(var(--drift) * 0.5)); } }
+.aa-paint-birds { animation: aa-paint-birds 46s linear infinite; }
+@keyframes aa-paint-birds { from { transform: translate(-260px, 30px); } to { transform: translate(1100px, -40px); } }
+.aa-torch { transform-box: fill-box; transform-origin: center; animation: aa-torch 1.6s ease-in-out infinite alternate; }
+@keyframes aa-torch { 0% { opacity: 0.75; transform: scale(0.92); } 45% { opacity: 1; transform: scale(1.05); } 70% { opacity: 0.82; transform: scale(0.97); } 100% { opacity: 0.95; transform: scale(1.02); } }
+.aa-firefly-p { animation: aa-firefly-p 5s ease-in-out infinite; }
+@keyframes aa-firefly-p { 0%, 100% { opacity: 0.1; transform: translate(0, 0); } 40% { opacity: 1; transform: translate(10px, -14px); } 70% { opacity: 0.5; transform: translate(-6px, -24px); } }
+@media (prefers-reduced-motion: reduce) { .aa-paint-mist, .aa-paint-birds, .aa-torch, .aa-firefly-p { animation: none; } }
+.aa-game-topfade { background: linear-gradient(180deg, var(--bar-b) 0%, color-mix(in srgb, var(--bar-b) 55%, transparent) 30%, color-mix(in srgb, var(--bar-b) 15%, transparent) 70%, transparent 100%); }
+/* in Home l'intestazione si fonde con il cielo: niente filo di separazione */
+.aa-homehead.aa-bar { border-bottom-color: transparent; box-shadow: none; }
+.aa-hud-tight .aa-day-last { display: none; }

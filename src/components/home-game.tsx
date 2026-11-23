@@ -145,10 +145,10 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
       const navH = nav && getComputedStyle(nav).display !== "none" ? nav.getBoundingClientRect().height : 0;
       const top = box.getBoundingClientRect().top + window.scrollY;
       const over = top + gh + below + 10 - (window.innerHeight - navH);
-      // mai tanto da far finire la testa dell'arciere sotto il blocco di oggi (ridotto a due righe):
+      // mai tanto da far finire la testa dell'arciere sotto il blocco di oggi (data, titolo e due righe):
       // su telefoni molto bassi piuttosto si scorre un poco per l'ultima riga di pulsanti
       const headTop = gh * ((AV_TOP + AV_H * 0.08) / H);
-      setCrop(Math.round(Math.max(0, Math.min(gh * 0.34, headTop - 78, over))));
+      setCrop(Math.round(Math.max(0, Math.min(gh * 0.34, headTop - 90, over))));
       setTight(over > gh * 0.1);
     };
     calc();
@@ -707,7 +707,9 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
 
       {/* HUD: a sinistra il blocco di oggi; a destra il record e un solo pannello del campo
           (bersaglio, piazzola, vento, distanza), in vetro scuro, riducibile a un bottone */}
-      <div className={`aa-game-hud pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-3 ${tight ? "aa-hud-tight" : ""}`} style={crop ? { top: crop } : undefined}>
+      {/* sfumatura: l'intestazione scende morbida nel cielo, senza uno stacco netto */}
+      <div aria-hidden className="aa-game-topfade pointer-events-none absolute inset-x-0 z-[3] h-[26%]" style={{ top: crop }} />
+      <div className={`aa-game-hud pointer-events-none absolute inset-x-0 top-0 z-[4] flex items-start justify-between gap-2 p-3 ${tight ? "aa-hud-tight" : ""}`} style={crop ? { top: crop } : undefined}>
         <div className="min-w-0 text-white">{info}</div>
         <div className="grid w-[8.4rem] shrink-0 justify-items-stretch gap-1.5 text-white">
           <div className="aa-hud flex items-center gap-2 rounded-2xl px-2.5 py-1.5">
