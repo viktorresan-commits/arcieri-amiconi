@@ -31,9 +31,9 @@ export const rnd = (i: number) => {
    Alcune scene hanno un'illustrazione vera (giorno e notte, più le varianti che ci sono).
    Sopra, in un solo SVG con le stesse coordinate dell'immagine, solo movimenti leggeri:
    foschia che scorre, uccelli, lucciole e torce di notte, pioggia e neve. */
-type Painted = { w: number; h: number; /** quota (su 300) del bordo alto dell'illustrazione */ top?: number; day: string; night: string; dusk?: string; rain?: string; torches?: [number, number][]; sky: number; grass: [number, number] };
+type Painted = { w: number; h: number; /** quota (su 300) del bordo alto dell'illustrazione */ top?: number; day: string; night: string; dusk?: string; dawn?: string; rain?: string; torches?: [number, number][]; sky: number; grass: [number, number] };
 const PAINTED: Partial<Record<SceneId, Painted>> = {
-  campo: { w: 843, h: 1264, top: 22, day: "/scene/campo-giorno.webp", night: "/scene/campo-notte.webp", torches: [[258, 522], [748, 520], [97, 518]], sky: 430, grass: [680, 1220] },
+  campo: { w: 843, h: 1264, top: 22, day: "/scene/campo-giorno.webp", night: "/scene/campo-notte.webp", dusk: "/scene/campo-tramonto.webp", dawn: "/scene/campo-alba.webp", rain: "/scene/campo-pioggia.webp", torches: [[258, 522], [748, 520], [97, 518]], sky: 430, grass: [680, 1220] },
 };
 
 function PaintedBackdrop({ sky, id, art, wind = 0 }: { sky: Sky; id: string; art: Painted; wind?: number }) {
@@ -41,7 +41,10 @@ function PaintedBackdrop({ sky, id, art, wind = 0 }: { sky: Sky; id: string; art
   const rain = sky.weather === "pioggia";
   const cloudy = sky.weather !== "sereno";
   const dusk = sky.tod === "tramonto";
-  const src = night ? art.night : rain && art.rain ? art.rain : dusk && art.dusk ? art.dusk : art.day;
+  const dawn = sky.tod === "mattina";
+  // con il cielo coperto (pioggia o nuvoloso) c'è la sua illustrazione; di notte vince sempre la notte
+  const grey = cloudy && Boolean(art.rain) && !night;
+  const src = night ? art.night : grey ? art.rain! : dusk && art.dusk ? art.dusk : dawn && art.dawn ? art.dawn : art.day;
   const { w, h } = art;
   const drift = wind < 0 ? -1 : 1;
   // la scena è 400×300 ma sul gioco (3:4) se ne vede la fascia centrale 87.5–312.5:
@@ -68,10 +71,12 @@ function PaintedBackdrop({ sky, id, art, wind = 0 }: { sky: Sky; id: string; art
       </defs>
       <image href={src} width={w} height={h} preserveAspectRatio="xMidYMid slice" />
       {/* luce dell'ora sopra l'illustrazione di giorno: mattino più fresco, tramonto caldo se manca la sua */}
-      {!night && sky.tod === "mattina" ? <rect width={w} height={h} fill="#ffe2b8" opacity="0.12" style={{ mixBlendMode: "soft-light" }} /> : null}
-      {dusk && !art.dusk ? <rect width={w} height={h} fill="#ff8a3a" opacity="0.35" style={{ mixBlendMode: "soft-light" }} /> : null}
-      {dusk && !art.dusk ? <rect width={w} height={h * 0.5} fill="#6a3a6a" opacity="0.12" /> : null}
-      {cloudy && !(rain && art.rain) && !night ? <rect width={w} height={h} fill="#4a5664" opacity={rain ? 0.32 : 0.14} style={{ mixBlendMode: "multiply" }} /> : null}
+      {!night && dawn && !art.dawn ? <rect width={w} height={h} fill="#ffe2b8" opacity="0.12" style={{ mixBlendMode: "soft-light" }} /> : null}
+      {dusk && !art.dusk && !grey ? <rect width={w} height={h} fill="#ff8a3a" opacity="0.35" style={{ mixBlendMode: "soft-light" }} /> : null}
+      {dusk && !art.dusk && !grey ? <rect width={w} height={h * 0.5} fill="#6a3a6a" opacity="0.12" /> : null}
+      {cloudy && !grey && !night ? <rect width={w} height={h} fill="#4a5664" opacity={rain ? 0.32 : 0.14} style={{ mixBlendMode: "multiply" }} /> : null}
+      {grey && dusk ? <rect width={w} height={h} fill="#ff9a5a" opacity="0.16" style={{ mixBlendMode: "soft-light" }} /> : null}
+      {grey && !rain ? <rect width={w} height={h} fill="#ffffff" opacity="0.06" /> : null}
       {/* foschia che scorre nel cielo, nel verso del vento */}
       {!night ? (
         <g className="aa-paint-mist" style={{ ["--drift" as string]: `${drift * 120}px` }} filter={`url(#${id}soft)`} fill="#fff" opacity={rain ? 0.22 : 0.16}>
