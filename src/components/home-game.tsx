@@ -684,6 +684,9 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
 
       {/* arciere, grande in primo piano: sempre sopra lo sfondo sfumato (su alcuni WebView Android
           lo sfondo con la maschera veniva composto sopra e dell'arciere restavano solo gli stivali) */}
+      </div>
+      {/* l'arciere sta fuori dal contenitore sfumato: così le gambe possono scendere oltre il bordo del gioco */}
+      <div className={`pointer-events-none absolute inset-0 z-[2] ${lefty ? "aa-mirror" : ""}`}>
       <div className="aa-game-archer pointer-events-none absolute z-[2]" style={{ left: `${(AV.left / W) * 100}%`, top: `${(AV_TOP / H) * 100}%`, width: `${(AV.width / W) * 100}%`, height: `${(AV_H / H) * 100}%` }}>
         {perks.includes("aura") ? <span aria-hidden className="aa-perk-aura absolute inset-[-6%_8%_2%_4%] rounded-full" /> : null}
         {perks.includes("stendardo") ? (
@@ -698,14 +701,14 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
         ) : null}
         {/* luce dell'ambiente: tinta dell'ora e bordo illuminato dal lato del sole */}
         {indoor ? null : <ArcherLightDefs />}
-        <ArcherAvatar look={bodyLook} drive={drive} pose="riposo" interactive={false} hideFlight wind={indoor ? 0 : wind} light={indoor ? undefined : `aa-lit-${lightMode(sky)}-${isPainted(scene) !== Boolean(look.lefty) || sky.tod === "mattina" ? "l" : "r"}`} className="aa-archer-feet h-full w-full drop-shadow-[0_10px_14px_rgba(0,0,0,0.4)]" />
+        <ArcherAvatar look={bodyLook} drive={drive} pose="riposo" interactive={false} hideFlight wind={indoor ? 0 : wind} light={indoor ? undefined : `aa-lit-${lightMode(sky)}-${isPainted(scene) !== Boolean(look.lefty) || sky.tod === "mattina" ? "l" : "r"}`} className="h-full w-full drop-shadow-[0_10px_14px_rgba(0,0,0,0.4)]" />
         {/* ombra di contatto morbida sotto i piedi */}
         <span aria-hidden className="aa-archer-contact pointer-events-none absolute bottom-[1.5%] left-[18%] h-[5%] w-[52%] rounded-[50%]" />
       </div>
       </div>
 
       {pop ? (
-        <span key={pop.id} className="aa-game-pop aa-game-score pointer-events-none absolute text-3xl font-black text-[#ffe08a]" style={pct(pop.x, pop.y)}>
+        <span key={pop.id} className="aa-game-pop aa-game-score pointer-events-none absolute z-[3] text-3xl font-black text-[#ffe08a]" style={pct(pop.x, pop.y)}>
           {pop.text}
         </span>
       ) : null}
@@ -773,7 +776,7 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
       ) : null}
 
       {!playing ? (
-        <div className="pointer-events-none absolute inset-x-0 top-[70%] flex justify-center pl-[30%]">
+        <div className="pointer-events-none absolute inset-x-0 top-[70%] z-[3] flex justify-center pl-[30%]">
           <p className="aa-game-hint rounded-2xl bg-black/45 px-4 py-2 text-center text-sm font-semibold text-white backdrop-blur">
             Tocca per giocare
             <span className="block text-xs font-normal text-white/80">tieni premuto, trascina per mirare, lascia</span>
@@ -781,16 +784,16 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
         </div>
       ) : null}
       {playing && !draw && !flight && !stationDone && hits.length === 0 && station === 1 ? (
-        <button data-ui type="button" onPointerDown={(e) => e.stopPropagation()} onClick={stop} className="absolute left-3 top-[44%] rounded-full bg-black/45 px-3 py-1.5 text-[0.7rem] font-semibold text-white backdrop-blur">
+        <button data-ui type="button" onPointerDown={(e) => e.stopPropagation()} onClick={stop} className="absolute left-3 top-[44%] z-[5] rounded-full bg-black/45 px-3 py-1.5 text-[0.7rem] font-semibold text-white backdrop-blur">
           Guarda tirare
         </button>
       ) : null}
       {draw && !draw.demo && pull >= 1 && hold > 3 ? (
-        <p className="pointer-events-none absolute inset-x-0 top-[30%] text-center text-xs font-semibold text-white [text-shadow:0_1px_6px_rgba(0,0,0,0.6)]">Il braccio si stanca: tira o rilassa</p>
+        <p className="pointer-events-none absolute inset-x-0 top-[30%] z-[3] text-center text-xs font-semibold text-white [text-shadow:0_1px_6px_rgba(0,0,0,0.6)]">Il braccio si stanca: tira o rilassa</p>
       ) : null}
 
       {stationDone && !done ? (
-        <div className="aa-rise pointer-events-none absolute inset-x-6 top-[30%] rounded-3xl bg-[#101814]/75 p-3 text-center text-white backdrop-blur-md">
+        <div className="aa-rise pointer-events-none absolute inset-x-6 top-[30%] z-[5] rounded-3xl bg-[#101814]/75 p-3 text-center text-white backdrop-blur-md">
           <p className="text-[0.66rem] font-semibold uppercase tracking-[0.2em] text-white/70">Piazzola {station} di {STATIONS}</p>
           <p className="aa-game-score text-4xl font-black">{piazzola}<span className="text-lg text-white/60">/{perStation}</span></p>
           <p className="text-xs text-white/80">{hits.map((h) => (h.score === 0 ? "M" : h.x10 ? "X" : h.score)).join(" · ")} · totale {total}</p>
@@ -798,7 +801,7 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
         </div>
       ) : null}
       {done ? (
-        <div data-ui className="absolute inset-x-4 top-[20%] rounded-3xl bg-[#101814]/85 p-4 text-center text-white backdrop-blur-md" style={crop ? { top: `calc(20% + ${crop}px)` } : undefined} onPointerDown={(e) => e.stopPropagation()}>
+        <div data-ui className="absolute inset-x-4 top-[20%] z-[6] rounded-3xl bg-[#101814]/85 p-4 text-center text-white backdrop-blur-md" style={crop ? { top: `calc(20% + ${crop}px)` } : undefined} onPointerDown={(e) => e.stopPropagation()}>
           <p className="text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-white/70">Giro finito · {mode.label} · {level.label}</p>
           <p className="aa-game-score mt-1 text-5xl font-black">{total}<span className="text-xl text-white/60">/{maxRound(modeId)}</span></p>
           <p className="mt-1 text-sm text-white/85">media {(total / (STATIONS * 3)).toFixed(2).replace(".", ",")} a freccia{total >= bestHere && total > 0 ? " · nuovo record" : ""}</p>
@@ -817,7 +820,8 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
   if (!apron) return game;
   return (
     <div className="aa-game-stack">
-      <div ref={wrap} className="relative z-[1] overflow-hidden" style={crop ? { marginTop: 0 } : undefined}>
+      {/* il gioco è tagliato in alto e ai lati ma non in basso: gambe e piedi dell'arciere scendono sul prato, sotto i pulsanti */}
+      <div ref={wrap} className="aa-game-wrap relative z-[1]" style={crop ? { marginTop: 0 } : undefined}>
         <div style={crop ? { marginTop: -crop } : undefined}>{game}</div>
       </div>
       <GameApron sky={sky} scene={scene} lefty={lefty}>{apron}</GameApron>

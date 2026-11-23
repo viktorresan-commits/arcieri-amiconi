@@ -1261,12 +1261,13 @@ export function GameApron({ sky, scene, lefty, children }: { sky: Sky; scene: st
     return () => ro.disconnect();
   }, []);
   const u = VW / Math.max(1, m.w);
+  // niente z-index sul contenitore: così i pulsanti (z-2) stanno sopra l'arciere del gioco (z-1) e il prato sotto
   return (
-    <div ref={box} className="aa-apron relative z-0 -mt-[13.33%] overflow-hidden md:rounded-b-[1.75rem]">
+    <div ref={box} className="aa-apron relative -mt-[13.33%] overflow-hidden md:rounded-b-[1.75rem]">
       <div key={scene} className={`aa-apron-scene aa-scene-swap pointer-events-none absolute inset-0 ${lefty ? "aa-mirror" : ""}`}>
         <SceneApron sky={sky} scene={scene} V={m.h * u} top={APRON_Y0 + m.t * u} bottom={APRON_Y0 + (m.t + m.c) * u} />
       </div>
-      <div ref={inner} className="aa-apron-inner relative z-[1] mx-3 mb-[3.75rem] mt-[calc(13.33%_+_0.25rem)] grid gap-2">
+      <div ref={inner} className="aa-apron-inner relative z-[2] mx-3 mb-[3.75rem] mt-[calc(13.33%_+_0.25rem)] grid gap-2">
         {children}
       </div>
     </div>
