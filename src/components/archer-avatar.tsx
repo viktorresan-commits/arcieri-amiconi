@@ -2,6 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "rea
 import { tune, type AvatarLook, type Pose } from "@/lib/arcieri/avatar";
 import { zigQ, BowDeco, Buckle, ChestEmblem, Clasp, ClothPattern, Earring, FaceFrame, FacePaintFront, FacePaintProfile, Fletching, HairOrnament, Pouch, QuiverBody } from "./avatar-extras";
 import { sceneById } from "@/lib/arcieri/scenes";
+import { seamOf, BeardTexture, BeltDetail, BootDetail, BrowHairs, ClothDetail, DetailDefs, EyeDetail, FaceShade, HairFineStrands, HandDetail, LeatherBand, LipDetail, SleeveDetail } from "./avatar-detail";
 
 /**
  * L'arciere disegnato, in stile gioco: busto rivolto a chi guarda, testa girata verso il bersaglio
@@ -303,6 +304,7 @@ function Figure({ look, def, t, flying, blink, uid }: { look: AvatarLook; def: P
           <path d={`M${f(ankle.x - 10)} ${f(ankle.y - top)} L${f(ankle.x + 10)} ${f(ankle.y - top)} L${f(ankle.x + 9)} ${f(ankle.y + 2)} C${f(ankle.x + 14)} ${f(ankle.y + 4)} ${f(ankle.x + 22)} ${f(ankle.y + 5)} ${f(ankle.x + 23)} ${f(ankle.y + 10)} L${f(ankle.x - 11)} ${f(ankle.y + 10)} Z`} fill={`url(#${uid}boot)`} stroke={OUT} strokeOpacity="0.55" strokeWidth="1.6" />
           <path d={`M${f(ankle.x - 6)} ${f(ankle.y - top + 8)} L${f(ankle.x - 5)} ${f(ankle.y - 4)}`} stroke="#fff" strokeOpacity="0.18" strokeWidth="2.4" strokeLinecap="round" />
           <path d={`M${f(ankle.x - 11)} ${f(ankle.y + 8)} h34`} stroke="#000" strokeOpacity="0.45" strokeWidth="2.6" />
+          <BootDetail ankle={ankle} top={top} />
           {look.footwear === "stivali-risvolto" ? (
             <g>
               <path d={`M${f(ankle.x - 13)} ${f(ankle.y - top - 2)} ${[0, 1, 2, 3, 4, 5].map((i) => `q2 ${i % 2 ? 4 : -3} 4.6 0`).join(" ")} l0 9 ${[0, 1, 2, 3, 4, 5].map((i) => `q-2 ${i % 2 ? 3 : -2} -4.6 0`).join(" ")} Z`} fill="#eee2c8" stroke={OUT} strokeOpacity="0.4" strokeWidth="1" />
@@ -407,6 +409,7 @@ function Figure({ look, def, t, flying, blink, uid }: { look: AvatarLook; def: P
         {limb(s, e, upW, sleeve)}
         {sleeveLong ? limb(e, lerpP(e, h, 0.86), foreW + 1.5, sleeve) : limb(e, h, foreW, skin)}
         {sleeveLong ? limb(lerpP(e, h, 0.86), h, foreW - 1, skin) : null}
+        {sleeveless ? null : <SleeveDetail s={s} e={e} h={h} w={upW} color={seamOf(sleeve)} long={sleeveLong} />}
         {medievalTop ? <circle cx={f(lerp(e.x, h.x, 0.84))} cy={f(lerp(e.y, h.y, 0.84))} r={6.5 * W} fill={look.trim} /> : null}
         {!sleeveLong && !sleeveless ? <circle cx={f(lerp(s.x, e.x, 0.6))} cy={f(lerp(s.y, e.y, 0.6))} r={upW / 2 + 0.4} fill={shade(sleeve, -0.15)} /> : null}
         {look.armband && which === "draw" ? (() => {
@@ -457,11 +460,13 @@ function Figure({ look, def, t, flying, blink, uid }: { look: AvatarLook; def: P
               return <path key={k} d={`M${f(c.x - 3)} ${f(c.y - 4)} l6 8 M${f(c.x + 3)} ${f(c.y - 4)} l-6 8`} stroke={shade(look.bracers, 0.5)} strokeWidth="0.9" />;
             })}
             <line x1={f(lerp(e.x, h.x, 0.33))} y1={f(lerp(e.y, h.y, 0.33) - 1)} x2={f(lerp(e.x, h.x, 0.85))} y2={f(lerp(e.y, h.y, 0.85) - 1)} stroke="#fff" strokeOpacity="0.15" strokeWidth="1.6" strokeLinecap="round" />
+            <LeatherBand uid={uid} a={lerpP(e, h, 0.34)} b={lerpP(e, h, 0.84)} w={foreW + 4} color={shade(look.bracers, 0.6)} />
           </g>
         ) : null}
         <circle cx={f(h.x)} cy={f(h.y)} r={7.4 * W + 1.3} fill={OUT} opacity="0.5" />
         <circle cx={f(h.x)} cy={f(h.y)} r={7.4 * W} fill={look.gloves ? "#4a2c16" : skin} />
         <circle cx={f(h.x - 1.5)} cy={f(h.y + 1.5)} r={7.4 * W} fill={look.gloves ? "#2a180c" : skinD} opacity="0.25" />
+        <HandDetail h={h} r={7.4 * W} gloved={Boolean(look.gloves)} skinD={shade(skin, -0.4)} draw={which === "draw"} />
         {which === "draw" && hook > 0.5 ? <path d={`M${f(h.x + 2)} ${f(h.y - 5)} q4 1 4 4 M${f(h.x + 2)} ${f(h.y - 1)} q4 1 4 4 M${f(h.x + 2)} ${f(h.y + 3)} q4 1 4 4`} stroke={look.gloves ? "#1a0e06" : skinD} strokeWidth="1.1" fill="none" /> : null}
         {which === "draw" ? (
           <g>
@@ -697,7 +702,8 @@ function Figure({ look, def, t, flying, blink, uid }: { look: AvatarLook; def: P
       {longTunic ? <path d={tunicD} fill={`url(#${uid}shirt)`} stroke={OUT} strokeOpacity="0.5" strokeWidth="2.2" /> : null}
       <path d={torso} fill={`url(#${uid}shirt)`} stroke={OUT} strokeOpacity="0.5" strokeWidth="2.2" />
       <ClothPattern kind={look.pattern} shapes={longTunic ? [torso, tunicD] : [torso]} base={look.shirt} trim={look.trim} uid={uid} box={[shoulderL - 16, 112, shoulderR + 16, (longTunic ? tunicLen : 210) + 6]} />
-      <Outfit look={look} cx={cx} shoulderL={shoulderL} shoulderR={shoulderR} hipL={hipL} hipR={hipR} tunicLen={tunicLen} W={W} woman={woman} />
+      <ClothDetail uid={uid} shapes={longTunic ? [torso, tunicD] : [torso]} cx={cx} shoulderL={shoulderL} shoulderR={shoulderR} hipL={hipL} hipR={hipR} tunicLen={tunicLen} longTunic={longTunic} seam={seamOf(look.shirt)} />
+      <Outfit look={look} cx={cx} shoulderL={shoulderL} shoulderR={shoulderR} hipL={hipL} hipR={hipR} tunicLen={tunicLen} W={W} woman={woman} uid={uid} />
       <ChestEmblem kind={look.emblem} crest={look.crest} x={cx + 9} y={look.top === "giubbetto" ? 160 : 150} s={look.emblem === "compagnia" ? 0.95 : 0.72} base={look.shirt} trim={look.trim} />
       {look.tattoo === "sole" && look.top === "canotta" ? <g transform={`translate(${f(shoulderR - 7)} 130) scale(0.4)`} opacity="0.8"><circle r="5" fill="none" stroke="#24324a" strokeWidth="2" />{[0, 1, 2, 3, 4, 5, 6, 7].map((k) => <path key={k} d={`M${f(Math.cos(k * 0.785) * 7)} ${f(Math.sin(k * 0.785) * 7)} L${f(Math.cos(k * 0.785) * 10)} ${f(Math.sin(k * 0.785) * 10)}`} stroke="#24324a" strokeWidth="2" />)}</g> : null}
       {look.cape && look.clasp !== "nessuno" ? <Clasp kind={look.clasp} x={shoulderR - 4} y={124} s={0.9} /> : null}
@@ -759,6 +765,7 @@ function Figure({ look, def, t, flying, blink, uid }: { look: AvatarLook; def: P
       ) : null}
 
       <path d={`M${f(neck.x - 8)} 100 L${f(neck.x + 8)} 100 L${f(neck.x + 9)} 124 L${f(neck.x - 9)} 124 Z`} fill={skinD} />
+      <ellipse cx={f(neck.x + 2)} cy="107" rx="8" ry="6" fill={`url(#${uid}sd)`} opacity="0.75" />
       {look.scarf ? (
         <g>
           <path d={`M${f(neck.x - 13)} 114 C${f(neck.x - 6)} 122 ${f(neck.x + 8)} 122 ${f(neck.x + 13)} 114 L${f(neck.x + 13)} 124 C${f(neck.x + 6)} 130 ${f(neck.x - 6)} 130 ${f(neck.x - 13)} 124 Z`} fill={look.scarfColor} />
@@ -824,7 +831,7 @@ function Figure({ look, def, t, flying, blink, uid }: { look: AvatarLook; def: P
 
 const OUTLINE = "#1b130d";
 
-function Outfit({ look, cx, shoulderL, shoulderR, hipL, hipR, tunicLen, W, woman }: { look: AvatarLook; cx: number; shoulderL: number; shoulderR: number; hipL: number; hipR: number; tunicLen: number; W: number; woman: boolean }) {
+function Outfit({ look, cx, shoulderL, shoulderR, hipL, hipR, tunicLen, W, woman, uid }: { look: AvatarLook; cx: number; shoulderL: number; shoulderR: number; hipL: number; hipR: number; tunicLen: number; W: number; woman: boolean; uid: string }) {
   const sh = look.shirt;
   const tr = look.trim;
   const dark = shade(sh, -0.3);
@@ -833,6 +840,7 @@ function Outfit({ look, cx, shoulderL, shoulderR, hipL, hipR, tunicLen, W, woman
   const belt = look.belt === "nessuna" ? (look.pouch ? <Pouch kind={look.pouchType} x={hipR - 8} y={206} /> : null) : (
     <g>
       <rect x={f(hipL - 2)} y={wide ? 196 : 200} width={f(hipR - hipL + 4)} height={wide ? 13 : 8} rx="2" fill={bc} stroke="#1b130d" strokeOpacity="0.5" strokeWidth="1.2" />
+      <BeltDetail uid={uid} x={hipL - 2} y={wide ? 196 : 200} w={hipR - hipL + 4} h={wide ? 13 : 8} cx={cx} />
       <rect x={f(hipL - 2)} y={wide ? 197 : 200.6} width={f(hipR - hipL + 4)} height="1.6" fill="#fff" opacity="0.15" />
       {wide ? [hipL + 6, hipR - 6].map((x) => <circle key={x} cx={f(x)} cy="202.5" r="1.3" fill="#d9b45a" />) : null}
       {look.buckle && look.buckle !== "semplice" ? <Buckle kind={look.buckle} x={cx} y={wide ? 202.5 : 204} s={wide ? 1 : 0.75} /> : <rect x={f(cx - (wide ? 6 : 3.5))} y={wide ? 196.5 : 200.5} width={wide ? 12 : 7} height={wide ? 12 : 7} rx="1.6" fill="none" stroke="#d9b45a" strokeWidth={wide ? 2 : 1.2} />}
@@ -1222,6 +1230,7 @@ function Head({ look, H, face, blink, uid, t }: { look: AvatarLook; H: P; face: 
         <ellipse cx="141" cy="88" rx={look.ears === "grandi" ? 5.4 : look.ears === "piccole" ? 3.6 : 4.4} ry={look.ears === "grandi" ? 8 : look.ears === "piccole" ? 5.4 : 6.6} fill={skinD} />
       )}
       <path d="M141 84 Q138 88 141 92" stroke={shade(skin, -0.38)} strokeWidth="0.9" fill="none" />
+      <FaceShade uid={uid} headPath={headPath} skin={skin} skinDeep={shade(skin, -0.42)} chinY={chinY} ear={look.ears !== "punta"} earRx={look.ears === "grandi" ? 5.4 : look.ears === "piccole" ? 3.6 : 4.4} earRy={look.ears === "grandi" ? 8 : look.ears === "piccole" ? 5.4 : 6.6} nk={nk} />
       {look.earring ? <Earring kind={look.earringType} x={141.5} y={96} /> : null}
       <ellipse cx="163" cy="93" rx="5" ry="3" fill={look.blush === "abbronzato" ? "#b8643a" : "#e0726b"} opacity={look.blush === "nessuno" ? 0 : look.blush === "rosato" ? 0.42 : look.blush === "abbronzato" ? 0.3 : 0.22} />
       {look.age === "maturo" || look.age === "anziano" ? (
@@ -1249,6 +1258,7 @@ function Head({ look, H, face, blink, uid, t }: { look: AvatarLook; H: P; face: 
           <path d="M157 83 Q162.5 77.4 168.4 81.6 Q163 86.4 157 83 Z" fill="#fbf7f2" />
           <circle cx="164" cy="82.2" r="3.2" fill={look.eyes} />
           <circle cx="164.4" cy="82.2" r="1.5" fill="#120c08" />
+          <EyeDetail uid={uid} eyes={look.eyes} skinDeep={shade(skin, -0.45)} lid={lid} />
           <circle cx="165.3" cy="81" r="0.9" fill="#fff" />
           {lid ? <path d={`M156.8 82.5 Q162.5 ${f(77.2 + lid)} 168.6 81.4 L168.6 79 L156.8 79 Z`} fill={skin} /> : null}
           <path d={`M156.8 82.8 Q162.5 ${f(77.2 + lid)} 168.6 81.4`} stroke="#2a1d14" strokeWidth={woman ? 1.6 : 1.1} fill="none" strokeLinecap="round" />
@@ -1258,9 +1268,11 @@ function Head({ look, H, face, blink, uid, t }: { look: AvatarLook; H: P; face: 
         <path d="M157 82.6 Q162.6 85 168.4 81.8" stroke="#2a1d14" strokeWidth="1.3" fill="none" strokeLinecap="round" />
       )}
       <path d={browD} stroke={shade(hair, -0.15)} strokeWidth={browW * (0.6 + (tune(look.browSize, 50, 0, 100) / 100) * 0.8)} strokeLinecap="round" fill="none" />
+      <BrowHairs d={browD} color={shade(hair, -0.45)} width={browW * (0.6 + (tune(look.browSize, 50, 0, 100) / 100) * 0.8)} />
       {look.mask ? null : face === "felice" || face === "sorriso" || !lips ? mouth : lips}
+      {look.mask || face === "felice" || face === "sorriso" || look.mouth === "aperta" ? null : <LipDetail lip={lip} skinDeep={shade(skin, -0.42)} />}
       <path d="M152 95 Q158 98 163 96" stroke={shade(skin, -0.12)} strokeWidth="2" fill="none" opacity="0.4" />
-      {look.mask ? null : <Beard look={look} />}
+      {look.mask ? null : <Beard look={look} uid={uid} />}
       {look.warpaint ? (
         <g stroke="#2a3a5a" strokeOpacity="0.75" strokeWidth="2.2" strokeLinecap="round">
           <path d="M150 86 L166 88" />
@@ -1358,23 +1370,27 @@ function hairScale(look: AvatarLook) {
   return 0.88 + (tune(look.hairVolume, 50, 0, 100) / 100) * 0.24;
 }
 
-function Beard({ look }: { look: AvatarLook }) {
+function Beard({ look, uid }: { look: AvatarLook; uid: string }) {
   const c = beardTone(look);
   const lo = shade(c, -0.35);
   const k = 0.7 + (tune(look.beardLength, 50, 0, 100) / 100) * 0.6;
   // la barba si allunga verso il basso partendo dal mento
   const grow = `translate(0 100) scale(1 ${k.toFixed(3)}) translate(0 -100)`;
   let body: ReactNode = null;
+  let bd = "";
   switch (look.beard) {
     case "piena":
     case "accenno":
-      body = <path d="M138 93 C140 105 148 115 158 115 C166 115 172 108 173 99 C169 101.5 164 102.5 160 101.5 L153 98.5 C148 98.5 143 96 138 93 Z" fill={c} opacity={look.beard === "accenno" ? 0.32 : 1} />;
+      bd = "M138 93 C140 105 148 115 158 115 C166 115 172 108 173 99 C169 101.5 164 102.5 160 101.5 L153 98.5 C148 98.5 143 96 138 93 Z";
+      body = <path d={bd} fill={c} opacity={look.beard === "accenno" ? 0.32 : 1} />;
       break;
     case "lunga":
-      body = <path d="M138 93 C139 108 146 122 152 132 C156 138 160 140 164 136 C168 128 172 112 173 99 C169 101.5 164 102.5 160 101.5 L153 98.5 C148 98.5 143 96 138 93 Z" fill={c} />;
+      bd = "M138 93 C139 108 146 122 152 132 C156 138 160 140 164 136 C168 128 172 112 173 99 C169 101.5 164 102.5 160 101.5 L153 98.5 C148 98.5 143 96 138 93 Z";
+      body = <path d={bd} fill={c} />;
       break;
     case "corta":
-      body = <path d="M143 97 C145 107 151 112 158 112 C164.5 112 170 107 171.3 101 C167 102.6 163 103.4 159 102.6 C153 101.6 148 100 143 97 Z" fill={c} />;
+      bd = "M143 97 C145 107 151 112 158 112 C164.5 112 170 107 171.3 101 C167 102.6 163 103.4 159 102.6 C153 101.6 148 100 143 97 Z";
+      body = <path d={bd} fill={c} />;
       break;
     case "pizzetto":
       body = <path d="M160 103 C161 109 164 112 168 111 C171 109 171 105 170.2 102 C167 104 163 104 160 103 Z" fill={c} />;
@@ -1410,7 +1426,7 @@ function Beard({ look }: { look: AvatarLook }) {
     ) : null;
   return (
     <g>
-      {body ? <g transform={look.beard === "basette" || look.beard === "barbetta" ? undefined : grow}>{body}</g> : null}
+      {body ? <g transform={look.beard === "basette" || look.beard === "barbetta" ? undefined : grow}>{body}{bd && look.beard !== "accenno" ? <BeardTexture uid={uid} d={bd} color={c} light={shade(c, 0.35)} dark={lo} /> : null}</g> : null}
       {body && look.beard !== "accenno" && look.beard !== "basette" && look.beard !== "mosca" ? <path d="M150 104 q3 3 6 3.4 M157 108 q3 1.6 6 0.4" stroke={lo} strokeWidth="0.7" fill="none" opacity="0.55" /> : null}
       {stache}
     </g>
@@ -1436,6 +1452,7 @@ function HairStrands({ look }: { look: AvatarLook }) {
           <path d="M133 74 Q144 64 158 66 M146 60 Q156 58 168 68 M131 82 Q136 72 146 70" stroke={lo} strokeOpacity="0.45" strokeWidth="0.9" />
         </>
       )}
+      <HairFineStrands color={look.hairColor} light={hi} dark={lo} curly={curly} />
     </g>
   );
 }
@@ -1672,6 +1689,7 @@ function Defs({ look, uid }: { look: AvatarLook; uid: string }) {
         <stop offset="0" stopColor={shade(look.hairColor, 0.2)} />
         <stop offset="1" stopColor={shade(look.hairColor, -0.38)} />
       </linearGradient>
+      <DetailDefs uid={uid} />
     </defs>
   );
 }

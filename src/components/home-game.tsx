@@ -6,6 +6,7 @@ import { useLocalState } from "@/lib/arcieri/local-store";
 import { award, readXp, today } from "@/lib/arcieri/xp";
 import { ArcherAvatar } from "./archer-avatar";
 import { SceneBackdrop } from "./scene-2d";
+import { GameApron } from "./scene-apron";
 import { SCENES, isIndoor } from "@/lib/arcieri/scenes";
 import { ANIMALS, type Animal } from "@/lib/arcieri/sagome";
 import { GAME_LEVELS, GAME_MODES, GAME_STATIONS, levelOf, maxRound, modeOf, type GameLevel, type GameMode } from "@/lib/arcieri/game-modes";
@@ -94,7 +95,7 @@ function sagomaBox(a: Animal, R: number) {
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 const now = () => performance.now() / 1000;
 
-export function HomeGame({ look, children, info, className = "", form, perks = [], banner, bleed = false }: {
+export function HomeGame({ look, children, info, className = "", form, perks = [], banner, bleed = false, apron }: {
   look: AvatarLook;
   children?: ReactNode;
   info?: ReactNode;
@@ -107,6 +108,8 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
   banner?: string;
   /** a tutta larghezza, senza riquadro: la scena sfuma nella pagina */
   bleed?: boolean;
+  /** pulsanti da mettere sotto il gioco: la scena si allunga e ci stanno sopra */
+  apron?: ReactNode;
 }) {
   const fire = perks.includes("fuoco");
   const { sky } = useSky();
@@ -511,10 +514,10 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
   // la manica pende quando non c'è vento e si alza quando soffia
   const droop = clamp(75 - Math.abs(wind) * 24, 4, 75) + Math.sin(t * 6) * Math.min(4, Math.abs(wind) * 1.5);
 
-  return (
+  const game = (
     <div
       ref={stage}
-      className={`aa-game aspect-[3/4] w-full ${bleed ? "aa-game-bleed" : ""} ${className}`}
+      className={`aa-game aspect-[3/4] w-full ${bleed ? "aa-game-bleed" : ""} ${apron ? "aa-game-joined" : ""} ${className}`}
       onPointerDown={onDown}
       onPointerMove={onMove}
       onPointerUp={onUp}
@@ -524,7 +527,7 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
     >
       {/* mancino: campo, bersaglio e arciere si specchiano; i testi restano dritti */}
       <div className={`pointer-events-none absolute inset-0 ${lefty ? "aa-mirror" : ""} ${bleed ? "aa-game-fade" : ""}`}>
-      <div key={scene} className="aa-scene-swap absolute inset-0">
+      <div key={scene} className={`aa-scene-swap absolute inset-0 ${apron ? "aa-backdrop-joined" : ""}`}>
         <SceneBackdrop sky={sky} id="game" scene={scene} wind={wind} />
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} className="absolute inset-0 h-full w-full" aria-hidden>
@@ -744,6 +747,13 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
           </div>
         </div>
       ) : null}
+    </div>
+  );
+  if (!apron) return game;
+  return (
+    <div className="aa-game-stack">
+      {game}
+      <GameApron sky={sky} scene={scene} lefty={lefty}>{apron}</GameApron>
     </div>
   );
 }

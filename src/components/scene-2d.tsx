@@ -8,7 +8,7 @@ import { sceneById, type SceneId } from "@/lib/arcieri/scenes";
  * castello, palazzo reale, montagna, lago, deserto, villaggio, bosco innevato, colline, torneo, rovine,
  * spiaggia, bosco d'autunno). Coordinate 400×300, orizzonte intorno a y = 216.
  */
-const SKY: Record<Sky["tod"], { top: string; mid: string; low: string; sun: string; shade: string; shadeA: number }> = {
+export const SKY: Record<Sky["tod"], { top: string; mid: string; low: string; sun: string; shade: string; shadeA: number }> = {
   mattina: { top: "#5b8fd6", mid: "#a9cdea", low: "#ffe2b8", sun: "#fff1c9", shade: "#ffd9a0", shadeA: 0.06 },
   pomeriggio: { top: "#2f6db8", mid: "#7fb2e0", low: "#d8ecf6", sun: "#fffbe8", shade: "#ffffff", shadeA: 0 },
   // sera: cielo grigio che schiarisce verso l'orizzonte, senza rosa
@@ -16,7 +16,7 @@ const SKY: Record<Sky["tod"], { top: string; mid: string; low: string; sun: stri
   notte: { top: "#050a1a", mid: "#0f1e3d", low: "#22355c", sun: "#e8eeff", shade: "#0a1430", shadeA: 0.5 },
 };
 
-const rnd = (i: number) => {
+export const rnd = (i: number) => {
   const x = Math.sin(i * 127.1 + 311.7) * 43758.5453;
   return x - Math.floor(x);
 };

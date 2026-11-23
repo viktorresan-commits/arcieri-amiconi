@@ -291,8 +291,8 @@ export function Shell({ children }: { children: ReactNode }) {
         <div className="aa-main relative z-0 min-w-0 md:ml-60">
           {path === "/" ? (
             /* Home: in alto il profilo (volto, nome, categoria e livello, esperienza) e gli avvisi */
-            <header className="aa-appheader aa-homehead sticky top-0 z-20 flex items-center gap-3 border-b border-[#e6b85c]/25 bg-[linear-gradient(180deg,rgba(13,18,16,0.96),rgba(13,18,16,0.86))] px-3 py-2 backdrop-blur-md md:px-4">
-              <Link to="/avatar" aria-label="Il tuo arciere" className={cx("relative grid h-[3.25rem] w-[3.25rem] shrink-0 place-items-center rounded-full p-[2.5px]", me.role === "admin" ? "aa-facering aa-facering-admin" : "bg-[linear-gradient(135deg,#f3d48a,#a8782c)] shadow-[0_4px_14px_-6px_rgba(0,0,0,0.8)]")}>
+            <header className="aa-appheader aa-homehead aa-bar sticky top-0 z-20 flex items-center gap-3 border-b px-3 py-2 backdrop-blur-md md:px-4">
+              <Link to="/avatar" aria-label="Il tuo arciere" className={cx("relative grid h-[3.25rem] w-[3.25rem] shrink-0 place-items-center rounded-full p-[2.5px]", me.role === "admin" ? "aa-facering aa-facering-admin" : "aa-ring")}>
                 <span className="relative z-[1] grid h-full w-full place-items-center overflow-hidden rounded-full bg-bg">
                   <AvatarFace look={avatar.shown} className="h-full w-full" />
                 </span>
@@ -300,22 +300,22 @@ export function Shell({ children }: { children: ReactNode }) {
               <Link to="/obiettivi" className="min-w-0 flex-1" aria-label={`${label}, livello ${lvl.level}`}>
                 <p className="flex min-w-0 items-baseline gap-2">
                   <b className="truncate font-display text-[1.3rem] leading-none">{label}</b>
-                  <span className="shrink-0 text-[0.74rem] font-semibold text-[#e6b85c]">{me.category ? `${me.category} · ` : ""}Livello {lvl.level}</span>
+                  <span className="aa-tone shrink-0 text-[0.74rem] font-semibold">{me.category ? `${me.category} · ` : ""}Livello {lvl.level}</span>
                 </p>
                 <span className="mt-1.5 flex items-center gap-2">
                   <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
-                    <span className="block h-full rounded-full bg-[linear-gradient(90deg,#f3d48a,#d69a2c)]" style={{ width: `${Math.round((lvl.into / Math.max(1, lvl.need)) * 100)}%` }} />
+                    <span className="aa-xp block h-full rounded-full" style={{ width: `${Math.round((lvl.into / Math.max(1, lvl.need)) * 100)}%` }} />
                   </span>
                   <span className="shrink-0 text-[0.62rem] tabular-nums text-white/70">{lvl.into.toLocaleString("it-IT")}/{lvl.need.toLocaleString("it-IT")}</span>
                 </span>
               </Link>
-              <Link to="/bacheca" aria-label={unread > 0 ? `Avvisi, ${unread} da leggere` : "Avvisi"} className="relative grid h-11 w-11 shrink-0 place-items-center rounded-full border border-[#e6b85c]/45 bg-[linear-gradient(180deg,#3b2b19,#1a130b)] text-[#f3d48a]">
+              <Link to="/bacheca" aria-label={unread > 0 ? `Avvisi, ${unread} da leggere` : "Avvisi"} className="aa-bell relative grid h-11 w-11 shrink-0 place-items-center rounded-full">
                 <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15Z" /><path d="M10 20a2 2 0 0 0 4 0" /></svg>
                 {unread > 0 ? <span className="absolute -right-0.5 -top-0.5 grid h-5 min-w-5 place-items-center rounded-full bg-[#d6402f] px-1 text-[0.66rem] font-bold text-white">{unread > 9 ? "9+" : unread}</span> : null}
               </Link>
             </header>
           ) : (
-          <header className="aa-appheader sticky top-0 z-20 flex h-14 items-center justify-between gap-2 border-b border-line/60 bg-bg/85 px-4 backdrop-blur-md">
+          <header className="aa-appheader aa-bar sticky top-0 z-20 flex h-14 items-center justify-between gap-2 border-b px-4 backdrop-blur-md">
               <div className="flex min-w-0 items-center gap-2">
                 <button type="button" onClick={() => (window.history.length > 1 ? window.history.back() : void navigate({ to: "/" }))} aria-label="Indietro" className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white/[0.06] active:scale-95">
                   <Glyph name="chevron" size={18} className="rotate-180" />
@@ -356,16 +356,16 @@ export function Shell({ children }: { children: ReactNode }) {
             {me.percorso === "" ? <PercorsoWelcome onDone={() => setNonce((n) => n + 1)} /> : null}
           </main>
           {/* barra in basso: solo voci che in Home non ci sono già (Tiro rapido, Da foto, Sfide e Classifiche stanno sul gioco) */}
-          <nav className="aa-bottomnav fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 items-end border-t border-[#e6b85c]/30 bg-[linear-gradient(180deg,rgba(27,23,18,0.97),rgba(12,11,9,0.98))] pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden">
+          <nav className="aa-bottomnav aa-bar-bottom fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 items-end border-t pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden">
             {bottom.map((item) => <BottomLink key={item.to} item={item} active={item.match(path)} />)}
-            <button type="button" className={cx("flex min-h-16 flex-col items-center justify-center gap-0.5 text-[11px] font-medium", menu ? "text-[#f3c766]" : "text-white/75")} onClick={() => setMenu(true)}>
+            <button type="button" className={cx("flex min-h-16 flex-col items-center justify-center gap-0.5 text-[11px] font-medium", menu ? "aa-tone-hi" : "text-white/75")} onClick={() => setMenu(true)}>
               <span className="grid h-8 w-14 place-items-center"><Glyph name="grid" size={22} /></span>
               Menu
             </button>
           </nav>
           {menu ? (
             <div ref={menuBox} className="aa-sheet fixed inset-0 z-40 overflow-y-auto bg-bg pb-[calc(env(safe-area-inset-bottom)+1.5rem)] md:hidden">
-              <div className="aa-appheader sticky top-0 z-10 flex h-14 items-center justify-between bg-bg/90 px-4 backdrop-blur-md">
+              <div className="aa-appheader aa-bar sticky top-0 z-10 flex h-14 items-center justify-between border-b px-4 backdrop-blur-md">
                 <p className="font-display text-xl">Menu</p>
                 <div className="flex items-center gap-2">
                   <button type="button" className={cx("grid h-11 w-11 place-items-center rounded-full", menuSearch ? "bg-primary text-primary-fg" : "bg-white/5")} onClick={() => setMenuSearch((v) => !v)} aria-label="Cerca" aria-pressed={menuSearch}>
@@ -401,7 +401,7 @@ export function Shell({ children }: { children: ReactNode }) {
 
 function BottomLink({ item, active }: { item: { to: string; label: string; icon: IconName }; active: boolean }) {
   return (
-    <Link to={item.to} className={cx("aa-tab flex min-h-16 flex-col items-center justify-center gap-0.5 text-[11px] font-medium", active ? "is-active text-[#f3c766]" : "text-white/75")}>
+    <Link to={item.to} className={cx("aa-tab flex min-h-16 flex-col items-center justify-center gap-0.5 text-[11px] font-medium", active ? "is-active aa-tone-hi" : "text-white/75")}>
       <span className="aa-tab-pill relative grid h-8 w-14 place-items-center rounded-full">
         <Glyph name={item.icon} size={22} strokeWidth={active ? 2.1 : 1.7} className="relative transition-transform duration-300" />
       </span>

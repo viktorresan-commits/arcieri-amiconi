@@ -1,6 +1,17 @@
 @import "tailwindcss";
 
 :root {
+  /* tinta delle cornici, dei titoli e dei pulsanti a placca: segue il colore scelto */
+  --tone: #7cc79a;
+  --tone-hi: #a8e6bf;
+  --tone-lo: #2f7a4f;
+  --tone-ink: #05140b;
+  --card-a: rgb(22 34 27 / 0.95);
+  --card-b: rgb(11 18 14 / 0.97);
+  --plate-a: #1f3a2a;
+  --plate-b: #0b1a11;
+  --bar-a: rgb(12 20 16 / 0.96);
+  --bar-b: rgb(10 16 13 / 0.9);
   color-scheme: dark;
   --bg: #0c1210;
   --bg-elev: #121a16;
@@ -38,6 +49,17 @@ body {
 }
 
 html[data-ink="verde"] {
+  /* tinta delle cornici, dei titoli e dei pulsanti a placca: segue il colore scelto */
+  --tone: #7cc79a;
+  --tone-hi: #a8e6bf;
+  --tone-lo: #2f7a4f;
+  --tone-ink: #05140b;
+  --card-a: rgb(22 34 27 / 0.95);
+  --card-b: rgb(11 18 14 / 0.97);
+  --plate-a: #1f3a2a;
+  --plate-b: #0b1a11;
+  --bar-a: rgb(12 20 16 / 0.96);
+  --bar-b: rgb(10 16 13 / 0.9);
   --bg: #0c1210;
   --bg-elev: #121a16;
   --surface: #16211b;
@@ -52,6 +74,17 @@ html[data-ink="verde"] {
   --soft: #9dbea4;
 }
 html[data-ink="blu"] {
+  /* tinta delle cornici, dei titoli e dei pulsanti a placca: segue il colore scelto */
+  --tone: #7ab8ee;
+  --tone-hi: #bcdcf8;
+  --tone-lo: #2f6fbe;
+  --tone-ink: #061220;
+  --card-a: rgb(22 30 42 / 0.95);
+  --card-b: rgb(11 15 22 / 0.97);
+  --plate-a: #1c3048;
+  --plate-b: #0a1420;
+  --bar-a: rgb(12 18 26 / 0.96);
+  --bar-b: rgb(10 14 20 / 0.9);
   --bg: #0c1218;
   --bg-elev: #121820;
   --surface: #17202a;
@@ -66,6 +99,17 @@ html[data-ink="blu"] {
   --soft: #8eb4d6;
 }
 html[data-ink="rosso"] {
+  /* tinta delle cornici, dei titoli e dei pulsanti a placca: segue il colore scelto */
+  --tone: #ec958c;
+  --tone-hi: #f8cbc2;
+  --tone-lo: #b4463d;
+  --tone-ink: #1c0806;
+  --card-a: rgb(42 24 23 / 0.95);
+  --card-b: rgb(20 13 13 / 0.97);
+  --plate-a: #45201c;
+  --plate-b: #1c0c0b;
+  --bar-a: rgb(22 14 14 / 0.96);
+  --bar-b: rgb(18 11 11 / 0.9);
   --bg: #140e0e;
   --bg-elev: #1c1414;
   --surface: #241818;
@@ -80,6 +124,17 @@ html[data-ink="rosso"] {
   --soft: #d9a097;
 }
 html[data-ink="giallo"] {
+  /* tinta delle cornici, dei titoli e dei pulsanti a placca: segue il colore scelto */
+  --tone: #e6b85c;
+  --tone-hi: #f6d98e;
+  --tone-lo: #c8902c;
+  --tone-ink: #2a1a08;
+  --card-a: rgb(32 27 20 / 0.95);
+  --card-b: rgb(15 16 14 / 0.97);
+  --plate-a: #3b2b19;
+  --plate-b: #1a130b;
+  --bar-a: rgb(20 18 12 / 0.96);
+  --bar-b: rgb(16 14 10 / 0.9);
   --bg: #12110c;
   --bg-elev: #1a1812;
   --surface: #221f16;
@@ -94,6 +149,17 @@ html[data-ink="giallo"] {
   --soft: #c9b27a;
 }
 html[data-ink="viola"] {
+  /* tinta delle cornici, dei titoli e dei pulsanti a placca: segue il colore scelto */
+  --tone: #c9a8f4;
+  --tone-hi: #e6d6fc;
+  --tone-lo: #7a4bb5;
+  --tone-ink: #160a22;
+  --card-a: rgb(32 25 46 / 0.95);
+  --card-b: rgb(16 13 22 / 0.97);
+  --plate-a: #33224d;
+  --plate-b: #150e22;
+  --bar-a: rgb(16 14 22 / 0.96);
+  --bar-b: rgb(13 11 18 / 0.9);
   --bg: #100e16;
   --bg-elev: #161322;
   --surface: #1c1828;
@@ -778,7 +844,7 @@ html[data-motion="ridotta"]::view-transition-old(root), html[data-motion="ridott
   transition: transform 0.35s cubic-bezier(0.22, 1.2, 0.36, 1), opacity 0.25s;
 }
 .aa-tab.is-active .aa-tab-pill::before { transform: none; opacity: 1; }
-.aa-bottomnav .aa-tab-pill::before { background: rgb(230 184 92 / 0.18); box-shadow: inset 0 0 0 1px rgb(230 184 92 / 0.35); }
+.aa-bottomnav .aa-tab-pill::before { background: color-mix(in srgb, var(--tone) 18%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tone) 35%, transparent); }
 .aa-tab.is-active svg { transform: translateY(-1px) scale(1.06); }
 .aa-tab:active svg { transform: scale(0.86); }
 
@@ -1449,13 +1515,86 @@ html[data-motion="ridotta"] .aa-hero-mark, html[data-motion="ridotta"] .aa-empty
 @keyframes aa-bar-grow { from { transform: scaleX(0); } }
 @media (prefers-reduced-motion: reduce) { .aa-perk.is-on::after, .aa-duel-bar, .aa-duel-step { animation: none; } }
 
-/* Home: schede con la stessa veste del gioco, cuoio scuro bordato d'oro */
-.aa-home :is(.aa-glow-panel, .aa-today, .aa-journey) {
-  border: 1px solid rgb(230 184 92 / 0.3);
-  background: linear-gradient(180deg, rgb(32 27 20 / 0.95), rgb(15 16 14 / 0.97));
-  box-shadow: 0 10px 24px -14px rgb(0 0 0 / 0.9), inset 0 1px 0 rgb(255 232 180 / 0.1);
+/* schede, titoli, barre e pulsanti a placca: la stessa veste in ogni pagina, nel colore scelto */
+:is(.aa-glow-panel, .aa-today, .aa-journey) {
+  border: 1px solid color-mix(in srgb, var(--tone) 30%, transparent);
+  background: linear-gradient(180deg, var(--card-a), var(--card-b));
+  box-shadow: 0 10px 24px -14px rgb(0 0 0 / 0.9), inset 0 1px 0 color-mix(in srgb, var(--tone-hi) 12%, transparent);
 }
-.aa-home .aa-glow-panel::after { display: none; }
-.aa-home .aa-kpi { border-color: rgb(230 184 92 / 0.2); background: linear-gradient(180deg, rgb(32 27 20 / 0.9), rgb(15 16 14 / 0.94)); }
-.aa-home .aa-section-title,
-.aa-home-label { font-family: inherit; font-size: 0.68rem; font-weight: 700; line-height: 1.2; text-transform: uppercase; letter-spacing: 0.16em; color: #e6b85c; }
+.aa-glow-panel::after { display: none; }
+.aa-kpi { border-color: color-mix(in srgb, var(--tone) 20%, transparent); background: linear-gradient(180deg, var(--card-a), var(--card-b)); }
+.aa-section-title,
+.aa-home-label { font-family: inherit; font-size: 0.68rem; font-weight: 700; line-height: 1.2; text-transform: uppercase; letter-spacing: 0.16em; color: var(--tone); }
+.aa-bar { background: linear-gradient(180deg, var(--bar-a), var(--bar-b)); border-color: color-mix(in srgb, var(--tone) 28%, transparent); }
+.aa-bar-bottom { background: linear-gradient(180deg, var(--bar-a), var(--bar-b)); border-color: color-mix(in srgb, var(--tone) 30%, transparent); }
+.aa-ring { background: linear-gradient(135deg, var(--tone-hi), var(--tone-lo)); box-shadow: 0 4px 14px -6px rgb(0 0 0 / 0.8); }
+.aa-xp { background: linear-gradient(90deg, var(--tone-hi), var(--tone-lo)); }
+.aa-tone { color: var(--tone); }
+.aa-tone-hi { color: var(--tone-hi); }
+.aa-plaque {
+  border: 1.5px solid color-mix(in srgb, var(--tone) 80%, #000);
+  background: linear-gradient(180deg, var(--plate-a), var(--plate-b));
+  box-shadow: 0 8px 16px -8px rgb(0 0 0 / 0.9), inset 0 1px 0 color-mix(in srgb, var(--tone-hi) 28%, transparent), inset 0 -2px 0 rgb(0 0 0 / 0.4);
+}
+.aa-plaque-medal {
+  border: 1px solid color-mix(in srgb, var(--tone) 70%, transparent);
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--plate-a) 70%, var(--tone) 30%), var(--plate-b));
+  color: var(--tone-hi);
+}
+.aa-plaque-title { color: color-mix(in srgb, var(--fg) 88%, var(--tone-hi)); }
+.aa-plaque-sub { color: color-mix(in srgb, var(--fg) 70%, transparent); }
+.aa-plaque-main {
+  border: 1.5px solid color-mix(in srgb, var(--tone-hi) 70%, #fff);
+  background: linear-gradient(180deg, var(--tone-hi), var(--tone-lo));
+  color: var(--tone-ink);
+  box-shadow: 0 10px 18px -8px rgb(0 0 0 / 0.9), inset 0 1px 0 rgb(255 255 255 / 0.6), inset 0 -3px 0 color-mix(in srgb, var(--tone-lo) 60%, #000);
+}
+.aa-plaque-main-medal { background: var(--tone-ink); color: var(--tone-hi); }
+.aa-bell { border: 1px solid color-mix(in srgb, var(--tone) 45%, transparent); background: linear-gradient(180deg, var(--plate-a), var(--plate-b)); color: var(--tone-hi); }
+
+/* Home: il gioco continua sotto, nel terreno con i pulsanti; il fondo della scena sfuma nel prolungamento */
+.aa-game.aa-game-joined { z-index: 1; }
+.aa-backdrop-joined { -webkit-mask-image: linear-gradient(180deg, #000 88%, transparent 100%); mask-image: linear-gradient(180deg, #000 88%, transparent 100%); }
+@media (min-width: 768px) { .aa-game.aa-game-joined { border-bottom-left-radius: 0; border-bottom-right-radius: 0; box-shadow: none; } }
+.aa-apron { -webkit-mask-image: linear-gradient(180deg, #000 93%, transparent 100%); mask-image: linear-gradient(180deg, #000 93%, transparent 100%); }
+@media (min-width: 768px) { .aa-apron { -webkit-mask-image: none; mask-image: none; } }
+/* vita nel terreno: piante che ondeggiano, farfalle, api, piccioni, granchi, foglie, lucciole */
+.aa-apron-life .aa-sway { transform-box: fill-box; transform-origin: 50% 100%; animation: aa-sway 3.6s ease-in-out infinite; }
+@keyframes aa-sway { 0%, 100% { transform: rotate(-4deg); } 50% { transform: rotate(4deg); } }
+.aa-bfly { animation: aa-bfly 11s ease-in-out infinite; }
+@keyframes aa-bfly { 0% { transform: translate(0, 0); } 20% { transform: translate(14px, -5px); } 40% { transform: translate(30px, 2px); } 60% { transform: translate(16px, 6px); } 80% { transform: translate(-8px, -3px); } 100% { transform: translate(0, 0); } }
+.aa-wing { transform-box: fill-box; transform-origin: 50% 50%; animation: aa-wing 0.22s ease-in-out infinite alternate; }
+@keyframes aa-wing { from { transform: scaleX(1); } to { transform: scaleX(0.25); } }
+.aa-wing-fast { transform-box: fill-box; transform-origin: 50% 50%; animation: aa-wing 0.08s linear infinite alternate; }
+.aa-bee { animation: aa-bee 6s ease-in-out infinite; }
+@keyframes aa-bee { 0%, 100% { transform: translate(0, 0); } 25% { transform: translate(10px, -4px); } 50% { transform: translate(22px, 1px); } 75% { transform: translate(8px, 4px); } }
+.aa-dart { animation: aa-dart 7s steps(1) infinite, aa-hover 0.6s ease-in-out infinite alternate; }
+@keyframes aa-dart { 0% { transform: translate(0, 0); } 30% { transform: translate(26px, -3px); } 60% { transform: translate(-14px, 2px); } 85% { transform: translate(8px, -6px); } }
+@keyframes aa-hover { from { translate: 0 -0.6px; } to { translate: 0 0.6px; } }
+.aa-peck { transform-box: fill-box; transform-origin: 20% 90%; animation: aa-peck 3.2s ease-in-out infinite; }
+@keyframes aa-peck { 0%, 55%, 100% { transform: rotate(0deg); } 65% { transform: rotate(38deg); } 72% { transform: rotate(10deg); } 78% { transform: rotate(38deg); } 86% { transform: rotate(0deg); } }
+.aa-strut { animation: aa-strut 9s ease-in-out infinite; }
+@keyframes aa-strut { 0%, 100% { transform: translateX(0); } 45%, 55% { transform: translateX(-18px); } }
+.aa-crab { animation: aa-crab 7s ease-in-out infinite; }
+@keyframes aa-crab { 0%, 100% { transform: translateX(0); } 20% { transform: translateX(10px); } 30% { transform: translateX(10px); } 60% { transform: translateX(-12px); } 75% { transform: translateX(-12px); } }
+.aa-tumble { animation: aa-tumble 16s linear infinite; }
+@keyframes aa-tumble { from { transform: translateX(60px); } to { transform: translateX(340px); } }
+.aa-spin { animation: aa-spin 2.4s linear infinite; }
+@keyframes aa-spin { to { transform: rotate(360deg); } }
+.aa-tail { transform-box: fill-box; transform-origin: 100% 50%; animation: aa-tail 2.8s ease-in-out infinite; }
+@keyframes aa-tail { 0%, 80%, 100% { transform: rotate(0deg); } 88% { transform: rotate(14deg); } 94% { transform: rotate(-8deg); } }
+.aa-hop { animation: aa-hop 4s ease-in-out infinite; }
+@keyframes aa-hop { 0%, 30%, 100% { transform: translate(0, 0); } 36% { transform: translate(4px, -4px); } 42% { transform: translate(8px, 0); } 60% { transform: translate(8px, 0); } 66% { transform: translate(4px, -4px); } 72% { transform: translate(0, 0); } }
+.aa-firefly { animation: aa-firefly 5s ease-in-out infinite; }
+@keyframes aa-firefly { 0%, 100% { opacity: 0; transform: translate(0, 0); } 30% { opacity: 1; } 50% { transform: translate(6px, -4px); } 70% { opacity: 0.8; } 85% { opacity: 0; transform: translate(-4px, 3px); } }
+.aa-mote { animation: aa-mote 7s ease-in-out infinite; opacity: 0; }
+@keyframes aa-mote { 0%, 100% { opacity: 0; transform: translate(0, 0); } 40% { opacity: 0.8; } 60% { opacity: 0.6; transform: translate(4px, -8px); } 90% { opacity: 0; transform: translate(-2px, -12px); } }
+.aa-fall { animation: aa-fall 9s linear infinite; opacity: 0; }
+@keyframes aa-fall { 0% { opacity: 0; transform: translate(0, -10px) rotate(0deg); } 10% { opacity: 1; } 85% { opacity: 1; } 100% { opacity: 0; transform: translate(-26px, 110px) rotate(280deg); } }
+.aa-ripple { transform-box: fill-box; transform-origin: center; animation: aa-ripple 3.6s ease-out infinite; }
+@keyframes aa-ripple { from { opacity: 0.8; transform: scale(0.2); } to { opacity: 0; transform: scale(1.6); } }
+.aa-glow-pulse { animation: aa-glow-pulse 1.8s ease-in-out infinite alternate; }
+@keyframes aa-glow-pulse { from { opacity: 0.08; } to { opacity: 0.18; } }
+@media (prefers-reduced-motion: reduce) {
+  .aa-apron-life *, .aa-apron-life { animation: none !important; }
+}
