@@ -26,7 +26,7 @@ const HOME_HIDE = ["rapido", "foto", "sfide", "classifiche", "gare", "squadra"];
 /** Pulsante a tema sul prolungamento del gioco: placca di cuoio bordata d'oro, medaglione con l'icona. */
 function Plaque({ to, search, icon, label, sub }: { to: string; search?: Record<string, string>; icon: IconName; label: string; sub?: string }) {
   return (
-    <Link to={to as "/"} search={search as never} className="aa-plaque aa-press flex min-h-[64px] min-w-0 items-center gap-2.5 rounded-2xl px-2.5 text-left">
+    <Link to={to as "/"} search={search as never} className="aa-plaque aa-press flex min-h-[58px] min-w-0 items-center gap-2.5 rounded-2xl px-2.5 text-left">
       <span className="aa-plaque-medal grid h-10 w-10 shrink-0 place-items-center rounded-full"><Glyph name={icon} size={20} /></span>
       <span className="min-w-0">
         <b className="aa-plaque-title block truncate font-display text-[1.05rem] leading-tight">{label}</b>
@@ -105,8 +105,14 @@ function Home() {
             /* il gioco si allunga: continua il terreno e i pulsanti ci stanno sopra senza coprire il tiro */
             apron={
               <>
+            {/* solo l'icona per vestire l'arciere, piccola, sotto i suoi piedi: non copre la figura */}
+            <div className="flex h-8 items-center pl-[5%]">
+              <Link to="/avatar" aria-label="Personalizza l'arciere e l'ambientazione" className="aa-bell grid h-8 w-8 place-items-center rounded-full shadow-[0_4px_10px_-4px_rgba(0,0,0,0.7)]">
+                <Glyph name="palette" size={15} />
+              </Link>
+            </div>
             <div className="grid grid-cols-[1.45fr_1fr] gap-2">
-              <Link to="/allenamento" search={{ avvia: "rapido" }} className="aa-plaque-main aa-press flex min-h-[64px] items-center gap-2.5 rounded-2xl px-3 text-left">
+              <Link to="/allenamento" search={{ avvia: "rapido" }} className="aa-plaque-main aa-press flex min-h-[58px] items-center gap-2.5 rounded-2xl px-3 text-left">
                 <span className="aa-plaque-main-medal grid h-10 w-10 shrink-0 place-items-center rounded-full"><Glyph name="bolt" size={20} /></span>
                 <span className="min-w-0"><b className="block truncate font-display text-[1.25rem] leading-none">Tiro rapido</b><span className="block truncate text-[0.68rem] font-semibold opacity-75">segna le frecce di oggi</span></span>
               </Link>
@@ -135,12 +141,6 @@ function Home() {
               </div>
             }
           >
-            {/* solo l'icona per vestire l'arciere, piccola, a sinistra sotto i suoi piedi */}
-            <div data-ui className="absolute bottom-1.5 left-2" onPointerDown={(e) => e.stopPropagation()}>
-              <Link to="/avatar" aria-label="Personalizza l'arciere e l'ambientazione" className="aa-bell grid h-8 w-8 place-items-center rounded-full backdrop-blur">
-                <Glyph name="palette" size={15} />
-              </Link>
-            </div>
           </HomeGame>
           </GameGuard>
           </div>

@@ -1266,7 +1266,7 @@ export function GameApron({ sky, scene, lefty, children }: { sky: Sky; scene: st
       <div key={scene} className={`aa-apron-scene aa-scene-swap pointer-events-none absolute inset-0 ${lefty ? "aa-mirror" : ""}`}>
         <SceneApron sky={sky} scene={scene} V={m.h * u} top={APRON_Y0 + m.t * u} bottom={APRON_Y0 + (m.t + m.c) * u} />
       </div>
-      <div ref={inner} className="relative z-[1] mx-3 mb-[3.75rem] mt-[calc(13.33%_+_2.4rem)] grid gap-2.5">
+      <div ref={inner} className="aa-apron-inner relative z-[1] mx-3 mb-[3.75rem] mt-[calc(13.33%_+_0.25rem)] grid gap-2">
         {children}
       </div>
     </div>

@@ -1598,3 +1598,22 @@ html[data-motion="ridotta"] .aa-hero-mark, html[data-motion="ridotta"] .aa-empty
 @media (prefers-reduced-motion: reduce) {
   .aa-apron-life *, .aa-apron-life { animation: none !important; }
 }
+
+/* arciere di fronte: respira, ondeggia sul peso, il mantello si muove, l'arco oscilla appena nella mano */
+.aa-front-sway { transform-box: view-box; transform-origin: 100px 356px; animation: aa-front-sway 6.4s ease-in-out infinite; }
+@keyframes aa-front-sway { 0%, 100% { transform: rotate(-0.7deg); } 50% { transform: rotate(0.7deg); } }
+.aa-front-breath { transform-box: view-box; transform-origin: 100px 206px; animation: aa-front-breath 3.8s ease-in-out infinite; }
+@keyframes aa-front-breath { 0%, 100% { transform: scale(1, 1); } 45% { transform: translateY(-0.8px) scale(1.012, 1.008); } }
+.aa-front-head { transform-box: view-box; transform-origin: 100px 100px; animation: aa-front-head 7.2s ease-in-out infinite; }
+@keyframes aa-front-head { 0%, 100% { transform: rotate(-1.6deg); } 30% { transform: rotate(0.4deg); } 60% { transform: rotate(1.8deg) translateY(0.4px); } }
+.aa-front-cape { transform-box: view-box; transform-origin: 100px 104px; animation: aa-front-cape 5.2s ease-in-out infinite; }
+@keyframes aa-front-cape { 0%, 100% { transform: skewX(-1.4deg); } 50% { transform: skewX(1.6deg); } }
+.aa-front-bow { animation: aa-front-bow 4.6s ease-in-out infinite; }
+@keyframes aa-front-bow { 0%, 100% { transform: rotate(-1.4deg); } 50% { transform: rotate(1.6deg); } }
+.aa-front-bowarm, .aa-front-arm { transform-box: view-box; }
+.aa-front-arm { animation: aa-front-arm 3.8s ease-in-out infinite; }
+@keyframes aa-front-arm { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(-1.2deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .aa-front-sway, .aa-front-breath, .aa-front-head, .aa-front-cape, .aa-front-bow, .aa-front-arm { animation: none; }
+}
+html[data-motion="ridotta"] :is(.aa-front-sway, .aa-front-breath, .aa-front-head, .aa-front-cape, .aa-front-bow, .aa-front-arm) { animation: none; }

@@ -1,5 +1,5 @@
 import type { Form } from "@/lib/arcieri/coach";
-import { Component, useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent, type ReactNode } from "react";
+import { Component, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent, type ReactNode } from "react";
 import type { AvatarLook } from "@/lib/arcieri/avatar";
 import { useSky } from "@/lib/arcieri/sky3d";
 import { useLocalState } from "@/lib/arcieri/local-store";
@@ -125,6 +125,37 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
   });
   const bodyLook = useMemo(() => (look.lefty ? { ...look, lefty: false } : look), [look]);
   const stage = useRef<HTMLDivElement>(null);
+  const wrap = useRef<HTMLDivElement>(null);
+  // con i pulsanti sotto: se lo schermo è basso, il cielo in cima si accorcia quanto basta perché
+  // gioco e pulsanti si vedano interi tra la barra in alto e quella in basso, senza scorrere
+  const [crop, setCrop] = useState(0);
+  useLayoutEffect(() => {
+    if (!apron) return;
+    const calc = () => {
+      const el = stage.current;
+      const box = wrap.current;
+      const inner = box?.parentElement?.querySelector<HTMLElement>(".aa-apron-inner");
+      if (!el || !box || !inner) return;
+      const gh = el.getBoundingClientRect().height;
+      const below = inner.getBoundingClientRect().bottom - el.getBoundingClientRect().bottom;
+      const nav = document.querySelector<HTMLElement>(".aa-bottomnav");
+      const navH = nav && getComputedStyle(nav).display !== "none" ? nav.getBoundingClientRect().height : 0;
+      const top = box.getBoundingClientRect().top + window.scrollY;
+      const over = top + gh + below + 10 - (window.innerHeight - navH);
+      setCrop(Math.round(Math.max(0, Math.min(gh * 0.3, over))));
+    };
+    calc();
+    const t = window.setTimeout(calc, 400);
+    window.addEventListener("resize", calc);
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(calc) : null;
+    const inner = wrap.current?.parentElement?.querySelector(".aa-apron-inner");
+    if (ro && inner) ro.observe(inner);
+    return () => {
+      window.clearTimeout(t);
+      window.removeEventListener("resize", calc);
+      ro?.disconnect();
+    };
+  }, [apron != null]);
   // bersaglio e livello scelti: restano sul telefono
   const [modeId, setModeId] = useLocalState<GameMode>("aa-game-mode", "fita");
   const [levelId, setLevelId] = useLocalState<GameLevel>("aa-game-level", "normale");
@@ -526,7 +557,7 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
       aria-label="Gioco: tieni premuto per tendere, trascina per mirare, lascia per tirare"
     >
       {/* mancino: campo, bersaglio e arciere si specchiano; i testi restano dritti */}
-      <div className={`pointer-events-none absolute inset-0 ${lefty ? "aa-mirror" : ""} ${bleed ? "aa-game-fade" : ""}`}>
+      <div className={`pointer-events-none absolute inset-0 ${lefty ? "aa-mirror" : ""} ${bleed ? "aa-game-fade" : ""}`} style={crop ? { WebkitMaskImage: `linear-gradient(180deg, transparent ${crop}px, rgba(0,0,0,0.55) calc(${crop}px + 5%), #000 calc(${crop}px + 13%), #000 100%)`, maskImage: `linear-gradient(180deg, transparent ${crop}px, rgba(0,0,0,0.55) calc(${crop}px + 5%), #000 calc(${crop}px + 13%), #000 100%)` } : undefined}>
       <div key={scene} className={`aa-scene-swap absolute inset-0 ${apron ? "aa-backdrop-joined" : ""}`}>
         <SceneBackdrop sky={sky} id="game" scene={scene} wind={wind} />
       </div>
@@ -662,7 +693,7 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
       ) : null}
 
       {/* HUD: a sinistra le informazioni di oggi, a destra punteggio, volée e vento */}
-      <div className="aa-game-hud pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-3">
+      <div className="aa-game-hud pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-3" style={crop ? { top: crop } : undefined}>
         <div className="min-w-0 text-white [text-shadow:0_1px_8px_rgba(0,0,0,0.55)]">{info}</div>
         <div className="grid shrink-0 justify-items-end gap-1.5 text-right text-white">
           <p className="aa-game-score text-4xl font-black leading-none">{playing ? total : "—"}</p>
@@ -682,7 +713,7 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
       </div>
       {children}
       {picker ? (
-        <div data-ui className="aa-rise absolute inset-x-3 top-[18%] z-10 grid gap-3 rounded-3xl bg-[#101814]/90 p-3 text-white backdrop-blur-md" onPointerDown={(e) => e.stopPropagation()}>
+        <div data-ui className="aa-rise absolute inset-x-3 top-[18%] z-10 grid gap-3 rounded-3xl bg-[#101814]/90 p-3 text-white backdrop-blur-md" style={crop ? { top: `calc(18% + ${crop}px)` } : undefined} onPointerDown={(e) => e.stopPropagation()}>
           <p className="text-[0.66rem] font-semibold uppercase tracking-[0.2em] text-white/70">Bersaglio</p>
           <div className="grid grid-cols-3 gap-1.5">
             {GAME_MODES.map((m) => (
@@ -733,7 +764,7 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
         </div>
       ) : null}
       {done ? (
-        <div data-ui className="absolute inset-x-4 top-[20%] rounded-3xl bg-[#101814]/85 p-4 text-center text-white backdrop-blur-md" onPointerDown={(e) => e.stopPropagation()}>
+        <div data-ui className="absolute inset-x-4 top-[20%] rounded-3xl bg-[#101814]/85 p-4 text-center text-white backdrop-blur-md" style={crop ? { top: `calc(20% + ${crop}px)` } : undefined} onPointerDown={(e) => e.stopPropagation()}>
           <p className="text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-white/70">Giro finito · {mode.label} · {level.label}</p>
           <p className="aa-game-score mt-1 text-5xl font-black">{total}<span className="text-xl text-white/60">/{maxRound(modeId)}</span></p>
           <p className="mt-1 text-sm text-white/85">media {(total / (STATIONS * 3)).toFixed(2).replace(".", ",")} a freccia{total >= bestHere && total > 0 ? " · nuovo record" : ""}</p>
@@ -752,7 +783,9 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
   if (!apron) return game;
   return (
     <div className="aa-game-stack">
-      {game}
+      <div ref={wrap} className="relative z-[1] overflow-hidden" style={crop ? { marginTop: 0 } : undefined}>
+        <div style={crop ? { marginTop: -crop } : undefined}>{game}</div>
+      </div>
       <GameApron sky={sky} scene={scene} lefty={lefty}>{apron}</GameApron>
     </div>
   );

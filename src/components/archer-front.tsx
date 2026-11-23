@@ -1,17 +1,20 @@
 import { useId } from "react";
 import { tune, type AvatarLook } from "@/lib/arcieri/avatar";
 import { AvatarFace, bodyWidth, shade } from "./archer-avatar";
-import { Buckle, ChestEmblem, Clasp, ClothPattern, Pouch, QuiverBody, zigQ } from "./avatar-extras";
+import { Buckle, ChestEmblem, Clasp, ClothPattern, Fletching, Pouch, QuiverBody, zigQ } from "./avatar-extras";
+import { seamOf, BeltDetail, ClothDetail, DetailDefs, LeatherBand, SleeveDetail } from "./avatar-detail";
 
 const OUT = "#1b130d";
 const LONG_TOPS: Record<string, number> = { tunica: 252, "tunica-lunga": 266, ranger: 262, incrociata: 250, cappotto: 258, "cappotto-lungo": 292, giubba: 230, cotta: 240, giubbetto: 234 };
 const LONG_SLEEVES = ["felpa", "giacca", "camicia", "tunica", "tunica-lunga", "farsetto", "ranger", "incrociata", "cappotto", "giubba", "cappotto-lungo", "cotta", "giubbetto"];
 
 /**
- * L'arciere visto di fronte, fermo e in piedi, con l'arco in mano: per il profilo degli
- * altri arcieri. Stessi colori, abiti e accessori della figura di profilo.
+ * L'arciere visto di fronte, in piedi con l'arco stretto nella mano e una freccia nell'altra:
+ * il peso su una gamba, respira, ondeggia appena, il mantello si muove. Stessi colori, abiti,
+ * accessori e arco della figura di profilo.
  */
 export function ArcherFront({ look, className = "h-96 w-auto", crop }: { look: AvatarLook; className?: string; /** riquadro da mostrare (viewBox), per le miniature di un dettaglio */ crop?: string }) {
+  const live = !crop;
   const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
   const woman = look.body === "donna" || look.body === "ragazza";
   const kid = look.body === "ragazzo" || look.body === "ragazza";
@@ -38,38 +41,95 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop }: { look: A
   const legX = [cx - 14 * W, cx + 14 * W];
   const bootTop = look.footwear === "stivali-alti" ? 262 : look.footwear === "stivali" || look.footwear === "stivali-risvolto" || look.footwear === "stivali-pelliccia" ? 280 : look.footwear === "stivaletti" || look.footwear === "scarponi" ? 306 : look.footwear === "mocassini" ? 326 : 318;
   // l'arco sta nella mano dell'arco: la sinistra (a destra per chi guarda), o l'altra se mancino
-  const bowSide = look.lefty ? -1 : 1;
-  const bowX = cx + bowSide * (sh.r - cx + 14);
-  const handY = 214;
-  const limbs = look.limbs || "#15191d";
-  const riser = look.riser || "#2f6fbe";
-  const longbow = ["longbow", "storico", "flatbow", "asiatico"].includes(look.bowType);
-  const bowTop = 70;
-  const bowBot = 352;
-  const bulge = longbow ? 26 : 18;
-  const bowPath = longbow
-    ? `M${bowX} ${bowTop} C${bowX + bowSide * bulge} ${bowTop + 70} ${bowX + bowSide * bulge} ${bowBot - 70} ${bowX} ${bowBot}`
-    : `M${bowX - bowSide * 6} ${bowTop} C${bowX + bowSide * 4} ${bowTop + 20} ${bowX + bowSide * bulge} ${bowTop + 70} ${bowX + bowSide * 4} ${handY - 26} L${bowX + bowSide * 4} ${handY + 26} C${bowX + bowSide * bulge} ${bowBot - 70} ${bowX + bowSide * 4} ${bowBot - 20} ${bowX - bowSide * 6} ${bowBot}`;
-  const stringX = longbow ? bowX : bowX - bowSide * 6;
+  const bowSide: 1 | -1 = look.lefty ? -1 : 1;
+  const grip = { x: cx + bowSide * (sh.r - cx + 12), y: 206 };
+  const wood = ["longbow", "flatbow", "storico", "asiatico", "ricurvo"].includes(look.bowType);
+  const woodBase = look.riser && look.riser !== "#2f6fbe" ? look.riser : "#9b6334";
+  const limbs = look.limbs || (wood ? woodBase : "#15191d");
+  const riser = wood ? woodBase : look.riser || "#2f6fbe";
+  const longbow = ["longbow", "flatbow"].includes(look.bowType);
+  const asian = ["storico", "asiatico"].includes(look.bowType);
+  const compound = look.bowType === "compound";
+  const recurve = !longbow && !asian && !compound;
+  // nelle coordinate dell'impugnatura: x verso l'esterno, y in giù
+  const half = longbow ? 146 : asian ? 112 : compound ? 96 : 140;
+  const rs = longbow ? 10 : asian ? 16 : compound ? 44 : 30;
+  const tipX = longbow ? -8 : asian ? 6 : compound ? -8 : -6;
+  const limbD = (sg: 1 | -1) =>
+    longbow ? `M0 ${-rs * sg} C${20} ${-(rs + 60) * sg} 16 ${-(half - 30) * sg} ${tipX} ${-half * sg}`
+    : asian ? `M3 ${-rs * sg} C16 ${-(rs + 30) * sg} 18 ${-(half - 30) * sg} 4 ${-(half - 10) * sg} L${tipX + 8} ${-half * sg}`
+    : compound ? `M4 ${-rs * sg} C10 ${-(rs + 20) * sg} 6 ${-(half - 14) * sg} ${tipX} ${-half * sg}`
+    : `M4 ${-rs * sg} C8 ${-(rs + 40) * sg} 20 ${-(half - 60) * sg} 6 ${-(half - 14) * sg} C2 ${-(half - 6) * sg} ${tipX} ${-(half - 2) * sg} ${tipX - 2} ${-(half + 4) * sg}`;
+  const tip = (sg: 1 | -1) => ({ x: recurve ? tipX - 2 : asian ? tipX + 8 : tipX, y: -(recurve ? half + 4 : half) * sg });
+  const strX = recurve ? tipX - 2 : asian ? tipX + 8 : tipX;
   const quiverBack = look.quiverPlace === "schiena";
   const spin = tune(look.quiverRot, 0, -180, 180);
+  const medievalTop = ["tunica", "tunica-lunga", "farsetto", "ranger", "incrociata", "cappotto", "giubba", "cappotto-lungo", "cotta"].includes(look.top);
+  const sleeveLong = LONG_SLEEVES.includes(look.top) || look.top === "corpetto" || look.top === "gilet";
+  const handR = 7.4 * W;
+  const handFill = look.gloves ? "#4a2c16" : skin;
   const arm = (side: -1 | 1) => {
-    const s0 = side < 0 ? sh.l + 7 : sh.r - 7;
-    const elbow = { x: s0 + side * 9, y: 160 };
-    const hand = side === bowSide ? { x: bowX - bowSide * 2, y: handY } : { x: s0 + side * 6, y: 222 };
+    const bowArm = side === bowSide;
+    const s0 = { x: side < 0 ? sh.l + 7 : sh.r - 7, y: 108 };
+    const elbow = bowArm ? { x: s0.x + side * 11, y: 158 } : { x: s0.x + side * 7, y: 160 };
+    const hand = bowArm ? { x: grip.x - bowSide * 1, y: grip.y } : { x: s0.x + side * 1, y: 214 };
+    const upW = 16.5 * W;
+    const foreW = 13 * W;
+    const segs = `M${f(s0.x)} ${f(s0.y)} L${f(elbow.x)} ${f(elbow.y)}`;
+    const cuff = lerpP(elbow, hand, 0.84);
+    const brA = lerpP(elbow, hand, 0.34);
+    const brB = lerpP(elbow, hand, 0.84);
     return (
-      <g key={side}>
-        <path d={`M${s0} 108 L${elbow.x} ${elbow.y} L${hand.x} ${hand.y}`} stroke={OUT} strokeOpacity="0.5" strokeWidth={17 * W + 2.4} strokeLinecap="round" strokeLinejoin="round" fill="none" />
-        <path d={`M${s0} 108 L${elbow.x} ${elbow.y} L${hand.x} ${hand.y}`} stroke={sleeve} strokeWidth={17 * W} strokeLinecap="round" strokeLinejoin="round" fill="none" />
-        {LONG_SLEEVES.includes(look.top) || look.top === "canotta" ? null : <path d={`M${s0} 108 L${s0 + side * 4} 128`} stroke={shirt} strokeWidth={19 * W} strokeLinecap="round" />}
-        {look.armband && side !== bowSide ? <path d={`M${lerp(s0, elbow.x, 0.45)} ${lerp(108, elbow.y, 0.45) - 4} L${lerp(s0, elbow.x, 0.6)} ${lerp(108, elbow.y, 0.6)}`} stroke={look.trim} strokeWidth={18 * W} /> : null}
-        {look.watch && side !== bowSide ? <g><circle cx={lerp(elbow.x, hand.x, 0.8)} cy={lerp(elbow.y, hand.y, 0.8)} r="5.4" fill="#1d2126" /><circle cx={lerp(elbow.x, hand.x, 0.8)} cy={lerp(elbow.y, hand.y, 0.8)} r="3" fill="#dfe6ee" /></g> : null}
-        {look.bracers ? <path d={`M${lerp(elbow.x, hand.x, 0.35)} ${lerp(elbow.y, hand.y, 0.35)} L${lerp(elbow.x, hand.x, 0.8)} ${lerp(elbow.y, hand.y, 0.8)}`} stroke={look.bracers} strokeWidth={18 * W} strokeLinecap="butt" /> : null}
-        {side === bowSide && look.armguard ? <path d={`M${lerp(elbow.x, hand.x, 0.3)} ${lerp(elbow.y, hand.y, 0.3)} L${lerp(elbow.x, hand.x, 0.78)} ${lerp(elbow.y, hand.y, 0.78)}`} stroke={look.armguard} strokeWidth={14 * W} strokeLinecap="round" opacity="0.92" /> : null}
-        <circle cx={hand.x} cy={hand.y} r={7.6 * W} fill={look.gloves ? "#3a2a1e" : skin} stroke={OUT} strokeOpacity="0.45" strokeWidth="1.2" />
+      <g key={side} className={live ? (bowArm ? "aa-front-bowarm" : "aa-front-arm") : undefined} style={live ? { transformOrigin: `${f(s0.x)}px ${f(s0.y)}px` } : undefined}>
+        <path d={`${segs} L${f(hand.x)} ${f(hand.y)}`} stroke={OUT} strokeOpacity="0.5" strokeWidth={upW + 2.6} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+        <path d={segs} stroke={sleeve} strokeWidth={upW} strokeLinecap="round" fill="none" />
+        <path d={`M${f(elbow.x)} ${f(elbow.y)} L${f(sleeveLong ? cuff.x : hand.x)} ${f(sleeveLong ? cuff.y : hand.y)}`} stroke={sleeveLong ? sleeve : skin} strokeWidth={foreW + (sleeveLong ? 1.5 : 0)} strokeLinecap="round" fill="none" />
+        {sleeveLong ? <path d={`M${f(cuff.x)} ${f(cuff.y)} L${f(hand.x)} ${f(hand.y)}`} stroke={skin} strokeWidth={foreW - 1} strokeLinecap="round" /> : null}
+        {LONG_SLEEVES.includes(look.top) || look.top === "canotta" ? null : <path d={`M${f(s0.x)} ${f(s0.y)} L${f(s0.x + side * 4)} 130`} stroke={look.top === "gilet" || look.top === "corpetto" ? look.sleeves || look.trim : shirt} strokeWidth={19 * W} strokeLinecap="round" />}
+        {look.top === "canotta" ? null : <SleeveDetail s={s0} e={elbow} h={hand} w={upW} color={seamOf(sleeve)} long={sleeveLong} />}
+        <path d={`M${f(s0.x - side * upW * 0.18)} ${f(s0.y + 4)} L${f(elbow.x - side * upW * 0.18)} ${f(elbow.y)}`} stroke="#fff" strokeOpacity="0.14" strokeWidth={upW * 0.26} strokeLinecap="round" />
+        {medievalTop ? <circle cx={f(cuff.x)} cy={f(cuff.y)} r={6.8 * W} fill={look.trim} stroke={OUT} strokeOpacity="0.3" strokeWidth="0.8" /> : null}
+        {look.armband && !bowArm ? <path d={`M${f(lerp(s0.x, elbow.x, 0.42))} ${f(lerp(s0.y, elbow.y, 0.42))} L${f(lerp(s0.x, elbow.x, 0.58))} ${f(lerp(s0.y, elbow.y, 0.58))}`} stroke={look.trim} strokeWidth={upW + 1.4} /> : null}
+        {look.watch && !bowArm ? <g><circle cx={f(lerp(elbow.x, hand.x, 0.8))} cy={f(lerp(elbow.y, hand.y, 0.8))} r="5.4" fill="#1d2126" /><circle cx={f(lerp(elbow.x, hand.x, 0.8))} cy={f(lerp(elbow.y, hand.y, 0.8))} r="3" fill="#dfe6ee" /></g> : null}
+        {bowArm && look.armguard ? <path d={`M${f(lerp(elbow.x, hand.x, 0.2))} ${f(lerp(elbow.y, hand.y, 0.2))} L${f(lerp(elbow.x, hand.x, 0.76))} ${f(lerp(elbow.y, hand.y, 0.76))}`} stroke={look.armguard} strokeWidth={foreW + 3} strokeLinecap="round" opacity="0.95" /> : null}
+        {look.bracers ? (
+          <g>
+            <path d={`M${f(brA.x)} ${f(brA.y)} L${f(brB.x)} ${f(brB.y)}`} stroke={OUT} strokeOpacity="0.5" strokeWidth={foreW + 6} strokeLinecap="round" />
+            <path d={`M${f(brA.x)} ${f(brA.y)} L${f(brB.x)} ${f(brB.y)}`} stroke={look.bracers} strokeWidth={foreW + 4} strokeLinecap="round" />
+            {[0.42, 0.56, 0.7].map((k) => {
+              const c = lerpP(elbow, hand, k);
+              return <path key={k} d={`M${f(c.x - 4)} ${f(c.y - 3)} l8 6 M${f(c.x + 4)} ${f(c.y - 3)} l-8 6`} stroke={shade(look.bracers, 0.55)} strokeWidth="0.9" />;
+            })}
+            <LeatherBand uid={`${uid}${side}`} a={lerpP(elbow, hand, 0.36)} b={lerpP(elbow, hand, 0.82)} w={foreW + 4} color={shade(look.bracers, 0.6)} />
+          </g>
+        ) : null}
+        {/* mano */}
+        {bowArm ? null : (
+          <g>
+            <ellipse cx={f(hand.x)} cy={f(hand.y + 1)} rx={f(handR * 0.9 + 1.2)} ry={f(handR + 1.4)} fill={OUT} opacity="0.5" />
+            <ellipse cx={f(hand.x)} cy={f(hand.y + 1)} rx={f(handR * 0.9)} ry={f(handR)} fill={handFill} />
+            <path d={`M${f(hand.x - handR * 0.6)} ${f(hand.y + 2)} h${f(handR * 1.2)} M${f(hand.x - handR * 0.6)} ${f(hand.y + 4.6)} h${f(handR * 1.2)}`} stroke={look.gloves ? "#1a0e06" : shade(skin, -0.35)} strokeWidth="0.7" strokeLinecap="round" />
+            <ellipse cx={f(hand.x - handR * 0.3)} cy={f(hand.y - handR * 0.4)} rx={f(handR * 0.4)} ry={f(handR * 0.28)} fill="#fff" opacity="0.16" />
+          </g>
+        )}
       </g>
     );
   };
+  // freccia nella mano libera: punta in giù lungo la gamba, penne sopra la mano
+  const freeHand = { x: (bowSide > 0 ? sh.l + 7 : sh.r - 7) - bowSide * 1, y: 214 };
+  const heldArrow = (
+    <g className={live ? "aa-front-arm" : undefined} style={live ? { transformOrigin: `${f(freeHand.x)}px 108px` } : undefined}>
+    <g transform={`translate(${f(freeHand.x)} ${f(freeHand.y)}) rotate(${-bowSide * 4})`}>
+      <path d="M0 -30 L0 84" stroke={look.shaft || "#1d1f22"} strokeWidth="2.2" strokeLinecap="round" />
+      <path d="M-2.2 84 L0 93 L2.2 84 Z" fill="#c9d0d8" />
+      <g transform="translate(0 -30) rotate(-90)">
+        <Fletching kind={look.fletchStyle} cock={look.cock} fletch={look.fletch} />
+      </g>
+      <rect x="-1.8" y="-34" width="3.6" height="5" rx="1" fill={look.nock} />
+    </g>
+    </g>
+  );
+  const splay = 4;
   return (
     <svg viewBox={crop ?? "0 0 200 370"} className={className} style={crop ? undefined : { aspectRatio: "200 / 370" }} role="img" aria-label="L'arciere di fronte">
       <defs>
@@ -83,17 +143,30 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop }: { look: A
           <stop offset="0.5" stopColor={shade(look.pants, 0.08)} />
           <stop offset="1" stopColor={shade(look.pants, -0.35)} />
         </linearGradient>
-        <linearGradient id={`${uid}bw`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor={shade(limbs, 0.2)} />
-          <stop offset="0.5" stopColor={riser} />
-          <stop offset="1" stopColor={shade(limbs, 0.2)} />
+        <linearGradient id={`${uid}bo`} x1="0" x2="1">
+          <stop offset="0" stopColor={shade(look.shoes, -0.35)} />
+          <stop offset="0.42" stopColor={shade(look.shoes, 0.16)} />
+          <stop offset="1" stopColor={shade(look.shoes, -0.3)} />
         </linearGradient>
+        <linearGradient id={`${uid}ri`} x1="0" x2="1">
+          <stop offset="0" stopColor={shade(riser, -0.45)} />
+          <stop offset="0.45" stopColor={shade(riser, 0.25)} />
+          <stop offset="1" stopColor={shade(riser, -0.5)} />
+        </linearGradient>
+        <DetailDefs uid={uid} />
+        <DetailDefs uid={`${uid}cd`} />
+        <DetailDefs uid={`${uid}1`} />
+        <DetailDefs uid={`${uid}-1`} />
       </defs>
       <g transform={`translate(100 360) scale(${((kid ? 0.84 : 1) * (0.9 + (tune(look.stature, 50, 0, 100) / 100) * 0.2)).toFixed(3)}) translate(-100 -360)`}>
-        <ellipse cx="100" cy="356" rx="58" ry="7" fill="#000" opacity="0.3" />
+        <ellipse cx="100" cy="356" rx="62" ry="7" fill="#000" opacity="0.3" />
+        <g className={live ? "aa-front-sway" : undefined}>
         {/* dietro: mantello e faretra sulla schiena */}
         {look.cape ? (
-          <path d={`M${sh.l - 4} 104 C${sh.l - 18} 180 ${sh.l - 22} 260 ${sh.l - 16} ${look.capeStyle === "corto" ? 230 : 338} L${sh.r + 16} ${look.capeStyle === "corto" ? 230 : 338} C${sh.r + 22} 260 ${sh.r + 18} 180 ${sh.r + 4} 104 Z`} fill={shade(look.capeColor, -0.25)} stroke={OUT} strokeOpacity="0.45" strokeWidth="1.4" />
+          <g className={live ? "aa-front-cape" : undefined}>
+            <path d={`M${sh.l - 4} 104 C${sh.l - 18} 180 ${sh.l - 22} 260 ${sh.l - 16} ${look.capeStyle === "corto" ? 230 : 338} L${sh.r + 16} ${look.capeStyle === "corto" ? 230 : 338} C${sh.r + 22} 260 ${sh.r + 18} 180 ${sh.r + 4} 104 Z`} fill={shade(look.capeColor, -0.25)} stroke={OUT} strokeOpacity="0.45" strokeWidth="1.4" />
+            {[0.2, 0.5, 0.8].map((u) => <path key={u} d={`M${f(lerp(sh.l, sh.r, u))} 112 Q${f(lerp(sh.l - 18, sh.r + 18, u))} 220 ${f(lerp(sh.l - 16, sh.r + 16, u))} ${look.capeStyle === "corto" ? 226 : 334}`} stroke={shade(look.capeColor, -0.5)} strokeOpacity="0.5" strokeWidth="1.4" fill="none" />)}
+          </g>
         ) : null}
         {quiverBack ? (
           <g transform={`translate(${cx - bowSide * 30} ${96 + tune(look.quiverY, 0, -40, 40)}) rotate(${-bowSide * 24 + spin})`}>
@@ -107,22 +180,51 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop }: { look: A
           </g>
         ) : null}
 
-        {/* gambe e calzature */}
-        {legX.map((x, i) => (
-          <g key={x}>
-            <path d={`M${x - legW / 2} 206 L${x + legW / 2} 206 L${x + legW / 2 - (tight ? 2 : 0)} 330 L${x - legW / 2 + (tight ? 2 : 0)} 330 Z`} fill={shorts ? skin : `url(#${uid}pa)`} stroke={OUT} strokeOpacity="0.45" strokeWidth="1.4" />
-            {shorts ? <path d={`M${x - legW / 2 - 1} 206 h${legW + 2} v46 h${-legW - 2} Z`} fill={`url(#${uid}pa)`} stroke={OUT} strokeOpacity="0.45" strokeWidth="1.2" /> : null}
-            {look.bottom === "jeans" ? <path d={`M${x + (i ? -3 : 3)} 214 V326`} stroke={shade(look.pants, 0.3)} strokeWidth="0.8" strokeDasharray="3 2" /> : null}
-            {look.wraps ? [0, 1, 2, 3, 4].map((k) => <path key={k} d={`M${x - legW / 2} ${246 + k * 12} L${x + legW / 2} ${240 + k * 12}`} stroke={look.wrapsColor} strokeWidth="4" />) : null}
-            <path d={`M${x - legW / 2 - 1} ${bootTop} L${x + legW / 2 + 1} ${bootTop} L${x + legW / 2 + 2} 344 C${x + legW / 2 + 2} 350 ${x - legW / 2 - 2} 350 ${x - legW / 2 - 2} 344 Z`} fill={look.footwear === "sandali" ? skin : look.shoes} stroke={OUT} strokeOpacity="0.55" strokeWidth="1.4" />
-            {look.footwear === "stivali-pelliccia" ? [-1, 0, 1].map((k) => <circle key={k} cx={x + k * legW * 0.4} cy={bootTop} r="5.4" fill="#e3d6be" stroke={OUT} strokeOpacity="0.25" strokeWidth="0.6" />) : null}
-            {look.footwear === "scarponi" ? <path d={`M${x - legW / 2 - 3} 346 h${legW + 6} v4 h${-legW - 6} Z`} fill="#2a2622" /> : null}
-            {look.bottom === "cargo" ? <rect x={x + (i ? 2 : -legW / 2 - 2)} y="244" width={legW / 2 + 1} height="16" rx="2" fill={shade(look.pants, -0.15)} stroke={shade(look.pants, -0.45)} strokeWidth="0.8" /> : null}
-            {look.footwear === "stivali-risvolto" ? <path d={`M${x - legW / 2 - 3} ${bootTop - 4} h${legW + 6} v9 h${-legW - 6} Z`} fill="#eee2c8" stroke={OUT} strokeOpacity="0.35" strokeWidth="1" /> : null}
-            {look.footwear === "sportive" ? <path d={`M${x - legW / 2 - 2} 344 h${legW + 4} v4 h${-legW - 4} Z`} fill="#f2efe8" /> : null}
-            {look.footwear === "sandali" ? <path d={`M${x - legW / 2} 330 L${x + legW / 2} 340 M${x + legW / 2} 330 L${x - legW / 2} 340`} stroke={look.shoes} strokeWidth="2.4" /> : null}
-          </g>
-        ))}
+        {/* gambe un po' aperte, il peso su quella dell'arco; calzature con suola, punta e cuciture */}
+        {legX.map((x, i) => {
+          const sp = (i === 0 ? -1 : 1) * splay * (i === (bowSide > 0 ? 1 : 0) ? 1.4 : 0.8);
+          const lx = (y: number) => x + (sp * (y - 206)) / 140;
+          const L = (y: number, d: number) => f(lx(y) + d);
+          return (
+            <g key={x}>
+              <path d={`M${L(206, -legW / 2)} 206 L${L(206, legW / 2)} 206 L${L(330, legW / 2 - (tight ? 2 : 0))} 330 L${L(330, -legW / 2 + (tight ? 2 : 0))} 330 Z`} fill={shorts ? skin : `url(#${uid}pa)`} stroke={OUT} strokeOpacity="0.45" strokeWidth="1.4" />
+              {shorts ? null : <path d={`M${L(268, -legW * 0.3)} 266 q${f(legW * 0.3)} 4 ${f(legW * 0.6)} 0 M${L(274, -legW * 0.25)} 273 q${f(legW * 0.25)} 3 ${f(legW * 0.5)} 0`} stroke="#000" strokeOpacity="0.25" strokeWidth="0.9" fill="none" />}
+              {shorts ? null : <path d={`M${L(212, -legW * 0.22)} 212 L${L(326, -legW * 0.22)} 326`} stroke="#fff" strokeOpacity="0.1" strokeWidth={f(legW * 0.18)} strokeLinecap="round" />}
+              {shorts ? <path d={`M${L(206, -legW / 2 - 1)} 206 h${legW + 2} l${f(sp * 0.33)} 46 h${-legW - 2} Z`} fill={`url(#${uid}pa)`} stroke={OUT} strokeOpacity="0.45" strokeWidth="1.2" /> : null}
+              {look.bottom === "jeans" ? <path d={`M${L(214, i ? -3 : 3)} 214 L${L(326, i ? -3 : 3)} 326`} stroke={shade(look.pants, 0.3)} strokeWidth="0.8" strokeDasharray="3 2" /> : null}
+              {look.wraps ? [0, 1, 2, 3, 4].map((k) => <path key={k} d={`M${L(246 + k * 12, -legW / 2)} ${246 + k * 12} L${L(240 + k * 12, legW / 2)} ${240 + k * 12}`} stroke={look.wrapsColor} strokeWidth="4" />) : null}
+              {/* calzatura */}
+              <path d={`M${L(bootTop, -legW / 2 - 1)} ${bootTop} L${L(bootTop, legW / 2 + 1)} ${bootTop} L${L(340, legW / 2 + 2)} 340 C${L(346, legW / 2 + 4)} 346 ${L(352, legW / 2 + 2)} 352 ${L(352, 0)} 352 C${L(352, -legW / 2 - 2)} 352 ${L(346, -legW / 2 - 4)} 346 ${L(340, -legW / 2 - 2)} 340 Z`} fill={look.footwear === "sandali" ? skin : `url(#${uid}bo)`} stroke={OUT} strokeOpacity="0.55" strokeWidth="1.4" />
+              {look.footwear === "sandali" ? null : (
+                <g fill="none" strokeLinecap="round">
+                  <path d={`M${L(351, -legW / 2 - 2)} 350.5 Q${L(355, 0)} 355 ${L(351, legW / 2 + 2)} 350.5`} stroke="#14110e" strokeWidth="2.4" />
+                  <path d={`M${L(348, -legW / 2)} 347.4 Q${L(351, 0)} 351 ${L(348, legW / 2)} 347.4`} stroke="#e8d9b0" strokeOpacity="0.35" strokeWidth="0.55" strokeDasharray="1.3 1.1" />
+                  <ellipse cx={L(346, -2)} cy="345" rx={f(legW * 0.22)} ry="2" fill="#fff" opacity="0.16" />
+                  <path d={`M${L(336, -legW * 0.3)} 334 q${f(legW * 0.3)} 2 ${f(legW * 0.6)} 0 M${L(330, -legW * 0.3)} 328 q${f(legW * 0.3)} 2 ${f(legW * 0.6)} 0`} stroke="#000" strokeOpacity="0.3" strokeWidth="0.8" />
+                  {bootTop < 300 ? <path d={`M${L(bootTop + 6, -legW * 0.25)} ${bootTop + 6} L${L(336, -legW * 0.25)} 336`} stroke="#fff" strokeOpacity="0.14" strokeWidth="2.2" /> : null}
+                </g>
+              )}
+              {look.footwear === "stivali-alti" ? (
+                <g>
+                  <path d={`M${L(bootTop - 3, -legW / 2 - 3)} ${bootTop - 3} L${L(bootTop - 4, legW / 2 + 3)} ${bootTop - 4} L${L(bootTop + 9, legW / 2 + 2)} ${bootTop + 9} L${L(bootTop + 10, -legW / 2 - 2)} ${bootTop + 10} Z`} fill={shade(look.shoes, -0.18)} stroke={OUT} strokeOpacity="0.45" strokeWidth="1" />
+                  {[24, 30].map((d) => <path key={d} d={`M${L(bootTop + d, -legW / 2 - 1)} ${bootTop + d} L${L(bootTop + d, legW / 2 + 1)} ${bootTop + d}`} stroke={shade(look.shoes, -0.5)} strokeWidth="1.6" />)}
+                  <rect x={L(bootTop + 23, legW * 0.15)} y={bootTop + 22.6} width="5" height="8.4" rx="1" fill="none" stroke="#c9a46a" strokeWidth="1" />
+                </g>
+              ) : null}
+              {look.footwear === "stivali-pelliccia" ? [-1, 0, 1].map((k) => <circle key={k} cx={L(bootTop, k * legW * 0.4)} cy={bootTop} r="5.4" fill="#e3d6be" stroke={OUT} strokeOpacity="0.25" strokeWidth="0.6" />) : null}
+              {look.footwear === "scarponi" ? (
+                <g>
+                  <path d={`M${L(348, -legW / 2 - 3)} 348 h${legW + 6} v4 h${-legW - 6} Z`} fill="#2a2622" />
+                  {[0, 1, 2, 3].map((k) => <path key={k} d={`M${L(312 + k * 7, -3)} ${312 + k * 7} l6 2`} stroke="#e8d9b0" strokeWidth="1" />)}
+                </g>
+              ) : null}
+              {look.bottom === "cargo" ? <rect x={L(244, i ? 2 : -legW / 2 - 2)} y="244" width={legW / 2 + 1} height="16" rx="2" fill={shade(look.pants, -0.15)} stroke={shade(look.pants, -0.45)} strokeWidth="0.8" /> : null}
+              {look.footwear === "stivali-risvolto" ? <path d={`M${L(bootTop, -legW / 2 - 3)} ${bootTop - 4} h${legW + 6} v9 h${-legW - 6} Z`} fill="#eee2c8" stroke={OUT} strokeOpacity="0.35" strokeWidth="1" /> : null}
+              {look.footwear === "sportive" ? <path d={`M${L(346, -legW / 2 - 2)} 346 h${legW + 4} v4 h${-legW - 4} Z`} fill="#f2efe8" /> : null}
+              {look.footwear === "sandali" ? <path d={`M${L(330, -legW / 2)} 330 L${L(340, legW / 2)} 340 M${L(330, legW / 2)} 330 L${L(340, -legW / 2)} 340`} stroke={look.shoes} strokeWidth="2.4" /> : null}
+            </g>
+          );
+        })}
 
         {look.bottom === "gonna" ? (
           <g>
@@ -130,6 +232,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop }: { look: A
             {[-0.7, -0.35, 0, 0.35, 0.7].map((k) => <path key={k} d={`M${cx + k * 28} 204 L${cx + k * 38} 262`} stroke={shade(look.pants, -0.35)} strokeWidth="1" />)}
           </g>
         ) : null}
+        <g className={live ? "aa-front-breath" : undefined}>
         {/* capelli lunghi e cappuccio: dietro il corpo */}
         <svg x={cx - 65} y="-8" width="130" height="130" viewBox="0 0 100 100" overflow="visible">
           <AvatarFace look={look} className="" bare part="back" />
@@ -140,6 +243,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop }: { look: A
         {longTop && ["cappotto-lungo", "ranger", "tunica-lunga", "incrociata"].includes(look.top) ? <path d={`M${cx} 200 L${cx} ${hem + 2}`} stroke={shade(shirt, -0.45)} strokeWidth="1.6" /> : null}
         <path d={torsoD} fill={`url(#${uid}sh)`} stroke={OUT} strokeOpacity="0.5" strokeWidth="1.8" />
         <ClothPattern kind={look.pattern} shapes={longTop ? [torsoD, tunicD] : [torsoD]} base={shirt} trim={look.trim} uid={`${uid}f`} box={[sh.l - 16, 94, sh.r + 16, (longTop ? hem : 208) + 6]} />
+        <ClothDetail uid={`${uid}cd`} shapes={longTop ? [torsoD, tunicD] : [torsoD]} cx={cx} shoulderL={sh.l} shoulderR={sh.r} hipL={hip.l} hipR={hip.r} tunicLen={longTop ? hem : 206} longTunic={longTop} seam={seamOf(shirt)} />
         {look.top === "giubbetto" ? (
           // scollo tondo del giubbetto: si vede la camicia, bordo a zig-zag d'argento
           <g>
@@ -160,6 +264,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop }: { look: A
         {look.belt !== "nessuna" ? (
           <g>
             <path d={`M${waist.l - 1} ${look.belt === "larga" ? 184 : 187} L${waist.r + 1} ${look.belt === "larga" ? 184 : 187} L${waist.r + 1} 194 L${waist.l - 1} 194 Z`} fill={look.beltColor} stroke={OUT} strokeOpacity="0.4" strokeWidth="1" />
+            <BeltDetail uid={uid} x={waist.l - 1} y={look.belt === "larga" ? 184 : 187} w={waist.r - waist.l + 2} h={look.belt === "larga" ? 10 : 7} cx={cx} />
             {look.buckle && look.buckle !== "semplice" ? <Buckle kind={look.buckle} x={cx} y={190} /> : <rect x={cx - 5} y={look.belt === "larga" ? 183 : 186} width="10" height={look.belt === "larga" ? 12 : 9} rx="1.5" fill="none" stroke="#d9b45a" strokeWidth="1.8" />}
           </g>
         ) : null}
@@ -188,18 +293,72 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop }: { look: A
           </g>
         ) : look.necklace ? <path d={`M${cx - 10} 100 Q${cx} 114 ${cx + 10} 100`} stroke="#d9b45a" strokeWidth="1.4" fill="none" /> : null}
 
-        {/* arco tenuto in verticale, corda, braccia */}
-        <path d={bowPath} stroke={OUT} strokeOpacity="0.5" strokeWidth="7.6" fill="none" strokeLinecap="round" />
-        <path d={bowPath} stroke={`url(#${uid}bw)`} strokeWidth="5.4" fill="none" strokeLinecap="round" />
-        <path d={`M${stringX} ${bowTop + 2} L${stringX} ${bowBot - 2}`} stroke={look.string || "#f4f1ea"} strokeWidth="1.1" opacity="0.9" />
-        {arm(-1)}
-        {arm(1)}
+        {/* faretra al fianco sopra la veste, sotto il braccio */}
+        {heldArrow}
+        {arm(bowSide === 1 ? -1 : 1)}
+        {arm(bowSide)}
+        {/* arco nella mano: flettenti, riser con impugnatura, corda con serving e punto d'incocco, pugno chiuso */}
+        <g transform={`translate(${f(grip.x)} ${f(grip.y)}) scale(${bowSide} 1) rotate(5)`}>
+          <g className={live ? "aa-front-bow" : undefined}>
+            {([1, -1] as const).map((sg) => (
+              <g key={sg}>
+                <path d={limbD(sg)} stroke={OUT} strokeOpacity="0.55" strokeWidth={longbow ? 8 : 7} strokeLinecap="round" fill="none" />
+                <path d={limbD(sg)} stroke={limbs} strokeWidth={longbow ? 5.8 : 4.8} strokeLinecap="round" fill="none" />
+                <path d={limbD(sg)} stroke={shade(limbs, wood ? 0.35 : 0.55)} strokeOpacity={wood ? 0.6 : 0.4} strokeWidth="1.4" strokeLinecap="round" fill="none" transform="translate(1.2 0)" />
+                <path d={limbD(sg)} stroke="#000" strokeOpacity="0.25" strokeWidth="1.2" strokeLinecap="round" fill="none" transform="translate(-1.4 0)" />
+                <circle cx={tip(sg).x} cy={tip(sg).y} r={longbow ? 2.6 : 2.1} fill={wood ? "#efe3c4" : "#2a2f35"} stroke={OUT} strokeOpacity="0.5" strokeWidth="0.7" />
+                {compound ? <g transform={`translate(${tipX} ${-half * sg})`}><ellipse rx="7" ry="8" fill="#b7c0c8" stroke="#2a2f35" strokeWidth="1.2" /><ellipse rx="3.6" ry="4.2" fill="#8a939c" /><circle r="1.2" fill="#e3a21a" /></g> : null}
+              </g>
+            ))}
+            <path d={`M${f(tip(1).x)} ${f(tip(1).y)} L${f(strX)} 0 L${f(tip(-1).x)} ${f(tip(-1).y)}`} stroke={look.string || "#f4f1ea"} strokeWidth="1.1" fill="none" opacity="0.92" />
+            <path d={`M${f(strX)} -16 V18`} stroke={shade(look.string || "#f4f1ea", -0.55)} strokeWidth="2" strokeLinecap="round" />
+            <circle cx={f(strX)} cy="-3" r="1.4" fill="#d9b45a" />
+            {/* riser */}
+            {longbow ? (
+              <g>
+                <rect x="-4.6" y="-14" width="9.2" height="28" rx="3.4" fill="#4a2c16" stroke={OUT} strokeOpacity="0.5" strokeWidth="0.8" />
+                {[0, 1, 2, 3, 4, 5].map((k) => <path key={k} d={`M-4.4 ${-11 + k * 4.2} L4.4 ${-9 + k * 4.2}`} stroke="#c9a46a" strokeWidth="0.7" opacity="0.8" />)}
+              </g>
+            ) : (
+              <g>
+                <path d={`M-1 ${-rs} L8 ${-rs} C9 ${-rs * 0.5} 10 -12 9 -8 L9 ${rs} L-1 ${rs} C-2 ${rs * 0.6} -2 14 -4 9 C-5 4 -5 -6 -2 -11 Z`} fill={`url(#${uid}ri)`} stroke={OUT} strokeOpacity="0.55" strokeWidth="0.9" />
+                {wood ? null : <path d={`M3 ${-rs + 6} L7 ${-rs + 6} L7 -10 L3.4 -10 Z`} fill="#000" opacity="0.3" />}
+                <path d="M9 -6 l4 0 l0 2.4" stroke="#c9d0d8" strokeWidth="1.1" fill="none" />
+                {look.bowType === "olimpico" ? (
+                  <g>
+                    {/* stabilizzatore lungo che viene verso chi guarda e mirino */}
+                    <path d="M6 20 L16 44" stroke="#1d2126" strokeWidth="3.4" strokeLinecap="round" />
+                    <circle cx="16.4" cy="45" r="4.4" fill="#2a2f35" />
+                    <circle cx="16.4" cy="45" r="2" fill="#e07a2f" />
+                    <path d="M8 -22 L26 -28 L26 -44" stroke="#9aa3ad" strokeWidth="1.6" fill="none" strokeLinecap="round" />
+                    <circle cx="26" cy="-47" r="3" fill="#a8d8ff" fillOpacity="0.35" stroke="#e3a21a" strokeWidth="1.3" />
+                  </g>
+                ) : null}
+              </g>
+            )}
+            {/* pugno chiuso sull'impugnatura: nocche, dita che avvolgono, pollice */}
+            <g>
+              <ellipse cx="2" cy="1" rx={f(handR * 0.95 + 1.2)} ry={f(handR + 1.6)} fill={OUT} opacity="0.5" />
+              <ellipse cx="2" cy="1" rx={f(handR * 0.95)} ry={f(handR)} fill={handFill} />
+              {[-4.6, -1.4, 1.8, 5].map((y) => <path key={y} d={`M${f(2 - handR * 0.8)} ${y} Q2 ${y + 1.2} ${f(2 + handR * 0.85)} ${y - 0.4}`} stroke={look.gloves ? "#1a0e06" : shade(skin, -0.35)} strokeWidth="0.75" fill="none" strokeLinecap="round" />)}
+              {[-4.6, -1.4, 1.8, 5].map((y) => <circle key={`k${y}`} cx={f(2 + handR * 0.82)} cy={y - 0.6} r="1.3" fill={look.gloves ? "#5a3a20" : shade(skin, 0.08)} stroke={look.gloves ? "#1a0e06" : shade(skin, -0.3)} strokeWidth="0.4" />)}
+              <path d={`M${f(2 - handR * 0.7)} -6 C-1 -10 6 -10 8 -7`} stroke={handFill} strokeWidth="3.2" strokeLinecap="round" fill="none" />
+              <path d={`M${f(2 - handR * 0.7)} -6 C-1 -10 6 -10 8 -7`} stroke={look.gloves ? "#1a0e06" : shade(skin, -0.35)} strokeWidth="0.6" strokeLinecap="round" fill="none" transform="translate(0 1.6)" />
+              <ellipse cx="0" cy="-3" rx={f(handR * 0.35)} ry={f(handR * 0.26)} fill="#fff" opacity="0.18" />
+            </g>
+          </g>
+        </g>
 
         {/* testa di fronte, la stessa della foto profilo */}
-        <rect x={cx - 9} y="78" width="18" height="26" rx="4" fill={shade(skin, -0.2)} />
-        <svg x={cx - 65} y="-8" width="130" height="130" viewBox="0 0 100 100" overflow="visible">
-          <AvatarFace look={look} className="" bare part="front" />
-        </svg>
+        <g className={live ? "aa-front-head" : undefined}>
+          <rect x={cx - 9} y="78" width="18" height="26" rx="4" fill={shade(skin, -0.2)} />
+          <ellipse cx={cx} cy="84" rx="9" ry="5" fill={`url(#${uid}sd)`} opacity="0.7" />
+          <svg x={cx - 65} y="-8" width="130" height="130" viewBox="0 0 100 100" overflow="visible">
+            <AvatarFace look={look} className="" bare part="front" />
+          </svg>
+        </g>
+        </g>
+        </g>
       </g>
     </svg>
   );
@@ -207,4 +366,12 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop }: { look: A
 
 function lerp(a: number, b: number, t: number) {
   return a + (b - a) * t;
+}
+
+function lerpP(a: { x: number; y: number }, b: { x: number; y: number }, t: number) {
+  return { x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t) };
+}
+
+function f(n: number) {
+  return n.toFixed(1);
 }

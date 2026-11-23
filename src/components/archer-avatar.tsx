@@ -1883,7 +1883,14 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false, part }
     const tilt = e === "deciso" ? 2 : e === "concentrato" ? 1 : 0;
     const inner = dir === 1 ? x + 6 : x - 6;
     const outer = dir === 1 ? x - 6 : x + 6;
-    return <path key={`b${x}`} d={`M${outer} ${eyeY - 8} Q${x} ${eyeY - 11} ${inner} ${eyeY - 8 + tilt}`} stroke={shade(hair, -0.15)} strokeWidth={(look.brows === "folte" ? 3 : look.brows === "sottili" ? 1.2 : 2) * (0.6 + (tune(look.browSize, 50, 0, 100) / 100) * 0.8)} strokeLinecap="round" fill="none" />;
+    const bw = (look.brows === "folte" ? 3 : look.brows === "sottili" ? 1.2 : 2) * (0.6 + (tune(look.browSize, 50, 0, 100) / 100) * 0.8);
+    const bd = `M${outer} ${eyeY - 8} Q${x} ${eyeY - 11} ${inner} ${eyeY - 8 + tilt}`;
+    return (
+      <g key={`b${x}`}>
+        <path d={bd} stroke={shade(hair, -0.15)} strokeWidth={bw} strokeLinecap="round" fill="none" />
+        <BrowHairs d={bd} color={shade(hair, -0.45)} width={bw * 0.8} />
+      </g>
+    );
   };
   const es = 0.8 + (tune(look.eyeSize, 50, 0, 100) / 100) * 0.4;
   const eye = (x: number) => (
@@ -1891,7 +1898,11 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false, part }
       <ellipse cx={x} cy={eyeY} rx="5.4" ry={e === "concentrato" ? 3.2 : 4.4} fill="#fbf7f2" />
       <circle cx={x + 0.3} cy={eyeY + 0.2} r="3.2" fill={look.eyes} />
       <circle cx={x + 0.3} cy={eyeY + 0.2} r="1.5" fill="#120c08" />
+      <circle cx={x + 0.3} cy={eyeY + 0.2} r="3.2" fill={`url(#${uid}ir)`} />
       <circle cx={x + 1.4} cy={eyeY - 1} r="1" fill="#fff" />
+      <circle cx={x - 0.9} cy={eyeY + 1.3} r="0.45" fill="#fff" opacity="0.7" />
+      <path d={`M${x - 5} ${eyeY + 2.2} Q${x} ${eyeY + 4.8} ${x + 5} ${eyeY + 2.2}`} stroke={shade(skin, -0.45)} strokeOpacity="0.45" strokeWidth="0.5" fill="none" />
+      <path d={`M${x - 5.4} ${eyeY - 3} Q${x} ${eyeY - (e === "concentrato" ? 6 : 7.6)} ${x + 5.4} ${eyeY - 3}`} stroke={shade(skin, -0.45)} strokeOpacity="0.45" strokeWidth="0.55" fill="none" />
       <path d={`M${x - 5.6} ${eyeY - 0.6} Q${x} ${eyeY - (e === "concentrato" ? 4 : 5.4)} ${x + 5.6} ${eyeY - 0.6}`} stroke="#2a1d14" strokeWidth={woman ? 1.6 : 1.1} fill="none" />
     </g>
   );
@@ -1925,8 +1936,9 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false, part }
   );
   const strands = ["calvo", "rasati", "afro", "ricci", "undercut", "vichinga", "dread"].includes(look.hair) || capOn || ["bandana", "tesa", "robin", "cuffia"].includes(look.hat) ? null : (
     <g fill="none" strokeLinecap="round">
-      <path d={`M${50 - rx + 4} ${fy - ry + 2} Q50 ${fy - ry - 8} ${50 + rx - 4} ${fy - ry + 2}`} stroke={shade(hair, 0.4)} strokeOpacity="0.55" strokeWidth="1.6" />
-      <path d={`M${50 - rx + 2} ${fy - 6} Q${50 - rx / 2} ${fy - ry} 46 ${fy - ry - 4} M54 ${fy - ry - 4} Q${50 + rx / 2} ${fy - ry} ${50 + rx - 2} ${fy - 6}`} stroke={shade(hair, -0.4)} strokeOpacity="0.5" strokeWidth="0.9" />
+      <path d={`M${50 - rx + 5} ${fy - ry + 4} Q50 ${fy - ry - 4} ${50 + rx - 5} ${fy - ry + 4}`} stroke={shade(hair, 0.4)} strokeOpacity="0.5" strokeWidth="1.6" />
+      <path d={`M${50 - rx + 2} ${fy - 6} Q${50 - rx / 2 + 1} ${fy - ry + 3} 46 ${fy - ry + 1} M54 ${fy - ry + 1} Q${50 + rx / 2 - 1} ${fy - ry + 3} ${50 + rx - 2} ${fy - 6}`} stroke={shade(hair, -0.4)} strokeOpacity="0.45" strokeWidth="0.8" />
+      {[-9, -4, 4, 9].map((dx) => <path key={dx} d={`M${50 + dx * 0.6} ${fy - ry + 1} Q${50 + dx * 1.2} ${fy - ry + 4} ${50 + dx * 1.7} ${fy - ry + 9}`} stroke={dx % 2 ? shade(hair, 0.35) : shade(hair, -0.4)} strokeOpacity="0.35" strokeWidth="0.5" />)}
     </g>
   );
   const top = (() => {
@@ -2069,6 +2081,16 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false, part }
         <clipPath id={`${uid}c`}>
           <circle cx="50" cy="50" r="50" />
         </clipPath>
+        <clipPath id={`${uid}fc`}>
+          <path d={faceD} />
+        </clipPath>
+        <radialGradient id={`${uid}ir`} cx="45%" cy="55%" r="55%">
+          <stop offset="0" stopColor="#fff" stopOpacity="0" />
+          <stop offset="0.55" stopColor="#fff" stopOpacity="0.16" />
+          <stop offset="0.85" stopColor="#000" stopOpacity="0.15" />
+          <stop offset="1" stopColor="#000" stopOpacity="0.55" />
+        </radialGradient>
+        <DetailDefs uid={uid} />
       </defs>
       <g clipPath={bare ? undefined : `url(#${uid}c)`}>
         {bare ? null : look.faceBgStyle === "tinta" ? <rect width="100" height="100" fill={bgBase} /> : look.faceBgStyle === "scena" ? <rect width="100" height="100" fill={`url(#${uid}sc)`} /> : <rect width="100" height="100" fill={`url(#${uid}bg)`} />}
@@ -2096,6 +2118,16 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false, part }
         )}
         {look.earring && !capOn ? <><Earring kind={look.earringType} x={50 - rx - 1} y={eyeY + 10} /><Earring kind={look.earringType} x={50 + rx + 1} y={eyeY + 10} /></> : null}
         <path d={faceD} fill={`url(#${uid}f)`} />
+        {/* volume del volto: guance e mascella in ombra ai lati, sotto il mento, fronte e zigomi in luce */}
+        <g clipPath={`url(#${uid}fc)`} pointerEvents="none">
+          <ellipse cx={50 - rx + 1} cy={fy + 6} rx="6" ry={ry * 0.8} fill={`url(#${uid}sd)`} opacity="0.4" />
+          <ellipse cx={50 + rx - 1} cy={fy + 6} rx="6" ry={ry * 0.8} fill={`url(#${uid}sd)`} opacity="0.4" />
+          <ellipse cx="50" cy={fy + ry + 2} rx={rx * 0.8} ry="5" fill={`url(#${uid}sd)`} opacity="0.5" />
+          <ellipse cx="50" cy={fy - ry + 6} rx={rx * 0.7} ry="6" fill={`url(#${uid}sl)`} opacity="0.4" />
+          {[39, 61].map((x) => <ellipse key={`z${x}`} cx={x} cy={fy + 3} rx="5" ry="2.4" fill={`url(#${uid}sl)`} opacity="0.35" />)}
+          {[41, 59].map((x) => <ellipse key={`o${x}`} cx={x} cy={eyeY - 2} rx="6.4" ry="4" fill={`url(#${uid}sd)`} opacity="0.28" />)}
+          <ellipse cx="50" cy={fy + 18} rx="4" ry="1.8" fill={`url(#${uid}sl)`} opacity="0.28" />
+        </g>
         {[38, 62].map((cxb) => <ellipse key={cxb} cx={cxb} cy={fy + 7} rx="4.5" ry="2.6" fill={look.blush === "abbronzato" ? "#b8643a" : "#e0726b"} opacity={look.blush === "nessuno" ? 0 : look.blush === "rosato" ? 0.42 : look.blush === "abbronzato" ? 0.3 : 0.22} />)}
         {look.age === "maturo" || look.age === "anziano" ? (
           <g stroke={shade(skin, -0.38)} strokeWidth="0.7" fill="none" opacity={look.age === "anziano" ? 0.85 : 0.5}>
