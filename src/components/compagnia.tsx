@@ -1,5 +1,5 @@
 import { refreshCrests } from "@/lib/arcieri/crest";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "@tanstack/react-router";
 import type { listCompanies } from "@/lib/arcieri/compagnie.api";
@@ -182,6 +182,12 @@ export function CompanyHero({ co, canEdit, onEdit }: { co: Co; canEdit: boolean;
           {links.map((item) => <ContactButton key={item.kind} kind={item.kind} href={item.href} tint={CONTACT_TINT[item.kind]} />)}
           <ContactButton kind="board" href="" tint={CONTACT_TINT.board} />
         </div>
+        {co.address || co.email ? (
+          <div className="grid gap-0.5 text-xs text-white/85">
+            {co.address ? <a className="truncate underline-offset-2 hover:underline" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(co.address)}`} target="_blank" rel="noreferrer">Campo: {co.address}</a> : null}
+            {co.email ? <a className="truncate underline-offset-2 hover:underline" href={`mailto:${co.email}`}>{co.email}</a> : null}
+          </div>
+        ) : null}
         {links.length === 0 ? <p className="text-xs text-white/70">{canEdit ? "Aggiungi telefono, WhatsApp e social: compariranno qui per tutti." : "Telefono e social non sono ancora stati inseriti."}</p> : null}
         {canEdit ? <button type="button" onClick={onEdit} className="aa-press justify-self-start rounded-full bg-white/15 px-3.5 py-2 text-xs font-semibold text-white backdrop-blur">Modifica la compagnia</button> : null}
       </div>
@@ -344,6 +350,7 @@ export function CompanyForm({ co, onDone, onCancel }: { co?: Co; onDone: () => v
   const [d, setD] = useState<Draft>(() => draftOf(co));
   const [err, setErr] = useState("");
   const [saving, setSaving] = useState(false);
+  const emailBad = d.email.trim() !== "" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.email.trim());
   const set = (k: keyof Draft) => (e: { target: { value: string } }) => setD((cur) => ({ ...cur, [k]: e.target.value }));
   const logo = d.logoUrl !== undefined ? d.logoUrl : co?.logoUrl ?? null;
   async function pickLogo(file: File) {
@@ -357,10 +364,15 @@ export function CompanyForm({ co, onDone, onCancel }: { co?: Co; onDone: () => v
   }
   async function save() {
     setErr("");
+    if (emailBad) {
+      setErr("L'email non è scritta bene: controlla la chiocciola e il dominio.");
+      return;
+    }
     setSaving(true);
     try {
-      if (co) await updateCompany({ data: { id: co.id, ...d } });
-      else await createCompany({ data: d });
+      const clean = { ...d, email: d.email.trim(), address: d.address.trim() };
+      if (co) await updateCompany({ data: { id: co.id, ...clean } });
+      else await createCompany({ data: clean });
       refreshCrests();
       onDone();
     } catch (e) {
@@ -370,7 +382,13 @@ export function CompanyForm({ co, onDone, onCancel }: { co?: Co; onDone: () => v
     }
   }
   const row = (children: ReactNode) => <div className="grid grid-cols-2 gap-2">{children}</div>;
+  // il modulo si apre sotto la testata: lo porto in vista, così si vede subito
+  const here = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    here.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
   return (
+    <div ref={here} className="scroll-mt-28">
     <Card className="grid gap-3">
       <h2 className="font-display text-2xl">{co ? "Modifica la compagnia" : "Fonda una compagnia"}</h2>
       {!co ? <p className="text-sm text-muted">Diventi il fondatore e lasci la compagnia di adesso. Gli altri potranno entrare dalla classifica.</p> : null}
@@ -391,6 +409,17 @@ export function CompanyForm({ co, onDone, onCancel }: { co?: Co; onDone: () => v
         <Field label="Motto"><TextInput value={d.motto} onChange={set("motto")} placeholder="In animo iuncti" maxLength={80} /></Field>
         <Field label="Città"><TextInput value={d.city} onChange={set("city")} placeholder="Fabriano" maxLength={50} /></Field>
       </>)}
+      <h3 className="mt-1 font-display text-lg">Dove trovarci</h3>
+      <Field label="Indirizzo del campo di tiro">
+        <TextInput value={d.address} onChange={set("address")} placeholder="Via…, numero, città" maxLength={160} autoComplete="street-address" />
+      </Field>
+      {d.address.trim() ? (
+        <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(d.address.trim())}`} target="_blank" rel="noreferrer" className="-mt-1 text-xs text-accent underline">Controlla sulla mappa</a>
+      ) : null}
+      <Field label="Email della compagnia">
+        <TextInput type="email" inputMode="email" autoCapitalize="none" autoCorrect="off" spellCheck={false} value={d.email} onChange={set("email")} placeholder="info@nomecompagnia.it" maxLength={160} autoComplete="email" />
+      </Field>
+      {emailBad ? <p className="-mt-1 text-xs text-[#f3a46a]">Controlla l'email: deve essere tipo nome@dominio.it</p> : null}
       <Field label="Presentazione"><TextInput value={d.bio} onChange={set("bio")} placeholder="Dove vi allenate, quando, chi può entrare" maxLength={500} /></Field>
       <div className="grid gap-1 text-sm">
         <span>Colore</span>
@@ -405,10 +434,7 @@ export function CompanyForm({ co, onDone, onCancel }: { co?: Co; onDone: () => v
         <Field label="Telefono"><TextInput inputMode="tel" value={d.phone} onChange={set("phone")} placeholder="+39 …" /></Field>
         <Field label="WhatsApp"><TextInput inputMode="tel" value={d.whatsapp} onChange={set("whatsapp")} placeholder="+39 …" /></Field>
       </>)}
-      {row(<>
-        <Field label="Email"><TextInput inputMode="email" value={d.email} onChange={set("email")} placeholder="info@…" /></Field>
-        <Field label="Sito"><TextInput value={d.website} onChange={set("website")} placeholder="www.…" /></Field>
-      </>)}
+      <Field label="Sito"><TextInput value={d.website} onChange={set("website")} placeholder="www.…" /></Field>
       {row(<>
         <Field label="Instagram"><TextInput value={d.instagram} onChange={set("instagram")} placeholder="nome utente" /></Field>
         <Field label="Facebook"><TextInput value={d.facebook} onChange={set("facebook")} placeholder="nome pagina" /></Field>
@@ -417,13 +443,13 @@ export function CompanyForm({ co, onDone, onCancel }: { co?: Co; onDone: () => v
         <Field label="YouTube"><TextInput value={d.youtube} onChange={set("youtube")} placeholder="canale" /></Field>
         <Field label="TikTok"><TextInput value={d.tiktok} onChange={set("tiktok")} placeholder="nome utente" /></Field>
       </>)}
-      <Field label="Campo di tiro (indirizzo)"><TextInput value={d.address} onChange={set("address")} placeholder="Via…, città" /></Field>
       {err ? <ErrorNote text={err} /> : null}
       <div className="grid grid-cols-2 gap-2">
         <Button variant="ghost" onClick={onCancel}>Annulla</Button>
         <Button onClick={() => void save()} disabled={saving}>{saving ? "Salvo…" : co ? "Salva" : "Fonda"}</Button>
       </div>
     </Card>
+    </div>
   );
 }
 

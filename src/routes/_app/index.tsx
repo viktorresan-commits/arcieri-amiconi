@@ -81,8 +81,11 @@ function Home() {
     <div className="grid gap-3">
       <Rise i={0}>
         <div className="grid gap-2">
+          {/* sul telefono il gioco va da bordo a bordo e sale fino sotto la barra in alto */}
+          <div className="-mx-4 -mt-6 md:mx-0 md:mt-0">
           <GameGuard>
           <HomeGame
+            bleed
             look={avatar.shown}
             form={duel.data?.form ?? null}
             perks={activePerks}
@@ -107,6 +110,7 @@ function Home() {
             </div>
           </HomeGame>
           </GameGuard>
+          </div>
           <div className="grid grid-cols-[1.4fr_1fr] gap-2">
             <Link to="/allenamento" search={{ avvia: "rapido" }} className="block">
               <Button className="aa-glow w-full"><Glyph name="bolt" size={18} /> Tiro rapido</Button>

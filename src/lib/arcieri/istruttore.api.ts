@@ -7,7 +7,7 @@
  */
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
-import { asNum, db, ensureMember, staffLevel } from "./access";
+import { asBool, asNum, db, ensureMember, staffLevel } from "./access";
 import { homeId, myMembership } from "./compagnie.api";
 import { faceById } from "./scoring";
 
@@ -48,7 +48,7 @@ export const coachBoard = createServerFn({ method: "POST" })
     const staff = staffLevel(me);
     const mine = await myMembership(sql, context.userId);
     const leader = mine.role === "owner";
-    if (!staff && !leader && me.percorso !== "istruttore") {
+    if (!staff && !leader && !asBool(me.coach)) {
       throw new Error("Il pannello è per gli istruttori, il capogruppo e lo staff della compagnia.");
     }
     // lo staff segue tutte le compagnie; gli altri solo la propria

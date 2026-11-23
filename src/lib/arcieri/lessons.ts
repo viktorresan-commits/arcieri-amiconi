@@ -1,4 +1,4 @@
-/** Lezioni in tre livelli: punti chiave, errori tipici, un esercizio e una domanda di verifica. */
+/** Lezioni in quattro livelli, ognuna con un disegno e uno o più grafici: punti chiave, errori tipici, un esercizio e una domanda di verifica. */
 export type Lesson = {
   id: string;
   level: 1 | 2 | 3 | 4;
@@ -10,6 +10,8 @@ export type Lesson = {
   errors: string[];
   drill: string;
   quiz: { q: string; options: string[]; correct: number; why: string };
+  /** grafici della lezione (vedi LessonChart) */
+  charts?: string[];
 };
 
 export const LEVELS = [
@@ -21,7 +23,7 @@ export const LEVELS = [
 
 export const LESSONS: Lesson[] = [
   {
-    id: "sicurezza", level: 1, title: "Sicurezza in campo", minutes: 4, art: "sicurezza",
+    id: "sicurezza", level: 1, title: "Sicurezza in campo", minutes: 4, art: "sicurezza", charts: ["fischi"],
     intro: "Prima di tutto: dove si sta, quando si tira e quando si va a prendere le frecce.",
     points: ["Si incocca solo sulla linea di tiro, con la freccia verso il bersaglio.", "2 fischi: alla linea. 1 fischio: si tira. 3 fischi: a recuperare. 5 o più: stop immediato.", "Si recupera camminando, mai correndo, e ci si avvicina al paglione di lato.", "Mai trazione a vuoto senza freccia: si rompono i flettenti."],
     errors: ["Estrarre le frecce stando davanti al paglione.", "Lasciare frecce a terra sulla linea."],
@@ -29,7 +31,7 @@ export const LESSONS: Lesson[] = [
     quiz: { q: "Cosa significano 3 fischi?", options: ["Stop di emergenza", "Andate a recuperare le frecce", "Avvicinatevi alla linea"], correct: 1, why: "Tre fischi: tiro finito, si va a recuperare." },
   },
   {
-    id: "attrezzatura-base", level: 1, title: "Com'è fatto l'arco", minutes: 4, art: "parti",
+    id: "attrezzatura-base", level: 1, title: "Com'è fatto l'arco", minutes: 4, art: "parti", charts: ["libbre"],
     intro: "I nomi delle parti servono a capire le correzioni dell'istruttore.",
     points: ["Riser: l'impugnatura centrale, dove si attaccano i flettenti.", "Flettenti: accumulano l'energia; le libbre sono scritte lì (a 28″).", "Rest e bottone: sostengono e guidano la freccia.", "Mirino, clicker e stabilizzatore: mira, allungo costante, arco fermo."],
     errors: ["Montare i flettenti invertiti (alto e basso).", "Corda senza punto d'incocco segnato."],
@@ -37,7 +39,7 @@ export const LESSONS: Lesson[] = [
     quiz: { q: "Dove si leggono le libbre dell'arco?", options: ["Sulla corda", "Sui flettenti", "Sul mirino"], correct: 1, why: "Sono scritte sui flettenti, misurate a 28 pollici di allungo." },
   },
   {
-    id: "postura", level: 1, title: "Postura e piedi", minutes: 5, art: "postura",
+    id: "postura", level: 1, title: "Postura e piedi", minutes: 5, art: "postura", charts: ["postura"],
     intro: "Una base ferma rende tutto il resto ripetibile.",
     points: ["Piedi alla larghezza delle spalle, a cavallo della linea.", "Peso 50/50 su entrambi i piedi, ginocchia morbide non bloccate.", "Bacino sotto il busto, niente pancia in avanti né schiena inarcata.", "Testa dritta, si gira verso il bersaglio senza inclinarla."],
     errors: ["Sbilanciarsi all'indietro durante la trazione.", "Testa che va verso la corda invece del contrario."],
@@ -45,7 +47,7 @@ export const LESSONS: Lesson[] = [
     quiz: { q: "Come va distribuito il peso?", options: ["Più sul piede avanti", "Più sul piede dietro", "Metà e metà"], correct: 2, why: "50/50: la base resta stabile in tutta la trazione." },
   },
   {
-    id: "presa-aggancio", level: 1, title: "Presa dell'arco e aggancio", minutes: 5, art: "presa",
+    id: "presa-aggancio", level: 1, title: "Presa dell'arco e aggancio", minutes: 5, art: "presa", charts: ["dita"],
     intro: "La mano dell'arco spinge, non stringe. Le dita della corda agganciano, non tirano con le punte.",
     points: ["L'arco appoggia sul cuscinetto del pollice; le dita restano rilassate.", "Aggancio mediterraneo: indice sopra la cocca, medio e anulare sotto.", "La corda nella prima piega delle dita, dorso della mano piatto.", "Usa la patella o il guantino: protegge le dita e rende il rilascio pulito."],
     errors: ["Stringere l'impugnatura: la freccia va a sinistra (arciere destro).", "Corda sulle punte delle dita: rilascio che strappa."],
@@ -53,7 +55,7 @@ export const LESSONS: Lesson[] = [
     quiz: { q: "Nell'aggancio mediterraneo quante dita stanno sotto la cocca?", options: ["Una", "Due", "Tre"], correct: 1, why: "Indice sopra, medio e anulare sotto." },
   },
   {
-    id: "ancoraggio", level: 1, title: "Allungo e ancoraggio", minutes: 5, art: "ancoraggio",
+    id: "ancoraggio", level: 1, title: "Allungo e ancoraggio", minutes: 5, art: "ancoraggio", charts: ["allungo-errore"],
     intro: "L'ancoraggio è il punto fisso sul viso: se cambia, cambia dove va la freccia.",
     points: ["Trazione con i muscoli della schiena: la scapola va verso la colonna.", "Gomito della corda in linea con la freccia, alla stessa altezza.", "Ancoraggio sempre uguale: corda su mento e naso (olimpico) o dito all'angolo della bocca.", "Arrivati all'ancoraggio non ci si ferma: si continua a espandere."],
     errors: ["Tirare con il bicipite e il braccio.", "Ancoraggio diverso a ogni freccia."],
@@ -61,7 +63,7 @@ export const LESSONS: Lesson[] = [
     quiz: { q: "Con cosa si fa la trazione?", options: ["Bicipite", "Muscoli della schiena", "Polso"], correct: 1, why: "La schiena: il braccio fa solo da gancio." },
   },
   {
-    id: "mira-rilascio", level: 2, title: "Mira, rilascio e accompagnamento", minutes: 6, art: "rilascio",
+    id: "mira-rilascio", level: 2, title: "Mira, rilascio e accompagnamento", minutes: 6, art: "rilascio", charts: ["dispersione"],
     intro: "Il rilascio non si fa: succede, rilassando le dita mentre la schiena continua a lavorare.",
     points: ["Il mirino oscilla sempre: si accetta il movimento e si tiene il centro.", "Le dita si rilassano, non si aprono di scatto.", "La mano della corda scivola indietro lungo il collo.", "Il braccio dell'arco resta verso il bersaglio finché la freccia non arriva."],
     errors: ["Abbassare l'arco per guardare la freccia.", "Aspettare il centro perfetto: la mira si stanca."],
@@ -69,7 +71,7 @@ export const LESSONS: Lesson[] = [
     quiz: { q: "Dove va la mano della corda dopo il rilascio?", options: ["Avanti verso l'arco", "Indietro lungo il collo", "In basso"], correct: 1, why: "Continua il lavoro della schiena: scivola indietro." },
   },
   {
-    id: "respiro", level: 2, title: "Respiro e ritmo", minutes: 4, art: "respiro",
+    id: "respiro", level: 2, title: "Respiro e ritmo", minutes: 4, art: "respiro", charts: ["respiro"],
     intro: "Lo stesso respiro a ogni freccia dà lo stesso tempo e la stessa tenuta.",
     points: ["Inspira alzando l'arco, espira in parte durante la trazione.", "In mira si tiene circa metà aria, senza bloccare il torace.", "Tempo totale costante: 4–7 secondi per l'olimpico.", "Se la mira dura troppo, si abbassa e si ricomincia."],
     errors: ["Trattenere il fiato a lungo: il mirino trema.", "Ritmo diverso a ogni volée."],
@@ -77,7 +79,7 @@ export const LESSONS: Lesson[] = [
     quiz: { q: "Se la mira dura troppo cosa si fa?", options: ["Si tira comunque", "Si abbassa e si ricomincia", "Si tende di più"], correct: 1, why: "Meglio ricominciare che tirare stanchi." },
   },
   {
-    id: "spine", level: 2, title: "Frecce giuste: spine e peso", minutes: 6, art: "spine",
+    id: "spine", level: 2, title: "Frecce giuste: spine e peso", minutes: 6, art: "spine", charts: ["spine", "peso-velocita"],
     intro: "La freccia deve flettersi quanto serve per girare attorno al riser.",
     points: ["Lo spine dipende dalle libbre al tuo allungo, dalla lunghezza dell'asta e dal peso della punta.", "Punta più pesante = asta che si comporta più morbida.", "Restare fra 6 e 9 grani per libbra.", "Un FOC tra 8% e 15% rende la freccia stabile."],
     errors: ["Comprare frecce in base al colore.", "Asta tagliata troppo corta per l'allungo."],
@@ -85,7 +87,7 @@ export const LESSONS: Lesson[] = [
     quiz: { q: "Una punta più pesante rende l'asta…", options: ["Più rigida", "Più morbida", "Uguale"], correct: 1, why: "Più massa davanti: l'asta si flette di più." },
   },
   {
-    id: "assetto", level: 2, title: "Assetto: brace, tiller, incocco", minutes: 6, art: "assetto",
+    id: "assetto", level: 2, title: "Assetto: brace, tiller, incocco", minutes: 6, art: "assetto", charts: ["nude"],
     intro: "Tre misure che vanno scritte e controllate ogni tanto.",
     points: ["Brace: distanza tra corda e punto più profondo dell'impugnatura.", "Tiller: differenza tra la distanza corda–flettente in alto e in basso.", "Punto d'incocco: qualche millimetro sopra il rest.", "Se una misura cambia, cambia il gruppo: segnala nell'app."],
     errors: ["Cambiare tre cose insieme: non sai più quale ha funzionato.", "Corda nuova senza ricontrollare il brace."],
@@ -93,7 +95,7 @@ export const LESSONS: Lesson[] = [
     quiz: { q: "Il brace si misura…", options: ["Dalla corda alla punta del flettente", "Dalla corda al punto più profondo dell'impugnatura", "Dal rest al bottone"], correct: 1, why: "Corda–gola dell'impugnatura." },
   },
   {
-    id: "vento", level: 2, title: "Leggere il vento", minutes: 5, art: "vento",
+    id: "vento", level: 2, title: "Leggere il vento", minutes: 5, art: "vento", charts: ["vento"],
     intro: "All'aperto il vento laterale sposta la freccia per tutto il volo.",
     points: ["Guarda bandierine, erba e alberi vicino al bersaglio, non solo alla linea.", "Si mira dalla parte da cui arriva il vento.", "Più distanza e più vento: lo spostamento cresce molto.", "Tira nelle pause, non nelle raffiche, se il tempo lo consente."],
     errors: ["Correggere il mirino a ogni raffica.", "Guardare solo la bandierina vicino a sé."],
@@ -101,7 +103,7 @@ export const LESSONS: Lesson[] = [
     quiz: { q: "Con vento da sinistra dove si mira?", options: ["Più a destra", "Più a sinistra", "Al centro"], correct: 1, why: "Controvento: verso il lato da cui arriva." },
   },
   {
-    id: "bare-shaft", level: 3, title: "Messa a punto con l'asta nuda", minutes: 7, art: "tuning",
+    id: "bare-shaft", level: 3, title: "Messa a punto con l'asta nuda", minutes: 7, art: "tuning", charts: ["nude"],
     intro: "Le frecce senza penne mostrano subito se spine e bottone sono giusti.",
     points: ["Tre frecce impennate e due nude, stessa mira, a 18 m.", "Nude a sinistra (destro): spine rigido o bottone duro.", "Nude a destra: spine morbido o bottone morbido.", "Nude sopra o sotto: punto d'incocco da correggere."],
     errors: ["Fare il test stanchi: i rilasci sporchi falsano tutto.", "Muovere bottone e incocco insieme."],
@@ -109,7 +111,7 @@ export const LESSONS: Lesson[] = [
     quiz: { q: "Nude in alto rispetto alle impennate: cosa si fa?", options: ["Si alza il punto d'incocco", "Si abbassa il punto d'incocco", "Si cambia lo spine"], correct: 0, why: "Nude alte: il punto d'incocco è troppo basso, quindi va alzato di poco alla volta." },
   },
   {
-    id: "tempi-gara", level: 3, title: "Ritmo di gara e tempi", minutes: 5, art: "tempi",
+    id: "tempi-gara", level: 3, title: "Ritmo di gara e tempi", minutes: 5, art: "tempi", charts: ["tempi"],
     intro: "In gara hai un tempo per volée: allenarti con lo stesso ritmo evita la fretta.",
     points: ["Indoor e targa: 2 minuti per 3 frecce, 4 per 6.", "Conta un tempo per freccia e tienilo anche in allenamento.", "Il semaforo giallo avverte: ultimi 30 secondi.", "Un ritmo regolare tiene stabili tenuta e mira."],
     errors: ["Tirare le prime frecce velocissime e l'ultima di fretta.", "Guardare ogni freccia col binocolo dopo ogni tiro."],
@@ -117,7 +119,7 @@ export const LESSONS: Lesson[] = [
     quiz: { q: "Quanto tempo per 3 frecce in una gara indoor?", options: ["1 minuto", "2 minuti", "4 minuti"], correct: 1, why: "Due minuti per volée da tre." },
   },
   {
-    id: "routine", level: 3, title: "Routine mentale", minutes: 5, art: "mente",
+    id: "routine", level: 3, title: "Routine mentale", minutes: 5, art: "mente", charts: ["battito"],
     intro: "La stessa sequenza a ogni freccia toglie spazio ai pensieri.",
     points: ["Una parola chiave per ogni fase (piedi, aggancio, schiena, rilascio).", "Dopo una freccia storta: respiro, routine, niente analisi.", "Obiettivi di gesto, non di punteggio, durante la gara.", "Il punteggio si guarda a fine volée, non a ogni freccia."],
     errors: ["Fare i conti della classifica tra una volée e l'altra.", "Cambiare tecnica in gara."],
@@ -125,7 +127,7 @@ export const LESSONS: Lesson[] = [
     quiz: { q: "Dopo una freccia sbagliata in gara…", options: ["Cambi l'ancoraggio", "Respiri e rifai la routine", "Tiri subito la successiva"], correct: 1, why: "Respiro e routine: si resetta." },
   },
   {
-    id: "distanze", level: 3, title: "Stimare le distanze (3D e campagna)", minutes: 5, art: "distanze",
+    id: "distanze", level: 3, title: "Stimare le distanze (3D e campagna)", minutes: 5, art: "distanze", charts: ["stima"],
     intro: "Nelle gare a distanza sconosciuta conta l'occhio: si allena come un muscolo.",
     points: ["Dividi la distanza in tratti da 5 metri che conosci bene.", "Confronta con oggetti di misura nota (paglione, persona, albero).", "In salita e in discesa la distanza da mirare è più corta di quella reale.", "Prima di guardare il bersaglio, scegli dove mirare sull'animale."],
     errors: ["Fidarsi solo della dimensione dell'animale.", "Dimenticare la pendenza."],
@@ -133,7 +135,7 @@ export const LESSONS: Lesson[] = [
     quiz: { q: "Tirando in forte discesa la distanza da mirare è…", options: ["Più lunga", "Più corta", "Uguale"], correct: 1, why: "Conta la distanza orizzontale: è più corta." },
   },
   {
-    id: "bilancio", level: 3, title: "Leggere le tue statistiche", minutes: 4, art: "statistiche",
+    id: "bilancio", level: 3, title: "Leggere le tue statistiche", minutes: 4, art: "statistiche", charts: ["gruppi"],
     intro: "Numeri e analisi del gesto dicono cosa allenare la settimana dopo.",
     points: ["Guarda la costanza (gruppo, tempi, allungo) prima della media.", "Confronta periodi uguali: 30 giorni con i 30 precedenti.", "Se la postura cala, torna al lavoro a vuoto e allo specchio.", "Fissa un obiettivo misurabile in «Obiettivi»."],
     errors: ["Cambiare attrezzatura dopo una giornata storta.", "Allenarsi solo a distanze facili."],
@@ -142,7 +144,7 @@ export const LESSONS: Lesson[] = [
   },
   // ── livello 1: altre basi ──
   {
-    id: "incocco", level: 1, title: "Incoccare la freccia", minutes: 3, art: "pose:incocco",
+    id: "incocco", level: 1, title: "Incoccare la freccia", minutes: 3, art: "pose:incocco", charts: ["sequenza"],
     intro: "Un gesto piccolo che, fatto sempre uguale, toglie una variabile a ogni tiro.",
     points: ["Arco basso e inclinato, punta della freccia verso il bersaglio o a terra davanti a te.", "La penna guida (di colore diverso) va lontana dall'arco.", "La cocca si inserisce sotto il punto d'incocco finché fa un piccolo clic.", "Controlla che la freccia appoggi sul rest prima di agganciare."],
     errors: ["Penna guida verso il riser: la freccia sbatte e devia.", "Incoccare sopra il punto d'incocco a volte sì e a volte no."],
@@ -150,7 +152,7 @@ export const LESSONS: Lesson[] = [
     quiz: { q: "Dove va la penna guida?", options: ["Verso l'arco", "Lontana dall'arco", "Indifferente"], correct: 1, why: "Lontana dall'arco: le altre due passano pulite accanto al riser." },
   },
   {
-    id: "riscaldamento", level: 1, title: "Riscaldamento e defaticamento", minutes: 4, art: "pose:riposo",
+    id: "riscaldamento", level: 1, title: "Riscaldamento e defaticamento", minutes: 4, art: "pose:riposo", charts: ["riscaldamento"],
     intro: "Spalle e schiena lavorano molto: cinque minuti prima e dopo evitano dolori e infortuni.",
     points: ["Rotazioni di spalle e braccia, avanti e indietro, 10 per lato.", "Elastico: 10 trazioni lente fino all'ancoraggio, tenendo 2 secondi.", "Prime volée a distanza corta, senza badare al punteggio.", "Alla fine: allungamento di pettorali, dorsali e avambracci, 20 secondi l'uno."],
     errors: ["Iniziare subito con le libbre piene e alla distanza di gara.", "Allungamenti con molleggi bruschi."],
@@ -158,7 +160,7 @@ export const LESSONS: Lesson[] = [
     quiz: { q: "A cosa servono le prime volée corte?", options: ["A fare punti facili", "A scaldare il gesto senza pensare al punteggio", "A provare frecce nuove"], correct: 1, why: "Si scalda il gesto: la precisione arriva dopo." },
   },
   {
-    id: "punteggio", level: 1, title: "Come si contano i punti", minutes: 4, art: "statistiche",
+    id: "punteggio", level: 1, title: "Come si contano i punti", minutes: 4, art: "statistiche", charts: ["zone"],
     intro: "Leggere il bersaglio bene evita discussioni e ti fa capire dove migliorare.",
     points: ["La faccia ha 10 zone: dal giallo (10 e 9) al bianco (2 e 1); la X è il 10 interno.", "Se l'asta tocca la riga, vale il punteggio più alto.", "Le frecce si chiamano dalla più alta alla più bassa, senza toccarle.", "Si estraggono solo dopo che tutti hanno segnato."],
     errors: ["Toccare la freccia prima che sia stata segnata.", "Contare in basso le frecce sulla riga."],
@@ -167,7 +169,7 @@ export const LESSONS: Lesson[] = [
   },
   // ── livello 2: ripetibilità ──
   {
-    id: "sequenza", level: 2, title: "La sequenza di tiro completa", minutes: 6, art: "seq",
+    id: "sequenza", level: 2, title: "La sequenza di tiro completa", minutes: 6, art: "seq", charts: ["sequenza"],
     intro: "Undici passi sempre nello stesso ordine e con lo stesso ritmo: è questo che rende un tiro uguale al precedente.",
     points: ["Posizione, incocco, aggancio e presa: preparazione senza fretta.", "Pre-trazione: l'arco sale già allineato, spalle basse.", "Trazione e ancoraggio: la schiena porta la mano al viso, sempre nello stesso punto.", "Trasferimento e mira: il carico passa ai muscoli della schiena mentre la mira si stabilizza.", "Rilascio e accompagnamento: le dita si aprono, la mano scivola indietro, l'arco resta fermo.", "Rilassamento: si guarda la freccia arrivare e si scarica tutto prima della prossima."],
     errors: ["Saltare la pre-trazione e tirare dall'alto.", "Accorciare la sequenza quando si è stanchi."],
@@ -175,7 +177,7 @@ export const LESSONS: Lesson[] = [
     quiz: { q: "Cosa succede nel trasferimento?", options: ["Si rilascia", "Il carico passa dalla trazione alla schiena", "Si incocca"], correct: 1, why: "Il trasferimento sposta il lavoro sulla schiena e prepara il rilascio." },
   },
   {
-    id: "clicker", level: 2, title: "Clicker e allungo costante", minutes: 5, art: "allungo",
+    id: "clicker", level: 2, title: "Clicker e allungo costante", minutes: 5, art: "allungo", charts: ["allungo-errore"],
     intro: "Il clicker dice quando la freccia è arrivata sempre allo stesso punto: pochi millimetri cambiano la quota.",
     points: ["Si regola con la punta 1–2 mm davanti alla lama quando sei ancorato e rilassato.", "Il clic arriva espandendo la schiena, non tirando col braccio.", "Al clic si rilascia: non si aspetta, non si anticipa.", "Se il clic non arriva entro 2–3 secondi si scarica e si ricomincia."],
     errors: ["Guardare il clicker invece del bersaglio.", "Rilasciare prima del clic per paura di non passarlo."],
@@ -183,7 +185,7 @@ export const LESSONS: Lesson[] = [
     quiz: { q: "Con cosa si passa il clicker?", options: ["Con il braccio dell'arco", "Con l'espansione della schiena", "Con il polso"], correct: 1, why: "L'espansione della schiena fa passare la punta senza cambiare la mira." },
   },
   {
-    id: "gruppi", level: 2, title: "Leggere i gruppi sul bersaglio", minutes: 5, art: "statistiche",
+    id: "gruppi", level: 2, title: "Leggere i gruppi sul bersaglio", minutes: 5, art: "statistiche", charts: ["gruppi", "dispersione"],
     intro: "Dove finiscono le frecce dice cosa correggere: il centro del gruppo è un problema di mira, la forma è un problema di gesto.",
     points: ["Gruppo stretto ma lontano dal centro: sposta il mirino verso il gruppo.", "Gruppo allungato in verticale: ancoraggio o allungo che cambiano.", "Gruppo allungato in orizzontale: presa dell'arco o rilascio.", "Una freccia isolata ripetuta sempre: controlla quella freccia (cocca, penne, asta)."],
     errors: ["Muovere il mirino dopo una sola freccia.", "Correggere il mirino quando il gruppo è largo."],
@@ -191,7 +193,7 @@ export const LESSONS: Lesson[] = [
     quiz: { q: "Il gruppo è stretto ma a destra: cosa fai?", options: ["Sposti il mirino a destra", "Sposti il mirino a sinistra", "Cambi l'ancoraggio"], correct: 0, why: "Il mirino va verso il gruppo: a destra." },
   },
   {
-    id: "manutenzione", level: 2, title: "Cura di arco e frecce", minutes: 4, art: "parti",
+    id: "manutenzione", level: 2, title: "Cura di arco e frecce", minutes: 4, art: "parti", charts: ["manutenzione"],
     intro: "Un'attrezzatura curata tira uguale ogni volta e dura anni.",
     points: ["Corda: cera ogni 2–3 uscite, cambio quando i fili si sfilacciano o il serving si apre.", "Frecce: controlla cocche incrinate, penne staccate e aste scheggiate dopo ogni volée.", "Riser e flettenti: viti serrate, niente urti, arco al riparo dal caldo dell'auto.", "Segna brace e tiller: se cambiano, qualcosa si è mosso."],
     errors: ["Tirare una freccia di carbonio scheggiata.", "Lasciare l'arco armato per ore al sole."],
@@ -200,7 +202,7 @@ export const LESSONS: Lesson[] = [
   },
   // ── livello 3: gara ──
   {
-    id: "pressione", level: 3, title: "Gestire la pressione in gara", minutes: 5, art: "mente",
+    id: "pressione", level: 3, title: "Gestire la pressione in gara", minutes: 5, art: "mente", charts: ["battito"],
     intro: "In gara il gesto è lo stesso dell'allenamento: cambia quello che pensi mentre lo fai.",
     points: ["Pensa al processo (la prossima freccia) e non al risultato (la classifica).", "Usa la stessa routine con lo stesso ritmo, anche dopo una freccia brutta.", "Respiro lento fra le volée: 4 secondi dentro, 6 fuori.", "Prepara una frase breve da dirti prima di ogni freccia ('schiena', 'spingi')."],
     errors: ["Fare i conti del punteggio durante la volée.", "Cambiare il mirino in gara per una sola freccia."],
@@ -208,7 +210,7 @@ export const LESSONS: Lesson[] = [
     quiz: { q: "Su cosa conviene concentrarsi in gara?", options: ["Sul punteggio totale", "Sulla prossima freccia e la routine", "Sugli avversari"], correct: 1, why: "La prossima freccia: il resto non lo controlli." },
   },
   {
-    id: "scontri", level: 3, title: "Scontri diretti e set", minutes: 4, art: "tempi",
+    id: "scontri", level: 3, title: "Scontri diretti e set", minutes: 4, art: "tempi", charts: ["set"],
     intro: "Negli scontri a set conta vincere la volée, non fare il massimo dei punti.",
     points: ["Olimpico: set da 3 frecce, 2 punti al vincitore, 1 a testa se pari; vince chi arriva a 6.", "Compound: si sommano i punti di 5 volée.", "In parità si va allo spareggio: una freccia, vince la più vicina al centro.", "Tempo: 20 secondi a freccia nell'alternato, 2 minuti per volée insieme."],
     errors: ["Prendersela per una volée persa: il set dopo riparte da zero.", "Non sapere quanti punti servono per chiudere."],
@@ -216,7 +218,7 @@ export const LESSONS: Lesson[] = [
     quiz: { q: "Nello scontro olimpico quanti punti set servono per vincere?", options: ["5", "6", "10"], correct: 1, why: "Si vince arrivando a 6 punti set." },
   },
   {
-    id: "diario", level: 3, title: "Diario e obiettivi", minutes: 4, art: "statistiche",
+    id: "diario", level: 3, title: "Diario e obiettivi", minutes: 4, art: "statistiche", charts: ["volume"],
     intro: "Scrivere cosa provi e cosa succede trasforma le uscite in progressi misurabili.",
     points: ["Dopo ogni uscita: una cosa andata bene, una da migliorare, un numero (media o gruppo).", "Obiettivi piccoli e misurabili: '+0,3 di media in un mese', non 'tirare meglio'.", "Rileggi il diario prima delle gare: ritrovi le soluzioni che hanno funzionato.", "Annota anche meteo, attrezzatura e stanchezza: spiegano molte giornate storte."],
     errors: ["Scrivere solo quando va male.", "Obiettivi legati alla classifica degli altri."],
@@ -225,7 +227,7 @@ export const LESSONS: Lesson[] = [
   },
   // ── livello 4: specialità ──
   {
-    id: "istintivo", level: 4, title: "Tiro istintivo e tradizionale", minutes: 6, art: "pose:mira",
+    id: "istintivo", level: 4, title: "Tiro istintivo e tradizionale", minutes: 6, art: "pose:mira", charts: ["caduta"],
     intro: "Senza mirino l'occhio e il corpo imparano la distanza: si guarda il punto, non la freccia.",
     points: ["Lo sguardo resta fisso su un punto piccolo del bersaglio dall'inizio alla fine.", "Ancoraggio alto (dito all'angolo della bocca) per vedere bene la linea della freccia.", "Tiro 'a gap': la punta si tiene sopra o sotto il punto di una distanza nota.", "Archi a più legni e longbow perdonano meno: la presa deve essere leggera."],
     errors: ["Guardare la punta della freccia invece del bersaglio.", "Tenere l'ancoraggio troppo a lungo: con l'istintivo il ritmo è più rapido."],
@@ -233,7 +235,7 @@ export const LESSONS: Lesson[] = [
     quiz: { q: "Nel tiro istintivo cosa si guarda?", options: ["La punta della freccia", "Un punto piccolo del bersaglio", "La corda"], correct: 1, why: "Un punto piccolo: il corpo allinea la freccia da solo." },
   },
   {
-    id: "compound", level: 4, title: "Arco compound e sgancio", minutes: 6, art: "pose:allungo",
+    id: "compound", level: 4, title: "Arco compound e sgancio", minutes: 6, art: "pose:allungo", charts: ["caduta"],
     intro: "Le carrucole riducono lo sforzo all'ancoraggio: conta l'appoggio contro il fermo e uno sgancio a sorpresa.",
     points: ["Il let-off fa tenere solo il 20–35% del carico a fine trazione.", "Si tira contro il 'muro' (fermo) con la stessa spinta ogni volta.", "Peep e diottra allineati: due cerchi concentrici.", "Lo sgancio deve sorprendere: si aumenta la tensione della schiena finché parte."],
     errors: ["Premere il grilletto come una pistola: la freccia va bassa.", "Allungo sbagliato: il muro arriva troppo presto o troppo tardi."],
@@ -241,7 +243,7 @@ export const LESSONS: Lesson[] = [
     quiz: { q: "Cosa vuol dire let-off 70%?", options: ["Tieni il 70% delle libbre", "Tieni il 30% delle libbre all'ancoraggio", "L'arco perde il 70% di velocità"], correct: 1, why: "L'arco ti 'toglie' il 70%: all'ancoraggio tieni circa il 30%." },
   },
   {
-    id: "terreni", level: 4, title: "Salita, discesa e terreni 3D", minutes: 5, art: "distanze",
+    id: "terreni", level: 4, title: "Salita, discesa e terreni 3D", minutes: 5, art: "distanze", charts: ["pendenza"],
     intro: "Nei percorsi 3D e di campagna la pendenza e la luce ingannano: si tiene la forma, non si piega il corpo.",
     points: ["In salita o in discesa ci si piega dai fianchi: l'angolo fra braccio e busto resta lo stesso.", "Si mira alla distanza orizzontale, che è più corta di quella che vedi.", "Piedi stabili anche su terreno storto: allarga un po' la base.", "Bosco scuro e radure luminose fanno sembrare i bersagli più vicini o più lontani."],
     errors: ["Abbassare solo il braccio in discesa: cambia l'ancoraggio.", "Fidarsi della distanza a occhio dopo una salita faticosa."],
@@ -249,7 +251,7 @@ export const LESSONS: Lesson[] = [
     quiz: { q: "In discesa come ti pieghi?", options: ["Abbassando il braccio dell'arco", "Dai fianchi, mantenendo la forma a T", "Piegando le ginocchia"], correct: 1, why: "Dai fianchi: braccio e busto restano come in piano." },
   },
   {
-    id: "sagome", level: 4, title: "Dove mirare sulle sagome", minutes: 5, art: "distanze",
+    id: "sagome", level: 4, title: "Dove mirare sulle sagome", minutes: 5, art: "distanze", charts: ["sagome"],
     intro: "Le zone di punteggio delle sagome seguono gli organi vitali: il centro non è il centro del disegno.",
     points: ["Lo spot (zona più alta) è dietro la spalla, nella parte bassa del torace.", "Si mira allo spot vero, non al centro della sagoma.", "Animali di profilo: guarda la linea della zampa anteriore e sali di un terzo del corpo.", "Le frecce sulle corna o sugli zoccoli valgono zero: meglio basso e centrale che alto."],
     errors: ["Mirare al centro della sagoma intera.", "Inseguire il punteggio massimo con mire rischiose."],
@@ -257,7 +259,7 @@ export const LESSONS: Lesson[] = [
     quiz: { q: "Dov'è di solito lo spot su una sagoma di profilo?", options: ["Al centro del disegno", "Dietro la spalla, in basso nel torace", "Sulla testa"], correct: 1, why: "Segue cuore e polmoni: dietro la spalla, in basso." },
   },
   {
-    id: "forza", level: 4, title: "Preparazione fisica per arcieri", minutes: 6, art: "pose:fiero",
+    id: "forza", level: 4, title: "Preparazione fisica per arcieri", minutes: 6, art: "pose:fiero", charts: ["forza"],
     intro: "Più forza nella schiena e nelle spalle vuol dire mira più ferma e libbre più alte senza fatica.",
     points: ["Rematore con elastico o manubrio: 3 serie da 12, due volte a settimana.", "Tenute all'ancoraggio con l'elastico: 5 da 20 secondi.", "Plank e esercizi per il core: il busto fermo regge la mira.", "Cuffia dei rotatori: rotazioni esterne leggere, prevengono i dolori alla spalla."],
     errors: ["Allenare solo il braccio della corda.", "Aumentare le libbre più di 2 alla volta."],
@@ -265,11 +267,75 @@ export const LESSONS: Lesson[] = [
     quiz: { q: "Di quanto conviene aumentare le libbre alla volta?", options: ["Al massimo 2 lb", "5 lb", "10 lb"], correct: 0, why: "Pochi passi alla volta: tendini e spalle si adattano più lentamente dei muscoli." },
   },
   {
-    id: "attrezzatura-scelta", level: 4, title: "Scegliere il primo arco tuo", minutes: 5, art: "spine",
+    id: "attrezzatura-scelta", level: 4, title: "Scegliere il primo arco tuo", minutes: 5, art: "spine", charts: ["libbre-inizio"],
     intro: "Comprare bene la prima volta fa risparmiare: libbre giuste, misure giuste, poi si cresce.",
     points: ["Altezza dell'arco: allungo + circa 40 cm (68″ per allunghi da 28–29″).", "Libbre: meglio poche per imparare (18–26 lb per un adulto), si cambiano i flettenti dopo.", "Frecce con lo spine adatto alle libbre reali e un po' più lunghe dell'allungo.", "Prova prima in società: impugnatura e peso devono essere comodi."],
     errors: ["Comprare libbre alte 'per crescere'.", "Frecce troppo corte rispetto all'allungo: pericolose."],
     drill: "Misura il tuo allungo con lo strumento dell'app e prova lo spine consigliato.",
     quiz: { q: "Perché iniziare con poche libbre?", options: ["Costano meno", "Si impara il gesto senza fatica e senza vizi", "Le frecce volano più dritte"], correct: 1, why: "Con poche libbre il gesto si costruisce bene, poi si aumenta." },
+  },
+  {
+    id: "bersagli-distanze", level: 1, title: "Bersagli e distanze", minutes: 4, art: "distanze", charts: ["bersagli", "zone"],
+    intro: "Ogni distanza ha il suo bersaglio: capire perché aiuta a scegliere dove allenarsi.",
+    points: ["In sala si tira a 18 m sul 40 cm; all'aperto l'olimpico tira a 70 m sul 122 cm, il compound a 50 m sull'80 cm.", "Più lontano significa bersaglio più grande, ma all'occhio sembra comunque più piccolo.", "Le zone hanno tutte la stessa larghezza: il 10 è la zona più piccola, l'1 la più grande.", "Si comincia vicino (10–18 m) e si allunga solo quando il gruppo è stretto."],
+    errors: ["Allontanarsi troppo presto e perdere il gesto per inseguire la freccia.", "Giudicare la giornata dal punteggio invece che dal gruppo."],
+    drill: "Tira 3 volée a 10 m e 3 a 18 m sullo stesso bersaglio: confronta la larghezza dei gruppi.",
+    quiz: { q: "Su quale bersaglio tira l'olimpico a 70 m?", options: ["40 cm", "80 cm", "122 cm"], correct: 2, why: "A 70 m si usa il bersaglio da 122 cm a 10 zone." },
+  },
+  {
+    id: "primi-allenamenti", level: 1, title: "Quanto tirare all'inizio", minutes: 3, art: "pose:riposo", charts: ["primi"],
+    intro: "I muscoli imparano in fretta, tendini e spalle più piano: il numero di frecce si alza a poco a poco.",
+    points: ["Le prime volte 30–40 frecce bastano, con pause tra le volée.", "Si aumenta di poco a ogni uscita, solo se il gesto resta pulito.", "Quando il braccio trema in ancoraggio è il momento di fermarsi.", "Meglio due uscite brevi che una lunga."],
+    errors: ["Tirare cento frecce al primo giorno e avere la spalla dolorante per una settimana.", "Continuare a tirare stanchi: si impara un gesto sbagliato."],
+    drill: "Conta le frecce della prossima uscita e fermati alla prima volée in cui il braccio trema.",
+    quiz: { q: "Il braccio trema in ancoraggio dopo molte frecce. Cosa fai?", options: ["Stringo i denti", "Mi fermo o faccio una pausa", "Aumento le libbre"], correct: 1, why: "Il tremore è stanchezza: continuare insegna un gesto sbagliato." },
+  },
+  {
+    id: "traiettoria", level: 2, title: "Traiettoria: perché si mira in alto", minutes: 5, art: "vento", charts: ["caduta", "dispersione"],
+    intro: "La freccia cade dal primo istante: il mirino (o la punta, nell'arco nudo) compensa alzando l'arco.",
+    points: ["La freccia vola su una curva: sale un poco e poi scende.", "Più è lenta, più tempo resta in aria e più scende.", "Il compound, più veloce, scende molto meno dell'arco olimpico o del longbow.", "Per questo a ogni distanza corrisponde una tacca diversa del mirino."],
+    errors: ["Inseguire con il corpo la freccia invece di cambiare tacca.", "Alzare la testa durante il rilascio per guardare la freccia."],
+    drill: "Tira a 18 e 30 m con la stessa tacca: misura quanto scende il gruppo.",
+    quiz: { q: "Perché una freccia lenta scende di più?", options: ["Pesa di più", "Resta più tempo in aria", "Ha meno penne"], correct: 1, why: "La caduta cresce con il quadrato del tempo di volo." },
+  },
+  {
+    id: "peso-freccia", level: 2, title: "Peso della freccia e velocità", minutes: 5, art: "spine", charts: ["peso-velocita"],
+    intro: "Una freccia più leggera va più veloce, una più pesante è più stabile: la scelta è un compromesso.",
+    points: ["Il peso si misura in grani (1 grano ≈ 0,065 g).", "Con lo stesso arco, più peso significa meno velocità.", "Una freccia troppo leggera stressa l'arco: c'è un minimo di grani per libbra.", "Sulle lunghe distanze conta di più la stabilità nel vento."],
+    errors: ["Scegliere la freccia più leggera possibile solo per la velocità.", "Cambiare punta senza ricontrollare lo spine."],
+    drill: "Pesa una freccia completa con una bilancia da cucina precisa e convertila in grani.",
+    quiz: { q: "Con lo stesso arco, una freccia più pesante…", options: ["Va più veloce", "Va più lenta", "Va alla stessa velocità"], correct: 1, why: "Con la stessa energia, più massa vuol dire meno velocità." },
+  },
+  {
+    id: "mirino-tacche", level: 3, title: "Il mirino: tacche per ogni distanza", minutes: 5, art: "pose:mira", charts: ["mirino"],
+    intro: "Le tacche del mirino sono il tuo quaderno delle distanze: si costruiscono una volta e si aggiornano.",
+    points: ["Il mirino si sposta verso il gruppo: gruppo basso, diottra in basso; gruppo a destra, diottra a destra.", "Più lontano si tira, più la diottra scende.", "Segna le tacche a 18, 30, 50 e 70 m e ricava le distanze intermedie.", "Dopo un cambio di frecce o di libbre le tacche vanno rifatte."],
+    errors: ["Spostare il mirino dopo una sola freccia.", "Correggere al contrario (diottra verso il centro invece che verso il gruppo)."],
+    drill: "Su 3 volée a una distanza, regola il mirino solo dopo aver visto il gruppo di tutte e 3.",
+    quiz: { q: "Il gruppo è in basso a sinistra. Dove sposti la diottra?", options: ["In alto a destra", "In basso a sinistra", "Non si sposta"], correct: 1, why: "La diottra segue il gruppo: si sposta dalla stessa parte delle frecce." },
+  },
+  {
+    id: "volume", level: 3, title: "Allenare il volume senza farsi male", minutes: 5, art: "pose:fiero", charts: ["volume"],
+    intro: "Il numero di frecce a settimana si alza con un piano, e ogni tanto si scende per recuperare.",
+    points: ["Aumenta di circa un quinto alla volta, non di più.", "Ogni tre o quattro settimane, una settimana più leggera.", "Segna le frecce di ogni uscita: l'app lo fa da sola con gli allenamenti.", "Prima di una gara si riduce il volume, non la qualità."],
+    errors: ["Raddoppiare le frecce prima di una gara.", "Ignorare il dolore al gomito o alla spalla."],
+    drill: "Guarda le frecce delle ultime 4 settimane nelle Statistiche e programma le prossime 4.",
+    quiz: { q: "Ogni quante settimane conviene una settimana di scarico?", options: ["Mai", "Ogni 3–4 settimane", "Ogni settimana"], correct: 1, why: "Il carico che sale senza pause porta a sovraccarico e dolori." },
+  },
+  {
+    id: "field", level: 4, title: "Tiro di campagna (field)", minutes: 5, art: "distanze", charts: ["zone-field", "pendenza"],
+    intro: "Nel bosco, su bersagli gialli e neri, a distanze note o da stimare, spesso in salita o in discesa.",
+    points: ["Il bersaglio field ha sei zone: 6 (con la X) e 5 gialli, da 4 a 1 neri.", "Si tirano piazzole a distanze diverse: il gruppo va controllato a ogni piazzola.", "In salita e in discesa conta la distanza in piano, più corta di quella reale.", "Il piede a valle regge il peso: postura stabile prima di tutto."],
+    errors: ["Mirare per la distanza reale sulle pendenze forti.", "Piegare il busto invece di inclinare tutto il corpo dai fianchi."],
+    drill: "Su un pendio, tira alla stessa sagoma da sopra e da sotto: annota dove va il gruppo.",
+    quiz: { q: "In discesa forte, a 30 m, per che distanza miri?", options: ["Più di 30 m", "30 m", "Un po' meno di 30 m"], correct: 2, why: "La gravità agisce solo sulla distanza in orizzontale, più corta." },
+  },
+  {
+    id: "string-walking", level: 4, title: "Arco nudo: string walking", minutes: 6, art: "pose:mira", charts: ["string-walking"],
+    intro: "Senza mirino, l'arco nudo cambia il punto in cui le dita prendono la corda per cambiare distanza.",
+    points: ["Più le dita scendono sotto la cocca, più la freccia va in basso: serve per le distanze corte.", "Alla distanza di point on la punta della freccia sta sul centro e le dita sono sotto la cocca.", "Si segnano le posizioni sulla patella (cuciture o tacche).", "Si ancora sempre allo stesso punto del viso: cambia solo la presa sulla corda."],
+    errors: ["Cambiare ancoraggio invece della presa sulla corda.", "Non ricontrollare i segni dopo un cambio di frecce."],
+    drill: "Trova la tua distanza di point on: sposta il paglione finché la freccia va al centro mirando con la punta.",
+    quiz: { q: "Le dita scendono molto sotto la cocca. La freccia va…", options: ["Più in alto", "Più in basso", "Uguale"], correct: 1, why: "Scendendo con le dita la cocca si alza rispetto alla mano: la freccia va più in basso, utile da vicino." },
   },
 ];

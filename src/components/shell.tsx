@@ -29,6 +29,11 @@ import { applyPrefs, readPrefs, usePrefs } from "@/lib/arcieri/prefs";
 type Ctx = { me: PublicMember; reload: () => void };
 const MemberCtx = createContext<Ctx | null>(null);
 
+/** come useMember, ma senza errore fuori dall'app (anteprime) */
+export function useMemberMaybe() {
+  return useContext(MemberCtx);
+}
+
 export function useMember() {
   const ctx = useContext(MemberCtx);
   if (!ctx) throw new Error("Profilo non pronto");
@@ -226,7 +231,8 @@ export function Shell({ children }: { children: ReactNode }) {
 
   const label = memberLabel(me, [me]);
   // voci che questa persona non può aprire, e il percorso dei nuovi (prime 6 funzioni)
-  const hide = [...(me.canCoach ? [] : ["istruttore"]), ...(me.canSegreteria ? [] : ["segreteria"])];
+  // squadra admin, istruttori e segreteria li vede solo chi ha un incarico
+  const hide = [...(me.canCoach ? [] : ["istruttore"]), ...(me.canSegreteria ? [] : ["segreteria"]), ...(me.canStaff ? [] : ["staff"])];
   const focus = me.essenziale ? percorsoOf(me.percorso)?.focus ?? null : null;
   const hour = greet(romeHour());
   const lvl = levelOf(xp.xp);

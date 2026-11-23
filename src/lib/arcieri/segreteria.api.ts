@@ -5,7 +5,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 import type { Sql } from "@/lib/db";
-import { asNum, clip, db, ensureMember, staffLevel, type MemberRow } from "./access";
+import { asBool, asNum, clip, db, ensureMember, staffLevel, type MemberRow } from "./access";
 import { homeId, myMembership } from "./compagnie.api";
 
 const DAY = 86_400_000;
@@ -25,7 +25,7 @@ export function currentSeason(now = new Date()) {
 async function access(sql: Sql, me: MemberRow, userId: string, wanted: number) {
   const staff = staffLevel(me);
   const mine = await myMembership(sql, userId);
-  if (!staff && mine.role !== "owner") throw new Error("La segreteria è per il capogruppo e lo staff della compagnia.");
+  if (!staff && mine.role !== "owner" && !asBool(me.coach)) throw new Error("La segreteria è per il capogruppo, gli istruttori e lo staff della compagnia.");
   return { companyId: staff && wanted ? wanted : mine.companyId, staff: staff != null };
 }
 

@@ -328,6 +328,15 @@ function Page() {
             <Migrazione myEmail={me.email} />
             <PrivacyCard share={me.shareCoach} onDone={reload} />
             <ResetCard onDone={reload} />
+            {me.canStaff ? null : (
+              <Link to="/staff" className="aa-glow-panel flex items-center justify-between gap-3 rounded-[var(--radius-card)] border border-hair p-3.5">
+                <span>
+                  <b className="block font-display text-xl leading-tight">Codici e incarichi</b>
+                  <span className="text-xs text-muted">Hai un codice dello staff o vuoi guidare una compagnia?</span>
+                </span>
+                <span aria-hidden className="text-muted">›</span>
+              </Link>
+            )}
             <DeleteAccountCard founder={me.isSuper} />
             <div className="flex justify-center pt-1"><UserButton /></div>
           </>

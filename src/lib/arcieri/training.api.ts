@@ -1153,8 +1153,7 @@ export const calendarMonth = createServerFn({ method: "POST" })
       select distinct c.id, c.name, c.starts_on::text as starts_on
       from competitions c
       left join competition_entries e on e.competition_id = c.id and e.user_id = ${context.userId}
-      where c.starts_on >= ${from}::date and c.starts_on < ${to}::date
-        and (c.starts_on >= current_date or e.user_id is not null or c.created_by = ${context.userId})`;
+      where c.starts_on >= ${from}::date and c.starts_on < ${to}::date`;
     const challenges = await sql<{ id: number; title: string; starts_on: string; ends_on: string }>`
       select c.id, c.title, c.starts_on::text as starts_on, c.ends_on::text as ends_on
       from challenges c

@@ -1,8 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
-import { asBool, asIso, asNum, asNumOrNull, canScore, clip, db, ensureMember, PRIZES, type MemberRow } from "./access";
+import { asBool, asIso, asNum, asNumOrNull, canScore, clip, db, ensureMember, PRIZES, staffLevel, type MemberRow } from "./access";
 import { syncBadges } from "./badges";
-import { companyPeers } from "./compagnie.api";
+import { companyPeers, myMembership } from "./compagnie.api";
 import { challengeScores, rulesFair, teamMeans, type Metric, type Rule } from "./challenge";
 import { romeMidnightUtc, ymdAdd } from "./time";
 import { divisionOf } from "./labels";
@@ -412,11 +412,13 @@ export const listCompetitions = createServerFn({ method: "GET" })
     await ensureMember(sql, context.userId);
     const comps = await sql<{
       id: number; name: string; starts_on: string; place: string; organizer: string; kind: string; distance_m: number | null;
-      category: string; signup_deadline: string | null; external_url: string; notes: string;
+      category: string; signup_deadline: string | null; external_url: string; notes: string; created_by: string;
     }>`
       select id, name, starts_on::text as starts_on, place, organizer, kind, distance_m, category,
-        signup_deadline::text as signup_deadline, external_url, notes
+        signup_deadline::text as signup_deadline, external_url, notes, created_by
       from competitions order by starts_on`;
+    const viewer = await sql<MemberRow>`select * from members where user_id = ${context.userId} limit 1`;
+    const staffHere = viewer[0] ? staffLevel(viewer[0]) != null : false;
     const entries = await sql<{ id: number; competition_id: number; user_id: string; score: number | null; rank: number | null; category: string; notes: string; lane_count: number | null; spot: number | null; championship_points: number | null; target_kind: string; sagoma_max: number | null }>`
       select id, competition_id, user_id, score, rank, category, notes, lane_count, spot, championship_points, target_kind, sagoma_max from competition_entries`;
     const lanes = await sql<{ competition_id: number; user_id: string; n: number; score: number; arrows: string; label: string; distance_m: number | null; note: string; aim_angle: string }>`
@@ -438,6 +440,8 @@ export const listCompetitions = createServerFn({ method: "GET" })
         signupDeadline: c.signup_deadline ? String(c.signup_deadline).slice(0, 10) : null,
         externalUrl: c.external_url,
         notes: c.notes,
+        // la elimina per tutti chi l'ha aggiunta o lo staff
+        canDelete: c.created_by === context.userId || staffHere,
         attended: mine.has(asNum(c.id)) ? mine.get(asNum(c.id)) ?? null : null,
         roster: presence.filter((row) => row.competition_id === c.id).map((row) => {
           const member = members.find((item) => item.user_id === row.user_id);
@@ -637,6 +641,36 @@ export const setPresence = createServerFn({ method: "POST" })
     return { ok: true as const };
   });
 
+/**
+ * Toglie una gara: "mine" la toglie dalle proprie (punteggio, piazzole e presenza), "all" la cancella per tutti
+ * (solo chi l'ha aggiunta o lo staff).
+ */
+export const deleteCompetition = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: unknown) => {
+    const raw = (input ?? {}) as { id?: unknown; scope?: unknown };
+    return { id: asNum(raw.id), scope: raw.scope === "all" ? ("all" as const) : ("mine" as const) };
+  })
+  .handler(async ({ context, data }) => {
+    const sql = await db();
+    const me = await ensureMember(sql, context.userId);
+    const rows = await sql<{ id: number; created_by: string }>`select id, created_by from competitions where id = ${data.id} limit 1`;
+    const comp = rows[0];
+    if (!comp) throw new Error("Gara non trovata.");
+    if (data.scope === "all") {
+      if (comp.created_by !== context.userId && staffLevel(me) == null) throw new Error("La cancella per tutti solo chi l'ha aggiunta o lo staff.");
+      await sql`delete from piazzole where competition_id = ${data.id}`;
+      await sql`delete from competition_entries where competition_id = ${data.id}`;
+      await sql`delete from competition_presence where competition_id = ${data.id}`;
+      await sql`delete from competitions where id = ${data.id}`;
+      return { ok: true as const };
+    }
+    await sql`delete from piazzole where competition_id = ${data.id} and user_id = ${context.userId}`;
+    await sql`delete from competition_entries where competition_id = ${data.id} and user_id = ${context.userId}`;
+    await sql`delete from competition_presence where competition_id = ${data.id} and user_id = ${context.userId}`;
+    return { ok: true as const };
+  });
+
 export const deleteEntry = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((input: unknown) => {
@@ -668,10 +702,16 @@ export const archerBoard = createServerFn({ method: "POST" })
   })
   .handler(async ({ context, data }) => {
     const sql = await db();
-    await ensureMember(sql, context.userId);
+    const viewer = await ensureMember(sql, context.userId);
     const rows = await sql<MemberRow>`select * from members where id = ${data.id} and user_id is not null limit 1`;
     const member = rows[0];
     if (!member?.user_id) throw new Error("Questo arciere non è ancora nel gruppo.");
+    // incarichi della persona e cosa può cambiare chi guarda
+    const theirs = await myMembership(sql, member.user_id);
+    const mineCo = await myMembership(sql, context.userId);
+    const coName = await sql<{ name: string; color: string }>`select name, color from companies where id = ${theirs.companyId} limit 1`;
+    const games = await sql<{ mode: string; level: string; best: number; max_points: number; stations: string; arrows: number; tens: number; xs: number; misses: number; rounds: number; best_at: unknown }>`
+      select mode, level, best, max_points, stations, arrows, tens, xs, misses, rounds, best_at from game_records where user_id = ${member.user_id}`.catch(() => []);
     const sessions = await sql<{ started_at: unknown; distance_m: unknown; arrows: number; points: number }>`
       select s.started_at, s.distance_m, count(sh.id)::int as arrows, coalesce(sum(sh.score), 0)::int as points
       from sessions s
@@ -706,6 +746,35 @@ export const archerBoard = createServerFn({ method: "POST" })
       admin: member.role === "admin",
       joinedOn: String(member.joined_on ?? "").slice(0, 10),
       mine: member.user_id === context.userId,
+      roles: {
+        level: staffLevel(member),
+        leader: theirs.role === "owner",
+        coach: asBool(member.coach),
+        companyName: coName[0]?.name ?? "",
+        companyColor: coName[0]?.color ?? "#1f7a46",
+      },
+      viewer: { level: staffLevel(viewer), leaderHere: mineCo.role === "owner" && mineCo.companyId === theirs.companyId, self: member.user_id === context.userId },
+      games: games.map((g) => {
+        let stations: number[] = [];
+        try {
+          stations = (JSON.parse(g.stations) as unknown[]).map(Number).filter((v) => Number.isFinite(v));
+        } catch {
+          /* dettaglio non leggibile */
+        }
+        return {
+          mode: g.mode,
+          level: g.level,
+          best: asNum(g.best),
+          max: asNum(g.max_points),
+          stations,
+          arrows: asNum(g.arrows),
+          tens: asNum(g.tens),
+          xs: asNum(g.xs),
+          misses: asNum(g.misses),
+          rounds: asNum(g.rounds),
+          bestAt: g.best_at ? asIso(g.best_at) : "",
+        };
+      }),
       trainings,
       comps: comps.map((c) => ({
         name: c.name,

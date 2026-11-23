@@ -31,6 +31,8 @@ export type MemberRow = {
   percorso?: string;
   /** gli istruttori della compagnia vedono i suoi allenamenti */
   share_coach?: boolean;
+  /** istruttore nominato dal fondatore, dallo staff o dal capogruppo */
+  coach?: boolean;
 };
 
 export type PublicMember = {
@@ -57,6 +59,12 @@ export type PublicMember = {
   staff: string;
   percorso: string;
   shareCoach: boolean;
+  /** istruttore nominato */
+  coach: boolean;
+  /** solo in getMe: incarichi (capogruppo della sua compagnia) */
+  leader?: boolean;
+  /** solo in getMe: vede la Squadra admin */
+  canStaff?: boolean;
   /** solo in getMe: percorso essenziale ancora attivo (meno di 5 allenamenti) */
   essenziale?: boolean;
   /** solo in getMe: può aprire il pannello istruttori */
@@ -197,6 +205,7 @@ export function toMember(row: MemberRow, claim: boolean, email: string | null = 
     staff: row.staff ?? "",
     percorso: row.percorso ?? "esistente",
     shareCoach: row.share_coach !== false,
+    coach: asBool(row.coach),
   };
 }
 

@@ -16,7 +16,7 @@ type Person = Overview["people"][number];
 const LEVEL: Record<string, { label: string; color: string }> = {
   super: { label: "Fondatore", color: "#ffd27a" },
   admin: { label: "Amministratore", color: "#ff8a3d" },
-  editor: { label: "Editor", color: "#3aa7ff" },
+  editor: { label: "Admin", color: "#3aa7ff" },
 };
 
 function since(iso: string | null) {
@@ -41,11 +41,11 @@ function Page() {
   if (error || !data) return <ErrorNote text={error || "Errore"} />;
   const lvl = data.me.level;
   const leader = data.me.leader;
-  const title = lvl ? LEVEL[lvl].label : leader ? "Capogruppo" : "Arciere";
+  const title = lvl ? LEVEL[lvl].label : leader ? "Capogruppo" : data.me.coach ? "Istruttore" : "Arciere";
   return (
     <div className="grid gap-4">
-      <PageHead kicker={`Il tuo incarico · ${title}`} title="Squadra admin" lede={lvl ? "Nomina amministratori, editor e capigruppo, rispondi alle richieste e tieni d'occhio chi non si vede da tempo." : leader ? `Guidi ${data.me.companyName}: invita persone e gestisci la tua compagnia.` : "Hai ricevuto un codice? Usalo qui. Puoi anche chiedere di diventare capogruppo della tua compagnia."} />
-      <RoleMap level={lvl} leader={leader} />
+      <PageHead kicker={`Il tuo incarico · ${title}`} title="Squadra admin" lede={lvl ? "Nomina amministratori, admin, capigruppo e istruttori, rispondi alle richieste e tieni d'occhio chi non si vede da tempo." : leader ? `Guidi ${data.me.companyName}: invita persone, nomina gli istruttori e gestisci la tua compagnia.` : "Hai ricevuto un codice? Usalo qui. Puoi anche chiedere di diventare capogruppo della tua compagnia."} />
+      <RoleMap level={lvl} leader={leader} coach={data.me.coach} />
       <RedeemCard onDone={reload} />
       {!lvl && !leader ? <LeaderRequest data={data} onDone={reload} /> : null}
       {lvl || leader ? <InviteCard data={data} /> : null}
@@ -58,21 +58,22 @@ function Page() {
 }
 
 /** chi può fare cosa: quattro gradini, con quello attuale in evidenza */
-function RoleMap({ level, leader }: { level: string | null; leader: boolean }) {
+function RoleMap({ level, leader, coach }: { level: string | null; leader: boolean; coach?: boolean }) {
   const steps = [
     { id: "super", label: "Fondatore", text: "Tutto. Nessuno lo può togliere o declassare." },
     { id: "admin", label: "Amministratore", text: "Gestisce l'app e lo staff, ma non il fondatore." },
-    { id: "editor", label: "Editor", text: "Segue tutte le compagnie e ne nomina i capigruppo." },
-    { id: "leader", label: "Capogruppo", text: "Invita e gestisce solo la sua compagnia." },
+    { id: "editor", label: "Admin", text: "Segue tutte le compagnie e ne nomina i capigruppo." },
+    { id: "leader", label: "Capogruppo", text: "Invita, nomina gli istruttori e gestisce la sua compagnia." },
+    { id: "coach", label: "Istruttore", text: "Segue gli atleti della compagnia, presenze e segreteria." },
   ];
-  const mine = level ?? (leader ? "leader" : "");
+  const mine = level ?? (leader ? "leader" : coach ? "coach" : "");
   return (
     <Card className="grid gap-2">
       <SectionHead title="Chi può fare cosa" />
       <ol className="grid gap-1.5">
         {steps.map((s, i) => (
           <li key={s.id} className={cx("aa-staff-step flex items-start gap-3 rounded-2xl p-2.5", s.id === mine ? "is-mine" : "")} style={{ animationDelay: `${i * 60}ms` }}>
-            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full font-display text-sm text-[#1a1408]" style={{ background: s.id === "leader" ? "#7cf0a8" : LEVEL[s.id].color }}>{i + 1}</span>
+            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full font-display text-sm text-[#1a1408]" style={{ background: s.id === "leader" ? "#7cf0a8" : s.id === "coach" ? "#8cc3f0" : LEVEL[s.id].color }}>{i + 1}</span>
             <span className="min-w-0">
               <span className="block text-sm font-semibold">{s.label}{s.id === mine ? " · sei tu" : ""}</span>
               <span className="block text-xs text-muted">{s.text}</span>
@@ -199,14 +200,14 @@ function CodeMaker({ data, onDone }: { data: Overview; onDone: () => void }) {
   const lvl = data.me.level;
   const kinds = [
     ...(lvl === "super" ? [{ id: "admin" as const, label: "Amministratore" }] : []),
-    ...(lvl === "super" || lvl === "admin" ? [{ id: "editor" as const, label: "Editor" }] : []),
+    ...(lvl === "super" || lvl === "admin" ? [{ id: "editor" as const, label: "Admin" }] : []),
     { id: "capogruppo" as const, label: "Capogruppo" },
   ];
   const [kind, setKind] = useState<(typeof kinds)[number]["id"]>(kinds[0].id);
   const [companyId, setCompanyId] = useState(data.me.companyId);
   const [made, setMade] = useState("");
   const [err, setErr] = useState("");
-  const what = kind === "admin" ? "amministratore" : kind === "editor" ? "editor" : `capogruppo di ${data.companies.find((c) => c.id === companyId)?.name ?? "una compagnia"}`;
+  const what = kind === "admin" ? "amministratore" : kind === "editor" ? "admin" : `capogruppo di ${data.companies.find((c) => c.id === companyId)?.name ?? "una compagnia"}`;
   return (
     <Card className="grid gap-2">
       <SectionHead title="Nomina con un codice" sub="Il codice vale una volta sola, per 7 giorni." />
@@ -245,6 +246,7 @@ function Badge({ p }: { p: Person }) {
   const items = [
     ...(p.level ? [LEVEL[p.level]] : []),
     ...(p.leader ? [{ label: "Capogruppo", color: "#7cf0a8" }] : []),
+    ...(p.coach ? [{ label: "Istruttore", color: "#8cc3f0" }] : []),
   ];
   return (
     <span className="flex flex-wrap gap-1">
@@ -294,10 +296,13 @@ function People({ data, onDone }: { data: Overview; onDone: () => void }) {
                   {lvl && !me && !lockedForMe ? (
                     <>
                       <button type="button" className="aa-chip" onClick={() => act(() => setRole({ data: { memberId: p.memberId, leader: !p.leader } }))}>{p.leader ? "Togli capogruppo" : "Fai capogruppo"}</button>
-                      {lvl !== "editor" && p.level !== "editor" ? <button type="button" className="aa-chip" onClick={() => act(() => setRole({ data: { memberId: p.memberId, to: "editor" } }))}>Fai editor</button> : null}
+                      {lvl !== "editor" && p.level !== "editor" ? <button type="button" className="aa-chip" onClick={() => act(() => setRole({ data: { memberId: p.memberId, to: "editor" } }))}>Fai admin</button> : null}
                       {lvl === "super" && p.level !== "admin" ? <button type="button" className="aa-chip" onClick={() => act(() => setRole({ data: { memberId: p.memberId, to: "admin" } }))}>Fai amministratore</button> : null}
                       {p.level && lvl !== "editor" ? <button type="button" className="aa-chip" onClick={() => act(() => setRole({ data: { memberId: p.memberId, to: "none" } }))}>Togli incarico</button> : null}
                     </>
+                  ) : null}
+                  {(lvl && (p.level !== "super" || lvl === "super")) || (!lvl && data.me.leader && p.companyId === data.me.companyId) ? (
+                    <button type="button" className="aa-chip" onClick={() => act(() => setRole({ data: { memberId: p.memberId, coach: !p.coach } }))}>{p.coach ? "Togli istruttore" : "Fai istruttore"}</button>
                   ) : null}
                   {!me && !lockedForMe && (lvl || (!p.level && p.companyId === data.me.companyId)) ? (
                     <button type="button" className="aa-chip" onClick={() => act(() => removeFromCompany({ data: { memberId: p.memberId } }))}>Togli dalla compagnia</button>

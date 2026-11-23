@@ -7,39 +7,47 @@ import { award } from "@/lib/arcieri/xp";
 export const Route = createFileRoute("/_app/stima")({ component: Page });
 
 /**
- * Stima delle distanze: una sagoma (alta circa 80 cm) compare nel bosco a una distanza tra 5 e 45 m.
- * Indovina i metri: più ti avvicini, più punti. 5 sagome a partita.
+ * Stima delle distanze su fotografie di campi e boschi: il paglione (largo 1 m, alto 1,3 m da terra) è messo nella
+ * foto con la prospettiva giusta (occhio a 1,6 m, orizzonte della foto misurato). Indovina i metri: più ti avvicini,
+ * più punti. 5 bersagli a partita.
  */
 const rnd = () => 5 + Math.round(Math.random() * 40);
 
-function Scene({ d, show }: { d: number; show: boolean }) {
-  // prospettiva: orizzonte a y=90, osservatore alto 1,6 m, focale tale che a 10 m la sagoma sia alta ~60 px
-  const f = 750;
-  const base = 90 + (1.6 * f) / d / 1.5;
-  const hpx = (0.8 * f) / d / 1.5;
-  const w = hpx * 1.5;
+/** foto 1008×1792: riga dell'orizzonte (punto di fuga del sentiero) misurata su ciascuna */
+const PHOTOS = [
+  { src: "/gioco/campo.jpg", horizon: 1040, haze: 0 },
+  { src: "/gioco/montagna.jpg", horizon: 1035, haze: 0 },
+  { src: "/gioco/prato.jpg", horizon: 1030, haze: 0 },
+  { src: "/gioco/nebbia.jpg", horizon: 970, haze: 0.012 },
+];
+const PW = 1008;
+const PH = 1792;
+const F = 1080; // focale in pixel della foto (circa 50° di campo orizzontale)
+const EYE = 1.6;
+
+function Scene({ d, show, photo, lat }: { d: number; show: boolean; photo: number; lat: number }) {
+  const ph = PHOTOS[photo % PHOTOS.length];
+  const y0 = ph.horizon - 360;
+  const vh = PH - y0;
+  const px = (m: number) => (F * m) / d;
+  const ground = ph.horizon + px(EYE);
+  const cx = PW / 2 + Math.max(-PW * 0.3, Math.min(PW * 0.3, px(lat)));
+  const boss = px(1);
+  const top = ground - px(1.3);
+  const leg = Math.max(1.5, px(0.05));
   return (
-    <svg viewBox="0 0 320 220" className="w-full rounded-2xl">
-      <defs>
-        <linearGradient id="st-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#2b4a6b" /><stop offset="1" stopColor="#7aa6c4" /></linearGradient>
-        <linearGradient id="st-g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#3d6b3a" /><stop offset="1" stopColor="#1f3d1f" /></linearGradient>
-      </defs>
-      <rect width="320" height="90" fill="url(#st-sky)" />
-      <rect y="90" width="320" height="130" fill="url(#st-g)" />
-      {[20, 60, 250, 290, 140].map((x, i) => <path key={x} d={`M${x} 92 l-16 0 l16 -${40 + i * 6} l16 ${40 + i * 6}z`} fill="#1d3a22" opacity={0.85} />)}
-      {[0, 1, 2, 3, 4].map((k) => {
-        const z = 5 + k * 10;
-        const y = 90 + (1.6 * f) / z / 1.5;
-        return <line key={k} x1="0" x2="320" y1={y} y2={y} stroke="#fff" strokeOpacity={0.05} />;
-      })}
-      <path d="M150 220 L158 92 L162 92 L170 220 Z" fill="#8a6a3a" opacity={0.35} />
-      <g key={d} className="aa-pop" style={{ transformOrigin: `160px ${base}px` }}>
-        <ellipse cx={160} cy={base} rx={w * 0.7} ry={hpx * 0.08} fill="#000" opacity={0.3} />
-        <path d={`M${160 - w / 2} ${base - hpx * 0.15} q${w * 0.1} -${hpx * 0.8} ${w * 0.55} -${hpx * 0.75} q${w * 0.35} 0 ${w * 0.45} ${hpx * 0.3} l0 ${hpx * 0.45} l-${w * 0.15} ${hpx * 0.15} l-${w * 0.7} 0 z`} fill="#6e4a2a" stroke="#3b2617" strokeWidth={Math.max(0.5, hpx * 0.02)} />
-        <circle cx={160 + w * 0.05} cy={base - hpx * 0.55} r={hpx * 0.1} fill="#f4f1ea" />
-        <circle cx={160 + w * 0.05} cy={base - hpx * 0.55} r={hpx * 0.05} fill="#d63a2f" />
+    <svg viewBox={`0 ${y0} ${PW} ${vh}`} className="w-full rounded-2xl" role="img" aria-label="Paglione nel campo: stima la distanza">
+      <image href={ph.src} x="0" y="0" width={PW} height={PH} preserveAspectRatio="none" />
+      <g key={`${d}-${photo}`} className="aa-pop" style={{ transformOrigin: `${cx}px ${ground}px` }}>
+        <ellipse cx={cx + boss * 0.08} cy={ground} rx={boss * 0.75} ry={Math.max(2, boss * 0.07)} fill="#000" opacity="0.35" />
+        {/* cavalletto: tre gambe di legno */}
+        <path d={`M${cx - boss * 0.38} ${top + boss} L${cx - boss * 0.5} ${ground} M${cx + boss * 0.38} ${top + boss} L${cx + boss * 0.5} ${ground} M${cx} ${top + boss} L${cx + boss * 0.08} ${ground - px(0.05)}`} stroke="#5a3d22" strokeWidth={leg} strokeLinecap="round" />
+        {/* paglione con il bersaglio, un po' scurito per la luce della foto */}
+        <rect x={cx - boss / 2 + px(0.02)} y={top + px(0.02)} width={boss} height={boss} fill="#000" opacity="0.3" />
+        <image href="/gioco/bersaglio.jpg" x={cx - boss / 2} y={top} width={boss} height={boss} preserveAspectRatio="none" style={{ filter: "brightness(0.82) saturate(0.85)" }} />
+        {ph.haze ? <rect x={cx - boss / 2} y={top} width={boss} height={boss + px(0.3)} fill="#d9dde0" opacity={Math.min(0.55, ph.haze * d)} /> : null}
       </g>
-      {show ? <text x="160" y="30" textAnchor="middle" fontSize="20" fontWeight="800" fill="#fff">{d} m</text> : null}
+      {show ? <text x={PW / 2} y={y0 + 120} textAnchor="middle" fontSize="96" fontWeight="800" fill="#fff" stroke="#000" strokeOpacity="0.45" strokeWidth="4" paintOrder="stroke">{d} m</text> : null}
     </svg>
   );
 }
@@ -47,6 +55,12 @@ function Scene({ d, show }: { d: number; show: boolean }) {
 function Page() {
   const [best, setBest] = useLocalState<{ best: number }>("aa-stima-v1", { best: 0 });
   const [d, setD] = useState(rnd);
+  const [photo, setPhoto] = useState(() => Math.floor(Math.random() * PHOTOS.length));
+  const [lat, setLat] = useState(() => (Math.random() - 0.5) * 3);
+  const shuffle = () => {
+    setPhoto((p) => (p + 1 + Math.floor(Math.random() * (PHOTOS.length - 1))) % PHOTOS.length);
+    setLat((Math.random() - 0.5) * 3);
+  };
   const [guess, setGuess] = useState(20);
   const [shown, setShown] = useState(false);
   const [round, setRound] = useState(1);
@@ -69,15 +83,16 @@ function Page() {
     }
     setRound(round + 1);
     setD(rnd());
+    shuffle();
     setShown(false);
   };
   return (
     <div className="grid gap-3">
-      <PageHead kicker="Impara" title="Stima distanze" lede="Nel 3D le distanze non sono scritte: allena l'occhio. La sagoma è alta circa 80 cm." />
+      <PageHead kicker="Impara" title="Stima distanze" lede="Nel 3D le distanze non sono scritte: allena l'occhio sulle foto. Il paglione è largo 1 m e arriva a 1,3 m da terra: usalo come metro." />
       {!over ? (
         <Card className="grid gap-3">
-          <div className="flex justify-between text-xs text-muted"><span>Sagoma {round} di 5</span><span>Punti {pts}</span></div>
-          <Scene d={d} show={shown} />
+          <div className="flex justify-between text-xs text-muted"><span>Bersaglio {round} di 5</span><span>Punti {pts}</span></div>
+          <Scene d={d} show={shown} photo={photo} lat={lat} />
           <label className="grid gap-1">
             <span className="flex items-baseline justify-between"><span className="text-xs text-muted">La tua stima</span><b className="font-display text-3xl tabular-nums">{guess} m</b></span>
             <input type="range" min={5} max={50} value={guess} disabled={shown} onChange={(e) => setGuess(Number(e.target.value))} className="w-full accent-[var(--primary)]" />
@@ -87,7 +102,7 @@ function Page() {
           ) : (
             <div className="aa-rise grid gap-2 text-center">
               <p className="font-semibold">{err === 0 ? "Esatto!" : `Era a ${d} m: hai sbagliato di ${err} m`} · +{gain}</p>
-              <button type="button" className="aa-press min-h-12 rounded-2xl bg-primary font-semibold text-primary-fg" onClick={next}>{round < 5 ? "Prossima sagoma" : "Risultato"}</button>
+              <button type="button" className="aa-press min-h-12 rounded-2xl bg-primary font-semibold text-primary-fg" onClick={next}>{round < 5 ? "Prossimo bersaglio" : "Risultato"}</button>
             </div>
           )}
         </Card>
@@ -96,7 +111,7 @@ function Page() {
           <p className="font-display text-6xl">{pts}<span className="text-2xl text-muted">/50</span></p>
           <p className="text-sm">{pts >= 40 ? "Occhio da cacciatore." : pts >= 25 ? "Buona stima: con l'allenamento scendi sotto i 3 m d'errore." : "Le distanze ingannano: riprova."}</p>
           <p className="text-xs text-muted">Record {Math.max(best.best, pts)}</p>
-          <button type="button" className="aa-press min-h-12 rounded-2xl bg-primary px-8 font-semibold text-primary-fg" onClick={() => { setRound(1); setPts(0); setD(rnd()); setShown(false); }}>Gioca ancora</button>
+          <button type="button" className="aa-press min-h-12 rounded-2xl bg-primary px-8 font-semibold text-primary-fg" onClick={() => { setRound(1); setPts(0); setD(rnd()); shuffle(); setShown(false); }}>Gioca ancora</button>
         </Card>
       )}
     </div>

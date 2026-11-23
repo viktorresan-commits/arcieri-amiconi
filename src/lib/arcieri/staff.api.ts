@@ -5,13 +5,14 @@
  * - Amministratore: gestisce tutto, nomina editor e capigruppo; non tocca il fondatore né gli altri amministratori.
  * - Editor: segue le compagnie (le vede tutte, ne nomina i capigruppo, risponde alle richieste).
  * - Capogruppo: il titolare di una compagnia; invita persone (anche su WhatsApp) e gestisce solo la sua compagnia.
+ * - Istruttore: segue gli atleti della sua compagnia e la segreteria; lo nominano lo staff o il capogruppo.
  *
  * Gli incarichi si danno con codici monouso (validi 7 giorni) o approvando una richiesta.
  */
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 import type { Sql } from "@/lib/db";
-import { asNum, clip, db, ensureMember, staffLevel, type MemberRow } from "./access";
+import { asBool, asNum, clip, db, ensureMember, staffLevel, type MemberRow } from "./access";
 import { dropIfEmpty, homeId, myMembership } from "./compagnie.api";
 
 type Level = ReturnType<typeof staffLevel>;
@@ -68,14 +69,14 @@ export const staffOverview = createServerFn({ method: "GET" })
     const myRequests = await sql<{ id: number; kind: string; status: string; created_at: unknown }>`
       select id, kind, status, created_at from role_requests where user_id = ${context.userId} order by created_at desc limit 5`;
     const base = {
-      me: { memberId: asNum(row.id), level, leader: mine.role === "owner", companyId: mine.companyId, companyName: company[0]?.name ?? "", companyColor: company[0]?.color ?? "#1f7a46" },
+      me: { memberId: asNum(row.id), level, leader: mine.role === "owner", coach: asBool(row.coach), companyId: mine.companyId, companyName: company[0]?.name ?? "", companyColor: company[0]?.color ?? "#1f7a46" },
       myRequests: myRequests.map((r) => ({ id: asNum(r.id), kind: r.kind, status: r.status, createdAt: asIso(r.created_at) })),
     };
 
     // il capogruppo vede la sua compagnia; lo staff le vede tutte
     const seen = await lastSeenMap(sql);
-    const people = await sql<{ id: number; user_id: string; given_name: string; family_name: string; nickname: string; role: string; staff: string; is_super: boolean; photo_url: string | null; avatar_color: string; company_id: number | null; company_role: string | null }>`
-      select m.id, m.user_id, m.given_name, m.family_name, m.nickname, m.role, m.staff, m.is_super, m.photo_url, m.avatar_color, cm.company_id, cm.role as company_role
+    const people = await sql<{ id: number; user_id: string; given_name: string; family_name: string; nickname: string; role: string; staff: string; is_super: boolean; coach: boolean; photo_url: string | null; avatar_color: string; company_id: number | null; company_role: string | null }>`
+      select m.id, m.user_id, m.given_name, m.family_name, m.nickname, m.role, m.staff, m.is_super, m.coach, m.photo_url, m.avatar_color, cm.company_id, cm.role as company_role
       from members m left join company_members cm on cm.user_id = m.user_id
       where m.user_id is not null
       order by m.given_name, m.id`;
@@ -92,6 +93,7 @@ export const staffOverview = createServerFn({ method: "GET" })
       companyId: asNum(p.company_id ?? home),
       companyName: nameOf.get(asNum(p.company_id ?? home)) ?? "",
       leader: p.company_role === "owner",
+      coach: asBool(p.coach),
       lastSeen: seen.get(p.user_id) ?? null,
     });
     const visible = level ? people : mine.role === "owner" ? people.filter((p) => asNum(p.company_id ?? home) === mine.companyId) : [];
@@ -198,7 +200,7 @@ export const redeemCode = createServerFn({ method: "POST" })
     }
     if (c.kind === "editor") {
       await sql`update members set staff = 'editor' where id = ${row.id}`;
-      return { ok: true as const, message: "Ora sei editor: segui le compagnie." };
+      return { ok: true as const, message: "Ora sei admin: segui le compagnie." };
     }
     await moveTo(sql, context.userId, asNum(c.company_id), "owner");
     return { ok: true as const, message: "Ora sei capogruppo della tua compagnia." };
@@ -258,29 +260,42 @@ export const decideRequest = createServerFn({ method: "POST" })
     return { ok: true as const };
   });
 
-/** cambia l'incarico di una persona: amministratore, editor, nessuno; capogruppo sì o no */
+/**
+ * cambia l'incarico di una persona: amministratore, admin (editor), nessuno; capogruppo sì o no; istruttore sì o no.
+ * Il fondatore può tutto; il capogruppo può solo nominare o togliere gli istruttori della sua compagnia.
+ */
 export const setRole = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((input: unknown) => {
-    const raw = (input ?? {}) as { memberId?: unknown; to?: unknown; leader?: unknown };
+    const raw = (input ?? {}) as { memberId?: unknown; to?: unknown; leader?: unknown; coach?: unknown };
     const to = (["admin", "editor", "none"] as const).find((k) => k === raw.to);
-    return { memberId: asNum(raw.memberId), to: to ?? null, leader: typeof raw.leader === "boolean" ? raw.leader : null };
+    return {
+      memberId: asNum(raw.memberId),
+      to: to ?? null,
+      leader: typeof raw.leader === "boolean" ? raw.leader : null,
+      coach: typeof raw.coach === "boolean" ? raw.coach : null,
+    };
   })
   .handler(async ({ context, data }) => {
     const sql = await db();
     const { row: meRow, level } = await me(sql, context.userId);
-    if (!level) throw new Error("Solo lo staff cambia gli incarichi.");
     const rows = await sql<MemberRow>`select * from members where id = ${data.memberId} limit 1`;
     const target = rows[0];
     if (!target?.user_id) throw new Error("Persona non trovata.");
     const targetLevel = staffLevel(target);
-    if (targetLevel === "super") throw new Error("Il fondatore non si può modificare.");
-    if (targetLevel === "admin" && level !== "super") throw new Error("Solo il fondatore cambia un amministratore.");
+    const mine = await myMembership(sql, context.userId);
+    const theirs = await myMembership(sql, target.user_id);
+    const leaderOfTheirs = mine.role === "owner" && mine.companyId === theirs.companyId;
+    if (!level && !(leaderOfTheirs && data.coach != null && data.to == null && data.leader == null)) {
+      throw new Error(leaderOfTheirs ? "Il capogruppo nomina solo gli istruttori." : "Solo lo staff cambia gli incarichi.");
+    }
+    if (targetLevel === "super" && level !== "super") throw new Error("Il fondatore non si può modificare.");
+    if (targetLevel === "admin" && level !== "super" && (data.to || data.leader != null)) throw new Error("Solo il fondatore cambia un amministratore.");
     if (data.to && asNum(target.id) === asNum(meRow.id)) throw new Error("Non puoi cambiare il tuo incarico da qui.");
     if (data.to) {
       if (data.to === "admin" && level !== "super") throw new Error("Solo il fondatore nomina amministratori.");
-      if (data.to === "editor" && level === "editor") throw new Error("Solo un amministratore nomina gli editor.");
-      if (data.to === "none" && level === "editor" && targetLevel !== null) throw new Error("Un editor non toglie incarichi allo staff.");
+      if (data.to === "editor" && level === "editor") throw new Error("Solo un amministratore nomina gli admin.");
+      if (data.to === "none" && level === "editor" && targetLevel !== null) throw new Error("Un admin non toglie incarichi allo staff.");
       await sql`
         update members set
           role = ${data.to === "admin" ? "admin" : target.role === "admin" ? "archer" : target.role},
@@ -288,8 +303,15 @@ export const setRole = createServerFn({ method: "POST" })
         where id = ${target.id}`;
     }
     if (data.leader != null) {
-      const mine = await myMembership(sql, target.user_id);
-      await sql`update company_members set role = ${data.leader ? "owner" : "member"} where user_id = ${target.user_id} and company_id = ${mine.companyId}`;
+      await sql`update company_members set role = ${data.leader ? "owner" : "member"} where user_id = ${target.user_id} and company_id = ${theirs.companyId}`;
+    }
+    if (data.coach != null) {
+      await sql`update members set coach = ${data.coach} where id = ${target.id}`;
+    }
+    // chi riceve un incarico lo sa subito, con un avviso in Bacheca
+    const what = data.to === "admin" ? "amministratore" : data.to === "editor" ? "admin" : data.leader ? "capogruppo" : data.coach ? "istruttore" : "";
+    if (what && target.user_id !== context.userId) {
+      await notify(sql, target.user_id, `Sei ${what}`, what === "istruttore" ? "Nel Menu trovi «I miei atleti» e la Segreteria." : "Nel Menu trovi la Squadra admin.", what === "istruttore" ? "/istruttore" : "/staff", `role-${what}-${target.user_id}-${Date.now()}`);
     }
     return { ok: true as const };
   });

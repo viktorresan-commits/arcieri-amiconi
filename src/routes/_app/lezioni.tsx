@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useAvatar } from "@/components/avatar-hero";
 import { LessonArt } from "@/components/lesson-art";
+import { LessonChart } from "@/components/lesson-charts";
 import { Button, Card, PageHead } from "@/components/kit";
 import { Glyph } from "@/components/icons";
 import { LESSONS, LEVELS, type Lesson } from "@/lib/arcieri/lessons";
@@ -12,10 +13,18 @@ export const Route = createFileRoute("/_app/lezioni")({
   component: Page,
 });
 
-/** Corso in quattro livelli: ogni lezione ha un disegno, i punti chiave, gli errori, un esercizio e una domanda. */
+/** Corso in quattro livelli: ogni lezione ha un disegno, i grafici, i punti chiave, gli errori, un esercizio e una domanda. */
 function Page() {
   const [st, setSt] = useLocalState<{ done: string[]; open: string | null }>("aa-lezioni-v1", { done: [], open: null });
   const { shown } = useAvatar();
+  // dal glossario si arriva con ?l=<lezione>: si apre subito quella
+  useEffect(() => {
+    const want = new URLSearchParams(window.location.search).get("l");
+    if (want && LESSONS.some((l) => l.id === want)) {
+      setSt((s) => ({ ...s, open: want }));
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+  }, []);
   const lesson = LESSONS.find((l) => l.id === st.open) ?? null;
   const done = new Set(st.done);
   const markDone = (id: string) => {
@@ -38,6 +47,7 @@ function Page() {
           <p className="text-sm text-muted">{lesson.intro}</p>
         </div>
         <LessonArt art={lesson.art} look={shown} />
+        {(lesson.charts ?? []).map((c) => <LessonChart key={c} id={c} />)}
         <LessonBody lesson={lesson} done={done.has(lesson.id)} onDone={() => markDone(lesson.id)} />
         {next ? (
           <Button variant="ghost" onClick={() => { setSt((s) => ({ ...s, open: next.id })); window.scrollTo({ top: 0, behavior: "smooth" }); }}>
@@ -51,7 +61,7 @@ function Page() {
   const total = LESSONS.length;
   return (
     <div className="grid gap-3">
-      <PageHead kicker="Impara" title="Lezioni" lede="Dal primo tiro alla gara e alle specialità, in quattro livelli. Ogni lezione ha un disegno, gli errori da evitare, un esercizio e una domanda.">
+      <PageHead kicker="Impara" title="Lezioni" lede="Dal primo tiro alla gara e alle specialità, in quattro livelli. Ogni lezione ha un disegno, i grafici da toccare, gli errori da evitare, un esercizio e una domanda.">
         <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
           <div className="h-full rounded-full bg-[#7cf0a8]" style={{ width: `${(st.done.length / total) * 100}%` }} />
         </div>
@@ -77,7 +87,7 @@ function Page() {
                     <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-sm font-bold ${done.has(l.id) ? "bg-[#7cf0a8] text-[#0b120e]" : "border border-line"}`}>{done.has(l.id) ? <Glyph name="check" size={15} /> : k + 1}</span>
                     <span className="min-w-0 flex-1">
                       <b className="block truncate text-sm">{l.title}</b>
-                      <span className="text-[0.7rem] text-muted">{l.minutes} min · {l.points.length} punti chiave</span>
+                      <span className="text-[0.7rem] text-muted">{l.minutes} min · {l.points.length} punti chiave{l.charts?.length ? ` · ${l.charts.length} ${l.charts.length === 1 ? "grafico" : "grafici"}` : ""}</span>
                     </span>
                     <Glyph name="chevron" size={15} />
                   </button>

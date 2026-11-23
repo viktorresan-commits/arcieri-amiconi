@@ -1,6 +1,7 @@
 import { useEntryState } from "@/lib/arcieri/back-restore";
 import { useEffect, useState, type ReactNode } from "react";
 import { useCrests } from "@/lib/arcieri/crest";
+import { useMemberMaybe } from "@/components/shell";
 import { createFileRoute } from "@tanstack/react-router";
 import { AvatarScene, useAvatar } from "@/components/avatar-hero";
 import { Archer3D } from "@/components/archer-3d";
@@ -301,6 +302,8 @@ function Page() {
   const setX = (k: ExtraKey, v: string) => setLook((l) => ({ ...l, [k]: v, ...(k === "earringType" ? { earring: true } : k === "pouchType" ? { pouch: true } : k === "clasp" && v !== "nessuno" ? { cape: true } : {}) }));
   const [view, setView] = useEntryState<"lato" | "fronte" | "3d">("avatar-view", "lato");
   const { sky } = useSky();
+  const member = useMemberMaybe();
+  const profileName = member ? [member.me.givenName, member.me.familyName].filter(Boolean).join(" ").trim() || member.me.nickname : "";
   const set = <K extends keyof AvatarLook>(k: K, v: AvatarLook[K]) => setLook((l) => ({ ...l, [k]: v }));
   const opts = <T extends string>(list: readonly T[]) => list.map((id) => ({ id, label: id.charAt(0).toUpperCase() + id.slice(1) }));
 
@@ -313,8 +316,9 @@ function Page() {
             {shown.lefty ? <span className="absolute -bottom-1 -right-1 rounded-full bg-[#ffd27a] px-1.5 py-0.5 text-[0.55rem] font-black uppercase text-[#2a1d0c]">Mancino</span> : null}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/60">Il tuo arciere</p>
-            <p className="truncate font-display text-2xl leading-tight text-white">{STYLE_NAME[shown.style]} · {BODY_NAME[shown.body]}</p>
+            <p className="text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/60">Il tuo arciere · {STYLE_NAME[shown.style]} · {BODY_NAME[shown.body]}</p>
+            {/* l'arciere porta il nome del profilo */}
+            <p className="truncate font-display text-2xl leading-tight text-white">{profileName || "Il tuo arciere"}</p>
             <p className="truncate text-xs text-white/70">{[sceneLabel(shown.scene), BOW_TYPES.find((b) => b.id === shown.bowType)?.label].filter(Boolean).join(" · ")}</p>
           </div>
         </div>

@@ -7,6 +7,9 @@ import { award, readXp, today } from "@/lib/arcieri/xp";
 import { ArcherAvatar } from "./archer-avatar";
 import { SceneBackdrop } from "./scene-2d";
 import { SCENES, isIndoor } from "@/lib/arcieri/scenes";
+import { ANIMALS, type Animal } from "@/lib/arcieri/sagome";
+import { GAME_LEVELS, GAME_MODES, GAME_STATIONS, levelOf, maxRound, modeOf, type GameLevel, type GameMode } from "@/lib/arcieri/game-modes";
+import { myGameRecords, saveGameRound } from "@/lib/arcieri/game.api";
 
 /**
  * Gioco della Home con il tuo arciere, nell'ambientazione scelta.
@@ -15,6 +18,8 @@ import { SCENES, isIndoor } from "@/lib/arcieri/scenes";
  * tieni troppo, trazione incompleta che fa cadere il tiro, bersaglio fermo o in movimento.
  *
  * Mondo in unità SVG 300×400 (contenitore 3:4, nessuna deformazione).
+ * Tre bersagli (Bersaglio 10 anelli, Field 6-1, Sagome 8-5-0) e tre livelli; il record di ogni
+ * combinazione si salva sul server a fine giro e compare nel profilo dell'arciere.
  */
 const W = 300;
 const H = 400;
@@ -23,27 +28,73 @@ const AV_H = (AV.width * 350) / 300;
 const AV_TOP = H - 6 - AV_H;
 const GRIP = { x: AV.left + ((250 - 40) / 300) * AV.width, y: AV_TOP + (124 / 350) * AV_H };
 const BASE = { x: 232, y: 236 };
-// a ogni volée una distanza a caso: il bersaglio è più grande o più piccolo, il vento pesa di più o di meno
-const DISTANCES = [18, 25, 30, 40, 50, 60, 70] as const;
-type Dist = (typeof DISTANCES)[number];
-const randomDist = (not?: number): Dist => {
-  const pool = DISTANCES.filter((d) => d !== not);
-  return pool[Math.floor(Math.random() * pool.length)];
+// a ogni volée una distanza a caso tra quelle del livello: il bersaglio è più grande o più piccolo, il vento pesa di più o di meno
+type Dist = number;
+const randomDist = (pool: number[], not?: number): Dist => {
+  const list = pool.length > 1 ? pool.filter((d) => d !== not) : pool;
+  return list[Math.floor(Math.random() * list.length)];
 };
 const RINGS = ["#f4f1ea", "#f4f1ea", "#1a1c1e", "#1a1c1e", "#2a6294", "#2a6294", "#c4473d", "#c4473d", "#e6b325", "#e6b325"];
+// field: due zone gialle (6 e 5) e quattro nere (4, 3, 2, 1), tutte della stessa larghezza
+const FIELD = ["#1a1c1e", "#1a1c1e", "#1a1c1e", "#1a1c1e", "#e6b325", "#e6b325"];
 const DRAW_S = 0.75;
-const STATIONS = 20;
+const STATIONS = GAME_STATIONS;
 const ROUND_KEY = "aa-game-round";
+const randomWind = (max: number) => Math.round((Math.random() * 2 - 1) * max * 10) / 10;
+const randomAnimal = (not?: string) => {
+  const pool = ANIMALS.filter((a) => a.id !== not);
+  return pool[Math.floor(Math.random() * pool.length)].id;
+};
+
+/** sagoma: forma dell'animale (trasparenza del disegno) per capire se la freccia è sul corpo */
+type Mask = { w: number; h: number; data: Uint8ClampedArray };
+const masks = new Map<string, Mask | "loading">();
+function loadMask(src: string, done: () => void) {
+  if (masks.has(src) || typeof window === "undefined") return;
+  masks.set(src, "loading");
+  const img = new Image();
+  img.onload = () => {
+    try {
+      const w = Math.min(260, img.naturalWidth);
+      const h = Math.round((img.naturalHeight / img.naturalWidth) * w);
+      const c = document.createElement("canvas");
+      c.width = w;
+      c.height = h;
+      const ctx = c.getContext("2d");
+      if (!ctx) return;
+      ctx.drawImage(img, 0, 0, w, h);
+      masks.set(src, { w, h, data: ctx.getImageData(0, 0, w, h).data });
+      done();
+    } catch {
+      masks.delete(src);
+    }
+  };
+  img.onerror = () => masks.delete(src);
+  img.src = src;
+}
+const maskOf = (src: string) => {
+  const m = masks.get(src);
+  return m && m !== "loading" ? m : null;
+};
 
 type Hit = { dx: number; dy: number; score: number; x10: boolean };
 type Flight = { from: { x: number; y: number }; to: { x: number; y: number }; hit: Hit; t0: number; dur: number; arc: number; demo: boolean };
 type Draw = { t0: number; sx: number; sy: number; ax: number; ay: number; aim: { x: number; y: number }; demo: boolean; releaseAt?: number };
 
 const radiusOf = (d: Dist) => 34 * Math.sqrt(18 / d);
+
+/** dove sta la sagoma rispetto al centro del cavalletto, in unità del mondo */
+function sagomaBox(a: Animal, R: number) {
+  const m = maskOf(a.src);
+  const w = R * 3;
+  const h = w * (m ? m.h / m.w : 0.8);
+  // poggia a terra (y 300), centrata sul carrello
+  return { w, h, left: -w / 2, top: 300 - BASE.y - h };
+}
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 const now = () => performance.now() / 1000;
 
-export function HomeGame({ look, children, info, className = "", form, perks = [], banner }: {
+export function HomeGame({ look, children, info, className = "", form, perks = [], banner, bleed = false }: {
   look: AvatarLook;
   children?: ReactNode;
   info?: ReactNode;
@@ -54,6 +105,8 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
   perks?: string[];
   /** colore dello stendardo della compagnia */
   banner?: string;
+  /** a tutta larghezza, senza riquadro: la scena sfuma nella pagina */
+  bleed?: boolean;
 }) {
   const fire = perks.includes("fuoco");
   const { sky } = useSky();
@@ -69,11 +122,45 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
   });
   const bodyLook = useMemo(() => (look.lefty ? { ...look, lefty: false } : look), [look]);
   const stage = useRef<HTMLDivElement>(null);
-  const [dist, setDist] = useState<Dist>(() => randomDist());
-  // il bersaglio si muove sempre da solo: ampiezza e velocità cambiano a ogni volée
-  const [motion, setMotion] = useState(() => ({ amp: 18 + Math.random() * 18, speed: 0.45 + Math.random() * 0.5, phase: Math.random() * 6 }));
-  const moving = true;
-  const [best, setBest] = useLocalState<number>("aa-game-best-giro", 0);
+  // bersaglio e livello scelti: restano sul telefono
+  const [modeId, setModeId] = useLocalState<GameMode>("aa-game-mode", "fita");
+  const [levelId, setLevelId] = useLocalState<GameLevel>("aa-game-level", "normale");
+  const mode = modeOf(modeId);
+  const level = levelOf(levelId);
+  const [picker, setPicker] = useState(false);
+  const [dist, setDist] = useState<Dist>(() => randomDist(level.distances));
+  // il bersaglio si muove da solo (se il livello lo prevede): ampiezza e velocità cambiano a ogni volée
+  const newMotion = (k: number) => ({ amp: (18 + Math.random() * 18) * k, speed: (0.45 + Math.random() * 0.5) * Math.max(1, k), phase: Math.random() * 6 });
+  const [motion, setMotion] = useState(() => newMotion(level.motion));
+  const moving = level.motion > 0;
+  const [animalId, setAnimalId] = useState(() => randomAnimal());
+  const animal = ANIMALS.find((a) => a.id === animalId) ?? ANIMALS[0];
+  const [, setMaskTick] = useState(0);
+  useEffect(() => {
+    if (modeId === "sagome") loadMask(animal.src, () => setMaskTick((n) => n + 1));
+  }, [modeId, animal.src]);
+  // record per bersaglio e livello; il vecchio record del giro vale per Bersaglio · Normale
+  const [bests, setBests] = useLocalState<Record<string, number>>("aa-game-bests", {});
+  const comboKey = `${modeId}-${levelId}`;
+  const best = bests[comboKey] ?? 0;
+  const setBest = (v: number) => setBests((cur) => ({ ...cur, [comboKey]: v }));
+  useEffect(() => {
+    try {
+      const old = Number(localStorage.getItem("aa-game-best-giro") || 0);
+      if (old > 0) setBests((cur) => ({ ...cur, "fita-normale": Math.max(cur["fita-normale"] ?? 0, old) }));
+    } catch {
+      /* niente */
+    }
+    // su un telefono nuovo i record arrivano dal server
+    myGameRecords()
+      .then((rows) => setBests((cur) => {
+        const next = { ...cur };
+        for (const r of rows) next[`${r.mode}-${r.level}`] = Math.max(next[`${r.mode}-${r.level}`] ?? 0, r.best);
+        return next;
+      }))
+      .catch(() => undefined);
+  }, []);
+  const [saved, setSaved] = useState<{ record: boolean } | null>(null);
   const [hits, setHits] = useState<Hit[]>([]);
   const [demoHits, setDemoHits] = useState<Hit[]>([]);
   const [flight, setFlight] = useState<Flight | null>(null);
@@ -84,14 +171,36 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
   const [puff, setPuff] = useState<{ id: number; x: number; y: number; t0: number } | null>(null);
   // colpo sul paglione: il bersaglio vibra un attimo (niente scossoni di tutto il riquadro, che lampeggiava)
   const [thud, setThud] = useState<number | null>(null);
-  const [rawWind, setWind] = useState(() => Math.round((Math.random() * 6 - 3) * 10) / 10);
+  const [rawWind, setWind] = useState(() => randomWind(level.wind));
   const wind = indoor ? 0 : rawWind;
   const [playing, setPlaying] = useState(false);
   const lastTouch = useRef(0);
   const landed = useRef(0);
   const hitsRef = useRef<Hit[]>([]);
   const stationsRef = useRef<number[]>([]);
+  // dettaglio del giro: dieci (o il massimo della zona), centri e frecce fuori
+  const countRef = useRef({ tens: 0, xs: 0, misses: 0 });
   const R = radiusOf(dist);
+  const perStation = mode.perArrow * 3;
+  const box = modeId === "sagome" ? sagomaBox(animal, R) : null;
+  // il punto da mirare (rispetto al centro del cavalletto) e la sua "grandezza"
+  const goalOff = box ? { x: box.left + animal.blue.cx * box.w, y: box.top + animal.blue.cy * box.h } : { x: 0, y: 0 };
+  const Rg = box ? Math.max(animal.blue.rx * box.w, animal.blue.ry * box.h) : R;
+  const scoreAt = (dx: number, dy: number): { score: number; x10: boolean } => {
+    if (box) {
+      const u = (dx - box.left) / box.w;
+      const v = (dy - box.top) / box.h;
+      const inside = (z: { cx: number; cy: number; rx: number; ry: number }) => ((u - z.cx) / z.rx) ** 2 + ((v - z.cy) / z.ry) ** 2 <= 1;
+      if (inside(animal.blue)) return { score: 8, x10: inside(animal.red) };
+      if (u < 0 || u > 1 || v < 0 || v > 1) return { score: 0, x10: false };
+      const m = maskOf(animal.src);
+      const body = m ? m.data[(Math.min(m.h - 1, Math.floor(v * m.h)) * m.w + Math.min(m.w - 1, Math.floor(u * m.w))) * 4 + 3] > 60 : ((u - 0.5) / 0.4) ** 2 + ((v - 0.55) / 0.35) ** 2 <= 1;
+      return { score: body ? 5 : 0, x10: false };
+    }
+    const r = Math.hypot(dx, dy) / R;
+    if (modeId === "field") return { score: r <= 1 ? Math.max(1, 6 - Math.floor(r * 6)) : 0, x10: r <= 1 / 12 };
+    return { score: r <= 1 ? Math.max(1, 10 - Math.floor(r * 10)) : 0, x10: r <= 0.05 };
+  };
   // un giro è di 20 piazzole da 3 frecce: alla fine di ogni piazzola si passa alla successiva
   const [station, setStation] = useState(1);
   const [stations, setStations] = useState<number[]>([]);
@@ -106,16 +215,19 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
     try {
       const raw = localStorage.getItem(ROUND_KEY);
       if (raw) {
-        const r = JSON.parse(raw) as { station?: number; stations?: number[]; hits?: Hit[]; dist?: Dist; wind?: number; at?: number };
+        const r = JSON.parse(raw) as { station?: number; stations?: number[]; hits?: Hit[]; dist?: Dist; wind?: number; at?: number; combo?: string; count?: { tens: number; xs: number; misses: number }; animal?: string };
         const fresh = typeof r.at === "number" && Date.now() - r.at < 7 * 86_400_000;
-        if (fresh && Array.isArray(r.stations) && r.stations.length < STATIONS && (r.stations.length > 0 || (r.hits?.length ?? 0) > 0)) {
+        const sameCombo = (r.combo ?? "fita-normale") === `${localStorage.getItem("aa-game-mode")?.replace(/"/g, "") || "fita"}-${localStorage.getItem("aa-game-level")?.replace(/"/g, "") || "normale"}`;
+        if (r.count) countRef.current = { tens: Number(r.count.tens) || 0, xs: Number(r.count.xs) || 0, misses: Number(r.count.misses) || 0 };
+        if (r.animal && ANIMALS.some((a) => a.id === r.animal)) setAnimalId(r.animal);
+        if (fresh && sameCombo && Array.isArray(r.stations) && r.stations.length < STATIONS && (r.stations.length > 0 || (r.hits?.length ?? 0) > 0)) {
           stationsRef.current = r.stations.map(Number).filter((v) => Number.isFinite(v));
           setStations(stationsRef.current);
           setStation(Math.min(STATIONS, stationsRef.current.length + 1));
           const hs = Array.isArray(r.hits) ? r.hits.filter((h) => h && typeof h.score === "number").slice(0, 2) : [];
           hitsRef.current = hs;
           setHits(hs);
-          if (r.dist && DISTANCES.includes(r.dist)) setDist(r.dist);
+          if (typeof r.dist === "number" && r.dist >= 10 && r.dist <= 90) setDist(r.dist);
           if (typeof r.wind === "number") setWind(r.wind);
           setPlaying(true);
         }
@@ -129,20 +241,24 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
     if (!restored.current) return;
     try {
       if (!playing || stations.length >= STATIONS || (stations.length === 0 && hits.length === 0)) localStorage.removeItem(ROUND_KEY);
-      else localStorage.setItem(ROUND_KEY, JSON.stringify({ station, stations, hits: hits.length >= 3 ? [] : hits, dist, wind: rawWind, at: Date.now() }));
+      else localStorage.setItem(ROUND_KEY, JSON.stringify({ station, stations, hits: hits.length >= 3 ? [] : hits, dist, wind: rawWind, at: Date.now(), combo: comboKey, count: countRef.current, animal: animalId }));
     } catch {
       /* memoria non disponibile */
     }
-  }, [playing, station, stations, hits, dist, rawWind]);
+  }, [playing, station, stations, hits, dist, rawWind, comboKey, animalId]);
   // il record si aggiorna subito, anche a giro non finito
   useEffect(() => {
     if (playing && total > best) setBest(total);
-  }, [playing, total, best]);
+  }, [playing, total, best, comboKey]);
 
   // posizione del bersaglio: fermo, o su un carrello che va avanti e indietro
   const amp = motion.amp;
   const speed = motion.speed + (dist - 18) / 160;
-  const targetAt = (time: number) => ({ x: BASE.x + Math.sin(time * speed + motion.phase) * amp, y: BASE.y });
+  const targetAt = (time: number) => ({ x: BASE.x + (moving ? Math.sin(time * speed + motion.phase) * amp : 0), y: BASE.y });
+  const goalAt = (time: number) => {
+    const p = targetAt(time);
+    return { x: p.x + goalOff.x, y: p.y + goalOff.y };
+  };
   const T = targetAt(t);
   const since0 = thud != null ? t - thud : 9;
   const wobble = since0 < 0.4 ? Math.sin(since0 * 48) * 1.6 * (1 - since0 / 0.4) : 0;
@@ -166,7 +282,7 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
 
   const pull = draw ? clamp((t - draw.t0) / DRAW_S, 0, 1) : 0;
   const hold = draw ? Math.max(0, t - draw.t0 - DRAW_S) : 0;
-  const swayA = (draw?.demo ? 0.6 : 0.8) + Math.max(0, hold - 3) * 2.2 + (sky.weather === "pioggia" ? 0.5 : 0);
+  const swayA = ((draw?.demo ? 0.6 : 0.8) + Math.max(0, hold - 3) * 2.2 + (sky.weather === "pioggia" ? 0.5 : 0)) * level.sway;
   const sway = draw ? { x: Math.sin(t * 1.7) * swayA + Math.sin(t * 4.1) * swayA * 0.25, y: Math.cos(t * 1.3) * swayA * 0.8 } : { x: 0, y: 0 };
   const sight = draw ? { x: draw.aim.x + sway.x, y: draw.aim.y + sway.y } : null;
 
@@ -184,10 +300,9 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
     const y = sight.y + drop + (Math.random() - 0.5) * spread * 2;
     const dx = x - land.x;
     const dy = y - land.y;
-    const r = Math.hypot(dx, dy) / R;
-    const score = r <= 1 ? Math.max(1, 10 - Math.floor(r * 10)) : 0;
+    const { score, x10 } = scoreAt(dx, dy);
     const from = { x: GRIP.x + 6, y: GRIP.y - (BASE.y - d.aim.y) * 0.25 };
-    setFlight({ from, to: { x, y }, hit: { dx, dy, score, x10: r <= 0.05 }, t0: at, dur, arc: 6 + dist * 0.35, demo: d.demo });
+    setFlight({ from, to: { x, y }, hit: { dx, dy, score, x10 }, t0: at, dur, arc: 6 + dist * 0.35, demo: d.demo });
   };
 
   // dimostrazione: se nessuno tocca da qualche secondo, l'arciere tira da solo
@@ -196,7 +311,7 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
     if (released != null && t - released < 1.4) return;
     if (t - lastTouch.current < 2.5) return;
     const start = now();
-    const land = targetAt(start + 1.6 + 0.36 + dist / 170);
+    const land = goalAt(start + 1.6 + 0.36 + dist / 170);
     let ax: number;
     let ay: number;
     if (form && form.n >= 6) {
@@ -205,10 +320,10 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
       const sx = lefty ? -form.offX : form.offX;
       const out = Math.random() < form.missRate ? 1.25 : 0;
       const ang = Math.random() * Math.PI * 2;
-      ax = land.x - wind * (dist / 18) * 1.1 + sx * R + g() * form.spread * R * 0.72 + Math.cos(ang) * out * R;
-      ay = land.y + form.offY * R + g() * form.spread * R * 0.72 + Math.sin(ang) * out * R;
+      ax = land.x - wind * (dist / 18) * 1.1 + sx * Rg + g() * form.spread * Rg * 0.72 + Math.cos(ang) * out * Rg;
+      ay = land.y + form.offY * Rg + g() * form.spread * Rg * 0.72 + Math.sin(ang) * out * Rg;
     } else {
-      const err = R * 0.32;
+      const err = Rg * 0.32;
       ax = land.x - wind * (dist / 18) * 1.1 + (Math.random() - 0.5) * err * 2;
       ay = land.y + (Math.random() - 0.5) * err * 2;
     }
@@ -246,6 +361,9 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
     }
     const next = [...hitsRef.current, h];
     hitsRef.current = next;
+    if (h.score === 0) countRef.current.misses += 1;
+    else if (h.score === mode.perArrow) countRef.current.tens += 1;
+    if (h.x10) countRef.current.xs += 1;
     setHits(next);
     if (next.length === 3) finish(next);
     try {
@@ -266,14 +384,20 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
       return;
     }
     const round = all.reduce((a, b) => a + b, 0);
+    const k = round / maxRound(modeId);
     // punti esperienza: al massimo tre giri al giorno
     const day = today();
     for (let i = 1; i <= 3; i++) {
       const once = `giro-${day}-${i}`;
       if (readXp().log.some((l) => l.why === once)) continue;
-      award(round >= 540 ? 8 : round >= 450 ? 6 : round >= 350 ? 4 : 2, "Giro di 20 piazzole", once);
+      award(k >= 0.9 ? 8 : k >= 0.75 ? 6 : k >= 0.58 ? 4 : 2, "Giro di 20 piazzole", once);
       break;
     }
+    // il record va sul server, con il dettaglio: si vede nel profilo dell'arciere
+    setSaved(null);
+    saveGameRound({ data: { mode: modeId, level: levelId, stations: all, ...countRef.current } })
+      .then((r) => setSaved({ record: r.record }))
+      .catch(() => undefined);
   };
 
   const toWorld = (cx: number, cy: number) => {
@@ -296,8 +420,9 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
     if (stationDone || (draw && !draw.demo)) return;
     (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
     const w = toWorld(e.clientX, e.clientY);
-    const ax = T.x + (Math.random() - 0.5) * R * 1.6;
-    const ay = T.y + (Math.random() - 0.5) * R * 1.6;
+    const G = { x: T.x + goalOff.x, y: T.y + goalOff.y };
+    const ax = G.x + (Math.random() - 0.5) * Rg * 1.6;
+    const ay = G.y + (Math.random() - 0.5) * Rg * 1.6;
     setReleased(null);
     const t0 = now();
     setT(t0);
@@ -308,7 +433,7 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
     lastTouch.current = now();
     const w = toWorld(e.clientX, e.clientY);
     const k = 0.45;
-    setDraw({ ...draw, aim: { x: clamp(draw.ax + (w.x - draw.sx) * k, BASE.x - 110, BASE.x + 55), y: clamp(draw.ay + (w.y - draw.sy) * k, BASE.y - 90, BASE.y + 80) } });
+    setDraw({ ...draw, aim: { x: clamp(draw.ax + (w.x - draw.sx) * k, BASE.x - 120, BASE.x + 60), y: clamp(draw.ay + (w.y - draw.sy) * k, BASE.y - 100, BASE.y + 80) } });
   };
   const onUp = () => {
     lastTouch.current = now();
@@ -321,9 +446,10 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
     hitsRef.current = [];
     setHits([]);
     setPop(null);
-    setWind(Math.round((Math.random() * 6 - 3) * 10) / 10);
-    setDist((d) => randomDist(d));
-    setMotion({ amp: 18 + Math.random() * 18, speed: 0.45 + Math.random() * 0.5, phase: Math.random() * 6 });
+    setWind(randomWind(level.wind));
+    setDist((d) => randomDist(level.distances, d));
+    setMotion(newMotion(level.motion));
+    setAnimalId((a) => randomAnimal(a));
   };
   const nextStation = () => {
     if (stationsRef.current.length >= STATIONS) return;
@@ -333,11 +459,41 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
   };
   const again = () => {
     nextScene();
+    countRef.current = { tens: 0, xs: 0, misses: 0 };
+    setSaved(null);
     stationsRef.current = [];
     setStations([]);
     setStation(1);
     freshStation();
   };
+  // altro bersaglio o livello: si ricomincia il giro con le regole nuove
+  const choose = (m: GameMode, l: GameLevel) => {
+    const L = levelOf(l);
+    setModeId(m);
+    setLevelId(l);
+    setPicker(false);
+    countRef.current = { tens: 0, xs: 0, misses: 0 };
+    stationsRef.current = [];
+    setStations([]);
+    setStation(1);
+    hitsRef.current = [];
+    setHits([]);
+    setDemoHits([]);
+    setPop(null);
+    setSaved(null);
+    setDraw(null);
+    setFlight(null);
+    setDist(randomDist(L.distances));
+    setWind(randomWind(L.wind));
+    setMotion(newMotion(L.motion));
+    setAnimalId((a) => randomAnimal(a));
+  };
+  // quando il livello arriva dalla memoria del telefono, distanza e vento si adeguano senza perdere il giro
+  useEffect(() => {
+    if (!level.distances.includes(dist)) setDist(randomDist(level.distances));
+    setWind((w) => clamp(w, -level.wind, level.wind));
+    setMotion((m) => (level.motion > 0 && m.amp === 0 ? newMotion(level.motion) : m));
+  }, [levelId]);
   const stop = () => {
     setPlaying(false);
     again();
@@ -358,7 +514,7 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
   return (
     <div
       ref={stage}
-      className={`aa-game aspect-[3/4] w-full ${className}`}
+      className={`aa-game aspect-[3/4] w-full ${bleed ? "aa-game-bleed" : ""} ${className}`}
       onPointerDown={onDown}
       onPointerMove={onMove}
       onPointerUp={onUp}
@@ -367,7 +523,7 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
       aria-label="Gioco: tieni premuto per tendere, trascina per mirare, lascia per tirare"
     >
       {/* mancino: campo, bersaglio e arciere si specchiano; i testi restano dritti */}
-      <div className={`pointer-events-none absolute inset-0 ${lefty ? "aa-mirror" : ""}`}>
+      <div className={`pointer-events-none absolute inset-0 ${lefty ? "aa-mirror" : ""} ${bleed ? "aa-game-fade" : ""}`}>
       <div key={scene} className="aa-scene-swap absolute inset-0">
         <SceneBackdrop sky={sky} id="game" scene={scene} wind={wind} />
       </div>
@@ -407,15 +563,27 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
         {moving ? <path d={`M${BASE.x - amp - 30} 302 H${BASE.x + amp + 30}`} stroke="#5b3d22" strokeWidth="2.4" strokeLinecap="round" /> : null}
         {/* paglione su cavalletto */}
         <g transform={`translate(${(T.x - BASE.x + wobble).toFixed(2)} 0)`}>
-          <ellipse cx={BASE.x + 3} cy={302} rx={R * 1.6} ry="4" fill="#000" opacity="0.3" />
-          <circle cx={BASE.x} cy={BASE.y} r={R * 1.9} fill="url(#gm-glow)" className="aa-target-glow" />
-          <path d={`M${BASE.x - R * 0.8} ${BASE.y + R * 0.8} L${BASE.x - R * 1.05} 302 M${BASE.x + R * 0.8} ${BASE.y + R * 0.8} L${BASE.x + R * 1.05} 302 M${BASE.x} ${BASE.y + R} L${BASE.x + R * 0.3} 300`} stroke="#5b3d22" strokeWidth={Math.max(2, R * 0.09)} strokeLinecap="round" />
+          <ellipse cx={BASE.x + 3} cy={302} rx={box ? box.w * 0.45 : R * 1.6} ry="4" fill="#000" opacity="0.3" />
+          <circle cx={BASE.x + goalOff.x} cy={BASE.y + goalOff.y} r={R * 1.9} fill="url(#gm-glow)" className="aa-target-glow" />
+          {box ? null : <path d={`M${BASE.x - R * 0.8} ${BASE.y + R * 0.8} L${BASE.x - R * 1.05} 302 M${BASE.x + R * 0.8} ${BASE.y + R * 0.8} L${BASE.x + R * 1.05} 302 M${BASE.x} ${BASE.y + R} L${BASE.x + R * 0.3} 300`} stroke="#5b3d22" strokeWidth={Math.max(2, R * 0.09)} strokeLinecap="round" />}
           {moving ? [-1, 1].map((s) => <circle key={s} cx={BASE.x + s * R * 0.9} cy="302" r="3" fill="#2a2f35" stroke="#9aa0a6" strokeWidth="0.8" />) : null}
-          <rect x={BASE.x - R * 1.18 + 2} y={BASE.y - R * 1.18 + 3} width={R * 2.36} height={R * 2.36} rx={R * 0.25} fill="#5b3d22" opacity="0.6" />
-          <rect x={BASE.x - R * 1.18} y={BASE.y - R * 1.18} width={R * 2.36} height={R * 2.36} rx={R * 0.25} fill="url(#gm-straw)" stroke="#7d5a2a" strokeWidth="1" />
-          {Array.from({ length: 7 }, (_, i) => <path key={i} d={`M${BASE.x - R * 1.15} ${BASE.y - R + i * R * 0.34} h${R * 2.3}`} stroke="#8e6a33" strokeOpacity="0.35" strokeWidth="0.7" />)}
-          {RINGS.map((c, i) => <circle key={i} cx={BASE.x} cy={BASE.y} r={R * (1 - i / 10)} fill={c} stroke={i < 2 ? "#1a1c1e" : i < 4 ? "#f4f1ea" : "#1a1c1e"} strokeWidth={0.35} strokeOpacity="0.6" />)}
-          <path d={`M${BASE.x - 1.5} ${BASE.y} h3 M${BASE.x} ${BASE.y - 1.5} v3`} stroke="#1a1c1e" strokeWidth="0.4" />
+          {box ? (
+            // sagoma: l'animale in piedi sul prato, senza paglione
+            <g>
+              <image href={animal.src} x={BASE.x + box.left} y={BASE.y + box.top} width={box.w} height={box.h} preserveAspectRatio="none" />
+            </g>
+          ) : (
+            <>
+              <rect x={BASE.x - R * 1.18 + 2} y={BASE.y - R * 1.18 + 3} width={R * 2.36} height={R * 2.36} rx={R * 0.25} fill="#5b3d22" opacity="0.6" />
+              <rect x={BASE.x - R * 1.18} y={BASE.y - R * 1.18} width={R * 2.36} height={R * 2.36} rx={R * 0.25} fill="url(#gm-straw)" stroke="#7d5a2a" strokeWidth="1" />
+              {Array.from({ length: 7 }, (_, i) => <path key={i} d={`M${BASE.x - R * 1.15} ${BASE.y - R + i * R * 0.34} h${R * 2.3}`} stroke="#8e6a33" strokeOpacity="0.35" strokeWidth="0.7" />)}
+              {modeId === "field"
+                ? FIELD.map((c, i) => <circle key={i} cx={BASE.x} cy={BASE.y} r={R * (1 - i / 6)} fill={c} stroke={c === "#e6b325" ? "#1a1c1e" : "#f4f1ea"} strokeWidth={0.5} strokeOpacity="0.8" />)
+                : RINGS.map((c, i) => <circle key={i} cx={BASE.x} cy={BASE.y} r={R * (1 - i / 10)} fill={c} stroke={i < 2 ? "#1a1c1e" : i < 4 ? "#f4f1ea" : "#1a1c1e"} strokeWidth={0.35} strokeOpacity="0.6" />)}
+              {modeId === "field" ? <circle cx={BASE.x} cy={BASE.y} r={R / 12} fill="none" stroke="#1a1c1e" strokeWidth="0.4" /> : null}
+              <path d={`M${BASE.x - 1.5} ${BASE.y} h3 M${BASE.x} ${BASE.y - 1.5} v3`} stroke="#1a1c1e" strokeWidth="0.4" />
+            </>
+          )}
           {shownHits.map((h, i) =>
             h.score > 0 ? (
               <g key={i} opacity={playing ? 1 : 0.85}>
@@ -495,7 +663,10 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
         <div className="min-w-0 text-white [text-shadow:0_1px_8px_rgba(0,0,0,0.55)]">{info}</div>
         <div className="grid shrink-0 justify-items-end gap-1.5 text-right text-white">
           <p className="aa-game-score text-4xl font-black leading-none">{playing ? total : "—"}</p>
-          <p className="text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-white/75">record {bestHere}/{STATIONS * 30}</p>
+          <p className="text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-white/75">record {bestHere}/{maxRound(modeId)}</p>
+          <button data-ui type="button" onPointerDown={(e) => e.stopPropagation()} onClick={() => setPicker((v) => !v)} className="aa-game-pill pointer-events-auto" aria-expanded={picker}>
+            {mode.label} · {level.label} <span aria-hidden>▾</span>
+          </button>
           <span className="aa-game-pill">
             {[0, 1, 2].map((i) => <span key={i} className={`inline-block h-3.5 w-1.5 rounded-full ${i < hits.length ? "bg-white/25" : "bg-[#ffd27a]"}`} />)}
             <span className="ml-1">Piazzola {station}/{STATIONS}</span>
@@ -503,9 +674,35 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
           <span className="aa-game-pill">
             {indoor ? "Al chiuso, niente vento" : <>{Math.abs(wind).toFixed(1)} m/s {wind === 0 ? "" : (wind > 0) !== lefty ? "→" : "←"}</>}
           </span>
+          <span className="aa-game-pill">{dist} m{box ? ` · ${animal.label}` : ""}</span>
         </div>
       </div>
       {children}
+      {picker ? (
+        <div data-ui className="aa-rise absolute inset-x-3 top-[18%] z-10 grid gap-3 rounded-3xl bg-[#101814]/90 p-3 text-white backdrop-blur-md" onPointerDown={(e) => e.stopPropagation()}>
+          <p className="text-[0.66rem] font-semibold uppercase tracking-[0.2em] text-white/70">Bersaglio</p>
+          <div className="grid grid-cols-3 gap-1.5">
+            {GAME_MODES.map((m) => (
+              <button key={m.id} type="button" aria-pressed={m.id === modeId} onClick={() => choose(m.id, levelId)} className={`grid gap-0.5 rounded-2xl p-2 text-left ${m.id === modeId ? "bg-[#ffd27a] text-[#2a1d0c]" : "bg-white/10"}`}>
+                <b className="text-sm">{m.label}</b>
+                <span className="text-[0.62rem] leading-tight opacity-80">{m.hint}</span>
+              </button>
+            ))}
+          </div>
+          <p className="text-[0.66rem] font-semibold uppercase tracking-[0.2em] text-white/70">Livello</p>
+          <div className="grid grid-cols-3 gap-1.5">
+            {GAME_LEVELS.map((l) => (
+              <button key={l.id} type="button" aria-pressed={l.id === levelId} onClick={() => choose(modeId, l.id)} className={`grid gap-0.5 rounded-2xl p-2 text-left ${l.id === levelId ? "bg-[#7cf0a8] text-[#0b2015]" : "bg-white/10"}`}>
+                <b className="text-sm">{l.label}</b>
+                <span className="text-[0.62rem] leading-tight opacity-80">{l.hint}</span>
+                <span className="text-[0.62rem] font-bold">record {bests[`${modeId}-${l.id}`] ?? 0}</span>
+              </button>
+            ))}
+          </div>
+          <p className="text-[0.66rem] text-white/60">Cambiare bersaglio o livello fa ripartire il giro. Ogni combinazione ha il suo record, visibile nel tuo profilo.</p>
+          <button type="button" onClick={() => setPicker(false)} className="rounded-full bg-white/15 px-4 py-2 text-sm font-bold">Chiudi</button>
+        </div>
+      ) : null}
 
       {!playing ? (
         <div className="pointer-events-none absolute inset-x-0 top-[70%] flex justify-center pl-[30%]">
@@ -527,18 +724,19 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
       {stationDone && !done ? (
         <div className="aa-rise pointer-events-none absolute inset-x-6 top-[30%] rounded-3xl bg-[#101814]/75 p-3 text-center text-white backdrop-blur-md">
           <p className="text-[0.66rem] font-semibold uppercase tracking-[0.2em] text-white/70">Piazzola {station} di {STATIONS}</p>
-          <p className="aa-game-score text-4xl font-black">{piazzola}<span className="text-lg text-white/60">/30</span></p>
+          <p className="aa-game-score text-4xl font-black">{piazzola}<span className="text-lg text-white/60">/{perStation}</span></p>
           <p className="text-xs text-white/80">{hits.map((h) => (h.score === 0 ? "M" : h.x10 ? "X" : h.score)).join(" · ")} · totale {total}</p>
           <p className="mt-1 text-[0.66rem] text-white/60">Si va alla prossima piazzola…</p>
         </div>
       ) : null}
       {done ? (
         <div data-ui className="absolute inset-x-4 top-[20%] rounded-3xl bg-[#101814]/85 p-4 text-center text-white backdrop-blur-md" onPointerDown={(e) => e.stopPropagation()}>
-          <p className="text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-white/70">Giro finito · {STATIONS} piazzole</p>
-          <p className="aa-game-score mt-1 text-5xl font-black">{total}<span className="text-xl text-white/60">/{STATIONS * 30}</span></p>
+          <p className="text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-white/70">Giro finito · {mode.label} · {level.label}</p>
+          <p className="aa-game-score mt-1 text-5xl font-black">{total}<span className="text-xl text-white/60">/{maxRound(modeId)}</span></p>
           <p className="mt-1 text-sm text-white/85">media {(total / (STATIONS * 3)).toFixed(2).replace(".", ",")} a freccia{total >= bestHere && total > 0 ? " · nuovo record" : ""}</p>
+          <p className="mt-0.5 text-xs text-white/70">{countRef.current.tens} da {mode.perArrow} · {countRef.current.xs} {modeId === "sagome" ? "nel cuore" : "X"} · {countRef.current.misses} fuori{saved ? " · salvato nel profilo" : ""}</p>
           <div className="mx-auto mt-3 grid max-w-[16rem] grid-cols-10 gap-1">
-            {stations.map((v, i) => <span key={i} className="grid h-6 place-items-center rounded-md text-[0.62rem] font-bold" style={{ background: v >= 27 ? "#ffd27a" : v >= 21 ? "#ff7a6e" : v >= 15 ? "#5aa6ff" : "rgba(255,255,255,0.15)", color: v >= 27 ? "#2a1d0c" : "#fff" }}>{v}</span>)}
+            {stations.map((v, i) => <span key={i} className="grid h-6 place-items-center rounded-md text-[0.62rem] font-bold" style={{ background: v >= perStation * 0.9 ? "#ffd27a" : v >= perStation * 0.7 ? "#ff7a6e" : v >= perStation * 0.5 ? "#5aa6ff" : "rgba(255,255,255,0.15)", color: v >= perStation * 0.9 ? "#2a1d0c" : "#fff" }}>{v}</span>)}
           </div>
           <div className="mt-3 grid grid-cols-2 gap-2">
             <button type="button" onClick={again} className="rounded-full bg-[#ffd27a] px-4 py-2.5 text-sm font-bold text-[#2a1d0c]">Nuovo giro</button>

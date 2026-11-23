@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { deleteMessage, listMessages, listNotifications, markNotificationsRead, postMessage } from "@/lib/arcieri/members.api";
+import { clearReadNotifications, deleteMessage, listMessages, listNotifications, markNotificationsRead, postMessage } from "@/lib/arcieri/members.api";
 import { memberLabel } from "@/lib/arcieri/labels";
 import { useLoad } from "@/lib/arcieri/use-load";
 import { Button, Card, ErrorNote, Loading, PageHead, TextArea } from "@/components/kit";
@@ -19,7 +19,12 @@ function Page() {
       <Card>
         <div className="mb-2 flex items-center justify-between">
           <h2 className="font-display text-2xl">Avvisi {notes.data ? `(${notes.data.unread})` : ""}</h2>
-          <button type="button" className="text-sm font-semibold text-accent" onClick={() => markNotificationsRead().then(() => setNonce((n) => n + 1))}>Segna letti</button>
+          <div className="flex items-center gap-3">
+            {notes.data?.unread ? <button type="button" className="text-sm font-semibold text-accent" onClick={() => markNotificationsRead().then(() => setNonce((n) => n + 1))}>Segna letti</button> : null}
+            {notes.data?.items.some((n) => n.read) ? (
+              <button type="button" className="text-sm font-semibold text-muted underline-offset-2 hover:underline" onClick={() => clearReadNotifications().then(() => setNonce((n) => n + 1))}>Svuota letti</button>
+            ) : null}
+          </div>
         </div>
         {(notes.data?.items ?? []).map((n) => {
           const [path, hash] = (n.href || "/bacheca").split("#");

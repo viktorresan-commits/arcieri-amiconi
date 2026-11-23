@@ -1,7 +1,7 @@
 import { useEntryState } from "@/lib/arcieri/back-restore";
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, useRouterState } from "@tanstack/react-router";
-import { deleteEntry, listCompetitions, saveCompetition, setPresence } from "@/lib/arcieri/club.api";
+import { deleteCompetition, deleteEntry, listCompetitions, saveCompetition, setPresence } from "@/lib/arcieri/club.api";
 import { memberLabel, divisionOf } from "@/lib/arcieri/labels";
 import { romeDayKey } from "@/lib/arcieri/time";
 import { useLoad } from "@/lib/arcieri/use-load";
@@ -44,6 +44,7 @@ type Comp = {
   place: string;
   organizer: string;
   signupDeadline: string | null;
+  canDelete?: boolean;
   attended: boolean | null;
   roster: { userId: string; attended: boolean; givenName: string; familyName: string; nickname: string; slug: string; photoUrl: string | null; avatarColor: string }[];
   entries: Entry[];
@@ -197,6 +198,20 @@ function Page() {
                 <div className="grid grid-cols-2 gap-2">
                   <Button className="w-full text-sm" onClick={() => mark(comp.id, true)}>{tab === "past" ? "Ho partecipato" : "Ci vado"}</Button>
                   <Button className="w-full text-sm" variant="ghost" onClick={() => mark(comp.id, false)}>{tab === "past" ? "Non ho partecipato" : "Non ci vado"}</Button>
+                </div>
+              ) : null}
+              {scope === "mine" || comp.canDelete ? (
+                <div className="grid gap-1.5 border-t border-white/[0.06] pt-2">
+                  {scope === "mine" ? (
+                    <HoldDelete hint={false} label="Togliere questa gara dalle tue?" onDelete={() => deleteCompetition({ data: { id: comp.id, scope: "mine" } }).then(() => setNonce((n) => n + 1))}>
+                      <span className="block text-center text-xs text-muted">Tieni premuto per togliere la gara dalle tue (punteggio compreso)</span>
+                    </HoldDelete>
+                  ) : null}
+                  {comp.canDelete ? (
+                    <HoldDelete hint={false} label="Eliminare la gara per tutti?" onDelete={() => deleteCompetition({ data: { id: comp.id, scope: "all" } }).then(() => setNonce((n) => n + 1))}>
+                      <span className="block text-center text-xs text-muted">Tieni premuto per eliminare la gara per tutti</span>
+                    </HoldDelete>
+                  ) : null}
                 </div>
               ) : null}
             </Card>

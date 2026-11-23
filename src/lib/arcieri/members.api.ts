@@ -35,7 +35,9 @@ export const getMe = createServerFn({ method: "GET" })
       const n = await sql<{ n: number }>`select count(*)::int as n from sessions where user_id = ${context.userId}`;
       essenziale = asNum(n[0]?.n) < 5;
     }
-    return { ...out, essenziale, canCoach: staff != null || leader || out.percorso === "istruttore", canSegreteria: staff != null || leader };
+    // squadra admin, istruttori e segreteria: solo per chi ha un incarico
+    const role = staff != null || leader || out.coach;
+    return { ...out, essenziale, leader, canStaff: role, canCoach: role, canSegreteria: role };
   });
 
 export const listRoster = createServerFn({ method: "GET" })
@@ -268,7 +270,7 @@ export const listNotifications = createServerFn({ method: "GET" })
       created_at: unknown;
     }>`
       select id, title, body, href, read_at, created_at
-      from notifications where user_id = ${context.userId}
+      from notifications where user_id = ${context.userId} and cleared_at is null
       order by id desc limit 40`;
     return {
       unread: rows.filter((r) => !r.read_at).length,
@@ -289,6 +291,15 @@ export const markNotificationsRead = createServerFn({ method: "POST" })
     const sql = await db();
     await sql`update notifications set read_at = now() where user_id = ${context.userId} and read_at is null`;
     return { ok: true as const };
+  });
+
+/** toglie dalla Bacheca gli avvisi già letti (restano registrati, così non ricompaiono) */
+export const clearReadNotifications = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    const sql = await db();
+    const rows = await sql<{ id: number }>`update notifications set cleared_at = now() where user_id = ${context.userId} and read_at is not null and cleared_at is null returning id`;
+    return { removed: rows.length };
   });
 
 export const listMessages = createServerFn({ method: "GET" })
