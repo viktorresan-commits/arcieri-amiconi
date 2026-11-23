@@ -16,6 +16,7 @@ export type IconName =
   | "sight" | "checklist" | "stopwatch" | "foc" | "wrench" | "hold"
   | "steps" | "lungs" | "scorecard" | "spine" | "windsock" | "energy" | "span" | "bareshaft" | "caliper" | "ruler"
   | "daily" | "quiz" | "binoculars" | "book" | "rules" | "lock" | "expand" | "search" | "help"
+  | "footprints" | "trend"
   | "bowstring" | "rest" | "stabilizer" | "armguard" | "release" | "chestguard" | "bowcase" | "bowstand" | "shirt" | "shoe";
 
 const A = 0.32; // opacità del secondo tono

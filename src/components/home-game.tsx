@@ -6,7 +6,7 @@ import { useLocalState } from "@/lib/arcieri/local-store";
 import { award, readXp, today } from "@/lib/arcieri/xp";
 import { ArcherAvatar } from "./archer-avatar";
 import { Glyph, type IconName } from "./icons";
-import { SceneBackdrop } from "./scene-2d";
+import { ArcherLightDefs, SceneBackdrop, isPainted, lightMode } from "./scene-2d";
 import { GameApron } from "./scene-apron";
 import { SCENES, isIndoor } from "@/lib/arcieri/scenes";
 import { ANIMALS, type Animal } from "@/lib/arcieri/sagome";
@@ -695,7 +695,13 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
             <path d="M14 18 h12 v8 q0 6 -6 9 q-6 -3 -6 -9 Z" fill="#f3ecda" opacity="0.9" />
           </svg>
         ) : null}
-        <ArcherAvatar look={bodyLook} drive={drive} pose="riposo" interactive={false} hideFlight wind={indoor ? 0 : wind} className="h-full w-full drop-shadow-[0_12px_20px_rgba(0,0,0,0.45)]" />
+        {/* luce dell'ambiente: tinta dell'ora e bordo illuminato dal lato del sole */}
+        {indoor ? null : <ArcherLightDefs />}
+        <div className="h-full w-full" style={indoor ? undefined : { filter: `url(#aa-lit-${lightMode(sky)}-${isPainted(scene) || (sky.tod === "mattina") ? "l" : "r"})` }}>
+          <ArcherAvatar look={bodyLook} drive={drive} pose="riposo" interactive={false} hideFlight wind={indoor ? 0 : wind} className="h-full w-full drop-shadow-[0_12px_20px_rgba(0,0,0,0.45)]" />
+        </div>
+        {/* ombra di contatto morbida sotto i piedi */}
+        <span aria-hidden className="aa-archer-contact pointer-events-none absolute bottom-[1.5%] left-[18%] h-[5%] w-[52%] rounded-[50%]" />
       </div>
       </div>
 
@@ -712,12 +718,11 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
       <div className={`aa-game-hud pointer-events-none absolute inset-x-0 top-0 z-[4] flex items-start justify-between gap-2 p-3 ${tight ? "aa-hud-tight" : ""}`} style={crop ? { top: crop } : undefined}>
         <div className="min-w-0 text-white">{info}</div>
         <div className="grid w-[8.4rem] shrink-0 justify-items-stretch gap-1.5 text-white">
-          <div className="aa-hud flex items-center gap-2 rounded-2xl px-2.5 py-1.5">
-            <Glyph name="trophy" size={20} className="aa-hud-ico shrink-0" />
-            <span className="grid min-w-0 flex-1 justify-items-end leading-none">
-              <b className="aa-game-score text-[1.9rem] tabular-nums">{playing ? total : bestHere}</b>
-              <span className="mt-0.5 text-[0.56rem] font-semibold uppercase tracking-[0.18em] text-white/70">{playing ? `punti · rec. ${bestHere}` : "record"}</span>
-            </span>
+          {/* record (o punti della partita in corso): coppa d'oro, numero grande, etichetta sotto */}
+          <div className="aa-hud aa-hud-record grid grid-cols-[auto_1fr] items-center gap-x-2 rounded-2xl px-2.5 pb-2 pt-1.5">
+            <Glyph name="trophy" detailed size={26} className="aa-trophy row-span-2 shrink-0" />
+            <b className="aa-game-score text-center text-[2rem] leading-none tabular-nums">{playing ? total : bestHere}</b>
+            <span className="text-center text-[0.56rem] font-semibold uppercase tracking-[0.2em] text-white/75">{playing ? `punti · record ${bestHere}` : "record"}</span>
           </div>
           {hudShown ? (
             <div data-ui className="aa-hud aa-hud-panel pointer-events-auto relative grid rounded-2xl py-1" onPointerDown={(e) => e.stopPropagation()}>

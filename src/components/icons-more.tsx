@@ -12,6 +12,26 @@ const FINE = { strokeWidth: 1.1 } as const;
 const DOT = { fill: "currentColor", stroke: "none" } as const;
 
 export const DETAILED_MORE: Partial<Record<IconName, ReactNode>> = {
+  footprints: (
+    <>
+      <path d="M6.6 3.2c1.8 0 2.8 2 2.8 4.6 0 2.2-.8 3.8-.9 5.6H5.2C4.9 11.6 4 10 4 7.8c0-2.6 1-4.6 2.6-4.6Z" fill="currentColor" fillOpacity={L2} />
+      <path d="M6.6 3.2c1.8 0 2.8 2 2.8 4.6 0 2.2-.8 3.8-.9 5.6H5.2C4.9 11.6 4 10 4 7.8c0-2.6 1-4.6 2.6-4.6Z" />
+      <path d="M5.2 15h3.4v1.2a1.7 1.7 0 0 1-3.4 0Z" fill="currentColor" fillOpacity={L3} />
+      <path d="M17.4 7.8c1.8 0 2.8 2 2.8 4.6 0 2.2-.8 3.8-.9 5.6h-3.3c-.3-1.8-1.2-3.4-1.2-5.6 0-2.6 1-4.6 2.6-4.6Z" fill="currentColor" fillOpacity={L2} />
+      <path d="M17.4 7.8c1.8 0 2.8 2 2.8 4.6 0 2.2-.8 3.8-.9 5.6h-3.3c-.3-1.8-1.2-3.4-1.2-5.6 0-2.6 1-4.6 2.6-4.6Z" />
+      <path d="M16 19.6h3.4v1.2a1.7 1.7 0 0 1-3.4 0Z" fill="currentColor" fillOpacity={L3} />
+    </>
+  ),
+  trend: (
+    <>
+      <path d="M4 20.4h16.6" />
+      <rect x="5" y="14" width="2.8" height="6.4" rx="0.6" fill="currentColor" fillOpacity={L2} />
+      <rect x="9.8" y="11.6" width="2.8" height="8.8" rx="0.6" fill="currentColor" fillOpacity={L2} />
+      <rect x="14.6" y="13" width="2.8" height="7.4" rx="0.6" fill="currentColor" fillOpacity={L1} />
+      <path d="m4 11 4.6-4.4 3.6 2.8 6.6-6" strokeWidth={1.9} />
+      <path d="M15.6 3.4h3.6V7" strokeWidth={1.9} />
+    </>
+  ),
   arrow: (
     <>
       <path d="M3.4 20.6 18.2 5.8" />

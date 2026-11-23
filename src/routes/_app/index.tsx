@@ -24,6 +24,19 @@ export const Route = createFileRoute("/_app/")({ component: Home });
 const HOME_HIDE = ["rapido", "foto", "segnapunti", "statistiche", "gare", "squadra"];
 
 /** Pulsante a tema sul prolungamento del gioco: placca di cuoio bordata d'oro, medaglione con l'icona. */
+/** un numero dell'attività con la sua icona, per la barra delle statistiche */
+function MiniStat({ icon, value, label }: { icon: IconName; value: string; label: string }) {
+  return (
+    <span className="flex items-center gap-1 px-1.5 first:pl-0">
+      <Glyph name={icon} detailed size={17} className="aa-tone-hi shrink-0" />
+      <span className="grid leading-none">
+        <b className="text-[0.86rem] tabular-nums">{value}</b>
+        <span className="aa-plaque-sub text-[0.56rem]">{label}</span>
+      </span>
+    </span>
+  );
+}
+
 function Plaque({ to, search, icon, label, sub }: { to: string; search?: Record<string, string>; icon: IconName; label: string; sub?: string }) {
   return (
     <Link to={to as "/"} search={search as never} className="aa-plaque aa-press flex min-h-[52px] min-w-0 items-center gap-2 rounded-2xl px-2 text-left">
@@ -122,11 +135,19 @@ function Home() {
               <Plaque to="/allenamento" search={{ avvia: "foto" }} icon="camera" label="Da foto" sub="Leggi il bersaglio" />
               <Plaque to="/segnapunti" icon="scorecard" label="Segnapunti" sub="Punti con gli amici" />
             </div>
-            <Link to="/statistiche" className="aa-plaque aa-press flex min-h-[46px] items-center gap-2.5 rounded-2xl px-2.5 text-left">
+            {/* statistiche con l'attività del mese: uscite, frecce, media (dati reali) */}
+            <Link to="/statistiche" className="aa-plaque aa-stats-bar aa-press flex min-h-[52px] items-center gap-2 rounded-2xl px-2.5 text-left">
               <AppIcon name="chart" size={32} />
-              <b className="aa-plaque-title font-display text-[1.05rem] leading-none">Statistiche</b>
-              <span className="aa-plaque-sub ml-auto truncate text-[0.78rem] font-semibold">{data.all.avg ? `Media ${data.all.avg.toFixed(2).replace(".", ",")}` : "Grafici e progressi"}</span>
-              <Glyph name="chevron" size={16} className="aa-tone-hi shrink-0" />
+              <span className="min-w-0 shrink-0">
+                <b className="aa-plaque-title block font-display text-[1.02rem] leading-none">Statistiche</b>
+                <span className="aa-plaque-sub block text-[0.62rem]">questo mese</span>
+              </span>
+              <span className="ml-auto grid grid-cols-3 divide-x divide-white/10">
+                <MiniStat icon="footprints" value={String(data.month.sessions)} label="uscite" />
+                <MiniStat icon="arrow" value={num(data.month.arrows)} label="frecce" />
+                <MiniStat icon="trend" value={data.month.arrows ? data.month.avg.toFixed(2).replace(".", ",") : "—"} label="media" />
+              </span>
+              <Glyph name="chevron" size={14} className="aa-tone-hi shrink-0 opacity-80" />
             </Link>
               </>
             }

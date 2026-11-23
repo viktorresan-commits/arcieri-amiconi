@@ -36,6 +36,9 @@ const PAINTED: Partial<Record<SceneId, Painted>> = {
   campo: { w: 843, h: 1264, top: 22, day: "/scene/campo-giorno.webp", night: "/scene/campo-notte.webp", dusk: "/scene/campo-tramonto.webp", dawn: "/scene/campo-alba.webp", rain: "/scene/campo-pioggia.webp", torches: [[258, 522], [748, 520], [97, 518]], sky: 430, grass: [680, 1220] },
 };
 
+/** la scena ha un'illustrazione dipinta? (la luce di quelle viene da sinistra) */
+export const isPainted = (id: string | undefined) => Boolean(PAINTED[sceneById(id).id]);
+
 function PaintedBackdrop({ sky, id, art, wind = 0 }: { sky: Sky; id: string; art: Painted; wind?: number }) {
   const night = sky.tod === "notte";
   const rain = sky.weather === "pioggia";
@@ -1202,5 +1205,51 @@ export function SceneThumb({ scene, sky, className = "h-16 w-24" }: { scene: str
     <span className={`relative block overflow-hidden rounded-xl ${className}`}>
       <SceneBackdrop sky={sky} scene={scene} id={`th${scene}`} />
     </span>
+  );
+}
+
+/**
+ * Luce dell'ambiente sull'arciere: tinta dell'ora (caldo al tramonto, blu di notte, grigio col
+ * cielo coperto) e un filo di luce sul bordo rivolto al sole, così la figura vettoriale si
+ * fonde con lo sfondo invece di sembrare incollata sopra. Filtri SVG usati via CSS.
+ */
+export type LightMode = "day" | "dawn" | "dusk" | "night" | "grey";
+export function lightMode(sky: Sky): LightMode {
+  if (sky.tod === "notte") return "night";
+  if (sky.weather !== "sereno") return "grey";
+  if (sky.tod === "tramonto") return "dusk";
+  if (sky.tod === "mattina") return "dawn";
+  return "day";
+}
+const LIGHT: Record<LightMode, { m: string; rim: string; rimA: number }> = {
+  day: { m: "1.04 0 0 0 0.01  0 1.03 0 0 0.01  0 0 1 0 0  0 0 0 1 0", rim: "#fff3d6", rimA: 0.55 },
+  dawn: { m: "1.04 0.02 0 0 0.02  0 1 0 0 0.01  0 0 0.98 0 0.01  0 0 0 1 0", rim: "#ffe2bd", rimA: 0.5 },
+  dusk: { m: "1.06 0.06 0 0 0.03  0 0.93 0.02 0 0.01  0 0 0.78 0 0  0 0 0 1 0", rim: "#ffb56a", rimA: 0.75 },
+  night: { m: "0.62 0.04 0.03 0 0  0.04 0.66 0.06 0 0  0.05 0.08 0.84 0 0.02  0 0 0 1 0", rim: "#9fb8ff", rimA: 0.4 },
+  grey: { m: "0.86 0.05 0.04 0 0  0.04 0.88 0.05 0 0  0.04 0.05 0.9 0 0.01  0 0 0 1 0", rim: "#dfe8f2", rimA: 0.25 },
+};
+export function ArcherLightDefs() {
+  return (
+    <svg width="0" height="0" className="absolute" aria-hidden focusable="false">
+      <defs>
+        {(Object.keys(LIGHT) as LightMode[]).flatMap((mode) =>
+          ([-1, 1] as const).map((dir) => {
+            const L = LIGHT[mode];
+            return (
+              <filter key={`${mode}${dir}`} id={`aa-lit-${mode}-${dir < 0 ? "l" : "r"}`} x="-5%" y="-5%" width="110%" height="110%" colorInterpolationFilters="sRGB">
+                <feColorMatrix in="SourceGraphic" type="matrix" values={L.m} result="graded" />
+                {/* bordo in luce: la parte della sagoma che resta scoperta spostandola via dal sole */}
+                <feOffset in="SourceAlpha" dx={dir < 0 ? 2.2 : -2.2} dy="1.6" result="shifted" />
+                <feComposite in="SourceAlpha" in2="shifted" operator="out" result="edge" />
+                <feGaussianBlur in="edge" stdDeviation="0.7" result="edgeSoft" />
+                <feFlood floodColor={L.rim} floodOpacity={L.rimA} />
+                <feComposite in2="edgeSoft" operator="in" result="rim" />
+                <feMerge><feMergeNode in="graded" /><feMergeNode in="rim" /></feMerge>
+              </filter>
+            );
+          }),
+        )}
+      </defs>
+    </svg>
   );
 }
