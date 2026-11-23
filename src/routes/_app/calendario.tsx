@@ -3,7 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { calendarMonth, deleteSession } from "@/lib/arcieri/training.api";
 import { listEvents, saveEvent } from "@/lib/arcieri/club.api";
 import { listGestures, type GestureRow } from "@/lib/arcieri/gesture.api";
-import { RealIcon } from "@/components/real-icons";
+import { AppIcon, Glyph } from "@/components/icons";
 import { monthGrid, romeYmd } from "@/lib/arcieri/time";
 import { useLoad } from "@/lib/arcieri/use-load";
 import { Button, Card, ErrorNote, Field, HoldDelete, Loading, PageHead, TextInput } from "@/components/kit";
@@ -105,11 +105,11 @@ function Page() {
       </Card>
       {daysGestures.length ? (
         <Card className="grid gap-2">
-          <p className="flex items-center gap-2 font-semibold"><RealIcon name="archer" size={26} />Postura e tiro del {day}</p>
+          <p className="flex items-center gap-2 font-semibold"><Glyph name="archer" size={26} className="aa-tone-hi shrink-0" />Postura e tiro del {day}</p>
           <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none]">
             {daysGestures.map((g) => (
               <button key={g.id} type="button" onClick={() => setOpen(g)} className="aa-thumb relative w-28 shrink-0 overflow-hidden rounded-xl border border-white/10 text-left">
-                {g.thumb ? <img src={g.thumb} alt="" className="aspect-[3/4] w-full object-cover" /> : <span className="grid aspect-[3/4] place-items-center bg-white/5"><RealIcon name="archer" size={40} /></span>}
+                {g.thumb ? <img src={g.thumb} alt="" className="aspect-[3/4] w-full object-cover" /> : <span className="grid aspect-[3/4] place-items-center bg-white/5"><AppIcon name="archer" size={40} /></span>}
                 <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent px-1.5 pb-1 pt-4 text-[0.65rem] font-semibold text-white">
                   {g.score != null ? `${Math.round(g.score)}/100 · ` : ""}{new Date(g.createdAt).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Rome" })}
                 </span>

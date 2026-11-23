@@ -9,8 +9,7 @@ import { useMember } from "@/components/shell";
 import { Button, Card, ErrorNote, Field, Loading, PageHead, Select, TextInput } from "@/components/kit";
 import { PrizeMark, prizeTier } from "@/components/prize-mark";
 import { Confetti, Sparkle } from "@/components/celebrate";
-import { RealIcon } from "@/components/real-icons";
-import { Glyph } from "@/components/icons";
+import { AppIcon, Glyph, type IconName } from "@/components/icons";
 
 export const Route = createFileRoute("/_app/obiettivi")({ component: Page });
 
@@ -47,7 +46,7 @@ function Page() {
           const label = g.metric === "avg" ? `${fmtAvg(g.progress)} / ${fmtAvg(g.target)}` : `${Math.round(g.progress)} / ${g.target}`;
           const done = pct >= 100;
           const C = 2 * Math.PI * 24;
-          const icon = g.metric === "arrows" ? "quiver" : g.metric === "sessions" ? "bow" : g.metric === "days" ? "calendar" : "chart";
+          const icon: IconName = g.metric === "arrows" ? "quiver" : g.metric === "sessions" ? "bow" : g.metric === "days" ? "calendar" : "chart";
           return (
             <Card key={g.id} className={`aa-prize relative flex items-center gap-3 ${done ? "aa-prize-on" : ""}`} style={{ animationDelay: `${i * 60}ms` }}>
               {done ? <Confetti count={14} /> : null}
@@ -56,7 +55,7 @@ function Page() {
                   <circle cx="28" cy="28" r="24" fill="none" stroke="currentColor" strokeOpacity={0.1} strokeWidth="5" />
                   <circle cx="28" cy="28" r="24" fill="none" stroke={done ? "#e2b340" : "var(--primary)"} strokeWidth="5" strokeLinecap="round" strokeDasharray={C} strokeDashoffset={C * (1 - pct / 100)} style={{ transition: "stroke-dashoffset 1s cubic-bezier(.22,1,.36,1)" }} />
                 </svg>
-                <RealIcon name={done ? "trophy" : icon} size={34} />
+                <AppIcon name={done ? "trophy" : icon} size={34} />
               </div>
               <div className="min-w-0 flex-1">
                 <p className="font-semibold">{g.title}{g.collective ? " · gruppo" : ""}</p>
@@ -73,7 +72,7 @@ function Page() {
         const got = prizes.filter((p) => p.holders.some((h) => h.userId === me.userId)).length;
         return (
           <div className="flex items-end justify-between gap-3">
-            <h2 className="flex items-center gap-2 font-display text-3xl"><RealIcon name="trophy" size={34} />Premi</h2>
+            <h2 className="flex items-center gap-2 font-display text-3xl"><AppIcon name="trophy" size={34} />Premi</h2>
             {prizes.length ? (
               <div className="grid min-w-32 gap-1 text-right">
                 <span className="text-xs text-muted">{got} di {prizes.length} sbloccati</span>
@@ -106,11 +105,11 @@ function Page() {
           ))}
         </div>
       ) : null}
-      <h2 className="flex items-center gap-2 font-display text-3xl"><RealIcon name="book" size={32} />Albo</h2>
+      <h2 className="flex items-center gap-2 font-display text-3xl"><AppIcon name="book" size={32} />Albo</h2>
       <Card className="grid gap-1">
         {(data?.albo ?? []).map((b, i) => (
           <div key={`${b.title}-${i}`} className="aa-menu-row flex items-center gap-2 border-b border-white/5 py-1.5 text-sm last:border-0" style={{ animationDelay: `${Math.min(i, 12) * 30}ms` }}>
-            <RealIcon name="trophy" size={20} />
+            <Glyph name="trophy" size={20} className="aa-tone-hi shrink-0" />
             <span className="min-w-0 flex-1 truncate">{b.title}</span>
             <span className="text-xs text-muted">{memberLabel(b, data?.albo ?? [])}</span>
           </div>

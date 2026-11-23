@@ -38,7 +38,8 @@ type PoseDef = {
   /** quanto la mano sta sulla corda (0–1) durante i passaggi */
   hookW?: number;
   /** da che parte piega il gomito del braccio della corda (1 = in fuori, verso l'esterno) */
-  bend?: 1 | -1;
+  /** da che parte sta il gomito: 1 in basso, -1 in alto; i valori in mezzo servono a passare da una posa all'altra senza scatti */
+  bend?: number;
   /** la mano tiene una freccia appena presa dalla faretra */
   holding?: boolean;
 };
@@ -47,9 +48,9 @@ const ANCHOR = p(166, 106);
 const POSES: Record<string, PoseDef> = {
   riposo: { grip: p(194, 210), bowAngle: 6, hand: p(108, 204), pull: 0, hooked: false, arrow: false, fore: 44, bend: 1 },
   // incocco: arco basso e quasi orizzontale, la mano porta la freccia sul rest e la incastra
-  incocco: { grip: p(206, 192), bowAngle: -66, hand: p(192, 184), pull: 0, hooked: false, arrow: true, fore: 48 },
+  incocco: { grip: p(206, 192), bowAngle: -66, hand: p(192, 184), pull: 0, hooked: false, arrow: true, fore: 48, bend: 1 },
   // aggancio e presa: tre dita sulla corda, mano dell'arco rilassata sull'impugnatura
-  aggancio: { grip: p(214, 172), bowAngle: -40, hand: null, pull: 0, hooked: true, arrow: true, fore: 52 },
+  aggancio: { grip: p(214, 172), bowAngle: -40, hand: null, pull: 0, hooked: true, arrow: true, fore: 52, bend: 0.6 },
   predraw: { grip: p(244, 132), bowAngle: -3, hand: null, pull: 0.1, hooked: true, arrow: true, fore: 64, face: "concentrato" },
   trazione: { grip: p(249, 125), bowAngle: 0, hand: null, pull: 0.62, hooked: true, arrow: true, fore: 74, face: "concentrato" },
   allungo: { grip: p(250, 124), bowAngle: 0, hand: null, pull: 1, hooked: true, arrow: true, fore: 82, face: "concentrato" },
@@ -148,6 +149,7 @@ function smoothTo(a: PoseDef, b: PoseDef, t: number): PoseDef {
     pull: lerp(a.pull, b.pull, t),
     fore: lerp(a.fore, b.fore, t),
     hookW: lerp(a.hookW ?? (a.hooked ? 1 : 0), b.hookW ?? (b.hooked ? 1 : 0), t),
+    bend: lerp(a.bend ?? -1, b.bend ?? -1, t),
   };
 }
 
@@ -162,19 +164,27 @@ function mix(a: PoseDef, b: PoseDef, t: number): PoseDef {
     arrow: t < 0.5 ? a.arrow : b.arrow,
     fore: lerp(a.fore, b.fore, t),
     face: t < 0.5 ? a.face : b.face,
-    bend: t < 0.5 ? a.bend : b.bend,
+    // il gomito gira con continuità: niente braccio che si ribalta a metà del movimento
+    bend: lerp(a.bend ?? -1, b.bend ?? -1, t),
     holding: t < 0.5 ? a.holding : b.holding,
   };
 }
 
 /** Due ossa: dalla spalla verso la mano, con il gomito dalla parte giusta. */
-function ik(s: P, target: P, l1: number, l2: number, bend: 1 | -1) {
+function ik(s: P, target: P, l1: number, l2: number, bend: number) {
   const dx = target.x - s.x;
   const dy = target.y - s.y;
   const d = Math.max(1, Math.min(l1 + l2 - 0.01, Math.hypot(dx, dy)));
   const base = Math.atan2(dy, dx);
   const a = Math.acos(Math.max(-1, Math.min(1, (l1 * l1 + d * d - l2 * l2) / (2 * l1 * d))));
-  const e = p(s.x + Math.cos(base + bend * a) * l1, s.y + Math.sin(base + bend * a) * l1);
+  // il gomito ruota attorno all'asse spalla-mano (come un braccio vero visto di lato):
+  // con bend fra -1 e 1 passa per il centro in scorcio, invece di ribaltarsi di colpo
+  const along = Math.cos(a) * l1;
+  const side = Math.sin(a) * l1 * Math.max(-1, Math.min(1, bend));
+  const e = p(
+    s.x + Math.cos(base) * along - Math.sin(base) * side,
+    s.y + Math.sin(base) * along + Math.cos(base) * side,
+  );
   const hand = p(s.x + Math.cos(base) * d, s.y + Math.sin(base) * d);
   return { elbow: e, hand };
 }
@@ -708,7 +718,7 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4 }: { look: Avata
               return (
                 <g key={i}>
                   <path d={fd} stroke={shade(look.capeColor, -0.6)} strokeOpacity="0.55" strokeWidth={1.6 + (i % 2) * 1.2} fill="none" strokeLinecap="round" />
-                  <path d={fd} stroke={shade(look.capeColor, 0.35)} strokeOpacity="0.28" strokeWidth="1" fill="none" strokeLinecap="round" transform="translate(1.8 0)" />
+                  <path d={fd} stroke={shade(look.capeColor, 0.55)} strokeOpacity="0.42" strokeWidth={1.4 + (i % 2) * 1.4} fill="none" strokeLinecap="round" transform="translate(2.4 0)" />
                 </g>
               );
             })}
@@ -742,13 +752,26 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4 }: { look: Avata
       <Outfit look={look} cx={cx} shoulderL={shoulderL} shoulderR={shoulderR} hipL={hipL} hipR={hipR} tunicLen={tunicLen} W={W} woman={woman} uid={uid} />
       <ChestEmblem kind={look.emblem} crest={look.crest} x={cx + 9} y={look.top === "giubbetto" ? 160 : 150} s={look.emblem === "compagnia" ? 0.95 : 0.72} base={look.shirt} trim={look.trim} />
       {look.tattoo === "sole" && look.top === "canotta" ? <g transform={`translate(${f(shoulderR - 7)} 130) scale(0.4)`} opacity="0.8"><circle r="5" fill="none" stroke="#24324a" strokeWidth="2" />{[0, 1, 2, 3, 4, 5, 6, 7].map((k) => <path key={k} d={`M${f(Math.cos(k * 0.785) * 7)} ${f(Math.sin(k * 0.785) * 7)} L${f(Math.cos(k * 0.785) * 10)} ${f(Math.sin(k * 0.785) * 10)}`} stroke="#24324a" strokeWidth="2" />)}</g> : null}
-      {look.cape && look.clasp !== "nessuno" ? (
-        // il fermaglio chiude il mantello sul davanti, sotto il collo; il cordone gira dietro la spalla
-        <g>
-          <path d={`M${f(cx + 13)} 120 Q${f(cx + 4)} 114 ${f(cx - 6)} 116 M${f(cx + 13)} 120 Q${f(shoulderR - 6)} 124 ${f(shoulderR - 2)} 130`} stroke={shade(look.capeColor, -0.35)} strokeWidth="2.2" fill="none" strokeLinecap="round" />
-          <Clasp kind={look.clasp} x={cx + 13} y={120} s={0.85} />
-        </g>
-      ) : null}
+      {look.cape ? (() => {
+        // il mantello si vede anche sopra le spalle: un lembo di stoffa che parte dal fermaglio sul davanti,
+        // passa sopra la spalla e scende sulla schiena, con la piega e il bordo in luce
+        const kx = cx + 12, ky = 121;
+        const drape = `M${f(kx)} ${ky - 3} C${f(cx + 2)} 109 ${f(shoulderL + 10)} 109 ${f(shoulderL - 3)} 119 C${f(shoulderL - 6)} 132 ${f(shoulderL - 5)} 146 ${f(shoulderL - 2)} 158 C${f(shoulderL + 6)} 150 ${f(shoulderL + 12)} 136 ${f(cx - 4)} 128 C${f(cx + 2)} 125 ${f(kx - 4)} ${ky + 3} ${f(kx)} ${ky + 3} Z`;
+        return (
+          <g>
+            <path d={drape} fill={`url(#${uid}cape)`} stroke={OUT} strokeOpacity="0.45" strokeWidth="1.4" />
+            <path d={`M${f(shoulderL + 2)} 122 C${f(shoulderL + 2)} 134 ${f(shoulderL + 4)} 144 ${f(shoulderL + 2)} 152`} stroke={shade(look.capeColor, -0.55)} strokeOpacity="0.7" strokeWidth="2" fill="none" strokeLinecap="round" />
+            <path d={`M${f(cx - 8)} 116 C${f(cx - 16)} 114 ${f(shoulderL + 4)} 115 ${f(shoulderL - 1)} 121`} stroke={shade(look.capeColor, 0.55)} strokeOpacity="0.55" strokeWidth="1.4" fill="none" strokeLinecap="round" />
+            <path d={`M${f(shoulderL - 2)} 158 C${f(shoulderL + 6)} 150 ${f(shoulderL + 12)} 136 ${f(cx - 4)} 128 C${f(cx + 2)} 125 ${f(kx - 4)} ${ky + 3} ${f(kx)} ${ky + 3}`} stroke={look.trim} strokeOpacity="0.85" strokeWidth="1.5" fill="none" />
+            {look.clasp !== "nessuno" ? (
+              <g>
+                <path d={`M${f(kx)} ${ky} Q${f(shoulderR - 4)} ${ky + 4} ${f(shoulderR - 1)} ${ky + 10}`} stroke={shade(look.capeColor, -0.4)} strokeWidth="2.4" fill="none" strokeLinecap="round" />
+                <Clasp kind={look.clasp} x={kx} y={ky} s={1.15} />
+              </g>
+            ) : null}
+          </g>
+        );
+      })() : null}
       {look.amulet ? (
         <g>
           <path d={`M${f(cx - 11)} 116 Q${f(cx - 2)} 140 ${f(cx + 4)} 142 Q${f(cx + 10)} 138 ${f(cx + 12)} 116`} stroke="#c9a46a" strokeWidth="1" fill="none" />

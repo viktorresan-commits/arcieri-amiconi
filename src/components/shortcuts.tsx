@@ -312,25 +312,25 @@ function CategoryCarousel({ current, onGo, isHere, hide = [] }: { current?: stri
   return (
     <div className="grid gap-3">
       <div className="flex justify-center gap-1.5" aria-hidden>
-        {STATIONS.map((st, k) => <span key={st.id} className="h-1.5 rounded-full transition-all duration-300" style={{ width: k === active ? 18 : 6, background: k === active ? st.color : "rgb(255 255 255 / 0.2)" }} />)}
+        {STATIONS.map((st, k) => <span key={st.id} className="h-1.5 rounded-full transition-all duration-300" style={{ width: k === active ? 18 : 6, background: k === active ? "var(--tone)" : "rgb(255 255 255 / 0.2)" }} />)}
       </div>
       <div ref={ref} onScroll={onScroll} className="relative -mx-4 flex snap-x snap-mandatory overflow-x-auto [scrollbar-width:none]" style={{ overscrollBehaviorX: "contain" }}>
         {pages.map((st, i) => {
           const items = SHORTCUTS.filter((s) => s.group === st.id && !hide.includes(s.id));
           const k = i % n;
           return (
-            <section key={i} className="aa-cat-page grid min-h-[calc(100dvh-15rem)] w-full shrink-0 snap-center content-start gap-4 px-4 pb-8 pt-1" style={{ ["--cat" as string]: st.color, background: `linear-gradient(180deg, ${st.color}38 0%, ${st.color}1f 35%, ${st.color}12 70%, ${st.color}08 100%)` }}>
+            <section key={i} className="aa-cat-page grid min-h-[calc(100dvh-15rem)] w-full shrink-0 snap-center content-start gap-4 px-4 pb-8 pt-1" style={{ ["--cat" as string]: "var(--tone)", background: "linear-gradient(180deg, color-mix(in srgb, var(--tone) 20%, transparent) 0%, color-mix(in srgb, var(--tone) 11%, transparent) 35%, color-mix(in srgb, var(--tone) 6%, transparent) 70%, color-mix(in srgb, var(--tone) 3%, transparent) 100%)" }}>
               {/* intestazione illustrata della categoria: grande icona con alone, titolo e bersaglio decorativo */}
-              <div className="aa-cat-hero relative overflow-hidden rounded-[1.75rem] p-4" style={{ ["--cat" as string]: st.color, background: `linear-gradient(135deg, ${st.color}55, ${st.color}1a 55%, rgba(255,255,255,0.02))` }}>
+              <div className="aa-cat-hero relative overflow-hidden rounded-[1.75rem] p-4" style={{ ["--cat" as string]: "var(--tone)", background: "linear-gradient(135deg, color-mix(in srgb, var(--tone) 30%, transparent), color-mix(in srgb, var(--tone) 9%, transparent) 55%, rgba(255,255,255,0.02))" }}>
                 <svg aria-hidden viewBox="0 0 200 200" className="aa-cat-rings pointer-events-none absolute -right-10 -top-12 h-52 w-52 opacity-[0.22]">
                   {[96, 78, 60, 42, 24].map((r, k) => <circle key={r} cx="100" cy="100" r={r} fill="none" stroke="#fff" strokeWidth={k === 4 ? 10 : 6} />)}
                   <path d="M0 160 L120 96" stroke="#fff" strokeWidth="4" strokeLinecap="round" />
                   <path d="M10 150 l-14 -2 m14 2 l-6 12" stroke="#fff" strokeWidth="4" strokeLinecap="round" />
                 </svg>
-                <span aria-hidden className="pointer-events-none absolute -left-16 -bottom-20 h-48 w-48 rounded-full blur-3xl" style={{ background: `${st.color}66` }} />
+                <span aria-hidden className="pointer-events-none absolute -left-16 -bottom-20 h-48 w-48 rounded-full blur-3xl" style={{ background: "color-mix(in srgb, var(--tone) 38%, transparent)" }} />
                 <div className="relative flex items-center gap-4">
                   <span className="aa-cat-icon relative grid place-items-center">
-                    <span aria-hidden className="absolute inset-[-10px] rounded-[2rem] blur-xl" style={{ background: `${st.color}88` }} />
+                    <span aria-hidden className="absolute inset-[-10px] rounded-[2rem] blur-xl" style={{ background: "color-mix(in srgb, var(--tone) 45%, transparent)" }} />
                     <AppIcon name={st.icon} color={st.color} size={76} className="relative" />
                   </span>
                   <div className="min-w-0">

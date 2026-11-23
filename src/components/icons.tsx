@@ -1,4 +1,3 @@
-import { RealIcon, hasRealIcon } from "./real-icons";
 import type { CSSProperties, ReactNode } from "react";
 
 /**
@@ -15,12 +14,24 @@ export type IconName =
   | "eye" | "save" | "share" | "close" | "chevron" | "broom" | "medal" | "crosshair" | "mountain" | "home" | "grid"
   | "sight" | "checklist" | "stopwatch" | "foc" | "wrench" | "hold"
   | "steps" | "lungs" | "scorecard" | "spine" | "windsock" | "energy" | "span" | "bareshaft" | "caliper" | "ruler"
-  | "daily" | "quiz" | "binoculars" | "book" | "rules" | "lock" | "expand" | "search" | "help";
+  | "daily" | "quiz" | "binoculars" | "book" | "rules" | "lock" | "expand" | "search" | "help"
+  | "bowstring" | "rest" | "stabilizer" | "armguard" | "release" | "chestguard" | "bowcase" | "bowstand" | "shirt" | "shoe";
 
 const A = 0.32; // opacità del secondo tono
 
 // ogni icona: tratti (stroke) e riempimenti tenui (fill, secondo tono)
 const ICONS: Partial<Record<IconName, ReactNode>> = {
+  // attrezzatura: stessi tratti e stesso secondo tono delle altre icone
+  bowstring: (<><path d="M7 3c5 4 5 14 0 18" /><path d="M7 3v18" strokeDasharray="2 2.2" /><path d="M4 9.5c1.6.6 3 .6 4.6 0M4 14.5c1.6-.6 3-.6 4.6 0" /><circle cx="7" cy="12" r="1.4" fill="currentColor" fillOpacity={A} /><path d="M14 8l5-3M14 16l5 3" /></>),
+  rest: (<><rect x="3" y="13" width="11" height="7" rx="1.6" fill="currentColor" fillOpacity={A} /><path d="M12 15l7-7" /><circle cx="19.5" cy="7.5" r="1.6" /><path d="M2 9h20" strokeOpacity={0.55} /></>),
+  stabilizer: (<><path d="M3 12h13" /><rect x="15" y="9.5" width="6" height="5" rx="1.4" fill="currentColor" fillOpacity={A} /><path d="M3 9.5v5M7 10.5v3M11 10.5v3" /></>),
+  armguard: (<><path d="M6 3h8c3 4 3 14 0 18H6c2-6 2-12 0-18z" fill="currentColor" fillOpacity={A} /><path d="M8.5 7h5M8.5 12h6M8.5 17h5" /></>),
+  release: (<><path d="M6 4h5v6a4 4 0 0 1-4 4H6z" fill="currentColor" fillOpacity={A} /><path d="M8 14v6M6 20h4" /><path d="M11 7h4l3 2-3 2h-4" /><circle cx="18.5" cy="9" r="1" /></>),
+  chestguard: (<><path d="M5 5c4-2 10-2 14 0v9c-3 4-11 4-14 0z" fill="currentColor" fillOpacity={A} /><path d="M5 5 3 3M19 5l2-2M9 9h6M8 12.5h8" /></>),
+  bowcase: (<><rect x="2.5" y="7" width="19" height="12" rx="2.4" fill="currentColor" fillOpacity={A} /><path d="M9 7V5h6v2M2.5 12h19M11 12v2h2v-2" /></>),
+  bowstand: (<><path d="M12 3v10M12 13l-6 8M12 13l6 8M12 13v8" /><path d="M9 4c2-1 4-1 6 0" /><circle cx="12" cy="13" r="1.6" fill="currentColor" fillOpacity={A} /></>),
+  shirt: (<><path d="M8 3 3 6l2 4 2-1v12h10V9l2 1 2-4-5-3c-.6 1.6-2 2.4-4 2.4S8.6 4.6 8 3z" fill="currentColor" fillOpacity={A} /><path d="M10 12h4" /></>),
+  shoe: (<><path d="M3 9c3 0 5-1 6-4h3l1 5c3 1 6 2 8 4v3H3z" fill="currentColor" fillOpacity={A} /><path d="M3 17h18M10 8h2M10.5 10.5h2.5" /></>),
   expand: (<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />),
   lock: (<><rect x="5" y="11" width="14" height="10" rx="2" fill="currentColor" fillOpacity={A} /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></>),
   steps: (<><path d="M5 6h4M5 12h4M5 18h4" /><path d="M12 6h7M12 12h7M12 18h5" /><circle cx="3" cy="6" r="0.6" /></>),
@@ -804,16 +815,15 @@ export function Glyph({ name, size = 20, className, strokeWidth = 1.7, title, de
   );
 }
 
-/** Tessera d'icona: vetro colorato con luce in alto, ombra morbida e glifo bianco. */
-export function AppIcon({ name, color, size = 52, className }: { name: IconName; color: string; size?: number; className?: string }) {
-  const real = hasRealIcon(name);
+/** Tessera d'icona: placca scura con la cornice e il disegno nel colore scelto per l'app.
+ *  Stesso aspetto ovunque (Home, menu, sezioni, categorie): `color` resta per compatibilità ma non cambia più la tinta. */
+export function AppIcon({ name, size = 52, className }: { name: IconName; color?: string; size?: number; className?: string }) {
   return (
     <span
-      className={["aa-appicon relative grid shrink-0 place-items-center", real ? "is-real" : "", className].filter(Boolean).join(" ")}
-      style={{ "--c": color, width: size, height: size, borderRadius: size * 0.3 } as CSSProperties}
+      className={["aa-appicon relative grid shrink-0 place-items-center", className].filter(Boolean).join(" ")}
+      style={{ width: size, height: size, borderRadius: size * 0.3 } as CSSProperties}
     >
-      {real ? <RealIcon name={name} size={Math.round(size * 0.84)} className="aa-real relative z-[1]" /> : null}
-      <Glyph name={name} detailed size={Math.round(size * 0.58)} strokeWidth={1.6} className={["aa-line relative z-[1] text-white drop-shadow-[0_1px_1.5px_rgba(0,0,0,0.35)]", real ? "hidden" : ""].join(" ")} />
+      <Glyph name={name} detailed size={Math.round(size * 0.56)} strokeWidth={size >= 48 ? 1.5 : 1.7} className="aa-line relative z-[1]" />
     </span>
   );
 }

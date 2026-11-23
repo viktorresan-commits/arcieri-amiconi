@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { INKS, WEEK_GOALS, usePrefs, type Prefs } from "@/lib/arcieri/prefs";
-import { AppIcon, Glyph } from "./icons";
+import { Glyph } from "./icons";
 import { cx } from "./kit";
 import { ShortcutEditor } from "./shortcuts";
 
@@ -60,22 +60,6 @@ export function PersonalizePanel() {
               <span className="h-7 w-7 rounded-full shadow-inner" style={{ background: `radial-gradient(circle at 35% 30%, color-mix(in srgb, ${item.color} 60%, white), ${item.color})` }} />
               {item.label}
             </button>
-          ))}
-        </div>
-      </Row>
-      <Row title="Icone" sub="Oggetti realistici: a tema prendono il colore dell'app, colorate distinguono le sezioni. Sobrie: solo il disegno a linee.">
-        <Pills
-          value={prefs.icons}
-          onChange={(icons) => update({ icons })}
-          options={[
-            { id: "tema", label: "A tema" },
-            { id: "colori", label: "Colorate" },
-            { id: "sobrie", label: "Sobrie" },
-          ]}
-        />
-        <div className="flex justify-center gap-3 pt-1">
-          {(["bow", "camera", "chart", "ballistics", "trophy"] as const).map((n, i) => (
-            <AppIcon key={n} name={n} color={["#2c8a57", "#2b74c9", "#1b9097", "#cc4f3b", "#c39320"][i]} size={38} />
           ))}
         </div>
       </Row>

@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Card, PageHead } from "@/components/kit";
-import { Glyph, StatusMark } from "@/components/icons";
-import { RealIcon } from "@/components/real-icons";
+import { AppIcon, Glyph, StatusMark } from "@/components/icons";
 import { useLocalState } from "@/lib/arcieri/local-store";
 import { dashboard } from "@/lib/arcieri/training.api";
 
@@ -50,7 +49,7 @@ function Page() {
       <PageHead kicker="Attrezzatura" title="Manutenzione" lede="Tocca «Fatto» quando sistemi una parte: conto io giorni e frecce da allora." />
       <Card className="flex items-center gap-3">
         <span className={`grid h-14 w-14 shrink-0 place-items-center rounded-2xl ${due ? "bg-rose-500/20" : "bg-emerald-400/15"}`}>
-          <RealIcon name="wrench" size={44} />
+          <AppIcon name="wrench" size={44} />
         </span>
         <div className="min-w-0">
           <p className="font-semibold">{due ? `${due} ${due === 1 ? "cosa da fare" : "cose da fare"}` : "Tutto in ordine"}</p>

@@ -510,24 +510,75 @@ export function Pouch({ kind, x, y, s = 1 }: { kind: string; x: number; y: numbe
 }
 
 export function Clasp({ kind, x, y, s = 1 }: { kind: string; x: number; y: number; s?: number }) {
+  // fermagli come piccoli gioielli: ombra portata, metallo con luce in alto a sinistra, spillo dietro
+  const metal = (hi: string, mid: string, lo: string, r = 4.6) => (
+    <g>
+      <path d={`M${-r - 2.6} 1.6 L${r + 2.6} -1.6`} stroke={lo} strokeWidth="1.1" strokeLinecap="round" />
+      <circle r={r} fill={mid} stroke={lo} strokeWidth="0.8" />
+      <path d={`M${-r * 0.78} ${-r * 0.2} A${r * 0.8} ${r * 0.8} 0 0 1 ${r * 0.35} ${-r * 0.72}`} stroke={hi} strokeWidth="1.1" fill="none" strokeLinecap="round" />
+      <path d={`M${r * 0.75} ${r * 0.25} A${r * 0.8} ${r * 0.8} 0 0 1 ${-r * 0.3} ${r * 0.75}`} stroke={lo} strokeOpacity="0.7" strokeWidth="1" fill="none" strokeLinecap="round" />
+    </g>
+  );
   const g = (() => {
     switch (kind) {
       case "oro":
-        return <g><circle r="4.4" fill="#e8c870" stroke="#8a6a20" strokeWidth="0.8" /><circle r="1.6" fill="#8a6a20" /></g>;
+        return (
+          <g>
+            {metal("#fff3c4", "#e2bd5c", "#7a5614")}
+            <circle r="2.6" fill="none" stroke="#9a7420" strokeWidth="0.7" />
+            {Array.from({ length: 8 }, (_, i) => <circle key={i} cx={Math.cos(i * 0.785) * 3.6} cy={Math.sin(i * 0.785) * 3.6} r="0.45" fill="#7a5614" />)}
+            <circle r="1.3" fill="#b8323a" stroke="#6a1418" strokeWidth="0.4" />
+            <circle cx="-0.45" cy="-0.45" r="0.4" fill="#fff" opacity="0.8" />
+          </g>
+        );
       case "argento":
-        return <g><circle r="4.4" fill="#d9dde2" stroke="#6b737c" strokeWidth="0.8" /><path d="M-2.4 0 H2.4 M0 -2.4 V2.4" stroke="#6b737c" strokeWidth="0.9" /></g>;
+        return (
+          <g>
+            {metal("#ffffff", "#cdd3da", "#59616b")}
+            <path d="M-2.6 0 H2.6 M0 -2.6 V2.6" stroke="#59616b" strokeWidth="1" strokeLinecap="round" />
+            <path d="M-1.8 -1.8 L1.8 1.8 M1.8 -1.8 L-1.8 1.8" stroke="#8a929c" strokeWidth="0.5" />
+            <circle r="0.9" fill="#3f6fa8" />
+          </g>
+        );
       case "foglia":
-        return <path d="M-5 2 C-4 -4 2 -6 6 -5 C5 0 0 5 -5 2 Z M-5 2 L5 -4" fill="#6f9a3a" stroke="#d9b45a" strokeWidth="0.8" />;
+        return (
+          <g>
+            <path d="M-6.4 2.2 C-5 -4.6 2 -6.8 6.6 -5.6 C5.6 0.4 -0.4 5.6 -6.4 2.2 Z" fill="#5f8a30" stroke="#3a5a1a" strokeWidth="0.8" />
+            <path d="M-6 2 C-2 -0.6 2 -3 6.2 -5.2" stroke="#d9b45a" strokeWidth="0.9" fill="none" />
+            {[-3, -0.6, 1.8].map((k) => <path key={k} d={`M${k} ${-0.2 - (k + 3) * 0.5} l1.6 2.6 M${k} ${-0.2 - (k + 3) * 0.5} l-1.2 -2.6`} stroke="#d9b45a" strokeWidth="0.5" />)}
+            <path d="M-4.6 0.6 C-3.4 -3.4 1 -5 4.6 -4.8" stroke="#a6c86a" strokeOpacity="0.6" strokeWidth="0.7" fill="none" />
+          </g>
+        );
       case "drago":
-        return <g><circle r="4.8" fill="#c9a46a" stroke="#6b4a1a" strokeWidth="0.8" /><path d="M-2.6 2 C-1 -2 2 -1 1 -3 C3 -2 3 2 0 3 Z" fill="#6b4a1a" /></g>;
+        return (
+          <g>
+            {metal("#f6e0a8", "#c49a58", "#5a3a12", 5)}
+            <path d="M-3 2.4 C-2 -1.6 1 -0.4 0.6 -3 C3.2 -2.4 3.4 1.6 0.4 3 C-0.8 3.4 -2 3.2 -3 2.4 Z" fill="#5a3a12" />
+            <circle cx="1.4" cy="-1.6" r="0.5" fill="#e04a2a" />
+            <path d="M-3 2.4 l-1.2 0.6 M0.6 -3 l0.2 -1.2" stroke="#5a3a12" strokeWidth="0.7" strokeLinecap="round" />
+          </g>
+        );
       case "gemma":
-        return <g><path d="M0 -5 L4.4 0 L0 5 L-4.4 0 Z" fill="#2f9e7a" stroke="#d9b45a" strokeWidth="1.1" /><path d="M-1.4 -1.4 L0 -3" stroke="#fff" strokeOpacity="0.6" strokeWidth="0.8" /></g>;
+        return (
+          <g>
+            <path d="M0 -6 L5.4 0 L0 6 L-5.4 0 Z" fill="#c9a24e" stroke="#6b4e14" strokeWidth="0.8" />
+            <path d="M0 -4 L3.4 0 L0 4 L-3.4 0 Z" fill="#23a07a" stroke="#0e5a40" strokeWidth="0.5" />
+            <path d="M0 -4 L-3.4 0 L0 0 Z" fill="#6ee0b6" opacity="0.6" />
+            <path d="M0 4 L3.4 0 L0 0 Z" fill="#0e5a40" opacity="0.5" />
+            <circle cx="-1.2" cy="-1.4" r="0.5" fill="#fff" opacity="0.9" />
+          </g>
+        );
       default:
         return null;
     }
   })();
   if (!g) return null;
-  return <g transform={`translate(${f(x)} ${f(y)}) scale(${s})`}>{g}</g>;
+  return (
+    <g transform={`translate(${f(x)} ${f(y)}) scale(${s})`}>
+      <ellipse cx="0.9" cy="1.4" rx="5.4" ry="4.6" fill="#000" opacity="0.28" />
+      {g}
+    </g>
+  );
 }
 
 /* ---------------- cornice della foto profilo ---------------- */

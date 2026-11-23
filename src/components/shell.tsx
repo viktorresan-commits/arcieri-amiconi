@@ -16,7 +16,6 @@ import { Scene } from "./scene";
 import { levelOf, useXp, useXpToasts } from "@/lib/arcieri/xp";
 import { AvatarFace } from "./archer-avatar";
 import { useAvatar, useAvatarSync } from "./avatar-hero";
-import { RealIcon } from "./real-icons";
 import { PersonalizeSheet } from "./personalize";
 import { HelpSheet } from "./help-sheet";
 import { rememberMenu, takeMenu, useBackRestore } from "@/lib/arcieri/back-restore";
@@ -425,7 +424,7 @@ function XpToasts() {
     <div className="aa-xp-toasts" aria-live="polite">
       {list.map((t) => (
         <div key={t.id} className="aa-xp-toast">
-          <RealIcon name="daily" size={22} />+{t.n} punti
+          <Glyph name="daily" size={22} className="aa-tone-hi shrink-0" />+{t.n} punti
           <span className="max-w-40 truncate font-semibold opacity-80">· {t.why}</span>
         </div>
       ))}

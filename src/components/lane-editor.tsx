@@ -9,7 +9,6 @@ import { TargetFace } from "@/components/target-face";
 import { ShotLab } from "@/components/shot-lab";
 import { Button, ErrorNote, Field, TextArea, TextInput } from "@/components/kit";
 import { Glyph } from "@/components/icons";
-import { RealIcon } from "@/components/real-icons";
 import { useLocalState } from "@/lib/arcieri/local-store";
 
 /**
@@ -336,7 +335,7 @@ export function LaneEditor({ compId, mine, onDone, onSaved }: { compId: number; 
   return (
     <div className="grid min-w-0 gap-3 border-t border-line pt-3">
       <div className="grid grid-cols-2 gap-2">
-        <button type="button" onClick={() => setKind("padiglione")} className={`flex min-h-12 items-center justify-center gap-2 rounded-xl text-sm font-semibold ${kind === "padiglione" ? "bg-primary text-primary-fg" : "border border-line"}`}><RealIcon name="target" size={26} />Padiglione</button>
+        <button type="button" onClick={() => setKind("padiglione")} className={`flex min-h-12 items-center justify-center gap-2 rounded-xl text-sm font-semibold ${kind === "padiglione" ? "bg-primary text-primary-fg" : "border border-line"}`}><Glyph name="target" size={26} className="aa-tone-hi shrink-0" />Padiglione</button>
         <button type="button" onClick={() => setKind("sagoma")} className={`flex min-h-12 items-center justify-center gap-2 rounded-xl text-sm font-semibold ${kind === "sagoma" ? "bg-primary text-primary-fg" : "border border-line"}`}><img src={ANIMALS[0]?.src} alt="" className="h-7 w-9 object-contain" />Sagoma 3D</button>
       </div>
       <div className="grid grid-cols-2 gap-1 rounded-2xl bg-white/[0.05] p-1">

@@ -1,7 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Card, PageHead } from "@/components/kit";
-import { Glyph } from "@/components/icons";
-import { RealIcon } from "@/components/real-icons";
+import { AppIcon, Glyph } from "@/components/icons";
 import { useLocalState } from "@/lib/arcieri/local-store";
 import { DRILLS, drillOfDay } from "@/lib/arcieri/learn";
 import { award, levelOf, today, useXp } from "@/lib/arcieri/xp";
@@ -35,7 +34,7 @@ function Page() {
       <PageHead kicker="Impara" title="Sfida del giorno" lede="Un esercizio diverso ogni giorno. Fallo e segnalo: punti e serie crescono." />
       <Card className="aa-daily grid gap-3">
         <div className="flex items-start gap-3">
-          <RealIcon name="daily" size={60} />
+          <AppIcon name="daily" size={60} />
           <div className="min-w-0">
             <p className="text-[0.66rem] font-semibold uppercase tracking-[0.16em] text-muted">{d.kind} · +{d.xp} punti</p>
             <p className="font-display text-2xl leading-tight">{d.title}</p>

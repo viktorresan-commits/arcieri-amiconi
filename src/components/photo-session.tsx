@@ -3,8 +3,7 @@ import type { Face } from "@/lib/arcieri/scoring";
 import type { Draft } from "@/lib/arcieri/draft";
 import { TargetRead } from "./target-read";
 import { Card, cx } from "./kit";
-import { Glyph } from "./icons";
-import { RealIcon } from "./real-icons";
+import { AppIcon, Glyph } from "./icons";
 
 type Hit = { nx: number; ny: number; score: number; isX: boolean; miss: boolean; tag?: number | null };
 type Item = { id: number; file: File; url: string; state: "da-leggere" | "salvata" | "saltata"; volley?: number; points?: number; arrows?: number };
@@ -87,7 +86,7 @@ export function PhotoSession({
     <div className="grid gap-3">
       <div className="aa-hero grid gap-3 p-4">
         <div className="flex items-center gap-3">
-          <RealIcon name="camera" size={52} />
+          <AppIcon name="camera" size={52} />
           <div className="min-w-0 flex-1">
             <p className="text-[0.66rem] font-semibold uppercase tracking-[0.16em] text-white/60">Nuovo allenamento</p>
             <h1 className="font-display text-3xl leading-none">Da foto</h1>
@@ -144,7 +143,7 @@ export function PhotoSession({
         </div>
       ) : (
         <Card className="grid justify-items-center gap-2 py-6 text-center">
-          <RealIcon name="bolt" size={64} />
+          <AppIcon name="bolt" size={64} />
           <p className="font-semibold">Fotografa il bersaglio dopo ogni volée</p>
           <p className="max-w-xs text-sm text-muted">Puoi anche sceglierne tante dall'album: le leggo una alla volta, tu controlli e salvi.</p>
         </Card>

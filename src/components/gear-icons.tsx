@@ -1,6 +1,6 @@
 import { useId } from "react";
 import { ArrowArt, FLETCH_SHAPES, POINT_TYPES } from "./arrow-art";
-import { RealIcon } from "./real-icons";
+import { Glyph, type IconName } from "./icons";
 /** Disegni dell'attrezzatura: archi per tipo, frecce con i loro colori, icone per categoria. */
 
 export const BOW_TYPES = [
@@ -190,46 +190,33 @@ export function ArrowIcon({
   return <ArrowArt {...look} number={number != null && number !== "" ? `${number}` : undefined} className={className} />;
 }
 
-/** Icone di categoria a colori: gli stessi oggetti illustrati del resto dell'app. */
+/** Icone di categoria: la stessa tessera a linee di tutta l'app, nel colore scelto. */
+const CATEGORY_GLYPH: Record<string, IconName> = {
+  arco: "bow",
+  freccia: "arrow",
+  corda: "bowstring",
+  mirino: "sight",
+  rest: "rest",
+  stabilizzatore: "stabilizer",
+  parabraccio: "armguard",
+  guantino: "hand",
+  sgancio: "release",
+  pettorina: "chestguard",
+  faretra: "quiver",
+  bersaglio: "target",
+  custodia: "bowcase",
+  borsa: "bag",
+  supporto: "bowstand",
+  accessorio: "gear",
+  abbigliamento: "shirt",
+  scarpe: "shoe",
+  altro: "archer",
+};
+
 export function CategoryIcon({ category, className = "h-8 w-8" }: { category: string; className?: string }) {
-  const u = useId().replace(/[^a-zA-Z0-9]/g, "");
-  const metal = (
-    <linearGradient id={`${u}m`} x1="0" x2="1" y1="0" y2="1">
-      <stop offset="0" stopColor="#f5f7f9" />
-      <stop offset="0.5" stopColor="#a3abb4" />
-      <stop offset="1" stopColor="#4c535b" />
-    </linearGradient>
+  return (
+    <span className={["aa-appicon relative grid shrink-0 place-items-center rounded-[30%]", className].filter(Boolean).join(" ")}>
+      <Glyph name={CATEGORY_GLYPH[category] ?? "bag"} detailed size={24} strokeWidth={1.6} className="aa-line relative z-[1] h-[60%] w-[60%]" />
+    </span>
   );
-  const real: Record<string, string> = {
-    freccia: "arrowone",
-    faretra: "quiver",
-    bersaglio: "target",
-    mirino: "sight3",
-    corda: "bowstring",
-    stabilizzatore: "stabilizer",
-    parabraccio: "armguard",
-    guantino: "fingertab",
-    sgancio: "release",
-    pettorina: "chestguard",
-    custodia: "bowcase",
-    borsa: "targetbag",
-    supporto: "bowstand",
-    accessorio: "bag",
-    abbigliamento: "shirt",
-    scarpe: "shoes",
-    altro: "archer",
-  };
-  if (category === "arco") return <BowIcon type="olimpico" className={className} />;
-  if (category === "rest") {
-    return (
-      <svg viewBox="0 0 32 32" className={className} aria-hidden>
-        <defs>{metal}</defs>
-        <rect x="4" y="18" width="14" height="8" rx="2" fill={`url(#${u}m)`} />
-        <path d="M16 20 L25 11" stroke="#1d2126" strokeWidth="2" strokeLinecap="round" />
-        <circle cx="25" cy="11" r="2" fill="#e3a21a" />
-        <path d="M3 13 H29" stroke="#2a2f35" strokeWidth="1.4" strokeLinecap="round" opacity="0.7" />
-      </svg>
-    );
-  }
-  return <RealIcon name={real[category] ?? "bag"} size={64} className={className} />;
 }

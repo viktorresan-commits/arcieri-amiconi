@@ -6,7 +6,6 @@ import { listGestures } from "@/lib/arcieri/gesture.api";
 import { useLocalState } from "@/lib/arcieri/local-store";
 import { BOW_TYPES } from "./gear-icons";
 import { Glyph } from "./icons";
-import { RealIcon } from "./real-icons";
 
 export type ProSave = { total: number; areas: Record<string, number | null>; issues: string[]; m: Partial<ProMetrics>; setup: ProSetup; at: number | null };
 
@@ -96,7 +95,7 @@ export function ProPanel({
 
       {ev.issues.length ? (
         <div className="grid gap-2">
-          <p className="flex items-center gap-2 text-sm font-semibold"><RealIcon name="target" size={22} />Da migliorare, in ordine</p>
+          <p className="flex items-center gap-2 text-sm font-semibold"><Glyph name="target" size={22} className="aa-tone-hi shrink-0" />Da migliorare, in ordine</p>
           {issues.map((it, i) => (
             <div key={it.title} className="aa-issue grid gap-1 rounded-2xl p-3" style={{ animationDelay: `${i * 80}ms` }}>
               <p className="flex items-start gap-2 font-semibold">
@@ -144,7 +143,7 @@ export function ProPanel({
       <History />
 
       <div className="grid gap-1.5 rounded-2xl bg-white/[0.05] p-3">
-        <p className="flex items-center gap-2 text-sm font-semibold"><RealIcon name="calendar" size={24} />Salva nel calendario della postura</p>
+        <p className="flex items-center gap-2 text-sm font-semibold"><Glyph name="calendar" size={24} className="aa-tone-hi shrink-0" />Salva nel calendario della postura</p>
         <p className="text-xs text-muted">Salvo il fotogramma {shot ? "a metà ancoraggio" : "attuale"} con i punti pro e il riassunto: lo ritrovi nel Calendario, nel giorno di oggi, e nel Profilo.</p>
         <button
           type="button"
@@ -201,7 +200,7 @@ function ProHead({ score, frames }: { score: number | null; frames: number }) {
         <span className="font-display text-3xl tabular-nums">{score == null ? "—" : shown}</span>
       </div>
       <div className="min-w-0">
-        <p className="flex items-center gap-1.5 text-[0.66rem] font-semibold uppercase tracking-[0.16em] text-amber-300"><RealIcon name="archer" size={18} />Analisi pro</p>
+        <p className="flex items-center gap-1.5 text-[0.66rem] font-semibold uppercase tracking-[0.16em] text-amber-300"><Glyph name="archer" size={18} className="aa-tone-hi shrink-0" />Analisi pro</p>
         <p className="font-display text-2xl leading-tight">Postura e gesto</p>
         <p className="text-xs text-muted">{frames > 1 ? `Media su ${frames} fotogrammi dell'ancoraggio` : frames === 1 ? "Su questo fotogramma" : "In attesa del corpo"} · 33 punti del corpo</p>
       </div>
@@ -350,7 +349,7 @@ function DrawLength({ m, setup, gear, aspect }: { m: ProMetrics; setup: ProSetup
   const room = arrowCm ? arrowCm - m.drawLenCm : null;
   return (
     <div className="grid gap-2 rounded-2xl bg-white/[0.05] p-3">
-      <p className="flex items-center gap-2 text-sm font-semibold"><RealIcon name="span" size={24} />Allungo e freccia</p>
+      <p className="flex items-center gap-2 text-sm font-semibold"><Glyph name="span" size={24} className="aa-tone-hi shrink-0" />Allungo e freccia</p>
       <div className="grid grid-cols-3 gap-1.5 text-center">
         <span className="rounded-xl bg-black/20 px-1 py-1.5"><span className="block text-[0.6rem] uppercase tracking-wider text-muted">Allungo</span><b className="font-display text-lg tabular-nums">{inch.toFixed(1).replace(".", ",")}″</b></span>
         <span className="rounded-xl bg-black/20 px-1 py-1.5"><span className="block text-[0.6rem] uppercase tracking-wider text-muted">Margine</span><b className={`font-display text-lg tabular-nums ${room == null ? "" : room < 0 ? "text-rose-300" : room > 9 ? "text-amber-300" : "text-emerald-300"}`}>{room == null ? "—" : `${room > 0 ? "+" : ""}${room.toFixed(0)} cm`}</b></span>
@@ -555,7 +554,7 @@ function GearSizes({ m, setup, gear, aspect, drawIn }: { m: ProMetrics; setup: P
   const declared = setup.arrowIn > 0 && arrowIn != null ? arrowIn - setup.arrowIn : null;
   return (
     <div className="grid gap-1.5">
-      <p className="flex items-center gap-1.5 text-xs font-semibold"><RealIcon name="caliper" size={20} />Attrezzatura riconosciuta nell'immagine</p>
+      <p className="flex items-center gap-1.5 text-xs font-semibold"><Glyph name="caliper" size={20} className="aa-tone-hi shrink-0" />Attrezzatura riconosciuta nell'immagine</p>
       <div className="grid grid-cols-3 gap-1.5 text-center">
         {cell("Freccia", g.arrowCm != null ? inch(g.arrowCm) : "—", g.arrowCm != null ? `${g.arrowCm.toFixed(0)} cm${room != null ? ` · ${room >= 0 ? "+" : ""}${room.toFixed(1).replace(".", ",")}″ sull'allungo` : ""}` : "punta non vista", room != null && (room < 0.5 || room > 3.5) ? "text-amber-300" : "")}
         {cell(g.compound ? "Asse-asse" : "Arco AMO", g.compound ? (g.chordCm != null ? inch(g.chordCm) : "—") : g.amoIn != null ? `${Math.round(g.amoIn)}″` : "—", g.chordCm != null ? `punte a ${g.chordCm.toFixed(0)} cm` : "punte non viste")}

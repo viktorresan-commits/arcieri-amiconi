@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { RealIcon } from "./real-icons";
-import { Glyph } from "./icons";
+import { AppIcon, Glyph } from "./icons";
 import { drillOfDay, QUIZ } from "@/lib/arcieri/learn";
 import { award, levelOf, today, useXp } from "@/lib/arcieri/xp";
 import { useLocalState } from "@/lib/arcieri/local-store";
@@ -71,7 +70,7 @@ export function TodayCard() {
         </div>
       </div>
       <Link to="/sfida-giorno" className="aa-press flex items-center gap-3 rounded-2xl bg-white/[0.05] p-2.5">
-        <RealIcon name="daily" size={40} />
+        <AppIcon name="daily" size={40} />
         <span className="min-w-0 flex-1">
           <span className="block text-[0.62rem] font-semibold uppercase tracking-wider text-muted">Sfida del giorno · +{d.xp}</span>
           <span className="block truncate font-semibold">{d.title}</span>
@@ -79,7 +78,7 @@ export function TodayCard() {
         {drillDone ? <span className="grid h-7 w-7 place-items-center rounded-full bg-emerald-500/25 text-emerald-200"><Glyph name="check" size={14} strokeWidth={2.6} /></span> : <Glyph name="chevron" size={16} className="text-muted" />}
       </Link>
       {showQuiz ? <div className="grid gap-2 rounded-2xl bg-white/[0.05] p-2.5">
-        <p className="flex items-center gap-2 text-[0.62rem] font-semibold uppercase tracking-wider text-muted"><RealIcon name="quiz" size={22} />Domanda lampo · +10</p>
+        <p className="flex items-center gap-2 text-[0.62rem] font-semibold uppercase tracking-wider text-muted"><Glyph name="quiz" size={22} className="aa-tone-hi shrink-0" />Domanda lampo · +10</p>
         <p className="text-sm font-semibold">{q.q}</p>
         <div className="grid grid-cols-2 gap-1.5">
           {q.options.map((o, k) => {

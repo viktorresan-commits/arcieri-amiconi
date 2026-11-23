@@ -14,7 +14,7 @@ import { ShortcutRow } from "@/components/shortcuts";
 import { JourneyCard } from "@/components/journey";
 import { TodayCard } from "@/components/today-card";
 import { usePrefs } from "@/lib/arcieri/prefs";
-import { Glyph, type IconName } from "@/components/icons";
+import { AppIcon, Glyph, type IconName } from "@/components/icons";
 import { LastArrows, LastSummary } from "@/components/last-arrows";
 import { Button, Card, Empty, ErrorNote, HoldDelete, Loading, cx } from "@/components/kit";
 
@@ -27,7 +27,7 @@ const HOME_HIDE = ["rapido", "foto", "segnapunti", "statistiche", "gare", "squad
 function Plaque({ to, search, icon, label, sub }: { to: string; search?: Record<string, string>; icon: IconName; label: string; sub?: string }) {
   return (
     <Link to={to as "/"} search={search as never} className="aa-plaque aa-press flex min-h-[58px] min-w-0 items-center gap-2.5 rounded-2xl px-2.5 text-left">
-      <span className="aa-plaque-medal grid h-10 w-10 shrink-0 place-items-center rounded-full"><Glyph name={icon} size={20} /></span>
+      <AppIcon name={icon} size={40} />
       <span className="min-w-0">
         <b className="aa-plaque-title block truncate font-display text-[1.05rem] leading-tight">{label}</b>
         {sub ? <span className="aa-plaque-sub block truncate text-[0.66rem]">{sub}</span> : null}
@@ -113,7 +113,7 @@ function Home() {
             </div>
             <div className="grid grid-cols-[1.45fr_1fr] gap-2">
               <Link to="/allenamento" search={{ avvia: "rapido" }} className="aa-plaque-main aa-press flex min-h-[58px] items-center gap-2.5 rounded-2xl px-3 text-left">
-                <span className="aa-plaque-main-medal grid h-10 w-10 shrink-0 place-items-center rounded-full"><Glyph name="bolt" size={20} /></span>
+                <AppIcon name="bolt" size={40} />
                 <span className="min-w-0"><b className="block truncate font-display text-[1.25rem] leading-none">Tiro rapido</b><span className="block truncate text-[0.68rem] font-semibold opacity-75">segna le frecce di oggi</span></span>
               </Link>
               <Plaque to="/allenamento" search={{ avvia: "foto" }} icon="camera" label="Da foto" sub="leggo il bersaglio" />

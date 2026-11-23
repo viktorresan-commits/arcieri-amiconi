@@ -558,10 +558,10 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
     >
       {/* mancino: campo, bersaglio e arciere si specchiano; i testi restano dritti */}
       <div className={`pointer-events-none absolute inset-0 ${lefty ? "aa-mirror" : ""} ${bleed ? "aa-game-fade" : ""}`} style={crop ? { WebkitMaskImage: `linear-gradient(180deg, transparent ${crop}px, rgba(0,0,0,0.55) calc(${crop}px + 5%), #000 calc(${crop}px + 13%), #000 100%)`, maskImage: `linear-gradient(180deg, transparent ${crop}px, rgba(0,0,0,0.55) calc(${crop}px + 5%), #000 calc(${crop}px + 13%), #000 100%)` } : undefined}>
-      <div key={scene} className={`aa-scene-swap absolute inset-0 ${apron ? "aa-backdrop-joined" : ""}`}>
+      <div key={scene} className={`aa-scene-swap absolute inset-0 z-0 ${apron ? "aa-backdrop-joined" : ""}`}>
         <SceneBackdrop sky={sky} id="game" scene={scene} wind={wind} />
       </div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="absolute inset-0 h-full w-full" aria-hidden>
+      <svg viewBox={`0 0 ${W} ${H}`} className="absolute inset-0 z-[1] h-full w-full" aria-hidden>
         <defs>
           <radialGradient id="gm-straw" cx="0.4" cy="0.35" r="0.8">
             <stop offset="0" stopColor="#e2c58c" />
@@ -669,8 +669,9 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
         <rect width={W} height={H} fill="url(#gm-vig)" pointerEvents="none" />
       </svg>
 
-      {/* arciere, grande in primo piano */}
-      <div className="pointer-events-none absolute" style={{ left: `${(AV.left / W) * 100}%`, top: `${(AV_TOP / H) * 100}%`, width: `${(AV.width / W) * 100}%`, height: `${(AV_H / H) * 100}%` }}>
+      {/* arciere, grande in primo piano: sempre sopra lo sfondo sfumato (su alcuni WebView Android
+          lo sfondo con la maschera veniva composto sopra e dell'arciere restavano solo gli stivali) */}
+      <div className="aa-game-archer pointer-events-none absolute z-[2]" style={{ left: `${(AV.left / W) * 100}%`, top: `${(AV_TOP / H) * 100}%`, width: `${(AV.width / W) * 100}%`, height: `${(AV_H / H) * 100}%` }}>
         {perks.includes("aura") ? <span aria-hidden className="aa-perk-aura absolute inset-[-6%_8%_2%_4%] rounded-full" /> : null}
         {perks.includes("stendardo") ? (
           // privilegio "Stendardo della compagnia": la bandiera sventola dietro l'arciere
