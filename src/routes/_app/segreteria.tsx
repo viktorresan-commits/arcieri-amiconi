@@ -30,7 +30,8 @@ function csvCell(v: unknown) {
 }
 
 /** Segreteria della compagnia: quote dell'anno, certificati medici e presenze ai corsi. */
-function Page() {
+/** il contenuto della pagina, anche dentro un'altra pagina (senza intestazione) */
+export function SegreteriaBody({ embedded = false }: { embedded?: boolean }) {
   const [companyId, setCompanyId] = useEntryState("segr-company", 0);
   const [season, setSeason] = useEntryState("segr-season", currentSeason());
   const [tab, setTab] = useEntryState<Tab>("segr-tab", "quote");
@@ -74,7 +75,7 @@ function Page() {
 
   return (
     <div className="grid gap-3">
-      <PageHead kicker={b.company.name} title="Segreteria" lede="Quote, certificati medici e presenze ai corsi. Lo vedono solo il presidente e lo staff." />
+      {embedded ? null : <PageHead kicker={b.company.name} title="Segreteria" lede="Quote, certificati medici e presenze ai corsi. Lo vedono solo il presidente e lo staff." />}
       {b.companies.length > 1 ? (
         <Select value={String(cid)} onChange={(e) => setCompanyId(Number(e.target.value))} aria-label="Compagnia">
           {b.companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -259,4 +260,8 @@ function Presence({ board, onChange, run }: { board: Board; onChange: (b: Board)
       )}
     </>
   );
+}
+
+function Page() {
+  return <SegreteriaBody />;
 }

@@ -3,7 +3,9 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useAvatar } from "@/components/avatar-hero";
 import { LessonArt } from "@/components/lesson-art";
 import { LessonChart } from "@/components/lesson-charts";
-import { Button, Card, PageHead } from "@/components/kit";
+import { Button, Card, PageHead, Segmented } from "@/components/kit";
+import { useEntryState } from "@/lib/arcieri/back-restore";
+import { QuizBody } from "./quiz";
 import { Glyph } from "@/components/icons";
 import { LESSONS, LEVELS, type Lesson } from "@/lib/arcieri/lessons";
 import { useLocalState } from "@/lib/arcieri/local-store";
@@ -17,6 +19,7 @@ export const Route = createFileRoute("/_app/lezioni")({
 function Page() {
   const [st, setSt] = useLocalState<{ done: string[]; open: string | null }>("aa-lezioni-v1", { done: [], open: null });
   const { shown } = useAvatar();
+  const [view, setView] = useEntryState<"lezioni" | "quiz">("lezioni-vista", "lezioni");
   // dal glossario si arriva con ?l=<lezione>: si apre subito quella
   useEffect(() => {
     const want = new URLSearchParams(window.location.search).get("l");
@@ -59,14 +62,28 @@ function Page() {
   }
 
   const total = LESSONS.length;
-  return (
-    <div className="grid gap-3">
-      <PageHead kicker="Impara" title="Lezioni" lede="Dal primo tiro alla gara e alle specialità, in quattro livelli. Ogni lezione ha un disegno, i grafici da toccare, gli errori da evitare, un esercizio e una domanda.">
+  const head = (
+    <>
+      <PageHead kicker="Impara" title="Lezioni" lede={view === "quiz" ? "Cinque domande su regole, tecnica e attrezzatura: per vedere quanto è rimasto delle lezioni." : "Dal primo tiro alla gara e alle specialità, in quattro livelli. Ogni lezione ha un disegno, i grafici da toccare, gli errori da evitare, un esercizio e una domanda."}>
         <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
           <div className="h-full rounded-full bg-[#7cf0a8]" style={{ width: `${(st.done.length / total) * 100}%` }} />
         </div>
         <p className="mt-1 text-xs text-white/70">{st.done.length} di {total} completate</p>
       </PageHead>
+      <Segmented value={view} onChange={setView} options={[{ id: "lezioni", label: "Lezioni" }, { id: "quiz", label: "Quiz" }]} />
+    </>
+  );
+  if (view === "quiz") {
+    return (
+      <div className="grid gap-3">
+        {head}
+        <QuizBody embedded />
+      </div>
+    );
+  }
+  return (
+    <div className="grid gap-3">
+      {head}
       {LEVELS.map((lv) => {
         const list = LESSONS.filter((l) => l.level === lv.n);
         const n = list.filter((l) => done.has(l.id)).length;

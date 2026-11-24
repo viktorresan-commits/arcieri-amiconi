@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ConvertButton } from "@/components/unit-converter";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { deleteEquipment, deleteSetup, gearStats, listEquipment, listSetups, saveEquipment, saveSetup } from "@/lib/arcieri/club.api";
 import { arrowAdvice, bowAdvice } from "@/lib/arcieri/gear-advice";
@@ -120,9 +121,9 @@ function Page() {
               <BowIcon type={spec("bowType") || "olimpico"} riser={spec("riser")} limbs={spec("limbs")} className="h-28 w-28" />
             </div>
             <div className="grid grid-cols-3 gap-2">
-              <Field label="Libbre"><TextInput inputMode="decimal" value={spec("draw")} onChange={(e) => setSpec("draw", e.target.value)} placeholder="36" /></Field>
-              <Field label="Lunghezza ″"><TextInput inputMode="decimal" value={spec("length")} onChange={(e) => setSpec("length", e.target.value)} placeholder="68" /></Field>
-              <Field label="Allungo ″"><TextInput inputMode="decimal" value={spec("drawLen")} onChange={(e) => setSpec("drawLen", e.target.value)} placeholder="28" /></Field>
+              <Field label="Libbre"><span className="flex items-center gap-1.5"><TextInput inputMode="decimal" value={spec("draw")} onChange={(e) => setSpec("draw", e.target.value)} placeholder="36" /><ConvertButton unit="lb" value={spec("draw")} onUse={(v) => setSpec("draw", v)} className="h-11 min-w-9" /></span></Field>
+              <Field label="Lunghezza ″"><span className="flex items-center gap-1.5"><TextInput inputMode="decimal" value={spec("length")} onChange={(e) => setSpec("length", e.target.value)} placeholder="68" /><ConvertButton unit="pollici" value={spec("length")} onUse={(v) => setSpec("length", v)} className="h-11 min-w-9" /></span></Field>
+              <Field label="Allungo ″"><span className="flex items-center gap-1.5"><TextInput inputMode="decimal" value={spec("drawLen")} onChange={(e) => setSpec("drawLen", e.target.value)} placeholder="28" /><ConvertButton unit="pollici" value={spec("drawLen")} onUse={(v) => setSpec("drawLen", v)} className="h-11 min-w-9" /></span></Field>
             </div>
             <div className="grid gap-1">
               <span className="text-xs text-muted">Lunghezze tipiche per questo arco</span>
@@ -159,9 +160,9 @@ function Page() {
               <Field label="Quante"><TextInput inputMode="numeric" value={spec("qty")} onChange={(e) => setSpec("qty", e.target.value)} placeholder="12" /></Field>
               <Field label="Numerate da"><TextInput inputMode="numeric" value={spec("numFrom")} onChange={(e) => setSpec("numFrom", e.target.value)} placeholder="1" /></Field>
               <Field label="Spine"><TextInput value={spec("spine")} onChange={(e) => setSpec("spine", e.target.value)} placeholder="600" /></Field>
-              <Field label="Lunghezza ″"><TextInput inputMode="decimal" value={spec("length")} onChange={(e) => setSpec("length", e.target.value)} placeholder="29" /></Field>
-              <Field label="Punta grani"><TextInput inputMode="numeric" value={spec("point")} onChange={(e) => setSpec("point", e.target.value)} placeholder="100" /></Field>
-              <Field label="Peso tot. grani"><TextInput inputMode="numeric" value={spec("weight")} onChange={(e) => setSpec("weight", e.target.value)} placeholder="360" /></Field>
+              <Field label="Lunghezza ″"><span className="flex items-center gap-1.5"><TextInput inputMode="decimal" value={spec("length")} onChange={(e) => setSpec("length", e.target.value)} placeholder="29" /><ConvertButton unit="pollici" value={spec("length")} onUse={(v) => setSpec("length", v)} className="h-11 min-w-9" /></span></Field>
+              <Field label="Punta grani"><span className="flex items-center gap-1.5"><TextInput inputMode="numeric" value={spec("point")} onChange={(e) => setSpec("point", e.target.value)} placeholder="100" /><ConvertButton unit="grani" value={spec("point")} onUse={(v) => setSpec("point", v)} className="h-11 min-w-9" /></span></Field>
+              <Field label="Peso tot. grani"><span className="flex items-center gap-1.5"><TextInput inputMode="numeric" value={spec("weight")} onChange={(e) => setSpec("weight", e.target.value)} placeholder="360" /><ConvertButton unit="grani" value={spec("weight")} onUse={(v) => setSpec("weight", v)} className="h-11 min-w-9" /></span></Field>
             </div>
             <Chips label="Uso" value={spec("use")} options={ARROW_USE} onPick={(v) => setSpec("use", v)} />
             <Chips label="Materiale" value={spec("material")} options={SHAFT_MATERIALS} onPick={(v) => setSpec("material", v)} />

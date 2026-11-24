@@ -270,8 +270,8 @@ function Toggle({ on, label, onChange }: { on: boolean; label: string; onChange:
   );
 }
 
-/** Personalizzazione dell'arciere della Home: aspetto, abiti e attrezzatura. Si salva da sé. */
-function Page() {
+/** Personalizzazione dell'arciere della Home: aspetto, abiti e attrezzatura. Si salva da sé. Vive nel Profilo. */
+export function AvatarEditor() {
   const { look, setLook, shown, main } = useAvatar();
   const [tab, setTab] = useEntryState<Tab>("avatar-tab", "corpo");
   const [mode, setMode] = useState<"semplice" | "completa">(() => {
@@ -644,4 +644,8 @@ function Page() {
       <Button variant="ghost" onClick={() => history.back()}>Fatto</Button>
     </div>
   );
+}
+
+function Page() {
+  return <AvatarEditor />;
 }

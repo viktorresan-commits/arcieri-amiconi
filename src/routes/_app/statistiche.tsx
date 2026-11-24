@@ -1,6 +1,6 @@
 import { useEntryState } from "@/lib/arcieri/back-restore";
 import { Glyph, IconLabel } from "@/components/icons";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { statsSeries } from "@/lib/arcieri/training.api";
 import { listCompetitions, skillBoard } from "@/lib/arcieri/club.api";
@@ -36,6 +36,15 @@ function Page() {
   const [nonce] = useState(0);
   const [period, setPeriod] = useState<Period>("90");
   const [tab, setTab] = useEntryState<"allenamento" | "corpo" | "gare">("stat-tab", "allenamento");
+  // dallo storico del gesto si arriva con ?tab=corpo
+  useEffect(() => {
+    const want = new URLSearchParams(window.location.search).get("tab");
+    if (want === "corpo" || want === "gare" || want === "allenamento") {
+      setTab(want);
+      window.history.replaceState(window.history.state, "", window.location.pathname);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const { me } = useMember();
   const { data, error, loading } = useLoad(`stats-${nonce}`, () => statsSeries({ data: {} }));
   const comps = useLoad(`comps-${nonce}`, () => listCompetitions());

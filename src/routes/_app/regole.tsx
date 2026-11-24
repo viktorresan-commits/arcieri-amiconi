@@ -1,6 +1,7 @@
 import { useEntryState } from "@/lib/arcieri/back-restore";
 import { createFileRoute } from "@tanstack/react-router";
-import { Card, Chips, PageHead } from "@/components/kit";
+import { Card, Chips, PageHead, Segmented } from "@/components/kit";
+import { StimaBody } from "./stima";
 
 export const Route = createFileRoute("/_app/regole")({ component: Page });
 
@@ -30,10 +31,25 @@ const DATA: Record<string, { title: string; rows: [string, string, string][]; no
 
 function Page() {
   const [tab, setTab] = useEntryState("regole-tab", "targa");
+  const [view, setView] = useEntryState<"promemoria" | "stima">("regole-vista", "promemoria");
   const d = DATA[tab];
+  const head = (
+    <>
+      <PageHead kicker="Impara" title="Distanze e bersagli" lede={view === "stima" ? "Nel 3D le distanze non sono scritte: allena l'occhio sulle foto. Il paglione è largo 1 m e arriva a 1,3 m da terra: usalo come metro." : "Un promemoria veloce. Per le gare fa fede il regolamento federale aggiornato."} />
+      <Segmented value={view} onChange={setView} options={[{ id: "promemoria", label: "Distanze e bersagli" }, { id: "stima", label: "Stima distanze" }]} />
+    </>
+  );
+  if (view === "stima") {
+    return (
+      <div className="grid gap-3">
+        {head}
+        <StimaBody embedded />
+      </div>
+    );
+  }
   return (
     <div className="grid gap-3">
-      <PageHead kicker="Impara" title="Distanze e bersagli" lede="Un promemoria veloce. Per le gare fa fede il regolamento federale aggiornato." />
+      {head}
       <Chips value={tab} onChange={setTab} options={[{ id: "indoor", label: "Sala" }, { id: "targa", label: "Targa" }, { id: "campagna", label: "Campagna" }, { id: "tred", label: "3D" }]} />
       <Card key={tab} className="aa-rise grid gap-2">
         <p className="aa-section-title">{d.title}</p>

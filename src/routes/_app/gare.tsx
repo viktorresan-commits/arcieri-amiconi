@@ -11,11 +11,12 @@ import { Avatar, Button, Card, Empty, ErrorNote, Field, HoldDelete, Loading, Pag
 import { GaraTrend, type GaraPoint } from "@/components/gara-trend";
 import { GaraResult } from "@/components/gara-result";
 import { LaneEditor } from "@/components/lane-editor";
+import { Glyph } from "@/components/icons";
 import { useTeamAvatars } from "@/components/avatar-hero";
+import { FitastPanel } from "@/components/fitast-panel";
 
 export const Route = createFileRoute("/_app/gare")({ component: Page });
 
-const FITAST = "http://89.46.73.21/FITAST_WEB/IT/pagView-GARE.awp";
 
 type Lane = { n: number; score: number; arrows: number[]; label: string; distanceM: number | null; note: string; aimAngle: string };
 type Entry = {
@@ -44,6 +45,7 @@ type Comp = {
   place: string;
   organizer: string;
   signupDeadline: string | null;
+  notes?: string;
   canDelete?: boolean;
   attended: boolean | null;
   roster: { userId: string; attended: boolean; givenName: string; familyName: string; nickname: string; slug: string; photoUrl: string | null; avatarColor: string }[];
@@ -64,6 +66,8 @@ function Page() {
   const [open, setOpen] = useState<number | null>(null);
   const [focus, setFocus] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [portal, setPortal] = useState<{ code: string } | null>(null);
+  const myName = [me.familyName, me.givenName].filter(Boolean).join(" ").trim() || me.nickname || "";
   const hash = useRouterState({ select: (state) => state.location.hash });
   const { data, error, loading } = useLoad(`gare-${nonce}`, () => listCompetitions());
   const comps = (data?.competitions ?? []) as Comp[];
@@ -160,6 +164,11 @@ function Page() {
                 <h2 className="break-words font-display text-2xl leading-tight">{comp.name}</h2>
                 {comp.organizer ? <p className="mt-1 break-words text-sm text-muted">{comp.organizer}</p> : null}
                 {comp.attended === false ? <p className="mt-1 text-sm text-muted">{tab === "past" ? "Non hai partecipato." : "Non ci vai."}</p> : null}
+                {/^fitast:\d+/.test(comp.notes ?? "") ? (
+                  <button type="button" className="aa-chip mt-2" onClick={() => { setPortal({ code: (comp.notes ?? "").replace(/^fitast:(\d+).*/, "$1") }); window.setTimeout(() => document.getElementById("fitast")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60); }}>
+                    {tab === "next" ? "Piazzole e iscritti su FITAST" : "Risultati su FITAST"}
+                  </button>
+                ) : null}
                 <Roster tab={tab} people={comp.roster ?? []} />
               </div>
               <ul className="grid min-w-0 gap-2">
@@ -225,7 +234,20 @@ function Page() {
           <GaraTrend points={minePoints} />
         </Card>
       ) : null}
-      <a className="text-sm font-semibold text-accent" href={FITAST} target="_blank" rel="noreferrer">Calendario FITAST, solo da leggere</a>
+      <div id="fitast" className="scroll-mt-4">
+        {portal ? (
+          <FitastPanel key={portal.code} comps={comps} myName={myName} userId={me.userId ?? ""} startCode={portal.code} onSaved={() => setNonce((n) => n + 1)} onClose={() => setPortal(null)} />
+        ) : (
+          <button type="button" onClick={() => setPortal({ code: "" })} className="aa-press flex w-full items-center gap-3 rounded-[var(--radius-card)] border border-[#e0b15a]/30 bg-[#e0b15a]/[0.07] p-3 text-left">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#e0b15a]/25"><Glyph name="trophy" size={22} /></span>
+            <span className="min-w-0 flex-1">
+              <b className="block">Portale FITAST</b>
+              <span className="block text-xs text-muted">Cerca il tuo nome: punteggi, punti campionato, compagni di piazzola, classifiche di arcieri e squadre</span>
+            </span>
+            <Glyph name="chevron" size={16} className="text-muted" />
+          </button>
+        )}
+      </div>
       {me.role === "viewer" ? null : adding ? (
         <AddGara onDone={() => { setAdding(false); setNonce((n) => n + 1); }} onClose={() => setAdding(false)} />
       ) : (

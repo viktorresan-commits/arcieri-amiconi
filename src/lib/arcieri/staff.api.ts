@@ -16,6 +16,7 @@ import { authMiddleware } from "@/lib/auth/middleware";
 import type { Sql } from "@/lib/db";
 import { asBool, asNum, clip, db, ensureMember, staffLevel, type MemberRow } from "./access";
 import { dropIfEmpty, homeId, myMembership } from "./compagnie.api";
+import { redeemClassCode } from "./classi.api";
 
 type Level = ReturnType<typeof staffLevel>;
 const ABSENT_DAYS = 90;
@@ -184,6 +185,9 @@ export const redeemCode = createServerFn({ method: "POST" })
       const co = await sql<{ name: string }>`select name from companies where id = ${invite[0].company_id} limit 1`;
       return { ok: true as const, message: `Sei entrato in ${co[0]?.name ?? "compagnia"}.` };
     }
+    // invito a una classe di un allenatore
+    const cls = await redeemClassCode(sql, context.userId, data.code);
+    if (cls) return { ok: true as const, message: `Sei entrato nella classe ${cls.name}.` };
     const found = await sql<{ code: string; kind: string; company_id: number | null; expires_at: unknown; used_by: string | null }>`
       select code, kind, company_id, expires_at, used_by from role_codes where code = ${data.code} limit 1`;
     const c = found[0];

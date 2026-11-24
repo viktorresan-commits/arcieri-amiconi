@@ -7,6 +7,8 @@ import { Mini, fmt } from "@/components/tool-kit";
 import { useLocalState } from "@/lib/arcieri/local-store";
 import { listGestures, type GestureRow } from "@/lib/arcieri/gesture.api";
 import { award } from "@/lib/arcieri/xp";
+import { useAvatar } from "@/components/avatar-hero";
+import { ArcherAvatar } from "@/components/archer-avatar";
 
 export const Route = createFileRoute("/_app/tempi")({ component: Page });
 
@@ -23,10 +25,12 @@ const BANDS: Record<string, { lo: number; hi: number; text: string }> = {
   compound: { lo: 5, hi: 12, text: "Compound: mira più lunga, di solito 5–12 s." },
 };
 
-function Page() {
+/** il contenuto della pagina, anche dentro un'altra pagina (senza intestazione) */
+export function TempiBody({ embedded = false }: { embedded?: boolean }) {
   const [st, setSt] = useLocalState<{ laps: Lap[]; bow: string }>("aa-tempi-v1", { laps: [], bow: "olimpico" });
   const [src, setSrc] = useState<"cronometro" | "video">("cronometro");
   const [running, setRunning] = useState<number | null>(null);
+  const { shown } = useAvatar();
   const [now, setNow] = useState(0);
   const raf = useRef(0);
   const band = BANDS[st.bow] ?? BANDS.olimpico;
@@ -69,7 +73,7 @@ function Page() {
 
   return (
     <div className="grid gap-3">
-      <PageHead kicker="Allenati" title="Tempo di allungo" lede="Dall'inizio della trazione al rilascio. Più è costante, più il tiro è ripetibile." />
+      {embedded ? null : <PageHead kicker="Allenati" title="Tempo di allungo" lede="Dall'inizio della trazione al rilascio. Più è costante, più il tiro è ripetibile." />}
       <ToolArt id="tempi" />
       <Chips value={src} onChange={setSrc} options={[{ id: "cronometro", label: "Cronometro" }, { id: "video", label: "Dalle analisi del gesto" }]} />
       <Chips value={st.bow} onChange={(bow) => setSt({ ...st, bow })} options={[{ id: "olimpico", label: "Olimpico" }, { id: "nudo", label: "Nudo" }, { id: "tradizionale", label: "Tradizionale" }, { id: "compound", label: "Compound" }]} />
@@ -78,11 +82,15 @@ function Page() {
           <button
             type="button"
             onClick={tap}
-            className={`aa-press grid min-h-56 place-items-center rounded-[2rem] text-center transition-colors ${running != null ? "bg-rose-600/85" : "bg-primary/85"}`}
+            className={`aa-press relative grid min-h-56 grid-cols-[0.8fr_1.2fr] items-center overflow-hidden rounded-[2rem] text-center transition-colors ${running != null ? "bg-rose-600/85" : "bg-primary/85"}`}
           >
-            <span>
+            {/* il tuo arciere: a riposo, poi in allungo mentre il cronometro corre */}
+            <span className="pointer-events-none flex h-full items-end justify-center self-stretch pt-2">
+              <ArcherAvatar look={shown} pose={running != null ? "allungo" : "riposo"} interactive={false} hideFlight className="h-52 w-auto drop-shadow-none" />
+            </span>
+            <span className="pr-3">
               <span className="block font-display text-7xl tabular-nums">{fmt(running != null ? now : (list[0]?.s ?? 0), 1)}<span className="text-3xl">s</span></span>
-              <span className="mt-2 block text-sm font-semibold uppercase tracking-[0.2em]">{running != null ? "Tocca al rilascio" : "Tocca all'inizio della trazione"}</span>
+              <span className="mt-2 block text-sm font-semibold uppercase tracking-[0.16em]">{running != null ? "Tocca al rilascio" : "Tocca all'inizio della trazione"}</span>
             </span>
           </button>
           <p className="text-center text-xs text-muted">{band.text}</p>
@@ -159,4 +167,8 @@ function FromVideos({ band }: { band: { lo: number; hi: number } }) {
       ))}
     </Card>
   );
+}
+
+function Page() {
+  return <TempiBody />;
 }

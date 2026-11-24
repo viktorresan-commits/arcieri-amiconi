@@ -4,6 +4,7 @@ import { airDensity, angularSize, effectiveLb, goldOf, compensatedDistance, desc
 import { Button, Card, Chips, Field, Segmented, Select, TextInput } from "@/components/kit";
 import { listEquipment, saveEquipment } from "@/lib/arcieri/club.api";
 import { Zoomable } from "./zoomable";
+import { ConvertButton } from "./unit-converter";
 import { Flight3D } from "./flight-gl";
 import { FlightCurves } from "./flight-curves";
 import { useNarrow } from "@/lib/arcieri/use-narrow";
@@ -452,6 +453,7 @@ function Slider({ label, value, min, max, step, unit, onChange }: { label: strin
           {unit ? <span className="text-[0.7rem] text-muted">{unit}</span> : null}
         </label>
         <button type="button" onClick={() => nudge(1)} className="grid h-8 w-8 place-items-center rounded-full border border-hair bg-white/5 text-base" aria-label={`${label}: più`}>+</button>
+        {unit ? <ConvertButton unit={unit} value={String(shown).replace(".", ",")} onUse={(v) => commit(v)} className="h-8" /> : null}
       </div>
       <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} className="h-6 w-full accent-[var(--primary)]" />
     </div>

@@ -141,12 +141,12 @@ export function DistBars({ data, height = 190 }: { data: { name: string; n: numb
   return (
     <div className={box} style={{ height }}>
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data.map((d) => ({ ...d, pct: (d.n / total) * 100 }))} margin={{ top: 8, right: 4, left: -10, bottom: 0 }} style={{ outline: "none" }}>
+        <BarChart data={data.map((d) => ({ ...d, pct: (d.n / total) * 100 }))} margin={{ top: 8, right: 4, left: -10, bottom: 0 }} barCategoryGap="38%" style={{ outline: "none" }}>
           {grid(ink)}
           <XAxis dataKey="name" {...axis(ink)} interval={0} />
           <YAxis {...axis(ink)} width={30} allowDecimals={false} />
           <Tooltip {...tip()} />
-          <Bar dataKey="n" name="Frecce" radius={[6, 6, 2, 2]} activeBar={false} animationDuration={800}>
+          <Bar dataKey="n" name="Frecce" radius={[4, 4, 1, 1]} activeBar={false} animationDuration={800} maxBarSize={14}>
             {data.map((d) => {
               const isX = /X$/.test(d.name);
               const score = Number.parseInt(d.name, 10) || 0;
@@ -172,7 +172,7 @@ export function MultiBars({ data, keys, height = 200 }: { data: { name: string; 
           <YAxis {...axis(ink)} width={32} />
           <Tooltip {...tip()} />
           {keys.map((series) => (
-            <Bar key={series.key} dataKey={series.key} name={series.name} fill={series.color} radius={[5, 5, 1, 1]} activeBar={false} />
+            <Bar key={series.key} dataKey={series.key} name={series.name} fill={series.color} radius={[3, 3, 1, 1]} activeBar={false} maxBarSize={10} />
           ))}
         </BarChart>
       </ResponsiveContainer>
@@ -200,7 +200,7 @@ export function ComboBars({
   return (
     <div className={box} style={{ height }}>
       <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={data} margin={{ top: 8, right: 0, left: -10, bottom: 0 }} style={{ outline: "none" }}>
+        <ComposedChart data={data} margin={{ top: 8, right: 0, left: -10, bottom: 0 }} barCategoryGap="40%" style={{ outline: "none" }}>
           {grid(ink)}
           <XAxis dataKey="name" {...axis(ink)} minTickGap={8} />
           <YAxis yAxisId="n" {...axis(ink)} width={32} allowDecimals={false} />
@@ -208,7 +208,7 @@ export function ComboBars({
           <Tooltip {...tip()} />
           <Legend iconType="circle" iconSize={7} wrapperStyle={{ fontSize: 10, color: ink.muted, paddingTop: 4 }} />
           {stacks.map((s, i) => (
-            <Bar key={s.key} yAxisId="n" dataKey={s.key} name={s.name} stackId="a" fill={s.color} radius={i === stacks.length - 1 ? [5, 5, 0, 0] : [0, 0, 0, 0]} maxBarSize={26} animationDuration={800} />
+            <Bar key={s.key} yAxisId="n" dataKey={s.key} name={s.name} stackId="a" fill={s.color} radius={i === stacks.length - 1 ? [3, 3, 0, 0] : [0, 0, 0, 0]} maxBarSize={11} animationDuration={800} />
           ))}
           {line ? (
             <Line yAxisId="avg" type="monotone" dataKey={line.key} name={line.name} stroke={line.color ?? ink.fg} strokeWidth={2} dot={{ r: 2.5, fill: line.color ?? ink.fg, strokeWidth: 0 }} connectNulls animationDuration={900} />

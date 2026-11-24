@@ -2,7 +2,8 @@ import { Card, Chips } from "@/components/kit";
 import { StatusMark } from "@/components/icons";
 import { useLocalState } from "@/lib/arcieri/local-store";
 import { estimateSpeed } from "@/components/foc-3d";
-import { FocBalanceGL, FocFlightGL } from "@/components/foc-gl";
+import { FocBalanceGL } from "@/components/foc-gl";
+import { ConvertButton } from "@/components/unit-converter";
 import { arrowLookOf, useMainArrowLook } from "@/lib/arcieri/main-gear";
 import { useArcherSetup, type ArcherSetup } from "@/lib/arcieri/setup";
 import { useLoad } from "@/lib/arcieri/use-load";
@@ -90,11 +91,6 @@ export function FocTool() {
   const grains = r?.total ?? n(st.grains);
   const gpp = grains > 0 && n(st.lb) > 0 ? grains / n(st.lb) : null;
   const speed = estimateSpeed(n(st.lb), grains);
-  const flight = speed > 0 ? (() => {
-    const s2 = Math.min(1, (9.81 * st.dist) / (speed * speed));
-    const th = 0.5 * Math.asin(s2);
-    return { angle: (th * 180) / Math.PI, peak: (speed * speed * Math.sin(th) ** 2) / (2 * 9.81) };
-  })() : null;
 
   // disegno: la freccia in scala con metà e punto di equilibrio
   const W = 320;
@@ -135,7 +131,7 @@ export function FocTool() {
           {st.mode === "misura" ? (
             <>
               <Num label="Punto di equilibrio" unit="cm" value={st.bal} onChange={set("bal")} hint="Dalla cocca" />
-              <Num label="Peso freccia" unit="gr" value={st.grains} onChange={set("grains")} hint="Per la gittata" />
+              <Num label="Peso freccia" unit="gr" value={st.grains} onChange={set("grains")} hint="Per il peso per libbra" />
               <Num label="Libbre" unit="lb" value={st.lb} onChange={set("lb")} />
             </>
           ) : (
@@ -188,31 +184,9 @@ export function FocTool() {
       {r ? <Analysis st={st} r={r} grains={grains} speed={speed} onSpine={(spine) => setSt({ ...st0, spine })} setup={setup} /> : null}
       {r ? (
         <Card className="grid gap-2.5">
-          <div className="flex items-center justify-between gap-2">
-            <p className="aa-section-title">In 3D</p>
-            <Chips value={st.view} onChange={(view) => setSt({ ...st0, view })} options={[{ id: "equilibrio", label: "Equilibrio" }, { id: "gittata", label: "Gittata" }]} />
-          </div>
-          {st.view === "equilibrio" ? (
-            <FocBalanceGL key="eq" L={r.L} B={r.B} foc={r.foc} look={look} />
-          ) : (
-            <>
-              <FocFlightGL key="fl" distance={st.dist} speed={speed} foc={r.foc} look={look} />
-              <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 [scrollbar-width:none]">
-                {[18, 30, 50, 70, 90].map((d) => (
-                  <button key={d} type="button" aria-pressed={st.dist === d} className="aa-chip" onClick={() => setSt({ ...st0, dist: d })}>{d} m</button>
-                ))}
-              </div>
-              {flight ? (
-                <div className="grid grid-cols-3 gap-1.5 text-center">
-                  <Mini k="Velocità" v={`${Math.round(speed)} m/s`} />
-                  <Mini k="Alzo" v={`${flight.angle.toFixed(1).replace(".", ",")}°`} />
-                  <Mini k="Sale fino a" v={`${flight.peak.toFixed(1).replace(".", ",")} m`} />
-                </div>
-              ) : null}
-              <p className="text-[0.7rem] text-muted">Velocità stimata da libbre e peso (arco ricurvo o tradizionale, senza attrito dell'aria). Con FOC basso la freccia oscilla di più all'uscita; con FOC alto si stabilizza prima.</p>
-            </>
-          )}
-          <p className="text-[0.7rem] text-muted">{st.view === "equilibrio" ? "Sul fulcro a metà la freccia pende verso la punta: spostandolo fino al punto di equilibrio torna dritta. La distanza tra i due segni è il FOC." : null}</p>
+          <p className="aa-section-title">Equilibrio in 3D</p>
+          <FocBalanceGL key="eq" L={r.L} B={r.B} foc={r.foc} look={look} />
+          <p className="text-[0.7rem] text-muted">Sul fulcro a metà la freccia pende verso la punta: spostandolo fino al punto di equilibrio torna dritta. La distanza tra i due segni è il FOC. La gittata la trovi in alto, nell'analisi balistica in 3D.</p>
         </Card>
       ) : (
         <Card><p className="text-sm text-muted">Inserisci la lunghezza dell'asta (in cm) e i pesi per vedere il risultato.</p></Card>
@@ -229,6 +203,7 @@ function Num({ label, unit, value, onChange, hint }: { label: string; unit: stri
       <span className="flex items-center gap-1 rounded-xl border border-hair bg-black/20 px-3">
         <input inputMode="decimal" value={value} onChange={onChange} className="min-h-11 w-full min-w-0 bg-transparent text-base tabular-nums outline-none" />
         <span className="text-xs text-muted">{unit}</span>
+        <ConvertButton unit={unit} value={value} onUse={(v) => onChange({ target: { value: v } })} className="ml-1.5" />
       </span>
     </label>
   );

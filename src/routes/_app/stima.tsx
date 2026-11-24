@@ -52,7 +52,8 @@ function Scene({ d, show, photo, lat }: { d: number; show: boolean; photo: numbe
   );
 }
 
-function Page() {
+/** il contenuto della pagina, anche dentro un'altra pagina (senza intestazione) */
+export function StimaBody({ embedded = false }: { embedded?: boolean }) {
   const [best, setBest] = useLocalState<{ best: number }>("aa-stima-v1", { best: 0 });
   const [d, setD] = useState(rnd);
   const [photo, setPhoto] = useState(() => Math.floor(Math.random() * PHOTOS.length));
@@ -88,7 +89,7 @@ function Page() {
   };
   return (
     <div className="grid gap-3">
-      <PageHead kicker="Impara" title="Stima distanze" lede="Nel 3D le distanze non sono scritte: allena l'occhio sulle foto. Il paglione è largo 1 m e arriva a 1,3 m da terra: usalo come metro." />
+      {embedded ? null : <PageHead kicker="Impara" title="Stima distanze" lede="Nel 3D le distanze non sono scritte: allena l'occhio sulle foto. Il paglione è largo 1 m e arriva a 1,3 m da terra: usalo come metro." />}
       {!over ? (
         <Card className="grid gap-3">
           <div className="flex justify-between text-xs text-muted"><span>Bersaglio {round} di 5</span><span>Punti {pts}</span></div>
@@ -116,4 +117,8 @@ function Page() {
       )}
     </div>
   );
+}
+
+function Page() {
+  return <StimaBody />;
 }

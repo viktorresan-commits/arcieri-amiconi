@@ -227,7 +227,9 @@ export function Shell({ children }: { children: ReactNode }) {
   const label = memberLabel(me, [me]);
   // voci che questa persona non può aprire, e il percorso dei nuovi (prime 6 funzioni)
   // squadra admin, allenatori e segreteria li vede solo chi ha un incarico
-  const hide = [...(me.hasPlans ? [] : ["schede"]), ...(me.canCoach ? [] : ["istruttore"]), ...(me.canSegreteria ? [] : ["segreteria"]), ...(me.canStaff ? [] : ["staff"])];
+  // voci che ora vivono dentro un'altra pagina: Il tuo arciere nel Profilo, Stima distanze in Distanze e bersagli,
+  // Quiz in Lezioni, Tempo di allungo in Allungo, Convertitore a comparsa vicino ai campi, Segreteria in Gestione compagnia
+  const hide = ["avatar", "stima", "quiz", "tempi", "unita", "segreteria", ...(me.hasPlans ? [] : ["schede"]), ...(me.canCoach ? [] : ["istruttore"]), ...(me.canSegreteria ? [] : ["segreteria"]), ...(me.canStaff ? [] : ["staff"])];
   const focus = me.essenziale ? percorsoOf(me.percorso)?.focus ?? null : null;
   const lvl = levelOf(xp.xp);
 

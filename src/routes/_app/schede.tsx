@@ -5,6 +5,10 @@ import { Glyph } from "@/components/icons";
 import { itemMeta, planProgress, planWhen } from "@/components/coach-plans";
 import { useLoad } from "@/lib/arcieri/use-load";
 import { myPlans, tickPlan, type Plan } from "@/lib/arcieri/istruttore.api";
+import { REQUEST_KINDS, doneRequest, myClasses } from "@/lib/arcieri/classi.api";
+import { when } from "@/components/coach-classes";
+import { Link } from "@tanstack/react-router";
+import { openExternal } from "@/lib/arcieri/native";
 
 export const Route = createFileRoute("/_app/schede")({ component: Page });
 
@@ -12,13 +16,15 @@ export const Route = createFileRoute("/_app/schede")({ component: Page });
 function Page() {
   const [nonce, setNonce] = useState(0);
   const { data, error, loading } = useLoad(`my-plans-${nonce}`, () => myPlans());
+  const classes = useLoad(`my-classes-${nonce}`, () => myClasses());
   if (loading) return <Loading />;
   if (error || !data) return <ErrorNote text={error || "Errore"} />;
   const active = data.filter((p) => p.status === "attiva");
   const closed = data.filter((p) => p.status === "conclusa");
   return (
     <div className="grid gap-3">
-      <PageHead title="Le mie schede" lede="Gli esercizi preparati dal tuo allenatore. Spunta quelli fatti: l'allenatore vede a che punto sei." />
+      <PageHead title="Le mie schede" lede="Esercizi, classi e richieste del tuo allenatore. Spunta quello che hai fatto: l'allenatore vede a che punto sei." />
+      {(classes.data ?? []).map((c) => <MyClass key={c.id} c={c} onChange={() => setNonce((n) => n + 1)} />)}
       {!data.length ? <Empty title="Nessuna scheda" text="Quando il tuo allenatore ti prepara una scheda, la trovi qui e ricevi un avviso." /> : null}
       {active.map((p) => <MyPlan key={p.id} plan={p} onChange={() => setNonce((n) => n + 1)} />)}
       {closed.length ? <SectionHead title="Concluse" /> : null}
@@ -84,6 +90,45 @@ function MyPlan({ plan, onChange }: { plan: Plan; onChange: () => void }) {
           {err ? <ErrorNote text={err} /> : null}
         </div>
       ) : null}
+    </Card>
+  );
+}
+
+type MyKlass = Awaited<ReturnType<typeof myClasses>>[number];
+
+/** una mia classe: orario, gruppo WhatsApp e le richieste dell'allenatore da spuntare */
+function MyClass({ c, onChange }: { c: MyKlass; onChange: () => void }) {
+  const [done, setDone] = useState<Record<number, boolean>>(() => Object.fromEntries(c.requests.map((r) => [r.id, r.done])));
+  const [err, setErr] = useState("");
+  const open = c.requests.filter((r) => !done[r.id]).length;
+  return (
+    <Card className="grid gap-2">
+      <div className="flex items-start gap-3">
+        <span className="min-w-0 flex-1">
+          <span className="block text-[0.66rem] font-semibold uppercase tracking-[0.14em] text-[#8cc3f0]">La tua classe{open ? ` · ${open} da fare` : ""}</span>
+          <span className="block font-display text-xl leading-tight">{c.name}</span>
+          <span className="block text-xs text-muted">{when(c) || "Orario da definire"}</span>
+        </span>
+        {c.whatsappUrl ? <button type="button" onClick={() => void openExternal(c.whatsappUrl)} className="shrink-0 rounded-full bg-[#25d366] px-3 py-1.5 text-xs font-bold text-[#06210f]">Gruppo</button> : null}
+      </div>
+      {c.requests.map((r) => {
+        const k = REQUEST_KINDS.find((x) => x.id === r.kind);
+        const ok = Boolean(done[r.id]);
+        const [path, query] = (k?.href ?? "/schede").split("?");
+        return (
+          <div key={r.id} className={cx("flex items-start gap-3 rounded-2xl border p-3", ok ? "border-[#7cf0a8]/40 bg-[#7cf0a8]/[0.08]" : "border-white/[0.08] bg-white/[0.03]")}>
+            <button type="button" aria-pressed={ok} aria-label={ok ? "Segna da fare" : "Segna fatto"} onClick={() => { const next = !ok; setDone((d) => ({ ...d, [r.id]: next })); doneRequest({ data: { id: r.id, done: next } }).then(onChange).catch((e: unknown) => { setDone((d) => ({ ...d, [r.id]: ok })); setErr(e instanceof Error ? e.message : "Non salvato."); }); }} className={cx("mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-black", ok ? "bg-[#7cf0a8] text-[#0b2416]" : "border-2 border-white/25")}>{ok ? "✓" : ""}</button>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-semibold">{k?.label ?? "Richiesta"}</span>
+              {r.message ? <span className="block text-xs text-muted">{r.message}</span> : null}
+              {r.dueOn ? <span className="block text-[0.7rem] font-semibold text-[#f3a46a]">entro il {r.dueOn.split("-").reverse().slice(0, 2).join("/")}</span> : null}
+            </span>
+            {!ok && k && k.id !== "altro" ? <Link to={path as "/"} search={(query ? Object.fromEntries(new URLSearchParams(query)) : {}) as never} className="aa-chip shrink-0">Fallo ora</Link> : null}
+          </div>
+        );
+      })}
+      {!c.requests.length ? <p className="text-xs text-muted">Nessuna richiesta dall'allenatore, per ora.</p> : null}
+      {err ? <ErrorNote text={err} /> : null}
     </Card>
   );
 }

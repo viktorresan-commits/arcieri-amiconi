@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Avatar, Button, Card, Empty, ErrorNote, Loading, PageHead, SectionHead, Select, TextArea, TextInput, cx } from "@/components/kit";
+import { Avatar, Button, Card, Empty, ErrorNote, Loading, PageHead, SectionHead, Segmented, Select, TextArea, TextInput, cx } from "@/components/kit";
 import { Glyph } from "@/components/icons";
 import { useLoad } from "@/lib/arcieri/use-load";
 import { SITE_URL } from "@/lib/arcieri/native";
 import { refreshCrests } from "@/lib/arcieri/crest";
 import { companyInvite, createRoleCode, decideRequest, redeemCode, removeFromCompany, requestLeader, setRole, staffOverview } from "@/lib/arcieri/staff.api";
 import { removeTeamMember } from "@/lib/arcieri/account.api";
+import { useEntryState } from "@/lib/arcieri/back-restore";
+import { SegreteriaBody } from "./segreteria";
 
 export const Route = createFileRoute("/_app/staff")({ component: Page });
 
@@ -34,6 +36,7 @@ function share(text: string) {
 function Page() {
   const [nonce, setNonce] = useState(0);
   const { data, error, loading } = useLoad(`staff-${nonce}`, () => staffOverview());
+  const [view, setView] = useEntryState<"persone" | "segreteria">("staff-vista", "persone");
   const reload = () => setNonce((n) => n + 1);
   if (loading) return <Loading />;
   if (error || !data) return <ErrorNote text={error || "Errore"} />;
@@ -51,7 +54,9 @@ function Page() {
         : "Hai ricevuto un codice? Usalo qui. Puoi anche chiedere di diventare presidente della tua compagnia.";
   return (
     <div className="grid gap-4">
-      <PageHead kicker={`Il tuo incarico · ${title}`} title="Gestione compagnia" lede={lede} />
+      <PageHead kicker={`Il tuo incarico · ${title}`} title="Gestione compagnia" lede={manager && view === "segreteria" ? "Quote, certificati medici e presenze ai corsi. La vedono il fondatore, il presidente e gli allenatori." : lede} />
+      {manager ? <Segmented value={view} onChange={setView} options={[{ id: "persone", label: "Persone e incarichi" }, { id: "segreteria", label: "Segreteria" }]} /> : null}
+      {manager && view === "segreteria" ? <SegreteriaBody embedded /> : <>
       <RoleMap level={lvl} leader={leader} coach={coach} />
       <RedeemCard onDone={reload} />
       {!lvl && !leader ? <LeaderRequest data={data} onDone={reload} /> : null}
@@ -60,6 +65,7 @@ function Page() {
       {lvl ? <CodeMaker data={data} onDone={reload} /> : null}
       {manager ? <People data={data} onDone={reload} /> : null}
       {manager ? <Absent data={data} onDone={reload} /> : null}
+      </>}
     </div>
   );
 }

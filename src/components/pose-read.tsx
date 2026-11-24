@@ -1,4 +1,5 @@
 import { Glyph, IconLabel, StatusMark } from "./icons";
+import { Link } from "@tanstack/react-router";
 import { Body3D } from "@/components/archer-3d";
 import { useAvatar } from "@/components/avatar-hero";
 import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from "react";
@@ -929,7 +930,7 @@ export function PoseRead() {
                 <input value={saveTitle} onChange={(e) => setSaveTitle(e.target.value)} placeholder="Titolo, es. 18 m sera" className="min-h-11 min-w-0 flex-1 rounded-xl border border-line bg-transparent px-3 text-sm" />
                 <button type="button" disabled={saveState === "busy"} onClick={() => void storeAnalysis()} className="min-h-11 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-fg disabled:opacity-60">{saveState === "busy" ? "Salvo…" : "Salva"}</button>
               </div>
-              {saveState === "ok" ? <p className="text-xs text-primary"><StatusMark state="ok" />Salvata. La trovi nel Profilo, in «Le mie analisi del gesto».</p> : saveState && saveState !== "busy" ? <p className="text-xs text-danger">{saveState}</p> : null}
+              {saveState === "ok" ? <p className="text-xs text-primary"><StatusMark state="ok" />Salvata nello storico. <Link to="/gesti" className="font-semibold underline underline-offset-2">Apri lo storico delle analisi</Link></p> : saveState && saveState !== "busy" ? <p className="text-xs text-danger">{saveState}</p> : null}
             </div>
           ) : null}
 

@@ -20,7 +20,8 @@ function pickFive(seed: number) {
   return idx.slice(0, 5);
 }
 
-function Page() {
+/** il contenuto della pagina, anche dentro un'altra pagina (senza intestazione) */
+export function QuizBody({ embedded = false }: { embedded?: boolean }) {
   const [st, setSt] = useLocalState<{ best: number; games: number }>("aa-quiz-v1", { best: 0, games: 0 });
   const [seed, setSeed] = useState(() => Date.now() % 233280);
   const set = useMemo(() => pickFive(seed), [seed]);
@@ -49,7 +50,7 @@ function Page() {
   };
   return (
     <div className="grid gap-3">
-      <PageHead kicker="Impara" title="Quiz" lede="Cinque domande su regole, tecnica e attrezzatura." />
+      {embedded ? null : <PageHead kicker="Impara" title="Quiz" lede="Cinque domande su regole, tecnica e attrezzatura." />}
       {!end ? (
         <Card className="grid gap-3">
           <div className="flex items-center gap-1.5">
@@ -85,4 +86,8 @@ function Page() {
       )}
     </div>
   );
+}
+
+function Page() {
+  return <QuizBody />;
 }

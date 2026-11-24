@@ -16,6 +16,7 @@ import { Button, Card, ErrorNote, Field, PageHead, Select, TextArea, TextInput }
 import { saveFile } from "@/lib/arcieri/native";
 import { Trasloco } from "@/components/trasloco";
 import { GestureGallery } from "@/components/gesture-gallery";
+import { AvatarEditor } from "./avatar";
 import { Migrazione } from "@/components/migrazione";
 import { PersonalizePanel } from "@/components/personalize";
 import { Glyph, IconTitle } from "@/components/icons";
@@ -182,8 +183,8 @@ function Page() {
   const myPrizes = prizes.filter((p) => p.holders.some((h) => h.userId === me.userId));
   const TABS = [
     { id: "io", label: "Io" },
-    { id: "aspetto", label: "Aspetto" },
-    { id: "gesti", label: "Gesti" },
+    { id: "aspetto", label: "Il tuo arciere" },
+    { id: "gesti", label: "Analisi del gesto" },
     { id: "account", label: "Account" },
     { id: "squadra", label: "Squadra" },
   ] as const;
@@ -200,7 +201,7 @@ function Page() {
           <div className="min-w-0">
             <p className="truncate font-display text-3xl leading-none">{[me.givenName, me.familyName].filter(Boolean).join(" ") || me.nickname || "Arciere"}</p>
             <p className="mt-1 truncate text-xs text-white/70">{me.email ?? ""}</p>
-            <span className={`mt-1.5 inline-flex rounded-full px-2 py-0.5 text-[0.65rem] font-semibold ${me.role === "admin" ? "bg-amber-400 text-black" : "bg-white/10"}`}>{me.role === "admin" ? "Amministratore" : me.role === "archer" ? "Arciere" : "Ospite"}</span>
+            <span className={`mt-1.5 inline-flex rounded-full px-2 py-0.5 text-[0.65rem] font-semibold ${me.role === "admin" ? "bg-amber-400 text-black" : "bg-white/10"}`}>{me.role === "admin" ? "Fondatore" : me.role === "archer" ? "Arciere" : "Ospite"}</span>
           </div>
         </div>
         <AvatarPhotoButton look={avatar.shown} onDone={reload} />
@@ -256,16 +257,7 @@ function Page() {
 
         {tab === "aspetto" ? (
           <>
-          <Link to="/avatar" className="block">
-            <Card className="flex items-center gap-3">
-              <span className="grid h-12 w-12 place-items-center rounded-2xl bg-[#c46b2b]/20"><Glyph name="archer" size={26} /></span>
-              <span className="min-w-0 flex-1">
-                <b className="block">Il tuo arciere</b>
-                <span className="text-xs text-muted">Viso, capelli, barba, abiti, arco e frecce dell'avatar in Home</span>
-              </span>
-              <Glyph name="chevron" size={16} />
-            </Card>
-          </Link>
+          <AvatarEditor />
           <Card className="grid gap-1">
             <IconTitle icon="palette" color="#7652d1" sub="Ogni scelta si salva da sola.">Personalizza</IconTitle>
             <PersonalizePanel />

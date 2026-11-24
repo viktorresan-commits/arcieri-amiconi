@@ -130,6 +130,17 @@ export function BodyStats() {
   if (rows == null) return <p className="text-xs text-muted">Carico le analisi del gesto…</p>;
   return (
     <>
+      {/* da dove vengono i numeri: lo storico delle analisi del gesto */}
+      <Link to="/gesti" className="block">
+        <Card className="flex items-center gap-3">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#7652d1]/25"><Glyph name="archer" size={22} /></span>
+          <span className="min-w-0 flex-1">
+            <b className="block">Storico del gesto</b>
+            <span className="block text-xs text-muted">{rows == null ? "Carico le analisi…" : rows.length ? `${rows.length} ${rows.length === 1 ? "analisi salvata" : "analisi salvate"}, l'ultima il ${new Date(rows[0].createdAt).toLocaleDateString("it-IT", { day: "numeric", month: "short" })}: da qui vengono i numeri qui sotto.` : "Nessuna analisi salvata: i numeri del corpo arrivano dalle analisi del gesto."}</span>
+          </span>
+          <Glyph name="chevron" size={16} className="text-muted" />
+        </Card>
+      </Link>
       {tips.length ? (
         <Card className="grid gap-1.5">
           <Head icon="sparkle" title="In breve" />

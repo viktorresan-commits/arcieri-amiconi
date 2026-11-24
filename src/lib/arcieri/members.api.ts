@@ -47,7 +47,7 @@ export const getMe = createServerFn({ method: "GET" })
     // schede di allenamento ricevute da un allenatore: la voce «Le mie schede» compare solo se ce n'è almeno una
     let hasPlans = false;
     try {
-      const n = await sql<{ n: number }>`select count(*)::int as n from coach_plans where athlete_user_id = ${context.userId}`;
+      const n = await sql<{ n: number }>`select ((select count(*) from coach_plans where athlete_user_id = ${context.userId}) + (select count(*) from class_members where user_id = ${context.userId}))::int as n`;
       hasPlans = asNum(n[0]?.n) > 0;
     } catch {
       /* tabella non ancora creata */
