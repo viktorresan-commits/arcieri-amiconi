@@ -1,6 +1,7 @@
 /**
  * Corpo anatomico vero per il 3D dell'analisi del gesto: pelle, ossa e muscoli da BodyParts3D
- * (© The Database Center for Life Science, CC BY 4.0), semplificati e divisi in 17 segmenti.
+ * (© The Database Center for Life Science, CC BY 4.0); gran dorsale, retto dell'addome e obliquo esterno
+ * da Z-Anatomy (CC BY-SA 4.0). Il file del corpo (public/anatomia) è distribuito con CC BY-SA 4.0.
  * Il modello è in posizione anatomica; ogni frame si calcola, per ogni segmento, la trasformazione
  * che lo porta dalla posa di riposo alla posa del video (osso per osso, con la torsione presa dalla
  * mano, dal gomito e dai piedi). La deformazione la fa la scheda grafica.
@@ -24,7 +25,7 @@ export type BodyMeta = {
 };
 export type BodyData = { meta: BodyMeta; buf: ArrayBuffer };
 
-export const BODY_CREDIT = "Anatomia: BodyParts3D, © The Database Center for Life Science, CC BY 4.0";
+export const BODY_CREDIT = "Anatomia: BodyParts3D © DBCLS (CC BY 4.0) · Z-Anatomy (CC BY-SA 4.0)";
 
 let loading: Promise<BodyData | null> | null = null;
 

@@ -4,7 +4,7 @@ Seleziona pelle, ossa e muscoli, li semplifica, calcola i pesi per segmento (per
 la posa del video), il gruppo muscolare di ogni muscolo e le coordinate delle fibre. Scrive un file
 binario compatto e un indice JSON.
 """
-import json, re, sys, struct
+import json, re, sys, struct, os
 import numpy as np
 from scipy.sparse import coo_matrix
 from scipy.sparse.csgraph import dijkstra
@@ -12,7 +12,7 @@ from scipy.spatial import cKDTree
 sys.path.insert(0, '.')
 from load import A, part
 from pick import classify
-from decimate import recompute_normals
+from decimate import cluster, recompute_normals
 
 OUT = sys.argv[1] if len(sys.argv) > 1 else '/tmp/corpo'
 # muscoli profondi, coperti da altri: non si vedono mai, si risparmia peso
@@ -53,6 +53,7 @@ def muscle_candidates(name):
     if re.search(r"biceps brachii|brachialis|triceps|anconeus|coracobrachialis", n): return seg('clav', 'omero', 'avambr')
     if re.search(r"carpi|digitorum superficialis|digitorum profundus|pronator|supinator|palmaris|brachioradialis|extensor digitorum$|extensor digiti minimi$|extensor indicis|pollicis longus|pollicis brevis$|abductor pollicis longus|extensor pollicis", n) and 'foot' not in n:
         return seg('omero', 'avambr', 'mano')
+    if re.search(r"foot|hallucis|plantar", n): return seg('gamba', 'piede')
     if re.search(r"hand|pollicis|opponens", n): return seg('avambr', 'mano')
     if re.search(r"deltoid|supraspinatus|infraspinatus|teres|subscapularis", n): return seg('clav', 'omero')
     if re.search(r"pectoralis major", n): return seg('torace', 'clav', 'omero')
@@ -75,7 +76,7 @@ def muscle_group(name):
         (r"brachioradialis", 'brachioradiale'),
         (r"flexor carpi|flexor digitorum (superficialis|profundus)|palmaris|pronator|flexor pollicis longus", 'flessori'),
         (r"extensor carpi|extensor digitorum$|extensor digiti minimi$|extensor indicis|supinator|abductor pollicis longus|extensor pollicis", 'estensori'),
-        (r"pollicis|opponens|digiti minimi of (left|right) hand", 'mano'),
+        (r"(pollicis|opponens|digiti minimi)(?!.*foot)", 'mano'),
         (r"pectoralis", 'pettorale'),
         (r"descending part of .*trapezius|levator scapulae", 'trapezio-sup'), (r"transverse part of .*trapezius", 'trapezio-med'), (r"ascending part of .*trapezius", 'trapezio-inf'),
         (r"rhomboid", 'romboidi'), (r"infraspinatus|teres minor|supraspinatus", 'sottospinato'), (r"latissimus|teres major", 'dorsale'),
@@ -227,25 +228,56 @@ def sheet(fn, nu, nv, inset, thick):
         I = I[:, [0, 2, 1]]; N = -N
     return V, N, I
 
-surf = torso_field()
-for s, sg in (('Left', 1), ('Right', -1)):
-    hum = by(f'{s} humerus')['full']
-    ins = hum[(hum[:, 1] > hum[:, 1].max() - 0.09) & (hum[:, 1] < hum[:, 1].max() - 0.05)].mean(0) + np.array([-sg * 0.012, 0, 0.0])
-    def lat(u, v, sg=sg, ins=ins):
-        yb = 0.985 + 0.05 * u; yt = 1.22 + 0.15 * u ** 0.8
-        y = yb + (yt - yb) * v
-        t = sg * np.radians(178 - 80 * u - 10 * v * u)
-        k = max(0.0, (u - 0.6) / 0.4) * max(0.0, (v - 0.55) / 0.45)
-        return y, t, (k ** 1.3 * 0.9, ins), 1.0 + 1.4 * u
-    V, N, I = sheet(lat, 14, 18, 0.004, 0.006)
-    parts.append(dict(kind='muscle', name=f'{s} latissimus dorsi', P=V, N=N, I=I, full=V))
-    def rab(u, v, sg=sg):
-        y = 0.94 + 0.31 * v
-        r = 0.16
-        w = (0.012 + 0.06 * u * (0.75 + 0.35 * v)) / r
-        return y, sg * w, (0.0, np.zeros(3)), 1.0
-    V, N, I = sheet(rab, 6, 16, 0.003, 0.008)
-    parts.append(dict(kind='muscle', name=f'{s} rectus abdominis', P=V, N=N, I=I, full=V))
+# ---------- muscoli che mancano in BodyParts3D: da Z-Anatomy (CC BY-SA 4.0) ----------
+# gran dorsale, retto dell'addome e obliquo esterno. Z-Anatomy è disegnato su proporzioni un po' diverse:
+# si spostano con un campo morbido ricavato dai muscoli presenti in tutti e due gli atlanti, poi si tengono
+# sotto la pelle di BodyParts3D.
+from za_load import load as za_load_parts
+from za_align import fit as za_fit
+from qem import simplify as qem_simplify
+s_, R_, t_, res_, keys_, ok_ = za_fit()
+za_parts = za_load_parts()
+def za_key(z): return (re.sub(r"\s+", " ", z['name'].lower().replace(' muscle', '').strip()), z['side'])
+by_key = {za_key(z): z for z in za_parts}
+ctrl_src, ctrl_dst = [], []
+for k, good in zip(keys_, ok_):
+    if not good: continue
+    z = by_key.get(k)
+    if z is None: continue
+    side = 'Left' if k[1] == 'l' else 'Right'
+    cand = [x for x in A['parts'] if x['system'] == 'muscular' and re.sub(r"\s+", " ", re.sub(r"\b(left|right)\b ?", "", x['name'].lower()).replace(' muscle', '').strip()) == k[0] and side.lower() in x['name'].lower()]
+    if not cand: continue
+    bpP, _, _ = part(cand[0])
+    ctrl_src.append(z['P'].mean(0)); ctrl_dst.append(bpP.astype(np.float64).mean(0))
+ctrl_src = np.array(ctrl_src); ctrl_dst = np.array(ctrl_dst)
+def za_warp(X):
+    base = (s_ * (R_ @ X.T)).T + t_
+    src = (s_ * (R_ @ ctrl_src.T)).T + t_
+    r = ctrl_dst - src
+    d2 = ((base[:, None, :] - src[None, :, :]) ** 2).sum(-1)
+    w = np.exp(-d2 / (2 * 0.06 ** 2)) + 1e-9
+    return base + (w[:, :, None] * r[None]).sum(1) / w.sum(1)[:, None] * (1 - np.exp(-w.sum(1) * 4))[:, None]
+skin_tree = cKDTree(SP)
+def keep_under_skin(X, gap=0.003):
+    d, i = skin_tree.query(X)
+    n = skin['N'][i]
+    sd = np.einsum('ij,ij->i', X - SP[i], n)
+    push = np.clip(sd + gap, 0, None)
+    return X - n * push[:, None]
+def weld(P, I):
+    key = np.round(P / 0.00002).astype(np.int64)
+    _, first, inv = np.unique(key, axis=0, return_index=True, return_inverse=True); inv = inv.reshape(-1)
+    I = inv[I]; I = I[(I[:, 0] != I[:, 1]) & (I[:, 1] != I[:, 2]) & (I[:, 0] != I[:, 2])]
+    return P[first], I
+for zname, ours, target in (('Latissimus dorsi muscle', 'latissimus dorsi', 7000), ('Rectus abdominis muscle', 'rectus abdominis', 5000), ('External abdominal oblique muscle', 'external oblique', 7000)):
+    for side, word in (('l', 'Left'), ('r', 'Right')):
+        z = [x for x in za_parts if x['name'] == zname and x['side'] == side][0]
+        P, I = weld(z['P'], z['I'])
+        P, I, _ = qem_simplify(P, I, target)
+        P = keep_under_skin(za_warp(P))
+        N = recompute_normals(P, I)
+        parts.append(dict(kind='muscle', name=f'{word} {ours}', P=P, N=N, I=I, full=P, za=True))
+print('Z-Anatomy aggiunti:', [x['name'] for x in parts if x.get('za')])
 
 # ---------- pesi per segmento ----------
 bone_pts, bone_seg = [], []
@@ -312,9 +344,30 @@ for s in range(len(SEGS)):
     seeds = np.where(sure & (np.argmin(D, 1) == s))[0]
     if len(seeds): GD[:, s] = np.minimum(dijkstra(G, indices=seeds, min_only=True), 9.0)
 S['J'], S['W'] = weights_from_dist(GD)
+# dove il braccio a riposo tocca il fianco (o la mano la coscia) la pelle dell'atlante è un'unica superficie:
+# quei triangoli, quando il braccio si alza, diventerebbero un lenzuolo tra braccio e busto. Si tolgono.
+_dom = np.where(S['W'] >= 0.5, S['J'][:, 0], S['J'][:, 1])
+_arm = np.isin(_dom, [SI[k] for k in ('omero_L', 'avambr_L', 'mano_L', 'omero_R', 'avambr_R', 'mano_R')])
+_trunk = np.isin(_dom, [SI[k] for k in ('torace', 'bacino', 'coscia_L', 'coscia_R')])
+_mixed = _arm[S['I']].any(1) & _trunk[S['I']].any(1) & (S['P'][S['I']].mean(1)[:, 1] < 1.30)
+S['I'] = S['I'][~_mixed]
+print('pelle: tolti', int(_mixed.sum()), 'triangoli tra braccio e fianco')
 
 parts = [x for x in parts if not x.get('drop')]
 
+# --- controllo: ogni muscolo agganciato a segmenti vicini ---
+for x in parts:
+    if x['kind'] != 'muscle': continue
+    dom = np.where(x['W'] >= 0.5, x['J'][:, 0], x['J'][:, 1])
+    far = []
+    for sgi in np.unique(dom):
+        if sgi in trees:
+            dd = trees[sgi].query(x['P'][dom == sgi])[0]
+            if np.median(dd) > 0.1: far.append((SEGS[sgi], round(float(np.median(dd)), 3)))
+    if far:
+        print('tolto, aggancio lontano:', x['name'], far)
+        x['drop'] = True
+parts = [x for x in parts if not x.get('drop')]
 # ---------- fibre, tendini e gruppi ----------
 groups = ['']
 for x in parts:
@@ -325,15 +378,16 @@ for x in parts:
     _, sv, vt = np.linalg.svd(Q, full_matrices=False)
     ax = vt[0]
     t = Q @ ax; t = (t - t.min()) / max(1e-6, t.max() - t.min())
-    a = np.arctan2(Q @ vt[2], Q @ vt[1]); a = (a + np.pi) / (2 * np.pi)
+    if sv[1] / max(sv[2], 1e-6) > 1.8:
+        # muscolo piatto: fibre parallele, la coordinata attraversa il muscolo
+        c2 = Q @ vt[1]; a = (c2 - c2.min()) / max(1e-6, c2.max() - c2.min()) * (sv[1] / max(sv[0], 1e-6)) * 0.6
+    else:
+        a = np.arctan2(Q @ vt[2], Q @ vt[1]); a = (a + np.pi) / (2 * np.pi)
     x['T'] = t; x['A'] = a
     long_ = sv[0] / max(sv[1], 1e-6) > 3.2
-    if long_ or 'calcaneal' in x['name'].lower():
+    if (long_ and not x.get('za')) or 'calcaneal' in x['name'].lower():
         x['TD'] = np.clip(np.maximum((0.12 - t) / 0.1, (t - 0.88) / 0.1), 0, 1)
     if 'calcaneal' in x['name'].lower(): x['TD'][:] = 1
-    if 'rectus abdominis' in x['name'].lower():
-        yv = x['P'][:, 1]
-        x['TD'] = np.clip(1 - np.min(np.abs(yv[:, None] - np.array([1.02, 1.1, 1.17, 1.235])[None]), 1) / 0.006, 0, 1) * 0.9
     g = muscle_group(x['name'])
     if g:
         if g not in groups: groups.append(g)
@@ -380,8 +434,8 @@ for kind in ('bone', 'muscle', 'skin'):
 
 def r3(v): return [round(float(c), 4) for c in v]
 meta = dict(
-    version=2,
-    source='BodyParts3D, © The Database Center for Life Science, licensed under CC BY 4.0 (https://dbarchive.biosciencedbc.jp/en/bodyparts3d/lic.html). Geometria semplificata e adattata per Arcieri Amiconi; gran dorsale e retto dell\'addome aggiunti.',
+    version=3,
+    source='BodyParts3D, © The Database Center for Life Science, licensed under CC BY 4.0 (https://dbarchive.biosciencedbc.jp/en/bodyparts3d/lic.html). Gran dorsale, retto dell\'addome e obliquo esterno da Z-Anatomy (CC BY-SA 4.0, https://github.com/Z-Anatomy/Models-of-human-anatomy). Geometria adattata per Arcieri Amiconi.',
     lo=r3(lo), hi=r3(hi), stride=16, segments=SEGS, groups=groups,
     rest={str(k): r3(v) for k, v in rest.items()},
     batches=batches, bytes=len(blob),
@@ -392,3 +446,14 @@ open(OUT + '.bin', 'wb').write(blob)
 open(OUT + '.bin.gz', 'wb').write(gzip.compress(bytes(blob), 9))
 json.dump(meta, open(OUT + '.json', 'w'), ensure_ascii=False)
 print('scritto', OUT, len(blob), 'byte', 'gruppi', len(groups))
+# --- diagnostica pelle (solo quando richiesto) ---
+if os.environ.get('DIAG'):
+    S = by('Skin'); J = S['J']; W = S['W']; I = S['I']; P = S['P']
+    dom = np.where(W >= 0.5, J[:, 0], J[:, 1])
+    arm = np.isin(dom, [SI['omero_L'], SI['avambr_L'], SI['mano_L'], SI['omero_R'], SI['avambr_R'], SI['mano_R']])
+    trunk = np.isin(dom, [SI['torace'], SI['bacino'], SI['coscia_L'], SI['coscia_R']])
+    mixed = (arm[I].any(1)) & (trunk[I].any(1))
+    cy = P[I].mean(1)[:, 1]
+    print('triangoli misti braccio-busto', mixed.sum(), 'sotto l\'ascella', (mixed & (cy < 1.30)).sum())
+    e = np.linalg.norm(P[I[:, 0]] - P[I[:, 1]], axis=1)
+    print('lunghezza media lati misti mm', round(e[mixed].mean() * 1000, 1), 'tutti', round(e.mean() * 1000, 1))

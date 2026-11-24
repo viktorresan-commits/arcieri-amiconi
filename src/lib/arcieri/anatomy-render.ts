@@ -60,13 +60,17 @@ const BVS = `
 attribute vec3 aP; attribute vec3 aN; attribute vec2 aJ; attribute vec4 aM; attribute float aT;
 uniform mat4 uVP; uniform mat4 uSeg[17]; uniform vec3 uLo; uniform vec3 uHi;
 uniform vec4 uAct[16]; uniform vec4 uFoc[16];
-varying vec3 vW; varying vec3 vN; varying vec2 vF; varying float vAct; varying float vFoc; varying float vTend;
+varying vec3 vW; varying vec3 vN; varying vec2 vF; varying float vAct; varying float vFoc; varying float vTend; varying float vStr;
 float pick(vec4 v, int k){ return k == 0 ? v.x : k == 1 ? v.y : k == 2 ? v.z : v.w; }
 void main(){
   vec3 p = uLo + aP * (uHi - uLo);
   float w = aM.x / 255.0;
-  mat4 M = uSeg[int(aJ.x + 0.5)] * w + uSeg[int(aJ.y + 0.5)] * (1.0 - w);
+  mat4 MA = uSeg[int(aJ.x + 0.5)]; mat4 MB = uSeg[int(aJ.y + 0.5)];
+  mat4 M = MA * w + MB * (1.0 - w);
   vec4 wp = M * vec4(p, 1.0);
+  // quanto è stirata la superficie qui: i due segmenti la tirano in punti lontani
+  float gap = length((MA * vec4(p, 1.0) - MB * vec4(p, 1.0)).xyz) * 4.0 * w * (1.0 - w);
+  vStr = smoothstep(0.02, 0.09, gap);
   vN = normalize(mat3(M[0].xyz, M[1].xyz, M[2].xyz) * aN);
   int g = int(aM.y + 0.5); int gi = g / 4; int gk = g - gi * 4;
   vAct = pick(uAct[gi], gk); vFoc = pick(uFoc[gi], gk);
@@ -75,7 +79,7 @@ void main(){
 }`;
 const BFS = `
 precision mediump float;
-varying vec3 vW; varying vec3 vN; varying vec2 vF; varying float vAct; varying float vFoc; varying float vTend;
+varying vec3 vW; varying vec3 vN; varying vec2 vF; varying float vAct; varying float vFoc; varying float vTend; varying float vStr;
 uniform vec3 uEye; uniform float uLayer; uniform float uAlpha; uniform float uDim;
 void main(){
   vec3 N = normalize(vN); vec3 V = normalize(uEye - vW);
@@ -90,7 +94,7 @@ void main(){
   if (uLayer < 0.5) {
     // pelle: vetro azzurro, il bordo si accende come nelle tavole mediche
     col = vec3(0.4, 0.72, 1.0) * (0.36 + rim * 1.5) + vec3(0.85, 0.95, 1.0) * pow(rim, 3.0) * 0.6;
-    a = uAlpha * (0.16 + rim * 0.7);
+    a = uAlpha * (0.16 + rim * 0.7) * (1.0 - 0.85 * vStr);
   } else if (uLayer < 1.5) {
     // ossa: bianco azzurro, morbide
     // con i muscoli accesi le ossa tra un muscolo e l'altro restano azzurrine, non bianche

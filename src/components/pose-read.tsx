@@ -33,6 +33,8 @@ import {
   type Metrics,
   type Sample,
   type Shot,
+  sideEvidence,
+  swapSides,
 } from "@/lib/arcieri/pose-analysis";
 
 /**
@@ -189,6 +191,13 @@ export function PoseRead() {
   const [hand, setHandState] = useState<Hand>("destro");
   const handRef = useRef(hand);
   handRef.current = hand;
+  // lati della persona: null finché il gesto non lo dice, poi resta deciso per il video
+  const sideScore = useRef(0);
+  const sideSwap = useRef<boolean | null>(null);
+  const resetSides = () => {
+    sideScore.current = 0;
+    sideSwap.current = null;
+  };
   /** 100 punti in più (mani e viso): più preciso su ancoraggio, presa e dita, un po' più lento */
   const [detail, setDetail] = useState(true);
   const detailRef = useRef(detail);
@@ -269,6 +278,7 @@ export function PoseRead() {
 
   function setHand(next: Hand) {
     setHandState(next);
+    resetSides();
     try {
       localStorage.setItem("aa-hand", next === "mancino" ? "left" : "right");
     } catch {
@@ -344,7 +354,13 @@ export function PoseRead() {
     };
     const chosen = [...poses].sort((a, b) => area(b) - area(a))[0];
     const world = worlds[poses.indexOf(chosen)];
-    const mapped = chosen.map((p, i) => ({ x: region.x + p.x * region.w, y: region.y + p.y * region.h, z: p.z != null ? p.z * region.w : undefined, visibility: p.visibility, zw: world?.[i]?.z }));
+    const raw = chosen.map((p, i) => ({ x: region.x + p.x * region.w, y: region.y + p.y * region.h, z: p.z != null ? p.z * region.w : undefined, visibility: p.visibility, zw: world?.[i]?.z }));
+    // video specchiato (fotocamera frontale) o arciere di spalle: il riconoscimento scambia sinistra e destra.
+    // Si capisce dal gesto (mano della corda al viso, braccio dell'arco teso) e si raddrizza per tutto il video.
+    const ev = sideEvidence(raw, handRef.current, W / H);
+    if (ev) sideScore.current = Math.max(-6, Math.min(6, sideScore.current + ev));
+    if (sideSwap.current === null && Math.abs(sideScore.current) >= 3) sideSwap.current = sideScore.current < 0;
+    const mapped = sideSwap.current ? swapSides(raw) : raw;
     if (!cropRef.current && followRef.current) autoBox.current = personBox(mapped, 0.45);
     // sempre 133 punti (mani e viso a visibilità 0 se non cercati), così i fotogrammi si confrontano
     if (!detailRef.current || !extras) return withExtras(mapped, null, null, null);
@@ -494,6 +510,7 @@ export function PoseRead() {
     lastLm.current = null;
     smoothRef.current = { lm: null, t: -1 };
     setShotIndex(0);
+    resetSides();
   }
 
   async function analyzePhoto(image: HTMLImageElement) {
@@ -588,10 +605,13 @@ export function PoseRead() {
       const step = Math.max(1 / 15, (to - from) / 240);
       const out: Sample[] = [];
       let prev: Landmark[] | null = null;
+      // fotogrammi letti prima di sapere se i lati sono scambiati: si sistemano alla fine
+      let undecided = 0;
       for (let t = from; t <= to + 1e-6; t += step) {
         if (cancel.current) break;
         await seekTo(video, Math.min(t, Math.max(0, duration - 0.02)));
         let lm = await detectOn(video, W, H);
+        if (sideSwap.current === null) undecided = out.length + 1;
         if (lm) lm = smoothLm(prev, lm);
         prev = lm;
         out.push({ t: video.currentTime, lm, m: lm ? metricsOf(lm, handRef.current, W / H, H) : null });
@@ -599,6 +619,14 @@ export function PoseRead() {
         paintOverlay(lm);
         setTime(video.currentTime);
         setProgress(Math.min(1, (t - from) / Math.max(0.01, to - from)));
+      }
+      if (!cancel.current && sideSwap.current && undecided > 0) {
+        for (let i = 0; i < Math.min(undecided, out.length); i++) {
+          const lm = out[i].lm;
+          if (!lm) continue;
+          const fixed = swapSides(lm);
+          out[i] = { ...out[i], lm: fixed, m: metricsOf(fixed, handRef.current, W / H, H) };
+        }
       }
       if (!cancel.current) {
         result = out;

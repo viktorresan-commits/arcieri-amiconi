@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { buildModel, v3, type Model, type V3 } from "@/lib/arcieri/anatomy-model";
 import { createAnatomyRenderer, lookAt, mul4, perspective } from "@/lib/arcieri/anatomy-render";
 import { BODY_CREDIT, loadBody } from "@/lib/arcieri/anatomy-body";
-import type { Hand, Landmark } from "@/lib/arcieri/pose-analysis";
+import { sideEvidence, swapSides, type Hand, type Landmark } from "@/lib/arcieri/pose-analysis";
 import { unpackLm, type PackedLm } from "@/lib/arcieri/gesture-record";
 import { cx } from "./kit";
 
@@ -67,8 +67,18 @@ export function Anatomy3D({
   const [failed, setFailed] = useState(false);
   const [empty, setEmpty] = useState(false);
   const emptyRef = useRef(false);
-  const input = useRef({ lm, lmRef, seq, aspect, hand });
-  input.current = { lm, lmRef, seq, aspect, hand };
+  // analisi salvate prima della correzione: se il gesto dice che sinistra e destra sono scambiate
+  // (video specchiato o arciere di spalle), si raddrizzano qui
+  const swap = useMemo(() => {
+    if (lmRef) return false;
+    const frames = seq && seq.length ? seq.map((f) => unpackLm(f.lm)) : [lm];
+    let score = 0;
+    for (const f of frames) if (f) score += sideEvidence(f, hand, aspect);
+    return score < 0;
+  }, [seq, lm, lmRef, hand, aspect]);
+  const stillFixed = useMemo(() => (swap && lm ? swapSides(lm) : lm), [swap, lm]);
+  const input = useRef({ lm: stillFixed, lmRef, seq, aspect, hand, swap });
+  input.current = { lm: stillFixed, lmRef, seq, aspect, hand, swap };
 
   useEffect(() => {
     const canvas = glCanvas.current;
@@ -108,13 +118,14 @@ export function Anatomy3D({
       const time = (now - t0) / 1000;
       // nascosto (vista non attiva o fuori schermo): non lavora
       if (!canvas.clientWidth || !canvas.clientHeight) return;
-      const { lm: still, lmRef: ref, seq: sq, aspect: asp, hand: hd } = input.current;
+      const { lm: still, lmRef: ref, seq: sq, aspect: asp, hand: hd, swap: sw } = input.current;
       // punti da mostrare: sequenza salvata (in ciclo), poi quelli dal vivo, poi quelli fissi
       let target: Landmark[] | null = null;
       const playing = Boolean(sq && sq.length > 1);
       if (playing && sq) {
         const end = sq[sq.length - 1].t + 0.9;
         target = seqAt(sq, time % end);
+        if (target && sw) target = swapSides(target);
       } else target = ref?.current ?? still;
       if (target && target !== lastTarget) {
         lastTarget = target;

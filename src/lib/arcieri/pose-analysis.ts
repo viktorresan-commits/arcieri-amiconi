@@ -603,6 +603,53 @@ export function facePoint(lm: Landmark[], meshId: number): Landmark | null {
 }
 
 /** aggiunge mani e viso ai 33 punti (assenti = visibilità 0, sul polso o sul naso) */
+/** coppie sinistra/destra della posa (viso, braccia, mani, gambe, piedi) */
+const SIDE_PAIRS: [number, number][] = [[1, 4], [2, 5], [3, 6], [7, 8], [9, 10], [11, 12], [13, 14], [15, 16], [17, 18], [19, 20], [21, 22], [23, 24], [25, 26], [27, 28], [29, 30], [31, 32]];
+
+/** scambia le etichette sinistra/destra (video specchiato o arciere ripreso da dietro) */
+export function swapSides(lm: Landmark[]): Landmark[] {
+  const out = lm.slice();
+  for (const [a, b] of SIDE_PAIRS) {
+    if (lm[a] && lm[b]) {
+      out[a] = lm[b];
+      out[b] = lm[a];
+    }
+  }
+  if (lm.length >= HAND_R + 21) {
+    for (let k = 0; k < 21; k++) {
+      out[HAND_L + k] = lm[HAND_R + k];
+      out[HAND_R + k] = lm[HAND_L + k];
+    }
+  }
+  return out;
+}
+
+/**
+ * Le etichette del braccio sono giuste per questo arciere? Si guarda il gesto, non le etichette:
+ * in trazione la mano della corda sta vicino al viso e il braccio dell'arco è disteso lontano.
+ * +1 giuste, -1 scambiate, 0 non si capisce (per esempio a braccia basse).
+ */
+export function sideEvidence(lm: Landmark[], hand: Hand, aspect: number): number {
+  const S = sides(hand);
+  const P = (i: number) => lm[i];
+  const ok = (i: number) => (P(i)?.visibility ?? 1) > 0.45;
+  if (![0, 11, 12, 13, 14, 15, 16, 23, 24].every((i) => P(i))) return 0;
+  if (!ok(15) || !ok(16)) return 0;
+  const d = (a: number, b: number) => Math.hypot((P(a).x - P(b).x) * aspect, P(a).y - P(b).y);
+  const shM = { x: (P(11).x + P(12).x) / 2, y: (P(11).y + P(12).y) / 2 };
+  const hipM = { x: (P(23).x + P(24).x) / 2, y: (P(23).y + P(24).y) / 2 };
+  const torso = Math.hypot((shM.x - hipM.x) * aspect, shM.y - hipM.y);
+  if (torso < 0.02) return 0;
+  const straight = (sh: number, el: number, wr: number) => d(sh, wr) / Math.max(1e-6, d(sh, el) + d(el, wr));
+  const near = (wr: number) => d(wr, 0) / torso;
+  const [bs, be, bw] = S.bow;
+  const [ds, de, dw] = S.draw;
+  // mano della corda al viso, braccio dell'arco teso e lontano
+  if (near(dw) < 0.5 && near(bw) > 1.0 && straight(bs, be, bw) > 0.88) return 1;
+  if (near(bw) < 0.5 && near(dw) > 1.0 && straight(ds, de, dw) > 0.88) return -1;
+  return 0;
+}
+
 export function withExtras(body: Landmark[], left: Landmark[] | null, right: Landmark[] | null, face: Landmark[] | null): Landmark[] {
   const out = body.slice(0, 33);
   const fill = (src: Landmark[] | null, n: number, anchor: Landmark) => {
