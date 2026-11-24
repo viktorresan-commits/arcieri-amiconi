@@ -1,4 +1,4 @@
-import { sides, type Gear, type Hand, type Landmark } from "./pose-analysis";
+import { facePoint, handPoint, sides, type Gear, type Hand, type Landmark } from "./pose-analysis";
 
 /** Misure dell'arciere in centimetri (stime da una ripresa 2D, ±3 cm). */
 export type KitNums = { drawCm: number; anchorCm: number | null; anchorBelowCm: number | null; eyeArrowCm: number | null; stringNoseCm: number | null };
@@ -28,8 +28,21 @@ export function archeryKit(lm: Landmark[], w: number, h: number, hand: Hand, gea
   est.sort((a, b) => a - b);
   const px = Math.max(1, est.length === 2 ? Math.max(...est) : est[est.length >> 1]);
   const bowFinger = sd.bow[2] + 4; // 15 → 19, 16 → 20
-  const grip = ok(bowFinger) ? { x: (P(sd.bow[2]).x * 2 + P(bowFinger).x) / 3, y: (P(sd.bow[2]).y * 2 + P(bowFinger).y) / 3 } : P(sd.bow[2]);
-  const nock = ok(sd.drawFinger) ? { x: (P(sd.draw[2]).x + P(sd.drawFinger).x * 2) / 3, y: (P(sd.draw[2]).y + P(sd.drawFinger).y * 2) / 3 } : P(sd.draw[2]);
+  // con le mani rilevate (21 punti ciascuna) presa e cocca sono molto più precise:
+  // impugnatura tra polso e nocca del medio, corda nella prima falange di indice e medio
+  const px2 = (p: Landmark) => ({ x: p.x * w, y: p.y * h });
+  const bowWristId = sd.bow[2] as 15 | 16;
+  const drawWristId = sd.draw[2] as 15 | 16;
+  const hb0 = handPoint(lm, bowWristId, 0);
+  const hb9 = handPoint(lm, bowWristId, 9);
+  const hd6 = handPoint(lm, drawWristId, 6);
+  const hd10 = handPoint(lm, drawWristId, 10);
+  const grip = hb0 && hb9
+    ? { x: (px2(hb0).x + px2(hb9).x * 2) / 3, y: (px2(hb0).y + px2(hb9).y * 2) / 3 }
+    : ok(bowFinger) ? { x: (P(sd.bow[2]).x * 2 + P(bowFinger).x) / 3, y: (P(sd.bow[2]).y * 2 + P(bowFinger).y) / 3 } : P(sd.bow[2]);
+  const nock = hd6 && hd10
+    ? { x: (px2(hd6).x + px2(hd10).x) / 2, y: (px2(hd6).y + px2(hd10).y) / 2 }
+    : ok(sd.drawFinger) ? { x: (P(sd.draw[2]).x + P(sd.drawFinger).x * 2) / 3, y: (P(sd.draw[2]).y + P(sd.drawFinger).y * 2) / 3 } : P(sd.draw[2]);
   const span = Math.hypot(grip.x - nock.x, grip.y - nock.y);
   if (span < 4) return null;
   const u = { x: (grip.x - nock.x) / span, y: (grip.y - nock.y) / span };
@@ -56,8 +69,10 @@ export function archeryKit(lm: Landmark[], w: number, h: number, hand: Hand, gea
   const measures = [`Allungo ≈ ${(drawLenM * 100).toFixed(0)} cm (${(drawLenM / 0.0254).toFixed(1)}″)`];
   // le stesse misure come numeri, per salvarle e per le statistiche
   const nums: KitNums = { drawCm: drawLenM * 100, anchorCm: null, anchorBelowCm: null, eyeArrowCm: null, stringNoseCm: null };
-  if (ok(9, 10)) {
-    const mouth = { x: (P(9).x + P(10).x) / 2, y: (P(9).y + P(10).y) / 2 };
+  // bocca: angolo della bocca dal lato della corda (viso rilevato), altrimenti il centro della bocca
+  const lipD = facePoint(lm, hand === "destro" ? 61 : 291);
+  if (lipD || ok(9, 10)) {
+    const mouth = lipD ? px2(lipD) : { x: (P(9).x + P(10).x) / 2, y: (P(9).y + P(10).y) / 2 };
     const d = cm(Math.hypot(nock.x - mouth.x, nock.y - mouth.y));
     const below = cm(nock.y - mouth.y);
     nums.anchorCm = d;
@@ -65,14 +80,20 @@ export function archeryKit(lm: Landmark[], w: number, h: number, hand: Hand, gea
     measures.push(`Ancoraggio: dita a ${d.toFixed(0)} cm dalla bocca${Math.abs(below) > 1 ? ` (${below > 0 ? "sotto" : "sopra"} ${Math.abs(below).toFixed(0)})` : ""}`);
   }
   const eyeId = hand === "destro" ? 5 : 2; // occhio dal lato della corda
-  if (ok(eyeId)) {
-    const e = P(eyeId);
+  const eyeF = facePoint(lm, hand === "destro" ? 468 : 473) ?? (() => {
+    const a = facePoint(lm, hand === "destro" ? 33 : 362);
+    const b = facePoint(lm, hand === "destro" ? 133 : 263);
+    return a && b ? { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } : null;
+  })();
+  if (eyeF || ok(eyeId)) {
+    const e = eyeF ? px2(eyeF) : P(eyeId);
     const off = cm(Math.abs((e.x - nock.x) * -u.y + (e.y - nock.y) * u.x));
     nums.eyeArrowCm = off;
     measures.push(`Occhio–freccia ${off.toFixed(1)} cm`);
   }
-  if (ok(0) && drawn) {
-    const nose = P(0);
+  const noseF = facePoint(lm, 1);
+  if ((noseF || ok(0)) && drawn) {
+    const nose = noseF ? px2(noseF) : P(0);
     // distanza del naso dal tratto di corda fra cocca e punta alta
     const sx = tipUp.x - nock.x;
     const sy = tipUp.y - nock.y;

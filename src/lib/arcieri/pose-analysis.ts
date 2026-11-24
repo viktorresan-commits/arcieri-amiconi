@@ -564,3 +564,52 @@ export function smoothLm(prev: Landmark[] | null, next: Landmark[], alpha = 0.6)
   const mix = (a: number | undefined, b: number | undefined) => (a != null && b != null ? alpha * a + (1 - alpha) * b : a);
   return next.map((p, i) => ({ x: alpha * p.x + (1 - alpha) * prev[i].x, y: alpha * p.y + (1 - alpha) * prev[i].y, z: mix(p.z, prev[i].z), visibility: p.visibility, zw: mix(p.zw, prev[i].zw) }));
 }
+
+/* ---------- 100 punti in più: mani (21 + 21) e viso (58) ---------- */
+
+/** dopo i 33 del corpo: mano sinistra della persona (polso 15), mano destra (polso 16), viso */
+export const HAND_L = 33;
+export const HAND_R = 54;
+export const FACE0 = 75;
+export const LM_TOTAL = 133;
+/** punti del viso scelti fra i 478 di MediaPipe: labbra (20), naso (6), occhi (12), sopracciglia (6), mento e mandibola (14) */
+export const FACE_IDS = [
+  61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 409, 270, 269, 267, 0, 37, 39, 40, 185,
+  1, 4, 5, 195, 98, 327,
+  33, 160, 158, 133, 153, 144, 362, 385, 387, 263, 373, 380,
+  70, 105, 107, 336, 334, 300,
+  152, 148, 176, 149, 150, 136, 172, 377, 400, 378, 379, 365, 397, 10,
+];
+/** collegamenti delle dita (indici 0–20 della mano) */
+export const HAND_LINKS: [number, number][] = [
+  [0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8], [5, 9], [9, 10], [10, 11], [11, 12],
+  [9, 13], [13, 14], [14, 15], [15, 16], [13, 17], [0, 17], [17, 18], [18, 19], [19, 20],
+];
+
+/** un punto della mano (k = 0–20) del lato indicato dal polso del corpo (15 o 16), se rilevato */
+export function handPoint(lm: Landmark[], wrist: 15 | 16, k: number): Landmark | null {
+  if (lm.length < LM_TOTAL) return null;
+  const p = lm[(wrist === 15 ? HAND_L : HAND_R) + k];
+  return p && (p.visibility ?? 0) > 0.5 ? p : null;
+}
+
+/** un punto del viso per indice MediaPipe (es. 61 e 291 angoli della bocca, 1 punta del naso, 152 mento) */
+export function facePoint(lm: Landmark[], meshId: number): Landmark | null {
+  if (lm.length < LM_TOTAL) return null;
+  const i = FACE_IDS.indexOf(meshId);
+  if (i < 0) return null;
+  const p = lm[FACE0 + i];
+  return p && (p.visibility ?? 0) > 0.5 ? p : null;
+}
+
+/** aggiunge mani e viso ai 33 punti (assenti = visibilità 0, sul polso o sul naso) */
+export function withExtras(body: Landmark[], left: Landmark[] | null, right: Landmark[] | null, face: Landmark[] | null): Landmark[] {
+  const out = body.slice(0, 33);
+  const fill = (src: Landmark[] | null, n: number, anchor: Landmark) => {
+    for (let k = 0; k < n; k++) out.push(src?.[k] ? { ...src[k], visibility: src[k].visibility ?? 0.9 } : { x: anchor.x, y: anchor.y, z: anchor.z, visibility: 0 });
+  };
+  fill(left, 21, body[15]);
+  fill(right, 21, body[16]);
+  fill(face, FACE_IDS.length, body[0]);
+  return out;
+}

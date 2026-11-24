@@ -20,6 +20,13 @@ import {
   personBox,
   sides,
   smoothLm,
+  withExtras,
+  FACE_IDS,
+  HAND_L,
+  HAND_R,
+  HAND_LINKS,
+  FACE0,
+  LM_TOTAL,
   type Gear,
   type Hand,
   type Landmark,
@@ -84,6 +91,95 @@ function engine(q: Quality): Promise<Marker> {
   return job;
 }
 
+/* ---------- mani e viso: 100 punti in più per ancoraggio, presa e dita ---------- */
+type PartMarker = { detect: (image: CanvasImageSource) => { landmarks?: Landmark[][]; faceLandmarks?: Landmark[][] } };
+const PART_MODELS = {
+  hand: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+  face: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+};
+const partEngines: Partial<Record<"hand" | "face", Promise<PartMarker>>> = {};
+function partEngine(kind: "hand" | "face"): Promise<PartMarker> {
+  let job = partEngines[kind];
+  if (!job) {
+    job = (async () => {
+      const vision = await new Function("url", "return import(url)")(`${VISION}/+esm`);
+      const files = await vision.FilesetResolver.forVisionTasks(`${VISION}/wasm`);
+      const make = (delegate: "GPU" | "CPU") =>
+        (kind === "hand"
+          ? vision.HandLandmarker.createFromOptions(files, { baseOptions: { modelAssetPath: PART_MODELS.hand, delegate }, runningMode: "IMAGE", numHands: 1, minHandDetectionConfidence: 0.35, minHandPresenceConfidence: 0.35 })
+          : vision.FaceLandmarker.createFromOptions(files, { baseOptions: { modelAssetPath: PART_MODELS.face, delegate }, runningMode: "IMAGE", numFaces: 1, minFaceDetectionConfidence: 0.35 })) as Promise<PartMarker>;
+      try {
+        return await make("GPU");
+      } catch {
+        return await make("CPU");
+      }
+    })();
+    partEngines[kind] = job;
+    job.catch(() => {
+      delete partEngines[kind];
+    });
+  }
+  return job;
+}
+
+const partCanvas: { c: HTMLCanvasElement | null } = { c: null };
+/** rileva una mano o il viso in un riquadro quadrato attorno a (cx, cy) e riporta i punti nel fotogramma */
+async function detectPart(kind: "hand" | "face", source: CanvasImageSource, W: number, H: number, cx: number, cy: number, side: number): Promise<Landmark[] | null> {
+  const marker = await partEngine(kind);
+  const sz = Math.max(48, Math.min(Math.max(W, H), side));
+  const x0 = Math.max(0, Math.min(W - sz, cx - sz / 2));
+  const y0 = Math.max(0, Math.min(H - sz, cy - sz / 2));
+  const sw = Math.min(sz, W);
+  const sh = Math.min(sz, H);
+  const c = partCanvas.c ?? (partCanvas.c = document.createElement("canvas"));
+  const k = Math.min(2.5, 320 / Math.max(sw, sh));
+  c.width = Math.round(sw * k);
+  c.height = Math.round(sh * k);
+  const ctx = c.getContext("2d");
+  if (!ctx) return null;
+  ctx.drawImage(source, x0, y0, sw, sh, 0, 0, c.width, c.height);
+  let res: ReturnType<PartMarker["detect"]>;
+  try {
+    res = marker.detect(c);
+  } catch {
+    return null;
+  }
+  const pts = kind === "hand" ? res.landmarks?.[0] : res.faceLandmarks?.[0];
+  if (!pts?.length) return null;
+  const map = (p: Landmark) => ({ x: (x0 + p.x * sw) / W, y: (y0 + p.y * sh) / H, z: p.z != null ? (p.z * sw) / W : undefined, visibility: 0.9 });
+  return kind === "hand" ? pts.map(map) : FACE_IDS.map((id) => map(pts[id] ?? pts[0]));
+}
+
+/** mani (attorno ai polsi) e viso (attorno al naso) per i 100 punti in più */
+async function detectExtras(source: CanvasImageSource, W: number, H: number, body: Landmark[]): Promise<Landmark[]> {
+  const px = (i: number) => ({ x: body[i].x * W, y: body[i].y * H });
+  const dist = (a: number, b: number) => Math.hypot(px(a).x - px(b).x, px(a).y - px(b).y);
+  const shoulders = dist(11, 12) || H * 0.1;
+  const hand = async (wrist: 15 | 16, elbow: 13 | 14) => {
+    if ((body[wrist].visibility ?? 1) < 0.25) return null;
+    const w = px(wrist);
+    const e = px(elbow);
+    // un po' oltre il polso, dove ci sono le dita
+    const cx = w.x + (w.x - e.x) * 0.35;
+    const cy = w.y + (w.y - e.y) * 0.35;
+    const pts = await detectPart("hand", source, W, H, cx, cy, Math.max(shoulders * 1.1, dist(wrist, elbow) * 1.6));
+    // la mano trovata deve partire dal polso giusto
+    if (pts && Math.hypot(pts[0].x * W - w.x, pts[0].y * H - w.y) > Math.max(shoulders * 0.5, 40)) return null;
+    return pts;
+  };
+  const face = async () => {
+    if ((body[0].visibility ?? 1) < 0.3) return null;
+    const n = px(0);
+    return detectPart("face", source, W, H, n.x, n.y, Math.max(dist(7, 8) * 2.6, shoulders * 0.9));
+  };
+  try {
+    const [l, r, f] = [await hand(15, 13), await hand(16, 14), await face()];
+    return withExtras(body, l, r, f);
+  } catch {
+    return withExtras(body, null, null, null);
+  }
+}
+
 export function PoseRead() {
   const box = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -93,6 +189,10 @@ export function PoseRead() {
   const [hand, setHandState] = useState<Hand>("destro");
   const handRef = useRef(hand);
   handRef.current = hand;
+  /** 100 punti in più (mani e viso): più preciso su ancoraggio, presa e dita, un po' più lento */
+  const [detail, setDetail] = useState(true);
+  const detailRef = useRef(detail);
+  detailRef.current = detail;
   const [quality, setQualityState] = useState<Quality>("full");
   const qualityRef = useRef(quality);
   qualityRef.current = quality;
@@ -118,6 +218,10 @@ export function PoseRead() {
   /** zoom dentro il video: pizzica con due dita, trascina con uno quando è ingrandito */
   const [zoomV, setZoomV] = useState({ z: 1, x: 0, y: 0 });
   const zoomRef = useRef(zoomV);
+  const [used3d, setUsed3d] = useState(false);
+  useEffect(() => {
+    if (look === "sagoma") setUsed3d(true);
+  }, [look]);
   const gesture = useRef<{ pts: Map<number, { x: number; y: number }>; pinch: number; moved: number }>({ pts: new Map(), pinch: 0, moved: 0 });
   const lookRef = useRef(look);
   lookRef.current = look;
@@ -206,7 +310,7 @@ export function PoseRead() {
   /* ---------- rilevamento ---------- */
 
   /** Rileva il corpo nel riquadro scelto (o seguito) e riporta i punti nel fotogramma intero. */
-  async function detectOn(source: CanvasImageSource, W: number, H: number): Promise<Landmark[] | null> {
+  async function detectOn(source: CanvasImageSource, W: number, H: number, extras = true): Promise<Landmark[] | null> {
     const marker = await engine(qualityRef.current);
     const region = cropRef.current ?? (followRef.current ? autoBox.current : null) ?? { x: 0, y: 0, w: 1, h: 1 };
     const sx = region.x * W;
@@ -242,7 +346,9 @@ export function PoseRead() {
     const world = worlds[poses.indexOf(chosen)];
     const mapped = chosen.map((p, i) => ({ x: region.x + p.x * region.w, y: region.y + p.y * region.h, z: p.z != null ? p.z * region.w : undefined, visibility: p.visibility, zw: world?.[i]?.z }));
     if (!cropRef.current && followRef.current) autoBox.current = personBox(mapped, 0.45);
-    return mapped;
+    // sempre 133 punti (mani e viso a visibilità 0 se non cercati), così i fotogrammi si confrontano
+    if (!detailRef.current || !extras) return withExtras(mapped, null, null, null);
+    return detectExtras(source, W, H, mapped);
   }
 
   function paintOverlay(lm: Landmark[] | null, draft?: Rect | null) {
@@ -287,7 +393,8 @@ export function PoseRead() {
     try {
       const W = video.videoWidth;
       const H = video.videoHeight;
-      const raw = await detectOn(video, W, H);
+      // mentre il video scorre solo il corpo (fluido); da fermo anche mani e viso
+      const raw = await detectOn(video, W, H, video.paused);
       const prev = smoothRef.current;
       const near = prev.t >= 0 && Math.abs(video.currentTime - prev.t) < 0.25;
       const lm = raw ? smoothLm(near ? prev.lm : null, raw) : null;
@@ -848,6 +955,10 @@ export function PoseRead() {
         ))}
         <span>{quality === "heavy" ? "più lento, il più preciso" : quality === "lite" ? "per telefoni lenti" : "consigliato"}</span>
       </div>
+      <label className="flex min-h-10 items-center gap-2 text-xs text-muted">
+        <input type="checkbox" checked={detail} onChange={(e) => setDetail(e.target.checked)} />
+        <span><b className="text-text">Mani e viso (+100 punti)</b>: dita, presa dell'arco, bocca, naso e mento per un ancoraggio preciso. Cercati nell'analisi e a video fermo.</span>
+      </label>
       <div className="grid grid-cols-2 gap-1 rounded-2xl bg-white/[0.05] p-1">
         <button type="button" onClick={() => setLive(false)} className={`min-h-11 rounded-xl text-sm font-semibold transition ${!live ? "bg-primary text-primary-fg" : "text-muted"}`}>Video o foto</button>
         <button type="button" onClick={() => { setLive(true); resetMedia(); setKind("none"); }} className={`flex min-h-11 items-center justify-center gap-1.5 rounded-xl text-sm font-semibold transition ${live ? "bg-primary text-primary-fg" : "text-muted"}`}><span className="h-2 w-2 rounded-full bg-red-500" />Dal vivo</button>
@@ -909,8 +1020,9 @@ export function PoseRead() {
             />
             </div>
             {/* Sagoma: il corpo in 3D (pelle, muscoli, scheletro) al posto del video, nello stesso riquadro */}
-            {look === "sagoma" ? (
-              <div className="absolute inset-0 z-[1]">
+            {/* una volta aperta la vista 3D resta pronta (nascosta): cambiare vista non la ricrea, niente scatti */}
+            {used3d ? (
+              <div className={`absolute inset-0 z-[1] ${look === "sagoma" ? "" : "hidden"}`}>
                 <Anatomy3D lmRef={lastLm} aspect={size.w / Math.max(1, size.h)} hand={hand} inBox className="h-full" />
               </div>
             ) : null}
@@ -922,7 +1034,7 @@ export function PoseRead() {
               </div>
             ) : null}
             <div className="absolute right-2 top-2 z-[2] flex gap-1 rounded-full bg-[#14181c]/75 p-1 text-xs font-semibold text-[#f4f1ea]">
-              {([["scheletro", "Scheletro"], ["sagoma", "Sagoma 3D"], ["mista", "Mista"]] as const).map(([k, label]) => (
+              {([["scheletro", "Scheletro"], ["sagoma", "Sagoma"], ["mista", "Mista"]] as const).map(([k, label]) => (
                 <button key={k} type="button" onClick={() => { setLook(k); if (k === "scheletro") setShowPose(true); }} className={`min-h-8 rounded-full px-2.5 ${look === k ? "bg-[#3ee08f] text-[#04140c]" : ""}`}>{label}</button>
               ))}
               {look === "scheletro" ? (
@@ -1222,6 +1334,54 @@ function Timeline({ samples, shots, time, duration, onSeek }: { samples: Sample[
 }
 
 function drawPose(ctx: CanvasRenderingContext2D, w: number, h: number, lm: Landmark[], hand: Hand, gear: Gear | null) {
+  drawPoseBody(ctx, w, h, lm, hand, gear);
+  drawExtras(ctx, w, h, lm);
+}
+
+/** dita e viso (i 100 punti in più): linee sottili sulle dita, punti su bocca, naso, occhi e mento */
+function drawExtras(ctx: CanvasRenderingContext2D, w: number, h: number, lm: Landmark[]) {
+  if (lm.length < LM_TOTAL) return;
+  const s = Math.max(0.6, Math.min(w, h) / 520);
+  ctx.lineCap = "round";
+  for (const base of [HAND_L, HAND_R]) {
+    if ((lm[base].visibility ?? 0) < 0.5) continue;
+    ctx.strokeStyle = "rgba(255,214,120,0.95)";
+    ctx.lineWidth = 1.1 * s;
+    ctx.beginPath();
+    for (const [a, b] of HAND_LINKS) {
+      ctx.moveTo(lm[base + a].x * w, lm[base + a].y * h);
+      ctx.lineTo(lm[base + b].x * w, lm[base + b].y * h);
+    }
+    ctx.stroke();
+    ctx.fillStyle = "#ffd678";
+    for (let k = 0; k < 21; k++) {
+      ctx.beginPath();
+      ctx.arc(lm[base + k].x * w, lm[base + k].y * h, (k % 4 === 0 ? 1.8 : 1.2) * s, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  if ((lm[FACE0].visibility ?? 0) >= 0.5) {
+    // contorno delle labbra (i primi 20 punti) e il resto come puntini
+    ctx.strokeStyle = "rgba(255,138,170,0.9)";
+    ctx.lineWidth = 1 * s;
+    ctx.beginPath();
+    for (let k = 0; k <= 20; k++) {
+      const p = lm[FACE0 + (k % 20)];
+      if (k) ctx.lineTo(p.x * w, p.y * h);
+      else ctx.moveTo(p.x * w, p.y * h);
+    }
+    ctx.stroke();
+    ctx.fillStyle = "rgba(140,220,255,0.95)";
+    for (let k = 20; k < FACE_IDS.length; k++) {
+      const p = lm[FACE0 + k];
+      ctx.beginPath();
+      ctx.arc(p.x * w, p.y * h, 1.1 * s, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+
+function drawPoseBody(ctx: CanvasRenderingContext2D, w: number, h: number, lm: Landmark[], hand: Hand, gear: Gear | null) {
   const s = Math.max(0.6, Math.min(w, h) / 520);
   const at = (i: number) => ({ x: lm[i].x * w, y: lm[i].y * h, v: lm[i].visibility ?? 1 });
   const { bow, draw } = sides(hand);

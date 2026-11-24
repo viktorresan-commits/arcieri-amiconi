@@ -72,28 +72,70 @@ export function bodyPoints(lm: Landmark[], aspect: number): Record<number, V3> |
   const hipY = hipsOk ? (P(23).y + P(24).y) / 2 : shM.y + 0.5 * s;
   const floorY = anklesOk ? Math.max(P(27).y, P(28).y) + 0.075 * s : hipY + 0.93 * s;
   const cx = shM.x;
-  // profondità: i punti "del mondo" del modello (in metri) se ci sono, altrimenti la stima
-  // dell'immagine, smorzata (è la parte meno affidabile e faceva pendere il corpo)
-  const hasWorld = [11, 12, 23, 24].every((i) => typeof lm[i]?.zw === "number" && Number.isFinite(lm[i].zw as number));
-  const zwRef = hasWorld ? ((lm[11].zw as number) + (lm[12].zw as number)) / 2 : 0;
-  const cz = (P(11).z + P(12).z) / 2;
-  const depth = (i: number) => {
-    const zw = lm[i]?.zw;
-    if (hasWorld && typeof zw === "number" && Number.isFinite(zw)) return -(zw - zwRef) * 0.9;
-    return (-(P(i).z - cz) / s) * 0.3;
+  // Profondità ricostruita dalle lunghezze delle ossa: dal video si conoscono x e y; ogni osso ha
+  // una lunghezza reale, quindi |dz| = √(L² − l²) dove l è la lunghezza vista nell'immagine.
+  // Il segno (avanti o dietro) arriva dal modello di posa. Busto e gambe restano in piedi:
+  // niente più corpo piegato in avanti.
+  const zSign = (child: number, parent: number) => {
+    const a = lm[child]?.zw;
+    const b = lm[parent]?.zw;
+    if (typeof a === "number" && typeof b === "number" && Number.isFinite(a) && Number.isFinite(b)) return a < b ? 1 : -1; // più vicino alla camera = z positivo
+    return (P(child).z ?? 0) < (P(parent).z ?? 0) ? 1 : -1;
   };
-  const W = (i: number): V3 => [(P(i).x - cx) / s, (floorY - P(i).y) / s, depth(i)];
+  const XY = (i: number): V3 => [(P(i).x - cx) / s, (floorY - P(i).y) / s, 0];
   const out: Record<number, V3> = {};
-  for (let i = 0; i < Math.min(33, lm.length); i++) out[i] = W(i);
-  // busto e gambe dritti come nel video: la profondità non può piegarli più di tanto
-  const clampZ = (i: number, ref: number, d: number) => {
-    if (out[i]) out[i][2] = Math.max(ref - d, Math.min(ref + d, out[i][2]));
+  for (let i = 0; i < Math.min(33, lm.length); i++) out[i] = XY(i);
+  const dzFor = (a: V3, b: V3, L: number) => {
+    const l = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    return l >= L ? 0 : Math.sqrt(L * L - l * l);
   };
+  // spalle e anche: se nel video sono più strette del vero, il busto è girato
+  const turn = (l: number, r: number, L: number) => {
+    const dz = dzFor(out[l], out[r], L) * 0.5;
+    const sg = zSign(r, l);
+    out[l][2] = -sg * dz;
+    out[r][2] = sg * dz;
+  };
+  turn(11, 12, 0.36);
+  if (hipsOk) turn(23, 24, 0.27);
+  // braccia: gomito e polso con la lunghezza vera di omero e avambraccio
+  for (const [sh, el, wr] of [[11, 13, 15], [12, 14, 16]] as const) {
+    out[el][2] = out[sh][2] + zSign(el, sh) * dzFor(out[sh], out[el], 0.3) * 0.9;
+    out[wr][2] = out[el][2] + zSign(wr, el) * dzFor(out[el], out[wr], 0.26) * 0.9;
+    for (const f of wr === 15 ? [17, 19, 21] : [18, 20, 22]) if (out[f]) out[f][2] = out[wr][2];
+  }
+  // gambe nel piano del bacino (si stanno dritti per tirare), con un filo di profondità se il video la mostra
+  for (const [hip, knee, ank] of [[23, 25, 27], [24, 26, 28]] as const) {
+    out[knee][2] = out[hip][2] + zSign(knee, hip) * Math.min(0.12, dzFor(out[hip], out[knee], 0.44) * 0.5);
+    out[ank][2] = out[knee][2] + zSign(ank, knee) * Math.min(0.12, dzFor(out[knee], out[ank], 0.42) * 0.5);
+  }
+  for (const [ank, heel, toe] of [[27, 29, 31], [28, 30, 32]] as const) {
+    if (out[heel]) out[heel][2] = out[ank][2] - 0.05;
+    if (out[toe]) out[toe][2] = out[ank][2] + 0.15;
+  }
+  // testa: il viso guarda dove è girato il naso rispetto alle orecchie
   const shZ = (out[11][2] + out[12][2]) / 2;
-  for (const i of [23, 24]) clampZ(i, shZ, 0.1);
-  const hipZ = ((out[23]?.[2] ?? shZ) + (out[24]?.[2] ?? shZ)) / 2;
-  for (const i of [25, 26, 27, 28, 29, 30, 31, 32]) clampZ(i, hipZ, 0.2);
-  for (const i of [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]) clampZ(i, shZ, 0.18);
+  const earsZ = shZ - 0.01;
+  const faceTurn = Math.max(-1, Math.min(1, (out[0][0] - (out[7][0] + out[8][0]) / 2) / 0.09));
+  for (const i of [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]) if (out[i]) out[i][2] = earsZ;
+  out[0][2] = earsZ + 0.09 * Math.sqrt(Math.max(0, 1 - faceTurn * faceTurn * 0.6));
+  for (const i of [1, 2, 3, 4, 5, 6, 9, 10]) if (out[i]) out[i][2] = earsZ + 0.07 * Math.sqrt(Math.max(0, 1 - faceTurn * faceTurn * 0.6));
+  // mani (21 punti per mano, se rilevate): profondità relativa al polso
+  if (lm.length >= 133) {
+    for (const [base, wr] of [[33, 15], [54, 16]] as const) {
+      if (vis(lm[base]) < 0.5) continue;
+      const w0 = lm[base];
+      const h0 = XY(base);
+      // il polso della mano coincide con quello del corpo
+      const off: V3 = [out[wr][0] - h0[0], out[wr][1] - h0[1], 0];
+      for (let k = 0; k < 21; k++) {
+        const p = lm[base + k];
+        const q = XY(base + k);
+        q[2] = out[wr][2] + (-(((p.z ?? 0) - (w0.z ?? 0)) * aspect) / s) * 0.8;
+        out[base + k] = add(q, off);
+      }
+    }
+  }
   if (!hipsOk) {
     out[23] = add(out[11], [0.02, -0.5, 0]);
     out[24] = add(out[12], [-0.02, -0.5, 0]);
@@ -218,9 +260,19 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand): Model | 
     push("sphere", seg(add(a.el, off), add(a.wr, off), 0.008), BONE, 1, 0.95, "osso"); // radio
     push("sphere", seg(sub(a.el, off), sub(a.wr, off), 0.008), BONE, 1, 0.95, "osso"); // ulna
   }
-  // mani: ossa verso indice, mignolo, pollice
-  for (const [wr, fingers] of [[J[15], [19, 17, 21]], [J[16], [20, 18, 22]]] as const) {
-    for (const f of fingers) if (J[f]) push("sphere", seg(wr, J[f], 0.006), BONE, 1, 0.9, "osso");
+  // mani: con i 21 punti per mano, falangi e dita vere (si vedono presa dell'arco e dita sulla corda);
+  // altrimenti tre ossa verso indice, mignolo e pollice
+  const handBase = (wr: number) => (wr === 15 ? 33 : 54);
+  const fingerLinks: [number, number][] = [[0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8], [0, 9], [9, 10], [10, 11], [11, 12], [0, 13], [13, 14], [14, 15], [15, 16], [0, 17], [17, 18], [18, 19], [19, 20]];
+  for (const [wrI, fingers] of [[15, [19, 17, 21]], [16, [20, 18, 22]]] as const) {
+    const base = handBase(wrI);
+    if (J[base]) {
+      for (const [a, b] of fingerLinks) {
+        const long = a === 0; // metacarpi
+        push("sphere", seg(J[base + a], J[base + b], long ? 0.0055 : 0.0048, long ? 0.0045 : 0.0048, 1.02), BONE, 1, 0.95, "osso");
+      }
+      for (const k of [2, 3, 6, 7, 10, 11, 14, 15, 18, 19]) push("sphere", ell(J[base + k], 0.0062, 0.0062, 0.0062), BONE, 1, 0.95, "osso");
+    } else for (const f of fingers) if (J[f]) push("sphere", seg(J[wrI], J[f], 0.006), BONE, 1, 0.9, "osso");
   }
   // bacino
   const pelC = add(hipM, mul(up, 0.06));
@@ -367,6 +419,12 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand): Model | 
     void lg;
   }
 
+  let tagHand = "";
+  const handMuscle = (a: V3, b: V3, id: string) => {
+    push("spindle", seg(a, b, 0.014, 0.01, 1.05), muscleCol(0.45), 2, 0.92, "muscolo", 0.45);
+    parts[parts.length - 1].id = id;
+  };
+  void tagHand;
   // ---------- pelle (bordo luminoso) ----------
   const K = (pl: { m: Float32Array; nm: Float32Array }) => push("sphere", pl, SKIN, 0, 0.8, "pelle");
   K(ell(headC, 0.088, 0.115, 0.1, headR, up));
@@ -379,7 +437,17 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand): Model | 
     K(seg(a.sh, a.el, 0.052, 0.05));
     K(seg(a.el, a.wr, 0.042, 0.038));
   }
-  for (const [wr, idx] of [[J[15], J[19]], [J[16], J[20]]] as const) if (idx) K(seg(wr, add(idx, mul(norm(sub(idx, wr)), 0.03)), 0.03, 0.045));
+  for (const [wrI, idxI] of [[15, 19], [16, 20]] as const) {
+    const base = handBase(wrI);
+    if (J[base]) {
+      // palmo e dita con la loro pelle
+      K(seg(J[base], lerp(J[base + 5], J[base + 17], 0.5), 0.035, 0.016, 1.15));
+      for (const [a, b] of fingerLinks) if (a !== 0) K(seg(J[base + a], J[base + b], 0.0095, 0.0095, 1.25));
+      // muscoli del pollice (eminenza tenare): lavorano nella presa
+      tagHand = `${wrI === S.bow[2] ? "arco" : "corda"}-mano`;
+      handMuscle(J[base], J[base + 2], tagHand);
+    } else if (J[idxI]) K(seg(J[wrI], add(J[idxI], mul(norm(sub(J[idxI], J[wrI])), 0.03)), 0.03, 0.045));
+  }
   for (const [hip, knee, ank, heel, toe] of [[23, 25, 27, 29, 31], [24, 26, 28, 30, 32]] as const) {
     K(seg(J[hip], J[knee], 0.082, 0.08));
     K(seg(J[knee], J[ank], 0.058, 0.055));

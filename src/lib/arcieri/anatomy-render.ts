@@ -19,17 +19,20 @@ void main(){
   vec3 N = normalize(vN); vec3 V = normalize(uEye - vW);
   float ndv = abs(dot(N, V));
   float rim = pow(1.0 - ndv, 2.2);
+  // luce principale, luce di riempimento e ambiente dal cielo: volumi come in studio
   vec3 L = normalize(vec3(0.4, 0.9, 0.6));
-  float dif = max(dot(N, L), 0.0);
+  vec3 L2 = normalize(vec3(-0.7, 0.2, -0.4));
+  float dif = max(dot(N, L), 0.0) * 0.78 + max(dot(N, L2), 0.0) * 0.22;
+  float hemi = 0.5 + 0.5 * N.y;
   vec3 col; float a;
   if (uMode < 0.5) {
     // pelle: vetro con il bordo che si accende, linee di scansione leggere
-    float scan = 0.85 + 0.15 * sin(vW.y * 140.0 - uTime * 2.0);
+    float scan = 0.88 + 0.12 * sin(vW.y * 140.0);
     col = uColor * (0.28 + rim * 2.1) * scan;
     a = uAlpha * (0.15 + rim * 1.1);
   } else if (uMode < 1.5) {
     // osso: avorio freddo, luce morbida e bordo azzurro
-    col = uColor * (0.35 + dif * 0.55) + vec3(0.45, 0.75, 1.0) * rim * 0.55;
+    col = uColor * (0.28 + 0.1 * hemi + dif * 0.55) + vec3(0.45, 0.75, 1.0) * rim * 0.5;
     a = uAlpha;
   } else if (uMode < 2.5) {
     // muscolo: fibre lungo il muscolo, tendini chiari alle estremità, lucido come nelle tavole
@@ -39,7 +42,10 @@ void main(){
     vec3 base = mix(uColor, vec3(0.94, 0.9, 0.82), tend * 0.85);
     vec3 R = reflect(-L, N);
     float spec = pow(max(dot(R, V), 0.0), 22.0) * 0.28;
-    col = base * (0.3 + dif * 0.64) * mix(fib, 1.0, tend) + uColor * uAct * 0.3 * (1.0 - tend) + vec3(1.0, 0.86, 0.72) * (rim * 0.2 + spec);
+    // bordo del muscolo più scuro: separa un muscolo dall'altro come nelle tavole anatomiche
+    float edge = mix(1.0, 0.55, pow(1.0 - ndv, 2.6));
+    float striae = 0.92 + 0.08 * sin(vO.y * 38.0 + ang * 3.0);
+    col = base * (0.22 + 0.12 * hemi + dif * 0.66) * mix(fib * striae, 1.0, tend) * edge + uColor * uAct * 0.28 * (1.0 - tend) + vec3(1.0, 0.88, 0.76) * spec;
     a = uAlpha;
   } else {
     col = uColor * (0.4 + dif * 0.6) + rim * 0.15;
@@ -48,7 +54,7 @@ void main(){
   gl_FragColor = vec4(col, a);
 }`;
 
-function sphereMesh(lat = 30, lon = 48) {
+function sphereMesh(lat = 16, lon = 24) {
   const p: number[] = [];
   const idx: number[] = [];
   for (let i = 0; i <= lat; i++) {
@@ -68,7 +74,7 @@ function sphereMesh(lat = 30, lon = 48) {
 }
 
 /** fuso del muscolo: largo al centro, sottile ai tendini (superficie di rotazione lungo y) */
-function spindleMesh(rings = 40, lon = 36) {
+function spindleMesh(rings = 18, lon = 16) {
   const p: number[] = [];
   const n: number[] = [];
   const idx: number[] = [];
@@ -94,7 +100,7 @@ function spindleMesh(rings = 40, lon = 36) {
   return { pos: new Float32Array(p), nor: new Float32Array(n), idx: new Uint16Array(idx) };
 }
 
-function torusMesh(R = 1, r = 0.07, seg = 44, tube = 8) {
+function torusMesh(R = 1, r = 0.07, seg = 32, tube = 6) {
   const p: number[] = [];
   const n: number[] = [];
   const idx: number[] = [];

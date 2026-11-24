@@ -584,15 +584,33 @@ function MuscleAreas({ lm, hand, aspect, areas }: { lm: Landmark[] | null; hand:
   const key = list.map((a) => a.id).join(",");
   useEffect(() => {
     if (!lm) return;
-    // si ridisegna quando la posa si ferma (non a ogni fotogramma del video)
-    const t = window.setTimeout(() => {
-      try {
-        setImgs(renderAreaImages(lm, aspect, hand, list.map((a) => a.id)));
-      } catch {
-        /* niente WebGL: restano i nomi dei muscoli */
-      }
-    }, 450);
-    return () => window.clearTimeout(t);
+    // si disegna quando la posa si ferma (non a ogni fotogramma), una zona alla volta nei momenti
+    // liberi del telefono: il video e i comandi restano fluidi
+    let stop = false;
+    const ids = list.map((a) => a.id);
+    const idle = (fn: () => void) => {
+      const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number };
+      if (w.requestIdleCallback) w.requestIdleCallback(fn, { timeout: 600 });
+      else window.setTimeout(fn, 40);
+    };
+    const step = (i: number) => {
+      if (stop || i >= ids.length) return;
+      idle(() => {
+        if (stop) return;
+        try {
+          const one = renderAreaImages(lm, aspect, hand, [ids[i]], 480, 390);
+          setImgs((cur) => ({ ...cur, ...one }));
+        } catch {
+          /* niente WebGL: restano i nomi dei muscoli */
+        }
+        step(i + 1);
+      });
+    };
+    const t = window.setTimeout(() => step(0), 700);
+    return () => {
+      stop = true;
+      window.clearTimeout(t);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lm, aspect, hand, key]);
   if (!list.length) return null;
@@ -604,7 +622,7 @@ function MuscleAreas({ lm, hand, aspect, areas }: { lm: Landmark[] | null; hand:
           const info = AREA_MUSCLES[a.id]!;
           return (
             <div key={a.id} className="grid overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.03]">
-              {imgs[a.id] ? <img src={imgs[a.id]} alt={`Muscoli di ${a.label}`} className="aspect-[640/520] w-full object-cover" /> : <div className="aspect-[640/520] w-full animate-pulse bg-[#0a2335]" />}
+              {imgs[a.id] ? <img src={imgs[a.id]} alt={`Muscoli di ${a.label}`} className="aspect-[480/390] w-full object-cover" /> : <div className="aspect-[480/390] w-full animate-pulse bg-[#0a2335]" />}
               <div className="grid gap-1.5 p-3">
                 <div className="flex items-baseline justify-between gap-2">
                   <b className="text-sm">{a.label}</b>

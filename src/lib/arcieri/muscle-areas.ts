@@ -108,11 +108,14 @@ function yawOf(m: Model, side: string) {
   return Math.atan2(toward[0], toward[2]) * 0.55 + front * 0.45;
 }
 
+let cacheModel: { lm: Landmark[]; hand: Hand; model: Model } | null = null;
 let shared: { canvas: HTMLCanvasElement; R: NonNullable<ReturnType<typeof createAnatomyRenderer>> } | null = null;
 
 /** immagini (data URL) dei muscoli in evidenza, una per zona */
 export function renderAreaImages(lm: Landmark[], aspect: number, hand: Hand, areas: AreaId[], w = 640, h = 520): Record<string, string> {
-  const model = buildModel(lm, aspect, hand);
+  // stessa posa: il modello si costruisce una volta sola per tutte le zone
+  const model = cacheModel?.lm === lm && cacheModel.hand === hand ? cacheModel.model : buildModel(lm, aspect, hand);
+  if (model) cacheModel = { lm, hand, model };
   if (!model || typeof document === "undefined") return {};
   if (!shared) {
     const canvas = document.createElement("canvas");

@@ -35,21 +35,24 @@ export type GestureRecord = {
 
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
 
-export function packLm(lm: Landmark[] | null | undefined): PackedLm | null {
+export function packLm(lm: Landmark[] | null | undefined, full = true): PackedLm | null {
   if (!lm || lm.length < 25) return null;
+  const n = full && lm.length >= 133 ? 133 : 33;
   const out: number[] = [];
-  for (let i = 0; i < 33; i++) {
+  for (let i = 0; i < n; i++) {
     const p: Landmark = lm[i] ?? { x: 0, y: 0, z: 0, visibility: 0 };
     out.push(r3(p.x), r3(p.y), r3(p.z ?? 0), Math.round((p.visibility ?? 1) * 100) / 100, p.zw == null ? 9 : r3(p.zw));
   }
   return out;
 }
 
+/** 33 o 133 punti (con mani e viso), 4 valori per punto nei vecchi salvataggi, 5 nei nuovi */
 export function unpackLm(a: PackedLm | null | undefined): Landmark[] | null {
   if (!Array.isArray(a) || a.length < 33 * 4) return null;
-  const k = a.length >= 33 * 5 ? 5 : 4;
+  const k = a.length === 33 * 5 || a.length === 133 * 5 ? 5 : 4;
+  const n = Math.floor(a.length / k);
   const out: Landmark[] = [];
-  for (let i = 0; i < 33; i++) {
+  for (let i = 0; i < n; i++) {
     const zw = k === 5 && a[i * k + 4] !== 9 ? a[i * k + 4] : undefined;
     out.push({ x: a[i * k], y: a[i * k + 1], z: a[i * k + 2], visibility: a[i * k + 3], zw });
   }
@@ -83,7 +86,7 @@ export function buildRecord(input: { lm: Landmark[] | null; samples: Sample[]; s
     const to = shot?.phases[shot.phases.length - 1]?.to ?? withLm[withLm.length - 1].t;
     const span = withLm.filter((s) => s.t >= from - 0.2 && s.t <= to + 0.2);
     const pick = span.length > 24 ? Array.from({ length: 24 }, (_, i) => span[Math.round((i / 23) * (span.length - 1))]) : span;
-    seq = pick.map((s) => ({ t: Math.round((s.t - pick[0].t) * 100) / 100, lm: packLm(s.lm)! })).filter((x) => x.lm);
+    seq = pick.map((s) => ({ t: Math.round((s.t - pick[0].t) * 100) / 100, lm: packLm(s.lm, false)! })).filter((x) => x.lm);
   }
   // postura per zone: mediana dell'ancoraggio se c'è un tiro, altrimenti il fotogramma
   let posture: GestureRecord["posture"] = null;

@@ -85,30 +85,53 @@ export function Anatomy3D({
     let last = performance.now();
     const t0 = last;
 
+    // si ridisegna solo quando cambia qualcosa (posa, camera, livelli, dimensioni): niente scatti
+    // e niente batteria consumata a vuoto
+    let lastTarget: Landmark[] | null = null;
+    let lastKey = "";
+    let settle = 0;
+    let scale = 1; // risoluzione adattiva: scende se il telefono non sta al passo
+    let slow = 0;
     const frame = (now: number) => {
       raf = requestAnimationFrame(frame);
       const dt = Math.min(0.1, (now - last) / 1000);
       last = now;
       const time = (now - t0) / 1000;
+      // nascosto (vista non attiva o fuori schermo): non lavora
+      if (!canvas.clientWidth || !canvas.clientHeight) return;
       const { lm: still, lmRef: ref, seq: sq, aspect: asp, hand: hd } = input.current;
       // punti da mostrare: sequenza salvata (in ciclo), poi quelli dal vivo, poi quelli fissi
       let target: Landmark[] | null = null;
-      if (sq && sq.length > 1) {
+      const playing = Boolean(sq && sq.length > 1);
+      if (playing && sq) {
         const end = sq[sq.length - 1].t + 0.9;
         target = seqAt(sq, time % end);
       } else target = ref?.current ?? still;
-      if (target) {
+      if (target && target !== lastTarget) {
+        lastTarget = target;
+        settle = 8;
+      }
+      const c = cam.current;
+      if (c.auto) c.yaw += dt * 0.35;
+      const L0 = layersRef.current;
+      const dprBase = Math.min(2, window.devicePixelRatio || 1);
+      const key = `${c.yaw.toFixed(4)}|${c.pitch.toFixed(4)}|${c.zoom.toFixed(3)}|${L0.pelle}${L0.muscolo}${L0.osso}${L0.quote}|${canvas.clientWidth}x${canvas.clientHeight}|${scale}`;
+      if (settle <= 0 && key === lastKey && !playing) return;
+      lastKey = key;
+      if (target && settle > 0) {
         const t = target;
-        const mix = (a: number | undefined, b: number | undefined) => (a != null && b != null ? a + (b - a) * 0.35 : b);
-        smooth = !smooth || smooth.length !== t.length ? t.map((p) => ({ ...p })) : smooth.map((p, i) => ({ x: p.x + (t[i].x - p.x) * 0.35, y: p.y + (t[i].y - p.y) * 0.35, z: mix(p.z, t[i].z), zw: mix(p.zw, t[i].zw), visibility: t[i].visibility }));
+        const mix = (a: number | undefined, b: number | undefined) => (a != null && b != null ? a + (b - a) * 0.45 : b);
+        smooth = !smooth || smooth.length !== t.length ? t.map((p) => ({ ...p })) : smooth.map((p, i) => ({ x: p.x + (t[i].x - p.x) * 0.45, y: p.y + (t[i].y - p.y) * 0.45, z: mix(p.z, t[i].z), zw: mix(p.zw, t[i].zw), visibility: t[i].visibility }));
         model = buildModel(smooth, asp, hd) ?? model;
+        settle -= 1;
       }
       if (emptyRef.current !== !model) {
         emptyRef.current = !model;
         setEmpty(!model);
       }
+      const t1 = performance.now();
 
-      const dpr = Math.min(3, window.devicePixelRatio || 1);
+      const dpr = dprBase * scale;
       const W = Math.max(1, Math.round(canvas.clientWidth * dpr));
       const H = Math.max(1, Math.round(canvas.clientHeight * dpr));
       if (canvas.width !== W || canvas.height !== H) {
@@ -123,9 +146,16 @@ export function Anatomy3D({
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, W, H);
       if (!model) return;
+      // se un disegno costa troppo, la volta dopo si disegna a risoluzione più bassa
+      queueMicrotask(() => {
+        const cost = performance.now() - t1;
+        slow = cost > 28 ? slow + 1 : Math.max(0, slow - 1);
+        if (slow > 3 && scale > 0.6) {
+          scale = Math.round((scale - 0.15) * 100) / 100;
+          slow = 0;
+        }
+      });
 
-      const c = cam.current;
-      if (c.auto) c.yaw += dt * 0.35;
       const target3: V3 = [model.center[0], model.height * 0.5, model.center[2]];
       const fov = (34 * Math.PI) / 180;
       const fit = (model.height * 0.62) / Math.tan(fov / 2) / Math.min(1, W / H + 0.15);
