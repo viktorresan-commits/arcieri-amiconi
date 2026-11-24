@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { listGestures, type GestureRow } from "@/lib/arcieri/gesture.api";
+import { drawCmOf, postureOf, readRecord } from "@/lib/arcieri/gesture-record";
 import { Card } from "./kit";
 import { Glyph } from "./icons";
 
-type Pro = { total?: number; areas?: Record<string, number | null>; m?: { drawLenCm?: number | null } };
 
 const AREA_LABEL: Record<string, string> = { testa: "Testa", spalle: "Spalle", braccioArco: "Braccio arco", polsoArco: "Polso arco", gomito: "Gomito corda", polsoCorda: "Polso corda", ancoraggio: "Ancoraggio", busto: "Busto", gambe: "Gambe", attrezzatura: "Allungo" };
 const f1 = (v: number) => v.toFixed(1).replace(".", ",");
@@ -15,14 +15,6 @@ const sd = (a: number[]) => {
   const m = mean(a);
   return Math.sqrt(mean(a.map((v) => (v - m) ** 2)));
 };
-
-function proOf(g: GestureRow): Pro | null {
-  try {
-    return (JSON.parse(g.data || "{}") as { pro?: Pro }).pro ?? null;
-  } catch {
-    return null;
-  }
-}
 
 /** Linea minima con punti, area e (facoltativa) fascia ideale. */
 function MiniLine({ values, color, band, invert = false, unit = "" }: { values: number[]; color: string; band?: [number, number]; invert?: boolean; unit?: string }) {
@@ -90,17 +82,28 @@ export function BodyStats() {
     }
   }, []);
 
-  const g = useMemo(() => [...(rows ?? [])].reverse(), [rows]);
-  const pros = g.map((r) => ({ r, p: proOf(r) })).filter((x) => x.p && typeof x.p.total === "number") as { r: GestureRow; p: Pro }[];
-  const drawLen = pros.map((x) => x.p.m?.drawLenCm).filter((v): v is number => typeof v === "number" && v > 40 && v < 95);
-  const drawS = [...g.map((r) => r.drawS).filter((v): v is number => v != null && v > 0.3 && v < 8), ...laps.map((l) => l.s)].slice(-40);
-  const hold = g.map((r) => r.anchorS).filter((v): v is number => v != null && v > 0.2 && v < 15);
-  const jitter = g.map((r) => r.jitter).filter((v): v is number => v != null && v >= 0);
-  const totals = pros.map((x) => x.p.total as number);
+  // dal più vecchio al più recente; l'ultima analisi è quella che dà i numeri principali
+  const g = useMemo(() => [...(rows ?? [])].reverse().map((r) => ({ r, d: readRecord(r.data) })), [rows]);
+  const last = g.length ? g[g.length - 1] : null;
+  const lastD = last?.d ?? null;
+  const drawLen = g.map((x) => drawCmOf(x.d)).filter((v): v is number => v != null);
+  const lastDraw = lastD ? drawCmOf(lastD) : null;
+  const drawOf = (x: (typeof g)[number]) => x.d.shot?.drawS ?? x.r.drawS;
+  const holdOf = (x: (typeof g)[number]) => x.d.shot?.anchorS ?? x.r.anchorS;
+  const drawS = [...g.map(drawOf).filter((v): v is number => v != null && v > 0.3 && v < 8), ...laps.map((l) => l.s)].slice(-40);
+  const hold = g.map(holdOf).filter((v): v is number => v != null && v > 0.2 && v < 15);
+  const jitter = g.map((x) => x.r.jitter).filter((v): v is number => v != null && v >= 0);
+  const postures = g.map((x) => postureOf(x.d)).filter((p): p is { total: number; areas: Record<string, number | null> } => Boolean(p));
+  const totals = postures.map((p) => p.total);
+  const lastDrawS = last ? drawOf(last) : null;
+  const lastHold = last ? holdOf(last) : null;
+  const lastJitter = last?.r.jitter ?? null;
+  const lastCreep = lastD?.shot?.creep ?? null;
+  const lastPost = lastD ? postureOf(lastD) : null;
 
-  // zone del corpo: prima e ultima analisi pro
-  const firstAreas = pros[0]?.p.areas ?? {};
-  const lastAreas = pros[pros.length - 1]?.p.areas ?? {};
+  // zone del corpo: prima analisi e ultima
+  const firstAreas = postures[0]?.areas ?? {};
+  const lastAreas = lastPost?.areas ?? {};
   const areas = Object.keys(AREA_LABEL)
     .map((k) => ({ k, a: firstAreas[k], b: lastAreas[k] }))
     .filter((x): x is { k: string; a: number; b: number } => typeof x.a === "number" && typeof x.b === "number");
@@ -118,6 +121,7 @@ export function BodyStats() {
   const maxDay = Math.max(1, ...days.map((d) => d.n));
 
   const tips: string[] = [];
+  if (lastD && !lastD.lm && g.length) tips.push("L'ultima analisi è nel vecchio formato: rifanne una per avere allungo, ancoraggio e postura completi.");
   if (totals.length >= 2) {
     const delta = totals[totals.length - 1] - totals[0];
     tips.push(delta >= 0 ? `Postura: +${delta} punti dalla prima analisi.` : `Postura: ${delta} punti dalla prima analisi, riguarda le zone in calo qui sotto.`);
@@ -130,15 +134,29 @@ export function BodyStats() {
   if (rows == null) return <p className="text-xs text-muted">Carico le analisi del gesto…</p>;
   return (
     <>
-      {/* da dove vengono i numeri: lo storico delle analisi del gesto */}
+      {/* da dove vengono i numeri: l'ultima analisi del gesto salvata */}
       <Link to="/gesti" className="block">
-        <Card className="flex items-center gap-3">
-          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#7652d1]/25"><Glyph name="archer" size={22} /></span>
-          <span className="min-w-0 flex-1">
-            <b className="block">Storico del gesto</b>
-            <span className="block text-xs text-muted">{rows == null ? "Carico le analisi…" : rows.length ? `${rows.length} ${rows.length === 1 ? "analisi salvata" : "analisi salvate"}, l'ultima il ${new Date(rows[0].createdAt).toLocaleDateString("it-IT", { day: "numeric", month: "short" })}: da qui vengono i numeri qui sotto.` : "Nessuna analisi salvata: i numeri del corpo arrivano dalle analisi del gesto."}</span>
-          </span>
-          <Glyph name="chevron" size={16} className="text-muted" />
+        <Card className="grid gap-2.5">
+          <div className="flex items-center gap-3">
+            {last?.r.thumb ? <img src={last.r.thumb} alt="" className="h-14 w-11 shrink-0 rounded-lg object-cover" /> : <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#7652d1]/25"><Glyph name="archer" size={22} /></span>}
+            <span className="min-w-0 flex-1">
+              <b className="block">{last ? "Dall'ultima analisi del gesto" : "Analisi del gesto"}</b>
+              <span className="block text-xs text-muted">{last ? `${new Date(last.r.createdAt).toLocaleDateString("it-IT", { day: "numeric", month: "long" })} · ${rows.length} ${rows.length === 1 ? "analisi salvata" : "analisi salvate"}: tocca per lo storico e il 3D.` : "Nessuna analisi salvata: i numeri del corpo arrivano dalle analisi del gesto."}</span>
+            </span>
+            <Glyph name="chevron" size={16} className="text-muted" />
+          </div>
+          {last ? (
+            <Kpis
+              items={[
+                ["Allungo", lastDraw != null ? `${Math.round(lastDraw)} cm` : "—"],
+                ["Trazione", lastDrawS != null ? `${f1(lastDrawS)} s` : "—"],
+                ["Tenuta", lastHold != null ? `${f1(lastHold)} s` : "—"],
+                ["Ancoraggio", lastD?.kit?.anchorCm != null ? `${Math.round(lastD.kit!.anchorCm!)} cm` : "—"],
+                ["Tremolio", lastJitter != null ? f2(lastJitter) : "—"],
+                ["Postura", lastPost ? `${Math.round(lastPost.total)}/100` : "—"],
+              ]}
+            />
+          ) : null}
         </Card>
       </Link>
       {tips.length ? (
@@ -151,14 +169,14 @@ export function BodyStats() {
       ) : null}
 
       <Card className="grid gap-2">
-        <Head icon="span" title="Allungo" sub="Misurato nelle analisi del gesto (serve la tua altezza)" />
-        <Kpis items={[["Ultimo", drawLen.length ? `${f1(drawLen[drawLen.length - 1])} cm` : "—"], ["Medio", drawLen.length ? `${f1(mean(drawLen))} cm` : "—"], ["Variazione", drawLen.length > 1 ? `±${f1(sd(drawLen))}` : "—"]]} />
+        <Head icon="span" title="Allungo" sub="Dall'ultima analisi del gesto (con la tua altezza è più preciso)" />
+        <Kpis items={[["Ultimo", lastDraw != null ? `${f1(lastDraw)} cm` : "—"], ["Medio", drawLen.length ? `${f1(mean(drawLen))} cm` : "—"], ["Variazione", drawLen.length > 1 ? `±${f1(sd(drawLen))}` : "—"]]} />
         <MiniLine values={drawLen} color="#5aa6e8" unit=" cm" />
       </Card>
 
       <Card className="grid gap-2">
-        <Head icon="stopwatch" title="Tempo di allungo e tenuta" sub="Dal registratore dei tempi e dai video analizzati" />
-        <Kpis items={[["Allungo", drawS.length ? `${f2(mean(drawS))} s` : "—"], ["Costanza", drawS.length > 1 ? `±${f2(sd(drawS))} s` : "—"], ["Tenuta", hold.length ? `${f1(mean(hold))} s` : "—"]]} />
+        <Head icon="stopwatch" title="Tempo di allungo e tenuta" sub="Dall'ultima analisi del gesto; l'andamento include il registratore dei tempi" />
+        <Kpis items={[["Allungo", lastDrawS != null ? `${f2(lastDrawS)} s` : drawS.length ? `${f2(drawS[drawS.length - 1])} s` : "—"], ["Costanza", drawS.length > 1 ? `±${f2(sd(drawS))} s` : "—"], ["Tenuta", lastHold != null ? `${f1(lastHold)} s` : hold.length ? `${f1(hold[hold.length - 1])} s` : "—"]]} />
         <MiniLine values={drawS} color="#8a5bd1" unit=" s" />
         <div className="flex flex-wrap gap-2 text-xs">
           <Link to="/tempi" className="aa-chip"><Glyph name="stopwatch" size={13} /> Registra i tempi</Link>
@@ -166,7 +184,7 @@ export function BodyStats() {
       </Card>
 
       <Card className="grid gap-2">
-        <Head icon="posture" title="Postura" sub={`${pros.length} analisi pro · punteggio su 100`} />
+        <Head icon="posture" title="Postura" sub={lastPost ? `Ultima analisi ${Math.round(lastPost.total)}/100 · ${postures.length} ${postures.length === 1 ? "analisi" : "analisi"} con le zone del corpo` : "Punteggio su 100 per zone del corpo"} />
         <MiniLine values={totals} color="#3d8f5f" band={[75, 100]} />
         {areas.length ? (
           <ul className="grid gap-1.5">
@@ -187,8 +205,8 @@ export function BodyStats() {
       </Card>
 
       <Card className="grid gap-2">
-        <Head icon="lungs" title="Respiro e mira ferma" sub="Respiri guidati e tremolio della mira nelle analisi" />
-        <Kpis items={[["Respiri", String(breathTotal)], ["Giorni", String(breathDays)], ["Tremolio", jitter.length ? f2(jitter[jitter.length - 1]) : "—"]]} />
+        <Head icon="lungs" title="Respiro e mira ferma" sub="Tremolio e scivolamento dall'ultima analisi; respiri guidati dei 14 giorni" />
+        <Kpis items={[["Tremolio", lastJitter != null ? f2(lastJitter) : "—"], ["Scivolamento", lastCreep != null ? f2(lastCreep) : "—"], ["Respiri", breathDays ? `${breathTotal} · ${breathDays} gg` : "0"]]} />
         <div className="flex h-20 items-end gap-1">
           {days.map((d) => (
             <div key={d.key} className="grid flex-1 justify-items-center gap-0.5">
@@ -198,7 +216,7 @@ export function BodyStats() {
           ))}
         </div>
         <MiniLine values={jitter} color="#e0b15a" invert />
-        <p className="text-[0.68rem] text-muted">Tremolio: quanto si muove la mano dell'arco durante la mira (più basso è meglio).</p>
+        <p className="text-[0.68rem] text-muted">Tremolio: quanto si muove la mano dell'arco durante la mira. Scivolamento: quanto la mano della corda cede in ancoraggio. Più bassi è meglio.</p>
         <Link to="/respiro" className="aa-chip justify-self-start"><Glyph name="breath" size={13} /> Respiro guidato</Link>
       </Card>
     </>

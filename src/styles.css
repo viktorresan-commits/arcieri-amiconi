@@ -44,6 +44,8 @@ html {
 }
 
 body {
+  /* niente scorrimento di lato: un elemento che sporge non deve allargare la pagina (anche nelle WebView vecchie) */
+  overflow-x: hidden;
   font-feature-settings: "tnum" 0, "ss01" 1;
   letter-spacing: 0.005em;
 }

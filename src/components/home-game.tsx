@@ -686,7 +686,10 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
           lo sfondo con la maschera veniva composto sopra e dell'arciere restavano solo gli stivali) */}
       </div>
       {/* l'arciere sta fuori dal contenitore sfumato: così le gambe possono scendere oltre il bordo del gioco */}
-      <div className={`pointer-events-none absolute inset-0 z-[2] ${lefty ? "aa-mirror" : ""}`}>
+      {/* contenitore che taglia ai lati ma lascia scendere le gambe: senza, da mancino l'arciere specchiato
+          sporge a destra e allarga tutta la pagina (le WebView vecchie ignorano overflow: clip) */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 bottom-[-60%] z-[2] overflow-hidden">
+      <div className={`pointer-events-none absolute inset-x-0 top-0 h-[62.5%] ${lefty ? "aa-mirror" : ""}`}>
       <div className="aa-game-archer pointer-events-none absolute z-[2]" style={{ left: `${(AV.left / W) * 100}%`, top: `${(AV_TOP / H) * 100}%`, width: `${(AV.width / W) * 100}%`, height: `${(AV_H / H) * 100}%` }}>
         {perks.includes("aura") ? <span aria-hidden className="aa-perk-aura absolute inset-[-6%_8%_2%_4%] rounded-full" /> : null}
         {perks.includes("stendardo") ? (
@@ -706,6 +709,7 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
         <span aria-hidden className="aa-archer-contact pointer-events-none absolute bottom-[1.5%] left-[18%] h-[5%] w-[52%] rounded-[50%]" />
       </div>
       </div>
+      </div>
 
       {pop ? (
         <span key={pop.id} className="aa-game-pop aa-game-score pointer-events-none absolute z-[3] text-3xl font-black text-[#ffe08a]" style={pct(pop.x, pop.y)}>
@@ -717,8 +721,9 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
           (bersaglio, piazzola, vento, distanza), in vetro scuro, riducibile a un bottone */}
       {/* sfumatura: l'intestazione scende morbida nel cielo, senza uno stacco netto */}
       <div aria-hidden className="aa-game-topfade pointer-events-none absolute inset-x-0 z-[3] h-[26%]" style={{ top: crop }} />
-      <div className={`aa-game-hud pointer-events-none absolute inset-x-0 top-0 z-[4] flex items-start justify-between gap-2 p-3 ${tight ? "aa-hud-tight" : ""}`} style={crop ? { top: crop } : undefined}>
-        <div className="min-w-0 text-white">{info}</div>
+      <div className={`aa-game-hud pointer-events-none absolute inset-x-0 top-0 z-[4] flex items-start justify-between gap-2 p-3 ${lefty ? "flex-row-reverse" : ""} ${tight ? "aa-hud-tight" : ""}`} style={crop ? { top: crop } : undefined}>
+        {/* mancino: l'arciere sta a destra, quindi pannello del campo a sinistra e data a destra */}
+        <div className={`min-w-0 text-white ${lefty ? "text-right" : ""}`}>{info}</div>
         <div className="grid w-[8.4rem] shrink-0 justify-items-stretch gap-1.5 text-white">
           {/* record (o punti della partita in corso): coppa d'oro, numero grande, etichetta sotto */}
           <div className="aa-hud aa-hud-record grid grid-cols-[auto_1fr] items-center gap-x-2 rounded-2xl px-2.5 pb-2 pt-1.5">

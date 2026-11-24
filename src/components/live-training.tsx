@@ -35,7 +35,7 @@ import { TargetRead } from "./target-read";
 import { AppIcon, Glyph } from "./icons";
 import { SagomaLab } from "./sagoma-lab";
 import { MediaPick } from "./media-pick";
-import { PoseRead } from "./pose-read";
+import { GestureHub } from "./gesture-hub";
 
 const QUICK: Array<Partial<DraftMeta> & { label: string }> = [
   { label: "Indoor 18 m", distanceM: 18, bowType: "olimpico", face: "wa10", discipline: "indoor", arrowsPerEnd: 3, endsPlanned: 10, blocksPlanned: 1 },
@@ -300,13 +300,7 @@ export function LiveTraining({ sessionId, openHistory = false, start }: { sessio
   if (phase === "gesto") {
     return (
       <div className="grid gap-3">
-        <Card className="grid gap-3">
-          <div>
-            <h1 className="font-display text-3xl">Analisi del gesto</h1>
-            <p className="mt-1 text-sm text-muted">Scegli un video dalla galleria o registralo adesso. Il video resta sul telefono, non viene caricato.</p>
-          </div>
-          <PoseRead />
-        </Card>
+        <GestureHub />
         <Button variant="ghost" onClick={() => setPhase(draft ? "live" : "choose")}>Torna all'allenamento</Button>
       </div>
     );

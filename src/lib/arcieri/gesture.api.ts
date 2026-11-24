@@ -65,7 +65,7 @@ export const saveGesture = createServerFn({ method: "POST" })
     const thumb = String(raw.thumb ?? "");
     if (thumb && (!thumb.startsWith("data:image/jpeg;base64,") || thumb.length > 160_000)) throw new Error("Miniatura non valida o troppo pesante.");
     const data = JSON.stringify(raw.data ?? {});
-    if (data.length > 20_000) throw new Error("Dati dell'analisi troppo grandi.");
+    if (data.length > 80_000) throw new Error("Dati dell'analisi troppo grandi.");
     return {
       title: clip(raw.title, 80),
       kind: raw.kind === "foto" ? "foto" : "video",
