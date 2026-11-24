@@ -9,7 +9,8 @@
  * alzata → trazione → ancoraggio (mano al viso, ferma) → rilascio (scatto del polso) → accompagnamento.
  */
 
-export type Landmark = { x: number; y: number; z?: number; visibility?: number };
+/** zw: profondità in metri dai punti "del mondo" del modello (più affidabile di z per il 3D) */
+export type Landmark = { x: number; y: number; z?: number; visibility?: number; zw?: number };
 export type Hand = "destro" | "mancino";
 
 export type Metrics = {
@@ -560,5 +561,6 @@ function median(list: number[]) {
 
 export function smoothLm(prev: Landmark[] | null, next: Landmark[], alpha = 0.6): Landmark[] {
   if (!prev || prev.length !== next.length) return next;
-  return next.map((p, i) => ({ x: alpha * p.x + (1 - alpha) * prev[i].x, y: alpha * p.y + (1 - alpha) * prev[i].y, z: p.z != null && prev[i].z != null ? alpha * p.z + (1 - alpha) * (prev[i].z as number) : p.z, visibility: p.visibility }));
+  const mix = (a: number | undefined, b: number | undefined) => (a != null && b != null ? alpha * a + (1 - alpha) * b : a);
+  return next.map((p, i) => ({ x: alpha * p.x + (1 - alpha) * prev[i].x, y: alpha * p.y + (1 - alpha) * prev[i].y, z: mix(p.z, prev[i].z), visibility: p.visibility, zw: mix(p.zw, prev[i].zw) }));
 }

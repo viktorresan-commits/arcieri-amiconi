@@ -6,6 +6,7 @@ import { listGestures } from "@/lib/arcieri/gesture.api";
 import { useLocalState } from "@/lib/arcieri/local-store";
 import { BOW_TYPES } from "./gear-icons";
 import { Glyph } from "./icons";
+import { AREA_MUSCLES, renderAreaImages } from "@/lib/arcieri/muscle-areas";
 
 export type ProSave = { total: number; areas: Record<string, number | null>; issues: string[]; m: Partial<ProMetrics>; setup: ProSetup; at: number | null };
 
@@ -48,6 +49,7 @@ export function ProPanel({
     return one ? [one] : [];
   }, [shot, samples, lm, hand, aspect, setup]);
   const m = useMemo(() => proMedian(frames), [frames]);
+  const lastFrame = useMemo(() => (shot && samples.length ? samples.filter((x) => x.lm && x.t >= shot.anchorFrom && x.t <= (shot.release ?? shot.anchorTo)).pop()?.lm ?? null : null), [shot, samples]);
   const steady = useMemo(() => (frames.length >= 3 ? proSteadiness(frames) : null), [frames]);
   const ev = useMemo(() => (m ? evaluate(m, setup, steady) : null), [m, setup, steady]);
 
@@ -92,6 +94,8 @@ export function ProPanel({
           ))}
         </div>
       </div>
+
+      <MuscleAreas lm={lastFrame ?? lm} hand={hand} aspect={aspect} areas={ev.areas} />
 
       {ev.issues.length ? (
         <div className="grid gap-2">
@@ -566,6 +570,58 @@ function GearSizes({ m, setup, gear, aspect, drawIn }: { m: ProMetrics; setup: P
         {g.amoIn != null && setup.bowType !== "compound" ? `Per il tuo allungo l'arco consigliato è ${bowLengthFor(drawIn)}. ` : ""}
         Misure dall'immagine ±4 cm: valgono se arco e freccia sono di lato alla camera.
       </p>
+    </div>
+  );
+}
+
+/**
+ * Zone del corpo con i muscoli che lavorano: per ognuna un'immagine 3D del corpo nella posa del video
+ * con i muscoli interessati in giallo, il punteggio e cosa fa ogni muscolo nel tiro.
+ */
+function MuscleAreas({ lm, hand, aspect, areas }: { lm: Landmark[] | null; hand: Hand; aspect: number; areas: Area[] }) {
+  const [imgs, setImgs] = useState<Record<string, string>>({});
+  const list = areas.filter((a) => a.score != null && AREA_MUSCLES[a.id]).sort((a, b) => (a.score ?? 0) - (b.score ?? 0));
+  const key = list.map((a) => a.id).join(",");
+  useEffect(() => {
+    if (!lm) return;
+    // si ridisegna quando la posa si ferma (non a ogni fotogramma del video)
+    const t = window.setTimeout(() => {
+      try {
+        setImgs(renderAreaImages(lm, aspect, hand, list.map((a) => a.id)));
+      } catch {
+        /* niente WebGL: restano i nomi dei muscoli */
+      }
+    }, 450);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lm, aspect, hand, key]);
+  if (!list.length) return null;
+  return (
+    <div className="grid gap-2">
+      <p className="flex items-center gap-2 text-sm font-semibold"><Glyph name="posture" size={22} className="aa-tone-hi shrink-0" />Zone del corpo e muscoli che lavorano</p>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {list.map((a) => {
+          const info = AREA_MUSCLES[a.id]!;
+          return (
+            <div key={a.id} className="grid overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.03]">
+              {imgs[a.id] ? <img src={imgs[a.id]} alt={`Muscoli di ${a.label}`} className="aspect-[640/520] w-full object-cover" /> : <div className="aspect-[640/520] w-full animate-pulse bg-[#0a2335]" />}
+              <div className="grid gap-1.5 p-3">
+                <div className="flex items-baseline justify-between gap-2">
+                  <b className="text-sm">{a.label}</b>
+                  <b className="tabular-nums" style={{ color: tone(a.score ?? 0) }}>{a.score}</b>
+                </div>
+                <span className="h-1.5 overflow-hidden rounded-full bg-white/[0.07]"><span className="block h-full rounded-full" style={{ width: `${a.score}%`, background: tone(a.score ?? 0) }} /></span>
+                <ul className="grid gap-1">
+                  {info.muscles.map((mu) => (
+                    <li key={mu.name} className="text-xs leading-snug"><b className="text-[#f6d57a]">{mu.name}</b> <span className="text-muted">· {mu.role}</span></li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <p className="text-[0.68rem] text-muted">In giallo i muscoli della zona, sul tuo corpo nella posa del video. I punteggi più bassi sono in alto.</p>
     </div>
   );
 }

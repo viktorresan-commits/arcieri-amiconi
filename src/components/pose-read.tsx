@@ -115,7 +115,10 @@ export function PoseRead() {
   showRef.current = showPose;
   /** come si vede: video con scheletro, sagoma luminosa su fondo scuro, o sagoma sopra il video */
   const [look, setLook] = useState<"scheletro" | "sagoma" | "mista">("scheletro");
-  const [show3d, setShow3d] = useState(false);
+  /** zoom dentro il video: pizzica con due dita, trascina con uno quando è ingrandito */
+  const [zoomV, setZoomV] = useState({ z: 1, x: 0, y: 0 });
+  const zoomRef = useRef(zoomV);
+  const gesture = useRef<{ pts: Map<number, { x: number; y: number }>; pinch: number; moved: number }>({ pts: new Map(), pinch: 0, moved: 0 });
   const lookRef = useRef(look);
   lookRef.current = look;
   const [samples, setSamples] = useState<Sample[]>([]);
@@ -218,8 +221,11 @@ export function PoseRead() {
     if (!ctx) return null;
     ctx.drawImage(source, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
     let poses: Landmark[][] = [];
+    let worlds: { z: number }[][] = [];
     try {
-      poses = marker.detect(canvas).landmarks ?? [];
+      const res = marker.detect(canvas) as { landmarks?: Landmark[][]; worldLandmarks?: { z: number }[][] };
+      poses = res.landmarks ?? [];
+      worlds = res.worldLandmarks ?? [];
     } catch {
       poses = [];
     }
@@ -233,7 +239,8 @@ export function PoseRead() {
       return b ? b.w * b.h : 0;
     };
     const chosen = [...poses].sort((a, b) => area(b) - area(a))[0];
-    const mapped = chosen.map((p) => ({ x: region.x + p.x * region.w, y: region.y + p.y * region.h, z: p.z != null ? p.z * region.w : undefined, visibility: p.visibility }));
+    const world = worlds[poses.indexOf(chosen)];
+    const mapped = chosen.map((p, i) => ({ x: region.x + p.x * region.w, y: region.y + p.y * region.h, z: p.z != null ? p.z * region.w : undefined, visibility: p.visibility, zw: world?.[i]?.z }));
     if (!cropRef.current && followRef.current) autoBox.current = personBox(mapped, 0.45);
     return mapped;
   }
@@ -367,6 +374,8 @@ export function PoseRead() {
 
   function resetMedia() {
     cancel.current = true;
+    zoomRef.current = { z: 1, x: 0, y: 0 };
+    setZoomV({ z: 1, x: 0, y: 0 });
     setError("");
     setSamples([]);
     setNow(null);
@@ -770,6 +779,58 @@ export function PoseRead() {
   const ratio = size.w / size.h;
   const frameStep = 1 / 30;
 
+  function setZoom(z: number, x: number, y: number) {
+    const el = box.current;
+    if (!el) return;
+    const W = el.clientWidth;
+    const H = el.clientHeight;
+    const zz = Math.max(1, Math.min(5, z));
+    const next = { z: zz, x: Math.max(W * (1 - zz), Math.min(0, x)), y: Math.max(H * (1 - zz), Math.min(0, y)) };
+    zoomRef.current = next;
+    setZoomV(next);
+  }
+  /** ingrandisce tenendo fermo il punto sotto le dita */
+  function zoomAt(f: number, cx: number, cy: number) {
+    const { z, x, y } = zoomRef.current;
+    const nz = Math.max(1, Math.min(5, z * f));
+    setZoom(nz, cx - ((cx - x) * nz) / z, cy - ((cy - y) * nz) / z);
+  }
+  const zoomOn = !cropMode && look !== "sagoma";
+  function zoomDown(e: RPointerEvent<HTMLDivElement>) {
+    if (!zoomOn) return;
+    const g = gesture.current;
+    g.pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (g.pts.size === 1) g.moved = 0;
+    if (g.pts.size === 2) {
+      const [a, b] = [...g.pts.values()];
+      g.pinch = Math.hypot(a.x - b.x, a.y - b.y);
+    }
+  }
+  function zoomMove(e: RPointerEvent<HTMLDivElement>) {
+    const g = gesture.current;
+    const prev = g.pts.get(e.pointerId);
+    if (!prev || !zoomOn) return;
+    g.pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const r = e.currentTarget.getBoundingClientRect();
+    if (g.pts.size === 2) {
+      const [a, b] = [...g.pts.values()];
+      const d = Math.hypot(a.x - b.x, a.y - b.y);
+      if (g.pinch > 0) zoomAt(d / g.pinch, (a.x + b.x) / 2 - r.left, (a.y + b.y) / 2 - r.top);
+      g.pinch = d;
+      g.moved += 20;
+    } else if (zoomRef.current.z > 1) {
+      const dx = e.clientX - prev.x;
+      const dy = e.clientY - prev.y;
+      g.moved += Math.abs(dx) + Math.abs(dy);
+      setZoom(zoomRef.current.z, zoomRef.current.x + dx, zoomRef.current.y + dy);
+    }
+  }
+  function zoomUp(e: RPointerEvent<HTMLDivElement>) {
+    const g = gesture.current;
+    g.pts.delete(e.pointerId);
+    if (g.pts.size < 2) g.pinch = 0;
+  }
+
   return (
     <div className="grid gap-3">
       <p className="text-sm text-muted">Video o foto del tiro, anche dalla galleria e anche a mezzo busto. Meglio di fronte all'arciere, da 3–6 metri, con la freccia di traverso nell'inquadratura.</p>
@@ -819,8 +880,20 @@ export function PoseRead() {
           <div
             ref={box}
             className="relative mx-auto overflow-hidden rounded-2xl bg-black"
-            style={{ aspectRatio: `${size.w} / ${size.h}`, width: `min(100%, calc(70vh * ${ratio.toFixed(4)}))` }}
+            style={{ aspectRatio: `${size.w} / ${size.h}`, width: `min(100%, calc(70vh * ${ratio.toFixed(4)}))`, touchAction: zoomV.z > 1 ? "none" : "pan-y" }}
+            onPointerDown={zoomDown}
+            onPointerMove={zoomMove}
+            onPointerUp={zoomUp}
+            onPointerCancel={zoomUp}
+            onClickCapture={(e) => {
+              // dopo aver trascinato o pizzicato non parte il video
+              if (gesture.current.moved > 8) {
+                e.stopPropagation();
+                gesture.current.moved = 0;
+              }
+            }}
           >
+            <div className="absolute inset-0 origin-top-left" style={{ transform: `translate(${zoomV.x}px, ${zoomV.y}px) scale(${zoomV.z})` }}>
             {kind === "video" ? (
               <video ref={videoRef} src={src} playsInline muted preload="auto" className="absolute inset-0 h-full w-full object-contain" onClick={toggle} />
             ) : (
@@ -834,24 +907,35 @@ export function PoseRead() {
               onPointerUp={cropUp}
               onPointerCancel={() => { cropStart.current = null; draftRef.current = null; paintOverlay(lastLm.current); }}
             />
-            <div className="absolute right-2 top-2 flex gap-1 rounded-full bg-[#14181c]/75 p-1 text-xs font-semibold text-[#f4f1ea]">
-              {([["scheletro", "Scheletro"], ["sagoma", "Sagoma"], ["mista", "Mista"]] as const).map(([k, label]) => (
+            </div>
+            {/* Sagoma: il corpo in 3D (pelle, muscoli, scheletro) al posto del video, nello stesso riquadro */}
+            {look === "sagoma" ? (
+              <div className="absolute inset-0 z-[1]">
+                <Anatomy3D lmRef={lastLm} aspect={size.w / Math.max(1, size.h)} hand={hand} inBox className="h-full" />
+              </div>
+            ) : null}
+            {zoomOn && kind !== "none" ? (
+              <div className="absolute bottom-2 left-2 z-[2] flex items-center gap-1 rounded-full bg-[#14181c]/75 p-1 text-xs font-semibold text-[#f4f1ea]">
+                <button type="button" aria-label="Rimpicciolisci" onClick={() => { const el = box.current; if (el) zoomAt(1 / 1.5, el.clientWidth / 2, el.clientHeight / 2); }} className="grid h-8 w-8 place-items-center rounded-full text-base">−</button>
+                <button type="button" aria-label="Zoom normale" onClick={() => setZoom(1, 0, 0)} className="min-h-8 rounded-full px-1.5 tabular-nums">{zoomV.z.toFixed(1).replace(".", ",")}×</button>
+                <button type="button" aria-label="Ingrandisci" onClick={() => { const el = box.current; if (el) zoomAt(1.5, el.clientWidth / 2, el.clientHeight / 2); }} className="grid h-8 w-8 place-items-center rounded-full text-base">+</button>
+              </div>
+            ) : null}
+            <div className="absolute right-2 top-2 z-[2] flex gap-1 rounded-full bg-[#14181c]/75 p-1 text-xs font-semibold text-[#f4f1ea]">
+              {([["scheletro", "Scheletro"], ["sagoma", "Sagoma 3D"], ["mista", "Mista"]] as const).map(([k, label]) => (
                 <button key={k} type="button" onClick={() => { setLook(k); if (k === "scheletro") setShowPose(true); }} className={`min-h-8 rounded-full px-2.5 ${look === k ? "bg-[#3ee08f] text-[#04140c]" : ""}`}>{label}</button>
               ))}
-              <button type="button" aria-pressed={show3d} onClick={() => setShow3d((v) => !v)} className={`min-h-8 rounded-full px-2.5 ${show3d ? "bg-[#7cf0a8] text-[#04140c]" : ""}`}>3D</button>
               {look === "scheletro" ? (
                 <button type="button" onClick={() => setShowPose((v) => !v)} className="min-h-8 rounded-full px-2" aria-label="Mostra o nascondi lo scheletro"><Glyph name="eye" size={15} className={showPose ? "" : "opacity-40"} /></button>
               ) : null}
             </div>
             {progress != null ? (
-              <div className="absolute inset-x-0 bottom-0 bg-[#14181c]/80 p-2 text-xs text-[#f4f1ea]">
+              <div className="absolute inset-x-0 bottom-0 z-[3] bg-[#14181c]/80 p-2 text-xs text-[#f4f1ea]">
                 {recording ? "Registro il video…" : "Analizzo il video…"} {Math.round(progress * 100)}%
                 <div className="mt-1 h-1.5 rounded-full bg-white/20"><div className="h-1.5 rounded-full bg-[#e6b325]" style={{ width: `${progress * 100}%` }} /></div>
               </div>
             ) : null}
           </div>
-
-          {show3d ? <Anatomy3D lmRef={lastLm} aspect={size.w / Math.max(1, size.h)} hand={hand} /> : null}
 
           {kind === "video" ? (
             <div className="grid gap-2">
@@ -1514,7 +1598,8 @@ function lmAt(samples: Sample[], t: number): Landmark[] | null {
   const b = hi >= 0 ? samples[hi] : null;
   if (a && b && a.lm && b.lm && b.t - a.t < 0.6) {
     const f = (t - a.t) / Math.max(1e-6, b.t - a.t);
-    return a.lm.map((p, i) => ({ x: p.x + (b.lm![i].x - p.x) * f, y: p.y + (b.lm![i].y - p.y) * f, visibility: Math.min(p.visibility ?? 1, b.lm![i].visibility ?? 1) }));
+    const mix = (u: number | undefined, v: number | undefined) => (u != null && v != null ? u + (v - u) * f : u);
+    return a.lm.map((p, i) => ({ x: p.x + (b.lm![i].x - p.x) * f, y: p.y + (b.lm![i].y - p.y) * f, z: mix(p.z, b.lm![i].z), zw: mix(p.zw, b.lm![i].zw), visibility: Math.min(p.visibility ?? 1, b.lm![i].visibility ?? 1) }));
   }
   if (a?.lm && t - a.t < 0.4) return a.lm;
   if (b?.lm && b.t - t < 0.4) return b.lm;

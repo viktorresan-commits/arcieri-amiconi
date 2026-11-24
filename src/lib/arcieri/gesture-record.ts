@@ -7,7 +7,7 @@ import { metricsOf, type Gear, type Hand, type Landmark, type Metrics, type Samp
 import { archeryKit, type KitNums } from "./pose-kit";
 import { evaluate, proMedian, proMetrics, proSteadiness, type ProMetrics, type ProSetup } from "./pose-pro";
 
-export type PackedLm = number[]; // x, y, z, visibilità per ognuno dei 33 punti
+export type PackedLm = number[]; // x, y, z, visibilità, profondità in metri (zw) per ognuno dei 33 punti (i vecchi: 4 valori)
 
 export type GestureRecord = {
   v: 2;
@@ -39,16 +39,20 @@ export function packLm(lm: Landmark[] | null | undefined): PackedLm | null {
   if (!lm || lm.length < 25) return null;
   const out: number[] = [];
   for (let i = 0; i < 33; i++) {
-    const p = lm[i] ?? { x: 0, y: 0, z: 0, visibility: 0 };
-    out.push(r3(p.x), r3(p.y), r3(p.z ?? 0), Math.round((p.visibility ?? 1) * 100) / 100);
+    const p: Landmark = lm[i] ?? { x: 0, y: 0, z: 0, visibility: 0 };
+    out.push(r3(p.x), r3(p.y), r3(p.z ?? 0), Math.round((p.visibility ?? 1) * 100) / 100, p.zw == null ? 9 : r3(p.zw));
   }
   return out;
 }
 
 export function unpackLm(a: PackedLm | null | undefined): Landmark[] | null {
   if (!Array.isArray(a) || a.length < 33 * 4) return null;
+  const k = a.length >= 33 * 5 ? 5 : 4;
   const out: Landmark[] = [];
-  for (let i = 0; i < 33; i++) out.push({ x: a[i * 4], y: a[i * 4 + 1], z: a[i * 4 + 2], visibility: a[i * 4 + 3] });
+  for (let i = 0; i < 33; i++) {
+    const zw = k === 5 && a[i * k + 4] !== 9 ? a[i * k + 4] : undefined;
+    out.push({ x: a[i * k], y: a[i * k + 1], z: a[i * k + 2], visibility: a[i * k + 3], zw });
+  }
   return out;
 }
 

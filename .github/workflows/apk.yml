@@ -49,6 +49,12 @@ jobs:
         run: |
           npx cap add android
           npx capacitor-assets generate --android --iconBackgroundColor '#0C1210' --iconBackgroundColorDark '#0C1210' --splashBackgroundColor '#0C1210' --splashBackgroundColorDark '#0C1210'
+          # testo del telefono ingrandito (Realme/Oppo con caratteri grandi): l'app lo segue fino al 115%,
+          # oltre le pagine non entrano più nello schermo
+          MA=$(find android/app/src/main/java -name MainActivity.java | head -1)
+          PKG=$(grep -m1 '^package ' "$MA")
+          printf '%s\n\nimport android.webkit.WebSettings;\nimport com.getcapacitor.BridgeActivity;\n\npublic class MainActivity extends BridgeActivity {\n    @Override\n    public void onResume() {\n        super.onResume();\n        try {\n            WebSettings s = getBridge().getWebView().getSettings();\n            if (s.getTextZoom() > 115) s.setTextZoom(115);\n        } catch (Exception e) {\n            // nessuna WebView pronta: si riprova al prossimo onResume\n        }\n    }\n}\n' "$PKG" > "$MA"
+          grep -q setTextZoom "$MA"
           # fotocamera per "Scatta foto" e "Registra video"
           sed -i 's#<uses-permission android:name="android.permission.INTERNET" />#&\n    <uses-permission android:name="android.permission.CAMERA" />#' android/app/src/main/AndroidManifest.xml
           # ritorno dal login Google fatto nel browser: arcieriamiconi://accesso?ott=…

@@ -496,6 +496,13 @@ aside.aa-side button {
 }
 
 @layer base {
+  /* Le griglie a una colonna non si allargano oltre lo schermo: con il testo ingrandito
+     (impostazione del telefono, es. Realme/Oppo) una riga che non va a capo allargava la colonna
+     e con lei tutta la pagina. minmax(0, 1fr) tiene la colonna larga quanto lo spazio. */
+  .grid:not([class^="grid-cols-"]):not([class*=" grid-cols-"]):not([class*="grid-flow-col"]) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   button:not(:disabled),
   [role="button"]:not(:disabled) {
     cursor: pointer;
