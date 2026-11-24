@@ -8,7 +8,7 @@
  */
 import { v3, type V3 } from "./anatomy-model";
 import type { Hand } from "./pose-analysis";
-import { sides } from "./pose-analysis";
+import { FACE0, FACE_IDS, sides } from "./pose-analysis";
 
 export type BodyBatch = { layer: "skin" | "bone" | "muscle"; vertices: number; indices: number; vOffset: number; iOffset: number };
 export type BodyMeta = {
@@ -27,14 +27,17 @@ export type BodyData = { meta: BodyMeta; buf: ArrayBuffer };
 
 export const BODY_CREDIT = "Anatomia: BodyParts3D © DBCLS (CC BY 4.0) · Z-Anatomy (CC BY-SA 4.0)";
 
-let loading: Promise<BodyData | null> | null = null;
+export type BodyLevel = "leggero" | "pieno";
+const FILES: Record<BodyLevel, string> = { leggero: "corpo-leggero", pieno: "corpo" };
+const loading: Partial<Record<BodyLevel, Promise<BodyData | null>>> = {};
+const loaded: Partial<Record<BodyLevel, BodyData>> = {};
 
 /** il file compresso pesa un terzo in meno: si apre nel telefono; senza questa funzione si scarica quello intero */
-async function fetchBody(): Promise<ArrayBuffer> {
+async function fetchBody(name: string): Promise<ArrayBuffer> {
   const DS = (globalThis as { DecompressionStream?: new (f: string) => TransformStream<Uint8Array, Uint8Array> }).DecompressionStream;
   if (DS) {
     try {
-      const r = await fetch("/anatomia/corpo.bin.gz");
+      const r = await fetch(`/anatomia/${name}.bin.gz`);
       if (r.ok) {
         const raw = await r.arrayBuffer();
         const b = new Uint8Array(raw, 0, 2);
@@ -46,35 +49,38 @@ async function fetchBody(): Promise<ArrayBuffer> {
       /* si prova con quello intero */
     }
   }
-  const r = await fetch("/anatomia/corpo.bin");
+  const r = await fetch(`/anatomia/${name}.bin`);
   if (!r.ok) throw new Error("corpo");
   return r.arrayBuffer();
 }
-let loaded: BodyData | null = null;
 
-/** scarica il corpo una volta sola (circa 4,6 MB compressi); null se non si riesce */
-export function loadBody(): Promise<BodyData | null> {
-  if (loaded) return Promise.resolve(loaded);
-  if (!loading) {
-    loading = (async () => {
+/**
+ * Scarica il corpo una volta sola. "leggero" (circa 1,5 MB) si usa mentre il corpo si muove,
+ * "pieno" (circa 4,7 MB) quando è fermo. null se non si riesce.
+ */
+export function loadBody(level: BodyLevel = "pieno"): Promise<BodyData | null> {
+  const done = loaded[level];
+  if (done) return Promise.resolve(done);
+  if (!loading[level]) {
+    loading[level] = (async () => {
       try {
-        const m = await fetch("/anatomia/corpo.json");
+        const m = await fetch(`/anatomia/${FILES[level]}.json`);
         if (!m.ok) return null;
         const meta = (await m.json()) as BodyMeta;
-        const buf = await fetchBody();
+        const buf = await fetchBody(FILES[level]);
         if (buf.byteLength < meta.bytes) return null;
-        loaded = { meta, buf };
-        return loaded;
+        loaded[level] = { meta, buf };
+        return loaded[level] ?? null;
       } catch {
-        loading = null;
+        delete loading[level];
         return null;
       }
     })();
   }
-  return loading;
+  return loading[level] ?? Promise.resolve(null);
 }
-export function bodyIfLoaded() {
-  return loaded;
+export function bodyIfLoaded(level: BodyLevel = "pieno") {
+  return loaded[level] ?? null;
 }
 
 const { add, sub, mul, dot, cross, len, norm, lerp } = v3;
@@ -186,7 +192,30 @@ export function bodyMatrices(meta: BodyMeta, J: Record<number, V3>): Float32Arra
       Fc[`clav_${s}`] = frame(nCur, sh, up, [0, 0, 1]);
     }
   }
+  // testa: con i punti del viso si gira come nel video (mento -> fronte, linea degli occhi)
+  const fi = (id: number) => FACE0 + FACE_IDS.indexOf(id);
+  const chin = J[fi(152)], brow = J[fi(10)], eyeL = J[fi(263)], eyeR = J[fi(33)];
+  const r0 = rest("mento"), r1 = rest("fronte");
+  if (chin && brow && eyeL && eyeR && r0 && r1) {
+    Fr.testa = frame(r0, r1, [1, 0, 0], [0, 0, 1]);
+    Fc.testa = frame(chin, brow, sub(eyeL, eyeR), [0, 0, 1]);
+  }
+  // dita (quattro insieme) e pollice: con i 21 punti della mano si piegano; senza, seguono la mano
+  for (const s of ["L", "R"] as const) {
+    const base = s === "L" ? 33 : 54;
+    const has = hasHand(base) && J[base + 8] && J[base + 20] && J[base + 2] && J[base + 4];
+    const d0 = rest(`dita0_${s}`), d1 = rest(`dita1_${s}`), p0 = rest(`pol0_${s}`), p1 = rest(`pol1_${s}`);
+    if (!has || !d0 || !d1 || !p0 || !p1) continue;
+    const avg = (ks: number[]) => mul(ks.reduce((acc, k) => add(acc, J[base + k]), [0, 0, 0] as V3), 1 / ks.length);
+    const palmR = cross(sub(rest(s === "L" ? 19 : 20) ?? d0, rest(s === "L" ? 15 : 16) ?? d0), sub(rest(s === "L" ? 17 : 18) ?? d0, rest(s === "L" ? 15 : 16) ?? d0));
+    const palmC = cross(sub(J[base + 5], J[base]), sub(J[base + 17], J[base]));
+    Fr[`dita_${s}`] = frame(d0, d1, palmR, [0, 0, 1]);
+    Fc[`dita_${s}`] = frame(avg([5, 9, 13, 17]), avg([8, 12, 16, 20]), palmC, [0, 0, 1]);
+    Fr[`pollice_${s}`] = frame(p0, p1, palmR, [0, 0, 1]);
+    Fc[`pollice_${s}`] = frame(J[base + 2], J[base + 4], palmC, [0, 0, 1]);
+  }
   const out = new Float32Array(meta.segments.length * 16);
+  const idx = (name: string) => meta.segments.indexOf(name);
   meta.segments.forEach((name, i) => {
     const r = Fr[name];
     const c = Fc[name];
@@ -196,6 +225,14 @@ export function bodyMatrices(meta: BodyMeta, J: Record<number, V3>): Float32Arra
     }
     segMatrix(r, c, 1, out, i * 16);
   });
+  // dita senza punti della mano: stessa trasformazione della mano
+  for (const s of ["L", "R"] as const) {
+    const m = idx(`mano_${s}`);
+    for (const f of [`dita_${s}`, `pollice_${s}`]) {
+      const k = idx(f);
+      if (k >= 0 && m >= 0 && !Fc[f]) out.copyWithin(k * 16, m * 16, m * 16 + 16);
+    }
+  }
   return out;
 }
 

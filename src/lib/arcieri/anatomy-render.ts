@@ -3,7 +3,7 @@
  * Usato dalla vista 3D dell'analisi e dalle immagini dei muscoli per le zone del corpo.
  */
 import { v3, type Model, type Part, type V3 } from "./anatomy-model";
-import { bodyMatrices, groupValues, type BodyBatch, type BodyData, type BodyMeta } from "./anatomy-body";
+import { bodyMatrices, groupValues, type BodyBatch, type BodyData, type BodyLevel, type BodyMeta } from "./anatomy-body";
 
 export type Layers = { pelle: boolean; muscolo: boolean; osso: boolean };
 
@@ -58,7 +58,7 @@ void main(){
 /* corpo anatomico vero: ogni vertice segue due segmenti (deformazione sulla scheda grafica) */
 const BVS = `
 attribute vec3 aP; attribute vec3 aN; attribute vec2 aJ; attribute vec4 aM; attribute float aT;
-uniform mat4 uVP; uniform mat4 uSeg[17]; uniform vec3 uLo; uniform vec3 uHi;
+uniform mat4 uVP; uniform mat4 uSeg[21]; uniform vec3 uLo; uniform vec3 uHi;
 uniform vec4 uAct[16]; uniform vec4 uFoc[16];
 varying vec3 vW; varying vec3 vN; varying vec2 vF; varying float vAct; varying float vFoc; varying float vTend; varying float vStr;
 float pick(vec4 v, int k){ return k == 0 ? v.x : k == 1 ? v.y : k == 2 ? v.z : v.w; }
@@ -270,7 +270,10 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     uAlpha: gl.getUniformLocation(bprog, "uAlpha"),
     uDim: gl.getUniformLocation(bprog, "uDim"),
   };
-  let body: { meta: BodyMeta; batches: { layer: BodyBatch["layer"]; vb: WebGLBuffer; ib: WebGLBuffer; count: number }[] } | null = null;
+  type GpuBody = { meta: BodyMeta; batches: { layer: BodyBatch["layer"]; vb: WebGLBuffer; ib: WebGLBuffer; count: number }[] };
+  const bodies: Partial<Record<BodyLevel, GpuBody>> = {};
+  /** il corpo usato per il disegno in corso */
+  let body: GpuBody | null = null;
   const bodyAttribs = [bl.aP, bl.aN, bl.aJ, bl.aM, bl.aT];
   const drawBodyLayer = (layer: BodyBatch["layer"], code: number, alpha: number) => {
     if (!body) return;
@@ -378,8 +381,8 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
   };
   return {
     /** carica il corpo vero nella scheda grafica; da quel momento sostituisce la sagoma semplice */
-    setBody(data: BodyData) {
-      if (!bodyOk || body) return;
+    setBody(data: BodyData, level: BodyLevel = "pieno") {
+      if (!bodyOk || bodies[level]) return;
       const batches = data.meta.batches.map((b) => {
         const vb = gl.createBuffer()!;
         gl.bindBuffer(gl.ARRAY_BUFFER, vb);
@@ -389,11 +392,11 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
         gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(data.buf, b.iOffset, b.indices), gl.STATIC_DRAW);
         return { layer: b.layer, vb, ib, count: b.indices };
       });
-      body = { meta: data.meta, batches };
+      bodies[level] = { meta: data.meta, batches };
       bound = "";
     },
     hasBody() {
-      return Boolean(body);
+      return Boolean(bodies.pieno || bodies.leggero);
     },
     clear(W: number, H: number) {
       gl.viewport(0, 0, W, H);
@@ -401,7 +404,9 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     },
     /** focus: id dei muscoli da mettere in evidenza (gli altri si spengono) */
-    draw(model: Model, VP: Float32Array, eye: V3, time: number, L: Layers, focus?: Set<string> | null) {
+    draw(model: Model, VP: Float32Array, eye: V3, time: number, L: Layers, focus?: Set<string> | null, fast = false) {
+      // in movimento il corpo leggero (scorre senza scatti), fermo quello pieno
+      body = (fast ? (bodies.leggero ?? bodies.pieno) : (bodies.pieno ?? bodies.leggero)) ?? null;
       if (body && model.J && model.hand) {
         drawBody(model, VP, eye, L, focus);
         return;

@@ -4,7 +4,7 @@
  * x verso destra dell'immagine, z verso la fotocamera. Le parti sono ellissoidi e anelli: il
  * renderer (anatomy-3d) disegna ogni parte con una matrice.
  */
-import { metricsOf, sides, type Hand, type Landmark } from "./pose-analysis";
+import { FACE0, FACE_IDS, metricsOf, sides, type Gear, type Hand, type Landmark } from "./pose-analysis";
 import { archeryKit } from "./pose-kit";
 
 export type V3 = [number, number, number];
@@ -137,6 +137,18 @@ export function bodyPoints(lm: Landmark[], aspect: number): Record<number, V3> |
       }
     }
   }
+  // viso (58 punti): servono a girare la testa come nel video (mento, fronte, occhi)
+  if (lm.length >= FACE0 + FACE_IDS.length && vis(lm[FACE0]) >= 0.5) {
+    const earZ = (out[7][2] + out[8][2]) / 2;
+    let zm = 0;
+    for (let k = 0; k < FACE_IDS.length; k++) zm += lm[FACE0 + k].z ?? 0;
+    zm /= FACE_IDS.length;
+    for (let k = 0; k < FACE_IDS.length; k++) {
+      const q = XY(FACE0 + k);
+      q[2] = earZ + 0.07 - (((lm[FACE0 + k].z ?? 0) - zm) * aspect) / s;
+      out[FACE0 + k] = q;
+    }
+  }
   if (!hipsOk) {
     out[23] = add(out[11], [0.02, -0.5, 0]);
     out[24] = add(out[12], [-0.02, -0.5, 0]);
@@ -167,7 +179,7 @@ const muscleCol = (a: number): V3 => {
   return [0.72 + 0.28 * t, 0.27 + 0.55 * t, 0.22 + 0.06 * t];
 };
 
-export function buildModel(lm: Landmark[], aspect: number, hand: Hand): Model | null {
+export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gear | null = null): Model | null {
   const J = bodyPoints(lm, aspect);
   if (!J) return null;
   const S = sides(hand);
@@ -459,8 +471,22 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand): Model | 
   const grip = lerp(bow.wr, bowIdx, 0.55);
   const nock = lerp(drw.wr, drwIdx, 0.6);
   const u = norm(sub(grip, nock));
-  const n = perp(u, [0, 1, 0]);
-  const half = 0.8;
+  // punto del fotogramma (0..1) -> metri, alla profondità di un punto del corpo vicino
+  const bowWrI = S.bow[2];
+  const sImg = Math.abs(lm[23].y - lm[11].y) / Math.max(1e-6, Math.abs(J[11][1] - J[23][1]));
+  const fromImage = (x: number, y: number, ref: V3, refI: number): V3 => [ref[0] + ((x - lm[refI].x) * aspect) / sImg, ref[1] - (y - lm[refI].y) / sImg, ref[2]];
+  let n = perp(u, [0, 1, 0]);
+  let half = 0.8;
+  // arco trovato nel video (a video fermo): inclinazione e lunghezza vere
+  if (gear?.bow && sImg > 0) {
+    const a = fromImage(gear.bow.x1, gear.bow.y1, bow.wr, bowWrI);
+    const b = fromImage(gear.bow.x2, gear.bow.y2, bow.wr, bowWrI);
+    let d = sub(a, b);
+    if (d[1] < 0) d = mul(d, -1);
+    const k = perp(u, norm(d));
+    if (len(k) > 0.5) n = k;
+    if (gear.bow.measured) half = Math.max(0.55, Math.min(0.9, len(sub(a, b)) / 2));
+  }
   const curve = (s: number): V3 => add(add(grip, mul(n, half * s)), mul(u, -0.11 * s * s));
   const steps = 44;
   for (let i = 0; i < steps; i++) {
@@ -474,13 +500,21 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand): Model | 
   const tipD = curve(-1);
   push("sphere", seg(tipU, nock, 0.0028, 0.0028, 1.0), [0.95, 0.95, 0.9], 3, 0.9, "arco");
   push("sphere", seg(tipD, nock, 0.0028, 0.0028, 1.0), [0.95, 0.95, 0.9], 3, 0.9, "arco");
-  const arrowTip = add(grip, mul(u, 0.08));
+  let arrowTip = add(grip, mul(u, 0.08));
+  // freccia trovata nel video: la punta è dove finisce davvero
+  if (gear?.arrow?.measured && sImg > 0) {
+    const a = fromImage(gear.arrow.x1, gear.arrow.y1, bow.wr, bowWrI);
+    const b = fromImage(gear.arrow.x2, gear.arrow.y2, bow.wr, bowWrI);
+    const tip = len(sub(a, nock)) > len(sub(b, nock)) ? a : b;
+    const along = dot(sub(tip, nock), u);
+    if (along > len(sub(grip, nock)) * 0.8 && along < len(sub(grip, nock)) + 0.4) arrowTip = add(nock, mul(u, along));
+  }
   push("sphere", seg(nock, arrowTip, 0.0045, 0.0045, 1.0), [0.98, 0.82, 0.35], 3, 1, "arco");
   push("sphere", seg(nock, add(nock, mul(u, 0.09)), 0.012, 0.003, 1.0, n), [0.95, 0.35, 0.3], 3, 0.9, "arco"); // alette
 
   // ---------- quote ----------
   const m = metricsOf(lm, hand, aspect, 1000);
-  const kit = archeryKit(lm, aspect * 1000, 1000, hand, null)?.nums ?? null;
+  const kit = archeryKit(lm, aspect * 1000, 1000, hand, gear)?.nums ?? null;
   const kneeM = lerp(J[25], J[26], 0.5);
   const eyeL = J[2], eyeR = J[5];
   const headTilt = eyeL && eyeR ? Math.abs((Math.atan2(eyeR[1] - eyeL[1], Math.hypot(eyeR[0] - eyeL[0], eyeR[2] - eyeL[2])) * 180) / Math.PI) : null;

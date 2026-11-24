@@ -21,7 +21,7 @@ EYE = re.compile(r"(superior|inferior|lateral|medial) rectus$|(superior|inferior
 
 # ---------- segmenti ----------
 SEGS = ['bacino', 'torace', 'testa', 'clav_L', 'omero_L', 'avambr_L', 'mano_L', 'clav_R', 'omero_R', 'avambr_R', 'mano_R',
-        'coscia_L', 'gamba_L', 'piede_L', 'coscia_R', 'gamba_R', 'piede_R']
+        'coscia_L', 'gamba_L', 'piede_L', 'coscia_R', 'gamba_R', 'piede_R', 'dita_L', 'pollice_L', 'dita_R', 'pollice_R']
 SI = {s: i for i, s in enumerate(SEGS)}
 
 def side_of(name):
@@ -34,6 +34,8 @@ def bone_segment(name):
     n = name.lower(); s = side_of(name)
     if re.search(r"humerus", n): return f'omero_{s}'
     if re.search(r"radius|ulna", n): return f'avambr_{s}'
+    if re.search(r"phalanx of (left|right) thumb", n): return f'pollice_{s}'
+    if re.search(r"phalanx of (left|right) (index|middle|ring|little) finger", n): return f'dita_{s}'
     if re.search(r"scaphoid|lunate|triquetral|pisiform|trapezium|trapezoid|capitate|hamate|metacarpal|finger|thumb", n): return f'mano_{s}'
     if re.search(r"femur|patella", n): return f'coscia_{s}'
     if re.search(r"tibia|fibula", n): return f'gamba_{s}'
@@ -54,7 +56,7 @@ def muscle_candidates(name):
     if re.search(r"carpi|digitorum superficialis|digitorum profundus|pronator|supinator|palmaris|brachioradialis|extensor digitorum$|extensor digiti minimi$|extensor indicis|pollicis longus|pollicis brevis$|abductor pollicis longus|extensor pollicis", n) and 'foot' not in n:
         return seg('omero', 'avambr', 'mano')
     if re.search(r"foot|hallucis|plantar", n): return seg('gamba', 'piede')
-    if re.search(r"hand|pollicis|opponens", n): return seg('avambr', 'mano')
+    if re.search(r"hand|pollicis|opponens", n): return seg('avambr', 'mano', 'dita', 'pollice')
     if re.search(r"deltoid|supraspinatus|infraspinatus|teres|subscapularis", n): return seg('clav', 'omero')
     if re.search(r"pectoralis major", n): return seg('torace', 'clav', 'omero')
     if re.search(r"latissimus", n): return seg('torace', 'bacino', 'omero')
@@ -137,6 +139,11 @@ for s, sg, (sh, el, wr, pk, ix, th, hp, kn, an, he, to, ear) in [('Left', 1, (11
     bt = [x for x in parts if re.search(rf'distal phalanx of {s.lower()} (big|second) toe', x['name'], re.I)]
     rest[to] = np.vstack([b['full'] for b in bt]).mean(0)
     tb = by(f'{s} temporal bone')['full']; rest[ear] = tb[np.abs(tb[:, 0]) > np.abs(tb[:, 0]).max() - 0.012].mean(0)
+    sd = s[0]
+    rest[f'dita0_{sd}'] = np.mean([bot(by(f'{s} {o} metacarpal bone')['full'], 0.008) for o in ('second', 'third', 'fourth', 'fifth')], 0)
+    rest[f'dita1_{sd}'] = np.mean([bot(by(f'Distal phalanx of {s.lower()} {f} finger')['full'], 0.004) for f in ('index', 'middle', 'ring', 'little')], 0)
+    rest[f'pol0_{sd}'] = rest[th]
+    rest[f'pol1_{sd}'] = bot(by(f'Distal phalanx of {s.lower()} thumb')['full'], 0.004)
 skin = by('Skin')
 # inguine da manichino: l'app è usata anche da ragazzi, la pelle trasparente non mostra i genitali
 def mannequin(S):
@@ -155,6 +162,13 @@ mannequin(skin)
 SP = skin['P']
 head = SP[SP[:, 1] > 1.5]
 rest[0] = head[np.argmax(head[:, 2])]
+# mento e fronte (punti 152 e 10 del viso)
+mid = SP[np.abs(SP[:, 0]) < 0.012]
+cz = mid[(mid[:, 1] > 1.40) & (mid[:, 1] < 1.53)]
+cz = cz[cz[:, 2] > cz[:, 2].max() - 0.025]
+rest['mento'] = cz[np.argmin(cz[:, 1])]
+fz = mid[(mid[:, 1] > 1.64) & (mid[:, 1] < 1.72)]
+rest['fronte'] = fz[np.argmax(fz[:, 2])]
 mid_m = [by('Manubrium')['full']] if any(x['name'] == 'Manubrium' for x in parts) else []
 notch = top(mid_m[0], 0.01) if mid_m else (rest[11] + rest[12]) / 2
 rest['notch'] = notch
@@ -394,58 +408,80 @@ for x in parts:
         x['g'] = groups.index(g)
 
 # ---------- scrittura ----------
-LAY = {'skin': 0, 'bone': 1, 'muscle': 2}
-allP = np.vstack([x['P'] for x in parts])
-lo = allP.min(0) - 0.001; hi = allP.max(0) + 0.001
-batches = []
-blob = bytearray()
-def align4():
-    while len(blob) % 4: blob.append(0)
-for kind in ('bone', 'muscle', 'skin'):
-    group = [x for x in parts if x['kind'] == kind]
-    cur, cnt = [], 0
-    chunks = []
-    for x in group:
-        if cnt + len(x['P']) > 65000 and cur: chunks.append(cur); cur, cnt = [], 0
-        cur.append(x); cnt += len(x['P'])
-    if cur: chunks.append(cur)
-    for ch in chunks:
-        P = np.vstack([x['P'] for x in ch]); N = np.vstack([x['N'] for x in ch])
-        off = np.cumsum([0] + [len(x['P']) for x in ch[:-1]])
-        I = np.vstack([x['I'] + o for x, o in zip(ch, off)])
-        J = np.vstack([x['J'] for x in ch]); W = np.concatenate([x['W'] for x in ch])
-        T = np.concatenate([x['T'] for x in ch]); Aa = np.concatenate([x['A'] for x in ch]); TD = np.concatenate([x['TD'] for x in ch])
-        Gp = np.concatenate([np.full(len(x['P']), x['g']) for x in ch])
-        q = np.round((P - lo) / (hi - lo) * 65535).astype(np.uint16)
-        nq = np.round(np.clip(N, -1, 1) * 127).astype(np.int8)
-        # vertice: 6 posizione + 4 normale (+1 vuoto) + 2 segmenti + 1 peso + 1 gruppo + 1 fibra + 1 giro + 1 tendine + 1 vuoto = 18 -> 20
-        # vertice da 16 byte: posizione 6, normale 3, segmenti 2, peso, gruppo, fibra, giro, tendine
-        V = np.zeros((len(P), 16), np.uint8)
-        V[:, 0:6] = q.view(np.uint8).reshape(-1, 6)
-        V[:, 6:9] = nq.view(np.uint8).reshape(-1, 3)
-        V[:, 9:11] = J
-        V[:, 11] = np.round(W * 255)
-        V[:, 12] = Gp
-        V[:, 13] = np.round(T * 255); V[:, 14] = np.round(Aa * 255); V[:, 15] = np.round(TD * 255)
-        align4(); vo = len(blob); blob.extend(V.tobytes())
-        align4(); io = len(blob); blob.extend(I.astype(np.uint16).tobytes())
-        batches.append(dict(layer=kind, vertices=int(len(P)), indices=int(I.size), vOffset=vo, iOffset=io))
-        print(kind, 'blocco', len(P), 'vertici', len(I), 'triangoli')
+def write(parts, OUT, lo=None, hi=None):
+    LAY = {'skin': 0, 'bone': 1, 'muscle': 2}
+    allP = np.vstack([x['P'] for x in parts])
+    if lo is None:
+        lo = allP.min(0) - 0.001; hi = allP.max(0) + 0.001
+    batches = []
+    blob = bytearray()
+    def align4():
+        while len(blob) % 4: blob.append(0)
+    for kind in ('bone', 'muscle', 'skin'):
+        group = [x for x in parts if x['kind'] == kind]
+        cur, cnt = [], 0
+        chunks = []
+        for x in group:
+            if cnt + len(x['P']) > 65000 and cur: chunks.append(cur); cur, cnt = [], 0
+            cur.append(x); cnt += len(x['P'])
+        if cur: chunks.append(cur)
+        for ch in chunks:
+            P = np.vstack([x['P'] for x in ch]); N = np.vstack([x['N'] for x in ch])
+            off = np.cumsum([0] + [len(x['P']) for x in ch[:-1]])
+            I = np.vstack([x['I'] + o for x, o in zip(ch, off)])
+            J = np.vstack([x['J'] for x in ch]); W = np.concatenate([x['W'] for x in ch])
+            T = np.concatenate([x['T'] for x in ch]); Aa = np.concatenate([x['A'] for x in ch]); TD = np.concatenate([x['TD'] for x in ch])
+            Gp = np.concatenate([np.full(len(x['P']), x['g']) for x in ch])
+            q = np.round((P - lo) / (hi - lo) * 65535).astype(np.uint16)
+            nq = np.round(np.clip(N, -1, 1) * 127).astype(np.int8)
+            # vertice: 6 posizione + 4 normale (+1 vuoto) + 2 segmenti + 1 peso + 1 gruppo + 1 fibra + 1 giro + 1 tendine + 1 vuoto = 18 -> 20
+            # vertice da 16 byte: posizione 6, normale 3, segmenti 2, peso, gruppo, fibra, giro, tendine
+            V = np.zeros((len(P), 16), np.uint8)
+            V[:, 0:6] = q.view(np.uint8).reshape(-1, 6)
+            V[:, 6:9] = nq.view(np.uint8).reshape(-1, 3)
+            V[:, 9:11] = J
+            V[:, 11] = np.round(W * 255)
+            V[:, 12] = Gp
+            V[:, 13] = np.round(T * 255); V[:, 14] = np.round(Aa * 255); V[:, 15] = np.round(TD * 255)
+            align4(); vo = len(blob); blob.extend(V.tobytes())
+            align4(); io = len(blob); blob.extend(I.astype(np.uint16).tobytes())
+            batches.append(dict(layer=kind, vertices=int(len(P)), indices=int(I.size), vOffset=vo, iOffset=io))
+            print(kind, 'blocco', len(P), 'vertici', len(I), 'triangoli')
 
-def r3(v): return [round(float(c), 4) for c in v]
-meta = dict(
-    version=3,
-    source='BodyParts3D, © The Database Center for Life Science, licensed under CC BY 4.0 (https://dbarchive.biosciencedbc.jp/en/bodyparts3d/lic.html). Gran dorsale, retto dell\'addome e obliquo esterno da Z-Anatomy (CC BY-SA 4.0, https://github.com/Z-Anatomy/Models-of-human-anatomy). Geometria adattata per Arcieri Amiconi.',
-    lo=r3(lo), hi=r3(hi), stride=16, segments=SEGS, groups=groups,
-    rest={str(k): r3(v) for k, v in rest.items()},
-    batches=batches, bytes=len(blob),
-)
-import gzip
-open(OUT + '.bin', 'wb').write(blob)
-# compresso: il sito lo scarica così e lo apre nel telefono (DecompressionStream)
-open(OUT + '.bin.gz', 'wb').write(gzip.compress(bytes(blob), 9))
-json.dump(meta, open(OUT + '.json', 'w'), ensure_ascii=False)
-print('scritto', OUT, len(blob), 'byte', 'gruppi', len(groups))
+    def r3(v): return [round(float(c), 4) for c in v]
+    meta = dict(
+        version=3,
+        source='BodyParts3D, © The Database Center for Life Science, licensed under CC BY 4.0 (https://dbarchive.biosciencedbc.jp/en/bodyparts3d/lic.html). Gran dorsale, retto dell\'addome e obliquo esterno da Z-Anatomy (CC BY-SA 4.0, https://github.com/Z-Anatomy/Models-of-human-anatomy). Geometria adattata per Arcieri Amiconi.',
+        lo=r3(lo), hi=r3(hi), stride=16, segments=SEGS, groups=groups,
+        rest={str(k): r3(v) for k, v in rest.items()},
+        batches=batches, bytes=len(blob),
+    )
+    import gzip
+    open(OUT + '.bin', 'wb').write(blob)
+    # compresso: il sito lo scarica così e lo apre nel telefono (DecompressionStream)
+    open(OUT + '.bin.gz', 'wb').write(gzip.compress(bytes(blob), 9))
+    json.dump(meta, open(OUT + '.json', 'w'), ensure_ascii=False)
+    print('scritto', OUT, len(blob), 'byte', 'gruppi', len(groups))
+    return lo, hi
+
+lo_, hi_ = write(parts, OUT)
+
+# versione leggera per il movimento: stesse parti semplificate (stessi pesi e gruppi sui vertici rimasti)
+if not os.environ.get('NOLIGHT'):
+    light = []
+    for x in parts:
+        nt = len(x['I'])
+        target = max(40, int(nt * (0.28 if x['kind'] != 'skin' else 0.4)))
+        if nt <= 60:
+            light.append(x); continue
+        P2, I2, used = qem_simplify(x['P'], x['I'], target)
+        y = dict(x); y['P'] = P2; y['I'] = I2
+        for k in ('J', 'W', 'T', 'A', 'TD'):
+            y[k] = x[k][used]
+        y['N'] = recompute_normals(P2, I2)
+        light.append(y)
+    print('leggero: triangoli', sum(len(x['I']) for x in light))
+    write(light, OUT.replace('corpo', 'corpo-leggero') if 'corpo' in OUT.split('/')[-1] else OUT + '-leggero', lo_, hi_)
 # --- diagnostica pelle (solo quando richiesto) ---
 if os.environ.get('DIAG'):
     S = by('Skin'); J = S['J']; W = S['W']; I = S['I']; P = S['P']

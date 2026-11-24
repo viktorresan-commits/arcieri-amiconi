@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { buildModel, v3, type Model, type V3 } from "@/lib/arcieri/anatomy-model";
 import { createAnatomyRenderer, lookAt, mul4, perspective } from "@/lib/arcieri/anatomy-render";
 import { BODY_CREDIT, loadBody } from "@/lib/arcieri/anatomy-body";
-import { sideEvidence, swapSides, type Hand, type Landmark } from "@/lib/arcieri/pose-analysis";
+import { sideEvidence, type Gear, type Hand, type Landmark } from "@/lib/arcieri/pose-analysis";
 import { unpackLm, type PackedLm } from "@/lib/arcieri/gesture-record";
 import { cx } from "./kit";
 
@@ -41,12 +41,15 @@ const VIEWS = [
 export function Anatomy3D({
   lm = null,
   lmRef,
+  gearRef,
   seq,
   aspect,
   hand,
   className = "h-[26rem]",
   inBox = false,
 }: {
+  /** arco e freccia trovati nel video (quando è fermo): il 3D li usa al posto di quelli stimati */
+  gearRef?: { current: Gear | null };
   /** dentro il riquadro del video: i comandi vanno in basso, in alto a destra c'è la scelta della vista */
   inBox?: boolean;
   lm?: Landmark[] | null;
@@ -63,6 +66,8 @@ export function Anatomy3D({
   layersRef.current = layers;
   // si parte come la ripresa del video (di fronte), fermi: si gira con il dito
   const cam = useRef({ yaw: 0, pitch: 0.06, zoom: 1, auto: false });
+  /** si sta girando o avvicinando con le dita: si usa il corpo leggero */
+  const dragging = useRef(false);
   const [auto, setAuto] = useState(false);
   const [failed, setFailed] = useState(false);
   const [empty, setEmpty] = useState(false);
@@ -76,9 +81,10 @@ export function Anatomy3D({
     for (const f of frames) if (f) score += sideEvidence(f, hand, aspect);
     return score < 0;
   }, [seq, lm, lmRef, hand, aspect]);
-  const stillFixed = useMemo(() => (swap && lm ? swapSides(lm) : lm), [swap, lm]);
-  const input = useRef({ lm: stillFixed, lmRef, seq, aspect, hand, swap });
-  input.current = { lm: stillFixed, lmRef, seq, aspect, hand, swap };
+  // i punti restano come nel video; cambia solo quale braccio tiene l'arco
+  const effHand: Hand = swap ? (hand === "destro" ? "mancino" : "destro") : hand;
+  const input = useRef({ lm, lmRef, seq, aspect, hand: effHand, gearRef });
+  input.current = { lm, lmRef, seq, aspect, hand: effHand, gearRef };
 
   useEffect(() => {
     const canvas = glCanvas.current;
@@ -94,10 +100,15 @@ export function Anatomy3D({
     // corpo anatomico vero (muscoli e ossa da atlante): si scarica la prima volta, poi resta in memoria
     let bodyTick = 0;
     let alive = true;
-    void loadBody().then((b) => {
+    void loadBody("leggero").then((b) => {
       if (!alive || !b) return;
-      R.setBody(b);
+      R.setBody(b, "leggero");
       bodyTick += 1;
+      return loadBody("pieno").then((f) => {
+        if (!alive || !f) return;
+        R.setBody(f, "pieno");
+        bodyTick += 1;
+      });
     });
     let smooth: Landmark[] | null = null;
     let model: Model | null = null;
@@ -108,7 +119,10 @@ export function Anatomy3D({
     // e niente batteria consumata a vuoto
     let lastTarget: Landmark[] | null = null;
     let lastKey = "";
-    let settle = 0;
+    let moving = false;
+    let lastChange = -1e9;
+    let lastFast = false;
+    let camSm: { c: V3; h: number } | null = null;
     let scale = 1; // risoluzione adattiva: scende se il telefono non sta al passo
     let slow = 0;
     const frame = (now: number) => {
@@ -118,32 +132,43 @@ export function Anatomy3D({
       const time = (now - t0) / 1000;
       // nascosto (vista non attiva o fuori schermo): non lavora
       if (!canvas.clientWidth || !canvas.clientHeight) return;
-      const { lm: still, lmRef: ref, seq: sq, aspect: asp, hand: hd, swap: sw } = input.current;
+      const { lm: still, lmRef: ref, seq: sq, aspect: asp, hand: hd, gearRef: gr } = input.current;
       // punti da mostrare: sequenza salvata (in ciclo), poi quelli dal vivo, poi quelli fissi
       let target: Landmark[] | null = null;
       const playing = Boolean(sq && sq.length > 1);
       if (playing && sq) {
         const end = sq[sq.length - 1].t + 0.9;
         target = seqAt(sq, time % end);
-        if (target && sw) target = swapSides(target);
       } else target = ref?.current ?? still;
       if (target && target !== lastTarget) {
         lastTarget = target;
-        settle = 8;
+        moving = true;
+        lastChange = now;
       }
       const c = cam.current;
       if (c.auto) c.yaw += dt * 0.35;
       const L0 = layersRef.current;
       const dprBase = Math.min(2, window.devicePixelRatio || 1);
       const key = `${c.yaw.toFixed(4)}|${c.pitch.toFixed(4)}|${c.zoom.toFixed(3)}|${L0.pelle}${L0.muscolo}${L0.osso}${L0.quote}|${canvas.clientWidth}x${canvas.clientHeight}|${scale}|${bodyTick}`;
-      if (settle <= 0 && key === lastKey && !playing) return;
+      // dopo un movimento si disegna ancora un attimo con il corpo leggero, poi una volta con quello pieno
+      const fast = now - lastChange < 450 || dragging.current;
+      if (!moving && key === lastKey && !playing && fast === lastFast) return;
       lastKey = key;
-      if (target && settle > 0) {
+      lastFast = fast;
+      if (target && moving) {
+        // inseguimento continuo nel tempo: tra un rilevamento e l'altro il corpo scorre, non salta
         const t = target;
-        const mix = (a: number | undefined, b: number | undefined) => (a != null && b != null ? a + (b - a) * 0.45 : b);
-        smooth = !smooth || smooth.length !== t.length ? t.map((p) => ({ ...p })) : smooth.map((p, i) => ({ x: p.x + (t[i].x - p.x) * 0.45, y: p.y + (t[i].y - p.y) * 0.45, z: mix(p.z, t[i].z), zw: mix(p.zw, t[i].zw), visibility: t[i].visibility }));
-        model = buildModel(smooth, asp, hd) ?? model;
-        settle -= 1;
+        const a = playing ? 1 : 1 - Math.exp(-dt / 0.075);
+        const mix = (x: number | undefined, y: number | undefined) => (x != null && y != null ? x + (y - x) * a : y);
+        let far = 0;
+        if (!smooth || smooth.length !== t.length) smooth = t.map((p) => ({ ...p }));
+        else
+          smooth = smooth.map((p, i) => {
+            far = Math.max(far, Math.abs(t[i].x - p.x), Math.abs(t[i].y - p.y));
+            return { x: p.x + (t[i].x - p.x) * a, y: p.y + (t[i].y - p.y) * a, z: mix(p.z, t[i].z), zw: mix(p.zw, t[i].zw), visibility: t[i].visibility };
+          });
+        if (far < 0.0006 && !playing) moving = false;
+        model = buildModel(smooth, asp, hd, gr?.current ?? null) ?? model;
       }
       if (emptyRef.current !== !model) {
         emptyRef.current = !model;
@@ -176,14 +201,20 @@ export function Anatomy3D({
         }
       });
 
-      const target3: V3 = [model.center[0], model.height * 0.5, model.center[2]];
+      // inquadratura morbida: centro e altezza del corpo cambiano un poco a ogni rilevamento
+      const kc = camSm ? 1 - Math.exp(-dt / 0.35) : 1;
+      camSm = camSm
+        ? { c: [camSm.c[0] + (model.center[0] - camSm.c[0]) * kc, camSm.c[1] + (model.height * 0.5 - camSm.c[1]) * kc, camSm.c[2] + (model.center[2] - camSm.c[2]) * kc], h: camSm.h + (model.height - camSm.h) * kc }
+        : { c: [model.center[0], model.height * 0.5, model.center[2]], h: model.height };
+      if (Math.abs(camSm.h - model.height) > 0.002) lastChange = now;
+      const target3: V3 = camSm.c;
       const fov = (34 * Math.PI) / 180;
-      const fit = (model.height * 0.62) / Math.tan(fov / 2) / Math.min(1, W / H + 0.15);
+      const fit = (camSm.h * 0.62) / Math.tan(fov / 2) / Math.min(1, W / H + 0.15);
       const dist = Math.max(1.6, fit) / c.zoom;
       const eye: V3 = [target3[0] + Math.sin(c.yaw) * Math.cos(c.pitch) * dist, target3[1] + Math.sin(c.pitch) * dist, target3[2] + Math.cos(c.yaw) * Math.cos(c.pitch) * dist];
       const VP = mul4(perspective(fov, W / H, 0.05, 30), lookAt(eye, target3));
       const L = layersRef.current;
-      R.draw(model, VP, eye, time, L);
+      R.draw(model, VP, eye, time, L, null, fast);
 
       // ---------- quote (2D sopra la scena) ----------
       const proj = (p: V3): [number, number, number] => {
@@ -300,6 +331,7 @@ export function Anatomy3D({
     const down = (e: PointerEvent) => {
       canvas.setPointerCapture(e.pointerId);
       ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      dragging.current = true;
       cam.current.auto = false;
       setAuto(false);
     };
@@ -310,7 +342,7 @@ export function Anatomy3D({
       if (ptrs.size === 2) {
         const [a, b] = [...ptrs.values()];
         const d = Math.hypot(a.x - b.x, a.y - b.y);
-        if (pinch) cam.current.zoom = Math.max(0.7, Math.min(2.6, cam.current.zoom * (d / pinch)));
+        if (pinch) cam.current.zoom = Math.max(0.7, Math.min(4, cam.current.zoom * (d / pinch)));
         pinch = d;
         return;
       }
@@ -320,10 +352,11 @@ export function Anatomy3D({
     const up = (e: PointerEvent) => {
       ptrs.delete(e.pointerId);
       if (ptrs.size < 2) pinch = 0;
+      if (!ptrs.size) dragging.current = false;
     };
     const wheel = (e: WheelEvent) => {
       e.preventDefault();
-      cam.current.zoom = Math.max(0.7, Math.min(2.6, cam.current.zoom * (e.deltaY > 0 ? 0.92 : 1.08)));
+      cam.current.zoom = Math.max(0.7, Math.min(4, cam.current.zoom * (e.deltaY > 0 ? 0.92 : 1.08)));
     };
     canvas.addEventListener("pointerdown", down);
     canvas.addEventListener("pointermove", move);

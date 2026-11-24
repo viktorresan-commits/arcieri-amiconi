@@ -34,7 +34,6 @@ import {
   type Sample,
   type Shot,
   sideEvidence,
-  swapSides,
 } from "@/lib/arcieri/pose-analysis";
 
 /**
@@ -100,6 +99,8 @@ const PART_MODELS = {
   face: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
 };
 const partEngines: Partial<Record<"hand" | "face", Promise<PartMarker>>> = {};
+const otherHand = (h: Hand): Hand => (h === "destro" ? "mancino" : "destro");
+
 function partEngine(kind: "hand" | "face"): Promise<PartMarker> {
   let job = partEngines[kind];
   if (!job) {
@@ -189,14 +190,21 @@ export function PoseRead() {
   const overlay = useRef<HTMLCanvasElement>(null);
   const work = useRef<HTMLCanvasElement | null>(null);
   const [hand, setHandState] = useState<Hand>("destro");
-  const handRef = useRef(hand);
-  handRef.current = hand;
-  // lati della persona: null finché il gesto non lo dice, poi resta deciso per il video
+  // lati della persona: null finché il gesto non lo dice, poi resta deciso per il video.
+  // Video specchiato (fotocamera frontale): il braccio dell'arco è l'altro rispetto a destro/mancino scelto.
   const sideScore = useRef(0);
   const sideSwap = useRef<boolean | null>(null);
+  const [sideFlip, setSideFlip] = useState(false);
+  const userHandRef = useRef(hand);
+  userHandRef.current = hand;
+  /** la mano usata per l'analisi di questo video */
+  const effHand: Hand = sideFlip ? otherHand(hand) : hand;
+  const handRef = useRef(effHand);
+  handRef.current = effHand;
   const resetSides = () => {
     sideScore.current = 0;
     sideSwap.current = null;
+    setSideFlip(false);
   };
   /** 100 punti in più (mani e viso): più preciso su ancoraggio, presa e dita, un po' più lento */
   const [detail, setDetail] = useState(true);
@@ -310,7 +318,7 @@ export function PoseRead() {
 
   useEffect(() => () => { if (src) URL.revokeObjectURL(src); }, [src]);
 
-  const analysis = useMemo(() => analyzeShots(samples, hand), [samples, hand]);
+  const analysis = useMemo(() => analyzeShots(samples, effHand), [samples, effHand]);
   const shot: Shot | null = analysis.shots[Math.min(shotIndex, analysis.shots.length - 1)] ?? null;
   const distance = useMemo(
     () => cameraDistance(samples.length ? samples : now ? [{ t: 0, lm: null, m: now }] : [], size.w, size.h),
@@ -357,10 +365,18 @@ export function PoseRead() {
     const raw = chosen.map((p, i) => ({ x: region.x + p.x * region.w, y: region.y + p.y * region.h, z: p.z != null ? p.z * region.w : undefined, visibility: p.visibility, zw: world?.[i]?.z }));
     // video specchiato (fotocamera frontale) o arciere di spalle: il riconoscimento scambia sinistra e destra.
     // Si capisce dal gesto (mano della corda al viso, braccio dell'arco teso) e si raddrizza per tutto il video.
-    const ev = sideEvidence(raw, handRef.current, W / H);
+    // i punti restano dove sono (il 3D deve essere identico al video, anche se specchiato):
+    // cambia solo quale braccio è quello dell'arco
+    const ev = sideEvidence(raw, userHandRef.current, W / H);
     if (ev) sideScore.current = Math.max(-6, Math.min(6, sideScore.current + ev));
-    if (sideSwap.current === null && Math.abs(sideScore.current) >= 3) sideSwap.current = sideScore.current < 0;
-    const mapped = sideSwap.current ? swapSides(raw) : raw;
+    if (sideSwap.current === null && Math.abs(sideScore.current) >= 3) {
+      sideSwap.current = sideScore.current < 0;
+      if (sideSwap.current) {
+        handRef.current = otherHand(userHandRef.current);
+        setSideFlip(true);
+      }
+    }
+    const mapped = raw;
     if (!cropRef.current && followRef.current) autoBox.current = personBox(mapped, 0.45);
     // sempre 133 punti (mani e viso a visibilità 0 se non cercati), così i fotogrammi si confrontano
     if (!detailRef.current || !extras) return withExtras(mapped, null, null, null);
@@ -441,9 +457,9 @@ export function PoseRead() {
 
   useEffect(() => {
     paintOverlay(lastLm.current);
-    if (lastLm.current) setNow(metricsOf(lastLm.current, hand, size.w / size.h, size.h));
+    if (lastLm.current) setNow(metricsOf(lastLm.current, effHand, size.w / size.h, size.h));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hand, showPose, size, crop, gear, look]);
+  }, [effHand, showPose, size, crop, gear, look]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -623,9 +639,7 @@ export function PoseRead() {
       if (!cancel.current && sideSwap.current && undecided > 0) {
         for (let i = 0; i < Math.min(undecided, out.length); i++) {
           const lm = out[i].lm;
-          if (!lm) continue;
-          const fixed = swapSides(lm);
-          out[i] = { ...out[i], lm: fixed, m: metricsOf(fixed, handRef.current, W / H, H) };
+          if (lm) out[i] = { ...out[i], m: metricsOf(lm, handRef.current, W / H, H) };
         }
       }
       if (!cancel.current) {
@@ -701,8 +715,8 @@ export function PoseRead() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     ctx.drawImage(media, 0, 0, size.w, size.h);
-    if (look !== "scheletro") drawSagoma(ctx, size.w, size.h, lastLm.current, hand, gear, look === "sagoma");
-    else if (lastLm.current) drawPose(ctx, size.w, size.h, lastLm.current, hand, gear);
+    if (look !== "scheletro") drawSagoma(ctx, size.w, size.h, lastLm.current, effHand, gear, look === "sagoma");
+    else if (lastLm.current) drawPose(ctx, size.w, size.h, lastLm.current, effHand, gear);
     canvas.toBlob((blob) => {
       if (blob) void saveFile(blob, `gesto-${fmt(time).replace(":", "m")}s.png`);
     }, "image/png");
@@ -868,9 +882,9 @@ export function PoseRead() {
       const ctx = c.getContext("2d");
       if (!ctx) throw new Error("Miniatura non riuscita.");
       ctx.drawImage(media, 0, 0, c.width, c.height);
-      if (look !== "scheletro") drawSagoma(ctx, c.width, c.height, frameLm, hand, null, look === "sagoma");
-      else if (frameLm) drawPose(ctx, c.width, c.height, frameLm, hand, null);
-      if (proData && frameLm && look !== "sagoma") drawPro(ctx, c.width, c.height, frameLm, hand);
+      if (look !== "scheletro") drawSagoma(ctx, c.width, c.height, frameLm, effHand, null, look === "sagoma");
+      else if (frameLm) drawPose(ctx, c.width, c.height, frameLm, effHand, null);
+      if (proData && frameLm && look !== "sagoma") drawPro(ctx, c.width, c.height, frameLm, effHand);
       let thumb = c.toDataURL("image/jpeg", 0.72);
       if (thumb.length > 150_000) thumb = c.toDataURL("image/jpeg", 0.5);
       const m = shot?.at ?? now;
@@ -878,7 +892,7 @@ export function PoseRead() {
         data: {
           title: saveTitle.trim() || (proData ? `Analisi pro · ${proData.total}/100` : kind === "video" ? "Video del gesto" : "Foto del gesto"),
           kind: kind === "video" ? "video" : "foto",
-          hand,
+          hand: effHand,
           score: proData ? proData.total : (shot?.score ?? null),
           shots: analysis.shots.length,
           anchorS: shot?.anchorTime ?? null,
@@ -890,7 +904,7 @@ export function PoseRead() {
           distanceM: distance,
           data: {
             // dato completo: punti del corpo, sequenza del tiro, angoli, misure in cm, tempi e postura per zone
-            ...buildRecord({ lm: frameLm, samples, shot: shot ?? null, hand, aspect: size.w / Math.max(1, size.h), w: size.w, h: size.h, gear }),
+            ...buildRecord({ lm: frameLm, samples, shot: shot ?? null, hand: effHand, aspect: size.w / Math.max(1, size.h), w: size.w, h: size.h, gear }),
             shoulderSide: m?.bowSh ?? null,
             draw: m?.draw ?? null,
             trunk: m?.trunk ?? null,
@@ -976,6 +990,7 @@ export function PoseRead() {
           </button>
         ))}
       </div>
+      {sideFlip ? <p className="text-xs text-muted">Nel video l'arco è nell'altra mano (video specchiato o arciere ripreso da dietro): l'analisi segue il video.</p> : null}
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
         Precisione:
         {(["lite", "full", "heavy"] as const).map((q) => (
@@ -1051,7 +1066,7 @@ export function PoseRead() {
             {/* una volta aperta la vista 3D resta pronta (nascosta): cambiare vista non la ricrea, niente scatti */}
             {used3d ? (
               <div className={`absolute inset-0 z-[1] ${look === "sagoma" ? "" : "hidden"}`}>
-                <Anatomy3D lmRef={lastLm} aspect={size.w / Math.max(1, size.h)} hand={hand} inBox className="h-full" />
+                <Anatomy3D lmRef={lastLm} gearRef={gearRef} aspect={size.w / Math.max(1, size.h)} hand={effHand} inBox className="h-full" />
               </div>
             ) : null}
             {zoomOn ? (
@@ -1141,7 +1156,7 @@ export function PoseRead() {
               lm={lastLm.current}
               samples={samples}
               shot={kind === "video" ? shot : null}
-              hand={hand}
+              hand={effHand}
               aspect={size.w / size.h}
               gear={gear}
               saveState={saveState}
