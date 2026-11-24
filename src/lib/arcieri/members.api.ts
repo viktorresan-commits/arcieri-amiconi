@@ -53,6 +53,14 @@ export const getMe = createServerFn({ method: "GET" })
     } catch {
       /* tabella non ancora creata */
     }
+    if (!hasPlans) {
+      try {
+        const n = await sql<{ n: number }>`select count(*)::int as n from exercise_programs where athlete_member_id = ${out.id}`;
+        hasPlans = asNum(n[0]?.n) > 0;
+      } catch {
+        /* tabella non ancora creata */
+      }
+    }
     const acting = await actingOf(sql, context.userId);
     return { ...out, essenziale, leader, canStaff: role, canCoach: role, canSegreteria: role, hasPlans, acting, category: last ? categorySingular(last.category) : "" };
   });

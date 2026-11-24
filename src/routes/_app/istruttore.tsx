@@ -3,6 +3,8 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { Avatar, Button, Card, Empty, ErrorNote, Loading, PageHead, SectionHead, Segmented, Select, cx } from "@/components/kit";
 import { AthletePick, CoachPlanCard, PlanEditor } from "@/components/coach-plans";
 import { ClassesTab } from "@/components/coach-classes";
+import { ProgramsTab } from "@/components/program-maker";
+import { useMemberMaybe } from "@/components/shell";
 import { Glyph } from "@/components/icons";
 import { useLoad } from "@/lib/arcieri/use-load";
 import { useEntryState } from "@/lib/arcieri/back-restore";
@@ -36,7 +38,9 @@ function Spark({ values, down }: { values: number[]; down: boolean }) {
 /** Scheda Allenatore: gli allievi (chi seguire, chi cresce, chi non si vede) e le schede di allenamento. */
 function Page() {
   const [companyId, setCompanyId] = useEntryState("istr-company", 0);
-  const [tab, setTab] = useEntryState<"allievi" | "classi" | "schede">("istr-tab", "allievi");
+  const [tab, setTab] = useEntryState<"allievi" | "classi" | "schede" | "programmi">("istr-tab", "allievi");
+  const ctx = useMemberMaybe();
+  const meName = ctx ? [ctx.me.givenName, ctx.me.familyName].filter(Boolean).join(" ") || ctx.me.nickname : "";
   const [nonce, setNonce] = useState(0);
   const { data, error, loading } = useLoad(`coach-${companyId}-${nonce}`, () => coachBoard({ data: { companyId } }));
   const [filter, setFilter] = useState<"tutti" | "seguire">("tutti");
@@ -44,13 +48,13 @@ function Page() {
   if (error || !data) return <ErrorNote text={error || "Errore"} />;
   const head = (
     <>
-      <PageHead kicker={data.company.name} title="Allenatore" lede="I tuoi allievi e le tue classi: progressi, analisi del gesto, foto delle volée, schede su misura e richieste alla classe." />
+      <PageHead kicker={data.company.name} title="Allenatore" lede="I tuoi allievi e le tue classi: progressi, analisi del gesto, foto delle volée, schede su misura, programmi di esercizi in PDF e richieste alla classe." />
       {data.companies.length > 1 ? (
         <Select value={String(data.company.id)} onChange={(e) => setCompanyId(Number(e.target.value))} aria-label="Compagnia">
           {data.companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </Select>
       ) : null}
-      <Segmented value={tab} onChange={setTab} options={[{ id: "allievi", label: `Allievi (${data.athletes.length})` }, { id: "classi", label: "Classi" }, { id: "schede", label: "Schede" }]} />
+      <Segmented value={tab} onChange={setTab} options={[{ id: "allievi", label: `Allievi (${data.athletes.length})` }, { id: "classi", label: "Classi" }, { id: "schede", label: "Schede" }, { id: "programmi", label: "Esercizi" }]} />
     </>
   );
   if (tab === "classi") {
@@ -58,6 +62,14 @@ function Page() {
       <div className="grid gap-3">
         {head}
         <ClassesTab companyId={data.company.id} />
+      </div>
+    );
+  }
+  if (tab === "programmi") {
+    return (
+      <div className="grid gap-3">
+        {head}
+        <ProgramsTab companyId={data.company.id} companyName={data.company.name} coachName={meName} />
       </div>
     );
   }

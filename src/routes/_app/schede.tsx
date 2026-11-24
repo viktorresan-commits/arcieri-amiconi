@@ -5,6 +5,9 @@ import { Glyph } from "@/components/icons";
 import { itemMeta, planProgress, planWhen } from "@/components/coach-plans";
 import { useLoad } from "@/lib/arcieri/use-load";
 import { myPlans, tickPlan, type Plan } from "@/lib/arcieri/istruttore.api";
+import { myPrograms, type ProgramRow } from "@/lib/arcieri/programmi.api";
+import { LEVEL_NAME } from "@/lib/arcieri/exercise-catalog";
+import { LevelDots, sendProgram } from "@/components/program-maker";
 import { REQUEST_KINDS, doneRequest, myClasses } from "@/lib/arcieri/classi.api";
 import { when } from "@/components/coach-classes";
 import { Link } from "@tanstack/react-router";
@@ -17,6 +20,7 @@ function Page() {
   const [nonce, setNonce] = useState(0);
   const { data, error, loading } = useLoad(`my-plans-${nonce}`, () => myPlans());
   const classes = useLoad(`my-classes-${nonce}`, () => myClasses());
+  const progs = useLoad(`my-progs-${nonce}`, () => myPrograms());
   if (loading) return <Loading />;
   if (error || !data) return <ErrorNote text={error || "Errore"} />;
   const active = data.filter((p) => p.status === "attiva");
@@ -25,11 +29,54 @@ function Page() {
     <div className="grid gap-3">
       <PageHead title="Le mie schede" lede="Esercizi, classi e richieste del tuo allenatore. Spunta quello che hai fatto: l'allenatore vede a che punto sei." />
       {(classes.data ?? []).map((c) => <MyClass key={c.id} c={c} onChange={() => setNonce((n) => n + 1)} />)}
-      {!data.length ? <Empty title="Nessuna scheda" text="Quando il tuo allenatore ti prepara una scheda, la trovi qui e ricevi un avviso." /> : null}
+      {(progs.data ?? []).map((r) => <MyProgram key={r.id} row={r} />)}
+      {!data.length && !(progs.data ?? []).length ? <Empty title="Nessuna scheda" text="Quando il tuo allenatore ti prepara una scheda, la trovi qui e ricevi un avviso." /> : null}
       {active.map((p) => <MyPlan key={p.id} plan={p} onChange={() => setNonce((n) => n + 1)} />)}
       {closed.length ? <SectionHead title="Concluse" /> : null}
       {closed.map((p) => <MyPlan key={p.id} plan={p} onChange={() => setNonce((n) => n + 1)} />)}
     </div>
+  );
+}
+
+/** programma di esercizi dell'allenatore: categorie, esercizi, quanto e difficoltà, più il PDF da stampare */
+function MyProgram({ row }: { row: ProgramRow }) {
+  const [open, setOpen] = useState(false);
+  const p = row.program;
+  return (
+    <Card className="grid gap-2">
+      <button type="button" onClick={() => setOpen((v) => !v)} className="flex items-start justify-between gap-2 text-left">
+        <span className="min-w-0">
+          <span className="text-[0.66rem] font-semibold uppercase tracking-[0.16em] text-[#e0b15a]">Programma di esercizi</span>
+          <b className="block font-display text-xl leading-tight">{LEVEL_NAME[p.level]} · {p.sections.reduce((n, s) => n + s.items.length, 0)} esercizi</b>
+          <span className="block text-xs text-muted">di {row.coachName}{p.header.days ? ` · ${p.header.days}` : ""}</span>
+        </span>
+        <Glyph name="chevron" size={16} className={cx("mt-1 shrink-0 text-muted transition-transform", open && "rotate-90")} />
+      </button>
+      {p.header.goal ? <p className="text-sm">Obiettivo: {p.header.goal}</p> : null}
+      <div className="flex flex-wrap gap-1.5">
+        <button type="button" className="aa-chip" onClick={() => void sendProgram(p, "scarica")}><Glyph name="download" size={13} /> Scarica il PDF</button>
+        <button type="button" className="aa-chip" onClick={() => void sendProgram(p, "whatsapp")}><Glyph name="share" size={13} /> Invia</button>
+      </div>
+      {open
+        ? p.sections.map((s, si) => (
+            <div key={s.id} className="grid gap-1 rounded-xl bg-white/[0.04] p-2.5">
+              <p className="text-sm font-semibold">{si + 1}. {s.title} <span className="text-xs font-normal text-muted">· {s.hint}</span></p>
+              {s.items.map((it) => (
+                <div key={it.code + it.name} className="flex items-start gap-2 border-t border-white/[0.05] pt-1.5 text-sm">
+                  <span className="min-w-0 flex-1">
+                    <b className="block leading-tight">{it.name}</b>
+                    <span className="block text-xs text-muted">{it.how}</span>
+                  </span>
+                  <span className="shrink-0 text-right text-xs">
+                    <b className="block">{it.dose}</b>
+                    <span className="text-[#e0b15a]"><LevelDots level={it.level} size={7} /></span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          ))
+        : null}
+    </Card>
   );
 }
 
