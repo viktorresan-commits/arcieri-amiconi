@@ -242,10 +242,11 @@ export function parseHtml(html: string, url: string): Omit<FitastPage, "fetchedA
         if (select.pending) select.options.push(select.pending);
         const s = select;
         s.options = s.options.map((o) => ({ ...o, text: o.text.replace(/\s+/g, " ").trim() }));
-        if (s.name && s.options.length && form) {
-          form.selects.push({ name: s.name, label: s.label || lastLabel, options: s.options, ...(s.press ? { press: s.press } : {}) });
+        const f = form as FitastForm | null;
+        if (s.name && s.options.length && f) {
+          f.selects.push({ name: s.name, label: s.label || lastLabel, options: s.options, ...(s.press ? { press: s.press } : {}) });
           const chosen = s.options.find((o) => o.selected) ?? s.options[0];
-          form.fields[s.name] = chosen.value;
+          f.fields[s.name] = chosen.value;
           line += ` ${chosen.text} `;
         }
         select = null;
