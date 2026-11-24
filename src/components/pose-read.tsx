@@ -914,7 +914,7 @@ export function PoseRead() {
                 <Anatomy3D lmRef={lastLm} aspect={size.w / Math.max(1, size.h)} hand={hand} inBox className="h-full" />
               </div>
             ) : null}
-            {zoomOn && kind !== "none" ? (
+            {zoomOn ? (
               <div className="absolute bottom-2 left-2 z-[2] flex items-center gap-1 rounded-full bg-[#14181c]/75 p-1 text-xs font-semibold text-[#f4f1ea]">
                 <button type="button" aria-label="Rimpicciolisci" onClick={() => { const el = box.current; if (el) zoomAt(1 / 1.5, el.clientWidth / 2, el.clientHeight / 2); }} className="grid h-8 w-8 place-items-center rounded-full text-base">−</button>
                 <button type="button" aria-label="Zoom normale" onClick={() => setZoom(1, 0, 0)} className="min-h-8 rounded-full px-1.5 tabular-nums">{zoomV.z.toFixed(1).replace(".", ",")}×</button>
