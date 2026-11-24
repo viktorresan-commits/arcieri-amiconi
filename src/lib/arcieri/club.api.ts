@@ -6,6 +6,7 @@ import { companyPeers, myMembership } from "./compagnie.api";
 import { challengeScores, rulesFair, teamMeans, type Metric, type Rule } from "./challenge";
 import { romeMidnightUtc, ymdAdd } from "./time";
 import { divisionOf } from "./labels";
+import { accountWriter, writerFor } from "./acting.api";
 import type { TallyShot } from "./scoring";
 import { aimSpot, faceById, ringPoint, scoreAtRadius } from "./scoring";
 
@@ -440,8 +441,8 @@ export const listCompetitions = createServerFn({ method: "GET" })
         signupDeadline: c.signup_deadline ? String(c.signup_deadline).slice(0, 10) : null,
         externalUrl: c.external_url,
         notes: c.notes,
-        // la elimina per tutti chi l'ha aggiunta o lo staff
-        canDelete: c.created_by === context.userId || staffHere,
+        // la elimina per tutti solo il fondatore
+        canDelete: staffHere,
         attended: mine.has(asNum(c.id)) ? mine.get(asNum(c.id)) ?? null : null,
         roster: presence.filter((row) => row.competition_id === c.id).map((row) => {
           const member = members.find((item) => item.user_id === row.user_id);
@@ -577,6 +578,7 @@ export const saveEntry = createServerFn({ method: "POST" })
     const sql = await db();
     const me = await ensureMember(sql, context.userId);
     if (!canScore(me.role)) throw new Error("Profilo in sola lettura.");
+    const owner = await accountWriter(sql, context.userId, me);
     const fromLanes = data.piazzole.length > 0;
     const laneCount = fromLanes ? data.piazzole.length : data.laneCount;
     const spot = data.spot;
@@ -593,26 +595,27 @@ export const saveEntry = createServerFn({ method: "POST" })
     if (score == null && laneCount == null && spot == null && data.championshipPoints == null) throw new Error("Metti almeno un numero: piazzole, punti, spot o punti campionato.");
     await sql`
       insert into competition_entries (competition_id, user_id, score, rank, category, notes, lane_count, spot, championship_points, target_kind, sagoma_max)
-      values (${data.competitionId}, ${context.userId}, ${score}, ${data.rank}, ${data.category}, ${data.notes}, ${laneCount}, ${spot}, ${data.championshipPoints}, ${data.targetKind}, ${data.sagomaMax})
+      values (${data.competitionId}, ${owner.userId}, ${score}, ${data.rank}, ${data.category}, ${data.notes}, ${laneCount}, ${spot}, ${data.championshipPoints}, ${data.targetKind}, ${data.sagomaMax})
       on conflict (competition_id, user_id) do update set
         score = excluded.score, rank = excluded.rank, category = excluded.category, notes = excluded.notes,
         lane_count = excluded.lane_count, spot = excluded.spot, championship_points = excluded.championship_points,
         target_kind = excluded.target_kind, sagoma_max = excluded.sagoma_max`;
     const previous = await sql<{ n: number; note: string; note_done: boolean }>`
-      select n, note, note_done from piazzole where competition_id = ${data.competitionId} and user_id = ${context.userId}`;
+      select n, note, note_done from piazzole where competition_id = ${data.competitionId} and user_id = ${owner.userId}`;
     const kept = new Map(previous.map((row) => [asNum(row.n), row]));
-    await sql`delete from piazzole where competition_id = ${data.competitionId} and user_id = ${context.userId}`;
+    await sql`delete from piazzole where competition_id = ${data.competitionId} and user_id = ${owner.userId}`;
     for (const lane of data.piazzole) {
       const old = kept.get(lane.n);
       const done = Boolean(lane.note && old && old.note === lane.note && old.note_done);
       await sql`
         insert into piazzole (competition_id, user_id, n, score, arrows, label, distance_m, note, note_done, aim_angle)
-        values (${data.competitionId}, ${context.userId}, ${lane.n}, ${lane.score}, ${lane.arrows.length ? lane.arrows.join("+") : ""}, ${lane.label}, ${lane.distanceM}, ${lane.note}, ${done}, ${lane.aimAngle})`;
+        values (${data.competitionId}, ${owner.userId}, ${lane.n}, ${lane.score}, ${lane.arrows.length ? lane.arrows.join("+") : ""}, ${lane.label}, ${lane.distanceM}, ${lane.note}, ${done}, ${lane.aimAngle})`;
     }
-    if (score != null) await syncBadges(sql, context.userId);
+    if (owner.by) await sql`update competition_entries set added_by = ${owner.by} where competition_id = ${data.competitionId} and user_id = ${owner.userId}`;
+    if (score != null) await syncBadges(sql, owner.userId);
     await sql`
       insert into competition_presence (competition_id, user_id, attended)
-      values (${data.competitionId}, ${context.userId}, true)
+      values (${data.competitionId}, ${owner.userId}, true)
       on conflict (competition_id, user_id) do update set attended = true`;
     return { ok: true as const, score };
   });
@@ -658,7 +661,7 @@ export const deleteCompetition = createServerFn({ method: "POST" })
     const comp = rows[0];
     if (!comp) throw new Error("Gara non trovata.");
     if (data.scope === "all") {
-      if (comp.created_by !== context.userId && staffLevel(me) == null) throw new Error("La cancella per tutti solo chi l'ha aggiunta o lo staff.");
+      if (staffLevel(me) == null) throw new Error("La gara la elimina per tutti solo il fondatore.");
       await sql`delete from piazzole where competition_id = ${data.id}`;
       await sql`delete from competition_entries where competition_id = ${data.id}`;
       await sql`delete from competition_presence where competition_id = ${data.id}`;
@@ -683,7 +686,8 @@ export const deleteEntry = createServerFn({ method: "POST" })
     const sql = await db();
     const me = await ensureMember(sql, context.userId);
     if (!canScore(me.role)) throw new Error("Profilo in sola lettura.");
-    if (data.userId !== context.userId) throw new Error("Puoi togliere solo il tuo punteggio.");
+    const owner = await writerFor(sql, context.userId, me);
+    if (data.userId !== context.userId && data.userId !== owner.userId) throw new Error("Puoi togliere solo il tuo punteggio.");
     await sql`delete from piazzole where competition_id = ${data.competitionId} and user_id = ${data.userId}`;
     const rows = await sql`
       delete from competition_entries

@@ -13,7 +13,8 @@ const MODES: Record<string, { name: string; hint: string; steps: [string, number
   ansia: { name: "Gara, agitazione", hint: "Inspira 4, tieni 7, espira 8", steps: [["Inspira", 4, 1], ["Tieni", 7, 1], ["Espira", 8, 0]] },
 };
 
-function Page() {
+/** il contenuto della pagina, anche dentro un'altra pagina (senza intestazione) */
+export function RespiroBody({ embedded = false }: { embedded?: boolean }) {
   const [st, setSt] = useLocalState<{ mode: string; cycles: number }>("aa-respiro-v1", { mode: "volee", cycles: 0 });
   const m = MODES[st.mode] ?? MODES.volee;
   const [run, setRun] = useState(false);
@@ -49,7 +50,7 @@ function Page() {
   const [label, dur, full] = m.steps[k];
   return (
     <div className="grid gap-3">
-      <PageHead kicker="Allenati" title="Respiro" lede="Pochi respiri lenti abbassano il battito e fermano la mira." />
+      {embedded ? null : <PageHead kicker="Allenati" title="Respiro" lede="Pochi respiri lenti abbassano il battito e fermano la mira." />}
       <Chips value={st.mode} onChange={(mode) => setSt({ ...st, mode })} options={Object.entries(MODES).map(([id, x]) => ({ id, label: x.name }))} />
       <Card className="grid justify-items-center gap-4 py-8">
         <div className="relative grid h-64 w-64 place-items-center">
@@ -87,4 +88,8 @@ function logBreath(mode: string) {
   } catch {
     /* memoria non disponibile */
   }
+}
+
+function Page() {
+  return <RespiroBody />;
 }

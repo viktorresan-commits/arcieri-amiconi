@@ -7,6 +7,7 @@ import { buildRanks, sortRanks, type RankMetric, type RankShot } from "./rank";
 import { periodBounds, romeDayKey, type PeriodKind } from "./time";
 import { publishNews } from "./news";
 import { divisionOf } from "./labels";
+import { accountWriter } from "./acting.api";
 
 const METRICS: RankMetric[] = ["avg", "best", "points", "arrows", "sessions", "consistency", "improvement", "precision"];
 const PERIODS: PeriodKind[] = ["day", "week", "month", "year", "all"];
@@ -103,14 +104,17 @@ export const saveSession = createServerFn({ method: "POST" })
     const sql = await db();
     const me = await ensureMember(sql, context.userId);
     if (!canScore(me.role)) throw new Error("Questo profilo può solo consultare.");
+    // una sessione già salvata resta di chi la possiede; quelle nuove vanno all'allievo se «Inserisci per» è attivo
+    const prior = await sql<{ user_id: string }>`select user_id from sessions where client_key = ${data.clientKey} limit 1`;
+    const owner = prior[0]?.user_id === context.userId ? { userId: context.userId, by: null as string | null } : await accountWriter(sql, context.userId, me);
     let setupId = data.setupId;
     if (setupId) {
-      const own = await sql`select id from setups where id = ${setupId} and user_id = ${context.userId} limit 1`;
+      const own = await sql`select id from setups where id = ${setupId} and user_id = ${owner.userId} limit 1`;
       if (!own[0]) setupId = null;
     }
     const base: unknown[] = [
       data.clientKey,
-      context.userId,
+      owner.userId,
       data.startedAt,
       data.endedAt,
       data.place,
@@ -145,7 +149,7 @@ export const saveSession = createServerFn({ method: "POST" })
     const wanted = [...new Set(data.shots.map((s) => s.set).filter((v): v is number => v != null))];
     const mySets = new Set<number>();
     if (wanted.length) {
-      const rows = await sql<{ id: number }>`select id from equipment where user_id = ${context.userId} and category = 'freccia' and id = any(string_to_array(${wanted.join(",")}, ',')::int[])`;
+      const rows = await sql<{ id: number }>`select id from equipment where user_id = ${owner.userId} and category = 'freccia' and id = any(string_to_array(${wanted.join(",")}, ',')::int[])`;
       rows.forEach((r) => mySets.add(asNum(r.id)));
     }
     const shotParams: unknown[] = [];
@@ -240,7 +244,8 @@ export const saveSession = createServerFn({ method: "POST" })
         select id::int as id from up`;
     const saved = await sql.query<{ id: number }>(textFixed, [...base, ...shotParams]);
     if (!saved[0]) throw new Error("Sessione non salvata. Se non è tua, non posso sovrascriverla.");
-    const badges = data.endedAt ? await syncBadges(sql, context.userId) : [];
+    if (owner.by) await sql`update sessions set added_by = ${owner.by} where id = ${asNum(saved[0].id)}`;
+    const badges = data.endedAt ? await syncBadges(sql, owner.userId) : [];
     const tally = summarize(data.shots, data.maxArrow);
     return { id: asNum(saved[0].id), tally, badges };
   });

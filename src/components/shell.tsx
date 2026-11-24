@@ -21,6 +21,7 @@ import { HelpSheet } from "./help-sheet";
 import { rememberMenu, takeMenu, useBackRestore } from "@/lib/arcieri/back-restore";
 import { onBack } from "@/lib/arcieri/native";
 import { redeemCode } from "@/lib/arcieri/staff.api";
+import { stopActing } from "@/lib/arcieri/acting.api";
 import { refreshCrests } from "@/lib/arcieri/crest";
 import { applyPrefs, readPrefs, usePrefs } from "@/lib/arcieri/prefs";
 
@@ -39,6 +40,32 @@ export function useMember() {
 }
 
 
+
+/** «Stai inserendo per …»: finché è attivo, allenamenti, gare e analisi del gesto vanno all'allievo */
+function ActingBanner({ name, memberId, onStop }: { name: string; memberId: number; onStop: () => void }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="aa-rise flex w-full items-center gap-3 bg-accent px-4 py-2 text-sm font-semibold text-accent-fg">
+      <Glyph name="user" size={16} strokeWidth={2.2} />
+      <Link to="/istruttore/$id" params={{ id: String(memberId) }} className="min-w-0 flex-1 truncate underline-offset-2 hover:underline">
+        Stai inserendo per {name}
+      </Link>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => {
+          setBusy(true);
+          stopActing()
+            .then(onStop)
+            .finally(() => setBusy(false));
+        }}
+        className="rounded-full bg-black/85 px-3 py-1 text-xs font-bold text-white disabled:opacity-60"
+      >
+        Fine
+      </button>
+    </div>
+  );
+}
 
 export function Shell({ children }: { children: ReactNode }) {
   const { user, isPending } = useCurrentUserState();
@@ -229,7 +256,7 @@ export function Shell({ children }: { children: ReactNode }) {
   // squadra admin, allenatori e segreteria li vede solo chi ha un incarico
   // voci che ora vivono dentro un'altra pagina: Il tuo arciere nel Profilo, Stima distanze in Distanze e bersagli,
   // Quiz in Lezioni, Tempo di allungo in Allungo, Convertitore a comparsa vicino ai campi, Segreteria in Gestione compagnia
-  const hide = ["avatar", "stima", "quiz", "tempi", "unita", "segreteria", ...(me.hasPlans ? [] : ["schede"]), ...(me.canCoach ? [] : ["istruttore"]), ...(me.canSegreteria ? [] : ["segreteria"]), ...(me.canStaff ? [] : ["staff"])];
+  const hide = ["avatar", "stima", "quiz", "tempi", "unita", "segreteria", "routine", "respiro", ...(me.hasPlans ? [] : ["schede"]), ...(me.canCoach ? [] : ["istruttore"]), ...(me.canSegreteria ? [] : ["segreteria"]), ...(me.canStaff ? [] : ["staff"])];
   const focus = me.essenziale ? percorsoOf(me.percorso)?.focus ?? null : null;
   const lvl = levelOf(xp.xp);
 
@@ -348,6 +375,7 @@ export function Shell({ children }: { children: ReactNode }) {
               <Glyph name="close" size={16} />
             </button>
           ) : null}
+          {me.acting ? <ActingBanner name={me.acting.name} memberId={me.acting.memberId} onStop={() => setNonce((n) => n + 1)} /> : null}
           {offline ? <p className="bg-accent px-4 py-2 text-sm text-accent-fg">Sei offline. Il tiro resta sul telefono e si sincronizza al ritorno della rete.</p> : null}
           <main key={path} className="aa-page mx-auto w-full min-w-0 max-w-3xl overflow-x-clip px-4 py-6 pb-[calc(9rem+env(safe-area-inset-bottom))] md:pb-12">
             {children}

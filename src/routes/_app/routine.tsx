@@ -10,7 +10,8 @@ export const Route = createFileRoute("/_app/routine")({ component: Page });
 /** La tua sequenza di tiro: passi modificabili e una prova guidata che li mostra uno alla volta. */
 const BASE = ["Posizione dei piedi", "Incocco", "Presa della corda e dell'impugnatura", "Pre-trazione e testa girata", "Trazione con la schiena", "Ancoraggio", "Trasferimento", "Mira", "Rilascio", "Follow-through"];
 
-function Page() {
+/** il contenuto della pagina, anche dentro un'altra pagina (senza intestazione) */
+export function RoutineBody({ embedded = false }: { embedded?: boolean }) {
   const [st, setSt] = useLocalState<{ steps: string[]; sec: number; done: number }>("aa-routine-v1", { steps: BASE, sec: 3, done: 0 });
   const [mode, setMode] = useState<"lista" | "prova">("lista");
   const [i, setI] = useState(-1);
@@ -36,7 +37,7 @@ function Page() {
   };
   return (
     <div className="grid gap-3">
-      <PageHead kicker="Allenati" title="Routine di tiro" lede="Sempre gli stessi passi, nello stesso ordine: è così che il tiro diventa ripetibile." />
+      {embedded ? null : <PageHead kicker="Allenati" title="Routine di tiro" lede="Sempre gli stessi passi, nello stesso ordine: è così che il tiro diventa ripetibile." />}
       <Chips value={mode} onChange={(m) => { setMode(m); setI(-1); }} options={[{ id: "lista", label: "I miei passi" }, { id: "prova", label: "Prova guidata" }]} />
       {mode === "lista" ? (
         <Card className="grid gap-1">
@@ -84,4 +85,8 @@ function Page() {
       )}
     </div>
   );
+}
+
+function Page() {
+  return <RoutineBody />;
 }

@@ -9,27 +9,62 @@ import { authMiddleware } from "@/lib/auth/middleware";
 export const FITAST_HOME = "http://89.46.73.21/FITAST_WEB/IT/pagView-GARE.awp";
 const HOST = "89.46.73.21";
 
-import { parseHtml, type FitastPage } from "./fitast-parse";
+import { formBody, parseHtml, type FitastPage } from "./fitast-parse";
 
-export type { FitastCell, FitastLink, FitastPage, FitastTable } from "./fitast-parse";
+export type { FitastButton, FitastCell, FitastForm, FitastLink, FitastPage, FitastSelect, FitastTable } from "./fitast-parse";
 
-const cache = new Map<string, { at: number; page: FitastPage }>();
+const cache = new Map<string, { at: number; page: FitastPage; cookie: string }>();
 const TTL = 10 * 60_000;
 
-async function fetchPage(url: string): Promise<FitastPage> {
-  const hit = cache.get(url);
-  if (hit && Date.now() - hit.at < TTL) return hit.page;
+/** cookie di sessione del portale (le pagine .awp ricordano la scelta fatta): si rimandano tali e quali */
+function mergeCookies(old: string, res: Response) {
+  const jar = new Map<string, string>();
+  for (const part of old.split(/;\s*/)) {
+    const [k, ...v] = part.split("=");
+    if (k?.trim()) jar.set(k.trim(), v.join("="));
+  }
+  const raw = (res.headers as Headers & { getSetCookie?: () => string[] }).getSetCookie?.() ?? (res.headers.get("set-cookie") ? [res.headers.get("set-cookie") as string] : []);
+  for (const line of raw) {
+    const [pair] = line.split(";");
+    const [k, ...v] = pair.split("=");
+    if (k?.trim()) jar.set(k.trim(), v.join("="));
+  }
+  return [...jar.entries()].slice(0, 20).map(([k, v]) => `${k}=${v}`).join("; ").slice(0, 3000);
+}
+
+type Req = { url: string; body?: string; cookie: string; referer?: string };
+
+async function fetchPage(req: Req): Promise<FitastPage & { cookie: string }> {
+  const key = `${req.url}|${req.body ?? ""}`;
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.at < TTL) return { ...hit.page, cookie: req.cookie || hit.cookie };
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 15_000);
+  const timer = setTimeout(() => ctrl.abort(), 20_000);
   try {
-    const res = await fetch(url, { signal: ctrl.signal, headers: { "user-agent": "Mozilla/5.0 (Arcieri Amiconi; lettura calendario)", accept: "text/html,application/pdf,*/*" } });
+    const headers: Record<string, string> = { "user-agent": "Mozilla/5.0 (Arcieri Amiconi; lettura calendario)", accept: "text/html,application/pdf,*/*" };
+    if (req.cookie) headers.cookie = req.cookie;
+    if (req.referer) headers.referer = req.referer;
+    if (req.body != null) headers["content-type"] = "application/x-www-form-urlencoded";
+    let res = await fetch(req.url, { method: req.body != null ? "POST" : "GET", body: req.body, headers, signal: ctrl.signal, redirect: "manual" });
+    let cookie = mergeCookies(req.cookie, res);
+    // dopo un invio WEBDEV spesso risponde con un rimando: lo si segue restando sul portale
+    for (let hop = 0; hop < 4 && res.status >= 300 && res.status < 400; hop++) {
+      const loc = res.headers.get("location");
+      if (!loc) break;
+      const next = new URL(loc, res.url || req.url);
+      if (next.hostname !== HOST || !next.pathname.startsWith("/FITAST_WEB/")) throw new Error("Il portale rimanda fuori da FITAST.");
+      const { "content-type": _drop, ...getHeaders } = headers;
+      res = await fetch(next.toString(), { headers: { ...getHeaders, cookie }, signal: ctrl.signal, redirect: "manual" });
+      cookie = mergeCookies(cookie, res);
+    }
     if (!res.ok) throw new Error(`Il portale FITAST risponde ${res.status}.`);
+    const finalUrl = res.url || req.url;
     const type = res.headers.get("content-type") ?? "";
     const now = new Date().toISOString();
-    if (/pdf/i.test(type) || /\.pdf($|\?)/i.test(url)) {
-      const page: FitastPage = { url, title: decodeURIComponent(url.split("/").pop() ?? "Documento"), kind: "pdf", tables: [], lines: [], links: [], fetchedAt: now };
-      cache.set(url, { at: Date.now(), page });
-      return page;
+    if (/pdf/i.test(type) || /\.pdf($|\?)/i.test(finalUrl)) {
+      const page: FitastPage = { url: finalUrl, title: decodeURIComponent(finalUrl.split("/").pop() ?? "Documento"), kind: "pdf", tables: [], lines: [], links: [], form: null, charset: "", fetchedAt: now };
+      cache.set(key, { at: Date.now(), page, cookie });
+      return { ...page, cookie };
     }
     const buf = new Uint8Array(await res.arrayBuffer());
     // i siti WEBDEV spesso sono in windows-1252: si guarda il charset dichiarato
@@ -41,9 +76,9 @@ async function fetchPage(url: string): Promise<FitastPage> {
     } catch {
       html = new TextDecoder("utf-8").decode(buf);
     }
-    const page: FitastPage = { ...parseHtml(html, res.url || url), kind: /html|xml|text/i.test(type) || !type ? "html" : "altro", fetchedAt: now };
-    cache.set(url, { at: Date.now(), page });
-    return page;
+    const page: FitastPage = { ...parseHtml(html, finalUrl), kind: /html|xml|text/i.test(type) || !type ? "html" : "altro", charset, fetchedAt: now };
+    cache.set(key, { at: Date.now(), page, cookie });
+    return { ...page, cookie };
   } catch (e) {
     if (e instanceof Error && e.name === "AbortError") throw new Error("Il portale FITAST non risponde: riprova più tardi.");
     throw e instanceof Error ? e : new Error("Portale FITAST non raggiungibile.");
@@ -52,18 +87,39 @@ async function fetchPage(url: string): Promise<FitastPage> {
   }
 }
 
-/** legge una pagina del portale FITAST (solo quel sito) */
+function onPortal(raw: string) {
+  let u: URL;
+  try {
+    u = new URL(raw);
+  } catch {
+    throw new Error("Indirizzo non valido.");
+  }
+  if (u.hostname !== HOST || !u.pathname.startsWith("/FITAST_WEB/")) throw new Error("Si leggono solo le pagine del portale FITAST.");
+  return u.toString();
+}
+
+/**
+ * legge una pagina del portale FITAST (solo quel sito). Con `post` preme un comando della pagina
+ * (PIAZZOLE, CLASSIFICA…): rimanda il modulo con i suoi campi, come farebbe il browser.
+ */
 export const fitastRead = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((input: unknown) => {
-    const raw = String((input as { url?: unknown })?.url ?? "") || FITAST_HOME;
-    let u: URL;
-    try {
-      u = new URL(raw);
-    } catch {
-      throw new Error("Indirizzo non valido.");
+    const raw = (input ?? {}) as { url?: unknown; post?: { fields?: unknown; charset?: unknown }; cookie?: unknown; referer?: unknown };
+    const url = onPortal(String(raw.url ?? "") || FITAST_HOME);
+    const cookie = String(raw.cookie ?? "").replace(/[\r\n]/g, "").slice(0, 3000);
+    const referer = raw.referer ? onPortal(String(raw.referer)) : undefined;
+    let body: string | undefined;
+    if (raw.post && typeof raw.post === "object") {
+      const f = raw.post.fields && typeof raw.post.fields === "object" ? (raw.post.fields as Record<string, unknown>) : {};
+      const fields: Record<string, string> = {};
+      for (const [k, v] of Object.entries(f).slice(0, 200)) {
+        if (k.length > 80) continue;
+        fields[k] = String(v ?? "").slice(0, 4000);
+      }
+      body = formBody(fields, String(raw.post.charset ?? "utf-8"));
+      if (body.length > 60_000) throw new Error("Modulo troppo grande.");
     }
-    if (u.hostname !== HOST || !u.pathname.startsWith("/FITAST_WEB/")) throw new Error("Si leggono solo le pagine del portale FITAST.");
-    return { url: u.toString() };
+    return { url, body, cookie, referer };
   })
-  .handler(async ({ data }) => fetchPage(data.url));
+  .handler(async ({ data }) => fetchPage(data));

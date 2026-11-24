@@ -1,4 +1,5 @@
 import { useTeamAvatars } from "@/components/avatar-hero";
+import { InsertFor } from "@/components/insert-for";
 import { SceneBackdrop } from "@/components/scene-2d";
 import { ArcherFront } from "@/components/archer-front";
 import { useSky } from "@/lib/arcieri/sky3d";
@@ -95,6 +96,7 @@ function Page() {
         <Card className="p-3"><p className="text-xs text-muted">Gare</p><p className="font-display text-3xl tabular-nums">{data.comps.length}</p></Card>
       </div>
       <RolesCard data={data} />
+      {data.viewer.level === "super" && !data.viewer.self ? <InsertFor memberId={data.id} name={name} hasAccount={Boolean(data.userId)} /> : null}
       <GameRecords games={data.games} mine={data.mine} />
       <Card>
         <h2 className="mb-3 font-display text-2xl">I premi migliori</h2>

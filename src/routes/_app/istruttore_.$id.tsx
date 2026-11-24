@@ -4,6 +4,7 @@ import { Avatar, Button, Card, Empty, ErrorNote, Loading, SectionHead, Segmented
 import { Glyph } from "@/components/icons";
 import { AvgLine } from "@/components/charts";
 import { CoachPlanCard, PlanEditor } from "@/components/coach-plans";
+import { InsertFor } from "@/components/insert-for";
 import { useLoad } from "@/lib/arcieri/use-load";
 import { useEntryState } from "@/lib/arcieri/back-restore";
 import { athleteBoard, type Plan } from "@/lib/arcieri/istruttore.api";
@@ -54,6 +55,7 @@ function Page() {
           <p className="text-sm">{a.name.split(" ")[0]} non condivide i suoi allenamenti con gli allenatori: progressi, gesto e foto restano privati. Puoi comunque preparargli una scheda.</p>
         </Card>
       ) : null}
+      <InsertFor memberId={a.memberId} name={a.name} />
       <Segmented
         value={tab}
         onChange={setTab}

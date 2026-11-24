@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { publishNews } from "./news";
 import { myMembership } from "./compagnie.api";
+import { actingOf } from "./acting.api";
 import {
   asNum,
   canScore,
@@ -52,7 +53,8 @@ export const getMe = createServerFn({ method: "GET" })
     } catch {
       /* tabella non ancora creata */
     }
-    return { ...out, essenziale, leader, canStaff: role, canCoach: role, canSegreteria: role, hasPlans, category: last ? categorySingular(last.category) : "" };
+    const acting = await actingOf(sql, context.userId);
+    return { ...out, essenziale, leader, canStaff: role, canCoach: role, canSegreteria: role, hasPlans, acting, category: last ? categorySingular(last.category) : "" };
   });
 
 export const listRoster = createServerFn({ method: "GET" })

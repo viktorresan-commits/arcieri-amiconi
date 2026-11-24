@@ -265,10 +265,26 @@ function CategoryCarousel({ current, onGo, isHere, hide = [] }: { current?: stri
   const n = STATIONS.length;
   const mid = Math.floor(COPIES / 2) * n;
   const here = current ? SHORTCUTS.filter((s) => s.to !== "/" && current.startsWith(s.to)).sort((x, y) => y.to.length - x.to.length)[0] : undefined;
-  const startAt = Math.max(0, STATIONS.findIndex((st) => st.id === (here?.group ?? "allena")));
+  // si riapre sulla categoria in cui si era (anche tornando indietro da una voce), altrimenti su quella della pagina
+  const remembered = (() => {
+    try {
+      return sessionStorage.getItem("aa-menu-cat") || "";
+    } catch {
+      return "";
+    }
+  })();
+  const startAt = Math.max(0, STATIONS.findIndex((st) => st.id === (remembered || here?.group || "allena")));
   const ref = useRef<HTMLDivElement>(null);
   const timer = useRef<number | null>(null);
   const [active, setActive] = useState(startAt);
+  const [cur, setCur] = useState(mid + startAt);
+  useEffect(() => {
+    try {
+      sessionStorage.setItem("aa-menu-cat", STATIONS[active].id);
+    } catch {
+      /* niente */
+    }
+  }, [active]);
   const tabs = useRef<HTMLDivElement>(null);
   // la linguetta della sezione aperta resta sempre in vista
   useEffect(() => {
@@ -294,6 +310,7 @@ function CategoryCarousel({ current, onGo, isHere, hide = [] }: { current?: stri
     const i = Math.round(el.scrollLeft / (pageW() + gap));
     const st = ((i % n) + n) % n;
     if (st !== active) setActive(st);
+    if (i !== cur) setCur(i);
     if (timer.current) window.clearTimeout(timer.current);
     // fermo: se sono vicino ai bordi della lista ripetuta, torno al centro senza scatti visibili
     timer.current = window.setTimeout(() => {
@@ -325,7 +342,7 @@ function CategoryCarousel({ current, onGo, isHere, hide = [] }: { current?: stri
           const items = SHORTCUTS.filter((s) => s.group === st.id && !hide.includes(s.id));
           const k = i % n;
           return (
-            <section key={i} className="aa-cat-page grid min-h-[calc(100dvh-15rem)] w-full shrink-0 snap-center content-start gap-4 px-4 pb-8 pt-1" style={{ ["--cat" as string]: st.color, background: `linear-gradient(180deg, color-mix(in srgb, ${st.color} 16%, transparent) 0%, color-mix(in srgb, ${st.color} 9%, transparent) 35%, color-mix(in srgb, ${st.color} 5%, transparent) 70%, color-mix(in srgb, ${st.color} 2%, transparent) 100%)` }}>
+            <section key={i} className={cx("aa-cat-page grid min-h-[calc(100dvh-15rem)] w-full shrink-0 snap-center content-start gap-4 px-4 pb-8 pt-1", i === cur && "is-active")} data-k={k} style={{ ["--cat" as string]: st.color, background: `linear-gradient(180deg, color-mix(in srgb, ${st.color} 16%, transparent) 0%, color-mix(in srgb, ${st.color} 9%, transparent) 35%, color-mix(in srgb, ${st.color} 5%, transparent) 70%, color-mix(in srgb, ${st.color} 2%, transparent) 100%)` }}>
               {/* intestazione illustrata della categoria: grande icona con alone, titolo e bersaglio decorativo */}
               <div className="aa-cat-hero relative overflow-hidden rounded-[1.5rem] p-3.5" style={{ ["--cat" as string]: st.color, background: `linear-gradient(135deg, color-mix(in srgb, ${st.color} 28%, transparent), color-mix(in srgb, ${st.color} 8%, transparent) 55%, rgba(255,255,255,0.02))` }}>
                 <svg aria-hidden viewBox="0 0 200 200" className="aa-cat-rings pointer-events-none absolute -right-10 -top-12 h-52 w-52 opacity-[0.22]">
@@ -348,11 +365,11 @@ function CategoryCarousel({ current, onGo, isHere, hide = [] }: { current?: stri
                 <span className="absolute right-3 top-3 rounded-full bg-black/30 px-2 py-0.5 text-[0.62rem] font-semibold text-white/85 backdrop-blur">{items.length} voci</span>
               </div>
               <div className="grid grid-cols-3 gap-2.5 pt-1">
-                {items.map((s) => (
-                  <Link key={s.id} to={s.to as "/"} search={(s.search ?? {}) as never} onClick={onGo} aria-current={isHere(s) ? "page" : undefined} className={cx("aa-short aa-cat-tile flex min-w-0 flex-col items-center gap-1.5 rounded-[1.4rem] px-1.5 pb-2.5 pt-3 text-center", isHere(s) && "is-here")}>
-                    <AppIcon name={s.icon} accent={st.color} size={64} className="aa-short-icon" />
-                    <span className="w-full truncate text-[0.78rem] font-semibold leading-tight">{s.label}</span>
-                    <span className="line-clamp-2 w-full text-[0.6rem] leading-tight text-muted">{s.hint}</span>
+                {items.map((s, j) => (
+                  <Link key={s.id} to={s.to as "/"} search={(s.search ?? {}) as never} onClick={onGo} aria-current={isHere(s) ? "page" : undefined} className={cx("aa-short aa-cat-tile flex min-w-0 flex-col items-center gap-1.5 rounded-[1.4rem] px-1 pb-3 pt-3.5 text-center", isHere(s) && "is-here")} style={{ ["--i" as string]: j }}>
+                    <AppIcon name={s.icon} accent={st.color} size={80} className="aa-short-icon" />
+                    <span className="line-clamp-2 w-full text-[0.82rem] font-semibold leading-tight">{s.label}</span>
+                    <span className="line-clamp-2 w-full text-[0.62rem] leading-tight text-muted">{s.hint}</span>
                   </Link>
                 ))}
               </div>

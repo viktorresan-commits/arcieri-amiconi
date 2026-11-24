@@ -75,6 +75,8 @@ export type PublicMember = {
   canSegreteria?: boolean;
   /** solo in getMe: categoria dell'ultima gara a cui si è iscritto, al singolare (Messere, Madonna, Junior, Puer); vuota se non c'è */
   category?: string;
+  /** solo in getMe: «Inserisci per» attivo (allenatore o fondatore che salva dati a nome di un allievo) */
+  acting?: { memberId: number; name: string; until: string } | null;
 };
 
 /** Categoria di gara al singolare, per il titolo sotto il nome. Se non la riconosco la lascio com'è. */

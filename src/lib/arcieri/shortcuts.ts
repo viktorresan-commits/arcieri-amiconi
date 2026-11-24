@@ -49,7 +49,7 @@ export const SHORTCUTS: Shortcut[] = [
   { id: "timer", group: "allena", label: "Timer di tiro", hint: "Semaforo e tempi da gara", icon: "stopwatch", color: "#d6582a", to: "/timer" },
   { id: "borsa", group: "prepara", label: "Prima di partire", hint: "Borsa e riscaldamento", icon: "checklist", color: "#3f8a76", to: "/borsa" },
   { id: "manutenzione", group: "prepara", label: "Manutenzione", hint: "Corda, cocche, penne", icon: "wrench", color: "#6c7684", to: "/manutenzione" },
-  { id: "secco", group: "allena", label: "A secco", hint: "Tenute con arco o elastico", icon: "hold", color: "#c4475a", to: "/secco" },
+  { id: "secco", group: "allena", label: "A secco, routine e respiro", hint: "Tenute, passi del tiro e respiro", icon: "hold", color: "#c4475a", to: "/secco" },
   { id: "tempi", group: "allena", label: "Tempo di allungo", hint: "Cronometra la trazione, o dai video", icon: "stopwatch", color: "#8a5bd1", to: "/tempi" },
   { id: "routine", group: "allena", label: "Routine di tiro", hint: "I tuoi passi, uno alla volta", icon: "steps", color: "#2a9c66", to: "/routine" },
   { id: "respiro", group: "allena", label: "Respiro", hint: "Calma prima della volée", icon: "lungs", color: "#3a8fc4", to: "/respiro" },

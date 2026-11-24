@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Card, Chips, PageHead } from "@/components/kit";
+import { Card, Chips, PageHead, Segmented } from "@/components/kit";
+import { useEntryState } from "@/lib/arcieri/back-restore";
+import { RoutineBody } from "./routine";
+import { RespiroBody } from "./respiro";
 import { Glyph } from "@/components/icons";
 import { useLocalState, useWakeLock, whistle } from "@/lib/arcieri/local-store";
 import { award } from "@/lib/arcieri/xp";
@@ -23,7 +26,8 @@ type Store = { preset: string; done: number; seconds: number; last?: string };
 const COLORS: Record<Phase, string> = { pronto: "#7c8aa5", tieni: "#e5484d", rilascia: "#2fbf71", pausa: "#e3a21a", fine: "#7cf0a8" };
 const LABEL: Record<Phase, string> = { pronto: "Pronto", tieni: "Tieni", rilascia: "Rilascia", pausa: "Pausa", fine: "Finito" };
 
-function Page() {
+/** il contenuto della pagina, anche dentro un'altra pagina (senza intestazione) */
+export function SeccoBody({ embedded = false }: { embedded?: boolean }) {
   const [store, setStore] = useLocalState<Store>("aa-secco-v1", { preset: "base", done: 0, seconds: 0 });
   const plan = (PRESETS[store.preset] ?? PRESETS.base).plan;
   const [phase, setPhase] = useState<Phase>("pronto");
@@ -96,7 +100,7 @@ function Page() {
 
   return (
     <div className="grid gap-3">
-      <PageHead kicker="Allenamento a secco" title="Tenute" lede="Arco o elastico in ancoraggio: tieni quando fischia una volta, rilascia piano con due." />
+      {embedded ? null : <PageHead kicker="Allenamento a secco" title="Tenute" lede="Arco o elastico in ancoraggio: tieni quando fischia una volta, rilascia piano con due." />}
       <Chips value={store.preset} onChange={(preset) => setStore({ ...store, preset })} options={Object.entries(PRESETS).map(([id, p]) => ({ id, label: p.name }))} />
       <Card className="grid justify-items-center gap-3 py-5">
         <div className="relative">
@@ -151,6 +155,19 @@ function Stat({ label, value }: { label: string; value: string }) {
     <div>
       <p className="font-display text-xl tabular-nums">{value}</p>
       <p className="text-[0.65rem] uppercase tracking-wider text-muted">{label}</p>
+    </div>
+  );
+}
+
+/** A secco, routine di tiro e respiro: un'unica sezione con tre schede */
+function Page() {
+  const [view, setView] = useEntryState<"secco" | "routine" | "respiro">("secco-vista", "secco");
+  const lede = view === "routine" ? "Sempre gli stessi passi, nello stesso ordine: è così che il tiro diventa ripetibile." : view === "respiro" ? "Pochi respiri lenti abbassano il battito e fermano la mira." : "Arco o elastico in ancoraggio: tieni quando fischia una volta, rilascia piano con due.";
+  return (
+    <div className="grid gap-3">
+      <PageHead kicker="Allenati" title="A secco, routine e respiro" lede={lede} />
+      <Segmented value={view} onChange={setView} options={[{ id: "secco", label: "A secco" }, { id: "routine", label: "Routine" }, { id: "respiro", label: "Respiro" }]} />
+      {view === "routine" ? <RoutineBody embedded /> : view === "respiro" ? <RespiroBody embedded /> : <SeccoBody embedded />}
     </div>
   );
 }

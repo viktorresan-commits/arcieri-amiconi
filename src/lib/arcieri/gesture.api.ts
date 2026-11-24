@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { asIso, asNum, asNumOrNull, canScore, clip, db, ensureMember } from "./access";
+import { writerFor } from "./acting.api";
 
 /** Analisi del gesto salvate: numeri e miniatura, per i confronti nel tempo e nel gruppo. */
 
@@ -86,9 +87,10 @@ export const saveGesture = createServerFn({ method: "POST" })
     const sql = await db();
     const me = await ensureMember(sql, context.userId);
     if (!canScore(me.role)) throw new Error("Questo profilo può solo consultare.");
+    const owner = await writerFor(sql, context.userId, me);
     const rows = await sql<{ id: number }>`
-      insert into gestures (member_id, title, kind, hand, score, shots, anchor_s, draw_s, line_deg, bow_deg, shoulder_deg, jitter, distance_m, data, thumb)
-      values (${me.id}, ${data.title}, ${data.kind}, ${data.hand}, ${data.score}, ${data.shots}, ${data.anchorS}, ${data.drawS}, ${data.lineDeg},
+      insert into gestures (member_id, added_by, title, kind, hand, score, shots, anchor_s, draw_s, line_deg, bow_deg, shoulder_deg, jitter, distance_m, data, thumb)
+      values (${owner.memberId}, ${owner.by}, ${data.title}, ${data.kind}, ${data.hand}, ${data.score}, ${data.shots}, ${data.anchorS}, ${data.drawS}, ${data.lineDeg},
         ${data.bowDeg}, ${data.shoulderDeg}, ${data.jitter}, ${data.distanceM}, ${data.data}::jsonb, ${data.thumb})
       returning id`;
     return { id: asNum(rows[0]?.id) };

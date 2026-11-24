@@ -1741,3 +1741,25 @@ html .aa-cat-page .aa-short.is-here span { color: color-mix(in srgb, var(--cat) 
 .aa-game-wrap { clip-path: inset(0 0 -60% 0); }
 .aa-game.aa-game-joined { overflow: visible; clip-path: inset(0 0 -60% 0); }
 @media (min-width: 768px) { .aa-game.aa-game-joined { clip-path: inset(0 0 -60% 0 round 1.75rem 1.75rem 0 0); } }
+
+/* Menu: entrata animata della categoria aperta (titolo, poi le voci una dopo l'altra) */
+@keyframes aa-tile-in {
+  0% { opacity: 0; transform: translateY(16px) scale(0.86); }
+  60% { opacity: 1; transform: translateY(-3px) scale(1.03); }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes aa-hero-in {
+  from { opacity: 0; transform: translateY(-10px) scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes aa-icon-in {
+  0% { transform: scale(0.6) rotate(-10deg); }
+  70% { transform: scale(1.08) rotate(3deg); }
+  100% { transform: none; }
+}
+.aa-cat-page.is-active .aa-cat-hero { animation: aa-hero-in 0.42s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.aa-cat-page.is-active .aa-cat-tile { animation: aa-tile-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; animation-delay: calc(90ms + var(--i, 0) * 45ms); }
+.aa-cat-page.is-active .aa-cat-tile .aa-short-icon { animation: aa-icon-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) both; animation-delay: calc(130ms + var(--i, 0) * 45ms); }
+@media (prefers-reduced-motion: reduce) {
+  .aa-cat-page.is-active .aa-cat-hero, .aa-cat-page.is-active .aa-cat-tile, .aa-cat-page.is-active .aa-cat-tile .aa-short-icon { animation: none; }
+}
