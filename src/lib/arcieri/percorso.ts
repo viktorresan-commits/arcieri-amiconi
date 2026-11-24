@@ -22,7 +22,7 @@ export const PERCORSI: { id: Percorso; title: string; text: string; color: strin
   {
     id: "istruttore",
     title: "Seguo altri arcieri",
-    text: "Istruttore: atleti e presenze, quando ti nominano",
+    text: "Allenatore: allievi, schede e progressi, quando ti nomina il presidente",
     color: "#8cc3f0",
     focus: ["istruttore", "segnapunti", "lezioni", "statistiche", "gare", "calendario"],
   },

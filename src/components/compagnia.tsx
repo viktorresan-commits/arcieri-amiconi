@@ -258,7 +258,7 @@ export function CompanyLeague({ board, onJoin, busy }: { board: Board; onJoin: (
       </Card>
       <Card className="grid grid-cols-[minmax(0,1fr)] gap-2">
         <h2 className="font-display text-2xl">Tutte le compagnie</h2>
-        {board.isAdmin ? <p className="text-xs text-muted">Sei amministratore: tocca una compagnia per vedere contatti e iscritti.</p> : <p className="text-xs text-muted">Tocca una compagnia per vedere i contatti.</p>}
+        {board.isAdmin ? <p className="text-xs text-muted">Sei il fondatore: tocca una compagnia per vedere contatti e iscritti.</p> : <p className="text-xs text-muted">Tocca una compagnia per vedere i contatti.</p>}
         {board.companies.map((co) => {
           const expanded = open === co.id;
           const kinds = ["phone", "whatsapp", "email", "website", "instagram", "facebook", "youtube", "tiktok", "address"] as const;
@@ -310,7 +310,7 @@ export function CompanyLeague({ board, onJoin, busy }: { board: Board; onJoin: (
                         </Link>
                       ))}
                     </div>
-                  ) : co.members > 0 && co.id !== board.mine ? <p className="text-xs text-muted">Gli iscritti li vede l'amministratore.</p> : null}
+                  ) : co.members > 0 && co.id !== board.mine ? <p className="text-xs text-muted">Gli iscritti li vedono il presidente e il fondatore.</p> : null}
                 </div>
               ) : null}
             </div>

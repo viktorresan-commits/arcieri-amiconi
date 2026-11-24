@@ -361,7 +361,7 @@ function Page() {
   );
 }
 
-/** Diventare amministratore con ID e password: poi si possono togliere persone dalla squadra. */
+/** Accesso del fondatore con ID e password: gestisce tutte le compagnie e ne nomina i presidenti. */
 function AdminUnlock({ isAdmin, onDone }: { isAdmin: boolean; onDone: () => void }) {
   const [id, setId] = useState("");
   const [pw, setPw] = useState("");
@@ -369,14 +369,14 @@ function AdminUnlock({ isAdmin, onDone }: { isAdmin: boolean; onDone: () => void
   if (isAdmin) {
     return (
       <Card className="grid gap-1">
-        <IconTitle icon="lock" color="#c39320">Amministratore</IconTitle>
-        <p className="text-sm text-muted">Sei amministratore: in Squadra tieni premuto su una persona per toglierla.</p>
+        <IconTitle icon="lock" color="#c39320">Fondatore</IconTitle>
+        <p className="text-sm text-muted">Sei il fondatore: in Gestione compagnia nomini i presidenti e gestisci tutte le compagnie.</p>
       </Card>
     );
   }
   return (
     <Card className="grid gap-2">
-      <IconTitle icon="lock" color="#c39320" sub="Con ID e password dell'amministratore">Diventa amministratore</IconTitle>
+      <IconTitle icon="lock" color="#c39320" sub="Con ID e password del fondatore">Accesso del fondatore</IconTitle>
       <Field label="ID"><TextInput value={id} onChange={(e) => setId(e.target.value)} autoComplete="username" autoCapitalize="none" /></Field>
       <Field label="Password"><TextInput type="password" value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="current-password" /></Field>
       <Button
@@ -390,7 +390,7 @@ function AdminUnlock({ isAdmin, onDone }: { isAdmin: boolean; onDone: () => void
       >
         {state === "busy" ? "Controllo…" : "Sblocca"}
       </Button>
-      {state && state !== "busy" ? <p className={`text-sm ${state === "ok" ? "text-emerald-300" : "text-danger"}`}>{state === "ok" ? "Fatto: ora sei amministratore." : state}</p> : null}
+      {state && state !== "busy" ? <p className={`text-sm ${state === "ok" ? "text-emerald-300" : "text-danger"}`}>{state === "ok" ? "Fatto: accesso del fondatore attivo." : state}</p> : null}
     </Card>
   );
 }

@@ -25,13 +25,13 @@ export type MemberRow = {
   created_at: unknown;
   /** il fondatore: nessuno lo può togliere o declassare */
   is_super?: boolean;
-  /** incarico nello staff oltre al ruolo: "" oppure "editor" */
+  /** vecchio incarico di moderatore: non più usato, sempre "" */
   staff?: string;
-  /** percorso scelto al primo accesso: "" (da scegliere), principiante, compagnia, istruttore, esistente */
+  /** percorso scelto al primo accesso: "" (da scegliere), principiante, compagnia, allenatore, esistente */
   percorso?: string;
-  /** gli istruttori della compagnia vedono i suoi allenamenti */
+  /** gli allenatori della compagnia vedono i suoi allenamenti */
   share_coach?: boolean;
-  /** istruttore nominato dal fondatore, dallo staff o dal capogruppo */
+  /** allenatore nominato dal fondatore o dal presidente della compagnia */
   coach?: boolean;
 };
 
@@ -59,16 +59,18 @@ export type PublicMember = {
   staff: string;
   percorso: string;
   shareCoach: boolean;
-  /** istruttore nominato */
+  /** allenatore nominato */
   coach: boolean;
-  /** solo in getMe: incarichi (capogruppo della sua compagnia) */
+  /** solo in getMe: incarichi (presidente della sua compagnia) */
   leader?: boolean;
-  /** solo in getMe: vede la Squadra admin */
+  /** solo in getMe: vede la Gestione compagnia */
   canStaff?: boolean;
   /** solo in getMe: percorso essenziale ancora attivo (meno di 5 allenamenti) */
   essenziale?: boolean;
-  /** solo in getMe: può aprire il pannello istruttori */
+  /** solo in getMe: può aprire il pannello allenatori */
   canCoach?: boolean;
+  /** solo in getMe: ha ricevuto almeno una scheda di allenamento da un allenatore */
+  hasPlans?: boolean;
   /** solo in getMe: può aprire la segreteria della compagnia */
   canSegreteria?: boolean;
   /** solo in getMe: categoria dell'ultima gara a cui si è iscritto, al singolare (Messere, Madonna, Junior, Puer); vuota se non c'è */
@@ -163,11 +165,13 @@ export function clip(value: unknown, max: number) {
   return String(value ?? "").replace(/\s+/g, " ").trim().slice(0, max);
 }
 
-/** livello nello staff: fondatore, amministratore, editor delle compagnie, oppure nessuno */
+/**
+ * Incarichi dell'app: fondatore (questo), presidente della compagnia e allenatore.
+ * Amministratori e moderatori non esistono più: l'unico livello "di staff" è il fondatore.
+ * Il tipo conserva i vecchi valori per i dati salvati, ma la funzione restituisce solo "super" o null.
+ */
 export function staffLevel(me: Pick<MemberRow, "role" | "is_super" | "staff">): "super" | "admin" | "editor" | null {
-  if (me.role === "admin") return asBool(me.is_super) ? "super" : "admin";
-  if (me.staff === "editor") return "editor";
-  return null;
+  return me.role === "admin" && asBool(me.is_super) ? "super" : null;
 }
 
 export function canScore(role: string) {

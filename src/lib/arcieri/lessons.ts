@@ -32,10 +32,10 @@ export const LESSONS: Lesson[] = [
   },
   {
     id: "attrezzatura-base", level: 1, title: "Com'è fatto l'arco", minutes: 4, art: "parti", charts: ["libbre"],
-    intro: "I nomi delle parti servono a capire le correzioni dell'istruttore.",
+    intro: "I nomi delle parti servono a capire le correzioni dell'allenatore.",
     points: ["Riser: l'impugnatura centrale, dove si attaccano i flettenti.", "Flettenti: accumulano l'energia; le libbre sono scritte lì (a 28″).", "Rest e bottone: sostengono e guidano la freccia.", "Mirino, clicker e stabilizzatore: mira, allungo costante, arco fermo."],
     errors: ["Montare i flettenti invertiti (alto e basso).", "Corda senza punto d'incocco segnato."],
-    drill: "Monta e smonta l'arco una volta con l'istruttore, nominando ogni parte.",
+    drill: "Monta e smonta l'arco una volta con l'allenatore, nominando ogni parte.",
     quiz: { q: "Dove si leggono le libbre dell'arco?", options: ["Sulla corda", "Sui flettenti", "Sul mirino"], correct: 1, why: "Sono scritte sui flettenti, misurate a 28 pollici di allungo." },
   },
   {

@@ -266,8 +266,8 @@ export const removeTeamMember = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const sql = await db();
     const me = await ensureMember(sql, context.userId);
-    if (me.role !== "admin") throw new Error("Solo l'amministratore toglie persone dalla squadra.");
-    if (asNum(me.id) === data.id) throw new Error("Non puoi togliere te stesso: passa il ruolo di amministratore a un altro prima.");
+    if (me.role !== "admin") throw new Error("Solo il fondatore toglie persone dall'app.");
+    if (asNum(me.id) === data.id) throw new Error("Non puoi togliere te stesso.");
     const rows = await sql<{ id: number; user_id: string | null; given_name: string; role: string; is_super: boolean | null }>`select id, user_id, given_name, role, is_super from members where id = ${data.id} limit 1`;
     const target = rows[0];
     if (!target) throw new Error("Profilo non trovato.");
@@ -299,7 +299,7 @@ export const deleteMyAccount = createServerFn({ method: "POST" })
     const sql = await db();
     const me = await ensureMember(sql, context.userId);
     // il fondatore tiene in piedi l'app: prima deve passare il ruolo a qualcun altro
-    if (me.is_super) throw new Error("Sei il fondatore dell'app: prima di eliminare l'account passa il ruolo a un altro amministratore.");
+    if (me.is_super) throw new Error("Sei il fondatore dell'app: il tuo account non si può eliminare da qui.");
     const memberId = asNum(me.id);
     await wipeUser(sql, context.userId, memberId, "tutto");
     const tidy = async (text: string, params: unknown[]) => {
@@ -324,7 +324,7 @@ export const deleteMyAccount = createServerFn({ method: "POST" })
     return { ok: true as const };
   });
 
-/* ---------------- percorso del primo accesso e condivisione con gli istruttori ---------------- */
+/* ---------------- percorso del primo accesso e condivisione con gli allenatori ---------------- */
 
 export const setPercorso = createServerFn({ method: "POST" })
   .middleware([authMiddleware])

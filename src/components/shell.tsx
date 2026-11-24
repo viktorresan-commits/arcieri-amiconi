@@ -226,8 +226,8 @@ export function Shell({ children }: { children: ReactNode }) {
 
   const label = memberLabel(me, [me]);
   // voci che questa persona non può aprire, e il percorso dei nuovi (prime 6 funzioni)
-  // squadra admin, istruttori e segreteria li vede solo chi ha un incarico
-  const hide = [...(me.canCoach ? [] : ["istruttore"]), ...(me.canSegreteria ? [] : ["segreteria"]), ...(me.canStaff ? [] : ["staff"])];
+  // squadra admin, allenatori e segreteria li vede solo chi ha un incarico
+  const hide = [...(me.hasPlans ? [] : ["schede"]), ...(me.canCoach ? [] : ["istruttore"]), ...(me.canSegreteria ? [] : ["segreteria"]), ...(me.canStaff ? [] : ["staff"])];
   const focus = me.essenziale ? percorsoOf(me.percorso)?.focus ?? null : null;
   const lvl = levelOf(xp.xp);
 

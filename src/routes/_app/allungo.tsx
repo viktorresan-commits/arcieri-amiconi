@@ -37,7 +37,7 @@ function Page() {
           </div>
         ) : null}
         {ok ? <p className="text-sm">Freccia di partenza: circa {fmt(arrow, 1)}″ (un pollice oltre l'allungo, per sicurezza).</p> : null}
-        <p className="text-[0.7rem] text-muted">È una stima: l'allungo vero si misura all'ancoraggio con una freccia graduata, meglio con l'istruttore.</p>
+        <p className="text-[0.7rem] text-muted">È una stima: l'allungo vero si misura all'ancoraggio con una freccia graduata, meglio con l'allenatore.</p>
       </Card>
       <Card className="grid gap-3">
         <p className="aa-section-title">L'arco al tuo allungo</p>

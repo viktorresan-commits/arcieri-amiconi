@@ -922,7 +922,7 @@ export const saveGoal = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const sql = await db();
     const me = await ensureMember(sql, context.userId);
-    if (data.collective && me.role !== "admin") throw new Error("Gli obiettivi di gruppo li crea l'amministratore.");
+    if (data.collective && me.role !== "admin") throw new Error("Gli obiettivi di gruppo li crea il fondatore.");
     if (!canScore(me.role) && !data.collective) throw new Error("Profilo in sola lettura.");
     const rows = await sql<{ id: number }>`
       insert into goals (user_id, title, metric, target, bow_type, distance_m, created_by)
@@ -971,7 +971,7 @@ export const saveEvent = createServerFn({ method: "POST" })
     const sql = await db();
     const me = await ensureMember(sql, context.userId);
     if (!canScore(me.role)) throw new Error("Profilo in sola lettura.");
-    if (data.group && me.role !== "admin") throw new Error("Gli eventi di gruppo li inserisce l'amministratore.");
+    if (data.group && me.role !== "admin") throw new Error("Gli eventi di gruppo li inserisce il fondatore.");
     await sql`
       insert into events (user_id, title, starts_on, notes, created_by)
       values (${data.group ? null : context.userId}, ${data.title}, ${data.day}::date, ${data.notes}, ${context.userId})`;

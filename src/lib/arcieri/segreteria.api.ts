@@ -1,6 +1,6 @@
 /**
  * Segreteria della compagnia: quote dell'anno, certificati medici (solo scadenza e tipo),
- * presenze ai corsi. La vedono e la cambiano solo lo staff e il capogruppo della compagnia.
+ * presenze ai corsi. La vedono e la cambiano solo lo staff e il presidente della compagnia.
  */
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
@@ -21,11 +21,11 @@ export function currentSeason(now = new Date()) {
   return now.getMonth() >= 10 ? now.getFullYear() + 1 : now.getFullYear();
 }
 
-/** chi apre la segreteria e di quale compagnia: lo staff le vede tutte, il capogruppo solo la sua */
+/** chi apre la segreteria e di quale compagnia: lo staff le vede tutte, il presidente solo la sua */
 async function access(sql: Sql, me: MemberRow, userId: string, wanted: number) {
   const staff = staffLevel(me);
   const mine = await myMembership(sql, userId);
-  if (!staff && mine.role !== "owner" && !asBool(me.coach)) throw new Error("La segreteria è per il capogruppo, gli istruttori e lo staff della compagnia.");
+  if (!staff && mine.role !== "owner" && !asBool(me.coach)) throw new Error("La segreteria è per il presidente, gli allenatori e lo staff della compagnia.");
   return { companyId: staff && wanted ? wanted : mine.companyId, staff: staff != null };
 }
 

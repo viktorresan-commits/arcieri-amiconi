@@ -12,7 +12,7 @@ const SECTIONS: { title: string; text: string[] }[] = [
     title: "Chi tratta i tuoi dati",
     text: [
       OWNER ? `Il titolare del trattamento è ${OWNER}, autore dell'app Arcieri Amiconi.` : "Il titolare del trattamento è l'autore dell'app Arcieri Amiconi.",
-      EMAIL ? `Per qualsiasi richiesta scrivi a ${EMAIL}.` : "Per qualsiasi richiesta scrivi all'amministratore dell'app dalla Bacheca, oppure chiedi al capogruppo della tua compagnia.",
+      EMAIL ? `Per qualsiasi richiesta scrivi a ${EMAIL}.` : "Per qualsiasi richiesta scrivi al fondatore dell'app dalla Bacheca, oppure chiedi al presidente della tua compagnia.",
       "Le compagnie che usano l'app non vendono e non comprano dati: li usano solo per la vita della compagnia.",
     ],
   },
@@ -38,8 +38,8 @@ const SECTIONS: { title: string; text: string[] }[] = [
     title: "Chi li vede",
     text: [
       "Gli arcieri della tua compagnia vedono il tuo nome, la foto, l'avatar, i punteggi in classifica e le gare.",
-      "Gli istruttori e il capogruppo della tua compagnia vedono l'andamento dei tuoi allenamenti, se non lo spegni dal Profilo.",
-      "Quote, certificati e presenze li vedono solo il capogruppo della tua compagnia e lo staff dell'app.",
+      "Gli allenatori e il presidente della tua compagnia vedono l'andamento dei tuoi allenamenti, le analisi del gesto e le foto delle volée, se non lo spegni dal Profilo.",
+      "Quote, certificati e presenze li vedono solo il presidente e gli allenatori della tua compagnia e il fondatore dell'app.",
       "Sito e database sono ospitati da fornitori cloud (Vercel per il sito, Neon per il database), che li custodiscono per nostro conto.",
     ],
   },
@@ -47,7 +47,7 @@ const SECTIONS: { title: string; text: string[] }[] = [
     title: "Per quanto li teniamo",
     text: [
       "Finché hai l'account. Se lo elimini, cancelliamo il profilo, gli allenamenti, le gare, l'attrezzatura e tutto il resto.",
-      "Gli amministratori possono togliere un account inattivo da più di 3 mesi, con gli stessi effetti.",
+      "Il fondatore può togliere un account inattivo da più di 3 mesi, con gli stessi effetti.",
     ],
   },
   {

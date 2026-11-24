@@ -241,12 +241,12 @@ export const updateCompany = createServerFn({ method: "POST" })
     const sql = await db();
     const me = await ensureMember(sql, context.userId);
     const mine = await myMembership(sql, context.userId);
-    // lo staff (amministratori ed editor) segue tutte le compagnie; il capogruppo solo la sua
+    // lo staff (amministratori ed editor) segue tutte le compagnie; il presidente solo la sua
     const staff = staffLevel(me);
     if (!staff && mine.companyId !== data.id) throw new Error("Puoi modificare solo la tua compagnia.");
     const owners = await sql<{ user_id: string }>`select user_id from company_members where company_id = ${data.id} and role = 'owner'`;
     const allowed = staff != null || (mine.role === "owner" && mine.companyId === data.id) || (me.role === "admin" && owners.length === 0);
-    if (!allowed) throw new Error("Solo il capogruppo della compagnia o lo staff possono modificarla.");
+    if (!allowed) throw new Error("Solo il presidente della compagnia o lo staff possono modificarla.");
     const clash = await sql<{ id: number }>`select id from companies where lower(name) = lower(${data.fields.name}) and id <> ${data.id} limit 1`;
     if (clash[0]) throw new Error("Esiste già una compagnia con questo nome.");
     const f = data.fields;

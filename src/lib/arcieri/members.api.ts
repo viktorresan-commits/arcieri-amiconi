@@ -36,7 +36,7 @@ export const getMe = createServerFn({ method: "GET" })
       const n = await sql<{ n: number }>`select count(*)::int as n from sessions where user_id = ${context.userId}`;
       essenziale = asNum(n[0]?.n) < 5;
     }
-    // squadra admin, istruttori e segreteria: solo per chi ha un incarico
+    // squadra admin, allenatori e segreteria: solo per chi ha un incarico
     const role = staff != null || leader || out.coach;
     // categoria: solo quella dichiarata nell'ultima gara, mai dedotta da altro
     const cat = await sql<{ category: string; starts_on: string }>`
@@ -44,7 +44,15 @@ export const getMe = createServerFn({ method: "GET" })
       from competition_entries e join competitions c on c.id = e.competition_id
       where e.user_id = ${context.userId}`;
     const last = cat.filter((r) => r.category.trim()).sort((a, b) => b.starts_on.localeCompare(a.starts_on))[0];
-    return { ...out, essenziale, leader, canStaff: role, canCoach: role, canSegreteria: role, category: last ? categorySingular(last.category) : "" };
+    // schede di allenamento ricevute da un allenatore: la voce «Le mie schede» compare solo se ce n'è almeno una
+    let hasPlans = false;
+    try {
+      const n = await sql<{ n: number }>`select count(*)::int as n from coach_plans where athlete_user_id = ${context.userId}`;
+      hasPlans = asNum(n[0]?.n) > 0;
+    } catch {
+      /* tabella non ancora creata */
+    }
+    return { ...out, essenziale, leader, canStaff: role, canCoach: role, canSegreteria: role, hasPlans, category: last ? categorySingular(last.category) : "" };
   });
 
 export const listRoster = createServerFn({ method: "GET" })
@@ -141,13 +149,13 @@ export const updateMember = createServerFn({ method: "POST" })
     const sql = await db();
     const me = await ensureMember(sql, context.userId);
     const targetId = data.memberId ?? me.id;
-    if (targetId !== me.id && me.role !== "admin") throw new Error("Solo l'amministratore modifica gli altri profili.");
+    if (targetId !== me.id && me.role !== "admin") throw new Error("Solo il fondatore modifica gli altri profili.");
     const rows = await sql<MemberRow>`select * from members where id = ${targetId} limit 1`;
     const row = rows[0];
     if (!row) throw new Error("Profilo assente.");
     if (data.role && data.role !== row.role && me.role !== "admin") throw new Error("Non puoi cambiare il ruolo.");
     if (data.role && data.role !== row.role && row.is_super && row.id !== me.id) throw new Error("Il ruolo del fondatore non si può cambiare.");
-    if (data.role && data.role !== row.role && (data.role === "admin" || row.role === "admin") && !me.is_super) throw new Error("Solo il fondatore nomina o toglie gli amministratori.");
+    if (data.role && data.role !== row.role && (data.role === "admin" || row.role === "admin")) throw new Error("Il fondatore è uno solo: gli incarichi sono presidente e allenatore, in Gestione compagnia.");
     if (data.role && data.role !== "admin" && row.role === "admin") {
       const left = await sql<{ n: number }>`
         select count(*)::int as n from members
@@ -184,7 +192,7 @@ export const regenerateCode = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const sql = await db();
     const me = await ensureMember(sql, context.userId);
-    if (me.role !== "admin") throw new Error("Solo l'amministratore rigenera i codici.");
+    if (me.role !== "admin") throw new Error("Solo il fondatore rigenera i codici.");
     const code = `AM${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
     const rows = await sql<MemberRow>`
       update members set claim_code = ${code}
@@ -236,7 +244,7 @@ export const resetMemberPassword = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const sql = await db();
     const me = await ensureMember(sql, context.userId);
-    if (me.role !== "admin") throw new Error("Solo l'amministratore reimposta le password.");
+    if (me.role !== "admin") throw new Error("Solo il fondatore reimposta le password.");
     const users = await sql<{ id: string }>`select id from "user" where lower(email) = ${data.email} limit 1`;
     if (!users[0]) throw new Error("Nessun account con questa email.");
     const { hashPassword } = await import("@better-auth/utils/password");
@@ -254,7 +262,7 @@ export const resetMemberPassword = createServerFn({ method: "POST" })
     await sql`update password_requests set status = 'done' where lower(email) = ${data.email} and status = 'open'`;
     await sql`
       insert into notifications (user_id, title, body, href, dedupe)
-      values (${users[0].id}, ${"Password aggiornata"}, ${"L'amministratore ha impostato una password nuova. Cambiala dal profilo."}, ${"/profilo"}, ${"pw-" + users[0].id + "-" + Date.now()})`;
+      values (${users[0].id}, ${"Password aggiornata"}, ${"Il fondatore ha impostato una password nuova. Cambiala dal profilo."}, ${"/profilo"}, ${"pw-" + users[0].id + "-" + Date.now()})`;
     return { ok: true as const };
   });
 

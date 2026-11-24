@@ -20,10 +20,8 @@ type Board = Awaited<ReturnType<typeof archerBoard>>;
 
 const ROLE_STYLE: Record<string, { label: string; color: string }> = {
   super: { label: "Fondatore", color: "#ffd27a" },
-  admin: { label: "Amministratore", color: "#ff8a3d" },
-  editor: { label: "Admin", color: "#3aa7ff" },
-  leader: { label: "Capogruppo", color: "#7cf0a8" },
-  coach: { label: "Istruttore", color: "#8cc3f0" },
+  leader: { label: "Presidente", color: "#7cf0a8" },
+  coach: { label: "Allenatore", color: "#8cc3f0" },
 };
 
 /** gli incarichi della persona, come etichette colorate */
@@ -125,7 +123,7 @@ function Page() {
   );
 }
 
-/** Incarichi: il fondatore e lo staff nominano amministratore, admin, capogruppo e istruttore; il capogruppo solo gli istruttori. */
+/** Incarichi: il fondatore nomina presidente e allenatore; il presidente della compagnia solo gli allenatori. */
 function RolesCard({ data }: { data: Board }) {
   const [roles, setRoles] = useState(data.roles);
   const [err, setErr] = useState("");
@@ -133,9 +131,9 @@ function RolesCard({ data }: { data: Board }) {
   const v = data.viewer;
   const target = roles.level;
   if (!v.level && !v.leaderHere) return null;
-  // chi non si può toccare
-  const locked = target === "super" ? v.level !== "super" : target === "admin" && v.level !== "super";
-  const run = (key: string, change: Partial<typeof roles>, payload: { to?: "admin" | "editor" | "none"; leader?: boolean; coach?: boolean }) => {
+  // il fondatore non lo tocca nessuno
+  const locked = target === "super";
+  const run = (key: string, change: Partial<typeof roles>, payload: { leader?: boolean; coach?: boolean }) => {
     setErr("");
     setBusy(key);
     setRole({ data: { memberId: data.id, ...payload } })
@@ -148,24 +146,8 @@ function RolesCard({ data }: { data: Board }) {
   };
   const items: { key: string; label: string; hint: string; on: boolean; show: boolean; toggle: () => void }[] = [
     {
-      key: "admin",
-      label: "Amministratore",
-      hint: "Gestisce l'app e lo staff",
-      on: target === "admin",
-      show: v.level === "super" && target !== "super" && !v.self,
-      toggle: () => run("admin", { level: target === "admin" ? null : "admin" }, { to: target === "admin" ? "none" : "admin" }),
-    },
-    {
-      key: "editor",
-      label: "Admin",
-      hint: "Segue tutte le compagnie",
-      on: target === "editor",
-      show: (v.level === "super" || v.level === "admin") && target !== "super" && !v.self && !locked,
-      toggle: () => run("editor", { level: target === "editor" ? null : "editor" }, { to: target === "editor" ? "none" : "editor" }),
-    },
-    {
       key: "leader",
-      label: "Capogruppo",
+      label: "Presidente",
       hint: roles.companyName ? `Guida ${roles.companyName}` : "Guida la compagnia",
       on: roles.leader,
       show: Boolean(v.level) && !locked,
@@ -173,10 +155,10 @@ function RolesCard({ data }: { data: Board }) {
     },
     {
       key: "coach",
-      label: "Istruttore",
-      hint: "Atleti, presenze e segreteria",
+      label: "Allenatore",
+      hint: "Allievi, schede e progressi",
       on: roles.coach,
-      show: (Boolean(v.level) || v.leaderHere) && (target !== "super" || v.level === "super"),
+      show: (Boolean(v.level) || v.leaderHere) && !locked,
       toggle: () => run("coach", { coach: !roles.coach }, { coach: !roles.coach }),
     },
   ];
@@ -195,17 +177,17 @@ function RolesCard({ data }: { data: Board }) {
             disabled={busy !== ""}
             onClick={i.toggle}
             className="grid gap-0.5 rounded-2xl border p-3 text-left transition disabled:opacity-60"
-            style={{ borderColor: i.on ? ROLE_STYLE[i.key === "admin" ? "admin" : i.key === "editor" ? "editor" : i.key].color : "rgba(255,255,255,0.1)", background: i.on ? "rgba(255,255,255,0.08)" : "transparent" }}
+            style={{ borderColor: i.on ? ROLE_STYLE[i.key].color : "rgba(255,255,255,0.1)", background: i.on ? "rgba(255,255,255,0.08)" : "transparent" }}
           >
             <span className="flex items-center justify-between gap-2 text-sm font-semibold">
               {i.label}
-              <span className="grid h-5 w-5 place-items-center rounded-full text-[0.7rem] font-black" style={{ background: i.on ? ROLE_STYLE[i.key === "admin" ? "admin" : i.key === "editor" ? "editor" : i.key].color : "rgba(255,255,255,0.12)", color: "#1a1408" }}>{i.on ? "✓" : ""}</span>
+              <span className="grid h-5 w-5 place-items-center rounded-full text-[0.7rem] font-black" style={{ background: i.on ? ROLE_STYLE[i.key].color : "rgba(255,255,255,0.12)", color: "#1a1408" }}>{i.on ? "✓" : ""}</span>
             </span>
             <span className="text-[0.7rem] text-muted">{busy === i.key ? "Salvo…" : i.hint}</span>
           </button>
         ))}
       </div>
-      {locked ? <p className="text-xs text-muted">{target === "super" ? "Il fondatore non si può modificare." : "Solo il fondatore cambia un amministratore."}</p> : null}
+      {locked ? <p className="text-xs text-muted">Il fondatore non si può modificare.</p> : null}
       {err ? <ErrorNote text={err} /> : null}
     </Card>
   );

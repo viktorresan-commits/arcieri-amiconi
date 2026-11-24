@@ -62,14 +62,19 @@ export const PAGE_HELP: Record<string, string[]> = {
   "/acquisti": ["La lista è tua: gli altri non la vedono."],
   "/profilo": ["Dati personali, importazioni, password e preferenze dell'app."],
   "/staff": [
-    "Hai ricevuto un codice? Scrivilo in «Hai un codice?»: vale per incarichi e inviti.",
-    "Il capogruppo crea un invito e lo manda su WhatsApp: chi apre il link entra nella compagnia.",
-    "Lo staff nomina amministratori, editor e capigruppo con codici che valgono 7 giorni.",
+    "Hai ricevuto un codice? Scrivilo in «Hai un codice?»: vale per la nomina a presidente e per gli inviti.",
+    "Presidente e allenatori creano un invito e lo mandano su WhatsApp: chi apre il link entra nella compagnia.",
+    "Presidente e allenatori tolgono persone solo dalla loro compagnia; gli allenatori li nomina il presidente.",
   ],
   "/istruttore": [
-    "In alto chi ha bisogno di attenzione: media in calo o assente da più di 10 giorni.",
-    "Tocca un atleta per aprire il suo profilo e i suoi allenamenti.",
-    "Chi ha tolto la condivisione dal profilo compare senza numeri.",
+    "Allievi: in alto chi ha bisogno di attenzione (media in calo o assente da più di 10 giorni). Tocca un allievo per i suoi progressi.",
+    "Nella scheda dell'allievo trovi miglioramenti, analisi del gesto, foto delle volée e le sue schede di allenamento.",
+    "Schede: prepara gli esercizi, l'allievo li trova nel Menu in «Le mie schede» e li spunta man mano.",
+    "Chi ha tolto la condivisione dal profilo compare senza numeri, ma puoi comunque preparargli una scheda.",
+  ],
+  "/schede": [
+    "Tocca un esercizio quando l'hai fatto: l'allenatore vede a che punto sei.",
+    "Con «Invia la nota» gli scrivi com'è andata o cosa non ti è chiaro.",
   ],
   "/segreteria": [
     "Quote: tocca «Segna pagata»; l'importo è facoltativo.",

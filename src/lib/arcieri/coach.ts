@@ -1,6 +1,6 @@
 /**
  * Cosa migliorare, letto da dove finiscono davvero le frecce.
- * Sono indicazioni di massima, come quelle di un istruttore che guarda il bersaglio:
+ * Sono indicazioni di massima, come quelle di un allenatore che guarda il bersaglio:
  * la causa vera va cercata sulla linea di tiro.
  */
 export type Form = { n: number; placed: number; avg: number; offX: number; offY: number; spread: number; missRate: number };

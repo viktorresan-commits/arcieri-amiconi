@@ -48,7 +48,7 @@ export function ClaimCard({ onDone }: { onDone: () => void }) {
   return (
     <Card className="grid gap-2">
       <IconTitle icon="ticket" color="#c39320">Hai un codice d'invito?</IconTitle>
-      <p className="text-xs text-muted">Se l'amministratore ti ha già messo in squadra, il codice collega il tuo account a quel posto (con i dati già inseriti).</p>
+      <p className="text-xs text-muted">Se il presidente o il fondatore ti ha già messo in squadra, il codice collega il tuo account a quel posto (con i dati già inseriti).</p>
       <div className="grid grid-cols-[1fr_auto] gap-2">
         <TextInput value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="AMXXXXXX" />
         <Button
@@ -109,7 +109,7 @@ export function ResetCard({ onDone }: { onDone: () => void }) {
   );
 }
 
-/* ---------------- privacy, condivisione con gli istruttori, eliminazione dell'account ---------------- */
+/* ---------------- privacy, condivisione con gli allenatori, eliminazione dell'account ---------------- */
 
 export function PrivacyCard({ share, onDone }: { share: boolean; onDone: () => void }) {
   const [on, setOn] = useState(share);
@@ -134,8 +134,8 @@ export function PrivacyCard({ share, onDone }: { share: boolean; onDone: () => v
       <label className="flex min-h-12 items-center gap-3 rounded-xl bg-white/[0.04] px-3 text-sm">
         <input type="checkbox" checked={on} disabled={busy} onChange={(e) => void flip(e.target.checked)} />
         <span className="min-w-0 flex-1">
-          <span className="block font-semibold">Gli istruttori vedono i miei allenamenti</span>
-          <span className="block text-xs text-muted">Media, andamento e ultimo tiro, solo nella tua compagnia.</span>
+          <span className="block font-semibold">Gli allenatori vedono i miei allenamenti</span>
+          <span className="block text-xs text-muted">Media, andamento, analisi del gesto e foto delle volée, solo nella tua compagnia.</span>
         </span>
       </label>
       <a href="/privacy" className="flex min-h-11 items-center justify-between rounded-xl bg-white/[0.04] px-3 text-sm font-semibold">
@@ -172,7 +172,7 @@ export function DeleteAccountCard({ founder }: { founder: boolean }) {
     <Card className="grid gap-2 border-rose-500/30">
       <IconTitle icon="trash" color="#c4475a">Elimina il mio account</IconTitle>
       <p className="text-xs text-muted">Cancella l'account, il profilo, gli allenamenti, le gare, l'attrezzatura, l'arciere e tutto il resto. Non si può annullare: prima, se vuoi, scarica il JSON qui sopra.</p>
-      {founder ? <p className="text-xs text-amber-300">Sei il fondatore dell'app: prima di eliminare l'account passa il ruolo a un altro amministratore.</p> : null}
+      {founder ? <p className="text-xs text-amber-300">Sei il fondatore dell'app: l'account del fondatore non si può eliminare da qui.</p> : null}
       {!open ? (
         <Button variant="ghost" onClick={() => setOpen(true)} disabled={founder}>Voglio eliminare l'account</Button>
       ) : (
@@ -190,9 +190,9 @@ export function DeleteAccountCard({ founder }: { founder: boolean }) {
   );
 }
 
-/* ---------------- gestione squadra (amministratore) ---------------- */
+/* ---------------- gestione squadra (fondatore) ---------------- */
 
-const ROLE_LABEL: Record<string, string> = { admin: "Amministratore", archer: "Arciere", viewer: "Solo lettura" };
+const ROLE_LABEL: Record<string, string> = { archer: "Arciere", viewer: "Solo lettura" };
 
 export function TeamAdmin() {
   const [nonce, setNonce] = useState(0);
@@ -222,9 +222,13 @@ export function TeamAdmin() {
               </div>
             </div>
             <div className="grid grid-cols-2 gap-1.5">
-              <Select value={p.role} onChange={(e) => void act(updateMember({ data: { memberId: p.id, role: e.target.value } }), `${p.name}: ${ROLE_LABEL[e.target.value] ?? e.target.value}.`)}>
-                {Object.entries(ROLE_LABEL).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
-              </Select>
+              {p.role === "admin" ? (
+                <span className="grid min-h-11 place-items-center rounded-2xl bg-[#ffd27a]/15 text-sm font-semibold text-[#ffd27a]">Fondatore</span>
+              ) : (
+                <Select value={p.role} onChange={(e) => void act(updateMember({ data: { memberId: p.id, role: e.target.value } }), `${p.name}: ${ROLE_LABEL[e.target.value] ?? e.target.value}.`)}>
+                  {Object.entries(ROLE_LABEL).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+                </Select>
+              )}
               <Button variant="ghost" onClick={() => void openExternal(whatsappLink(inviteText(p.name.split(" ")[0], p.linked ? "" : p.code)))}>WhatsApp</Button>
               {p.email && p.id !== team.data?.meId ? (
                 pw?.id === p.id ? (

@@ -74,7 +74,7 @@ function Page() {
 
   return (
     <div className="grid gap-3">
-      <PageHead kicker={b.company.name} title="Segreteria" lede="Quote, certificati medici e presenze ai corsi. Lo vedono solo il capogruppo e lo staff." />
+      <PageHead kicker={b.company.name} title="Segreteria" lede="Quote, certificati medici e presenze ai corsi. Lo vedono solo il presidente e lo staff." />
       {b.companies.length > 1 ? (
         <Select value={String(cid)} onChange={(e) => setCompanyId(Number(e.target.value))} aria-label="Compagnia">
           {b.companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}

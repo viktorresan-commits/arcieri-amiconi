@@ -356,16 +356,6 @@ function CategoryCarousel({ current, onGo, isHere, hide = [] }: { current?: stri
                   </Link>
                 ))}
               </div>
-              {/* in fondo alla sezione: le due sezioni vicine, per continuare senza tornare su */}
-              <div className="grid grid-cols-2 gap-2 pt-1">
-                {[STATIONS[(k + n - 1) % n], STATIONS[(k + 1) % n]].map((nb, j) => (
-                  <button key={nb.id + j} type="button" onClick={() => jump(i + (j ? 1 : -1), true)} className={cx("aa-sec-next flex min-h-12 items-center gap-2 rounded-2xl px-2.5 text-left", j ? "flex-row-reverse text-right" : "")} style={{ ["--acc" as string]: nb.color }}>
-                    <Glyph name="chevron" size={14} className={cx("shrink-0 opacity-70", j ? "" : "rotate-180")} />
-                    <AppIcon name={nb.icon} accent={nb.color} size={30} />
-                    <span className="min-w-0 flex-1"><span className="block text-[0.56rem] font-semibold uppercase tracking-[0.16em] text-muted">{j ? "Avanti" : "Indietro"}</span><span className="block truncate text-sm font-semibold">{nb.title}</span></span>
-                  </button>
-                ))}
-              </div>
             </section>
           );
         })}
