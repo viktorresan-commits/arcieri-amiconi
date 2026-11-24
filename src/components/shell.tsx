@@ -22,6 +22,7 @@ import { rememberMenu, takeMenu, useBackRestore } from "@/lib/arcieri/back-resto
 import { onBack } from "@/lib/arcieri/native";
 import { redeemCode } from "@/lib/arcieri/staff.api";
 import { stopActing } from "@/lib/arcieri/acting.api";
+import { clearLoadCache } from "@/lib/arcieri/use-load";
 import { refreshCrests } from "@/lib/arcieri/crest";
 import { applyPrefs, readPrefs, usePrefs } from "@/lib/arcieri/prefs";
 
@@ -56,7 +57,10 @@ function ActingBanner({ name, memberId, onStop }: { name: string; memberId: numb
         onClick={() => {
           setBusy(true);
           stopActing()
-            .then(onStop)
+            .then(() => {
+              clearLoadCache();
+              onStop();
+            })
             .finally(() => setBusy(false));
         }}
         className="rounded-full bg-black/85 px-3 py-1 text-xs font-bold text-white disabled:opacity-60"

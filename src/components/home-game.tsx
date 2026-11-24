@@ -41,6 +41,8 @@ const RINGS = ["#f4f1ea", "#f4f1ea", "#1a1c1e", "#1a1c1e", "#2a6294", "#2a6294",
 // field: due zone gialle (6 e 5) e quattro nere (4, 3, 2, 1), tutte della stessa larghezza
 const FIELD = ["#1a1c1e", "#1a1c1e", "#1a1c1e", "#1a1c1e", "#e6b325", "#e6b325"];
 const DRAW_S = 0.75;
+/** tiri dimostrativi di fila prima che l'arciere si metta a riposo (riparte al primo tocco) */
+const DEMO_SHOTS = 3;
 const STATIONS = GAME_STATIONS;
 const ROUND_KEY = "aa-game-round";
 const randomWind = (max: number) => Math.round((Math.random() * 2 - 1) * max * 10) / 10;
@@ -222,6 +224,15 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
   const wind = indoor ? 0 : rawWind;
   const [playing, setPlaying] = useState(false);
   const lastTouch = useRef(0);
+  // frecce tirate da solo dall'ultimo tocco: dopo qualche tiro l'arciere si ferma e la Home resta leggera
+  const demoShots = useRef(0);
+  const [calm, setCalm] = useState(false);
+  const wake = () => {
+    demoShots.current = 0;
+    setCalm(false);
+  };
+  // la scena fuori dallo schermo non si ridisegna
+  const onScreen = useRef(true);
   const landed = useRef(0);
   const hitsRef = useRef<Hit[]>([]);
   const stationsRef = useRef<number[]>([]);
@@ -313,11 +324,21 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
   // orologio: fluido mentre si tende o la freccia vola, più lento a riposo (risparmia batteria)
   const busy = draw != null || flight != null || (released != null && t - released < 1.2) || (thud != null && t - thud < 0.6);
   useEffect(() => {
+    const el = stage.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(([e]) => {
+      onScreen.current = e.isIntersecting;
+    });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  useEffect(() => {
     let raf = 0;
     let last = 0;
     const tick = (ms: number) => {
-      const step = busy ? 0 : moving ? 25 : 40;
-      if (ms - last >= step && !document.hidden) {
+      // ~30 fotogrammi mentre tende o la freccia vola; a riposo quasi fermo
+      const step = busy ? 32 : moving ? 40 : demoShots.current >= DEMO_SHOTS ? 250 : 80;
+      if (ms - last >= step && !document.hidden && onScreen.current) {
         last = ms;
         setT(ms / 1000);
       }
@@ -357,6 +378,11 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
     if (playing || draw || flight) return;
     if (released != null && t - released < 1.4) return;
     if (t - lastTouch.current < 2.5) return;
+    if (demoShots.current >= DEMO_SHOTS) {
+      setCalm(true);
+      return;
+    }
+    demoShots.current += 1;
     const start = now();
     const land = goalAt(start + 1.6 + 0.36 + dist / 170);
     let ax: number;
@@ -456,6 +482,7 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
 
   const onDown = (e: RPointerEvent) => {
     lastTouch.current = now();
+    wake();
     if ((e.target as HTMLElement).closest("[data-ui]")) return;
     if (!playing) {
       // si entra in gioco: via la dimostrazione
@@ -478,12 +505,14 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
   const onMove = (e: RPointerEvent) => {
     if (!draw || draw.demo) return;
     lastTouch.current = now();
+    wake();
     const w = toWorld(e.clientX, e.clientY);
     const k = 0.45;
     setDraw({ ...draw, aim: { x: clamp(draw.ax + (w.x - draw.sx) * k, BASE.x - 120, BASE.x + 60), y: clamp(draw.ay + (w.y - draw.sy) * k, BASE.y - 100, BASE.y + 80) } });
   };
   const onUp = () => {
     lastTouch.current = now();
+    wake();
     if (!draw || draw.demo) return;
     shoot(draw, now());
   };
@@ -545,6 +574,7 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
     setPlaying(false);
     again();
     lastTouch.current = now();
+    wake();
   };
 
   const aimLift = draw ? clamp((BASE.y - draw.aim.y) / 6, -14, 18) : 0;
@@ -552,6 +582,14 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
   const since = released != null && !draw ? t - released : null;
   const active = draw != null || (since != null && since < 2.4);
   const drive = useMemo(() => (active ? { pull, aim: aimLift, released: since != null && since < 2.4 ? since : null } : null), [active, pull, aimLift, since]);
+  // l'arciere è il disegno più pesante della Home: si ridisegna solo quando cambia qualcosa che lo riguarda,
+  // non a ogni battito dell'orologio della scena
+  const archerWind = indoor ? 0 : wind;
+  const archerLight = indoor ? undefined : `aa-lit-${lightMode(sky)}-${isPainted(scene) !== Boolean(look.lefty) || sky.tod === "mattina" ? "l" : "r"}`;
+  const archerEl = useMemo(
+    () => <ArcherAvatar look={bodyLook} drive={drive} pose="riposo" still={calm && !drive} interactive={false} hideFlight wind={archerWind} light={archerLight} className="h-full w-full" />,
+    [bodyLook, drive, archerWind, archerLight, calm],
+  );
   const bestHere = best;
   const pct = (x: number, y: number) => ({ left: `${((lefty ? W - x : x) / W) * 100}%`, top: `${(y / H) * 100}%` });
   const shownHits = playing ? hits : demoHits;
@@ -561,6 +599,7 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
   const game = (
     <div
       ref={stage}
+      data-calm={calm ? "" : undefined}
       className={`aa-game aspect-[3/4] w-full ${bleed ? "aa-game-bleed" : ""} ${apron ? "aa-game-joined" : ""} ${className}`}
       onPointerDown={onDown}
       onPointerMove={onMove}
@@ -704,7 +743,7 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
         ) : null}
         {/* luce dell'ambiente: tinta dell'ora e bordo illuminato dal lato del sole */}
         {indoor ? null : <ArcherLightDefs />}
-        <ArcherAvatar look={bodyLook} drive={drive} pose="riposo" interactive={false} hideFlight wind={indoor ? 0 : wind} light={indoor ? undefined : `aa-lit-${lightMode(sky)}-${isPainted(scene) !== Boolean(look.lefty) || sky.tod === "mattina" ? "l" : "r"}`} className="h-full w-full" />
+        {archerEl}
         {/* ombra di contatto morbida sotto i piedi */}
         <span aria-hidden className="aa-archer-contact pointer-events-none absolute bottom-[1.5%] left-[18%] h-[5%] w-[52%] rounded-[50%]" />
       </div>
@@ -824,7 +863,7 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
   );
   if (!apron) return game;
   return (
-    <div className="aa-game-stack">
+    <div className="aa-game-stack" data-calm={calm ? "" : undefined}>
       {/* il gioco è tagliato in alto e ai lati ma non in basso: gambe e piedi dell'arciere scendono sul prato, sotto i pulsanti */}
       <div ref={wrap} className="aa-game-wrap relative z-[1]" style={crop ? { marginTop: 0 } : undefined}>
         <div style={crop ? { marginTop: -crop } : undefined}>{game}</div>

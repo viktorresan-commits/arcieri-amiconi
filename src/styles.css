@@ -1225,6 +1225,10 @@ html[data-scenes="no"] .aa-scene { display: none; }
 .aa-target-glow { animation: aa-target-glow 2.4s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
 @keyframes aa-target-glow { 0%, 100% { opacity: 0.55; transform: scale(0.96); } 50% { opacity: 1; transform: scale(1.04); } }
 @media (prefers-reduced-motion: reduce) { .aa-target-glow { animation: none; } }
+/* Home a riposo (l'arciere ha smesso di tirare da solo): le animazioni disegnate dentro gli SVG si fermano,
+   perché ognuna costringe il telefono a ridipingere tutta la scena. Le nuvole restano: le muove la GPU. */
+.aa-game[data-calm] svg *, .aa-game[data-calm] .aa-perk-glow, .aa-game[data-calm] .aa-game-hint,
+.aa-game-stack[data-calm] .aa-apron-life * { animation-play-state: paused !important; }
 /* fluidità: dentro gli sfondi illustrati si animano solo nuvole, uccelli, bandiere, acqua, pioggia e neve
    (alberi ed erba che ondeggiano costringevano a ridisegnare tutta la scena a ogni fotogramma) */
 svg .aa-tree, svg .aa-grass, svg .aa-sun-pulse, svg .aa-ray { animation: none !important; }

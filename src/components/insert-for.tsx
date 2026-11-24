@@ -4,6 +4,7 @@ import { Card, ErrorNote, cx } from "./kit";
 import { AppIcon, type IconName } from "./icons";
 import { useMemberMaybe } from "./shell";
 import { startActing } from "@/lib/arcieri/acting.api";
+import { clearLoadCache } from "@/lib/arcieri/use-load";
 
 type Kind = { id: string; label: string; hint: string; icon: IconName; color: string; to: string; search?: Record<string, string>; account: boolean };
 
@@ -30,6 +31,7 @@ export function InsertFor({ memberId, name, hasAccount = true, only }: { memberI
     setError("");
     try {
       await startActing({ data: { memberId } });
+      clearLoadCache();
       ctx?.reload();
       void navigate({ to: k.to, search: k.search as never });
     } catch (e) {

@@ -1842,8 +1842,9 @@ export function ArcherAvatar({ look, className = "h-72 w-auto", interactive = tr
     let raf = 0;
     let last = 0;
     const t0 = performance.now();
-    // ~50 fotogrammi al secondo mentre tira, ~30 nelle pose ferme (basta per il respiro)
-    const step = mode === "animata" || mode === "guidata" ? 19 : 33;
+    // ~50 fotogrammi al secondo mentre tira, ~15 nelle pose ferme: il respiro è lento e ogni
+    // fotogramma ridisegna tutto l'arciere, quindi a riposo ne bastano pochi
+    const step = mode === "animata" || mode === "guidata" ? 19 : 66;
     const frame = (now: number) => {
       if (now - last > step && !document.hidden && visible.current) {
         last = now;
