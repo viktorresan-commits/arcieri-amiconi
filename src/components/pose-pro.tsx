@@ -7,6 +7,7 @@ import { useLocalState } from "@/lib/arcieri/local-store";
 import { BOW_TYPES } from "./gear-icons";
 import { Glyph } from "./icons";
 import { AREA_MUSCLES, renderAreaImages } from "@/lib/arcieri/muscle-areas";
+import { loadBody } from "@/lib/arcieri/anatomy-body";
 
 export type ProSave = { total: number; areas: Record<string, number | null>; issues: string[]; m: Partial<ProMetrics>; setup: ProSetup; at: number | null };
 
@@ -576,7 +577,7 @@ function GearSizes({ m, setup, gear, aspect, drawIn }: { m: ProMetrics; setup: P
 
 /**
  * Zone del corpo con i muscoli che lavorano: per ognuna un'immagine 3D del corpo nella posa del video
- * con i muscoli interessati in giallo, il punteggio e cosa fa ogni muscolo nel tiro.
+ * con i muscoli interessati in rosso acceso, il punteggio e cosa fa ogni muscolo nel tiro.
  */
 function MuscleAreas({ lm, hand, aspect, areas }: { lm: Landmark[] | null; hand: Hand; aspect: number; areas: Area[] }) {
   const [imgs, setImgs] = useState<Record<string, string>>({});
@@ -606,7 +607,11 @@ function MuscleAreas({ lm, hand, aspect, areas }: { lm: Landmark[] | null; hand:
         step(i + 1);
       });
     };
-    const t = window.setTimeout(() => step(0), 700);
+    // prima si aspetta il corpo anatomico vero (una volta sola), poi si disegna
+    let t = 0;
+    void loadBody().finally(() => {
+      if (!stop) t = window.setTimeout(() => step(0), 300);
+    });
     return () => {
       stop = true;
       window.clearTimeout(t);

@@ -198,7 +198,7 @@ export function Empty({ title, text }: { title: string; text?: string }) {
 
 export function Loading() {
   return (
-    <div className="grid gap-3" aria-busy>
+    <div className="aa-loading grid content-start gap-3" aria-busy>
       <span className="sr-only">Caricamento…</span>
       <div className="aa-skel h-8 w-40 rounded-lg" />
       <div className="aa-skel h-28 rounded-2xl" style={{ animationDelay: "120ms" }} />

@@ -6,6 +6,7 @@ import type { AreaId } from "./pose-pro";
 import type { Hand, Landmark } from "./pose-analysis";
 import { buildModel, v3, type Model, type V3 } from "./anatomy-model";
 import { createAnatomyRenderer, viewFrom } from "./anatomy-render";
+import { bodyIfLoaded } from "./anatomy-body";
 
 type Side = "corda" | "arco";
 export type MuscleInfo = { ids: string[]; name: string; role: string };
@@ -124,6 +125,9 @@ export function renderAreaImages(lm: Landmark[], aspect: number, hand: Hand, are
     shared = { canvas, R };
   }
   const { canvas, R } = shared;
+  // con il corpo vero già scaricato le immagini usano muscoli e ossa da atlante
+  const body = bodyIfLoaded();
+  if (body) R.setBody(body);
   canvas.width = w;
   canvas.height = h;
   const out = document.createElement("canvas");
@@ -140,9 +144,9 @@ export function renderAreaImages(lm: Landmark[], aspect: number, hand: Hand, are
     R.clear(w, h);
     R.draw(model, VP, eye, 0, { pelle: true, muscolo: true, osso: true }, focus);
     const g = ctx.createRadialGradient(w / 2, h * 0.4, 10, w / 2, h * 0.5, Math.max(w, h) * 0.75);
-    g.addColorStop(0, "#14476a");
-    g.addColorStop(0.55, "#0a2335");
-    g.addColorStop(1, "#040b12");
+    g.addColorStop(0, "#3f9fe6");
+    g.addColorStop(0.5, "#1c6fc2");
+    g.addColorStop(1, "#072a5c");
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, w, h);
     ctx.drawImage(canvas, 0, 0);

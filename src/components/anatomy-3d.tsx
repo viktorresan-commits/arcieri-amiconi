@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { buildModel, v3, type Model, type V3 } from "@/lib/arcieri/anatomy-model";
 import { createAnatomyRenderer, lookAt, mul4, perspective } from "@/lib/arcieri/anatomy-render";
+import { BODY_CREDIT, loadBody } from "@/lib/arcieri/anatomy-body";
 import type { Hand, Landmark } from "@/lib/arcieri/pose-analysis";
 import { unpackLm, type PackedLm } from "@/lib/arcieri/gesture-record";
 import { cx } from "./kit";
@@ -80,6 +81,14 @@ export function Anatomy3D({
       return;
     }
     let raf = 0;
+    // corpo anatomico vero (muscoli e ossa da atlante): si scarica la prima volta, poi resta in memoria
+    let bodyTick = 0;
+    let alive = true;
+    void loadBody().then((b) => {
+      if (!alive || !b) return;
+      R.setBody(b);
+      bodyTick += 1;
+    });
     let smooth: Landmark[] | null = null;
     let model: Model | null = null;
     let last = performance.now();
@@ -115,7 +124,7 @@ export function Anatomy3D({
       if (c.auto) c.yaw += dt * 0.35;
       const L0 = layersRef.current;
       const dprBase = Math.min(2, window.devicePixelRatio || 1);
-      const key = `${c.yaw.toFixed(4)}|${c.pitch.toFixed(4)}|${c.zoom.toFixed(3)}|${L0.pelle}${L0.muscolo}${L0.osso}${L0.quote}|${canvas.clientWidth}x${canvas.clientHeight}|${scale}`;
+      const key = `${c.yaw.toFixed(4)}|${c.pitch.toFixed(4)}|${c.zoom.toFixed(3)}|${L0.pelle}${L0.muscolo}${L0.osso}${L0.quote}|${canvas.clientWidth}x${canvas.clientHeight}|${scale}|${bodyTick}`;
       if (settle <= 0 && key === lastKey && !playing) return;
       lastKey = key;
       if (target && settle > 0) {
@@ -311,6 +320,7 @@ export function Anatomy3D({
     canvas.addEventListener("pointercancel", up);
     canvas.addEventListener("wheel", wheel, { passive: false });
     return () => {
+      alive = false;
       cancelAnimationFrame(raf);
       canvas.removeEventListener("pointerdown", down);
       canvas.removeEventListener("pointermove", move);
@@ -324,9 +334,10 @@ export function Anatomy3D({
   if (failed) return <p className="rounded-2xl bg-white/[0.04] p-3 text-sm text-muted">Il 3D non parte su questo telefono: le misure restano nell'analisi qui sopra.</p>;
   const toggle = (k: Layer) => setLayers((l) => ({ ...l, [k]: !l[k] }));
   return (
-    <div className={cx("relative w-full overflow-hidden", inBox ? "" : "rounded-2xl", className)} style={{ background: "radial-gradient(ellipse at 50% 38%, #12405e 0%, #082032 45%, #03090f 100%)" }}>
+    <div className={cx("relative w-full overflow-hidden", inBox ? "" : "rounded-2xl", className)} style={{ background: "radial-gradient(ellipse at 45% 35%, #3f9fe6 0%, #1c6fc2 42%, #0b3f82 78%, #072a5c 100%)" }}>
       <canvas ref={glCanvas} className="absolute inset-0 h-full w-full touch-none" aria-label="Analisi del gesto in 3D: corpo, scheletro e muscoli, da girare con il dito" />
       <canvas ref={hudCanvas} className="pointer-events-none absolute inset-0 h-full w-full" />
+      <p className="pointer-events-none absolute inset-x-0 bottom-0 truncate px-2 text-center text-[0.45rem] leading-[0.7rem] text-white/50">{BODY_CREDIT}</p>
       {empty ? <p className="absolute inset-x-0 top-1/2 -translate-y-1/2 text-center text-sm text-white/80">In attesa della posa: avvia il video o scegli un fotogramma.</p> : null}
       <div className={inBox ? "absolute inset-x-2 bottom-11 flex flex-wrap justify-center gap-1" : "absolute left-2 top-2 flex flex-wrap gap-1"}>
         {([["pelle", "Corpo"], ["muscolo", "Muscoli"], ["osso", "Scheletro"], ["quote", "Misure"]] as const).map(([k, label]) => (
@@ -335,7 +346,7 @@ export function Anatomy3D({
           </button>
         ))}
       </div>
-      <div className="absolute inset-x-2 bottom-2 flex flex-wrap justify-center gap-1">
+      <div className="absolute inset-x-2 bottom-3 flex flex-wrap justify-center gap-1">
         {VIEWS.map((v) => (
           <button
             key={v.id}

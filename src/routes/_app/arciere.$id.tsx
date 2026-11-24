@@ -3,7 +3,7 @@ import { InsertFor } from "@/components/insert-for";
 import { SceneBackdrop } from "@/components/scene-2d";
 import { ArcherFront } from "@/components/archer-front";
 import { useSky } from "@/lib/arcieri/sky3d";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { archerBoard, listGadgets } from "@/lib/arcieri/club.api";
 import { bowLabel, memberLabel } from "@/lib/arcieri/labels";
 import { fmtAvg } from "@/lib/arcieri/scoring";
@@ -97,6 +97,15 @@ function Page() {
       </div>
       <RolesCard data={data} />
       {data.viewer.level === "super" && !data.viewer.self ? <InsertFor memberId={data.id} name={name} hasAccount={Boolean(data.userId)} /> : null}
+      {data.viewer.level === "super" && !data.viewer.self ? (
+        <Link to="/gestisci/$id" params={{ id: String(data.id) }} className="flex min-h-12 items-center justify-between gap-3 rounded-2xl border border-hair bg-white/5 px-4 text-left">
+          <span>
+            <span className="block font-display text-lg leading-tight">Gestisci i dati di {name.split(" ")[0]}</span>
+            <span className="block text-xs text-muted">Allenamenti, gare, analisi del gesto e il resto: elimina quello che non va. Solo tu vedi questa voce.</span>
+          </span>
+          <span aria-hidden className="text-xl text-muted">›</span>
+        </Link>
+      ) : null}
       <GameRecords games={data.games} mine={data.mine} />
       <Card>
         <h2 className="mb-3 font-display text-2xl">I premi migliori</h2>

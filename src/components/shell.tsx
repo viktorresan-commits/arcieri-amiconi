@@ -295,14 +295,14 @@ export function Shell({ children }: { children: ReactNode }) {
               <NavLink key={item.to} to={item.to} label={item.label} active={item.to === "/squadra" ? path === "/squadra" || path.startsWith("/arciere/") : path === item.to || (item.to !== "/" && path.startsWith(item.to))} />
             ))}
             {STATIONS.map((st) => {
-              const seen = new Set<string>();
-              const items = SHORTCUTS.filter((sc) => sc.group === st.id && !hide.includes(sc.id) && !sc.search && !sc.hash && sc.to !== "/allenamento" && sc.to !== "/squadra" && !seen.has(sc.to) && seen.add(sc.to));
+              // tutte le voci della categoria, come nel Menu dell'app (anche quelle che aprono una scheda di una pagina)
+              const items = SHORTCUTS.filter((sc) => sc.group === st.id && !hide.includes(sc.id));
               if (!items.length) return null;
               return (
                 <div key={st.id} className="mt-3 grid gap-0.5">
                   <p className="px-3 pb-1 text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-muted/80">{st.title}</p>
                   {items.map((sc) => (
-                    <Link key={sc.id} to={sc.to as "/"} className={cx("aa-sidelink flex items-center gap-2.5 rounded-xl px-2.5 py-1.5 text-sm font-medium", path.startsWith(sc.to) ? "is-active" : "text-muted")} style={{ "--c": sc.color } as CSSProperties}>
+                    <Link key={sc.id} to={sc.to as "/"} search={(sc.search ?? {}) as never} hash={sc.hash} className={cx("aa-sidelink flex items-center gap-2.5 rounded-xl px-2.5 py-1.5 text-sm font-medium", !sc.search && !sc.hash && sc.to !== "/" && path.startsWith(sc.to) ? "is-active" : "text-muted")} style={{ "--c": sc.color } as CSSProperties}>
                       <AppIcon name={sc.icon} color={sc.color} size={26} />
                       <span className="truncate">{sc.label}</span>
                     </Link>

@@ -85,6 +85,22 @@ function Rise({ i, className, children }: { i: number; className?: string; child
   );
 }
 
+/** Segnaposto con la stessa sagoma della Home (scena da bordo a bordo e pulsanti sotto). */
+function HomeSkeleton() {
+  return (
+    <div className="aa-loading grid content-start gap-2" aria-busy>
+      <span className="sr-only">Caricamento…</span>
+      <div className="aa-home-skel -mx-4 -mt-6 aspect-[3/4] md:mx-0 md:mt-0 md:rounded-3xl" />
+      <div className="aa-skel h-[58px] rounded-2xl" />
+      <div className="grid grid-cols-2 gap-2">
+        <div className="aa-skel h-[52px] rounded-2xl" style={{ animationDelay: "120ms" }} />
+        <div className="aa-skel h-[52px] rounded-2xl" style={{ animationDelay: "160ms" }} />
+      </div>
+      <div className="aa-skel h-[52px] rounded-2xl" style={{ animationDelay: "240ms" }} />
+    </div>
+  );
+}
+
 function Home() {
   const [nonce, setNonce] = useState(0);
   const { data, error, loading } = useLoad(`dash-${nonce}`, () => dashboard());
@@ -103,12 +119,13 @@ function Home() {
       /* niente */
     }
   }, [data]);
-  if (loading) return <Loading />;
+  // la Home compare in un colpo solo, quando ci sono sia i numeri sia la forma dell'arciere
+  if (loading || (duel.loading && !duel.data && !duel.error)) return <HomeSkeleton />;
   if (error) return <ErrorNote text={error} />;
   if (!data) return null;
   const rankFill = data.rank && data.rank.of > 1 ? ((data.rank.of - data.rank.position) / (data.rank.of - 1)) * 100 : data.rank ? 100 : 0;
   return (
-    <div className="aa-home grid gap-3">
+    <div className="aa-home aa-arrive grid gap-3">
       <Rise i={0}>
         <div className="grid gap-2">
           {/* sul telefono il gioco va da bordo a bordo e sale fino sotto la barra in alto */}

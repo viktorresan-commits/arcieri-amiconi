@@ -1,4 +1,13 @@
 @import "tailwindcss";
+/* sui telefoni il sito è sempre uguale all'app (barra in basso e Menu a categorie), anche quando il browser
+   chiede la versione desktop: il layout largo con la colonna a sinistra è solo per computer e tablet */
+@custom-variant md {
+  @media (width >= 48rem) {
+    html:not(.aa-phone) & {
+      @slot;
+    }
+  }
+}
 
 :root {
   /* tinta delle cornici, dei titoli e dei pulsanti a placca: segue il colore scelto */
@@ -882,6 +891,14 @@ html[data-motion="ridotta"]::view-transition-old(root), html[data-motion="ridott
   animation: aa-shimmer 1.4s linear infinite;
 }
 @keyframes aa-shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
+/* una pagina che carica tiene già il posto del contenuto: i riquadri sotto (consigli, prossimo passo)
+   non saltano su e giù quando arrivano i dati */
+main.aa-page > .aa-loading:first-child { min-height: 72vh; }
+/* la Home mentre carica: la stessa sagoma della scena, così all'arrivo dei dati non si sposta nulla */
+.aa-home-skel { background: radial-gradient(120% 70% at 50% 35%, color-mix(in srgb, var(--fg) 7%, transparent), transparent 70%), linear-gradient(180deg, color-mix(in srgb, var(--fg) 5%, transparent), color-mix(in srgb, var(--fg) 2%, transparent)); }
+/* contenuto appena arrivato: compare con una dissolvenza breve invece di apparire di colpo */
+.aa-arrive { animation: aa-arrive 0.28s ease-out both; }
+@keyframes aa-arrive { from { opacity: 0; } to { opacity: 1; } }
 
 /* tocco: tutto ciò che si preme risponde */
 .aa-chip, .aa-check, a.aa-glow-panel, button.aa-glow-panel { transition: transform 0.16s cubic-bezier(0.22, 1, 0.36, 1), background-color 0.2s, border-color 0.2s; }
@@ -890,7 +907,7 @@ html[data-motion="ridotta"]::view-transition-old(root), html[data-motion="ridott
 .aa-check.is-on .aa-check-box { background: var(--primary); border-color: var(--primary); color: var(--primary-fg, #fff); transform: scale(1.08); }
 
 @media (prefers-reduced-motion: reduce) {
-  .aa-page > * > *, .aa-hero::before, .aa-skel { animation: none; }
+  .aa-page > * > *, .aa-hero::before, .aa-skel, .aa-arrive { animation: none; }
 }
 
 /* ── Ultime frecce: volano da sinistra a destra, si piantano, alone del risultato ── */

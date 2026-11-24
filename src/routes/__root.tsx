@@ -39,7 +39,7 @@ export const Route = createRootRoute({
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `try{var d=document.documentElement,ink=localStorage.getItem("aa-ink")||"verde",p=JSON.parse(localStorage.getItem("aa-prefs-v1")||"{}");d.dataset.ink=ink;d.dataset.icons=p.icons||"tema";d.dataset.motion=p.motion||"piena";d.dataset.scenes=p.scenes||"si"}catch(e){}`,
+            __html: `try{var d=document.documentElement,ink=localStorage.getItem("aa-ink")||"verde",p=JSON.parse(localStorage.getItem("aa-prefs-v1")||"{}");d.dataset.ink=ink;d.dataset.icons=p.icons||"tema";d.dataset.motion=p.motion||"piena";d.dataset.scenes=p.scenes||"si";if(matchMedia("(pointer: coarse)").matches&&Math.min(screen.width,screen.height)<600)d.classList.add("aa-phone")}catch(e){}`,
           }}
         />
         <style

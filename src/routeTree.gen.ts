@@ -29,6 +29,7 @@ import { Route as AppStatisticheRouteImport } from './routes/_app/statistiche'
 import { Route as AppAllenamentoIndexRouteImport } from './routes/_app/allenamento.index'
 import { Route as AppAllenamentoIdRouteImport } from './routes/_app/allenamento.$id'
 import { Route as AppArciereIdRouteImport } from './routes/_app/arciere.$id'
+import { Route as AppGestisciIdRouteImport } from './routes/_app/gestisci.$id'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 
 const AppRoute = AppRouteImport.update({
@@ -130,6 +131,11 @@ const AppArciereIdRoute = AppArciereIdRouteImport.update({
   path: '/arciere/$id',
   getParentRoute: () => AppRoute,
 } as any)
+const AppGestisciIdRoute = AppGestisciIdRouteImport.update({
+  id: '/gestisci/$id',
+  path: '/gestisci/$id',
+  getParentRoute: () => AppRoute,
+} as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
@@ -155,6 +161,7 @@ export interface FileRoutesByFullPath {
   '/statistiche': typeof AppStatisticheRoute
   '/allenamento/$id': typeof AppAllenamentoIdRoute
   '/arciere/$id': typeof AppArciereIdRoute
+  '/gestisci/$id': typeof AppGestisciIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/allenamento/': typeof AppAllenamentoIndexRoute
 }
@@ -176,6 +183,7 @@ export interface FileRoutesByTo {
   '/': typeof AppIndexRoute
   '/allenamento/$id': typeof AppAllenamentoIdRoute
   '/arciere/$id': typeof AppArciereIdRoute
+  '/gestisci/$id': typeof AppGestisciIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/allenamento': typeof AppAllenamentoIndexRoute
 }
@@ -200,6 +208,7 @@ export interface FileRoutesById {
   '/_app/': typeof AppIndexRoute
   '/_app/allenamento/$id': typeof AppAllenamentoIdRoute
   '/_app/arciere/$id': typeof AppArciereIdRoute
+  '/_app/gestisci/$id': typeof AppGestisciIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/_app/allenamento/': typeof AppAllenamentoIndexRoute
 }
@@ -224,6 +233,7 @@ export interface FileRouteTypes {
     | '/statistiche'
     | '/allenamento/$id'
     | '/arciere/$id'
+    | '/gestisci/$id'
     | '/api/auth/$'
     | '/allenamento/'
   fileRoutesByTo: FileRoutesByTo
@@ -245,6 +255,7 @@ export interface FileRouteTypes {
     | '/'
     | '/allenamento/$id'
     | '/arciere/$id'
+    | '/gestisci/$id'
     | '/api/auth/$'
     | '/allenamento'
   id:
@@ -268,6 +279,7 @@ export interface FileRouteTypes {
     | '/_app/'
     | '/_app/allenamento/$id'
     | '/_app/arciere/$id'
+    | '/_app/gestisci/$id'
     | '/api/auth/$'
     | '/_app/allenamento/'
   fileRoutesById: FileRoutesById
@@ -420,6 +432,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppArciereIdRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/gestisci/$id': {
+      id: '/_app/gestisci/$id'
+      path: '/gestisci/$id'
+      fullPath: '/gestisci/$id'
+      preLoaderRoute: typeof AppGestisciIdRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/api/auth/$': {
       id: '/api/auth/$'
       path: '/api/auth/$'
@@ -461,6 +480,7 @@ interface AppRouteChildren {
   AppStatisticheRoute: typeof AppStatisticheRoute
   AppIndexRoute: typeof AppIndexRoute
   AppArciereIdRoute: typeof AppArciereIdRoute
+  AppGestisciIdRoute: typeof AppGestisciIdRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
@@ -480,6 +500,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppStatisticheRoute: AppStatisticheRoute,
   AppIndexRoute: AppIndexRoute,
   AppArciereIdRoute: AppArciereIdRoute,
+  AppGestisciIdRoute: AppGestisciIdRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)

@@ -17,7 +17,8 @@ export type Hud = {
   dims: { a: V3; b: V3; text: string }[];
   feet: V3;
 };
-export type Model = { parts: Part[]; hud: Hud; center: V3; height: number };
+/** J e hand servono al corpo anatomico vero (anatomy-body): ogni segmento segue questi punti */
+export type Model = { parts: Part[]; hud: Hud; center: V3; height: number; J?: Record<number, V3>; hand?: Hand };
 
 const add = (a: V3, b: V3): V3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
 const sub = (a: V3, b: V3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
@@ -505,5 +506,7 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand): Model | 
     hud: { pts: { nock, grip, headC, shM, hipM, bowEl: bow.el, drawEl: drw.el, bowWr: bow.wr, drawWr: drw.wr, bowSh: bow.sh, drawSh: drw.sh, knees: lerp(J[25], J[26], 0.5) }, labels, arcs, dims, feet },
     center: [shM[0] * 0.5 + hipM[0] * 0.5, top * 0.52, shM[2] * 0.5 + hipM[2] * 0.5],
     height: top,
+    J,
+    hand,
   };
 }

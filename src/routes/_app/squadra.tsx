@@ -95,7 +95,8 @@ function Page() {
   const ranked = useMemo(() => [...people].sort(bySkill), [people]);
   const chosen = pick.length ? pick : ranked.filter((row) => row.skill >= 0).slice(0, 2).map((row) => row.userId);
 
-  if (loading) return <Loading />;
+  // la pagina compare tutta insieme: lo stemma della compagnia arriva con l'elenco, non dopo spingendolo giù
+  if (loading || (companies.loading && !companies.data)) return <Loading />;
   if (error || !data) return <ErrorNote text={error || "Errore"} />;
   if (people.length === 0) return <Empty title="Ancora nessuno" text="Il primo account apre la compagnia. Gli altri si registrano da soli." />;
 
