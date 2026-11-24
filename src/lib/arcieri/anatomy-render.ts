@@ -79,8 +79,8 @@ varying vec3 vW; varying vec3 vN; varying vec2 vF; varying float vAct; varying f
 uniform vec3 uEye; uniform float uLayer; uniform float uAlpha; uniform float uDim;
 void main(){
   vec3 N = normalize(vN); vec3 V = normalize(uEye - vW);
-  if (dot(N, V) < 0.0) N = -N;
-  float ndv = max(dot(N, V), 0.0);
+  // si disegnano solo le facce verso chi guarda: ai bordi la normale può sfiorare il lato opposto
+  float ndv = clamp(dot(N, V), 0.0, 1.0);
   float rim = pow(1.0 - ndv, 2.0);
   vec3 L = normalize(vec3(0.35, 0.8, 0.55)); vec3 L2 = normalize(vec3(-0.6, 0.25, 0.3));
   float dif = max(dot(N, L), 0.0) * 0.75 + max(dot(N, L2), 0.0) * 0.3;
@@ -278,9 +278,9 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
       gl.bindBuffer(gl.ARRAY_BUFFER, b.vb);
       gl.vertexAttribPointer(bl.aP, 3, gl.UNSIGNED_SHORT, true, st, 0);
       gl.vertexAttribPointer(bl.aN, 3, gl.BYTE, true, st, 6);
-      gl.vertexAttribPointer(bl.aJ, 2, gl.UNSIGNED_BYTE, false, st, 10);
-      gl.vertexAttribPointer(bl.aM, 4, gl.UNSIGNED_BYTE, false, st, 12);
-      gl.vertexAttribPointer(bl.aT, 1, gl.UNSIGNED_BYTE, true, st, 16);
+      gl.vertexAttribPointer(bl.aJ, 2, gl.UNSIGNED_BYTE, false, st, 9);
+      gl.vertexAttribPointer(bl.aM, 4, gl.UNSIGNED_BYTE, false, st, 11);
+      gl.vertexAttribPointer(bl.aT, 1, gl.UNSIGNED_BYTE, true, st, 15);
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, b.ib);
       gl.drawElements(gl.TRIANGLES, b.count, gl.UNSIGNED_SHORT, 0);
     }
@@ -329,7 +329,7 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     gl.disable(gl.CULL_FACE);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     gl.depthMask(true);
-    // arco, corda e freccia: dal modello semplice
+    // arco, corda e freccia: dal modello semplice (senza scartare facce)
     drawProcedural(model.parts.filter((p) => p.layer === "arco" && !focus), VP, eye, 0);
     gl.disableVertexAttribArray(loc.aP);
     gl.disableVertexAttribArray(loc.aN);
@@ -347,6 +347,11 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     gl.uniform4fv(bl.uFoc, f16);
     gl.uniform3fv(bl.uEye, eye);
     gl.uniform1f(bl.uDim, L.muscolo ? 1 : 0);
+    // le superfici del corpo sono chiuse e orientate verso l'esterno: le facce interne non si disegnano
+    // (niente pieghe luccicanti dentro la pelle)
+    gl.enable(gl.CULL_FACE);
+    gl.cullFace(gl.BACK);
+    gl.frontFace(gl.CCW);
     if (L.osso) drawBodyLayer("bone", 1, 1);
     if (L.muscolo) drawBodyLayer("muscle", 2, 1);
     if (L.pelle) {
@@ -362,6 +367,7 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
       gl.depthMask(true);
       gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     }
+    gl.disable(gl.CULL_FACE);
     for (const a of bodyAttribs) if (a >= 0) gl.disableVertexAttribArray(a);
     gl.useProgram(prog);
     bound = "";

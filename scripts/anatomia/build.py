@@ -12,9 +12,11 @@ from scipy.spatial import cKDTree
 sys.path.insert(0, '.')
 from load import A, part
 from pick import classify
-from decimate import cluster, recompute_normals
+from decimate import recompute_normals
 
 OUT = sys.argv[1] if len(sys.argv) > 1 else '/tmp/corpo'
+# muscoli profondi, coperti da altri: non si vedono mai, si risparmia peso
+DEEP = re.compile(r"vastus intermedius|gluteus minimus|iliacus|psoas|tibialis posterior|flexor digitorum profundus|supinator|pronator quadratus|scalen|longissimus (capitis|cervicis)|iliocostalis cervicis|subscapularis|pectoralis minor|flexor hallucis longus|flexor digitorum longus|extensor indicis|extensor pollicis|abductor pollicis longus|flexor pollicis longus", re.I)
 EYE = re.compile(r"(superior|inferior|lateral|medial) rectus$|(superior|inferior) oblique$|perineal", re.I)
 
 # ---------- segmenti ----------
@@ -93,13 +95,19 @@ for p in A['parts']:
     if p['name'] in ('Left tensor fasciae latae', 'Right tensor fasciae latae'): k = 'muscle'
     if p['name'] in ('Left calcaneal tendon', 'Right calcaneal tendon'): k = 'muscle'
     if not k or EYE.search(p['name']): continue
+    if k == 'muscle' and DEEP.search(p['name']): continue
     pos, nor, idx = part(p)
-    size = float(np.linalg.norm(pos.max(0) - pos.min(0)))
-    cell = {'muscle': min(0.006, size / 12), 'bone': min(0.006, size / 9), 'skin': 0.011}[k]
-    P, N, I = cluster(pos.astype(np.float64), nor.astype(np.float64), idx.astype(np.int64), cell)
-    if len(I) < 4: continue
-    N = recompute_normals(P.astype(np.float64), I)
-    parts.append(dict(kind=k, name=p['name'], P=P.astype(np.float64), N=N, I=I, full=pos.astype(np.float64)))
+    # piena definizione dell'atlante: niente semplificazione che apra buchi
+    P = pos.astype(np.float64); N = nor.astype(np.float64); I = idx.astype(np.int64)
+    # vertici doppi nello stesso punto: si uniscono (metà del peso, superficie continua, normali lisce)
+    key = np.round(P / 0.00005).astype(np.int64)
+    _, first, inv = np.unique(key, axis=0, return_index=True, return_inverse=True)
+    inv = inv.reshape(-1)
+    Nw = np.zeros((len(first), 3)); np.add.at(Nw, inv, N)
+    P = P[first]; I = inv[I]
+    I = I[(I[:, 0] != I[:, 1]) & (I[:, 1] != I[:, 2]) & (I[:, 0] != I[:, 2])]
+    N = Nw / np.maximum(np.linalg.norm(Nw, axis=1, keepdims=True), 1e-6)
+    parts.append(dict(kind=k, name=p['name'], P=P, N=N, I=I, full=P))
 print('parti', len(parts), 'triangoli', sum(len(x['I']) for x in parts))
 
 def by(name):
@@ -129,6 +137,20 @@ for s, sg, (sh, el, wr, pk, ix, th, hp, kn, an, he, to, ear) in [('Left', 1, (11
     rest[to] = np.vstack([b['full'] for b in bt]).mean(0)
     tb = by(f'{s} temporal bone')['full']; rest[ear] = tb[np.abs(tb[:, 0]) > np.abs(tb[:, 0]).max() - 0.012].mean(0)
 skin = by('Skin')
+# inguine da manichino: l'app è usata anche da ragazzi, la pelle trasparente non mostra i genitali
+def mannequin(S):
+    P = S['P']
+    ax = np.abs(P[:, 0])
+    def sm(a, b, x): t = np.clip((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t)
+    zc = 0.02 + 0.055 * sm(0.75, 0.885, P[:, 1])
+    bx = 1 - sm(0.032, 0.062, ax)
+    reg = (P[:, 1] > 0.69) & (P[:, 1] < 0.89) & (P[:, 2] > -0.03) & (bx > 0)
+    z_new = np.minimum(P[:, 2], zc + 0.01 * ax / 0.06)
+    P[reg, 2] = P[reg, 2] * (1 - bx[reg]) + z_new[reg] * bx[reg]
+    low = reg & (P[:, 1] < 0.75) & (ax < 0.045)
+    P[low, 1] = P[low, 1] * (1 - bx[low]) + 0.75 * bx[low]
+    S['N'] = recompute_normals(P, S['I'])
+mannequin(skin)
 SP = skin['P']
 head = SP[SP[:, 1] > 1.5]
 rest[0] = head[np.argmax(head[:, 2])]
@@ -343,13 +365,14 @@ for kind in ('bone', 'muscle', 'skin'):
         q = np.round((P - lo) / (hi - lo) * 65535).astype(np.uint16)
         nq = np.round(np.clip(N, -1, 1) * 127).astype(np.int8)
         # vertice: 6 posizione + 4 normale (+1 vuoto) + 2 segmenti + 1 peso + 1 gruppo + 1 fibra + 1 giro + 1 tendine + 1 vuoto = 18 -> 20
-        V = np.zeros((len(P), 20), np.uint8)
+        # vertice da 16 byte: posizione 6, normale 3, segmenti 2, peso, gruppo, fibra, giro, tendine
+        V = np.zeros((len(P), 16), np.uint8)
         V[:, 0:6] = q.view(np.uint8).reshape(-1, 6)
         V[:, 6:9] = nq.view(np.uint8).reshape(-1, 3)
-        V[:, 10:12] = J
-        V[:, 12] = np.round(W * 255)
-        V[:, 13] = Gp
-        V[:, 14] = np.round(T * 255); V[:, 15] = np.round(Aa * 255); V[:, 16] = np.round(TD * 255)
+        V[:, 9:11] = J
+        V[:, 11] = np.round(W * 255)
+        V[:, 12] = Gp
+        V[:, 13] = np.round(T * 255); V[:, 14] = np.round(Aa * 255); V[:, 15] = np.round(TD * 255)
         align4(); vo = len(blob); blob.extend(V.tobytes())
         align4(); io = len(blob); blob.extend(I.astype(np.uint16).tobytes())
         batches.append(dict(layer=kind, vertices=int(len(P)), indices=int(I.size), vOffset=vo, iOffset=io))
@@ -357,12 +380,15 @@ for kind in ('bone', 'muscle', 'skin'):
 
 def r3(v): return [round(float(c), 4) for c in v]
 meta = dict(
-    version=1,
+    version=2,
     source='BodyParts3D, © The Database Center for Life Science, licensed under CC BY 4.0 (https://dbarchive.biosciencedbc.jp/en/bodyparts3d/lic.html). Geometria semplificata e adattata per Arcieri Amiconi; gran dorsale e retto dell\'addome aggiunti.',
-    lo=r3(lo), hi=r3(hi), stride=20, segments=SEGS, groups=groups,
+    lo=r3(lo), hi=r3(hi), stride=16, segments=SEGS, groups=groups,
     rest={str(k): r3(v) for k, v in rest.items()},
     batches=batches, bytes=len(blob),
 )
+import gzip
 open(OUT + '.bin', 'wb').write(blob)
+# compresso: il sito lo scarica così e lo apre nel telefono (DecompressionStream)
+open(OUT + '.bin.gz', 'wb').write(gzip.compress(bytes(blob), 9))
 json.dump(meta, open(OUT + '.json', 'w'), ensure_ascii=False)
 print('scritto', OUT, len(blob), 'byte', 'gruppi', len(groups))

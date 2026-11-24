@@ -27,18 +27,40 @@ export type BodyData = { meta: BodyMeta; buf: ArrayBuffer };
 export const BODY_CREDIT = "Anatomia: BodyParts3D, © The Database Center for Life Science, CC BY 4.0";
 
 let loading: Promise<BodyData | null> | null = null;
+
+/** il file compresso pesa un terzo in meno: si apre nel telefono; senza questa funzione si scarica quello intero */
+async function fetchBody(): Promise<ArrayBuffer> {
+  const DS = (globalThis as { DecompressionStream?: new (f: string) => TransformStream<Uint8Array, Uint8Array> }).DecompressionStream;
+  if (DS) {
+    try {
+      const r = await fetch("/anatomia/corpo.bin.gz");
+      if (r.ok) {
+        const raw = await r.arrayBuffer();
+        const b = new Uint8Array(raw, 0, 2);
+        // se il server l'ha già aperto (intestazione gzip assente) si usa così com'è
+        if (b[0] !== 0x1f || b[1] !== 0x8b) return raw;
+        return await new Response(new Blob([raw]).stream().pipeThrough(new DS("gzip"))).arrayBuffer();
+      }
+    } catch {
+      /* si prova con quello intero */
+    }
+  }
+  const r = await fetch("/anatomia/corpo.bin");
+  if (!r.ok) throw new Error("corpo");
+  return r.arrayBuffer();
+}
 let loaded: BodyData | null = null;
 
-/** scarica il corpo una volta sola (circa 2 MB compressi); null se non si riesce */
+/** scarica il corpo una volta sola (circa 4,6 MB compressi); null se non si riesce */
 export function loadBody(): Promise<BodyData | null> {
   if (loaded) return Promise.resolve(loaded);
   if (!loading) {
     loading = (async () => {
       try {
-        const [m, b] = await Promise.all([fetch("/anatomia/corpo.json"), fetch("/anatomia/corpo.bin")]);
-        if (!m.ok || !b.ok) return null;
+        const m = await fetch("/anatomia/corpo.json");
+        if (!m.ok) return null;
         const meta = (await m.json()) as BodyMeta;
-        const buf = await b.arrayBuffer();
+        const buf = await fetchBody();
         if (buf.byteLength < meta.bytes) return null;
         loaded = { meta, buf };
         return loaded;
