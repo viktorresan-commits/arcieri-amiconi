@@ -9,6 +9,7 @@ import { findCompanyLogos, syncFitastCompanies } from "@/lib/arcieri/fitast-leag
 import { Avatar, Button, Card, ErrorNote, Field, Segmented, TextInput } from "./kit";
 import { RankBars } from "./rank-bars";
 import { CrestPodium } from "./podium";
+import { TeamArchersSheet } from "./fitast-league";
 import { crestOf as drawnCrest } from "@/lib/arcieri/fitast-league";
 
 type Board = Awaited<ReturnType<typeof listCompanies>>;
@@ -272,6 +273,8 @@ export function CompanyLeague({ board, onJoin, busy, onSynced, part, fitastBoard
   const [find, setFind] = useState("");
   const [showAll, setShowAll] = useState(false);
   const [editCo, setEditCo] = useState<number | null>(null);
+  // gli arcieri di una compagnia nella classifica generale FITAST
+  const [teamOf, setTeamOf] = useState<{ team: string; crest: { name: string; logoUrl: string | null; color: string; fitastName?: string } } | null>(null);
   const [sync, setSync] = useState<{ busy: boolean; text: string }>({ busy: false, text: "" });
   useLogoSearch(part === "ranking" ? undefined : onSynced);
   // l'elenco delle compagnie FITAST si prepara da solo (una volta alla settimana)
@@ -424,6 +427,9 @@ export function CompanyLeague({ board, onJoin, busy, onSynced, part, fitastBoard
                     </div>
                   ) : co.members > 0 && co.id !== board.mine ? <p className="text-xs text-muted">Gli iscritti li vedono il presidente e il fondatore.</p> : null}
                   <CompanyTrophies companyId={co.id} companyName={co.name} />
+                  <button type="button" onClick={() => setTeamOf({ team: co.fitastName || co.name, crest: { name: co.name, logoUrl: co.logoUrl, color: co.color, fitastName: co.fitastName } })} className="aa-chip justify-self-start">
+                    Tutti gli arcieri nel campionato
+                  </button>
                   {board.isAdmin ? (
                     editCo === co.id ? (
                       <CompanyForm co={co} onCancel={() => setEditCo(null)} onDone={() => { setEditCo(null); onSynced?.(); }} />
@@ -436,6 +442,7 @@ export function CompanyLeague({ board, onJoin, busy, onSynced, part, fitastBoard
             </div>
           );
               })}
+              {teamOf ? <TeamArchersSheet team={teamOf.team} crest={teamOf.crest} onClose={() => setTeamOf(null)} /> : null}
               {!find.trim() && !showAll && ordered.length > FIRST_COMPANIES ? (
                 <button type="button" onClick={() => setShowAll(true)} className="aa-press min-h-11 rounded-2xl border border-line text-sm font-semibold">
                   Mostra tutte le {ordered.length} compagnie

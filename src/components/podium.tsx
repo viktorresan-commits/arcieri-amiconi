@@ -121,7 +121,7 @@ function Glory() {
   );
 }
 
-type Slot = { key: string; place: Place; art: ReactNode; to?: { id: number }; /** l'alloro lo disegna già l'arte (attorno allo stemma) */ ownWreath?: boolean };
+type Slot = { key: string; place: Place; art: ReactNode; to?: { id: number }; onClick?: () => void; /** l'alloro lo disegna già l'arte (attorno allo stemma) */ ownWreath?: boolean };
 
 /**
  * Podio epico: tre colonne (secondo, primo, terzo) con la corona d'alloro, la coppa sul primo,
@@ -153,7 +153,7 @@ function Stage({ slots }: { slots: Slot[] }) {
         );
         return (
           <div key={s.key} className={`aa-pop relative grid ${width} ${big ? "z-10" : ""}`} style={{ animationDelay: `${0.25 + (3 - p) * 0.15}s` }}>
-            {s.to ? <Link to="/arciere/$id" params={{ id: String(s.to.id) }} className="block">{body}</Link> : body}
+            {s.to ? <Link to="/arciere/$id" params={{ id: String(s.to.id) }} className="block">{body}</Link> : s.onClick ? <button type="button" onClick={s.onClick} className="block w-full text-left">{body}</button> : body}
             <div className="mt-2"><Step place={p} /></div>
           </div>
         );
@@ -265,9 +265,9 @@ function CrestMedal({ row, place }: { row: CrestPodiumRow; place: Place }) {
 }
 
 /** Podio delle compagnie: i loro stemmi sul podio con alloro e coppa */
-export function CrestPodium({ rows }: { rows: CrestPodiumRow[] }) {
+export function CrestPodium({ rows, onPick }: { rows: CrestPodiumRow[]; /** tocca una compagnia (la sua chiave) */ onPick?: (key: string) => void }) {
   if (!rows.length) return null;
-  const slots: Slot[] = rows.slice(0, 3).map((row, i) => ({ key: row.key, place: (i + 1) as Place, ownWreath: true, art: <CrestMedal row={row} place={(i + 1) as Place} /> }));
+  const slots: Slot[] = rows.slice(0, 3).map((row, i) => ({ key: row.key, place: (i + 1) as Place, ownWreath: true, onClick: onPick ? () => onPick(row.key) : undefined, art: <CrestMedal row={row} place={(i + 1) as Place} /> }));
   return (
     <div className="relative overflow-hidden rounded-2xl bg-[radial-gradient(120%_80%_at_50%_0%,rgba(224,177,90,0.2),transparent_70%)] px-1">
       <Confetti count={14} />

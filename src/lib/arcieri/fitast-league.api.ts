@@ -415,6 +415,42 @@ export const saveFitastStandings = createServerFn({ method: "POST" })
   });
 
 /** punti FITAST delle compagnie nel campionato più recente (classifica generale squadre), per nome */
+export type TeamArcher = { name: string; points: number | null; category: string; place: number | null; categories: { category: string; place: number | null }[] };
+
+/** tutti gli arcieri di una compagnia nella classifica generale arcieri del campionato (dal migliore) */
+export const fitastTeamArchers = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: unknown) => ({ team: clip((input as { team?: unknown } | null)?.team, 120) }))
+  .handler(async ({ context, data }) => {
+    const sql = await db();
+    await ensureMember(sql, context.userId);
+    const key = teamKey(data.team);
+    const latest = await sql<{ season: string; season_name: string }>`select season, season_name from fitast_standings where kind = 'generale-arcieri' order by updated_at desc limit 1`;
+    if (!key || !latest[0]) return { season: latest[0]?.season_name ?? "", archers: [] as TeamArcher[] };
+    const rows = await sql<{ category: string; rows: StandingRow[] }>`select category, rows from fitast_standings where kind = 'generale-arcieri' and season = ${latest[0].season}`;
+    const byName = new Map<string, { name: string; points: number | null; entries: { category: string; place: number | null }[] }>();
+    for (const r of rows) {
+      for (const x of Array.isArray(r.rows) ? r.rows : []) {
+        if (teamKey(x.team || "") !== key) continue;
+        const who = teamKey(x.name);
+        if (!who) continue;
+        const cur = byName.get(who) ?? { name: x.name, points: null, entries: [] };
+        const pts = x.camp ?? x.score;
+        if (pts != null && (cur.points == null || pts > cur.points)) cur.points = pts;
+        if (!cur.entries.some((e) => e.category === r.category)) cur.entries.push({ category: r.category, place: x.place });
+        byName.set(who, cur);
+      }
+    }
+    // la categoria da mostrare: quella con la tipologia d'arco (non «Tutte»), se c'è
+    const archers: TeamArcher[] = [...byName.values()]
+      .map((a) => {
+        const specific = a.entries.find((e) => !/\btutt/i.test(e.category)) ?? a.entries[0];
+        return { name: a.name, points: a.points, category: specific?.category ?? "", place: specific?.place ?? null, categories: a.entries };
+      })
+      .sort((a, b) => (b.points ?? -1) - (a.points ?? -1) || a.name.localeCompare(b.name, "it"));
+    return { season: latest[0].season_name, archers };
+  });
+
 /**
  * Media dei punti campionato per arciere di ogni compagnia: tutti i suoi arcieri nella classifica generale
  * arcieri del campionato (ognuno contato una volta, anche se compare in più categorie).

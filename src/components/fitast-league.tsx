@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { Glyph } from "@/components/icons";
 import { Card, ErrorNote, Loading, cx } from "@/components/kit";
 import { Medal } from "@/components/palmares";
 import { CrestPodium } from "@/components/podium";
 import { Insignia } from "@/components/insignia";
 import { useLoad } from "@/lib/arcieri/use-load";
-import { fitastStandings, type Standing, type StandingRow } from "@/lib/arcieri/fitast-league.api";
+import { fitastStandings, fitastTeamArchers, type Standing, type StandingRow, type TeamArcher } from "@/lib/arcieri/fitast-league.api";
 import { categoryGroup, crestOf as drawCrest, teamKey, titleName } from "@/lib/arcieri/fitast-league";
 import { syncStandings, type SyncProgress } from "@/lib/arcieri/fitast-sync";
 
@@ -73,11 +75,15 @@ function useSplit(items: Standing[]) {
   }, [items]);
 }
 
-function RankList({ rows, crestOf, team, limit }: { rows: StandingRow[]; crestOf: (t: string) => Crest | null; team?: boolean; limit: number }) {
+function RankList({ rows, crestOf, team, limit, onTeam }: { rows: StandingRow[]; crestOf: (t: string) => Crest | null; team?: boolean; limit: number; /** tocca una compagnia: i suoi arcieri */ onTeam?: (name: string) => void }) {
   return (
     <ol className="grid gap-1.5">
       {rows.slice(0, limit).map((r, i) => (
-        <li key={`${r.name}-${i}`} className="flex items-center gap-2.5 rounded-xl bg-white/[0.035] px-2.5 py-2">
+        <li
+          key={`${r.name}-${i}`}
+          className={cx("flex items-center gap-2.5 rounded-xl bg-white/[0.035] px-2.5 py-2", onTeam && "aa-press cursor-pointer active:bg-white/[0.07]")}
+          {...(onTeam ? { role: "button", tabIndex: 0, onClick: () => onTeam(team ? r.name : r.team), onKeyDown: (e: { key: string }) => { if (e.key === "Enter") onTeam(team ? r.name : r.team); } } : {})}
+        >
           <Place place={r.place} />
           <CrestMark crest={crestOf(team ? r.name : r.team)} team={team ? r.name : r.team} />
           <span className="min-w-0 flex-1">
@@ -96,16 +102,17 @@ function RankList({ rows, crestOf, team, limit }: { rows: StandingRow[]; crestOf
 
 /** una classifica divisa per categoria (e tipologia): pastiglie e la lista */
 /** i primi tre della classifica sul podio, con gli stemmi delle compagnie */
-function TeamPodium({ rows, crestOf }: { rows: StandingRow[]; crestOf: (t: string) => Crest | null }) {
+function TeamPodium({ rows, crestOf, onTeam }: { rows: StandingRow[]; crestOf: (t: string) => Crest | null; onTeam?: (name: string) => void }) {
   const top = rows.slice(0, 3).map((r) => {
     const c = crestOf(r.name);
     const drawnCrest = c?.logoUrl ? null : drawCrest(r.name);
     return { key: r.name, name: titleName(r.name), mark: `${num(pts(r))} ${r.camp != null ? "pt camp." : "punti"}`, logo: c?.logoUrl ?? drawnCrest?.logo ?? null, color: c?.color ?? drawnCrest?.color ?? "#1f7a46" };
   });
-  return <CrestPodium rows={top} />;
+  return <CrestPodium rows={top} onPick={onTeam ? (key) => onTeam(key) : undefined} />;
 }
 
 function SplitBoard({ items, crestOf, team, limit, empty }: { items: Standing[]; crestOf: (t: string) => Crest | null; team?: boolean; limit: number; empty: string }) {
+  const [shown, setShown] = useState<string | null>(null);
   const { groups, order } = useSplit(items);
   const [g, setG] = useState("");
   const group = order.includes(g) ? g : order[0] ?? "";
@@ -120,11 +127,64 @@ function SplitBoard({ items, crestOf, team, limit, empty }: { items: Standing[];
       <Chips value={tip} options={tips} onChange={setT} />
       {it && team && it.rows.length >= 3 ? (
         <>
-          <TeamPodium rows={it.rows} crestOf={crestOf} />
-          <RankList rows={it.rows.slice(3)} crestOf={crestOf} team={team} limit={limit - 3} />
+          <TeamPodium rows={it.rows} crestOf={crestOf} onTeam={setShown} />
+          <RankList rows={it.rows.slice(3)} crestOf={crestOf} team={team} limit={limit - 3} onTeam={setShown} />
         </>
-      ) : it ? <RankList rows={it.rows} crestOf={crestOf} team={team} limit={limit} /> : null}
+      ) : it ? <RankList rows={it.rows} crestOf={crestOf} team={team} limit={limit} onTeam={setShown} /> : null}
+      {team ? <p className="px-1 text-[0.7rem] text-muted">Tocca una compagnia per vedere tutti i suoi arcieri.</p> : null}
+      {shown ? <TeamArchersSheet team={shown} crest={crestOf(shown)} onClose={() => setShown(null)} /> : null}
     </div>
+  );
+}
+
+/** Tutti gli arcieri di una compagnia nel campionato (classifica generale arcieri), dal migliore. */
+export function TeamArchersSheet({ team, crest, onClose }: { team: string; crest: Crest | null; onClose: () => void }) {
+  const { data, error, loading } = useLoad(`fitast-team-${team}`, () => fitastTeamArchers({ data: { team } }));
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  if (typeof document === "undefined") return null;
+  const list: TeamArcher[] = data?.archers ?? [];
+  return createPortal(
+    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/55 backdrop-blur-[3px] md:items-center" onClick={onClose} role="dialog" aria-modal="true" aria-label={`Arcieri di ${titleName(team)}`}>
+      <div className="aa-sheet grid max-h-[88dvh] w-full max-w-lg grid-rows-[auto_minmax(0,1fr)] gap-3 overflow-hidden rounded-t-3xl border-t border-hair bg-elev p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] md:rounded-3xl md:border" onClick={(e) => e.stopPropagation()}>
+        <header className="flex items-center gap-3">
+          <CrestMark crest={crest} team={team} size={46} />
+          <div className="min-w-0 flex-1">
+            <h2 className="truncate font-display text-2xl leading-tight">{crest?.name ?? titleName(team)}</h2>
+            <p className="text-xs text-muted">{loading ? "Leggo la classifica…" : `${list.length} ${list.length === 1 ? "arciere" : "arcieri"} nel campionato${data?.season ? ` · ${data.season}` : ""}`}</p>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Chiudi" className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white/[0.06]">
+            <Glyph name="close" size={18} />
+          </button>
+        </header>
+        <div className="-mx-1 overflow-y-auto px-1">
+          {error ? <ErrorNote text={error} /> : loading ? <Loading /> : !list.length ? (
+            <p className="py-6 text-center text-sm text-muted">Nessun arciere di questa compagnia nella classifica generale. Tocca «Aggiorna dal portale» per leggerla intera.</p>
+          ) : (
+            <ol className="grid gap-1.5">
+              {list.map((a, i) => (
+                <li key={`${a.name}-${i}`} className="flex items-center gap-2.5 rounded-xl bg-white/[0.035] px-2.5 py-2">
+                  <span className="w-6 shrink-0 text-center font-display text-base tabular-nums text-muted">{i + 1}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold">{titleName(a.name)}</span>
+                    <span className="block truncate text-xs text-muted">{titleName(a.category)}{a.place ? ` · ${a.place}° in categoria` : ""}</span>
+                  </span>
+                  {a.place && a.place <= 3 ? <Medal place={a.place} size={26} /> : null}
+                  <span className="shrink-0 text-right">
+                    <b className="block font-display text-lg leading-none tabular-nums">{num(a.points)}</b>
+                    <span className="text-[0.58rem] uppercase tracking-wider text-muted">pt camp.</span>
+                  </span>
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body,
   );
 }
 
