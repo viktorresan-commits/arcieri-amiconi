@@ -5,11 +5,36 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 import type { Sql } from "@/lib/db";
-import { asNum, clip, db, ensureMember, staffLevel } from "./access";
+import { asNum, canScore, clip, db, ensureMember, staffLevel } from "./access";
 import { homeId, myMembership } from "./compagnie.api";
 
 export type Podium = { competition: string; day: string; place: number; score: number | null; category: string; userId: string; memberId: number; name: string };
 export type Award = { id: number; title: string; place: number | null; competition: string; day: string; category: string; notes: string };
+/** risultato di squadra della compagnia in una gara, dalla classifica squadre del portale FITAST */
+export type TeamResult = { id: number; fitastId: string; competitionId: number | null; competition: string; day: string; team: string; category: string; place: number | null; score: number | null; teams: number | null };
+
+type ResRow = { id: number; fitast_id: string; competition_id: number | null; competition: string; held_on: string | null; team: string; category: string; place: number | null; score: number | string | null; teams: number | null };
+export const toTeamResult = (r: ResRow): TeamResult => ({
+  id: asNum(r.id),
+  fitastId: r.fitast_id ?? "",
+  competitionId: r.competition_id == null ? null : asNum(r.competition_id),
+  competition: r.competition ?? "",
+  day: r.held_on ? String(r.held_on).slice(0, 10) : "",
+  team: r.team ?? "",
+  category: r.category ?? "",
+  place: r.place == null ? null : asNum(r.place),
+  score: r.score == null ? null : Number(r.score),
+  teams: r.teams == null ? null : asNum(r.teams),
+});
+
+/** i risultati di squadra di una compagnia, dal più recente */
+export async function teamResultsOf(sql: Sql, companyId: number) {
+  const rows = await sql<ResRow>`
+    select id, fitast_id, competition_id, competition, held_on::text as held_on, team, category, place, score, teams
+    from company_results where company_id = ${companyId}
+    order by held_on desc nulls last, place nulls last, id desc`;
+  return rows.map(toTeamResult);
+}
 
 type PodRow = { name: string; starts_on: string; rank: number; score: number | null; category: string; user_id: string; member_id: number; given_name: string; family_name: string; nickname: string };
 
@@ -89,6 +114,7 @@ export const companyPalmares = createServerFn({ method: "POST" })
     return {
       companyId,
       seeNames,
+      results: await teamResultsOf(sql, companyId),
       canEdit: await companyAccess(sql, context.userId, companyId),
       awards: awards.map(
         (a): Award => ({ id: asNum(a.id), title: a.title, place: a.place == null ? null : asNum(a.place), competition: a.competition, day: a.held_on ? String(a.held_on).slice(0, 10) : "", category: a.category, notes: a.notes }),
@@ -137,4 +163,78 @@ export const deleteCompanyAward = createServerFn({ method: "POST" })
     if (!data.companyId || !(await companyAccess(sql, context.userId, data.companyId))) throw new Error("Solo il capo della compagnia o lo staff può aggiornare la bacheca.");
     await sql`delete from company_awards where id = ${data.id} and company_id = ${data.companyId}`;
     return { ok: true };
+  });
+
+/** la compagnia di chi cerca sul portale FITAST e il nome con cui il portale la scrive (es. ARCIERI FABRIANO) */
+export const fitastTeam = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    const sql = await db();
+    await ensureMember(sql, context.userId);
+    const mine = await myMembership(sql, context.userId);
+    const rows = await sql<{ name: string; city: string; fitast_name: string | null }>`select name, city, fitast_name from companies where id = ${mine.companyId} limit 1`;
+    return { companyId: mine.companyId, name: rows[0]?.name ?? "", city: rows[0]?.city ?? "", fitastName: rows[0]?.fitast_name ?? "" };
+  });
+
+const optNum = (v: unknown, max: number) => (v == null || v === "" || !Number.isFinite(Number(v)) ? null : Math.max(0, Math.min(max, Number(v))));
+
+/**
+ * Salva per tutta la compagnia di chi cerca i suoi risultati di squadra letti sul portale (posizione,
+ * punteggio, quante squadre): li vede ogni arciere della compagnia, senza aspettare i punteggi di tutti.
+ */
+export const saveCompanyResults = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: unknown) => {
+    const raw = (input ?? {}) as { fitastName?: unknown; results?: unknown };
+    const list = Array.isArray(raw.results) ? raw.results.slice(0, 40) : [];
+    return {
+      fitastName: clip(raw.fitastName, 80),
+      results: list
+        .map((item) => {
+          const r = (item ?? {}) as Record<string, unknown>;
+          const day = String(r.day ?? "").slice(0, 10);
+          const place = optNum(r.place, 999);
+          const teams = optNum(r.teams, 999);
+          return {
+            fitastId: clip(r.fitastId, 12).replace(/\D/g, ""),
+            competition: clip(r.competition, 160),
+            day: /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : null,
+            team: clip(r.team, 120),
+            category: clip(r.category, 120),
+            place: place == null ? null : Math.round(place),
+            score: optNum(r.score, 1_000_000),
+            teams: teams == null ? null : Math.round(teams),
+          };
+        })
+        .filter((r) => r.fitastId && r.team && (r.place != null || r.score != null)),
+    };
+  })
+  .handler(async ({ context, data }) => {
+    const sql = await db();
+    const me = await ensureMember(sql, context.userId);
+    if (!canScore(me.role)) throw new Error("Profilo in sola lettura.");
+    const mine = await myMembership(sql, context.userId);
+    if (data.fitastName) await sql`update companies set fitast_name = ${data.fitastName} where id = ${mine.companyId} and coalesce(fitast_name, '') = ''`;
+    let saved = 0;
+    for (const r of data.results) {
+      // la gara del calendario: quella collegata al portale (fitast:ID) o, se è una sola, quella dello stesso giorno
+      let compId: number | null = null;
+      const linked = await sql<{ id: number }>`select id from competitions where notes ~ ${`^fitast:${r.fitastId}(\\D|$)`} limit 1`;
+      if (linked[0]) compId = asNum(linked[0].id);
+      else if (r.day) {
+        const same = await sql<{ id: number }>`select id from competitions where starts_on = ${r.day}::date limit 2`;
+        if (same.length === 1) compId = asNum(same[0].id);
+      }
+      await sql`
+        insert into company_results (company_id, fitast_id, competition_id, competition, held_on, team, category, place, score, teams, updated_by, updated_at)
+        values (${mine.companyId}, ${r.fitastId}, ${compId}, ${r.competition}, ${r.day}::date, ${r.team}, ${r.category}, ${r.place}, ${r.score}, ${r.teams}, ${context.userId}, now())
+        on conflict (company_id, fitast_id, team, category) do update set
+          competition_id = coalesce(excluded.competition_id, company_results.competition_id),
+          competition = case when excluded.competition <> '' then excluded.competition else company_results.competition end,
+          held_on = coalesce(excluded.held_on, company_results.held_on),
+          place = excluded.place, score = excluded.score, teams = excluded.teams,
+          updated_by = excluded.updated_by, updated_at = now()`;
+      saved++;
+    }
+    return { saved };
   });

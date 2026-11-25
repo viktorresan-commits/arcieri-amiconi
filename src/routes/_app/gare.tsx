@@ -14,6 +14,8 @@ import { LaneEditor } from "@/components/lane-editor";
 import { Glyph } from "@/components/icons";
 import { useTeamAvatars } from "@/components/avatar-hero";
 import { FitastPanel } from "@/components/fitast-panel";
+import { Medal, teamResultText } from "@/components/palmares";
+import type { TeamResult } from "@/lib/arcieri/palmares.api";
 
 export const Route = createFileRoute("/_app/gare")({ component: Page });
 
@@ -50,6 +52,7 @@ type Comp = {
   attended: boolean | null;
   roster: { userId: string; attended: boolean; givenName: string; familyName: string; nickname: string; slug: string; photoUrl: string | null; avatarColor: string }[];
   entries: Entry[];
+  teamResults?: TeamResult[];
 };
 
 function hasResult(entry: Entry) {
@@ -169,6 +172,7 @@ function Page() {
                     {tab === "next" ? "Piazzole e iscritti su FITAST" : "Risultati su FITAST"}
                   </button>
                 ) : null}
+                {comp.teamResults?.length ? <TeamLine results={comp.teamResults} /> : null}
                 <Roster tab={tab} people={comp.roster ?? []} />
               </div>
               <ul className="grid min-w-0 gap-2">
@@ -253,6 +257,24 @@ function Page() {
       ) : (
         <Button variant="ghost" onClick={() => setAdding(true)}>Aggiungi una gara</Button>
       )}
+    </div>
+  );
+}
+
+/** la compagnia in questa gara (classifica squadre del portale FITAST), uguale per tutti */
+function TeamLine({ results }: { results: TeamResult[] }) {
+  const rows = [...results].sort((a, b) => (a.place ?? 999) - (b.place ?? 999));
+  return (
+    <div className="mt-2 grid gap-1.5 rounded-2xl bg-white/[0.04] p-2.5">
+      {rows.slice(0, 4).map((r) => (
+        <div key={r.id} className="flex items-center gap-2.5">
+          {r.place && r.place <= 3 ? <Medal place={r.place} size={26} /> : <span className="grid h-[26px] w-[26px] shrink-0 place-items-center rounded-full bg-white/[0.07] text-[0.7rem] font-semibold tabular-nums">{r.place ?? "—"}</span>}
+          <p className="min-w-0 text-sm leading-snug">
+            <b>Compagnia</b> {teamResultText(r)}
+            <span className="block text-xs text-muted">{[r.team, r.category].filter(Boolean).join(" · ")}</span>
+          </p>
+        </div>
+      ))}
     </div>
   );
 }

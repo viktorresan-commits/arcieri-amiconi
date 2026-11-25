@@ -4,7 +4,8 @@ import { Glyph } from "@/components/icons";
 import { saveEntry } from "@/lib/arcieri/club.api";
 import { FITAST_HOME, fitastRead } from "@/lib/arcieri/fitast.api";
 import { pressFields, type FitastCell, type FitastPage, type FitastTable } from "@/lib/arcieri/fitast-parse";
-import { findGare, garaIdOf, garaTitleOf, rowFields, seasonRange, seasonSelect, type Gara } from "@/lib/arcieri/fitast-gare";
+import { findGare, garaIdOf, garaTitleOf, rowFields, seasonRange, seasonSelect, teamOfRow, teamRowsOf, teamTokens, type Gara } from "@/lib/arcieri/fitast-gare";
+import { fitastTeam, saveCompanyResults } from "@/lib/arcieri/palmares.api";
 import { openExternal } from "@/lib/arcieri/native";
 
 type Lane = { n: number; score: number; arrows: number[]; label: string; distanceM: number | null; note: string; aimAngle: string };
@@ -132,7 +133,7 @@ const isoDay = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padSt
 const fmtDay = (d: string | null) => (d ? `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}` : "");
 const rowsOf = (p: FitastPage) => p.tables.reduce((n, t) => n + Math.max(0, t.rows.length - 1), 0);
 /** una gara letta durante la ricerca: cosa si è aperto e cosa si è trovato */
-type Step = { id: string; date: string | null; title: string; pages: number; rows: number; found: number; note: string };
+type Step = { id: string; date: string | null; title: string; pages: number; rows: number; found: number; note: string; team: string };
 
 const reqKey = (r: Req) => `${r.url}|${r.post ? JSON.stringify(r.post.fields) : ""}|${r.label ?? ""}`;
 
@@ -162,6 +163,7 @@ export function FitastPanel({ comps, myName, userId, startCode, onSaved, onClose
   const [found, setFound] = useState<Match[] | null>(null);
   const [scan, setScan] = useState<{ gara: number; label: string; pages: number } | null>(null);
   const [steps, setSteps] = useState<Step[]>([]);
+  const [teamSaved, setTeamSaved] = useState(0);
   const [extra, setExtra] = useState<{ text: string; req: Req; squadre: boolean }[]>([]);
   const stop = useRef(false);
   const cookie = useRef("");
@@ -231,6 +233,7 @@ export function FitastPanel({ comps, myName, userId, startCode, onSaved, onClose
     setFound([]);
     setErr("");
     setSteps([]);
+    setTeamSaved(0);
     setExtra([]);
     const todayIso = isoDay(new Date());
     const from = isoDay(new Date(Date.now() - WINDOW_DAYS * 86_400_000));
@@ -256,6 +259,10 @@ export function FitastPanel({ comps, myName, userId, startCode, onSaved, onClose
     const preferred = [...new Set(comps.flatMap((c) => c.entries.filter((e) => e.userId === userId).map((e) => e.category)).filter(Boolean))];
     const hints = loadCombos();
     const confirmed: string[][] = [];
+    // la propria compagnia: nome sul portale (salvato da chi ha cercato prima) e parole che la distinguono
+    const myTeam = await fitastTeam().catch(() => null);
+    const teamNames = [myTeam?.fitastName ?? ""].filter(Boolean);
+    const tokens = myTeam ? (teamTokens(myTeam.name).length ? teamTokens(myTeam.name) : teamTokens(myTeam.city)) : [];
     const calendar = new Map(comps.map((c) => [codeOf(c), c.startsOn.slice(0, 10)] as const).filter(([k]) => k));
 
     /** righe con il nome nella pagina: quante nuove */
@@ -267,6 +274,9 @@ export function FitastPanel({ comps, myName, userId, startCode, onSaved, onClose
           const key = `${r.label ?? p.title}|${rowText(row)}`;
           if (i && hits(rowText(row), q)) {
             inTables = true;
+            // dalla propria riga si impara come il portale scrive la compagnia (es. ARCIERI FABRIANO)
+            const tn = teamOfRow(t.rows[0].map((c) => c.text), row.map((c) => c.text));
+            if (tn && !teamNames.includes(tn)) teamNames.unshift(tn);
             if (!hitKeys.has(key)) {
               hitKeys.add(key);
               out.push({ page: p, req: r, table: t, index: i });
@@ -319,10 +329,12 @@ export function FitastPanel({ comps, myName, userId, startCode, onSaved, onClose
     }
 
     const seenIds = new Set<string>();
+    let savedN = 0;
     let rowField: string | null | undefined;
     const probe: { last: { id: string; p: FitastPage; r: Req } | null } = { last: null };
     const btnOf = (p: FitastPage) => p.form?.buttons.find((b) => /classific/i.test(b.label) && !/squadr/i.test(b.label)) ?? null;
     const pzOf = (p: FitastPage) => p.form?.buttons.find((b) => /piazzol/i.test(b.label)) ?? null;
+    const sqOf = (p: FitastPage) => p.form?.buttons.find((b) => /classific/i.test(b.label) && /squadr/i.test(b.label)) ?? null;
     const isClassifica = (p: FitastPage) => Boolean(p.form?.selects.some((x) => FILTER_SELECT.test(x.label))) && !btnOf(p);
     const short = (t: string) => t.split(" - ").pop()?.trim() ?? t;
 
@@ -374,7 +386,7 @@ export function FitastPanel({ comps, myName, userId, startCode, onSaved, onClose
         const base: FitastPage = page;
         garaN++;
         label = [fmtDay(g.date), g.title || (g.id ? `gara ${g.id}` : "")].filter(Boolean).join(" · ");
-        const step: Step = { id: g.id, date: g.date, title: g.title, pages: 0, rows: 0, found: 0, note: "" };
+        const step: Step = { id: g.id, date: g.date, title: g.title, pages: 0, rows: 0, found: 0, note: "", team: "" };
         log.push(step);
         setSteps([...log]);
         const startPages = pages;
@@ -486,11 +498,48 @@ export function FitastPanel({ comps, myName, userId, startCode, onSaved, onClose
           const pp = await get(pr);
           if (pp && pr) take(pp, pr, []);
         }
+        // la compagnia in questa gara: posizione e punti dalla classifica squadre, salvati per tutta la compagnia
+        const fid = gotId || g.id;
+        const sq = sqOf(opened.via.page);
+        if (sq && fid && (teamNames.length || tokens.length)) {
+          const r0 = pressReq(opened.via.page, sq, opened.via.choose, lbl("Classifica squadre"));
+          const p0 = await get(r0);
+          const rows: { team: string; place: number | null; score: number | null; teams: number; category: string }[] = [];
+          const collect = (p: FitastPage, texts: string[]) => {
+            for (const t of teamRowsOf(p, teamNames, tokens)) if (!rows.some((x) => x.team === t.team && x.category === texts.join(" · "))) rows.push({ ...t, category: texts.join(" · ") });
+          };
+          if (p0 && r0) {
+            collect(p0, currentTexts(p0));
+            const combos = orderCombos(filterCombos(p0, r0), [], [...confirmed, ...hints], []).slice(0, 12);
+            for (const c of combos) {
+              if (stop.current || pages >= MAX_PAGES) break;
+              const p = await get(c.req);
+              if (p) collect(p, c.texts);
+            }
+          }
+          if (rows.length) {
+            const best = [...rows].sort((a, b) => (a.place ?? 999) - (b.place ?? 999))[0];
+            step.team = [`${best.team}: ${best.place ? `${best.place}ª` : "in classifica"}${best.teams ? ` su ${best.teams}` : ""}`, best.score != null ? `${best.score.toLocaleString("it-IT")} punti` : "", rows.length > 1 ? `+${rows.length - 1} ${rows.length === 2 ? "altra" : "altre"}` : ""].filter(Boolean).join(" · ");
+            await saveCompanyResults({
+              data: {
+                fitastName: teamNames[0] ?? "",
+                results: rows.map((x) => ({ fitastId: fid, competition: step.title, day: g.date ?? "", team: x.team, category: x.category, place: x.place, score: x.score, teams: x.teams })),
+              },
+            })
+              .then(() => {
+                savedN++;
+              })
+              .catch(() => {
+                step.team += " · non salvato";
+              });
+          }
+        }
         step.found = n;
         step.pages = pages - startPages;
         setSteps([...log]);
       }
     }
+    setTeamSaved(savedN);
     if (pages >= MAX_PAGES) setErr(`Fermato dopo ${MAX_PAGES} pagine lette: riprova con il cognome o apri la gara qui sotto.`);
     setScan(null);
   }
@@ -515,6 +564,7 @@ export function FitastPanel({ comps, myName, userId, startCode, onSaved, onClose
         </p>
       ) : null}
       {found ? <Matches found={found} q={q} comps={comps} userId={userId} onSaved={onSaved} onOpen={(r) => go(r)} searching={Boolean(scan)} /> : null}
+      {teamSaved > 0 && !scan ? <p className="rounded-2xl bg-[#e0b15a]/10 p-3 text-sm">Risultato della compagnia salvato per tutti in {teamSaved} {teamSaved === 1 ? "gara" : "gare"}: lo vedete in Gare e nella bacheca della Compagnia.</p> : null}
       {steps.length ? <Steps steps={steps} searching={Boolean(scan)} /> : null}
       {extra.length ? (
         <div className="grid gap-1.5">
@@ -724,6 +774,7 @@ function Steps({ steps, searching }: { steps: Step[]; searching: boolean }) {
               {s.title.slice(0, 70) || "gara"}
               {" — "}
               {s.found ? `trovato (${s.found} ${s.found === 1 ? "riga" : "righe"})` : s.note || (searching && i === steps.length - 1 ? "in lettura…" : `non in classifica · ${s.rows} righe in ${s.pages} pagine`)}
+              {s.team ? <span className="block text-[#bfe3c8]">Compagnia · {s.team}</span> : null}
             </span>
           </li>
         ))}

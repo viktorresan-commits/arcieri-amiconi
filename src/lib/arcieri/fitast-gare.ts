@@ -227,3 +227,67 @@ export function rowFields(page: FitastPage): string[] {
     .map(([k]) => k);
   return [...new Set([...fromPress, ...hidden])].slice(0, 6);
 }
+
+const normT = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim();
+const STOP = new Set(["compagnia", "compagnie", "degli", "dei", "delle", "della", "del", "di", "arcieri", "arciere", "asd", "ssd", "aps", "gruppo", "storici", "storico", "the", "team"]);
+
+/** le parole che distinguono una compagnia ("Compagnia degli Arcieri di Fabriano" → fabriano) */
+export function teamTokens(name: string) {
+  return normT(name)
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w.length > 2 && !STOP.has(w));
+}
+
+/** la cella è la propria compagnia: stesso nome del portale, o tutte le parole che la distinguono */
+export function teamMatches(cell: string, names: string[], tokens: string[]) {
+  const c = normT(cell);
+  if (!c) return false;
+  if (names.some((n) => n && (c === normT(n) || c.startsWith(`${normT(n)} `)))) return true;
+  const words = c.split(/[^a-z0-9]+/);
+  return tokens.length > 0 && tokens.every((t) => words.includes(t));
+}
+
+/** numero all'italiana: 1.240 → 1240, 1240,5 → 1240.5 */
+export function numIt(text: string): number | null {
+  const t = text.replace(/\s|°|ª|º/g, "");
+  if (!/^-?[\d.,]+$/.test(t)) return null;
+  const v = /^\d{1,3}(\.\d{3})+(,\d+)?$/.test(t) ? Number(t.replace(/\./g, "").replace(",", ".")) : Number(t.replace(",", "."));
+  return Number.isFinite(v) ? v : null;
+}
+
+/** le colonne di una classifica: posizione, compagnia o squadra, punti */
+export function columnsOf(head: string[]) {
+  const find = (re: RegExp) => head.findIndex((h) => re.test(h.trim()));
+  return { place: find(/^(pos|class|n\.?$|n°|#)/i), team: find(/compagn|squadr|societ|team/i), score: find(/punt|tot|score|^pt/i) };
+}
+
+export type TeamRow = { team: string; place: number | null; score: number | null; teams: number };
+/** le righe della propria compagnia in una classifica squadre, con posizione, punti e numero di squadre */
+export function teamRowsOf(page: FitastPage, names: string[], tokens: string[]): TeamRow[] {
+  const out: TeamRow[] = [];
+  for (const t of page.tables) {
+    const head = t.rows[0].map((c) => c.text);
+    if (head.some((h) => /^arcier/i.test(h.trim()))) continue;
+    const cols = columnsOf(head);
+    const data = t.rows.slice(1);
+    let tc = cols.team;
+    if (tc < 0) tc = head.findIndex((_, k) => data.some((r) => teamMatches(r[k]?.text ?? "", names, tokens)));
+    if (tc < 0) continue;
+    const teams = data.filter((r) => (r[tc]?.text ?? "").trim()).length;
+    for (const r of data) {
+      const team = (r[tc]?.text ?? "").trim();
+      if (!teamMatches(team, names, tokens)) continue;
+      const nums = r.map((c, k) => ({ k, v: numIt(c.text) })).filter((x): x is { k: number; v: number } => x.v != null && x.k !== tc);
+      const place = cols.place >= 0 ? numIt(r[cols.place]?.text ?? "") : (nums[0]?.v ?? null);
+      const score = cols.score >= 0 ? numIt(r[cols.score]?.text ?? "") : (nums.filter((x) => x.k !== (cols.place >= 0 ? cols.place : nums[0]?.k)).pop()?.v ?? null);
+      out.push({ team, place: place != null && place > 0 && place < 1000 ? Math.round(place) : null, score, teams });
+    }
+  }
+  return out;
+}
+
+/** il nome della compagnia come lo scrive il portale, dalla riga dell'arciere trovato (colonna Compagnia) */
+export function teamOfRow(head: string[], row: string[]) {
+  const k = head.findIndex((h) => /compagn|societ/i.test(h));
+  return k >= 0 ? (row[k] ?? "").trim() : "";
+}

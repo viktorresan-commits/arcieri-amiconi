@@ -3,6 +3,7 @@ import { authMiddleware } from "@/lib/auth/middleware";
 import { asBool, asIso, asNum, asNumOrNull, canScore, clip, db, ensureMember, PRIZES, staffLevel, type MemberRow } from "./access";
 import { syncBadges } from "./badges";
 import { companyPeers, myMembership } from "./compagnie.api";
+import { teamResultsOf } from "./palmares.api";
 import { challengeScores, rulesFair, teamMeans, type Metric, type Rule } from "./challenge";
 import { romeMidnightUtc, ymdAdd } from "./time";
 import { divisionOf } from "./labels";
@@ -428,6 +429,10 @@ export const listCompetitions = createServerFn({ method: "GET" })
       select competition_id, user_id, attended from competition_presence`;
     const mine = new Map(presence.filter((row) => row.user_id === context.userId).map((row) => [asNum(row.competition_id), asBool(row.attended)]));
     const members = await sql<MemberRow>`select * from members where user_id is not null`;
+    // risultati di squadra della propria compagnia (dalla classifica squadre del portale FITAST)
+    const teamRows = await teamResultsOf(sql, (await myMembership(sql, context.userId)).companyId);
+    const linkedTo = (c: { id: number; notes: string }) =>
+      teamRows.filter((r) => r.competitionId === asNum(c.id) || (r.fitastId !== "" && new RegExp(`^fitast:${r.fitastId}(\\D|$)`).test(c.notes ?? "")));
     return {
       competitions: comps.map((c) => ({
         id: asNum(c.id),
@@ -443,6 +448,7 @@ export const listCompetitions = createServerFn({ method: "GET" })
         notes: c.notes,
         // la elimina per tutti solo il fondatore
         canDelete: staffHere,
+        teamResults: linkedTo(c),
         attended: mine.has(asNum(c.id)) ? mine.get(asNum(c.id)) ?? null : null,
         roster: presence.filter((row) => row.competition_id === c.id).map((row) => {
           const member = members.find((item) => item.user_id === row.user_id);

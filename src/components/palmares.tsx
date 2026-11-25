@@ -5,7 +5,7 @@
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { Button, Card, ErrorNote, Field, Select, TextInput, cx } from "@/components/kit";
-import { archerPodiums, companyPalmares, deleteCompanyAward, saveCompanyAward, type Award, type Podium } from "@/lib/arcieri/palmares.api";
+import { archerPodiums, companyPalmares, deleteCompanyAward, saveCompanyAward, type Award, type Podium, type TeamResult } from "@/lib/arcieri/palmares.api";
 import { useLoad } from "@/lib/arcieri/use-load";
 
 const METAL: Record<number, { face: string; rim: string; ribbon: string; label: string }> = {
@@ -119,6 +119,24 @@ export function ArcherPalmares({ memberId, firstName }: { memberId: number; firs
   );
 }
 
+/** "3ª su 12 · 1.240 punti" */
+export function teamResultText(r: Pick<TeamResult, "place" | "teams" | "score">) {
+  return [r.place ? `${r.place}ª${r.teams ? ` su ${r.teams}` : ""}` : "in classifica", r.score != null ? `${r.score.toLocaleString("it-IT")} punti` : ""].filter(Boolean).join(" · ");
+}
+
+/** una gara della compagnia nella classifica squadre del portale */
+function TeamResultRow({ r }: { r: TeamResult }) {
+  return (
+    <li className="flex items-center gap-3 rounded-xl bg-white/[0.035] px-2.5 py-2">
+      {r.place && r.place <= 3 ? <Medal place={r.place} size={30} /> : <span className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full bg-white/[0.07] text-xs font-semibold tabular-nums">{r.place ?? "—"}</span>}
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold leading-snug">{r.competition || `Gara ${r.fitastId}`}</p>
+        <p className="text-xs text-muted">{[teamResultText(r), fmtDay(r.day), r.category, r.team].filter(Boolean).join(" · ")}</p>
+      </div>
+    </li>
+  );
+}
+
 type Draft = { id: number; title: string; place: string; competition: string; day: string; category: string; notes: string };
 const EMPTY: Draft = { id: 0, title: "", place: "1", competition: "", day: "", category: "", notes: "" };
 
@@ -134,7 +152,8 @@ export function CompanyTrophies({ companyId, companyName }: { companyId: number;
   if (!data) return null;
   const awards = data.awards;
   const pods = data.podiums;
-  const counts = countOf([...awards, ...pods]);
+  const results = data.results ?? [];
+  const counts = countOf([...awards, ...pods, ...results]);
   const save = async () => {
     if (!draft) return;
     setBusy(true);
@@ -239,6 +258,16 @@ export function CompanyTrophies({ companyId, companyName }: { companyId: number;
             </div>
           </div>
         ) : null}
+      </div>
+      <div className="grid gap-1.5">
+        <p className="text-sm font-semibold">Classifiche di squadra</p>
+        {results.length ? (
+          <ul className="grid gap-1.5">
+            {results.slice(0, 12).map((r) => <TeamResultRow key={r.id} r={r} />)}
+          </ul>
+        ) : (
+          <p className="text-sm text-muted">Arrivano da sole quando un arciere della compagnia cerca il suo nome sul portale FITAST (sezione Gare).</p>
+        )}
       </div>
       <div className="grid gap-1.5">
         <p className="text-sm font-semibold">Podi degli arcieri</p>
