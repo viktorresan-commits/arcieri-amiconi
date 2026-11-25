@@ -468,8 +468,33 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gea
   }
 
   // ---------- arco, corda, freccia ----------
-  const grip = lerp(bow.wr, bowIdx, 0.55);
-  const nock = lerp(drw.wr, drwIdx, 0.6);
+  // presa: il palmo della mano dell'arco (con i punti della mano), altrimenti tra polso e indice
+  const bowBase = handBase(S.bow[2]);
+  const drwBase = handBase(S.draw[2]);
+  const grip = J[bowBase] ? lerp(lerp(J[bowBase], J[bowBase + 5], 0.5), J[bowBase + 9], 0.5) : lerp(bow.wr, bowIdx, 0.55);
+  // dita sulla corda: le seconde falangi di indice e medio
+  const fingers = J[drwBase] ? lerp(J[drwBase + 6], J[drwBase + 10], 0.5) : lerp(drw.wr, drwIdx, 0.6);
+  // verso il bersaglio: dalla spalla della corda a quella dell'arco, in orizzontale
+  let toT = sub(bow.sh, drw.sh);
+  toT = norm([toT[0], 0, toT[2]]);
+  // trazione: si decide sul fotogramma (2D), non sulla profondità stimata, che sbaglia spesso:
+  // braccio dell'arco su e mano della corda verso il viso (o gomito della corda piegato)
+  const mm = metricsOf(lm, hand, aspect, 1000);
+  const drawn = Boolean(mm && mm.bowUp && (mm.handFace < 1.0 || drawAng < 115));
+  let nock: V3;
+  if (drawn) {
+    nock = [fingers[0], fingers[1], fingers[2]];
+    // all'ancoraggio le dita sono al viso: stessa profondità della bocca
+    const mouthJ = J[9] && J[10] ? lerp(J[9], J[10], 0.5) : J[0];
+    const k = Math.max(0, Math.min(1, 1 - ((mm?.handFace ?? 1) - 0.35) / 0.65));
+    nock[2] += (mouthJ[2] - nock[2]) * k;
+    // le dita della corda non vanno mai dietro la linea delle spalle (sarebbero dietro la nuca)
+    const ahead = dot(sub(nock, shM), fwd);
+    if (ahead < 0.03) nock = add(nock, mul(fwd, 0.03 - ahead));
+  } else {
+    // arco a riposo: la cocca sta sulla corda a 22 cm dalla presa
+    nock = sub(grip, mul(toT, 0.22));
+  }
   const u = norm(sub(grip, nock));
   // punto del fotogramma (0..1) -> metri, alla profondità di un punto del corpo vicino
   const bowWrI = S.bow[2];
@@ -477,7 +502,7 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gea
   const fromImage = (x: number, y: number, ref: V3, refI: number): V3 => [ref[0] + ((x - lm[refI].x) * aspect) / sImg, ref[1] - (y - lm[refI].y) / sImg, ref[2]];
   let n = perp(u, [0, 1, 0]);
   let half = 0.8;
-  // arco trovato nel video (a video fermo): inclinazione e lunghezza vere
+  // arco trovato nel video: inclinazione e lunghezza vere
   if (gear?.bow && sImg > 0) {
     const a = fromImage(gear.bow.x1, gear.bow.y1, bow.wr, bowWrI);
     const b = fromImage(gear.bow.x2, gear.bow.y2, bow.wr, bowWrI);
@@ -487,7 +512,9 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gea
     if (len(k) > 0.5) n = k;
     if (gear.bow.measured) half = Math.max(0.55, Math.min(0.9, len(sub(a, b)) / 2));
   }
-  const curve = (s: number): V3 => add(add(grip, mul(n, half * s)), mul(u, -0.11 * s * s));
+  if (n[1] < 0) n = mul(n, -1);
+  // flettenti curvati verso il bersaglio (davanti alla presa), corda dietro
+  const curve = (s: number): V3 => add(add(grip, mul(n, half * s)), mul(u, 0.02 - 0.13 * s * s));
   const steps = 44;
   for (let i = 0; i < steps; i++) {
     const s0 = -1 + (2 * i) / steps;
@@ -500,17 +527,22 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gea
   const tipD = curve(-1);
   push("sphere", seg(tipU, nock, 0.0028, 0.0028, 1.0), [0.95, 0.95, 0.9], 3, 0.9, "arco");
   push("sphere", seg(tipD, nock, 0.0028, 0.0028, 1.0), [0.95, 0.95, 0.9], 3, 0.9, "arco");
-  let arrowTip = add(grip, mul(u, 0.08));
-  // freccia trovata nel video: la punta è dove finisce davvero
-  if (gear?.arrow?.measured && sImg > 0) {
-    const a = fromImage(gear.arrow.x1, gear.arrow.y1, bow.wr, bowWrI);
-    const b = fromImage(gear.arrow.x2, gear.arrow.y2, bow.wr, bowWrI);
-    const tip = len(sub(a, nock)) > len(sub(b, nock)) ? a : b;
-    const along = dot(sub(tip, nock), u);
-    if (along > len(sub(grip, nock)) * 0.8 && along < len(sub(grip, nock)) + 0.4) arrowTip = add(nock, mul(u, along));
+  // freccia: incoccata quando le dita sono sulla corda (in trazione o pronte a tirare)
+  const nocked = drawn || len(sub(fingers, nock)) < 0.14;
+  if (nocked) {
+    const gn = len(sub(grip, nock));
+    let arrowTip = add(nock, mul(u, Math.max(0.72, gn + 0.06)));
+    // freccia trovata nel video: la punta è dove finisce davvero
+    if (gear?.arrow?.measured && sImg > 0) {
+      const a = fromImage(gear.arrow.x1, gear.arrow.y1, bow.wr, bowWrI);
+      const b = fromImage(gear.arrow.x2, gear.arrow.y2, bow.wr, bowWrI);
+      const tip = len(sub(a, nock)) > len(sub(b, nock)) ? a : b;
+      const along = dot(sub(tip, nock), u);
+      if (along > gn * 0.8 && along < gn + 0.4) arrowTip = add(nock, mul(u, along));
+    }
+    push("sphere", seg(nock, arrowTip, 0.0045, 0.0045, 1.0), [0.98, 0.82, 0.35], 3, 1, "arco");
+    push("sphere", seg(nock, add(nock, mul(u, 0.09)), 0.012, 0.003, 1.0, n), [0.95, 0.35, 0.3], 3, 0.9, "arco"); // alette
   }
-  push("sphere", seg(nock, arrowTip, 0.0045, 0.0045, 1.0), [0.98, 0.82, 0.35], 3, 1, "arco");
-  push("sphere", seg(nock, add(nock, mul(u, 0.09)), 0.012, 0.003, 1.0, n), [0.95, 0.35, 0.3], 3, 0.9, "arco"); // alette
 
   // ---------- quote ----------
   const m = metricsOf(lm, hand, aspect, 1000);
@@ -526,8 +558,8 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gea
   if (headTilt != null) labels.push({ at: headC, text: `Testa ${headTilt.toFixed(0)}°`, tone: ok(headTilt <= 8) });
   labels.push({ at: hipM, text: `Anca ${Math.round(angleAt(shM, hipM, kneeM))}°`, tone: "cyan" });
   if (m) labels.push({ at: drw.el, text: `Linea gomito ${Math.round(m.line)}°`, tone: ok(m.line >= 165) });
-  if (kit?.anchorCm != null) labels.push({ at: nock, text: `Ancoraggio ${kit.anchorCm.toFixed(0)} cm dalla bocca`, tone: "gold" });
-  const dims: Hud["dims"] = kit ? [{ a: nock, b: grip, text: `Allungo ${kit.drawCm.toFixed(0)} cm (${(kit.drawCm / 2.54).toFixed(1)}″)` }] : [];
+  if (drawn && kit?.anchorCm != null) labels.push({ at: nock, text: `Ancoraggio ${kit.anchorCm.toFixed(0)} cm dalla bocca`, tone: "gold" });
+  const dims: Hud["dims"] = kit && drawn ? [{ a: nock, b: grip, text: `Allungo ${kit.drawCm.toFixed(0)} cm (${(kit.drawCm / 2.54).toFixed(1)}″)` }] : [];
   const arcs: Hud["arcs"] = [
     { at: drw.el, a: drw.sh, b: drw.wr, deg: drawAng },
     { at: bow.el, a: bow.sh, b: bow.wr, deg: bowAng },

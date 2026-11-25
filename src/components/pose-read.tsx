@@ -243,6 +243,8 @@ export function PoseRead() {
   const lookRef = useRef(look);
   lookRef.current = look;
   const [samples, setSamples] = useState<Sample[]>([]);
+  const samplesRef = useRef<Sample[]>(samples);
+  samplesRef.current = samples;
   const [progress, setProgress] = useState<number | null>(null);
   const [crop, setCropState] = useState<Rect | null>(null);
   const cropRef = useRef<Rect | null>(null);
@@ -418,6 +420,49 @@ export function PoseRead() {
     }
   }
 
+  /**
+   * Dopo l'analisi completa il video scorre sui punti già letti (corpo, mani, viso, arco e freccia di ogni
+   * fotogramma), interpolati tra un campione e l'altro: la sagoma segue tutti i micropunti ed è fluida.
+   */
+  function fromSamples(t: number): boolean {
+    const arr = samplesRef.current;
+    if (arr.length < 2 || scanning.current) return false;
+    if (t < arr[0].t - 0.05 || t > arr[arr.length - 1].t + 0.05) return false;
+    let lo = 0;
+    let hi = arr.length - 1;
+    while (hi - lo > 1) {
+      const mid = (lo + hi) >> 1;
+      if (arr[mid].t <= t) lo = mid;
+      else hi = mid;
+    }
+    const a = arr[lo];
+    const b = arr[hi];
+    if (b.t - a.t > 0.6) return false;
+    const k = Math.max(0, Math.min(1, (t - a.t) / Math.max(1e-3, b.t - a.t)));
+    let lm: Landmark[] | null;
+    if (a.lm && b.lm && a.lm.length === b.lm.length) {
+      lm = a.lm.map((p, i) => {
+        const q = b.lm![i];
+        const va = p.visibility ?? 1;
+        const vb = q.visibility ?? 1;
+        // un punto visto solo in uno dei due fotogrammi non si trascina dall'altro
+        if (va < 0.5 && vb >= 0.5) return q;
+        if (vb < 0.5 && va >= 0.5) return p;
+        const mix = (x: number | undefined, y: number | undefined) => (x != null && y != null ? x + (y - x) * k : x ?? y);
+        return { x: p.x + (q.x - p.x) * k, y: p.y + (q.y - p.y) * k, z: mix(p.z, q.z), visibility: Math.min(va, vb), zw: mix(p.zw, q.zw) };
+      });
+    } else lm = (k < 0.5 ? a.lm : b.lm) ?? a.lm ?? b.lm;
+    if (!lm) return false;
+    const g = (k < 0.5 ? a.g : b.g) ?? null;
+    lastLm.current = lm;
+    gearRef.current = g;
+    smoothRef.current = { lm, t };
+    paintOverlay(lm);
+    const video = videoRef.current;
+    if (video) setNow(metricsOf(lm, handRef.current, video.videoWidth / Math.max(1, video.videoHeight), video.videoHeight));
+    return true;
+  }
+
   async function detectFrame() {
     const video = videoRef.current;
     if (!video || busyDetect.current || scanning.current || video.readyState < 2) return;
@@ -470,7 +515,7 @@ export function PoseRead() {
     const tick = () => {
       if (stop) return;
       setTime(video.currentTime);
-      if (!video.paused && !recRef.current) void detectFrame();
+      if (!video.paused && !recRef.current && !fromSamples(video.currentTime)) void detectFrame();
       handle = withFrame
         ? (video as HTMLVideoElement & { requestVideoFrameCallback: (cb: () => void) => number }).requestVideoFrameCallback(tick)
         : requestAnimationFrame(tick);
@@ -630,7 +675,9 @@ export function PoseRead() {
         if (sideSwap.current === null) undecided = out.length + 1;
         if (lm) lm = smoothLm(prev, lm);
         prev = lm;
-        out.push({ t: video.currentTime, lm, m: lm ? metricsOf(lm, handRef.current, W / H, H) : null });
+        // arco e freccia di ogni fotogramma: servono alle misure e alla sagoma mentre il video scorre
+        const g = lm ? safeGear(video, W, H, lm, handRef.current) : null;
+        out.push({ t: video.currentTime, lm, m: lm ? metricsOf(lm, handRef.current, W / H, H) : null, g });
         lastLm.current = lm;
         paintOverlay(lm);
         setTime(video.currentTime);

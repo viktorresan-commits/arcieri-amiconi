@@ -16,7 +16,7 @@ export type GestureRecord = {
   aspect: number;
   /** punti del fotogramma salvato (ancoraggio, se trovato) */
   lm: PackedLm | null;
-  /** sequenza del tiro: alzata → accompagnamento, al massimo 24 fotogrammi */
+  /** sequenza del tiro: alzata → accompagnamento, al massimo 24 fotogrammi (33 o 133 punti) */
   seq: { t: number; lm: PackedLm }[];
   /** angoli del fotogramma salvato (gradi) */
   angles: Partial<Omit<Metrics, "drawPx" | "bowPx" | "bowUp">> & { bowUp?: boolean };
@@ -86,7 +86,8 @@ export function buildRecord(input: { lm: Landmark[] | null; samples: Sample[]; s
     const to = shot?.phases[shot.phases.length - 1]?.to ?? withLm[withLm.length - 1].t;
     const span = withLm.filter((s) => s.t >= from - 0.2 && s.t <= to + 0.2);
     const pick = span.length > 24 ? Array.from({ length: 24 }, (_, i) => span[Math.round((i / 23) * (span.length - 1))]) : span;
-    seq = pick.map((s) => ({ t: Math.round((s.t - pick[0].t) * 100) / 100, lm: packLm(s.lm, false)! })).filter((x) => x.lm);
+    // tutti i punti (corpo, mani e viso): la sagoma 3D rivista segue anche dita e testa
+    seq = pick.map((s) => ({ t: Math.round((s.t - pick[0].t) * 100) / 100, lm: packLm(s.lm, true)! })).filter((x) => x.lm);
   }
   // postura per zone: mediana dell'ancoraggio se c'è un tiro, altrimenti il fotogramma
   let posture: GestureRecord["posture"] = null;

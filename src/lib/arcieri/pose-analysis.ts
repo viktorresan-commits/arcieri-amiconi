@@ -45,7 +45,8 @@ export type Metrics = {
   bowPx: { x: number; y: number };
 };
 
-export type Sample = { t: number; lm: Landmark[] | null; m: Metrics | null };
+/** g: arco e freccia trovati in quel fotogramma (durante l'analisi completa) */
+export type Sample = { t: number; lm: Landmark[] | null; m: Metrics | null; g?: Gear | null };
 
 export type PhaseName = "alzata" | "trazione" | "ancoraggio" | "accompagnamento";
 export type Phase = { name: PhaseName; from: number; to: number };
@@ -116,16 +117,27 @@ export function metricsOf(lm: Landmark[], hand: Hand, aspect: number, heightPx =
     const mh = { x: (P(23).x + P(24).x) / 2, y: (P(23).y + P(24).y) / 2 };
     trunk = (Math.atan2(ms.x - mh.x, mh.y - ms.y) * 180) / Math.PI;
   }
-  const line = joint(P(s.bow[2]), P(s.draw[2]), P(s.draw[1]));
+  // micropunti (se mani e viso sono stati rilevati): presa nel palmo, corda tra indice e medio, bocca
+  const Q = (p: Landmark) => ({ x: p.x * aspect, y: p.y });
+  const bowWr = s.bow[2] as 15 | 16;
+  const drwWr = s.draw[2] as 15 | 16;
+  const hb0 = handPoint(lm, bowWr, 0), hb5 = handPoint(lm, bowWr, 5), hb9 = handPoint(lm, bowWr, 9);
+  const hd6 = handPoint(lm, drwWr, 6), hd10 = handPoint(lm, drwWr, 10);
+  const gripP = hb0 && hb5 && hb9 ? { x: (Q(hb0).x + Q(hb5).x + Q(hb9).x) / 3, y: (Q(hb0).y + Q(hb5).y + Q(hb9).y) / 3 } : null;
+  const nockP = hd6 && hd10 ? { x: (Q(hd6).x + Q(hd10).x) / 2, y: (Q(hd6).y + Q(hd10).y) / 2 } : null;
+  const line = nockP && gripP ? joint(gripP, nockP, P(s.draw[1])) : joint(P(s.bow[2]), P(s.draw[2]), P(s.draw[1]));
   const bowSh = joint(ds, bs, P(s.bow[1]));
   const drawSh = joint(bs, ds, P(s.draw[1]));
   const feetSeen = vis(lm[27]) > 0.5 && vis(lm[28]) > 0.5 && lm[27].y < 1.02 && lm[28].y < 1.02;
   const stance = feetSeen ? Math.hypot(P(27).x - P(28).x, P(27).y - P(28).y) / w : null;
   const bw = P(s.bow[2]);
   const dw = P(s.draw[2]);
-  const tilt = (Math.atan2(dw.y - bw.y, Math.abs(bw.x - dw.x)) * 180) / Math.PI;
-  const finger = vis(lm[s.drawFinger]) > 0.4 ? P(s.drawFinger) : dw;
-  const mouth = vis(lm[9]) > 0.3 && vis(lm[10]) > 0.3 ? { x: (P(9).x + P(10).x) / 2, y: (P(9).y + P(10).y) / 2 } : P(0);
+  const aT = nockP ?? dw;
+  const bT = gripP ?? bw;
+  const tilt = (Math.atan2(aT.y - bT.y, Math.abs(bT.x - aT.x)) * 180) / Math.PI;
+  const finger = nockP ?? (vis(lm[s.drawFinger]) > 0.4 ? P(s.drawFinger) : dw);
+  const lip = facePoint(lm, hand === "destro" ? 61 : 291);
+  const mouth = lip ? Q(lip) : vis(lm[9]) > 0.3 && vis(lm[10]) > 0.3 ? { x: (P(9).x + P(10).x) / 2, y: (P(9).y + P(10).y) / 2 } : P(0);
   const handFace = Math.min(Math.hypot(finger.x - mouth.x, finger.y - mouth.y), Math.hypot(dw.x - mouth.x, dw.y - mouth.y)) / w;
   const spread = Math.hypot(bw.x - dw.x, bw.y - dw.y) / w;
   const bowUp = Math.abs(bw.y - bs.y) < 0.75 * w && bowAngle > 120;
@@ -562,7 +574,7 @@ function median(list: number[]) {
 export function smoothLm(prev: Landmark[] | null, next: Landmark[], alpha = 0.6): Landmark[] {
   if (!prev || prev.length !== next.length) return next;
   const mix = (a: number | undefined, b: number | undefined) => (a != null && b != null ? alpha * a + (1 - alpha) * b : a);
-  return next.map((p, i) => ({ x: alpha * p.x + (1 - alpha) * prev[i].x, y: alpha * p.y + (1 - alpha) * prev[i].y, z: mix(p.z, prev[i].z), visibility: p.visibility, zw: mix(p.zw, prev[i].zw) }));
+  return next.map((p, i) => i >= 33 && ((prev[i].visibility ?? 1) < 0.5 || (p.visibility ?? 1) < 0.5) ? p : ({ x: alpha * p.x + (1 - alpha) * prev[i].x, y: alpha * p.y + (1 - alpha) * prev[i].y, z: mix(p.z, prev[i].z), visibility: p.visibility, zw: mix(p.zw, prev[i].zw) }));
 }
 
 /* ---------- 100 punti in più: mani (21 + 21) e viso (58) ---------- */
