@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { dashboard, deleteSession } from "@/lib/arcieri/training.api";
 import { dismissNote, openNotes } from "@/lib/arcieri/club.api";
@@ -109,7 +109,7 @@ function Home() {
   const avatar = useAvatar();
   // l'arciere della Home tira come te; i privilegi attivi si vedono nel gioco
   const duel = useLoad(`duel-${nonce}`, () => avatarChallenge());
-  const activePerks = (duel.data?.perks ?? []).filter((p) => p.active).map((p) => p.id);
+  const activePerks = useMemo(() => (duel.data?.perks ?? []).filter((p) => p.active).map((p) => p.id), [duel.data]);
   useEffect(() => {
     if (!data) return;
     try {

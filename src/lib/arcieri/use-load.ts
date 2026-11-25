@@ -21,6 +21,14 @@ function slot(key: string) {
   return `${page}|${key}`;
 }
 
+function same(a: unknown, b: unknown) {
+  try {
+    return JSON.stringify(a) === JSON.stringify(b);
+  } catch {
+    return false;
+  }
+}
+
 /** Da chiamare quando cambia di chi sono i dati (per esempio quando un allenatore inserisce per un allievo). */
 export function clearLoadCache() {
   cache.clear();
@@ -42,7 +50,11 @@ export function useLoad<T>(key: string, fn: () => Promise<T>) {
     }
     setError("");
     fn()
-      .then((value) => {
+      .then((fresh) => {
+        // dati uguali a quelli già mostrati: si tiene lo stesso oggetto, così la pagina non si ridisegna
+        // tutta (tornando sulla Home l'arciere andava a scatti per un ridisegno inutile)
+        const old = cache.get(id);
+        const value = old !== undefined && same(old, fresh) ? (old as T) : fresh;
         cache.delete(id);
         cache.set(id, value);
         if (cache.size > MAX) cache.delete(cache.keys().next().value as string);

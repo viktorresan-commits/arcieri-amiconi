@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 
 /**
  * Attrezzatura principale: la configurazione (arco + frecce) che usi di solito.
@@ -49,19 +49,31 @@ export function saveMainGear(gear: MainGear | null) {
   }
 }
 
+// lo stesso oggetto finché il testo salvato non cambia: chi la usa non si ridisegna per niente
+let snap: { raw: string | null; gear: MainGear | null } | null = null;
+function gearSnapshot(): MainGear | null {
+  let raw: string | null = null;
+  try {
+    raw = localStorage.getItem(KEY);
+  } catch {
+    return null;
+  }
+  if (snap && snap.raw === raw) return snap.gear;
+  snap = { raw, gear: readMainGear() };
+  return snap.gear;
+}
+function subscribeGear(fn: () => void) {
+  window.addEventListener(EVENT, fn);
+  window.addEventListener("storage", fn);
+  return () => {
+    window.removeEventListener(EVENT, fn);
+    window.removeEventListener("storage", fn);
+  };
+}
+
+/** Attrezzatura principale, letta subito (anche al ritorno su una scheda); durante l'idratazione parte vuota come sul server. */
 export function useMainGear() {
-  const [gear, setGear] = useState<MainGear | null>(null);
-  useEffect(() => {
-    const load = () => setGear(readMainGear());
-    load();
-    window.addEventListener(EVENT, load);
-    window.addEventListener("storage", load);
-    return () => {
-      window.removeEventListener(EVENT, load);
-      window.removeEventListener("storage", load);
-    };
-  }, []);
-  return gear;
+  return useSyncExternalStore(subscribeGear, gearSnapshot, () => null);
 }
 
 const SHAFT_BY_MATERIAL: Record<string, string> = { legno: "#c99a5e", carbonio: "#1d1f22", alluminio: "#9aa7b2", "carbo-alluminio": "#5b6670", bambu: "#c9b46a" };

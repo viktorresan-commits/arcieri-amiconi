@@ -43,6 +43,8 @@ const FIELD = ["#1a1c1e", "#1a1c1e", "#1a1c1e", "#1a1c1e", "#e6b325", "#e6b325"]
 const DRAW_S = 0.75;
 /** tiri dimostrativi di fila prima che l'arciere si metta a riposo (riparte al primo tocco) */
 const DEMO_SHOTS = 3;
+// dopo il rilascio l'arciere accompagna, prende la freccia e torna a riposo: tutto in 2,4 s
+const FOLLOW_S = 2.4;
 const STATIONS = GAME_STATIONS;
 const ROUND_KEY = "aa-game-round";
 const randomWind = (max: number) => Math.round((Math.random() * 2 - 1) * max * 10) / 10;
@@ -322,7 +324,8 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
   const wobble = since0 < 0.4 ? Math.sin(since0 * 48) * 1.6 * (1 - since0 / 0.4) : 0;
 
   // orologio: fluido mentre si tende o la freccia vola, più lento a riposo (risparmia batteria)
-  const busy = draw != null || flight != null || (released != null && t - released < 1.2) || (thud != null && t - thud < 0.6);
+  // (anche il ritorno a riposo dopo il tiro: a 4 fotogrammi al secondo andava a scatti)
+  const busy = draw != null || flight != null || (released != null && t - released < FOLLOW_S) || (thud != null && t - thud < 0.6);
   useEffect(() => {
     const el = stage.current;
     if (!el || typeof IntersectionObserver === "undefined") return;
@@ -388,7 +391,8 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
   // dimostrazione: se nessuno tocca da qualche secondo, l'arciere tira da solo
   useEffect(() => {
     if (playing || draw || flight) return;
-    if (released != null && t - released < 1.4) return;
+    // il tiro dopo parte quando l'arciere è tornato a riposo, senza scatti a metà movimento
+    if (released != null && t - released < FOLLOW_S) return;
     if (t - lastTouch.current < 2.5) return;
     if (demoShots.current >= DEMO_SHOTS) {
       setCalm(true);
@@ -592,8 +596,8 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
   const aimLift = draw ? clamp((BASE.y - draw.aim.y) / 6, -14, 18) : 0;
   // dopo l'accompagnamento l'arciere torna in posizione: niente pose bloccate
   const since = released != null && !draw ? t - released : null;
-  const active = draw != null || (since != null && since < 2.4);
-  const drive = useMemo(() => (active ? { pull, aim: aimLift, released: since != null && since < 2.4 ? since : null } : null), [active, pull, aimLift, since]);
+  const active = draw != null || (since != null && since < FOLLOW_S);
+  const drive = useMemo(() => (active ? { pull, aim: aimLift, released: since != null && since < FOLLOW_S ? since : null } : null), [active, pull, aimLift, since]);
   // l'arciere è il disegno più pesante della Home: si ridisegna solo quando cambia qualcosa che lo riguarda,
   // non a ogni battito dell'orologio della scena
   const archerWind = indoor ? 0 : wind;

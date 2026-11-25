@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useSyncExternalStore, type SetStateAction } from "react";
 
 const isPlain = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 
@@ -9,56 +9,90 @@ function restore<T>(initial: T, saved: unknown): T {
   return (typeof saved === typeof initial ? saved : initial) as T;
 }
 
-/**
- * Stato salvato sul telefono: si legge all'apertura e si scrive a ogni modifica, senza pulsanti.
- * Più componenti con la stessa chiave restano allineati (evento "aa-local").
- */
-export function useLocalState<T>(key: string, initial: T) {
-  const [value, setValue] = useState<T>(initial);
-  const loaded = useRef(false);
-  const first = useRef(true);
-  const external = useRef(false);
-  const id = useId();
-  useEffect(() => {
+type Entry = { raw: string | null; value: unknown };
+// ultimo valore letto per chiave, legato al testo salvato: finché il testo non cambia, lo stesso oggetto
+const cache = new Map<string, Entry>();
+// valori che il telefono non è riuscito a salvare (memoria piena o navigazione privata): valgono finché la pagina resta aperta
+const unsaved = new Map<string, unknown>();
+const listeners = new Map<string, Set<() => void>>();
+
+function readRaw(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function currentValue<T>(key: string, initial: T): T {
+  if (unsaved.has(key)) return unsaved.get(key) as T;
+  const raw = readRaw(key);
+  const hit = cache.get(key);
+  if (hit && hit.raw === raw) return hit.value as T;
+  let value = initial;
+  if (raw != null) {
     try {
-      const raw = localStorage.getItem(key);
-      if (raw != null) setValue(restore(initial, JSON.parse(raw)));
+      value = restore(initial, JSON.parse(raw));
     } catch {
       /* dato rovinato: si riparte dai valori iniziali */
     }
-    loaded.current = true;
-    const on = (e: Event) => {
-      const d = (e as CustomEvent<{ key: string; value: T; src: string }>).detail;
-      if (!d || d.key !== key || d.src === id) return;
-      setValue((cur) => {
-        if (JSON.stringify(cur) === JSON.stringify(d.value)) return cur;
-        external.current = true;
-        return d.value;
-      });
-    };
-    window.addEventListener("aa-local", on);
-    return () => window.removeEventListener("aa-local", on);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
-  useEffect(() => {
-    if (!loaded.current) return;
-    // al primo giro il valore è ancora quello iniziale: non sovrascrive quello salvato
-    if (first.current) {
-      first.current = false;
-      return;
-    }
-    // valore arrivato da un altro componente: è già salvato, non lo rimando indietro
-    if (external.current) {
-      external.current = false;
-      return;
-    }
-    try {
-      localStorage.setItem(key, JSON.stringify(value));
-    } catch {
-      /* memoria piena o privata */
-    }
-    window.dispatchEvent(new CustomEvent("aa-local", { detail: { key, value, src: id } }));
-  }, [key, value, id]);
+  }
+  cache.set(key, { raw, value });
+  return value;
+}
+
+function emit(key: string) {
+  listeners.get(key)?.forEach((fn) => fn());
+}
+
+let storageHooked = false;
+function subscribeKey(key: string, fn: () => void) {
+  let set = listeners.get(key);
+  if (!set) listeners.set(key, (set = new Set()));
+  set.add(fn);
+  // modifiche fatte da un'altra finestra dell'app
+  if (!storageHooked && typeof window !== "undefined") {
+    storageHooked = true;
+    window.addEventListener("storage", (e) => {
+      if (e.key == null) listeners.forEach((_, k) => emit(k));
+      else emit(e.key);
+    });
+  }
+  return () => {
+    set.delete(fn);
+  };
+}
+
+/**
+ * Stato salvato sul telefono: si legge subito (anche al ritorno su una scheda, senza mostrare prima i valori
+ * iniziali) e si scrive a ogni modifica, senza pulsanti. Tutti i componenti con la stessa chiave vedono lo stesso valore.
+ * Durante l'idratazione si parte dai valori iniziali, come la pagina arrivata dal server.
+ */
+export function useLocalState<T>(key: string, initial: T) {
+  const init = useRef(initial);
+  const subscribe = useCallback((fn: () => void) => subscribeKey(key, fn), [key]);
+  const value = useSyncExternalStore(
+    subscribe,
+    () => currentValue(key, init.current),
+    () => init.current,
+  );
+  const setValue = useCallback(
+    (next: SetStateAction<T>) => {
+      const prev = currentValue(key, init.current);
+      const v = typeof next === "function" ? (next as (p: T) => T)(prev) : next;
+      if (Object.is(v, prev)) return;
+      try {
+        const raw = JSON.stringify(v);
+        localStorage.setItem(key, raw);
+        unsaved.delete(key);
+        cache.set(key, { raw, value: v });
+      } catch {
+        unsaved.set(key, v);
+      }
+      emit(key);
+    },
+    [key],
+  );
   return [value, setValue] as const;
 }
 
