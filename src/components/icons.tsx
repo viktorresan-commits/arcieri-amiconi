@@ -873,21 +873,21 @@ function coinOf(name: string): Coin {
 
 /** Tessera d'icona: placca scura con riflesso e cornice, disegno inciso in metallo del colore dell'app.
  *  Stesso aspetto ovunque. `accent` (solo nel Menu) dà a una sezione la sua tinta, sullo stesso materiale. */
-export function AppIcon({ name, size = 52, className, accent, color, fluid = false, plain = false }: { name: IconName; color?: string; size?: number; className?: string; accent?: string; /** riempie il contenitore invece di una misura fissa */ fluid?: boolean; /** tessera semplice (vecchio stile) */ plain?: boolean }) {
+export function AppIcon({ name, size = 52, className, accent, color, fluid = false, plain = false, glow = false }: { name: IconName; color?: string; size?: number; className?: string; accent?: string; /** riempie il contenitore invece di una misura fissa */ fluid?: boolean; /** tessera semplice (vecchio stile) */ plain?: boolean; /** raggi di luce che girano e brillano: solo per la voce in evidenza (l'ultima toccata nel Menu) */ glow?: boolean }) {
   const id = `ai${(useId().replace(/[^a-zA-Z0-9]/g, "") + "_")}`;
   if (!plain && !fluid) {
     // insegna coniata: gare, premi, sfide e obiettivi in oro con il loro simbolo; le altre voci in argento,
     // smalto del colore della sezione e il loro disegno in rilievo
     const ins = INSIGNIA_FOR[name];
     return (
-      <span className={["aa-appicon-ins relative grid shrink-0 place-items-center", className].filter(Boolean).join(" ")} style={{ width: size, height: size }}>
+      <span className={["aa-appicon-ins relative grid shrink-0 place-items-center", glow && "aa-appicon-hot", className].filter(Boolean).join(" ")} style={{ width: size, height: size }}>
         {ins ? (
-          <Insignia {...ins} size={Math.round(size * 1.04)} glow={size >= 56} />
+          <Insignia {...ins} size={Math.round(size * 1.04 * (glow ? 1.13 : 1))} glow={glow} />
         ) : (
           (() => {
             // ogni voce ha il suo metallo e il suo smalto (non la tinta della sezione): colorate e ben staccate
             const [metal, enamel, shape] = coinOf(name);
-            return <Insignia art={DETAILED[name] ?? ICONS[name]} metal={metal} enamel={enamel} shape={shape ?? "round"} size={Math.round(size * 1.02)} glow={size >= 64} still />;
+            return <Insignia art={DETAILED[name] ?? ICONS[name]} metal={metal} enamel={enamel} shape={shape ?? "round"} size={Math.round(size * 1.02 * (glow ? 1.13 : 1))} glow={glow} />;
           })()
         )}
       </span>

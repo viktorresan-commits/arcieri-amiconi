@@ -7,6 +7,7 @@ import { SHORTCUTS, STATIONS, nextShortcut, shortcutById, usePinned, type Shortc
 import { cx } from "./kit";
 import { menuAllOpen, setMenuAllOpen } from "@/lib/arcieri/percorso";
 import { AppIcon, Glyph } from "./icons";
+import { useLocalState } from "@/lib/arcieri/local-store";
 
 /** Una scorciatoia: icona colorata che rimbalza al tocco. */
 export function ShortcutTile({ s, size = "md", onClick, index = 0 }: { s: Shortcut; size?: "md" | "lg"; onClick?: () => void; index?: number }) {
@@ -168,6 +169,8 @@ export function TipCard() {
 
 /** Pagine visitate di recente, per tornarci dal Menu con un tocco. */
 const RECENT_KEY = "aa-recent-pages";
+const MENU_LAST_KEY = "aa-menu-last";
+
 export function rememberPage(path: string) {
   const here = SHORTCUTS.filter((s) => s.to !== "/" && path.startsWith(s.to)).sort((x, y) => y.to.length - x.to.length)[0];
   if (!here) return;
@@ -195,6 +198,9 @@ export function PathMap({ onPick, current, showSearch = false, focus = null, hid
   const found = query ? visible.filter((s) => `${s.label} ${s.hint}`.toLowerCase().includes(query)) : [];
   const mine = focus ? focus.map((id) => shortcutById(id)).filter((s): s is Shortcut => !!s && !hide.includes(s.id)) : [];
   const isHere = (s: Shortcut) => !!current && s.to !== "/" && current.startsWith(s.to);
+  // l'ultima voce toccata di ogni sezione brilla e ha i raggi che girano
+  const [lastTouched, setLastTouched] = useLocalState<Record<string, string>>(MENU_LAST_KEY, {});
+  const touch = (s: Shortcut) => setLastTouched((m) => (m[s.group] === s.id ? m : { ...m, [s.group]: s.id }));
   const go = () => {
     if (navigator.vibrate) navigator.vibrate(8);
     onPick?.();
@@ -212,8 +218,8 @@ export function PathMap({ onPick, current, showSearch = false, focus = null, hid
             const sta = STATIONS.find((x) => x.id === s.group);
             return (
               <li key={s.id} className="aa-menu-row" style={{ animationDelay: `${Math.min(i, 10) * 30}ms` }}>
-                <Link to={s.to as "/"} search={(s.search ?? {}) as never} onClick={go} className="aa-short flex items-center gap-3 rounded-2xl px-2 py-1.5 active:bg-white/[0.05]">
-                  <AppIcon name={s.icon} accent={sta?.color} size={42} className="aa-short-icon" />
+                <Link to={s.to as "/"} search={(s.search ?? {}) as never} onClick={() => { touch(s); go(); }} className="aa-short flex items-center gap-3 rounded-2xl px-2 py-1.5 active:bg-white/[0.05]">
+                  <AppIcon name={s.icon} accent={sta?.color} size={42} className="aa-short-icon" glow={lastTouched[s.group] === s.id} />
                   <span className="min-w-0 flex-1">
                     <span className="block text-[0.95rem] font-semibold">{s.label}</span>
                     <span className="block truncate text-xs text-muted">{sta ? `${sta.title} · ` : ""}{s.hint}</span>
@@ -235,8 +241,8 @@ export function PathMap({ onPick, current, showSearch = false, focus = null, hid
               </div>
               <div className="grid grid-cols-3 gap-2.5">
                 {mine.map((s) => (
-                  <Link key={s.id} to={s.to as "/"} search={(s.search ?? {}) as never} onClick={go} aria-current={isHere(s) ? "page" : undefined} className={cx("aa-short aa-cat-tile flex min-w-0 flex-col items-center gap-1.5 rounded-[1.4rem] px-1.5 pb-2.5 pt-3 text-center", isHere(s) && "is-here")}>
-                    <AppIcon name={s.icon} color={s.color} size={60} className="aa-short-icon" />
+                  <Link key={s.id} to={s.to as "/"} search={(s.search ?? {}) as never} onClick={() => { touch(s); go(); }} aria-current={isHere(s) ? "page" : undefined} className={cx("aa-short aa-cat-tile flex min-w-0 flex-col items-center gap-1.5 rounded-[1.4rem] px-1.5 pb-2.5 pt-3 text-center", isHere(s) && "is-here")}>
+                    <AppIcon name={s.icon} color={s.color} size={60} className="aa-short-icon" glow={lastTouched[s.group] === s.id} />
                     <span className="w-full truncate text-[0.78rem] font-semibold leading-tight">{s.label}</span>
                     <span className="line-clamp-2 w-full text-[0.6rem] leading-tight text-muted">{s.hint}</span>
                   </Link>
@@ -249,7 +255,7 @@ export function PathMap({ onPick, current, showSearch = false, focus = null, hid
               ) : null}
             </section>
           ) : null}
-          {all ? <CategoryCarousel current={current} onGo={go} isHere={isHere} hide={hide} /> : null}
+          {all ? <CategoryCarousel current={current} onGo={(s) => { touch(s); go(); }} isHere={isHere} hide={hide} lastTouched={lastTouched} /> : null}
         </>
       )}
     </div>
@@ -260,7 +266,7 @@ export function PathMap({ onPick, current, showSearch = false, focus = null, hid
  * Sezioni del Menu in un carosello infinito: si scorre a destra e a sinistra senza fine, una
  * categoria per pagina con tutte le sue voci; in alto le linguette per saltare a una categoria.
  */
-function CategoryCarousel({ current, onGo, isHere, hide = [] }: { current?: string; onGo: () => void; isHere: (s: Shortcut) => boolean; hide?: string[] }) {
+function CategoryCarousel({ current, onGo, isHere, hide = [], lastTouched = {} }: { current?: string; onGo: (s: Shortcut) => void; isHere: (s: Shortcut) => boolean; hide?: string[]; /** per sezione, l'ultima voce toccata */ lastTouched?: Record<string, string> }) {
   const COPIES = 5;
   const n = STATIONS.length;
   const mid = Math.floor(COPIES / 2) * n;
@@ -366,8 +372,8 @@ function CategoryCarousel({ current, onGo, isHere, hide = [] }: { current?: stri
               </div>
               <div className="grid grid-cols-3 gap-2.5 pt-1">
                 {items.map((s, j) => (
-                  <Link key={s.id} to={s.to as "/"} search={(s.search ?? {}) as never} onClick={onGo} aria-current={isHere(s) ? "page" : undefined} className={cx("aa-short aa-cat-tile flex min-w-0 flex-col items-center gap-1.5 rounded-[1.4rem] px-1 pb-3 pt-3.5 text-center", isHere(s) && "is-here")} style={{ ["--i" as string]: j }}>
-                    <AppIcon name={s.icon} accent={st.color} size={80} className="aa-short-icon" />
+                  <Link key={s.id} to={s.to as "/"} search={(s.search ?? {}) as never} onClick={() => onGo(s)} aria-current={isHere(s) ? "page" : undefined} className={cx("aa-short aa-cat-tile flex min-w-0 flex-col items-center gap-1.5 rounded-[1.4rem] px-1 pb-3 pt-3.5 text-center", isHere(s) && "is-here")} style={{ ["--i" as string]: j }}>
+                    <AppIcon name={s.icon} accent={st.color} size={80} className="aa-short-icon" glow={lastTouched[st.id] === s.id} />
                     <span className="line-clamp-2 w-full text-[0.82rem] font-semibold leading-tight">{s.label}</span>
                     <span className="line-clamp-2 w-full text-[0.62rem] leading-tight text-muted">{s.hint}</span>
                   </Link>
