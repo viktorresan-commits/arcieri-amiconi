@@ -19,7 +19,9 @@ import { setRole } from "@/lib/arcieri/staff.api";
 import { refreshCrests } from "@/lib/arcieri/crest";
 import { GAME_LEVELS, GAME_MODES, modeOf } from "@/lib/arcieri/game-modes";
 import { LevelCrest } from "@/components/level-crest";
-import { ArcherPalmares } from "@/components/palmares";
+import { levelOf } from "@/lib/arcieri/xp";
+import { Glyph } from "@/components/icons";
+import { ArcherPalmares, Medal } from "@/components/palmares";
 
 type Board = Awaited<ReturnType<typeof archerBoard>>;
 
@@ -51,8 +53,6 @@ function Page() {
   const badges = roleBadges(data.roles);
   const train = data.trainings.slice(-12).map((s) => ({ name: s.day.slice(5), avg: Number(s.avg.toFixed(2)) }));
   const comps = data.comps.map((c) => ({ name: c.day.slice(5), score: c.score }));
-  const arrows = data.trainings.reduce((sum, s) => sum + s.arrows, 0);
-  const points = data.trainings.reduce((sum, s) => sum + s.avg * s.arrows, 0);
   const shownPrizes = topPrizes((gadgets.data?.prizes ?? []).filter((prize) => prize.holders.some((holder) => holder.userId === data.userId)));
   // gli ultimi tre premi vinti, dal più recente
   const latest = (gadgets.data?.prizes ?? [])
@@ -69,7 +69,7 @@ function Page() {
         <div className="aa-stage-glow pointer-events-none absolute inset-x-0 top-[18%] bottom-[8%] pr-[22%]" aria-hidden />
         <div className="aa-stage-shadow pointer-events-none absolute bottom-[3.5%] left-[39%] h-[4.5%] w-[34%] -translate-x-1/2" aria-hidden />
         <div className="absolute inset-x-0 bottom-[1%] top-[11%] flex justify-center pr-[22%]">
-          <ArcherFront look={look} className="h-full w-auto drop-shadow-[0_16px_24px_rgba(0,0,0,0.5)]" />
+          <ArcherFront look={look} fit className="h-full w-auto drop-shadow-[0_16px_24px_rgba(0,0,0,0.5)]" />
         </div>
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[16%] bg-gradient-to-t from-black/35 to-transparent" aria-hidden />
         {/* il livello dell'arciere, come uno stemma in basso a sinistra */}
@@ -79,7 +79,6 @@ function Page() {
         <div className="absolute inset-x-0 top-0 flex items-center gap-3 bg-gradient-to-b from-black/65 to-transparent p-3 pb-8">
           <span className="relative shrink-0">
             <Avatar size="lg" label={name} color={data.avatarColor} photo={data.photoUrl} look={looks[data.userId]} admin={data.admin} />
-            <LevelCrest xp={data.xp} compact className="absolute -bottom-1.5 -right-2 z-[2] h-8 w-7 drop-shadow-[0_3px_4px_rgba(0,0,0,0.6)]" />
           </span>
           <div className="min-w-0">
             <h1 className="truncate font-display text-3xl leading-none text-white">{name}</h1>
@@ -105,24 +104,10 @@ function Page() {
           )}
         </div>
       </div>
-      {/* numeri veri: allenamenti e gare; il minigioco ha il suo riquadro più sotto */}
-      <div className="grid grid-cols-3 gap-2 text-center">
-        <Card className="grid justify-items-center gap-0.5 p-2.5" style={{ boxShadow: `inset 0 -3px 0 ${KINDS.allenamento.color}55` }}>
-          <KindEmblem kind="allenamento" size={26} />
-          <p className="text-[0.68rem] text-muted">Frecce in allenamento</p>
-          <p className="font-display text-3xl tabular-nums">{arrows}</p>
-        </Card>
-        <Card className="grid justify-items-center gap-0.5 p-2.5" style={{ boxShadow: `inset 0 -3px 0 ${KINDS.allenamento.color}55` }}>
-          <KindEmblem kind="allenamento" size={26} />
-          <p className="text-[0.68rem] text-muted">Media allenamenti</p>
-          <p className="font-display text-3xl tabular-nums">{arrows ? fmtAvg(points / arrows) : "—"}</p>
-        </Card>
-        <Card className="grid justify-items-center gap-0.5 p-2.5" style={{ boxShadow: `inset 0 -3px 0 ${KINDS.campionato.color}55` }}>
-          <KindEmblem kind="campionato" size={26} />
-          <p className="text-[0.68rem] text-muted">Gare di campionato</p>
-          <p className="font-display text-3xl tabular-nums">{data.comps.length}</p>
-        </Card>
-      </div>
+      {data.viewerStats ? <CompareWithMe them={data.stats} me={data.viewerStats} name={name.split(" ")[0]} /> : null}
+      <ChampionshipCard st={data.stats} />
+      {data.stats.last ? <LastGara g={data.stats.last} /> : null}
+      <StatsGrid st={data.stats} />
       <RolesCard data={data} />
       {data.viewer.level === "super" && !data.viewer.self ? <InsertFor memberId={data.id} name={name} hasAccount={Boolean(data.userId)} /> : null}
       {data.viewer.level === "super" && !data.viewer.self ? (
@@ -159,6 +144,145 @@ function Page() {
         <ScoreLine data={comps} />
       </Card>
       <p className="text-sm text-muted">Qui si vede solo il riassunto. Note, attrezzatura personale e acquisti restano di chi li ha scritti.</p>
+    </div>
+  );
+}
+
+type Stats = Board["stats"];
+
+const fmtNum = (v: number | null | undefined) => (v == null ? "—" : Math.round(v).toLocaleString("it-IT"));
+
+/** Campionato in corso: punti, posto nella generale FITAST, gare vinte e podi */
+function ChampionshipCard({ st }: { st: Stats }) {
+  return (
+    <Card className="grid gap-3" style={{ boxShadow: `inset 0 -3px 0 ${KINDS.campionato.color}55` }}>
+      <KindHeading kind="campionato" title="Campionato" sub={st.seasonName} />
+      <div className="grid grid-cols-[1.25fr_1fr_1fr] gap-2 text-center">
+        <div className="rounded-2xl bg-white/[0.05] p-2.5">
+          <p className="font-display text-4xl leading-none tabular-nums">{fmtNum(st.champSeason)}</p>
+          <p className="mt-1 text-[0.68rem] text-muted">punti campionato</p>
+        </div>
+        <div className="rounded-2xl bg-white/[0.05] p-2.5">
+          <p className="font-display text-4xl leading-none tabular-nums">{st.wins}</p>
+          <p className="mt-1 text-[0.68rem] text-muted">{st.wins === 1 ? "gara vinta" : "gare vinte"}</p>
+        </div>
+        <div className="rounded-2xl bg-white/[0.05] p-2.5">
+          <p className="font-display text-4xl leading-none tabular-nums">{st.podiums}</p>
+          <p className="mt-1 text-[0.68rem] text-muted">{st.podiums === 1 ? "podio" : "podi"}</p>
+        </div>
+      </div>
+      <p className="text-sm text-muted">
+        {st.gareSeason ? `${st.gareSeason} ${st.gareSeason === 1 ? "gara" : "gare"} in questa stagione` : "Nessuna gara in questa stagione"}
+        {st.fitast ? ` · ${st.fitast.place ? `${st.fitast.place}° ` : ""}nella generale arcieri FITAST${st.fitast.category ? ` (${st.fitast.category})` : ""}${st.fitast.points != null ? `, ${fmtNum(st.fitast.points)} pt` : ""}` : ""}
+      </p>
+    </Card>
+  );
+}
+
+/** L'ultima gara: posto in classifica, punteggio e punti campionato */
+function LastGara({ g }: { g: NonNullable<Stats["last"]> }) {
+  const [y, m, d] = g.day.split("-");
+  const cells: [string, string][] = [
+    ["Posto", g.rank != null ? `${g.rank}°` : "—"],
+    ["Punteggio", fmtNum(g.score)],
+    ["Punti camp.", fmtNum(g.champ)],
+    ["Spot", fmtNum(g.spot)],
+  ];
+  return (
+    <Card className="grid gap-2.5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[0.68rem] font-semibold uppercase tracking-[0.1em] text-muted">Ultima gara</p>
+          <p className="truncate font-display text-xl leading-tight">{g.name}</p>
+          <p className="text-xs text-muted">{`${d}/${m}/${y}`}{g.category ? ` · ${g.category}` : ""}</p>
+        </div>
+        {g.rank != null && g.rank <= 3 ? <Medal place={g.rank} size={46} /> : null}
+      </div>
+      <div className="grid grid-cols-4 gap-1.5 text-center">
+        {cells.map(([k, v]) => (
+          <div key={k} className="rounded-xl bg-black/20 py-2">
+            <p className="font-display text-xl leading-none tabular-nums">{v}</p>
+            <p className="mt-1 text-[0.6rem] font-semibold uppercase tracking-wider text-muted">{k}</p>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+/** Le statistiche che vedono tutti: allenamenti, gare, punti dell'avatar */
+function StatsGrid({ st }: { st: Stats }) {
+  const lv = levelOf(Math.max(0, st.xp));
+  const items: { kind: "allenamento" | "campionato" | "minigioco"; label: string; value: string }[] = [
+    { kind: "allenamento", label: "Allenamenti", value: fmtNum(st.trainings) },
+    { kind: "allenamento", label: "Frecce", value: fmtNum(st.arrows) },
+    { kind: "allenamento", label: "Media", value: st.avg == null ? "—" : fmtAvg(st.avg) },
+    { kind: "campionato", label: "Gare", value: fmtNum(st.gare) },
+    { kind: "campionato", label: "Miglior gara", value: fmtNum(st.bestScore) },
+    { kind: "campionato", label: "Media gare", value: fmtNum(st.avgScore) },
+    { kind: "minigioco", label: "Punti avatar", value: fmtNum(st.xp) },
+    { kind: "minigioco", label: "Livello", value: String(lv.level) },
+    { kind: "minigioco", label: "Giri al minigioco", value: fmtNum(st.gameRounds) },
+  ];
+  return (
+    <Card className="grid gap-2.5">
+      <h2 className="font-display text-2xl">Statistiche</h2>
+      <div className="grid grid-cols-3 gap-2 text-center">
+        {items.map((it) => (
+          <div key={it.label} className="grid justify-items-center gap-0.5 rounded-2xl bg-white/[0.04] p-2" style={{ boxShadow: `inset 0 -2px 0 ${KINDS[it.kind].color}55` }}>
+            <p className="font-display text-2xl leading-none tabular-nums">{it.value}</p>
+            <p className="text-[0.66rem] leading-tight text-muted">{it.label}</p>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+/** «Confronta con me»: un tocco e si vedono i propri numeri accanto ai suoi */
+function CompareWithMe({ them, me, name }: { them: Stats; me: Stats; name: string }) {
+  const [open, setOpen] = useState(false);
+  const rows: { label: string; a: number | null; b: number | null; fmt?: (v: number) => string }[] = [
+    { label: "Punti campionato", a: me.champSeason, b: them.champSeason },
+    { label: "Gare vinte", a: me.wins, b: them.wins },
+    { label: "Podi", a: me.podiums, b: them.podiums },
+    { label: "Gare", a: me.gare, b: them.gare },
+    { label: "Miglior gara", a: me.bestScore, b: them.bestScore },
+    { label: "Allenamenti", a: me.trainings, b: them.trainings },
+    { label: "Frecce", a: me.arrows, b: them.arrows },
+    { label: "Media allenamento", a: me.avg, b: them.avg, fmt: (v) => fmtAvg(v) },
+    { label: "Punti avatar", a: me.xp, b: them.xp },
+    { label: "Giri al minigioco", a: me.gameRounds, b: them.gameRounds },
+  ];
+  const mine = rows.filter((r) => r.a != null && r.b != null && r.a > r.b).length;
+  const theirs = rows.filter((r) => r.a != null && r.b != null && r.b > r.a).length;
+  return (
+    <div className="grid gap-2">
+      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="aa-press flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-primary px-4 font-semibold text-primary-fg shadow-[0_10px_24px_-12px_rgba(0,0,0,0.7)]">
+        <Glyph name="duel" size={18} />
+        {open ? "Chiudi il confronto" : "Confronta con me"}
+      </button>
+      {open ? (
+        <Card className="aa-rise grid gap-1.5">
+          <div className="grid grid-cols-[1fr_4.5rem_4.5rem] items-end gap-2 px-1 pb-1 text-[0.66rem] font-semibold uppercase tracking-[0.1em] text-muted">
+            <span>{mine > theirs ? `Avanti tu, ${mine} a ${theirs}` : theirs > mine ? `Avanti ${name}, ${theirs} a ${mine}` : `Pari, ${mine} a ${theirs}`}</span>
+            <span className="text-right">Tu</span>
+            <span className="text-right">{name}</span>
+          </div>
+          {rows.map((r) => {
+            const f = (v: number | null) => (v == null ? "—" : r.fmt ? r.fmt(v) : fmtNum(v));
+            const aWin = r.a != null && r.b != null && r.a > r.b;
+            const bWin = r.a != null && r.b != null && r.b > r.a;
+            return (
+              <div key={r.label} className="grid grid-cols-[1fr_4.5rem_4.5rem] items-center gap-2 rounded-xl bg-white/[0.04] px-2.5 py-2 text-sm">
+                <span className="truncate">{r.label}</span>
+                <span className={`text-right font-display text-lg tabular-nums ${aWin ? "text-primary" : bWin ? "text-muted" : ""}`}>{f(r.a)}</span>
+                <span className={`text-right font-display text-lg tabular-nums ${bWin ? "text-primary" : aWin ? "text-muted" : ""}`}>{f(r.b)}</span>
+              </div>
+            );
+          })}
+        </Card>
+      ) : null}
     </div>
   );
 }

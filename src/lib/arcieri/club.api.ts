@@ -738,6 +738,95 @@ export const deleteEntry = createServerFn({ method: "POST" })
     return { ok: true as const };
   });
 
+/** la stagione di campionato di un giorno: invernale da ottobre ad aprile, estiva da maggio a settembre */
+export function champSeasonOf(day: string) {
+  const y = Number(day.slice(0, 4));
+  const m = Number(day.slice(5, 7));
+  if (m >= 10) return { from: `${y}-10-01`, to: `${y + 1}-04-30`, name: `Campionato invernale ${y}/${y + 1}` };
+  if (m <= 4) return { from: `${y - 1}-10-01`, to: `${y}-04-30`, name: `Campionato invernale ${y - 1}/${y}` };
+  return { from: `${y}-05-01`, to: `${y}-09-30`, name: `Campionato estivo ${y}` };
+}
+
+const nameKey = (s: string) =>
+  s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .replace(/[^A-Z ]+/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length > 1)
+    .sort()
+    .join(" ");
+
+/** i numeri di un arciere che si vedono sul profilo e nel confronto: gare, campionato, allenamenti, avatar */
+async function archerStats(sql: Awaited<ReturnType<typeof db>>, userId: string, fullName: string, xp: number) {
+  const entries = await sql<{ name: string; starts_on: string; score: number | null; rank: number | null; category: string; championship_points: number | null; spot: number | null }>`
+    select c.name, c.starts_on::text as starts_on, e.score, e.rank, e.category, e.championship_points, e.spot
+    from competition_entries e
+    join competitions c on c.id = e.competition_id
+    where e.user_id = ${userId} and (e.score is not null or e.rank is not null or e.championship_points is not null)
+    order by c.starts_on`;
+  const today = new Date().toISOString().slice(0, 10);
+  const season = champSeasonOf(today);
+  const gare = entries.map((e) => ({
+    name: e.name,
+    day: String(e.starts_on).slice(0, 10),
+    score: asNumOrNull(e.score),
+    rank: asNumOrNull(e.rank),
+    category: divisionOf(e.category ?? "") || "",
+    champ: asNumOrNull(e.championship_points),
+    spot: asNumOrNull(e.spot),
+  }));
+  const done = gare.filter((g) => g.day <= today);
+  const inSeason = done.filter((g) => g.day >= season.from && g.day <= season.to);
+  const scores = done.map((g) => g.score).filter((v): v is number => v != null);
+  const sessions = await sql<{ arrows: number; points: number }>`
+    select count(sh.id)::int as arrows, coalesce(sum(sh.score), 0)::int as points
+    from sessions s left join shots sh on sh.session_id = s.id
+    where s.user_id = ${userId}
+    group by s.id`;
+  const real = sessions.filter((x) => asNum(x.arrows) > 0);
+  const arrows = real.reduce((sum, x) => sum + asNum(x.arrows), 0);
+  const points = real.reduce((sum, x) => sum + asNum(x.points), 0);
+  const game = await sql<{ rounds: number; best: number; max_points: number }>`
+    select coalesce(sum(rounds), 0)::int as rounds, coalesce(max(best), 0)::int as best, coalesce(max(max_points), 0)::int as max_points from game_records where user_id = ${userId}`.catch(() => []);
+  // la classifica generale arcieri del portale FITAST, se ci si trova con lo stesso nome
+  let fitast: { place: number | null; points: number | null; category: string; season: string } | null = null;
+  const key = nameKey(fullName);
+  if (key.includes(" ")) {
+    const gen = await sql<{ season_name: string; category: string; rows: { place: number | null; name: string; score: number | null; camp: number | null }[] }>`
+      select season_name, category, rows from fitast_standings
+      where kind = 'generale-arcieri' and season = (select season from fitast_standings where kind = 'generale-arcieri' order by updated_at desc limit 1)`.catch(() => []);
+    for (const g of gen) {
+      const row = (Array.isArray(g.rows) ? g.rows : []).find((r) => nameKey(r.name) === key);
+      if (row) {
+        fitast = { place: row.place ?? null, points: row.camp ?? row.score ?? null, category: g.category, season: g.season_name };
+        break;
+      }
+    }
+  }
+  const last = [...done].reverse()[0] ?? null;
+  return {
+    seasonName: season.name,
+    champSeason: inSeason.reduce((sum, g) => sum + (g.champ ?? 0), 0),
+    gareSeason: inSeason.length,
+    gare: done.length,
+    wins: done.filter((g) => g.rank === 1).length,
+    podiums: done.filter((g) => g.rank != null && g.rank <= 3).length,
+    bestScore: scores.length ? Math.max(...scores) : null,
+    avgScore: scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : null,
+    last,
+    trainings: real.length,
+    arrows,
+    avg: arrows ? points / arrows : null,
+    gameRounds: asNum(game[0]?.rounds),
+    gameBest: asNum(game[0]?.best),
+    xp,
+    fitast,
+  };
+}
+export type ArcherStats = Awaited<ReturnType<typeof archerStats>>;
+
 export const archerBoard = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((input: unknown) => {
@@ -827,6 +916,9 @@ export const archerBoard = createServerFn({ method: "POST" })
         day: String(c.starts_on).slice(0, 10),
         score: asNum(c.score),
       })),
+      stats: await archerStats(sql, member.user_id, `${member.given_name} ${member.family_name}`, asNum((member as MemberRow & { xp?: number }).xp)),
+      // i numeri di chi guarda, per «Confronta con me»
+      viewerStats: member.user_id === context.userId ? null : await archerStats(sql, context.userId, `${viewer.given_name} ${viewer.family_name}`, asNum((viewer as MemberRow & { xp?: number }).xp)),
     };
   });
 
