@@ -242,7 +242,23 @@ function Page() {
       ) : null}
       <div id="fitast" className="scroll-mt-4">
         {portal ? (
-          <FitastPanel key={portal.code} comps={comps} myName={myName} userId={me.userId ?? ""} startCode={portal.code} onSaved={() => setNonce((n) => n + 1)} onClose={() => setPortal(null)} />
+          <FitastPanel
+            key={portal.code}
+            comps={comps}
+            myName={myName}
+            userId={me.userId ?? ""}
+            startCode={portal.code}
+            onSaved={() => setNonce((n) => n + 1)}
+            onClose={() => setPortal(null)}
+            onEditLanes={(id) => {
+              // dal punteggio salvato alle piazzole: la gara tra le mie, con l'editor aperto
+              const comp = comps.find((c) => c.id === id);
+              if (comp) setTab(comp.startsOn < today ? "past" : "next");
+              setScope("mine");
+              setOpen(id);
+              window.setTimeout(() => document.getElementById(`gara-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 120);
+            }}
+          />
         ) : (
           <button type="button" onClick={() => setPortal({ code: "" })} className="aa-press flex w-full items-center gap-3 rounded-[var(--radius-card)] border border-[#e0b15a]/30 bg-[#e0b15a]/[0.07] p-3 text-left">
             <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#e0b15a]/25"><Glyph name="trophy" size={22} /></span>

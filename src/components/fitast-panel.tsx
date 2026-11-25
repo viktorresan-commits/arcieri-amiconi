@@ -139,7 +139,7 @@ function garaSelect(page: FitastPage) {
  * gare (iscritti, piazzole, classifiche), si vedono i compagni di piazzola e si porta il punteggio
  * nella propria gara del calendario. I pulsanti del portale (PIAZZOLE, CLASSIFICA…) si premono da qui.
  */
-export function FitastPanel({ comps, myName, userId, startCode, onSaved, onClose }: { comps: Comp[]; myName: string; userId: string; startCode?: string; onSaved: () => void; onClose?: () => void }) {
+export function FitastPanel({ comps, myName, userId, startCode, onSaved, onClose, onEditLanes }: { comps: Comp[]; myName: string; userId: string; startCode?: string; onSaved: () => void; onClose?: () => void; /** dopo il salvataggio: aprire le piazzole della gara nel calendario */ onEditLanes?: (compId: number) => void }) {
   // aperto da una gara del calendario con il numero FITAST: si va dritti alla sua classifica
   const [req, setReq] = useState<Req>(() => (startCode && /^\d{3,6}$/.test(startCode) ? { url: classificaUrl(startCode, FITAST_HOME), referer: FITAST_HOME } : { url: FITAST_HOME }));
   const [back, setBack] = useState<Req[]>([]);
@@ -157,7 +157,7 @@ export function FitastPanel({ comps, myName, userId, startCode, onSaved, onClose
   const [seasonOpts, setSeasonOpts] = useState<{ value: string; text: string }[]>([]);
   const [pick, setPick] = useState("");
   const [diagText, setDiagText] = useState<string[]>([]);
-  const [extra, setExtra] = useState<{ text: string; req: Req; squadre: boolean }[]>([]);
+  const [, setExtra] = useState<{ text: string; req: Req; squadre: boolean }[]>([]);
   const stop = useRef(false);
   const cookie = useRef("");
   // il campo che sceglie la riga dell'elenco gare, quando la ricerca l'ha scoperto
@@ -224,7 +224,10 @@ export function FitastPanel({ comps, myName, userId, startCode, onSaved, onClose
     }
   }
 
+  // la pagina del portale aperta da chi usa l'app (non la prima, letta solo per i campionati)
+  const [browse, setBrowse] = useState(false);
   const go = (next: Req, push = true) => {
+    setBrowse(true);
     if (push && page) setBack((b) => [...b, req]);
     setReq(next);
   };
@@ -895,27 +898,25 @@ export function FitastPanel({ comps, myName, userId, startCode, onSaved, onClose
           {scan.gara ? `Gara ${scan.gara}${scan.label ? ` · ${scan.label}` : ""}` : "Leggo l'elenco delle gare"} · {scan.pages} {scan.pages === 1 ? "pagina letta" : "pagine lette"}
         </p>
       ) : null}
-      {found ? <Matches found={found} q={q} comps={comps} userId={userId} onSaved={onSaved} onOpen={(r) => go(r)} searching={Boolean(scan)} diag={diagText} /> : null}
+      {found ? <Matches found={found} q={q} comps={comps} userId={userId} onSaved={onSaved} onOpen={(r) => go(r)} searching={Boolean(scan)} diag={diagText} onEditLanes={onEditLanes} /> : null}
       {teamSaved > 0 && !scan ? <p className="rounded-2xl bg-[#e0b15a]/10 p-3 text-sm">Risultato della compagnia salvato per tutti in {teamSaved} {teamSaved === 1 ? "gara" : "gare"}: lo vedete in Gare e nella bacheca della Compagnia.</p> : null}
       {champ && !scan ? <p className="rounded-2xl bg-[#e0b15a]/10 p-3 text-sm">Campionato della compagnia · {champ}</p> : null}
-      {steps.length ? <Steps steps={steps} searching={Boolean(scan)} skipped={skipped} /> : null}
-      {extra.length ? (
-        <div className="grid gap-1.5">
-          <p className="text-sm font-semibold">Classifiche trovate</p>
-          <div className="flex flex-wrap gap-1.5">
-            {extra.slice(0, 16).map((l) => <button key={reqKey(l.req)} type="button" className="aa-chip" onClick={() => go(l.req)}>{l.squadre ? "Squadre · " : "Arcieri · "}{l.text.slice(0, 48)}</button>)}
-          </div>
-        </div>
-      ) : null}
-      <div className="flex flex-wrap items-center gap-1.5 border-t border-white/[0.06] pt-2">
-        {back.length ? <button type="button" className="aa-chip" onClick={() => { const prev = back[back.length - 1]; setBack((b) => b.slice(0, -1)); go(prev, false); }}><Glyph name="chevron" size={12} className="rotate-180" /> Indietro</button> : null}
-        {req.url !== FITAST_HOME || req.post ? <button type="button" className="aa-chip" onClick={() => { setBack([]); go({ url: FITAST_HOME }, false); }}>Calendario</button> : null}
-        <button type="button" className="aa-chip" onClick={() => void openExternal(req.post ? req.referer || req.url : req.url)}>Apri sul sito</button>
-      </div>
-      {busy ? <Loading /> : null}
+      {/* le gare lette servono solo quando il nome non si trova (per capire dove si ferma) */}
+      {steps.length && !scan && !found?.length ? <Steps steps={steps} searching={false} skipped={skipped} /> : null}
       {err ? <ErrorNote text={err} /> : null}
       {locating ? <p className="rounded-2xl bg-white/[0.04] p-3 text-sm text-muted">{locating}</p> : null}
-      {page && !busy ? <PageView page={page} label={req.label} q={q} rowField={rowFieldRef.current} onOpen={open} onGo={(r) => go(r)} onLocate={(g) => void locate(g)} /> : null}
+      {/* la pagina del portale si vede solo se la si apre (un risultato toccato o un indirizzo incollato) */}
+      {browse ? (
+        <>
+          <div className="flex flex-wrap items-center gap-1.5 border-t border-white/[0.06] pt-2">
+            {back.length ? <button type="button" className="aa-chip" onClick={() => { const prev = back[back.length - 1]; setBack((b) => b.slice(0, -1)); go(prev, false); }}><Glyph name="chevron" size={12} className="rotate-180" /> Indietro</button> : null}
+            <button type="button" className="aa-chip" onClick={() => void openExternal(req.post ? req.referer || req.url : req.url)}>Apri sul sito</button>
+            <button type="button" className="aa-chip" onClick={() => { setBrowse(false); setBack([]); }}>Chiudi la pagina</button>
+          </div>
+          {busy ? <Loading /> : null}
+          {page && !busy ? <PageView page={page} label={req.label} q={q} rowField={rowFieldRef.current} onOpen={open} onGo={(r) => go(r)} onLocate={(g) => void locate(g)} /> : null}
+        </>
+      ) : null}
     </Card>
   );
 }
@@ -1147,7 +1148,7 @@ function Steps({ steps: raw, searching, skipped = 0 }: { steps: Step[]; searchin
 }
 
 /** dove compare il nome: riga, compagni di piazzola e il punteggio da portare nella gara */
-function Matches({ found, q, comps, userId, onSaved, onOpen, searching, diag = [] }: { found: Match[]; q: string; comps: Comp[]; userId: string; onSaved: () => void; onOpen: (r: Req) => void; searching: boolean; diag?: string[] }) {
+function Matches({ found, q, comps, userId, onSaved, onOpen, searching, diag = [], onEditLanes }: { found: Match[]; q: string; comps: Comp[]; userId: string; onSaved: () => void; onOpen: (r: Req) => void; searching: boolean; diag?: string[]; onEditLanes?: (compId: number) => void }) {
   if (!found.length) {
     return (
       <div className="grid gap-2 rounded-2xl bg-white/[0.04] p-3">
@@ -1174,12 +1175,13 @@ function Matches({ found, q, comps, userId, onSaved, onOpen, searching, diag = [
   return (
     <div className="grid gap-2">
       <p className="text-sm font-semibold">Trovato in {found.length} {found.length === 1 ? "riga" : "righe"}</p>
-      {found.slice(0, 30).map((m, i) => <MatchCard key={i} m={m} comps={comps} userId={userId} onSaved={onSaved} onOpen={onOpen} />)}
+      {found.slice(0, 30).map((m, i) => <MatchCard key={i} m={m} comps={comps} userId={userId} onSaved={onSaved} onOpen={onOpen} onEditLanes={onEditLanes} />)}
     </div>
   );
 }
 
-function MatchCard({ m, comps, userId, onSaved, onOpen }: { m: Match; comps: Comp[]; userId: string; onSaved: () => void; onOpen: (r: Req) => void }) {
+function MatchCard({ m, comps, userId, onSaved, onOpen, onEditLanes }: { m: Match; comps: Comp[]; userId: string; onSaved: () => void; onOpen: (r: Req) => void; onEditLanes?: (compId: number) => void }) {
+  const [savedIn, setSavedIn] = useState<number | null>(null);
   const head: FitastCell[] = m.table ? m.table.rows[0] : [];
   const row: FitastCell[] = m.table ? m.table.rows[m.index] : (m.line ?? "").split(" ").map((text) => ({ text }));
   const g = head.findIndex((c) => GROUP.test(c.text));
@@ -1202,7 +1204,15 @@ function MatchCard({ m, comps, userId, onSaved, onOpen }: { m: Match; comps: Com
           <ul className="mt-1 grid gap-0.5 text-xs text-muted">{mates.slice(0, 12).map((r, i) => <li key={i}>{r.filter((_, k) => k !== g).map((c2) => c2.text).filter(Boolean).slice(0, 3).join(" · ")}</li>)}</ul>
         </div>
       ) : null}
-      {nums.length ? (save ? <SaveScore nums={nums} row={row} m={m} comps={comps} userId={userId} onDone={() => { setSave(false); onSaved(); }} onCancel={() => setSave(false)} /> : <button type="button" className="aa-chip justify-self-start" onClick={() => setSave(true)}>Porta il punteggio nella mia gara</button>) : null}
+      {savedIn != null ? (
+        // salvato: il passo dopo è segnare le piazzole della gara
+        <div className="grid gap-2 rounded-xl bg-[#e0b15a]/10 p-3">
+          <p className="text-sm font-semibold">Salvato nella gara del calendario.</p>
+          {onEditLanes ? <Button onClick={() => onEditLanes(savedIn)}>Modifica le piazzole</Button> : null}
+        </div>
+      ) : nums.length ? (
+        save ? <SaveScore nums={nums} row={row} m={m} comps={comps} userId={userId} onDone={(compId) => { setSave(false); setSavedIn(compId); onSaved(); }} onCancel={() => setSave(false)} /> : <Button className="justify-self-start" onClick={() => setSave(true)}>Porta il punteggio nella mia gara</Button>
+      ) : null}
     </div>
   );
 }
@@ -1219,7 +1229,7 @@ function Pair({ k, v }: { k: string; v: string }) {
 }
 
 /** sceglie la gara del calendario e quali numeri sono punteggio e punti campionato */
-function SaveScore({ nums, row, m, comps, userId, onDone, onCancel }: { nums: { i: number; v: number; label: string }[]; row: FitastCell[]; m: Match; comps: Comp[]; userId: string; onDone: () => void; onCancel: () => void }) {
+function SaveScore({ nums, row, m, comps, userId, onDone, onCancel }: { nums: { i: number; v: number; label: string }[]; row: FitastCell[]; m: Match; comps: Comp[]; userId: string; onDone: (compId: number) => void; onCancel: () => void }) {
   // la gara giusta: stesso codice nell'indirizzo, oppure la stessa data scritta nella pagina
   const guess = useMemo(() => {
     const text = `${m.page.url} ${m.req.label ?? ""} ${m.page.title} ${m.page.lines.slice(0, 40).join(" ")}`;
@@ -1248,11 +1258,14 @@ function SaveScore({ nums, row, m, comps, userId, onDone, onCancel }: { nums: { 
     const comp = comps.find((x) => x.id === compId);
     if (!comp) return setErr("Scegli la gara del calendario.");
     const old = comp.entries.find((e) => e.userId === userId);
-    if (old?.piazzole.length) return setErr("In questa gara hai già segnato le piazzole: il totale viene da quelle. Correggile dalla gara.");
+    if (old?.piazzole.length) {
+      setErr("In questa gara hai già segnato le piazzole: il totale viene da quelle.");
+      return;
+    }
     setBusy(true);
     setErr("");
     saveEntry({ data: { competitionId: comp.id, score: val(scoreCol), championshipPoints: val(champCol), rank: rankCol >= 0 && (val(rankCol) ?? 0) >= 1 ? val(rankCol) : (old?.rank ?? null), category: old?.category ?? "", laneCount: old?.laneCount ?? null, spot: old?.spot ?? null, targetKind: old?.targetKind ?? "", sagomaMax: old?.sagomaMax ?? null, notes: "Dal portale FITAST", piazzole: [] } })
-      .then(onDone)
+      .then(() => onDone(comp.id))
       .catch((e: unknown) => setErr(e instanceof Error ? e.message : "Non salvato."))
       .finally(() => setBusy(false));
   };
