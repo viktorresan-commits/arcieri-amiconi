@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { buildModel, v3, type Model, type V3 } from "@/lib/arcieri/anatomy-model";
+import { boneCal, buildModel, v3, type BoneCal, type Model, type V3 } from "@/lib/arcieri/anatomy-model";
 import { createAnatomyRenderer, lookAt, mul4, perspective } from "@/lib/arcieri/anatomy-render";
 import { BODY_CREDIT, loadBody } from "@/lib/arcieri/anatomy-body";
 import { mixLm, sideEvidence, type Gear, type Hand, type Landmark } from "@/lib/arcieri/pose-analysis";
@@ -13,7 +13,7 @@ import { cx } from "./kit";
  * Le profondità arrivano da una ripresa 2D: sono stime.
  */
 
-type Layer = "pelle" | "muscolo" | "osso" | "quote";
+type Layer = "pelle" | "muscolo" | "osso" | "punti" | "quote";
 type Seq = { t: number; lm: PackedLm }[];
 
 /** punti al tempo t della sequenza salvata, interpolati */
@@ -45,6 +45,7 @@ export function Anatomy3D({
   lmRef,
   gearRef,
   seq,
+  calFrames,
   aspect,
   hand,
   className = "h-[26rem]",
@@ -57,13 +58,15 @@ export function Anatomy3D({
   lm?: Landmark[] | null;
   lmRef?: { current: Landmark[] | null };
   seq?: Seq | null;
+  /** tutti i fotogrammi letti dal video: danno le lunghezze vere delle ossa dell'arciere */
+  calFrames?: (Landmark[] | null)[] | null;
   aspect: number;
   hand: Hand;
   className?: string;
 }) {
   const glCanvas = useRef<HTMLCanvasElement>(null);
   const hudCanvas = useRef<HTMLCanvasElement>(null);
-  const [layers, setLayers] = useState<Record<Layer, boolean>>({ pelle: true, muscolo: true, osso: true, quote: true });
+  const [layers, setLayers] = useState<Record<Layer, boolean>>({ pelle: true, muscolo: true, osso: true, punti: true, quote: true });
   const layersRef = useRef(layers);
   layersRef.current = layers;
   // si parte come la ripresa del video (di fronte), fermi: si gira con il dito
@@ -85,8 +88,19 @@ export function Anatomy3D({
   }, [seq, lm, lmRef, hand, aspect]);
   // i punti restano come nel video; cambia solo quale braccio tiene l'arco
   const effHand: Hand = swap ? (hand === "destro" ? "mancino" : "destro") : hand;
-  const input = useRef({ lm, lmRef, seq, aspect, hand: effHand, gearRef });
-  input.current = { lm, lmRef, seq, aspect, hand: effHand, gearRef };
+  // lunghezze vere delle ossa: dalla sequenza salvata o dai fotogrammi dell'analisi; dal vivo si
+  // imparano dai fotogrammi che passano
+  const fixedCal = useMemo<BoneCal | null>(() => {
+    if (calFrames && calFrames.length >= 8) return boneCal(calFrames, aspect);
+    if (seq && seq.length >= 8) return boneCal(seq.map((f) => unpackLm(f.lm)), aspect);
+    return null;
+  }, [calFrames, seq, aspect]);
+  const live = useRef<{ frames: Landmark[][]; cal: BoneCal | null; n: number }>({ frames: [], cal: null, n: 0 });
+  useEffect(() => {
+    live.current = { frames: [], cal: null, n: 0 };
+  }, [calFrames, aspect]);
+  const input = useRef({ lm, lmRef, seq, aspect, hand: effHand, gearRef, cal: fixedCal });
+  input.current = { lm, lmRef, seq, aspect, hand: effHand, gearRef, cal: fixedCal };
 
   useEffect(() => {
     const canvas = glCanvas.current;
@@ -134,7 +148,7 @@ export function Anatomy3D({
       const time = (now - t0) / 1000;
       // nascosto (vista non attiva o fuori schermo): non lavora
       if (!canvas.clientWidth || !canvas.clientHeight) return;
-      const { lm: still, lmRef: ref, seq: sq, aspect: asp, hand: hd, gearRef: gr } = input.current;
+      const { lm: still, lmRef: ref, seq: sq, aspect: asp, hand: hd, gearRef: gr, cal: fc } = input.current;
       // punti da mostrare: sequenza salvata (in ciclo), poi quelli dal vivo, poi quelli fissi
       let target: Landmark[] | null = null;
       const playing = Boolean(sq && sq.length > 1);
@@ -146,12 +160,21 @@ export function Anatomy3D({
         lastTarget = target;
         moving = true;
         lastChange = now;
+        if (!fc) {
+          const lv = live.current;
+          lv.n += 1;
+          if (lv.n % 2 === 0) {
+            lv.frames.push(target);
+            if (lv.frames.length > 300) lv.frames.shift();
+            if (lv.frames.length >= 8 && lv.frames.length % 15 === 8) lv.cal = boneCal(lv.frames, asp);
+          }
+        }
       }
       const c = cam.current;
       if (c.auto) c.yaw += dt * 0.35;
       const L0 = layersRef.current;
       const dprBase = Math.min(2, window.devicePixelRatio || 1);
-      const key = `${c.yaw.toFixed(4)}|${c.pitch.toFixed(4)}|${c.zoom.toFixed(3)}|${L0.pelle}${L0.muscolo}${L0.osso}${L0.quote}|${canvas.clientWidth}x${canvas.clientHeight}|${scale}|${bodyTick}`;
+      const key = `${c.yaw.toFixed(4)}|${c.pitch.toFixed(4)}|${c.zoom.toFixed(3)}|${L0.pelle}${L0.muscolo}${L0.osso}${L0.punti}${L0.quote}|${canvas.clientWidth}x${canvas.clientHeight}|${scale}|${bodyTick}`;
       // dopo un movimento si disegna ancora un attimo con il corpo leggero, poi una volta con quello pieno
       const fast = now - lastChange < 450 || dragging.current;
       if (!moving && key === lastKey && !playing && fast === lastFast) return;
@@ -169,7 +192,7 @@ export function Anatomy3D({
             return mixLm(p, t[i], a, t[i].visibility);
           });
         if (far < 0.0006 && !playing) moving = false;
-        model = buildModel(smooth, asp, hd, gr?.current ?? null) ?? model;
+        model = buildModel(smooth, asp, hd, gr?.current ?? null, fc ?? live.current.cal) ?? model;
       }
       if (emptyRef.current !== !model) {
         emptyRef.current = !model;
@@ -250,6 +273,7 @@ export function Anatomy3D({
         ctx.lineTo(b[0], b[1]);
         ctx.stroke();
       }
+      if (L.punti && model.J) drawJoints(ctx, model.J, proj, dpr, model.hand ?? "destro");
       if (!L.quote) return;
       // archi degli angoli ai gomiti
       for (const a of hudD.arcs) {
@@ -385,7 +409,7 @@ export function Anatomy3D({
       <p className="pointer-events-none absolute inset-x-0 bottom-0 truncate px-2 text-center text-[0.45rem] leading-[0.7rem] text-white/50">{BODY_CREDIT}</p>
       {empty ? <p className="absolute inset-x-0 top-1/2 -translate-y-1/2 text-center text-sm text-white/80">In attesa della posa: avvia il video o scegli un fotogramma.</p> : null}
       <div className={inBox ? "absolute inset-x-2 bottom-11 flex flex-wrap justify-center gap-1" : "absolute left-2 top-2 flex flex-wrap gap-1"}>
-        {([["pelle", "Corpo"], ["muscolo", "Muscoli"], ["osso", "Scheletro"], ["quote", "Misure"]] as const).map(([k, label]) => (
+        {([["pelle", "Corpo"], ["muscolo", "Muscoli"], ["osso", "Scheletro"], ["punti", "Punti"], ["quote", "Misure"]] as const).map(([k, label]) => (
           <button key={k} type="button" aria-pressed={layers[k]} onClick={() => toggle(k)} className={cx("min-h-8 rounded-full px-2.5 text-[0.7rem] font-semibold backdrop-blur", layers[k] ? "bg-[#5fd4ff]/25 text-white ring-1 ring-[#5fd4ff]/60" : "bg-black/40 text-white/60")}>
             {label}
           </button>
@@ -419,6 +443,65 @@ export function Anatomy3D({
       </div>
     </div>
   );
+}
+
+/** collegamenti dei punti: corpo, piedi, mani (21 punti per mano) */
+const BODY_LINKS: [number, number][] = [
+  [11, 12], [11, 23], [12, 24], [23, 24],
+  [11, 13], [13, 15], [12, 14], [14, 16],
+  [15, 17], [15, 19], [15, 21], [17, 19], [16, 18], [16, 20], [16, 22], [18, 20],
+  [23, 25], [25, 27], [24, 26], [26, 28],
+  [27, 29], [29, 31], [27, 31], [28, 30], [30, 32], [28, 32],
+  [7, 8], [0, 7], [0, 8],
+];
+const HAND_LINKS: [number, number][] = [[0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8], [5, 9], [9, 10], [10, 11], [11, 12], [9, 13], [13, 14], [14, 15], [15, 16], [13, 17], [0, 17], [17, 18], [18, 19], [19, 20]];
+
+/**
+ * Lo scheletro dei punti rilevati nel video, sopra il corpo 3D: ogni articolazione è un punto
+ * (lato dell'arco in azzurro, lato della corda in oro), le linee sono quelle dello scheletro del video
+ */
+function drawJoints(ctx: CanvasRenderingContext2D, J: Record<number, V3>, proj: (p: V3) => [number, number, number], dpr: number, hand: Hand) {
+  // punti dispari (11, 13, 15...) = lato sinistro dell'arciere
+  const bowOdd = hand === "destro"; // per un destro l'arco è nella mano sinistra (punti dispari)
+  const tone = (i: number) => (i <= 10 ? "#ffffff" : (i % 2 === 1) === bowOdd ? "#5fd4ff" : "#ffd36e");
+  const P: Record<number, [number, number, number]> = {};
+  for (const k of Object.keys(J)) {
+    const i = Number(k);
+    if (J[i]) P[i] = proj(J[i]);
+  }
+  ctx.lineCap = "round";
+  const line = (a: number, b: number, col: string, w: number) => {
+    const p = P[a];
+    const q = P[b];
+    if (!p || !q || p[2] <= 0 || q[2] <= 0) return;
+    ctx.strokeStyle = col;
+    ctx.lineWidth = w * dpr;
+    ctx.beginPath();
+    ctx.moveTo(p[0], p[1]);
+    ctx.lineTo(q[0], q[1]);
+    ctx.stroke();
+  };
+  for (const [a, b] of BODY_LINKS) line(a, b, "rgba(4,20,34,0.55)", 4.2);
+  for (const [a, b] of BODY_LINKS) line(a, b, a <= 10 ? "rgba(255,255,255,0.9)" : tone(b), 2);
+  for (const base of [33, 54]) {
+    if (!J[base]) continue;
+    const col = base === 33 ? tone(15) : tone(16);
+    for (const [a, b] of HAND_LINKS) line(base + a, base + b, col, 1.2);
+  }
+  const dot = (i: number, r: number) => {
+    const p = P[i];
+    if (!p || p[2] <= 0) return;
+    ctx.fillStyle = "rgba(4,20,34,0.8)";
+    ctx.beginPath();
+    ctx.arc(p[0], p[1], (r + 1.4) * dpr, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = tone(i);
+    ctx.beginPath();
+    ctx.arc(p[0], p[1], r * dpr, 0, Math.PI * 2);
+    ctx.fill();
+  };
+  for (const i of [0, 7, 8, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32]) dot(i, i >= 15 && i <= 22 ? 2.2 : 3.2);
+  for (const base of [33, 54]) if (J[base]) for (let k = 1; k < 21; k++) dot(base + k, 1.4);
 }
 
 /** etichetta con fondo scuro e bordo del colore della misura */

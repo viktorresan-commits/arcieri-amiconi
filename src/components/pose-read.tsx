@@ -197,6 +197,7 @@ export function PoseRead() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const overlay = useRef<HTMLCanvasElement>(null);
+  const pip = useRef<HTMLCanvasElement>(null);
   const work = useRef<HTMLCanvasElement | null>(null);
   const [hand, setHandState] = useState<Hand>("destro");
   // lati della persona: null finché il gesto non lo dice, poi resta deciso per il video.
@@ -334,6 +335,8 @@ export function PoseRead() {
   useEffect(() => () => { if (src) URL.revokeObjectURL(src); }, [src]);
 
   const analysis = useMemo(() => analyzeShots(samples, effHand), [samples, effHand]);
+  // fotogrammi dell'analisi: la sagoma ne ricava le lunghezze vere delle ossa dell'arciere
+  const calFrames = useMemo(() => samples.map((s) => s.lm), [samples]);
   const shot: Shot | null = analysis.shots[Math.min(shotIndex, analysis.shots.length - 1)] ?? null;
   const distance = useMemo(
     () => cameraDistance(samples.length ? samples : now ? [{ t: 0, lm: null, m: now }] : [], size.w, size.h),
@@ -442,13 +445,55 @@ export function PoseRead() {
       ctx.setLineDash([]);
     }
     if (lookRef.current !== "scheletro") drawSagoma(ctx, w, h, lm, handRef.current, gearRef.current, lookRef.current === "sagoma");
-    else if (lm && showRef.current) drawPose(ctx, w, h, lm, handRef.current, gearRef.current);
+    // in «Mista» sopra la sagoma anche lo scheletro con tutti i punti
+    if (lm && lookRef.current !== "sagoma" && (showRef.current || lookRef.current === "mista")) drawPose(ctx, w, h, lm, handRef.current, gearRef.current);
+    paintPip(lm);
     if (lm && proRef.current && showRef.current && lookRef.current !== "sagoma") drawPro(ctx, w, h, lm, handRef.current);
     if (draft) {
       ctx.strokeStyle = "#e6b325";
       ctx.lineWidth = 3 * dpr;
       ctx.strokeRect(draft.x * w, draft.y * h, draft.w * w, draft.h * h);
     }
+  }
+
+  /**
+   * Con la sagoma 3D a tutto riquadro, in un angolo resta il video con lo scheletro e i punti:
+   * si confronta il 3D con l'arciere vero fotogramma per fotogramma
+   */
+  function paintPip(lm: Landmark[] | null) {
+    const c = pip.current;
+    const media = videoRef.current ?? imageRef.current;
+    if (!c || !media || lookRef.current !== "sagoma") return;
+    const holder = box.current;
+    if (!holder) return;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    // dal video stesso (questa funzione può arrivare da un disegno precedente, con misure vecchie)
+    const mw = media instanceof HTMLVideoElement ? media.videoWidth : media.naturalWidth;
+    const mh = media instanceof HTMLVideoElement ? media.videoHeight : media.naturalHeight;
+    if (!mw || !mh) return;
+    const ratio = mw / mh;
+    const cw = Math.max(60, Math.round(Math.min(holder.clientWidth * 0.3, holder.clientHeight * 0.3 * ratio)));
+    const ch = Math.round(cw / ratio);
+    if (c.style.width !== `${cw}px`) {
+      c.style.width = `${cw}px`;
+      c.style.height = `${ch}px`;
+    }
+    const W = Math.round(cw * dpr);
+    const H = Math.round(ch * dpr);
+    if (c.width !== W || c.height !== H) {
+      c.width = W;
+      c.height = H;
+    }
+    const ctx = c.getContext("2d");
+    if (!ctx) return;
+    try {
+      ctx.drawImage(media, 0, 0, W, H);
+    } catch {
+      ctx.fillStyle = "#000";
+      ctx.fillRect(0, 0, W, H);
+    }
+    resetLabels();
+    if (lm) drawPose(ctx, W, H, lm, handRef.current, gearRef.current);
   }
 
   /**
@@ -819,7 +864,7 @@ export function PoseRead() {
     if (!ctx) return;
     ctx.drawImage(media, 0, 0, size.w, size.h);
     if (look !== "scheletro") drawSagoma(ctx, size.w, size.h, lastLm.current, effHand, gear, look === "sagoma");
-    else if (lastLm.current) drawPose(ctx, size.w, size.h, lastLm.current, effHand, gear);
+    if (lastLm.current && look !== "sagoma") drawPose(ctx, size.w, size.h, lastLm.current, effHand, gear);
     canvas.toBlob((blob) => {
       if (blob) void saveFile(blob, `gesto-${fmt(time).replace(":", "m")}s.png`);
     }, "image/png");
@@ -904,7 +949,7 @@ export function PoseRead() {
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       const lm = lmAt(data, video.currentTime);
       if (kind !== "scheletro") drawSagoma(ctx, canvas.width, canvas.height, lm, handRef.current, null, kind === "sagoma");
-      else if (lm) drawPose(ctx, canvas.width, canvas.height, lm, handRef.current, null);
+      if (lm && kind !== "sagoma") drawPose(ctx, canvas.width, canvas.height, lm, handRef.current, null);
     };
     paint();
     rec.start(1000);
@@ -986,7 +1031,7 @@ export function PoseRead() {
       if (!ctx) throw new Error("Miniatura non riuscita.");
       ctx.drawImage(media, 0, 0, c.width, c.height);
       if (look !== "scheletro") drawSagoma(ctx, c.width, c.height, frameLm, effHand, null, look === "sagoma");
-      else if (frameLm) drawPose(ctx, c.width, c.height, frameLm, effHand, null);
+      if (frameLm && look !== "sagoma") drawPose(ctx, c.width, c.height, frameLm, effHand, null);
       if (proData && frameLm && look !== "sagoma") drawPro(ctx, c.width, c.height, frameLm, effHand);
       let thumb = c.toDataURL("image/jpeg", 0.72);
       if (thumb.length > 150_000) thumb = c.toDataURL("image/jpeg", 0.5);
@@ -1169,7 +1214,9 @@ export function PoseRead() {
             {/* una volta aperta la vista 3D resta pronta (nascosta): cambiare vista non la ricrea, niente scatti */}
             {used3d ? (
               <div className={`absolute inset-0 z-[1] ${look === "sagoma" ? "" : "hidden"}`}>
-                <Anatomy3D lmRef={lastLm} gearRef={gearRef} aspect={size.w / Math.max(1, size.h)} hand={effHand} inBox className="h-full" />
+                <Anatomy3D lmRef={lastLm} gearRef={gearRef} calFrames={calFrames} aspect={size.w / Math.max(1, size.h)} hand={effHand} inBox className="h-full" />
+                {/* il video con lo scheletro, in piccolo: per confrontare la sagoma con l'arciere vero */}
+                <canvas ref={pip} className="pointer-events-none absolute left-2 top-2 z-[2] rounded-lg shadow-lg ring-1 ring-white/40" aria-label="Il video con lo scheletro e i punti rilevati" />
               </div>
             ) : null}
             {zoomOn ? (

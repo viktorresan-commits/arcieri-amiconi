@@ -55,8 +55,30 @@ function perp(ay: V3, hint: V3): V3 {
 
 const vis = (p: Landmark | undefined) => (p ? (p.visibility ?? 1) : 0);
 
-/** punti della posa in metri; gambe e anche ricostruite se fuori dall'inquadratura */
-export function bodyPoints(lm: Landmark[], aspect: number): Record<number, V3> | null {
+/**
+ * Ossa di cui si conosce la lunghezza vera: [punto, punto, lunghezza tipica in metri, limiti].
+ * Con l'analisi di un video la lunghezza vera è quella dell'arciere (la più lunga vista nel video,
+ * quando l'osso è di piatto rispetto alla camera), non quella di un corpo medio.
+ */
+const BONES = {
+  spalle: [11, 12, 0.36, 0.9, 1.25],
+  anche: [23, 24, 0.27, 0.9, 1.3],
+  omeroS: [11, 13, 0.3, 0.85, 1.25],
+  omeroD: [12, 14, 0.3, 0.85, 1.25],
+  avambraccioS: [13, 15, 0.26, 0.85, 1.25],
+  avambraccioD: [14, 16, 0.26, 0.85, 1.25],
+  femoreS: [23, 25, 0.44, 0.85, 1.2],
+  femoreD: [24, 26, 0.44, 0.85, 1.2],
+  tibiaS: [25, 27, 0.42, 0.85, 1.2],
+  tibiaD: [26, 28, 0.42, 0.85, 1.2],
+} as const;
+type BoneName = keyof typeof BONES;
+/** lunghezze delle ossa dell'arciere, nelle stesse unità della sagoma */
+export type BoneCal = Partial<Record<BoneName, number>>;
+const PAIRS: [BoneName, BoneName][] = [["omeroS", "omeroD"], ["avambraccioS", "avambraccioD"], ["femoreS", "femoreD"], ["tibiaS", "tibiaD"]];
+
+/** posizione nel piano dell'immagine, in metri, piedi a terra: è il video, senza stime */
+function planar(lm: Landmark[], aspect: number) {
   if (!lm || lm.length < 25) return null;
   if (![11, 12, 13, 14, 15, 16].every((i) => vis(lm[i]) > 0.2)) return null;
   const P = (i: number) => ({ x: lm[i].x * aspect, y: lm[i].y, z: (lm[i].z ?? 0) * aspect });
@@ -73,42 +95,101 @@ export function bodyPoints(lm: Landmark[], aspect: number): Record<number, V3> |
   const hipY = hipsOk ? (P(23).y + P(24).y) / 2 : shM.y + 0.5 * s;
   const floorY = anklesOk ? Math.max(P(27).y, P(28).y) + 0.075 * s : hipY + 0.93 * s;
   const cx = shM.x;
-  // Profondità ricostruita dalle lunghezze delle ossa: dal video si conoscono x e y; ogni osso ha
-  // una lunghezza reale, quindi |dz| = √(L² − l²) dove l è la lunghezza vista nell'immagine.
-  // Il segno (avanti o dietro) arriva dal modello di posa. Busto e gambe restano in piedi:
-  // niente più corpo piegato in avanti.
+  const XY = (i: number): V3 => [(P(i).x - cx) / s, (floorY - P(i).y) / s, 0];
+  return { P, s, XY, hipsOk, anklesOk };
+}
+
+/**
+ * Lunghezze vere delle ossa dell'arciere da tutti i fotogrammi del video: per ogni osso la lunghezza
+ * vista più lunga (90° percentile, così un punto sbagliato non conta), uguale a destra e a sinistra.
+ */
+export function boneCal(frames: (Landmark[] | null | undefined)[], aspect: number): BoneCal {
+  const seen: Partial<Record<BoneName, number[]>> = {};
+  for (const lm of frames) {
+    if (!lm) continue;
+    const pl = planar(lm, aspect);
+    if (!pl) continue;
+    for (const name of Object.keys(BONES) as BoneName[]) {
+      const [a, b] = BONES[name];
+      if (vis(lm[a]) < 0.5 || vis(lm[b]) < 0.5) continue;
+      if (a >= 23 && !pl.hipsOk) continue;
+      if (b >= 25 && !pl.anklesOk) continue;
+      const pa = pl.XY(a);
+      const pb = pl.XY(b);
+      (seen[name] ??= []).push(Math.hypot(pb[0] - pa[0], pb[1] - pa[1]));
+    }
+  }
+  const p90 = (v: number[] | undefined) => {
+    if (!v || v.length < 8) return 0;
+    const s = [...v].sort((x, y) => x - y);
+    return s[Math.min(s.length - 1, Math.floor(s.length * 0.9))];
+  };
+  const raw: Partial<Record<BoneName, number>> = {};
+  for (const name of Object.keys(BONES) as BoneName[]) raw[name] = p90(seen[name]);
+  for (const [l, r] of PAIRS) {
+    const m = Math.max(raw[l] ?? 0, raw[r] ?? 0);
+    raw[l] = m;
+    raw[r] = m;
+  }
+  const cal: BoneCal = {};
+  for (const name of Object.keys(BONES) as BoneName[]) {
+    const [, , def, lo, hi] = BONES[name];
+    const v = raw[name] ?? 0;
+    if (v > 0) cal[name] = Math.max(def * lo, Math.min(def * hi, v));
+  }
+  return cal;
+}
+
+/**
+ * Punti della posa in metri; gambe e anche ricostruite se fuori dall'inquadratura.
+ * Larghezza e altezza vengono dal video così come sono (la sagoma vista "come il video" combacia
+ * con l'arciere). La profondità viene dalle ossa: un osso che nel video sembra più corto del vero
+ * va verso la camera o si allontana, di quanto basta a ridargli la sua lunghezza.
+ */
+export function bodyPoints(lm: Landmark[], aspect: number, cal: BoneCal | null = null): Record<number, V3> | null {
+  const pl = planar(lm, aspect);
+  if (!pl) return null;
+  const { P, s, XY, hipsOk, anklesOk } = pl;
+  const L = (name: BoneName) => cal?.[name] ?? BONES[name][2];
+  // avanti o dietro: dai punti in metri del modello di posa quando la differenza è netta,
+  // altrimenti dalla profondità relativa dell'immagine
   const zSign = (child: number, parent: number) => {
     const a = lm[child]?.zw;
     const b = lm[parent]?.zw;
-    if (typeof a === "number" && typeof b === "number" && Number.isFinite(a) && Number.isFinite(b)) return a < b ? 1 : -1; // più vicino alla camera = z positivo
+    if (typeof a === "number" && typeof b === "number" && Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) > 0.02) return a < b ? 1 : -1; // più vicino alla camera = z positivo
     return (P(child).z ?? 0) < (P(parent).z ?? 0) ? 1 : -1;
   };
-  const XY = (i: number): V3 => [(P(i).x - cx) / s, (floorY - P(i).y) / s, 0];
   const out: Record<number, V3> = {};
   for (let i = 0; i < Math.min(33, lm.length); i++) out[i] = XY(i);
-  const dzFor = (a: V3, b: V3, L: number) => {
+  // quanto l'osso esce dal piano dell'immagine. Sotto i 14° è rumore dei punti (un osso di piatto
+  // sembra più corto di un 5-10% da un fotogramma all'altro): resta nel piano, niente braccia che
+  // ondeggiano avanti e indietro
+  const DEAD = 0.24;
+  const dzFor = (a: V3, b: V3, len_: number) => {
     const l = Math.hypot(b[0] - a[0], b[1] - a[1]);
-    return l >= L ? 0 : Math.sqrt(L * L - l * l);
+    const phi = Math.acos(Math.min(1, l / len_));
+    if (phi <= DEAD) return 0;
+    return len_ * Math.sin(((phi - DEAD) * (Math.PI / 2)) / (Math.PI / 2 - DEAD));
   };
   // spalle e anche: se nel video sono più strette del vero, il busto è girato
-  const turn = (l: number, r: number, L: number) => {
-    const dz = dzFor(out[l], out[r], L) * 0.5;
+  const turn = (l: number, r: number, len_: number) => {
+    const dz = dzFor(out[l], out[r], len_) * 0.5;
     const sg = zSign(r, l);
     out[l][2] = -sg * dz;
     out[r][2] = sg * dz;
   };
-  turn(11, 12, 0.36);
-  if (hipsOk) turn(23, 24, 0.27);
-  // braccia: gomito e polso con la lunghezza vera di omero e avambraccio
-  for (const [sh, el, wr] of [[11, 13, 15], [12, 14, 16]] as const) {
-    out[el][2] = out[sh][2] + zSign(el, sh) * dzFor(out[sh], out[el], 0.3) * 0.9;
-    out[wr][2] = out[el][2] + zSign(wr, el) * dzFor(out[el], out[wr], 0.26) * 0.9;
+  turn(11, 12, L("spalle"));
+  if (hipsOk) turn(23, 24, L("anche"));
+  // braccia: gomito e polso con la lunghezza vera di omero e avambraccio dell'arciere
+  for (const [sh, el, wr, ua, fa] of [[11, 13, 15, "omeroS", "avambraccioS"], [12, 14, 16, "omeroD", "avambraccioD"]] as const) {
+    out[el][2] = out[sh][2] + zSign(el, sh) * dzFor(out[sh], out[el], L(ua));
+    out[wr][2] = out[el][2] + zSign(wr, el) * dzFor(out[el], out[wr], L(fa));
     for (const f of wr === 15 ? [17, 19, 21] : [18, 20, 22]) if (out[f]) out[f][2] = out[wr][2];
   }
   // gambe nel piano del bacino (si stanno dritti per tirare), con un filo di profondità se il video la mostra
-  for (const [hip, knee, ank] of [[23, 25, 27], [24, 26, 28]] as const) {
-    out[knee][2] = out[hip][2] + zSign(knee, hip) * Math.min(0.12, dzFor(out[hip], out[knee], 0.44) * 0.5);
-    out[ank][2] = out[knee][2] + zSign(ank, knee) * Math.min(0.12, dzFor(out[knee], out[ank], 0.42) * 0.5);
+  for (const [hip, knee, ank, th, tb] of [[23, 25, 27, "femoreS", "tibiaS"], [24, 26, 28, "femoreD", "tibiaD"]] as const) {
+    out[knee][2] = out[hip][2] + zSign(knee, hip) * Math.min(0.12, dzFor(out[hip], out[knee], L(th)) * 0.5);
+    out[ank][2] = out[knee][2] + zSign(ank, knee) * Math.min(0.12, dzFor(out[knee], out[ank], L(tb)) * 0.5);
   }
   for (const [ank, heel, toe] of [[27, 29, 31], [28, 30, 32]] as const) {
     if (out[heel]) out[heel][2] = out[ank][2] - 0.05;
@@ -121,24 +202,9 @@ export function bodyPoints(lm: Landmark[], aspect: number): Record<number, V3> |
   for (const i of [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]) if (out[i]) out[i][2] = earsZ;
   out[0][2] = earsZ + 0.09 * Math.sqrt(Math.max(0, 1 - faceTurn * faceTurn * 0.6));
   for (const i of [1, 2, 3, 4, 5, 6, 9, 10]) if (out[i]) out[i][2] = earsZ + 0.07 * Math.sqrt(Math.max(0, 1 - faceTurn * faceTurn * 0.6));
-  // punti in metri del modello (xw, yw, zw): quando ci sono per spalle, braccia e anche, il corpo
-  // viene da lì. Sono già un corpo 3D coerente (lunghezze vere, profondità vera): le braccia hanno
-  // l'inclinazione e la posizione del video, non quella ricostruita dalle sole lunghezze nell'immagine
-  const Wp = (i: number) => {
-    const p = lm[i];
-    return p && typeof p.xw === "number" && typeof p.yw === "number" && typeof p.zw === "number" && Number.isFinite(p.xw + p.yw + p.zw) ? p : null;
-  };
-  if ([11, 12, 13, 14, 15, 16, 23, 24].every((i) => Wp(i) && vis(lm[i]) > 0.2)) {
-    const feet = [27, 28, 29, 30, 31, 32].filter((i) => Wp(i) && vis(lm[i]) > 0.3).map((i) => lm[i].yw as number);
-    const hipYw = ((lm[23].yw as number) + (lm[24].yw as number)) / 2;
-    // y in su, con i piedi a terra (o il bacino all'altezza tipica se i piedi non si vedono)
-    const lift = anklesOk && feet.length ? Math.max(...feet) + 0.025 : hipYw + 0.93;
-    for (let i = 0; i < 33; i++) {
-      const p = Wp(i);
-      if (!p) continue;
-      out[i] = [p.xw as number, lift - (p.yw as number), -(p.zw as number)];
-    }
-  }
+  // (i punti in metri del modello di posa non danno più la forma del corpo: con l'arciere di fronte
+  // alla camera la loro profondità piegava il busto all'indietro e portava il gomito dietro la testa.
+  // Servono solo a dire se un osso va avanti o indietro)
   // mani (21 punti per mano, se rilevate): profondità relativa al polso
   if (lm.length >= 133) {
     for (const [base, wr] of [[33, 15], [54, 16]] as const) {
@@ -199,8 +265,8 @@ const muscleCol = (a: number): V3 => {
   return [0.72 + 0.28 * t, 0.27 + 0.55 * t, 0.22 + 0.06 * t];
 };
 
-export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gear | null = null): Model | null {
-  const J = bodyPoints(lm, aspect);
+export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gear | null = null, cal: BoneCal | null = null): Model | null {
+  const J = bodyPoints(lm, aspect, cal);
   if (!J) return null;
   const S = sides(hand);
   const parts: Part[] = [];
