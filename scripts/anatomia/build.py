@@ -287,7 +287,9 @@ for z in za_all:
     P, I = weld(za_world(z), z['I'])
     if len(I) < 40: continue
     # i più grandi si alleggeriscono (forma uguale, meno triangoli)
-    if len(I) > 1300: P, I, _ = qem_simplify(P, I, max(1300, int(len(I) * 0.38)))
+    # ZA_KEEP=1: piena definizione dell'atlante (versione per foto e video in alta definizione)
+    _keep = float(os.environ.get('ZA_KEEP', '0.38'))
+    if _keep < 1 and len(I) > 1300: P, I, _ = qem_simplify(P, I, max(1300, int(len(I) * _keep)))
     P = za_warp(P)
     N = recompute_normals(P, I)
     parts.append(dict(kind=kind, name=outname, P=P, N=N, I=I, full=P, za=True))

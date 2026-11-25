@@ -27,13 +27,14 @@ export type BodyData = { meta: BodyMeta; buf: ArrayBuffer };
 
 export const BODY_CREDIT = "Anatomia: BodyParts3D © DBCLS (CC BY 4.0) · Z-Anatomy (CC BY-SA 4.0)";
 
-export type BodyLevel = "leggero" | "pieno";
-const FILES: Record<BodyLevel, string> = { leggero: "corpo-leggero", pieno: "corpo" };
+/** leggero: in movimento; pieno: fermo; hd: piena definizione dell'atlante, solo per foto e video in alta definizione */
+export type BodyLevel = "leggero" | "pieno" | "hd";
+const FILES: Record<BodyLevel, string> = { leggero: "corpo-leggero", pieno: "corpo", hd: "corpo-hd" };
 const loading: Partial<Record<BodyLevel, Promise<BodyData | null>>> = {};
 const loaded: Partial<Record<BodyLevel, BodyData>> = {};
 
 /** il file compresso pesa un terzo in meno: si apre nel telefono; senza questa funzione si scarica quello intero */
-async function fetchBody(name: string): Promise<ArrayBuffer> {
+async function fetchBody(name: string, gzOnly = false): Promise<ArrayBuffer> {
   const DS = (globalThis as { DecompressionStream?: new (f: string) => TransformStream<Uint8Array, Uint8Array> }).DecompressionStream;
   if (DS) {
     try {
@@ -49,6 +50,8 @@ async function fetchBody(name: string): Promise<ArrayBuffer> {
       /* si prova con quello intero */
     }
   }
+  // il corpo in alta definizione c'è solo compresso
+  if (gzOnly) throw new Error("corpo");
   const r = await fetch(`/anatomia/${name}.bin`);
   if (!r.ok) throw new Error("corpo");
   return r.arrayBuffer();
@@ -67,7 +70,7 @@ export function loadBody(level: BodyLevel = "pieno"): Promise<BodyData | null> {
         const m = await fetch(`/anatomia/${FILES[level]}.json`);
         if (!m.ok) return null;
         const meta = (await m.json()) as BodyMeta;
-        const buf = await fetchBody(FILES[level]);
+        const buf = await fetchBody(FILES[level], level === "hd");
         if (buf.byteLength < meta.bytes) return null;
         loaded[level] = { meta, buf };
         return loaded[level] ?? null;

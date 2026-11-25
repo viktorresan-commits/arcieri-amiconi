@@ -69,7 +69,8 @@ export async function sagomaPainter(W: number, H: number) {
   gl.height = H;
   const R = createAnatomyRenderer(gl, true);
   if (!R) return null;
-  const body = (await loadBody("pieno")) ?? (await loadBody("leggero"));
+  // il corpo in piena definizione dell'atlante (si scarica la prima volta), altrimenti quello dello schermo
+  const body = (await loadBody("hd")) ?? (await loadBody("pieno")) ?? (await loadBody("leggero"));
   if (body) R.setBody(body, "pieno");
   const out = document.createElement("canvas");
   out.width = W;
@@ -197,7 +198,7 @@ export function Anatomy3D({
     const box = glCanvas.current;
     if (!shot?.lm || !box || shooting) return;
     setShooting(true);
-    setShotMsg("");
+    setShotMsg("Preparo la foto in alta definizione…");
     try {
       const ratio = (box.clientWidth || 9) / (box.clientHeight || 16);
       const long = 3840;
