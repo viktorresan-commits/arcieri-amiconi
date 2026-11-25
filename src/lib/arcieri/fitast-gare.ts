@@ -221,6 +221,8 @@ export function findGare(page: FitastPage): Gara[] {
 /** i campi nascosti che possono tenere la riga scelta di un elenco WEBDEV (da provare uno per uno) */
 export function rowFields(page: FitastPage): string[] {
   const fromPress = new Set<string>();
+  // le tabelle WEBDEV tengono la riga scelta nel campo con il loro alias
+  for (const a of page.wdAliases ?? []) if (page.form && a in page.form.fields) fromPress.add(a);
   for (const b of page.blocks ?? []) for (const k of Object.keys(parsePress(b.press)?.set ?? {})) fromPress.add(k);
   const hidden = Object.entries(page.form?.fields ?? {})
     .filter(([k, v]) => !/^WD_/i.test(k) && /^-?\d{1,4}$/.test(v.trim()))

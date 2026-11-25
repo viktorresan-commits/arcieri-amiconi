@@ -7,8 +7,12 @@
 
 export type FitastLink = { text: string; href: string };
 export type FitastCell = { text: string; href?: string; press?: string };
-/** source "script": righe trovate nei dati di uno script della pagina (tabelle che il browser disegna da sé) */
-export type FitastTable = { rows: FitastCell[][]; source?: "script" };
+/**
+ * source "script": righe trovate nei dati di uno script della pagina; "wd": tabella WEBDEV (le righe
+ * arrivano in XML dentro lo script che la dichiara e poi con le richieste AJAX LIGNESTABLE).
+ * alias e total servono a chiedere al portale le righe che mancano.
+ */
+export type FitastTable = { rows: FitastCell[][]; source?: "script" | "wd"; alias?: string; total?: number };
 export type FitastOption = { value: string; text: string; selected: boolean };
 export type FitastSelect = { name: string; label: string; options: FitastOption[]; press?: { code: string; set: Record<string, string> } };
 /** un comando della pagina: code è l'alias WEBDEV (A5…), set sono i campi che il click imposta prima dell'invio */
@@ -29,6 +33,8 @@ export type FitastPage = {
   charset: string;
   fetchedAt: string;
   blocks?: FitastBlock[];
+  /** tabelle WEBDEV della pagina (alias come A12): le loro righe si chiedono al portale con AJAX */
+  wdAliases?: string[];
 };
 
 const ENT: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ", agrave: "à", egrave: "è", eacute: "é", igrave: "ì", ograve: "ò", ugrave: "ù", Agrave: "À", Egrave: "È", Eacute: "É", Igrave: "Ì", Ograve: "Ò", Ugrave: "Ù", deg: "°", laquo: "«", raquo: "»", rsquo: "’", lsquo: "‘", ldquo: "“", rdquo: "”", ndash: "–", mdash: "—", euro: "€", ordm: "º", ordf: "ª" };
@@ -369,14 +375,23 @@ export function parseHtml(html: string, url: string): Omit<FitastPage, "fetchedA
     (form as FitastForm).buttons = buttons;
     (form as FitastForm).inputs = inputs;
   }
-  // tabelle disegnate dal browser: le righe stanno negli script della pagina
-  if (scripts) tables.push(...scriptTables(scripts));
+  // tabelle disegnate dal browser: le righe stanno negli script della pagina (prima le tabelle WEBDEV)
+  if (scripts) {
+    const wd = wdScriptTables(scripts);
+    tables.push(...wd);
+    if (!wd.length) tables.push(...scriptTables(scripts));
+  }
+  // tabelle WEBDEV: il campo nascosto ALIAS_DATA dice che ci sono (anche senza righe iniziali), le righe si chiedono dopo
+  const wdAliases = Object.keys((form as FitastForm | null)?.fields ?? {})
+    .map((k) => /^(.+)_DATA$/.exec(k)?.[1] ?? "")
+    .filter(Boolean);
+  for (const t of tables) if (t.source === "wd" && t.alias && !wdAliases.includes(t.alias)) wdAliases.push(t.alias);
   // niente doppioni fra i link
   const seen = new Set<string>();
   const uniq = links.filter((l) => (seen.has(l.href + l.text) ? false : (seen.add(l.href + l.text), true)));
   // niente righe ripetute di seguito (menu ripetuti, intestazioni)
   const tidy = lines.filter((l, i) => l !== lines[i - 1]);
-  return { url, title: clean(title), tables, lines: tidy.slice(0, 2000), links: uniq.slice(0, 400), form, blocks };
+  return { url, title: clean(title), tables, lines: tidy.slice(0, 2000), links: uniq.slice(0, 400), form, blocks, wdAliases };
 }
 
 /** fine di una stringa JavaScript che comincia in i (virgolette comprese) */
@@ -445,6 +460,85 @@ function flatAt(js: string, i: number): { cells: string[]; keys: string[] | null
   return null;
 }
 
+/** XML → albero minimo (nome, attributi, figli, testo) per le risposte delle tabelle WEBDEV */
+type XNode = { name: string; attrs: Record<string, string>; kids: XNode[]; text: string };
+function xmlTree(xml: string): XNode {
+  // il CDATA diventa testo normale
+  const src = xml.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, (_, c: string) => c.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"));
+  const root: XNode = { name: "#root", attrs: {}, kids: [], text: "" };
+  const stack: XNode[] = [root];
+  for (const tk of tokenize(src)) {
+    const top = stack[stack.length - 1];
+    if (tk.kind === "text") {
+      top.text += decode(tk.text);
+      continue;
+    }
+    if (tk.kind !== "tag") continue;
+    if (tk.close) {
+      for (let k = stack.length - 1; k > 0; k--) {
+        if (stack[k].name === tk.name) {
+          stack.length = k;
+          break;
+        }
+      }
+      continue;
+    }
+    const node: XNode = { name: tk.name, attrs: tk.attrs, kids: [], text: "" };
+    top.kids.push(node);
+    if (!tk.self) stack.push(node);
+  }
+  return root;
+}
+const xText = (n: XNode): string => (n.text + n.kids.map(xText).join(" ")).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+function xFind(n: XNode, name: string, out: XNode[] = []): XNode[] {
+  for (const k of n.kids) {
+    if (k.name === name) out.push(k);
+    else xFind(k, name, out);
+  }
+  return out;
+}
+
+/**
+ * Tabella WEBDEV in XML (righe iniziali nello script della pagina o risposta AJAX LIGNESTABLE):
+ * COLONNES/COLONNE con il titolo (TITRE), LIGNES/LIGNE con una cella per figlio, NOMBRE = righe totali.
+ */
+export function wdXmlTable(xml: string, alias = ""): FitastTable | null {
+  if (!/<ligne[\s>/]/i.test(xml)) return null;
+  const root = xmlTree(xml);
+  const lignes = xFind(root, "ligne");
+  if (!lignes.length) return null;
+  const cols = xFind(root, "colonne");
+  const withTotal = [root, ...xFind(root, "lignes"), ...xFind(root, "liste"), ...xFind(root, "champ")].find((n) => n.attrs.nombre != null);
+  const total = withTotal ? Number(withTotal.attrs.nombre) : NaN;
+  const rows = lignes.map((l) => l.kids.filter((k) => k.name !== "ruptures").map((k) => ({ text: xText(k) })));
+  const width = Math.max(cols.length, ...rows.map((r) => r.length));
+  const head = Array.from({ length: width }, (_, k) => ({ text: (cols[k]?.attrs.titre || cols[k]?.attrs.alias || `Colonna ${k + 1}`).replace(/\s+/g, " ").trim() }));
+  return { source: "wd", alias, total: Number.isFinite(total) ? total : undefined, rows: [head, ...rows] };
+}
+
+/** configurazione di WEBDEV, non dati: stili delle righe e immagini dei pulsanti della tabella */
+const WD_JUNK = /\.(gif|png|jpe?g|svg|css|js)$|^[a-z]-\d+( wb\w*)?$|^wb[A-Z]\w*$/i;
+
+/** le tabelle WEBDEV dichiarate negli script: clWDUtil.DeclareChamp("A12", …, WDTable, ["<xml…>", …]) */
+export function wdScriptTables(js: string): FitastTable[] {
+  const out: FitastTable[] = [];
+  for (let i = 0; i < js.length && out.length < 10; i++) {
+    const c = js[i];
+    if (c !== '"' && c !== "'") continue;
+    const e = skipString(js, i);
+    const raw = js.slice(i + 1, e);
+    if (raw.length > 30 && /<ligne|&lt;ligne|\\x3cligne|\\u003cligne/i.test(raw)) {
+      const xml = unescapeJs(raw);
+      const before = js.slice(Math.max(0, i - 400), i);
+      const alias = [...before.matchAll(/DeclareChamp\(\s*["']([^"']+)["']/g)].pop()?.[1] ?? "";
+      const t = wdXmlTable(/&lt;ligne/i.test(xml) && !/<ligne/i.test(xml) ? decode(xml) : xml, alias);
+      if (t) out.push(t);
+    }
+    i = e;
+  }
+  return out;
+}
+
 /**
  * Righe di dati scritte negli script della pagina (le tabelle "lato browser" di WEBDEV e simili):
  * array o oggetti piatti di valori, uno dopo l'altro, diventano le righe di una tabella.
@@ -477,6 +571,11 @@ export function scriptTables(js: string): FitastTable[] {
   const out: FitastTable[] = [];
   let group: typeof rows = [];
   const done = () => {
+    // le impostazioni di WEBDEV (stili, immagini dei pulsanti) non sono righe
+    if (group.some((r) => r.cells.filter((c) => WD_JUNK.test(c.trim())).length >= r.cells.length / 2)) {
+      group = [];
+      return;
+    }
     const data = group.filter((r) => r.cells.some((c) => /[A-Za-zÀ-ÿ]{2}/.test(c)));
     if (data.length >= 2 && data.length >= group.length / 2) {
       const width = Math.max(...group.map((r) => r.cells.length));
@@ -506,6 +605,11 @@ export function pressFields(form: FitastForm, code: string, set: Record<string, 
 
 /** codifica application/x-www-form-urlencoded nel charset della pagina (WEBDEV usa spesso windows-1252) */
 export function formBody(fields: Record<string, string>, charset: string) {
+  return formBodyPairs(Object.entries(fields), charset);
+}
+
+/** come formBody, ma con l'ordine dei campi deciso da chi chiama (le richieste AJAX di WEBDEV) */
+export function formBodyPairs(pairs: [string, string][], charset: string) {
   const latin = /1252|8859|latin/i.test(charset);
   const enc = (s: string) => {
     if (!latin) return encodeURIComponent(s).replace(/%20/g, "+");
@@ -520,7 +624,49 @@ export function formBody(fields: Record<string, string>, charset: string) {
     }
     return out;
   };
-  return Object.entries(fields)
-    .map(([k, v]) => `${enc(k)}=${enc(v)}`)
-    .join("&");
+  return pairs.map(([k, v]) => `${enc(k)}=${enc(v)}`).join("&");
+}
+
+/**
+ * Le tabelle WEBDEV (classifiche, elenco gare) mandano nella pagina solo le prime righe: le altre il
+ * browser le chiede con una richiesta AJAX alla pagina stessa
+ * (WD_ACTION_=AJAXEXECUTE&LIGNESTABLE=alias&inizio=quante&alias_DATA=…&alias=riga scelta).
+ * Qui si fa la stessa cosa finché la tabella è completa; post manda il corpo e restituisce l'XML.
+ */
+export async function fillWdTables(page: FitastPage, post: (action: string, body: string) => Promise<string | null>) {
+  const aliases = page.wdAliases ?? [];
+  if (!aliases.length || !page.form) return;
+  const action = page.form.action || page.url;
+  for (const alias of aliases.slice(0, 4)) {
+    let t: FitastTable | undefined = page.tables.find((x) => x.source === "wd" && x.alias === alias);
+    for (let round = 0; round < 15; round++) {
+      const got = t ? t.rows.length - 1 : 0;
+      if (t?.total != null && got >= t.total) break;
+      if (got >= 3000) break;
+      const pairs: [string, string][] = [
+        ["WD_ACTION_", "AJAXEXECUTE"],
+        ["LIGNESTABLE", alias],
+        [String(got), "100"],
+      ];
+      const data = page.form.fields[`${alias}_DATA`];
+      if (data != null) pairs.push([`${alias}_DATA`, data]);
+      const sel = page.form.fields[alias];
+      if (sel != null) pairs.push([alias, sel]);
+      const xml = await post(action, formBodyPairs(pairs, page.charset));
+      const more = xml ? wdXmlTable(xml, alias) : null;
+      if (!more || more.rows.length < 2) break;
+      if (!t) {
+        t = more;
+        page.tables.push(t);
+      } else {
+        t.rows.push(...more.rows.slice(1));
+        if (more.total != null) t.total = more.total;
+        // titoli delle colonne arrivati solo adesso
+        if (t.rows[0].every((c) => /^Colonna \d+$/.test(c.text)) && more.rows[0].some((c) => !/^Colonna \d+$/.test(c.text))) t.rows[0] = more.rows[0];
+      }
+      if (t.total == null) break;
+    }
+  }
+  // una tabella WEBDEV rimasta vuota non serve
+  page.tables = page.tables.filter((x) => x.rows.length >= 2);
 }

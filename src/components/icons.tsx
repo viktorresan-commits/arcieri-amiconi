@@ -837,13 +837,19 @@ export function Glyph({ name, size = 20, className, strokeWidth = 1.7, title, de
 
 /** Tessera d'icona: placca scura con riflesso e cornice, disegno inciso in metallo del colore dell'app.
  *  Stesso aspetto ovunque. `accent` (solo nel Menu) dà a una sezione la sua tinta, sullo stesso materiale. */
-export function AppIcon({ name, size = 52, className, accent, fluid = false, plain = false }: { name: IconName; color?: string; size?: number; className?: string; accent?: string; /** riempie il contenitore invece di una misura fissa */ fluid?: boolean; /** tessera semplice anche per gare, premi e obiettivi */ plain?: boolean }) {
+export function AppIcon({ name, size = 52, className, accent, color, fluid = false, plain = false }: { name: IconName; color?: string; size?: number; className?: string; accent?: string; /** riempie il contenitore invece di una misura fissa */ fluid?: boolean; /** tessera semplice (vecchio stile) */ plain?: boolean }) {
   const id = `ai${(useId().replace(/[^a-zA-Z0-9]/g, "") + "_")}`;
-  const ins = !plain && !fluid ? INSIGNIA_FOR[name] : undefined;
-  if (ins) {
+  if (!plain && !fluid) {
+    // insegna coniata: gare, premi, sfide e obiettivi in oro con il loro simbolo; le altre voci in argento,
+    // smalto del colore della sezione e il loro disegno in rilievo
+    const ins = INSIGNIA_FOR[name];
     return (
       <span className={["aa-appicon-ins relative grid shrink-0 place-items-center", className].filter(Boolean).join(" ")} style={{ width: size, height: size }}>
-        <Insignia {...ins} size={Math.round(size * 1.04)} glow={size >= 56} />
+        {ins ? (
+          <Insignia {...ins} size={Math.round(size * 1.04)} glow={size >= 56} />
+        ) : (
+          <Insignia art={DETAILED[name] ?? ICONS[name]} metal="silver" enamel={accent ?? color ?? "#2c8a57"} size={Math.round(size * 1.02)} />
+        )}
       </span>
     );
   }

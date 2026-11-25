@@ -9,7 +9,7 @@ import { authMiddleware } from "@/lib/auth/middleware";
 export const FITAST_HOME = "http://89.46.73.21/FITAST_WEB/IT/pagView-GARE.awp";
 const HOST = "89.46.73.21";
 
-import { formBody, parseHtml, type FitastPage } from "./fitast-parse";
+import { fillWdTables, formBody, parseHtml, type FitastPage } from "./fitast-parse";
 import { pdfLines } from "./pdf-text";
 
 export type { FitastButton, FitastCell, FitastForm, FitastLink, FitastPage, FitastSelect, FitastTable } from "./fitast-parse";
@@ -34,6 +34,28 @@ function mergeCookies(old: string, res: Response) {
 }
 
 type Req = { url: string; body?: string; cookie: string; referer?: string };
+
+/** le righe mancanti delle tabelle WEBDEV, chieste con la stessa sessione (vedi fillWdTables) */
+async function fillWd(page: FitastPage, cookie: string, signal: AbortSignal, headers: Record<string, string>) {
+  let jar = cookie;
+  await fillWdTables(page, async (action, body) => {
+    try {
+      const res = await fetch(action, { method: "POST", body, headers: { ...headers, cookie: jar, "content-type": "application/x-www-form-urlencoded", referer: page.url }, signal, redirect: "manual" });
+      jar = mergeCookies(jar, res);
+      if (!res.ok) return null;
+      const buf = new Uint8Array(await res.arrayBuffer());
+      const cs = (res.headers.get("content-type") ?? "").match(/charset=([\w-]+)/i)?.[1]?.toLowerCase() ?? page.charset ?? "utf-8";
+      try {
+        return new TextDecoder(cs === "iso-8859-1" || cs === "latin1" ? "windows-1252" : cs).decode(buf);
+      } catch {
+        return new TextDecoder("utf-8").decode(buf);
+      }
+    } catch {
+      return null;
+    }
+  });
+  return jar;
+}
 
 async function fetchPage(req: Req): Promise<FitastPage & { cookie: string }> {
   const key = `${req.url}|${req.body ?? ""}`;
@@ -89,6 +111,7 @@ async function fetchPage(req: Req): Promise<FitastPage & { cookie: string }> {
       html = new TextDecoder("utf-8").decode(buf);
     }
     const page: FitastPage = { ...parseHtml(html, finalUrl), kind: /html|xml|text/i.test(type) || !type ? "html" : "altro", charset, fetchedAt: now };
+    cookie = await fillWd(page, cookie, ctrl.signal, headers);
     return { ...page, cookie };
   } catch (e) {
     if (e instanceof Error && e.name === "AbortError") throw new Error("Il portale FITAST non risponde: riprova più tardi.");

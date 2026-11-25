@@ -54,8 +54,10 @@ const FIXED_SELECT = /gara|campionat|stagion|anno|data|evento/i;
 type Combo = { req: Req; texts: string[] };
 /** le tendine-filtro di una classifica (Categoria, Tipologia…), al massimo due */
 function filterSelects(page: FitastPage) {
+  const season = seasonSelect(page);
+  // Categoria e Tipologia sempre; le altre tendine solo se non sono gara, stagione o data
   return (page.form?.selects ?? [])
-    .filter((x) => x.options.length >= 2 && x.options.length <= 80 && !FIXED_SELECT.test(`${x.label} ${x.name}`))
+    .filter((x) => x !== season && x.options.length >= 2 && x.options.length <= 120 && (FILTER_SELECT.test(x.label) || !FIXED_SELECT.test(x.label)))
     .sort((a, b) => Number(FILTER_SELECT.test(b.label)) - Number(FILTER_SELECT.test(a.label)))
     .slice(0, 2);
 }
@@ -133,7 +135,7 @@ const isoDay = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padSt
 const fmtDay = (d: string | null) => (d ? `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}` : "");
 const rowsOf = (p: FitastPage) => p.tables.reduce((n, t) => n + Math.max(0, t.rows.length - 1), 0);
 /** una gara letta durante la ricerca: cosa si è aperto e cosa si è trovato */
-type Step = { id: string; date: string | null; title: string; pages: number; rows: number; found: number; note: string; team: string };
+type Step = { id: string; date: string | null; title: string; pages: number; rows: number; found: number; note: string; team: string; combos: number };
 
 const reqKey = (r: Req) => `${r.url}|${r.post ? JSON.stringify(r.post.fields) : ""}|${r.label ?? ""}`;
 
@@ -331,7 +333,10 @@ export function FitastPanel({ comps, myName, userId, startCode, onSaved, onClose
     const seenIds = new Set<string>();
     let savedN = 0;
     let rowField: string | null | undefined;
+    let rowShift = 0;
     const probe: { last: { id: string; p: FitastPage; r: Req } | null } = { last: null };
+    // una tabella WEBDEV manda anche ALIAS_SEL (la riga scelta all'apertura della pagina)
+    const selOf = (p: FitastPage, f: string): Record<string, string> => ((p.wdAliases ?? []).includes(f) ? { [`${f}_SEL`]: p.form?.fields[f] ?? "" } : {});
     const btnOf = (p: FitastPage) => p.form?.buttons.find((b) => /classific/i.test(b.label) && !/squadr/i.test(b.label)) ?? null;
     const pzOf = (p: FitastPage) => p.form?.buttons.find((b) => /piazzol/i.test(b.label)) ?? null;
     const sqOf = (p: FitastPage) => p.form?.buttons.find((b) => /classific/i.test(b.label) && /squadr/i.test(b.label)) ?? null;
@@ -357,6 +362,8 @@ export function FitastPanel({ comps, myName, userId, startCode, onSaved, onClose
       const every: Gara[] = findGare(page).map((g) => ({ ...g, date: g.date ?? calendar.get(g.id) ?? null }));
       // solo le gare già fatte, dalla più recente, fino a 360 giorni fa
       let gare = every.filter((g) => !g.date || (g.date >= from && g.date <= todayIso));
+      // se il portale non lascia scegliere la riga, si legge almeno la gara che ha già scelta
+      for (const g of gare) if (!g.alts.some((a) => a.kind === "current")) g.alts.push({ kind: "current" });
       if (!gare.length && every.some((g) => g.date)) continue;
       if (!gare.length) gare = [{ id: "", date: null, title: season.text ? short(season.text) : "Gara scelta nel portale", alts: [{ kind: "current" }] }];
 
@@ -367,11 +374,15 @@ export function FitastPanel({ comps, myName, userId, startCode, onSaved, onClose
         const g2 = every.find((g) => g.id && idx(g) > 1);
         if (!btn || !g2) return null;
         for (const f of rowFields(p)) {
-          const r = pressReq(p, btn, { ...choose, [f]: String(idx(g2)) }, "prova");
-          const t = await get(r);
-          if (t && r && garaIdOf(t) === g2.id) {
-            probe.last = { id: g2.id, p: t, r };
-            return f;
+          // la riga scelta: contata da 1 (come in WLangage) o da 0
+          for (const shift of [0, -1]) {
+            const r = pressReq(p, btn, { ...choose, [f]: String(idx(g2) + shift), ...selOf(p, f) }, "prova");
+            const t = await get(r);
+            if (t && r && garaIdOf(t) === g2.id) {
+              probe.last = { id: g2.id, p: t, r };
+              rowShift = shift;
+              return f;
+            }
           }
         }
         return null;
@@ -386,7 +397,7 @@ export function FitastPanel({ comps, myName, userId, startCode, onSaved, onClose
         const base: FitastPage = page;
         garaN++;
         label = [fmtDay(g.date), g.title || (g.id ? `gara ${g.id}` : "")].filter(Boolean).join(" · ");
-        const step: Step = { id: g.id, date: g.date, title: g.title, pages: 0, rows: 0, found: 0, note: "", team: "" };
+        const step: Step = { id: g.id, date: g.date, title: g.title, pages: 0, rows: 0, found: 0, note: "", team: "", combos: 0 };
         log.push(step);
         setSteps([...log]);
         const startPages = pages;
@@ -426,9 +437,9 @@ export function FitastPanel({ comps, myName, userId, startCode, onSaved, onClose
               if (!rowField) rowField = await probeRow(base);
               if (!rowField) continue;
               rowFieldRef.current = rowField;
-              [field, value] = [rowField, String(how.index)];
+              [field, value] = [rowField, String(how.index + rowShift)];
             }
-            via = { page: base, choose: { ...choose, [field]: value } };
+            via = { page: base, choose: { ...choose, [field]: value, ...(how.kind === "row" ? selOf(base, field) : {}) } };
             // la prova del campo ha già aperto proprio questa gara: la si usa
             const pr = probe.last;
             if (how.kind === "row" && pr && pr.id === g.id) {
@@ -482,7 +493,9 @@ export function FitastPanel({ comps, myName, userId, startCode, onSaved, onClose
         }
         // poi una categoria alla volta, finché il nome compare
         if (!n) {
-          for (const c of orderCombos(filterCombos(opened.p, opened.r), confirmed, hints, preferred)) {
+          const combos = orderCombos(filterCombos(opened.p, opened.r), confirmed, hints, preferred);
+          step.combos = combos.length;
+          for (const c of combos) {
             if (stop.current || pages >= MAX_PAGES) break;
             const p = await get(c.req);
             if (!p) continue;
@@ -773,7 +786,7 @@ function Steps({ steps, searching }: { steps: Step[]; searching: boolean }) {
               {s.id ? `${s.id} · ` : ""}
               {s.title.slice(0, 70) || "gara"}
               {" — "}
-              {s.found ? `trovato (${s.found} ${s.found === 1 ? "riga" : "righe"})` : s.note || (searching && i === steps.length - 1 ? "in lettura…" : `non in classifica · ${s.rows} righe in ${s.pages} pagine`)}
+              {s.found ? `trovato (${s.found} ${s.found === 1 ? "riga" : "righe"})` : s.note || (searching && i === steps.length - 1 ? "in lettura…" : `non in classifica · ${s.rows} righe in ${s.pages} pagine · ${s.combos} categorie provate`)}
               {s.team ? <span className="block text-[#bfe3c8]">Compagnia · {s.team}</span> : null}
             </span>
           </li>

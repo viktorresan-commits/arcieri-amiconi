@@ -56,6 +56,16 @@ const RIBBON: Record<InsEnamel, [string, string]> = {
   amber: ["#7a3f06", "#fff8d6"],
 };
 
+/** smalto da un colore qualsiasi (#rrggbb): più chiaro in luce, più scuro in fondo */
+function enamelFromHex(hex: string): [string, string, string] {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return ENAMEL.night;
+  const n = parseInt(m[1], 16);
+  const rgb = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  const mix = (t: number, to: number) => `#${rgb.map((v) => Math.round(v + (to - v) * t).toString(16).padStart(2, "0")).join("")}`;
+  return [mix(0.42, 255), mix(0.08, 0), mix(0.72, 0)];
+}
+
 const C = 60;
 const scaleAt = (k: number) => `translate(${C} ${C}) scale(${k}) translate(${-C} ${-C})`;
 
@@ -278,9 +288,12 @@ function laurelBranch(side: 1 | -1, fill: string) {
 }
 
 export type InsigniaProps = {
-  symbol: InsSymbol;
+  symbol?: InsSymbol;
+  /** al posto del simbolo: un disegno a linee 24×24 (le icone dell'app), coniato in rilievo */
+  art?: ReactNode;
   metal?: InsMetal;
-  enamel?: InsEnamel;
+  /** uno smalto con nome o un colore #rrggbb */
+  enamel?: InsEnamel | string;
   shape?: InsShape;
   size?: number;
   /** nastro sotto (premi) */
@@ -302,12 +315,13 @@ export type InsigniaProps = {
 };
 
 /** Insegna coniata: bordo di metallo, smalto, simbolo in rilievo, riflessi; si anima al tocco. */
-export function Insignia({ symbol, metal = "gold", enamel = "night", shape = "round", size = 64, ribbon = false, crown = false, laurel = false, glow = false, locked = false, pop = false, badge, className, title }: InsigniaProps) {
+export function Insignia({ symbol = "star", art, metal = "gold", enamel = "night", shape = "round", size = 64, ribbon = false, crown = false, laurel = false, glow = false, locked = false, pop = false, badge, className, title }: InsigniaProps) {
   const id = `in${useId().replace(/[^a-zA-Z0-9]/g, "")}_`;
   const [tap, setTap] = useState(0);
   const [lux, hi, mid, lo, deep] = METAL[metal];
-  const [el, em, ed] = ENAMEL[enamel];
-  const [rib, ribStripe] = RIBBON[enamel];
+  const named = (enamel in ENAMEL ? enamel : "") as InsEnamel | "";
+  const [el, em, ed] = named ? ENAMEL[named] : enamelFromHex(enamel);
+  const [rib, ribStripe] = named ? RIBBON[named] : [ed, hi];
   const d = shapePath(shape);
   const fine = size >= 44;
   const top = crown ? -16 : glow ? -6 : 0;
@@ -317,11 +331,17 @@ export function Insignia({ symbol, metal = "gold", enamel = "night", shape = "ro
   const h = (size * vb.h) / vb.w;
   const field = shape === "shield" ? 0.8 : shape === "rosette" ? 0.76 : 0.82;
   const symBox = shape === "shield" ? { x: 31, y: 26, s: 58 } : shape === "rosette" ? { x: 33, y: 33, s: 54 } : { x: 31, y: 31, s: 58 };
-  const symbolAt = (c: string, dd: string, dx = 0, dy = 0, op = 1) => (
-    <svg x={symBox.x + dx} y={symBox.y + dy} width={symBox.s} height={symBox.s} viewBox="0 0 100 100" overflow="visible" opacity={op}>
-      {symbolArt(symbol, c, dd)}
-    </svg>
-  );
+  const symbolAt = (c: string, dd: string, dx = 0, dy = 0, op = 1) =>
+    art ? (
+      // disegno a linee: colori pieni (currentColor), il metallo del rilievo è il tono chiaro
+      <svg x={symBox.x - 1 + dx} y={symBox.y - 1 + dy} width={symBox.s + 2} height={symBox.s + 2} viewBox="0 0 24 24" overflow="visible" opacity={op} fill="none" stroke="currentColor" strokeWidth={size >= 44 ? 1.9 : 2.3} strokeLinecap="round" strokeLinejoin="round" style={{ color: c.startsWith("url(") ? hi : c }}>
+        {art}
+      </svg>
+    ) : (
+      <svg x={symBox.x + dx} y={symBox.y + dy} width={symBox.s} height={symBox.s} viewBox="0 0 100 100" overflow="visible" opacity={op}>
+        {symbolArt(symbol, c, dd)}
+      </svg>
+    );
   const beads = shape === "round" ? 28 : shape === "hex" ? 18 : 0;
   return (
     <span

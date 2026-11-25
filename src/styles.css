@@ -1915,3 +1915,5 @@ html[data-motion="ridotta"] :is(.aa-life *, .aa-life-fallwater, .aa-life-spray, 
   .aa-ins, .aa-ins-rays, .aa-ins-twinkle, .aa-ins-pop, .aa-ins .aa-ins-shine { animation: none !important; transition: none; }
   .aa-ins-twinkle { opacity: 0.8; }
 }
+/* le insegne al posto delle tessere: l'anello "sei qui" segue il tondo */
+.aa-appicon-ins { border-radius: 9999px; }
