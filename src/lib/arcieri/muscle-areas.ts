@@ -113,7 +113,7 @@ let cacheModel: { lm: Landmark[]; hand: Hand; model: Model } | null = null;
 let shared: { canvas: HTMLCanvasElement; R: NonNullable<ReturnType<typeof createAnatomyRenderer>> } | null = null;
 
 /** immagini (data URL) dei muscoli in evidenza, una per zona */
-export function renderAreaImages(lm: Landmark[], aspect: number, hand: Hand, areas: AreaId[], w = 640, h = 520): Record<string, string> {
+export function renderAreaImages(lm: Landmark[], aspect: number, hand: Hand, areas: AreaId[], w = 960, h = 780): Record<string, string> {
   // stessa posa: il modello si costruisce una volta sola per tutte le zone
   const model = cacheModel?.lm === lm && cacheModel.hand === hand ? cacheModel.model : buildModel(lm, aspect, hand);
   if (model) cacheModel = { lm, hand, model };
@@ -140,7 +140,8 @@ export function renderAreaImages(lm: Landmark[], aspect: number, hand: Hand, are
     const a = AREA_MUSCLES[id];
     if (!a) continue;
     const focus = new Set(a.muscles.flatMap((m) => m.ids));
-    const { eye, VP } = viewFrom(targetOf(model, a.view.at), yawOf(model, a.view.side), a.view.pitch ?? 0.1, a.view.dist, w / h, 30);
+    // tutto quello che sta tra la camera e la zona (l'altro braccio, l'altra gamba) resta fuori dall'immagine
+    const { eye, VP } = viewFrom(targetOf(model, a.view.at), yawOf(model, a.view.side), a.view.pitch ?? 0.1, a.view.dist, w / h, 30, a.view.dist * 0.45);
     R.clear(w, h);
     R.draw(model, VP, eye, 0, { pelle: true, muscolo: true, osso: true }, focus);
     const g = ctx.createRadialGradient(w / 2, h * 0.4, 10, w / 2, h * 0.5, Math.max(w, h) * 0.75);

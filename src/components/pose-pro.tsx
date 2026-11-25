@@ -599,7 +599,8 @@ function MuscleAreas({ lm, hand, aspect, areas }: { lm: Landmark[] | null; hand:
       idle(() => {
         if (stop) return;
         try {
-          const one = renderAreaImages(lm, aspect, hand, [ids[i]], 480, 390);
+          // immagine nitida anche sugli schermi ad alta densità
+          const one = renderAreaImages(lm, aspect, hand, [ids[i]], 900, 732);
           setImgs((cur) => ({ ...cur, ...one }));
         } catch {
           /* niente WebGL: restano i nomi dei muscoli */

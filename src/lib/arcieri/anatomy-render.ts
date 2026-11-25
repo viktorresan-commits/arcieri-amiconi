@@ -12,8 +12,13 @@ attribute vec3 aP; attribute vec3 aN;
 uniform mat4 uVP; uniform mat4 uM; uniform mat3 uNM;
 varying vec3 vW; varying vec3 vN; varying vec3 vO;
 void main(){ vec4 w = uM * vec4(aP, 1.0); vW = w.xyz; vN = normalize(uNM * aN); vO = aP; gl_Position = uVP * w; }`;
-const FS = `
+const PREC = `#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
 precision mediump float;
+#endif
+`;
+const FS = `${PREC}
 varying vec3 vW; varying vec3 vN; varying vec3 vO;
 uniform vec3 uEye; uniform vec3 uColor; uniform float uMode; uniform float uAlpha; uniform float uAct; uniform float uTime;
 void main(){
@@ -77,8 +82,7 @@ void main(){
   vF = vec2(aM.z, aM.w) / 255.0; vTend = aT;
   vW = wp.xyz; gl_Position = uVP * wp;
 }`;
-const BFS = `
-precision mediump float;
+const BFS = `${PREC}
 varying vec3 vW; varying vec3 vN; varying vec2 vF; varying float vAct; varying float vFoc; varying float vTend; varying float vStr;
 uniform vec3 uEye; uniform float uLayer; uniform float uAlpha; uniform float uDim;
 void main(){
@@ -102,7 +106,14 @@ void main(){
     col = boneCol * (0.32 + 0.12 * hemi + dif * 0.55) + vec3(0.55, 0.8, 1.0) * rim * 0.35;
   } else {
     // muscoli: rosso bruno con le fibre lungo il muscolo, tendini chiari, lucidi
-    float fib = 0.82 + 0.1 * sin(vF.y * 6.2832 * 34.0 + sin(vF.x * 9.0) * 1.4) + 0.08 * sin(vF.y * 6.2832 * 83.0);
+    // fibre: si attenuano dove sullo schermo sarebbero più fitte di un paio di pixel (niente puntinato)
+    float fy = vF.y * 34.0;
+#ifdef HAS_DERIV
+    float amp = 1.0 - smoothstep(0.18, 0.5, fwidth(fy));
+#else
+    float amp = 0.45;
+#endif
+    float fib = 0.88 + amp * (0.08 * sin(fy * 6.2832 + sin(vF.x * 9.0) * 1.4) + 0.04 * sin(fy * 6.2832 * 2.44));
     vec3 rest = vec3(0.74, 0.35, 0.31);
     vec3 work = vec3(1.0, 0.36, 0.2);
     float act = clamp(vAct, 0.0, 1.0);
@@ -250,7 +261,8 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
   // ---- corpo anatomico vero ----
   const bprog = gl.createProgram()!;
   gl.attachShader(bprog, sh(gl.VERTEX_SHADER, BVS));
-  gl.attachShader(bprog, sh(gl.FRAGMENT_SHADER, BFS));
+  const deriv = gl.getExtension("OES_standard_derivatives");
+  gl.attachShader(bprog, sh(gl.FRAGMENT_SHADER, deriv ? "#extension GL_OES_standard_derivatives : enable\n#define HAS_DERIV 1\n" + BFS : BFS));
   gl.linkProgram(bprog);
   const bodyOk = Boolean(gl.getProgramParameter(bprog, gl.LINK_STATUS));
   const bl = {
@@ -456,7 +468,7 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
 }
 
 /** camera che guarda un punto da una direzione (yaw, pitch) a una distanza */
-export function viewFrom(target: V3, yaw: number, pitch: number, dist: number, aspect: number, fovDeg = 34) {
+export function viewFrom(target: V3, yaw: number, pitch: number, dist: number, aspect: number, fovDeg = 34, near = 0.05) {
   const eye: V3 = [target[0] + Math.sin(yaw) * Math.cos(pitch) * dist, target[1] + Math.sin(pitch) * dist, target[2] + Math.cos(yaw) * Math.cos(pitch) * dist];
-  return { eye, VP: mul4(perspective((fovDeg * Math.PI) / 180, aspect, 0.05, 30), lookAt(eye, target)) };
+  return { eye, VP: mul4(perspective((fovDeg * Math.PI) / 180, aspect, near, 30), lookAt(eye, target)) };
 }
