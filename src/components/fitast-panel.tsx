@@ -21,7 +21,16 @@ function hits(text: string, q: string) {
   const words = norm(q).split(" ").filter((w) => w.length > 1);
   if (!words.length) return false;
   const t = norm(text);
-  return words.every((w) => t.includes(w));
+  if (words.every((w) => t.includes(w))) return true;
+  // classifiche con il nome puntato ("TORRESAN V."): basta il cognome intero e l'iniziale del nome
+  if (words.length < 2) return false;
+  const toks = t.split(/[\s,;]+/);
+  let full = 0;
+  for (const w of words) {
+    if (toks.includes(w)) full++;
+    else if (!toks.some((x) => x === `${w[0]}.` || x === w[0])) return false;
+  }
+  return full >= 1;
 }
 
 function codeOf(c: Comp) {
@@ -132,7 +141,7 @@ export function FitastPanel({ comps, myName, userId, startCode, onSaved, onClose
     const keys = (home.form?.buttons ?? []).filter((b) => KEY_BUTTON.test(b.label));
     const named = keys.filter((b) => !/squadr/i.test(b.label));
     if (sel) {
-      for (const o of sel.options.slice(0, 40)) {
+      for (const o of sel.options.slice(0, 120)) {
         for (const b of named.length ? named : sel.press ? [{ code: sel.press.code, set: sel.press.set, label: "" }] : []) {
           const r = pressReq(home, b, { [sel.name]: o.value }, `${o.text}${b.label ? ` · ${b.label}` : ""}`);
           if (r) push(r);
@@ -182,16 +191,21 @@ export function FitastPanel({ comps, myName, userId, startCode, onSaved, onClose
     }
     let done = 0;
     setScan({ done, total: queue.length });
-    while (queue.length && !stop.current && seen.size < 140) {
-      // a due per volta: il portale tiene la sessione nei cookie
-      const batch = queue.splice(0, 2).filter((r) => !seen.has(reqKey(r)));
+    while (queue.length && !stop.current && seen.size < 400) {
+      // una pagina alla volta: il portale ricorda nella sessione (cookie) la gara scelta, e due comandi
+      // premuti insieme si confondevano (risposta di una gara al posto dell'altra)
+      const batch = queue.splice(0, 1).filter((r) => !seen.has(reqKey(r)));
       batch.forEach((r) => seen.add(reqKey(r)));
       const pages = await Promise.all(batch.map((r) => read(r).then((p) => ({ p, r })).catch(() => null)));
       for (const x of pages) {
         if (!x) continue;
         take(x.p, x.r);
         // un livello in più: le pagine di iscritti, piazzole e classifiche della gara
-        if (!x.r.post) x.p.links.filter((l) => sameSite(l.href) && SUBPAGE.test(l.text + l.href)).slice(0, 4).forEach((l) => push({ url: l.href, referer: x.p.url, label: l.text }));
+        // (anche dopo un comando premuto: CLASSIFICA spesso risponde con il collegamento al PDF)
+        x.p.links
+          .filter((l) => sameSite(l.href) && (/\.pdf($|\?)/i.test(l.href) || (!x.r.post && SUBPAGE.test(l.text + l.href))))
+          .slice(0, 6)
+          .forEach((l) => push({ url: l.href, referer: x.p.url, label: `${x.r.label ? `${x.r.label} · ` : ""}${l.text || "PDF"}` }));
       }
       done += batch.length;
       setScan({ done, total: done + queue.length });
@@ -289,9 +303,15 @@ function Commands({ page, onGo }: { page: FitastPage; onGo: (r: Req) => void }) 
 /** la pagina letta: comandi, tabelle (con il nome evidenziato), testo e collegamenti utili */
 function PageView({ page, label, q, onOpen, onGo }: { page: FitastPage; label?: string; q: string; onOpen: (u: string) => void; onGo: (r: Req) => void }) {
   if (page.kind === "pdf") {
+    const mine = page.lines.filter((l) => hits(l, q));
     return (
       <div className="grid gap-2 rounded-2xl bg-white/[0.04] p-3">
-        <p className="text-sm">È un documento PDF: si apre fuori dall'app.</p>
+        <p className="text-sm">{page.lines.length ? `Documento PDF: ${page.lines.length} righe lette${q.trim() ? `, ${mine.length} con «${q.trim()}»` : ""}.` : "Documento PDF senza testo leggibile (forse una scansione): si apre fuori dall'app."}</p>
+        {page.lines.length ? (
+          <div className="grid max-h-80 gap-1 overflow-y-auto rounded-2xl bg-white/[0.03] p-3 text-sm">
+            {page.lines.slice(0, 400).map((l, i) => <p key={i} className={cx(hits(l, q) && "rounded bg-[#e0b15a]/25 px-1")}>{l}</p>)}
+          </div>
+        ) : null}
         <Button variant="ghost" onClick={() => void openExternal(page.url)}>Apri il PDF</Button>
       </div>
     );
@@ -414,6 +434,12 @@ function SaveScore({ nums, row, m, comps, userId, onDone, onCancel }: { nums: { 
   const [compId, setCompId] = useState(guess);
   const [scoreCol, setScoreCol] = useState(() => { const k = pick(/tot|punt|score/i); return k >= 0 ? k : nums[nums.length - 1].i; });
   const [champCol, setChampCol] = useState(() => pick(/camp/i));
+  // posizione in classifica: la colonna "Pos."/"Class." o il primo numero della riga (1°, 2°, 3°… = podio)
+  const [rankCol, setRankCol] = useState(() => {
+    const k = pick(/pos|clas|^cl|rank|ord|°/i);
+    if (k >= 0) return k;
+    return nums[0] && nums[0].i === 0 && nums[0].v >= 1 && nums[0].v <= 500 ? nums[0].i : -1;
+  });
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const val = (i: number) => (i >= 0 ? Math.round(Number(row[i].text.replace(",", "."))) : null);
@@ -424,7 +450,7 @@ function SaveScore({ nums, row, m, comps, userId, onDone, onCancel }: { nums: { 
     if (old?.piazzole.length) return setErr("In questa gara hai già segnato le piazzole: il totale viene da quelle. Correggile dalla gara.");
     setBusy(true);
     setErr("");
-    saveEntry({ data: { competitionId: comp.id, score: val(scoreCol), championshipPoints: val(champCol), rank: old?.rank ?? null, category: old?.category ?? "", laneCount: old?.laneCount ?? null, spot: old?.spot ?? null, targetKind: old?.targetKind ?? "", sagomaMax: old?.sagomaMax ?? null, notes: "Dal portale FITAST", piazzole: [] } })
+    saveEntry({ data: { competitionId: comp.id, score: val(scoreCol), championshipPoints: val(champCol), rank: rankCol >= 0 && (val(rankCol) ?? 0) >= 1 ? val(rankCol) : (old?.rank ?? null), category: old?.category ?? "", laneCount: old?.laneCount ?? null, spot: old?.spot ?? null, targetKind: old?.targetKind ?? "", sagomaMax: old?.sagomaMax ?? null, notes: "Dal portale FITAST", piazzole: [] } })
       .then(onDone)
       .catch((e: unknown) => setErr(e instanceof Error ? e.message : "Non salvato."))
       .finally(() => setBusy(false));
@@ -440,6 +466,12 @@ function SaveScore({ nums, row, m, comps, userId, onDone, onCancel }: { nums: { 
       <div className="grid grid-cols-2 gap-2">
         <Field label="Punteggio gara">
           <Select value={String(scoreCol)} onChange={(e) => setScoreCol(Number(e.target.value))}>
+            {nums.map((x) => <option key={x.i} value={x.i}>{x.label}: {row[x.i].text}</option>)}
+          </Select>
+        </Field>
+        <Field label="Posizione in classifica">
+          <Select value={String(rankCol)} onChange={(e) => setRankCol(Number(e.target.value))}>
+            <option value="-1">Non indicata</option>
             {nums.map((x) => <option key={x.i} value={x.i}>{x.label}: {row[x.i].text}</option>)}
           </Select>
         </Field>

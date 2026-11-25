@@ -5,6 +5,7 @@ import { TargetGL } from "@/components/target-gl";
 import { useMemo, useState, type ReactNode } from "react";
 import { listCompanies } from "@/lib/arcieri/compagnie.api";
 import { CompanyForm, CompanyHero, CompanyLeague, joinAndReload } from "@/components/compagnia";
+import { CompanyTrophies } from "@/components/palmares";
 import { RankBars } from "@/components/rank-bars";
 import { Heat } from "@/components/shot-lab";
 import { useLocalState } from "@/lib/arcieri/local-store";
@@ -222,6 +223,7 @@ function Page() {
               );
             })}
           </div>
+          {company ? <CompanyTrophies companyId={company.id} companyName={company.name} /> : null}
           <GadgetShelf />
           <ClubSpend />
         </>

@@ -10,6 +10,7 @@ export const FITAST_HOME = "http://89.46.73.21/FITAST_WEB/IT/pagView-GARE.awp";
 const HOST = "89.46.73.21";
 
 import { formBody, parseHtml, type FitastPage } from "./fitast-parse";
+import { pdfLines } from "./pdf-text";
 
 export type { FitastButton, FitastCell, FitastForm, FitastLink, FitastPage, FitastSelect, FitastTable } from "./fitast-parse";
 
@@ -62,7 +63,16 @@ async function fetchPage(req: Req): Promise<FitastPage & { cookie: string }> {
     const type = res.headers.get("content-type") ?? "";
     const now = new Date().toISOString();
     if (/pdf/i.test(type) || /\.pdf($|\?)/i.test(finalUrl)) {
-      const page: FitastPage = { url: finalUrl, title: decodeURIComponent(finalUrl.split("/").pop() ?? "Documento"), kind: "pdf", tables: [], lines: [], links: [], form: null, charset: "", fetchedAt: now };
+      // classifiche e risultati delle gare passate sono spesso PDF: se ne legge il testo, riga per riga,
+      // così il nome dell'arciere si trova anche lì
+      const bytes = new Uint8Array(await res.arrayBuffer());
+      let lines: string[] = [];
+      try {
+        lines = bytes.length < 12_000_000 ? pdfLines(bytes, 3000).map((l) => l.slice(0, 400)) : [];
+      } catch {
+        lines = [];
+      }
+      const page: FitastPage = { url: finalUrl, title: decodeURIComponent(finalUrl.split("/").pop() ?? "Documento"), kind: "pdf", tables: [], lines, links: [], form: null, charset: "", fetchedAt: now };
       cache.set(key, { at: Date.now(), page, cookie });
       return { ...page, cookie };
     }

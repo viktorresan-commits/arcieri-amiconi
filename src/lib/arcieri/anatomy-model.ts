@@ -171,25 +171,45 @@ export function bodyPoints(lm: Landmark[], aspect: number, cal: BoneCal | null =
     if (phi <= DEAD) return 0;
     return len_ * Math.sin(((phi - DEAD) * (Math.PI / 2)) / (Math.PI / 2 - DEAD));
   };
-  // spalle e anche: se nel video sono più strette del vero, il busto è girato
+  // Inclinazione di ogni osso rispetto al piano dell'immagine, dai punti in metri del modello di posa:
+  // per un osso solo la sua direzione (quanto va verso la camera rispetto a quanto si vede nel video)
+  // è affidabile, la sua lunghezza no (la spalla "sale" alzando il braccio e l'omero misurato si
+  // accorcia). La sporgenza è quindi la lunghezza vista nel video per quella pendenza.
+  const W = (i: number) => {
+    const p = lm[i];
+    return p && typeof p.xw === "number" && typeof p.yw === "number" && typeof p.zw === "number" && Number.isFinite(p.xw + p.yw + p.zw) && vis(p) > 0.2 ? p : null;
+  };
+  const depth = (a: number, b: number, len_: number) => {
+    const pa = W(a);
+    const pb = W(b);
+    if (!pa || !pb) return zSign(b, a) * dzFor(out[a], out[b], len_);
+    const l = Math.hypot(out[b][0] - out[a][0], out[b][1] - out[a][1]);
+    const dxy = Math.hypot((pb.xw as number) - (pa.xw as number), (pb.yw as number) - (pa.yw as number));
+    const dzw = -((pb.zw as number) - (pa.zw as number)); // verso la camera = positivo
+    const slope = Math.max(-4, Math.min(4, dzw / Math.max(0.02, dxy)));
+    // un osso che punta alla camera si vede corto: la sporgenza arriva dalla sua lunghezza vera
+    const dz = Math.abs(slope) > 1 ? Math.max(l * Math.abs(slope) * 0.85, Math.sqrt(Math.max(0, len_ * len_ - l * l)) * 0.9) : l * Math.abs(slope);
+    return Math.sign(slope) * Math.min(len_ * 1.1, dz);
+  };
+  // spalle e anche: il busto girato rispetto alla camera
   const turn = (l: number, r: number, len_: number) => {
-    const dz = dzFor(out[l], out[r], len_) * 0.5;
-    const sg = zSign(r, l);
-    out[l][2] = -sg * dz;
-    out[r][2] = sg * dz;
+    const dz = depth(l, r, len_) * 0.5;
+    out[l][2] = -dz;
+    out[r][2] = dz;
   };
   turn(11, 12, L("spalle"));
   if (hipsOk) turn(23, 24, L("anche"));
   // braccia: gomito e polso con la lunghezza vera di omero e avambraccio dell'arciere
   for (const [sh, el, wr, ua, fa] of [[11, 13, 15, "omeroS", "avambraccioS"], [12, 14, 16, "omeroD", "avambraccioD"]] as const) {
-    out[el][2] = out[sh][2] + zSign(el, sh) * dzFor(out[sh], out[el], L(ua));
-    out[wr][2] = out[el][2] + zSign(wr, el) * dzFor(out[el], out[wr], L(fa));
+    out[el][2] = out[sh][2] + depth(sh, el, L(ua));
+    out[wr][2] = out[el][2] + depth(el, wr, L(fa));
     for (const f of wr === 15 ? [17, 19, 21] : [18, 20, 22]) if (out[f]) out[f][2] = out[wr][2];
   }
   // gambe nel piano del bacino (si stanno dritti per tirare), con un filo di profondità se il video la mostra
   for (const [hip, knee, ank, th, tb] of [[23, 25, 27, "femoreS", "tibiaS"], [24, 26, 28, "femoreD", "tibiaD"]] as const) {
-    out[knee][2] = out[hip][2] + zSign(knee, hip) * Math.min(0.12, dzFor(out[hip], out[knee], L(th)) * 0.5);
-    out[ank][2] = out[knee][2] + zSign(ank, knee) * Math.min(0.12, dzFor(out[knee], out[ank], L(tb)) * 0.5);
+    const cap = (v: number) => Math.max(-0.12, Math.min(0.12, v * 0.6));
+    out[knee][2] = out[hip][2] + cap(depth(hip, knee, L(th)));
+    out[ank][2] = out[knee][2] + cap(depth(knee, ank, L(tb)));
   }
   for (const [ank, heel, toe] of [[27, 29, 31], [28, 30, 32]] as const) {
     if (out[heel]) out[heel][2] = out[ank][2] - 0.05;
@@ -202,6 +222,51 @@ export function bodyPoints(lm: Landmark[], aspect: number, cal: BoneCal | null =
   for (const i of [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]) if (out[i]) out[i][2] = earsZ;
   out[0][2] = earsZ + 0.09 * Math.sqrt(Math.max(0, 1 - faceTurn * faceTurn * 0.6));
   for (const i of [1, 2, 3, 4, 5, 6, 9, 10]) if (out[i]) out[i][2] = earsZ + 0.07 * Math.sqrt(Math.max(0, 1 - faceTurn * faceTurn * 0.6));
+  // Mano al viso o al collo (in trazione, all'ancoraggio, nell'accompagnamento dopo il rilascio): la
+  // mano tocca il corpo, quindi ha la profondità del viso o del collo, non quella stimata (che la
+  // portava mezzo metro davanti). Il gomito tiene l'avambraccio della sua lunghezza: in trazione sulla
+  // linea della freccia, dietro la mano, come fa ogni arciere ancorato; altrimenti dove lo stima il video.
+  const mouth: V3 = out[9] && out[10] ? lerp(out[9], out[10], 0.5) : out[0];
+  const neck: V3 = lerp(out[11], out[12], 0.5);
+  const d2v = (a: V3, b: V3) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+  for (const [sh, el, wr, fa, osh, owr] of [[12, 14, 16, "avambraccioD", 11, 15], [11, 13, 15, "avambraccioS", 12, 16]] as const) {
+    // punto del corpo più vicino al polso: viso e collo, spalla dello stesso lato, petto.
+    // Al viso la mano sta di lato alla mandibola (un filo dietro la bocca), su spalla e petto davanti
+    const sternum: V3 = [neck[0], neck[1] - 0.25, neck[2] + 0.06];
+    const segs: [V3, V3, number, number][] = [
+      [mouth, neck, -0.035, 0.17],
+      [neck, out[sh], 0.06, 0.13],
+      [neck, sternum, 0.07, 0.13],
+    ];
+    let best: { d: number; z: number } | null = null;
+    for (const [p, q, dz, lim] of segs) {
+      const ax = q[0] - p[0];
+      const ay = q[1] - p[1];
+      const t = Math.max(0, Math.min(1, ((out[wr][0] - p[0]) * ax + (out[wr][1] - p[1]) * ay) / (ax * ax + ay * ay || 1)));
+      const c = lerp(p, q, t);
+      const d = d2v(out[wr], c);
+      if (d <= lim && (!best || d < best.d)) best = { d, z: c[2] + dz };
+    }
+    if (!best) continue;
+    const drawing = d2v(out[wr], mouth) < 0.16 && d2v(out[owr], out[osh]) > 0.4 && Math.abs(out[owr][1] - out[osh][1]) < 0.25 && Math.abs(out[el][1] - out[sh][1]) < 0.22;
+    const wz = best.z;
+    const lfa = d2v(out[el], out[wr]);
+    const Lfa = Math.max(lfa, L(fa));
+    const h = Math.sqrt(Math.max(0, Lfa * Lfa - lfa * lfa));
+    const pick = (target: number) => (Math.abs(wz + h - target) < Math.abs(wz - h - target) ? wz + h : wz - h);
+    let ez: number;
+    if (drawing) {
+      // linea della freccia: dalla mano dell'arco alla mano della corda, prolungata fino al gomito
+      const bow = out[owr];
+      const dx = out[wr][0] - bow[0];
+      const lineZ = Math.abs(dx) > 0.05 ? wz + ((wz - bow[2]) / dx) * (out[el][0] - out[wr][0]) : wz;
+      ez = (pick(lineZ) + lineZ) / 2;
+    } else ez = pick(out[el][2]);
+    const dWr = wz - out[wr][2];
+    out[wr][2] = wz;
+    out[el][2] = ez;
+    for (const f of wr === 15 ? [17, 19, 21] : [18, 20, 22]) if (out[f]) out[f][2] += dWr;
+  }
   // (i punti in metri del modello di posa non danno più la forma del corpo: con l'arciere di fronte
   // alla camera la loro profondità piegava il busto all'indietro e portava il gomito dietro la testa.
   // Servono solo a dire se un osso va avanti o indietro)

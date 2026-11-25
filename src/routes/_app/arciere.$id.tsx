@@ -17,6 +17,7 @@ import { setRole } from "@/lib/arcieri/staff.api";
 import { refreshCrests } from "@/lib/arcieri/crest";
 import { GAME_LEVELS, GAME_MODES, modeOf } from "@/lib/arcieri/game-modes";
 import { LevelCrest } from "@/components/level-crest";
+import { ArcherPalmares } from "@/components/palmares";
 
 type Board = Awaited<ReturnType<typeof archerBoard>>;
 
@@ -118,6 +119,7 @@ function Page() {
           <span aria-hidden className="text-xl text-muted">›</span>
         </Link>
       ) : null}
+      <ArcherPalmares memberId={data.id} firstName={name.split(" ")[0]} />
       <GameRecords games={data.games} mine={data.mine} />
       <Card>
         <h2 className="mb-3 font-display text-2xl">I premi migliori</h2>

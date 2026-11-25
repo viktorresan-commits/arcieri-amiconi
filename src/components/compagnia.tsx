@@ -1,3 +1,4 @@
+import { CompanyTrophies } from "./palmares";
 import { refreshCrests } from "@/lib/arcieri/crest";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -311,6 +312,7 @@ export function CompanyLeague({ board, onJoin, busy }: { board: Board; onJoin: (
                       ))}
                     </div>
                   ) : co.members > 0 && co.id !== board.mine ? <p className="text-xs text-muted">Gli iscritti li vedono il presidente e il fondatore.</p> : null}
+                  <CompanyTrophies companyId={co.id} companyName={co.name} />
                 </div>
               ) : null}
             </div>
