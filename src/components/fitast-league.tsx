@@ -7,7 +7,7 @@ import { CrestPodium } from "@/components/podium";
 import { Insignia } from "@/components/insignia";
 import { useLoad } from "@/lib/arcieri/use-load";
 import { fitastStandings, fitastTeamArchers, fitastTeamStats, type Standing, type StandingRow, type TeamArcher, type TeamStat } from "@/lib/arcieri/fitast-league.api";
-import { categoryGroup, crestOf as drawCrest, teamKey, titleName } from "@/lib/arcieri/fitast-league";
+import { categoryGroup, cleanCategory, crestOf as drawCrest, teamKey, titleName } from "@/lib/arcieri/fitast-league";
 import { syncStandings, type SyncProgress } from "@/lib/arcieri/fitast-sync";
 
 type Crest = { name: string; logoUrl: string | null; color: string; fitastName?: string };
@@ -170,7 +170,7 @@ export function TeamArchersSheet({ team, crest, onClose }: { team: string; crest
                   <span className="w-6 shrink-0 text-center font-display text-base tabular-nums text-muted">{i + 1}</span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-semibold">{titleName(a.name)}</span>
-                    <span className="block truncate text-xs text-muted">{titleName(a.category)}{a.place ? ` · ${a.place}° in categoria` : ""}</span>
+                    <span className="block truncate text-xs text-muted">{[titleName(cleanCategory(a.category)), a.place ? `${a.place}° in categoria` : ""].filter(Boolean).join(" · ")}</span>
                   </span>
                   {a.place && a.place <= 3 ? <Medal place={a.place} size={26} /> : null}
                   <span className="shrink-0 text-right">

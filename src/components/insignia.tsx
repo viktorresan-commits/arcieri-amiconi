@@ -24,6 +24,8 @@ export type InsSymbol =
   | "duel"
   | "podium"
   | "laurel"
+  | "crown"
+  | "gonfalon"
   | "check";
 
 /** metallo: luce, chiaro, medio, scuro, ombra profonda */
@@ -256,6 +258,33 @@ function symbolArt(symbol: InsSymbol, c: string, d: string): ReactNode {
             </g>
           ))}
           <path d="M50 30 L54 40 L64 40.6 L56.4 47 L58.8 57 L50 51.4 L41.2 57 L43.6 47 L36 40.6 L46 40 Z" fill={c} />
+        </g>
+      );
+    case "crown":
+      // corona a tre punte con gemme: i grandi traguardi del campionato
+      return (
+        <g>
+          <path d="M15 72 L9 31 L32 51 L50 19 L68 51 L91 31 L85 72 Z" fill={c} />
+          <circle cx="9" cy="28" r="5.5" fill={c} />
+          <circle cx="50" cy="15" r="6" fill={c} />
+          <circle cx="91" cy="28" r="5.5" fill={c} />
+          <rect x="13" y="74" width="74" height="13" rx="3.5" fill={c} />
+          <path d="M50 46 L56 55 L50 64 L44 55 Z" fill={d} />
+          <circle cx="29" cy="62" r="3.6" fill={d} />
+          <circle cx="71" cy="62" r="3.6" fill={d} />
+          <path d="M20 80.5 H80" stroke={d} strokeWidth="1.8" strokeLinecap="round" strokeDasharray="0.1 5.4" />
+        </g>
+      );
+    case "gonfalon":
+      // stendardo appeso all'asta, a coda di rondine, con la stella: il campionato da protagonisti
+      return (
+        <g>
+          <path d="M14 15 H86" {...ln} strokeWidth="5.5" />
+          <circle cx="10" cy="15" r="5.5" fill={c} />
+          <circle cx="90" cy="15" r="5.5" fill={c} />
+          <path d="M25 20 H75 V86 L50 70 L25 86 Z" fill={c} />
+          <path d="M50 31 L54.4 41.6 L65.6 42.3 L57 49.4 L59.7 60.4 L50 54.2 L40.3 60.4 L43 49.4 L34.4 42.3 L45.6 41.6 Z" fill={d} />
+          <path d="M30 25 V77 M70 25 V77" stroke={d} strokeWidth="1.4" strokeLinecap="round" strokeDasharray="0.1 4.2" />
         </g>
       );
     case "check":

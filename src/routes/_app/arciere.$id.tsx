@@ -22,6 +22,8 @@ import { LevelCrest } from "@/components/level-crest";
 import { levelOf } from "@/lib/arcieri/xp";
 import { Glyph } from "@/components/icons";
 import { ArcherPalmares, Medal } from "@/components/palmares";
+import { RankBanner } from "@/components/rank-banner";
+import { titleName } from "@/lib/arcieri/fitast-league";
 
 type Board = Awaited<ReturnType<typeof archerBoard>>;
 
@@ -60,18 +62,21 @@ function Page() {
     .sort((a, b) => b.at.localeCompare(a.at))
     .slice(0, 3);
   const look = looks[data.userId] ?? AVATAR_DEFAULT;
+  const rank = data.stats.fitast;
   return (
     <div className="grid gap-5">
       {/* il suo arciere, grande e di fronte, con accanto gli ultimi premi */}
       <div className="aa-profile-stage relative h-[34rem] overflow-hidden rounded-[1.75rem]">
         <SceneBackdrop sky={sky} id={`pf${data.id}`} scene={look.scene} />
         {/* luce morbida dietro l'arciere e ombra a terra: l'arciere sta nella scena, non sopra */}
-        <div className="aa-stage-glow pointer-events-none absolute inset-x-0 top-[18%] bottom-[8%] pr-[22%]" aria-hidden />
-        <div className="aa-stage-shadow pointer-events-none absolute bottom-[3.5%] left-[39%] h-[4.5%] w-[34%] -translate-x-1/2" aria-hidden />
-        <div className="absolute inset-x-0 bottom-[1%] top-[11%] flex justify-center pr-[22%]">
+        <div className={`aa-stage-glow pointer-events-none absolute inset-x-0 top-[18%] bottom-[8%] ${rank ? "px-[22%]" : "pr-[22%]"}`} aria-hidden />
+        <div className={`aa-stage-shadow pointer-events-none absolute bottom-[3.5%] h-[4.5%] w-[34%] -translate-x-1/2 ${rank ? "left-1/2" : "left-[39%]"}`} aria-hidden />
+        <div className={`absolute inset-x-0 bottom-[1%] top-[11%] flex justify-center ${rank ? "px-[22%]" : "pr-[22%]"}`}>
           <ArcherFront look={look} fit className="h-full w-auto drop-shadow-[0_16px_24px_rgba(0,0,0,0.5)]" />
         </div>
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[16%] bg-gradient-to-t from-black/35 to-transparent" aria-hidden />
+        {/* il posto vero nel campionato FITAST, come uno stendardo appeso a sinistra */}
+        {rank ? <RankBanner r={rank} className="absolute left-[4.5%] top-[7.4rem] w-[24%]" /> : null}
         {/* il livello dell'arciere, come uno stemma in basso a sinistra */}
         <div className="aa-prize-float absolute bottom-4 left-2 w-[24%]" style={{ animationDelay: "0.1s" }}>
           <LevelCrest xp={data.xp} />
@@ -171,11 +176,33 @@ function ChampionshipCard({ st }: { st: Stats }) {
           <p className="mt-1 text-[0.68rem] text-muted">{st.podiums === 1 ? "podio" : "podi"}</p>
         </div>
       </div>
+      {st.fitast ? <FitastPlaces r={st.fitast} /> : null}
       <p className="text-sm text-muted">
         {st.gareSeason ? `${st.gareSeason} ${st.gareSeason === 1 ? "gara" : "gare"} in questa stagione` : "Nessuna gara in questa stagione"}
-        {st.fitast ? ` · ${st.fitast.place ? `${st.fitast.place}° ` : ""}nella generale arcieri FITAST${st.fitast.category ? ` (${st.fitast.category})` : ""}${st.fitast.points != null ? `, ${fmtNum(st.fitast.points)} pt` : ""}` : ""}
+        {st.fitast?.points != null ? ` · ${fmtNum(st.fitast.points)} punti nella generale FITAST` : ""}
       </p>
     </Card>
+  );
+}
+
+/** I posti veri nella classifica generale arcieri FITAST: categoria, generale, divisione e compagnia */
+function FitastPlaces({ r }: { r: NonNullable<Stats["fitast"]> }) {
+  const cells: Array<{ n: number | null; label: string; sub: string; of: string }> = [
+    { n: r.place, label: "in categoria", sub: titleName(r.category), of: r.size ? `su ${r.size}` : "" },
+    { n: r.overall, label: "nella generale", sub: "", of: `su ${r.overallSize} arcieri` },
+    { n: r.teamPlace, label: "in compagnia", sub: "", of: r.teamSize ? `su ${r.teamSize}` : "" },
+  ];
+  return (
+    <div className="grid grid-cols-3 gap-2 text-center">
+      {cells.map((c, i) => (
+        <div key={c.label} className="grid content-start justify-items-center rounded-2xl p-2.5" style={{ background: i === 0 ? "linear-gradient(180deg, rgb(156 30 49 / 0.55), rgb(66 9 18 / 0.55))" : "rgb(255 255 255 / 0.05)" }}>
+          <p className="font-display text-3xl leading-none tabular-nums">{c.n != null ? `${c.n}°` : "—"}</p>
+          <p className="mt-1 text-[0.68rem] font-semibold">{c.label}</p>
+          {c.sub ? <p className="line-clamp-2 text-[0.62rem] font-semibold leading-tight text-white/85">{c.sub}</p> : null}
+          {c.of ? <p className="text-[0.62rem] leading-tight text-muted">{c.of}</p> : null}
+        </div>
+      ))}
+    </div>
   );
 }
 

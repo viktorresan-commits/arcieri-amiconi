@@ -10,6 +10,7 @@ import { romeMidnightUtc, ymdAdd } from "./time";
 import { divisionOf } from "./labels";
 import { accountWriter, writerFor } from "./acting.api";
 import { activityXp } from "./xp.api";
+import { fitastRankOf, loadGenerale, type GenTable } from "./fitast-rank";
 import type { TallyShot } from "./scoring";
 import { aimSpot, faceById, ringPoint, scoreAtRadius } from "./scoring";
 
@@ -592,6 +593,7 @@ export const saveEntry = createServerFn({ method: "POST" })
       rank: raw.rank == null || raw.rank === "" ? null : asNum(raw.rank),
       category: divisionOf(clip(raw.category, 20)),
       notes: clip(raw.notes, 300),
+      fitastName: clip(raw.fitastName, 120),
       laneCount: optionalInt(raw.laneCount, 0, 40, "Numero piazzole non valido."),
       spot: optionalInt(raw.spot, 0, 999, "Spot non valido."),
       championshipPoints: optionalInt(raw.championshipPoints, 0, 999, "Punti campionato non validi."),
@@ -653,6 +655,8 @@ export const saveEntry = createServerFn({ method: "POST" })
         insert into piazzole (competition_id, user_id, n, score, arrows, label, distance_m, note, note_done, aim_angle)
         values (${data.competitionId}, ${owner.userId}, ${lane.n}, ${lane.score}, ${lane.arrows.length ? lane.arrows.join("+") : ""}, ${lane.label}, ${lane.distanceM}, ${lane.note}, ${done}, ${lane.aimAngle})`;
     }
+    // il nome con cui il portale FITAST conosce l'arciere: serve per il suo posto in campionato
+    if (data.fitastName) await sql`update members set fitast_name = ${data.fitastName} where user_id = ${owner.userId}`.catch(() => []);
     if (owner.by) await sql`update competition_entries set added_by = ${owner.by} where competition_id = ${data.competitionId} and user_id = ${owner.userId}`;
     if (score != null) await syncBadges(sql, owner.userId);
     await sql`
@@ -748,19 +752,8 @@ export function champSeasonOf(day: string) {
   return { from: `${y}-05-01`, to: `${y}-09-30`, name: `Campionato estivo ${y}` };
 }
 
-const nameKey = (s: string) =>
-  s
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toUpperCase()
-    .replace(/[^A-Z ]+/g, " ")
-    .split(/\s+/)
-    .filter((w) => w.length > 1)
-    .sort()
-    .join(" ");
-
 /** i numeri di un arciere che si vedono sul profilo e nel confronto: gare, campionato, allenamenti, avatar */
-async function archerStats(sql: Awaited<ReturnType<typeof db>>, userId: string, fullName: string, xp: number) {
+async function archerStats(sql: Awaited<ReturnType<typeof db>>, userId: string, who: { fullName: string; givenName: string; nickname: string; fitastName: string; team: string }, xp: number, gen: GenTable[]) {
   const entries = await sql<{ name: string; starts_on: string; score: number | null; rank: number | null; category: string; championship_points: number | null; spot: number | null }>`
     select c.name, c.starts_on::text as starts_on, e.score, e.rank, e.category, e.championship_points, e.spot
     from competition_entries e
@@ -791,21 +784,8 @@ async function archerStats(sql: Awaited<ReturnType<typeof db>>, userId: string, 
   const points = real.reduce((sum, x) => sum + asNum(x.points), 0);
   const game = await sql<{ rounds: number; best: number; max_points: number }>`
     select coalesce(sum(rounds), 0)::int as rounds, coalesce(max(best), 0)::int as best, coalesce(max(max_points), 0)::int as max_points from game_records where user_id = ${userId}`.catch(() => []);
-  // la classifica generale arcieri del portale FITAST, se ci si trova con lo stesso nome
-  let fitast: { place: number | null; points: number | null; category: string; season: string } | null = null;
-  const key = nameKey(fullName);
-  if (key.includes(" ")) {
-    const gen = await sql<{ season_name: string; category: string; rows: { place: number | null; name: string; score: number | null; camp: number | null }[] }>`
-      select season_name, category, rows from fitast_standings
-      where kind = 'generale-arcieri' and season = (select season from fitast_standings where kind = 'generale-arcieri' order by updated_at desc limit 1)`.catch(() => []);
-    for (const g of gen) {
-      const row = (Array.isArray(g.rows) ? g.rows : []).find((r) => nameKey(r.name) === key);
-      if (row) {
-        fitast = { place: row.place ?? null, points: row.camp ?? row.score ?? null, category: g.category, season: g.season_name };
-        break;
-      }
-    }
-  }
+  // il posto vero nel campionato FITAST: in categoria, assoluto, nella divisione e in compagnia
+  const fitast = fitastRankOf(gen, who);
   const last = [...done].reverse()[0] ?? null;
   return {
     seasonName: season.name,
@@ -844,7 +824,16 @@ export const archerBoard = createServerFn({ method: "POST" })
     // incarichi della persona e cosa può cambiare chi guarda
     const theirs = await myMembership(sql, member.user_id);
     const mineCo = await myMembership(sql, context.userId);
-    const coName = await sql<{ name: string; color: string }>`select name, color from companies where id = ${theirs.companyId} limit 1`;
+    const coName = await sql<{ name: string; color: string; fitast_name: string }>`select name, color, fitast_name from companies where id = ${theirs.companyId} limit 1`;
+    const viewerCo = await sql<{ name: string; fitast_name: string }>`select name, fitast_name from companies where id = ${mineCo.companyId} limit 1`;
+    const gen = await loadGenerale(sql);
+    const whoOf = (m: MemberRow, co: { name: string; fitast_name: string } | undefined) => ({
+      fullName: `${m.given_name} ${m.family_name}`,
+      givenName: m.given_name,
+      nickname: m.nickname,
+      fitastName: String((m as MemberRow & { fitast_name?: string }).fitast_name ?? ""),
+      team: co?.fitast_name || co?.name || "",
+    });
     // punti dell'avatar: quelli del telefono (minigioco, quiz, esercizi) più allenamenti e gare registrati
     const theirXp = asNum((member as MemberRow & { xp?: number }).xp) + (await activityXp(sql, member.user_id));
     const games = await sql<{ mode: string; level: string; best: number; max_points: number; stations: string; arrows: number; tens: number; xs: number; misses: number; rounds: number; best_at: unknown }>`
@@ -919,9 +908,9 @@ export const archerBoard = createServerFn({ method: "POST" })
         day: String(c.starts_on).slice(0, 10),
         score: asNum(c.score),
       })),
-      stats: await archerStats(sql, member.user_id, `${member.given_name} ${member.family_name}`, theirXp),
+      stats: await archerStats(sql, member.user_id, whoOf(member, coName[0]), theirXp, gen),
       // i numeri di chi guarda, per «Confronta con me»
-      viewerStats: member.user_id === context.userId ? null : await archerStats(sql, context.userId, `${viewer.given_name} ${viewer.family_name}`, asNum((viewer as MemberRow & { xp?: number }).xp) + (await activityXp(sql, context.userId))),
+      viewerStats: member.user_id === context.userId ? null : await archerStats(sql, context.userId, whoOf(viewer, viewerCo[0]), asNum((viewer as MemberRow & { xp?: number }).xp) + (await activityXp(sql, context.userId)), gen),
     };
   });
 

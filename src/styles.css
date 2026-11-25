@@ -1933,6 +1933,10 @@ html[data-motion="ridotta"] :is(.aa-life *, .aa-life-fallwater, .aa-life-spray, 
 @keyframes aa-podium-cheer { 0%, 100% { transform: translateY(0) rotate(-1deg); } 35% { transform: translateY(-3.2%) rotate(1.4deg); } 55% { transform: translateY(-3.6%) rotate(1.2deg); } }
 @keyframes aa-cup-bob { 0%, 100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-4px) rotate(2deg); } }
 @media (prefers-reduced-motion: reduce) { .aa-glory, .aa-cup, .aa-podium-sway, .aa-podium-cheer { animation: none; } }
+/* lo stendardo del campionato accanto all'arciere: appeso all'asta, ondeggia piano */
+.aa-banner-sway { transform-origin: 50% 0; animation: aa-banner-sway 6.5s ease-in-out infinite; }
+@keyframes aa-banner-sway { 0%, 100% { transform: rotate(-1.3deg); } 50% { transform: rotate(1.3deg); } }
+@media (prefers-reduced-motion: reduce) { .aa-banner-sway { animation: none; } }
 /* nel Menu: l'ultima voce toccata di ogni sezione, raggi che girano e un alone che pulsa */
 .aa-appicon-hot { isolation: isolate; }
 .aa-appicon-hot .aa-ins-rays { animation-duration: 12s; }

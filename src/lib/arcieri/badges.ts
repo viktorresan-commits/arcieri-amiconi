@@ -93,6 +93,7 @@ export async function syncBadges(sql: Sql, userId: string) {
   if (champ >= 10) codes.push("champ_10");
   if (champ >= 50) codes.push("champ_50");
   if (champ >= 100) codes.push("champ_100");
+  for (const t of [150, 200, 300, 400, 500, 750, 1000]) if (champ >= t) codes.push(`champ_${t}`);
   if (improved) codes.push("improve_5");
   if (days.length >= 30) codes.push("days_30");
   if (bestStreak >= 7) codes.push("streak_7");

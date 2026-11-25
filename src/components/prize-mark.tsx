@@ -6,7 +6,7 @@ const LADDERS = {
   arrow: ["arrows_100", "arrows_500", "arrows_1000", "arrows_5000"],
   bow: ["first_session", "sessions_5", "sessions_10", "sessions_50", "sessions_100"],
   target: ["first_comp", "gare_5", "gare_10"],
-  medal: ["champ_10", "champ_50", "champ_100"],
+  medal: ["champ_10", "champ_50", "champ_100", "champ_150", "champ_200", "champ_300", "champ_400", "champ_500", "champ_750", "champ_1000"],
   flame: ["streak_7", "days_30"],
   rise: ["first_record", "improve_5"],
 } as const;
@@ -219,6 +219,16 @@ const FAMILY_ART: Record<PrizeTier["symbol"], { symbol: InsSymbol; enamel: InsEn
   flame: { symbol: "flame", enamel: "amber" },
   rise: { symbol: "rise", enamel: "sapphire" },
 };
+/** i traguardi dei punti campionato oltre i 100 hanno un'insegna tutta loro: coppa, corona, stendardo */
+const CODE_ART: Record<string, { symbol: InsSymbol; enamel: InsEnamel; shape: InsShape }> = {
+  champ_150: { symbol: "trophy", enamel: "ruby", shape: "shield" },
+  champ_200: { symbol: "trophy", enamel: "ruby", shape: "shield" },
+  champ_300: { symbol: "crown", enamel: "amethyst", shape: "hex" },
+  champ_400: { symbol: "crown", enamel: "amethyst", shape: "hex" },
+  champ_500: { symbol: "crown", enamel: "amethyst", shape: "hex" },
+  champ_750: { symbol: "gonfalon", enamel: "sapphire", shape: "rosette" },
+  champ_1000: { symbol: "gonfalon", enamel: "night", shape: "rosette" },
+};
 const TIER_METAL: Record<PrizeTier["metal"], InsMetal> = { base: "iron", bronze: "bronze", silver: "silver", gold: "gold", platinum: "platinum" };
 const TIER_SHAPE: Record<PrizeTier["metal"], InsShape> = { base: "round", bronze: "round", silver: "round", gold: "rosette", platinum: "rosette" };
 
@@ -227,11 +237,12 @@ export function PrizeMark({ code, locked = false, size = "md" }: { code: string;
   const tier = prizeTier(code);
   const ring = RING[tier.metal];
   const px = size === "lg" ? 80 : 60;
-  const art = FAMILY_ART[tier.symbol];
+  const own = CODE_ART[code];
+  const art = own ?? FAMILY_ART[tier.symbol];
   const precious = tier.metal === "gold" || tier.metal === "platinum";
   return (
     <span className={`inline-flex w-16 shrink-0 flex-col items-center ${size === "lg" ? "w-20" : ""}`}>
-      <Insignia symbol={art.symbol} enamel={art.enamel} metal={TIER_METAL[tier.metal]} shape={TIER_SHAPE[tier.metal]} ribbon laurel={tier.metal === "platinum"} glow={precious && !locked} locked={locked} size={px} />
+      <Insignia symbol={art.symbol} enamel={art.enamel} metal={TIER_METAL[tier.metal]} shape={own?.shape ?? TIER_SHAPE[tier.metal]} ribbon laurel={tier.metal === "platinum" || code === "champ_1000"} glow={precious && !locked} locked={locked} size={px} />
       <span className="mt-1 flex h-3 items-center justify-center gap-px">
         {Array.from({ length: tier.stars }, (_, index) => (
           <Star key={index} color={ring.color} />

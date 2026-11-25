@@ -1285,7 +1285,9 @@ function SaveScore({ nums, row, m, comps, userId, onDone, onCancel }: { nums: { 
     }
     setBusy(true);
     setErr("");
-    saveEntry({ data: { competitionId: comp.id, score: val(scoreCol), championshipPoints: val(champCol), rank, category: rank != null ? division : (old?.category ?? division), laneCount: old?.laneCount ?? null, spot: old?.spot ?? null, targetKind: old?.targetKind ?? "", sagomaMax: old?.sagomaMax ?? null, notes: kept.length ? "Piazzole dal segnapunti, risultato dal portale FITAST" : "Dal portale FITAST", piazzole: kept } })
+    // il nome come lo scrive il portale (due parole o più, senza numeri, non la compagnia): collega il profilo alla classifica
+    const fitastName = row.map((c) => c.text.trim()).find((t) => /^[\p{L}' .-]{5,}$/u.test(t) && t.split(/\s+/).length >= 2 && !/arcier|compagni|asd|societ|gruppo|club|sagittar/i.test(t)) ?? "";
+    saveEntry({ data: { fitastName, competitionId: comp.id, score: val(scoreCol), championshipPoints: val(champCol), rank, category: rank != null ? division : (old?.category ?? division), laneCount: old?.laneCount ?? null, spot: old?.spot ?? null, targetKind: old?.targetKind ?? "", sagomaMax: old?.sagomaMax ?? null, notes: kept.length ? "Piazzole dal segnapunti, risultato dal portale FITAST" : "Dal portale FITAST", piazzole: kept } })
       .then(() => {
         refreshActivity();
         onDone(comp.id);

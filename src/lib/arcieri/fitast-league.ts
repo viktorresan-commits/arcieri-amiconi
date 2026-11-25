@@ -31,6 +31,15 @@ const NOT_LOGO = /spacer|pixel|blank|vide|puce|fleche|freccia|arrow|btn|bouton|b
 const clean = (s: string) => s.replace(/\s+/g, " ").trim();
 
 /** chiave per riconoscere la stessa compagnia scritta in modi diversi (ASD, Compagnia, apostrofi…) */
+/** categoria leggibile: via i pezzi vuoti e «Tutte» (es. «Messere · » → «Messere») */
+export function cleanCategory(raw: string) {
+  return raw
+    .split("·")
+    .map((x) => x.trim())
+    .filter((x) => x && !/^tutt/i.test(x))
+    .join(" · ");
+}
+
 export function teamKey(name: string) {
   return clean(
     name
