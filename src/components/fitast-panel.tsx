@@ -1275,10 +1275,9 @@ function SaveScore({ nums, row, m, comps, userId, onDone, onCancel }: { nums: { 
     const comp = comps.find((x) => x.id === compId);
     if (!comp) return setErr("Scegli la gara del calendario.");
     const old = comp.entries.find((e) => e.userId === userId);
-    if (old?.piazzole.length) {
-      setErr("In questa gara hai già segnato le piazzole: il totale viene da quelle.");
-      return;
-    }
+    // piazzole già segnate (dal segnapunti o in Gare): restano, e il totale viene da quelle;
+    // dal portale si aggiungono posto, categoria e punti campionato
+    const kept = old?.piazzole ?? [];
     const rank = rankCol >= 0 && (val(rankCol) ?? 0) >= 1 ? val(rankCol) : (old?.rank ?? null);
     if (rank != null && !division) {
       setErr("Per il posto in classifica scegli la categoria: Madonne, Messeri, Pueri o Juniores.");
@@ -1286,7 +1285,7 @@ function SaveScore({ nums, row, m, comps, userId, onDone, onCancel }: { nums: { 
     }
     setBusy(true);
     setErr("");
-    saveEntry({ data: { competitionId: comp.id, score: val(scoreCol), championshipPoints: val(champCol), rank, category: rank != null ? division : (old?.category ?? division), laneCount: old?.laneCount ?? null, spot: old?.spot ?? null, targetKind: old?.targetKind ?? "", sagomaMax: old?.sagomaMax ?? null, notes: "Dal portale FITAST", piazzole: [] } })
+    saveEntry({ data: { competitionId: comp.id, score: val(scoreCol), championshipPoints: val(champCol), rank, category: rank != null ? division : (old?.category ?? division), laneCount: old?.laneCount ?? null, spot: old?.spot ?? null, targetKind: old?.targetKind ?? "", sagomaMax: old?.sagomaMax ?? null, notes: kept.length ? "Piazzole dal segnapunti, risultato dal portale FITAST" : "Dal portale FITAST", piazzole: kept } })
       .then(() => {
         refreshActivity();
         onDone(comp.id);
@@ -1329,6 +1328,12 @@ function SaveScore({ nums, row, m, comps, userId, onDone, onCancel }: { nums: { 
           ))}
         </div>
       </div>
+      {(() => {
+        const prev = comps.find((x) => x.id === compId)?.entries.find((e) => e.userId === userId);
+        return prev?.piazzole.length ? (
+          <p className="text-xs text-muted">In questa gara hai già {prev.piazzole.length} piazzole ({prev.piazzole.reduce((a, l) => a + l.score, 0)} punti): restano, e dal portale si aggiungono posto, categoria e punti campionato.</p>
+        ) : null;
+      })()}
       {err ? <ErrorNote text={err} /> : null}
       <div className="grid grid-cols-2 gap-2">
         <Button variant="ghost" onClick={onCancel}>Annulla</Button>
