@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { Link } from "@tanstack/react-router";
 import type { listCompanies } from "@/lib/arcieri/compagnie.api";
 import { companyWelcome, createCompany, joinCompany, updateCompany } from "@/lib/arcieri/compagnie.api";
-import { syncFitastCompanies } from "@/lib/arcieri/fitast-league.api";
+import { findCompanyLogos, syncFitastCompanies } from "@/lib/arcieri/fitast-league.api";
 import { Avatar, Button, Card, ErrorNote, Field, Segmented, TextInput } from "./kit";
 import { RankBars } from "./rank-bars";
 
@@ -218,6 +218,38 @@ function DefaultCrest({ color, letter }: { color: string; letter: string }) {
 
 type Metric = "fitast" | "points" | "arrows" | "members" | "gare" | "avg";
 
+/** quante compagnie si vedono prima di "Mostra tutte" */
+const FIRST_COMPANIES = 10;
+
+/**
+ * Loghi veri: il server li cerca poche compagnie per volta (portale FITAST, sito, dominio dell'e-mail);
+ * qui si richiama finché ne restano, una volta per sessione, e si avvisa quando ne arrivano di nuovi.
+ */
+function useLogoSearch(onFound?: () => void) {
+  const cb = useRef(onFound);
+  cb.current = onFound;
+  useEffect(() => {
+    let off = false;
+    try {
+      if (sessionStorage.getItem("aa-company-logos") === "1") return;
+      sessionStorage.setItem("aa-company-logos", "1");
+    } catch {
+      /* niente memoria di sessione: si cerca lo stesso */
+    }
+    void (async () => {
+      for (let round = 0; round < 12 && !off; round += 1) {
+        const r = await findCompanyLogos().catch(() => null);
+        if (!r || off) return;
+        if (r.found > 0) cb.current?.();
+        if (!r.remaining || !r.checked) return;
+      }
+    })();
+    return () => {
+      off = true;
+    };
+  }, []);
+}
+
 export function CompanyLeague({ board, onJoin, busy, onSynced, part, fitastBoard, fitastReady = false }: {
   board: Board;
   onJoin: (id: number) => void;
@@ -236,7 +268,10 @@ export function CompanyLeague({ board, onJoin, busy, onSynced, part, fitastBoard
   const [metric, setMetric] = useState<Metric>(hasFitast || fitastBoard ? "fitast" : "points");
   const [open, setOpen] = useState<number | null>(null);
   const [find, setFind] = useState("");
+  const [showAll, setShowAll] = useState(false);
+  const [editCo, setEditCo] = useState<number | null>(null);
   const [sync, setSync] = useState<{ busy: boolean; text: string }>({ busy: false, text: "" });
+  useLogoSearch(part === "ranking" ? undefined : onSynced);
   // l'elenco delle compagnie FITAST si prepara da solo (una volta alla settimana)
   useEffect(() => {
     if (part === "ranking") return;
@@ -311,7 +346,14 @@ export function CompanyLeague({ board, onJoin, busy, onSynced, part, fitastBoard
             {sync.text ? <p className="w-full break-words text-xs text-muted">{sync.text}</p> : null}
           </div>
         ) : null}
-        {board.companies.filter((co) => !find.trim() || `${co.name} ${co.city}`.toLowerCase().includes(find.trim().toLowerCase())).map((co) => {
+        {(() => {
+          const matching = board.companies.filter((co) => !find.trim() || `${co.name} ${co.city}`.toLowerCase().includes(find.trim().toLowerCase()));
+          // prima la propria compagnia, poi le altre; ne bastano 10, le altre a richiesta
+          const ordered = [...matching].sort((a, b) => Number(b.id === board.mine) - Number(a.id === board.mine));
+          const shown = find.trim() || showAll ? ordered : ordered.slice(0, FIRST_COMPANIES);
+          return (
+            <>
+              {shown.map((co) => {
           const expanded = open === co.id;
           const kinds = ["phone", "whatsapp", "email", "website", "instagram", "facebook", "youtube", "tiktok", "address"] as const;
           const links = kinds.map((kind) => ({ kind, href: hrefOf(kind, co[kind]) })).filter((item) => item.href);
@@ -364,11 +406,26 @@ export function CompanyLeague({ board, onJoin, busy, onSynced, part, fitastBoard
                     </div>
                   ) : co.members > 0 && co.id !== board.mine ? <p className="text-xs text-muted">Gli iscritti li vedono il presidente e il fondatore.</p> : null}
                   <CompanyTrophies companyId={co.id} companyName={co.name} />
+                  {board.isAdmin ? (
+                    editCo === co.id ? (
+                      <CompanyForm co={co} onCancel={() => setEditCo(null)} onDone={() => { setEditCo(null); onSynced?.(); }} />
+                    ) : (
+                      <button type="button" onClick={() => setEditCo(co.id)} className="aa-chip justify-self-start">Modifica logo, sito e contatti</button>
+                    )
+                  ) : null}
                 </div>
               ) : null}
             </div>
           );
-        })}
+              })}
+              {!find.trim() && !showAll && ordered.length > FIRST_COMPANIES ? (
+                <button type="button" onClick={() => setShowAll(true)} className="aa-press min-h-11 rounded-2xl border border-line text-sm font-semibold">
+                  Mostra tutte le {ordered.length} compagnie
+                </button>
+              ) : null}
+            </>
+          );
+        })()}
       </Card>
   );
   if (part === "ranking") return ranking;
@@ -553,6 +610,13 @@ export function CompanyWelcome() {
   const [busy, setBusy] = useState<number | null>(null);
   const [err, setErr] = useState("");
   const [find, setFind] = useState("");
+  const [showAll, setShowAll] = useState(false);
+  // arrivano loghi veri: si rilegge l'elenco (solo se la scelta è ancora aperta)
+  const open = useRef(false);
+  open.current = Boolean(w && !w.chosen);
+  useLogoSearch(() => {
+    if (open.current) void companyWelcome().then((again) => open.current && !again.chosen && setW(again)).catch(() => undefined);
+  });
   useEffect(() => {
     let off = false;
     try {
@@ -606,7 +670,7 @@ export function CompanyWelcome() {
   const home = w.companies.find((c) => c.id === w.homeId) ?? w.companies[0];
   const needle = find.trim().toLowerCase();
   const allOthers = w.companies.filter((c) => c.id !== home?.id);
-  const others = needle ? allOthers.filter((c) => `${c.name} ${c.city}`.toLowerCase().includes(needle)) : allOthers;
+  const others = needle ? allOthers.filter((c) => `${c.name} ${c.city}`.toLowerCase().includes(needle)) : showAll ? allOthers : allOthers.slice(0, FIRST_COMPANIES);
   return createPortal(
     <div className="fixed inset-0 z-[80] overflow-y-auto bg-[#07100b]/92 backdrop-blur-md" role="dialog" aria-modal="true" aria-label="Scegli la tua compagnia">
       <div className="mx-auto grid max-w-md gap-4 px-4 pb-10 pt-[calc(env(safe-area-inset-top)+2rem)]">
@@ -650,6 +714,11 @@ export function CompanyWelcome() {
                   </div>
                 ))}
               </div>
+            ) : null}
+            {!needle && !showAll && allOthers.length > FIRST_COMPANIES ? (
+              <button type="button" onClick={() => setShowAll(true)} className="aa-press min-h-11 rounded-2xl border border-white/20 bg-white/[0.04] text-sm font-semibold text-white">
+                Mostra tutte le {allOthers.length} compagnie
+              </button>
             ) : null}
             <button type="button" onClick={() => setMode("fonda")} className="aa-press min-h-12 rounded-2xl border border-dashed border-white/30 text-sm font-semibold text-white">Fonda una nuova compagnia</button>
             {err ? <p className="text-center text-sm text-red-300">{err}</p> : null}

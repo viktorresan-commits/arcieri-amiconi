@@ -31,6 +31,7 @@ import { Route as AppAllenamentoIdRouteImport } from './routes/_app/allenamento.
 import { Route as AppArciereIdRouteImport } from './routes/_app/arciere.$id'
 import { Route as AppGestisciIdRouteImport } from './routes/_app/gestisci.$id'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as ApiLogoIdRouteImport } from './routes/api/logo/$id'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -141,6 +142,11 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiLogoIdRoute = ApiLogoIdRouteImport.update({
+  id: '/api/logo/$id',
+  path: '/api/logo/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
@@ -163,6 +169,7 @@ export interface FileRoutesByFullPath {
   '/arciere/$id': typeof AppArciereIdRoute
   '/gestisci/$id': typeof AppGestisciIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/logo/$id': typeof ApiLogoIdRoute
   '/allenamento/': typeof AppAllenamentoIndexRoute
 }
 export interface FileRoutesByTo {
@@ -185,6 +192,7 @@ export interface FileRoutesByTo {
   '/arciere/$id': typeof AppArciereIdRoute
   '/gestisci/$id': typeof AppGestisciIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/logo/$id': typeof ApiLogoIdRoute
   '/allenamento': typeof AppAllenamentoIndexRoute
 }
 export interface FileRoutesById {
@@ -210,6 +218,7 @@ export interface FileRoutesById {
   '/_app/arciere/$id': typeof AppArciereIdRoute
   '/_app/gestisci/$id': typeof AppGestisciIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/logo/$id': typeof ApiLogoIdRoute
   '/_app/allenamento/': typeof AppAllenamentoIndexRoute
 }
 export interface FileRouteTypes {
@@ -235,6 +244,7 @@ export interface FileRouteTypes {
     | '/arciere/$id'
     | '/gestisci/$id'
     | '/api/auth/$'
+    | '/api/logo/$id'
     | '/allenamento/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -257,6 +267,7 @@ export interface FileRouteTypes {
     | '/arciere/$id'
     | '/gestisci/$id'
     | '/api/auth/$'
+    | '/api/logo/$id'
     | '/allenamento'
   id:
     | '__root__'
@@ -281,6 +292,7 @@ export interface FileRouteTypes {
     | '/_app/arciere/$id'
     | '/_app/gestisci/$id'
     | '/api/auth/$'
+    | '/api/logo/$id'
     | '/_app/allenamento/'
   fileRoutesById: FileRoutesById
 }
@@ -288,6 +300,7 @@ export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   LoginRoute: typeof LoginRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
+  ApiLogoIdRoute: typeof ApiLogoIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -446,6 +459,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/logo/$id': {
+      id: '/api/logo/$id'
+      path: '/api/logo/$id'
+      fullPath: '/api/logo/$id'
+      preLoaderRoute: typeof ApiLogoIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -509,6 +529,7 @@ const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   LoginRoute: LoginRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
+  ApiLogoIdRoute: ApiLogoIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

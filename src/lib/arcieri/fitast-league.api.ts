@@ -8,7 +8,8 @@ import { authMiddleware } from "@/lib/auth/middleware";
 import type { Sql } from "@/lib/db";
 import { asNum, clip, db, ensureMember, staffLevel } from "./access";
 import { readFitastPage } from "./fitast.api";
-import { COMPAGNIE_URL, crestOf, parseCompanies, teamKey, titleName, type RankRow } from "./fitast-league";
+import { COMPAGNIE_URL, crestOf, parseCompanies, teamKey, titleName, type PortalCompany, type RankRow } from "./fitast-league";
+import { imageInfo, logoCandidates, siteFromEmail, usableLogo } from "./company-logo";
 
 const DAY = 86_400_000;
 export const STANDING_KINDS = ["generale-squadre", "generale-arcieri", "gara-arcieri", "gara-squadre"] as const;
@@ -103,6 +104,140 @@ export const syncFitastCompanies = createServerFn({ method: "POST" })
     const good = list.length >= 3;
     await sql`update fitast_sync set info = ${JSON.stringify({ ok: good, total: list.length, added, linked })}::jsonb where key = 'compagnie'`;
     return { added, linked, total: list.length, skipped: false, diag: good ? [] : diag };
+  });
+
+/* ---------- loghi veri delle compagnie ---------- */
+
+const UA = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36 ArcieriAmiconi/1.0";
+const MAX_IMG = 900_000;
+
+/** legge un indirizzo con un limite di tempo e di dimensione (null se non risponde o è troppo grande) */
+async function grab(url: string, ms: number, max: number) {
+  try {
+    const res = await fetch(url, { redirect: "follow", signal: AbortSignal.timeout(ms), headers: { "user-agent": UA, accept: "text/html,image/*;q=0.9,*/*;q=0.5", "accept-language": "it-IT,it;q=0.9" } });
+    if (!res.ok) return null;
+    const len = Number(res.headers.get("content-length") || 0);
+    if (len > max) return null;
+    const buf = new Uint8Array(await res.arrayBuffer());
+    if (buf.length > max) return null;
+    return { url: res.url || url, type: res.headers.get("content-type") ?? "", body: buf };
+  } catch {
+    return null;
+  }
+}
+
+/** un'immagine che può fare da stemma: formato riconosciuto, non minuscola, non una striscia */
+async function logoImage(url: string) {
+  const r = await grab(url, 6000, MAX_IMG);
+  if (!r) return null;
+  const info = imageInfo(r.body);
+  if (!usableLogo(info) || !info) return null;
+  return { mime: info.mime, data: Buffer.from(r.body).toString("base64"), source: r.url };
+}
+
+type LogoHint = { logo?: string; detail?: string };
+
+function hintOf(raw: string): LogoHint {
+  try {
+    const v = JSON.parse(raw || "{}") as LogoHint;
+    return typeof v === "object" && v ? v : {};
+  } catch {
+    return {};
+  }
+}
+
+/** cerca il logo: immagine del portale, pagina della compagnia sul portale, sito, dominio dell'e-mail */
+async function logoFor(c: { website: string; email: string; logo_hint: string }, until: number) {
+  const hint = hintOf(c.logo_hint);
+  if (hint.logo) {
+    const img = await logoImage(hint.logo);
+    if (img) return img;
+  }
+  const pages = [hint.detail ?? "", c.website, siteFromEmail(c.email)].filter((u, i, all) => /^https?:\/\//i.test(u) && all.indexOf(u) === i);
+  for (const page of pages) {
+    if (Date.now() > until) break;
+    const r = await grab(page, 6000, 2_000_000);
+    if (!r || !/html|text/i.test(r.type || "text/html")) continue;
+    const html = new TextDecoder().decode(r.body);
+    for (const cand of logoCandidates(html, r.url).slice(0, 4)) {
+      if (Date.now() > until) break;
+      const img = await logoImage(cand.url);
+      if (img) return img;
+    }
+  }
+  return null;
+}
+
+/** indizi dal portale (stemmi e pagine delle compagnie), al massimo una volta alla settimana */
+async function refreshLogoHints(sql: Sql) {
+  const last = await sql<{ at: string }>`select at from fitast_sync where key = 'compagnie-loghi' limit 1`;
+  if (last[0] && Date.now() - new Date(last[0].at).getTime() < 7 * DAY) return;
+  await sql`insert into fitast_sync (key, at, info) values ('compagnie-loghi', now(), '{}'::jsonb) on conflict (key) do update set at = now()`;
+  let list: PortalCompany[] = [];
+  try {
+    list = parseCompanies(await readFitastPage(COMPAGNIE_URL));
+  } catch {
+    return;
+  }
+  const rows = await sql<{ id: number; name: string; fitast_name: string }>`select id, name, fitast_name from companies`;
+  const byKey = new Map<string, number>();
+  for (const r of rows) for (const k of [teamKey(r.fitast_name), teamKey(r.name)]) if (k && !byKey.has(k)) byKey.set(k, asNum(r.id));
+  let hints = 0;
+  for (const c of list) {
+    const id = byKey.get(teamKey(c.name));
+    if (id == null) continue;
+    const website = c.website ? clip(/^https?:\/\//i.test(c.website) ? c.website : `https://${c.website.replace(/^\/+/, "")}`, 160) : "";
+    const email = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c.email) ? c.email.toLowerCase().slice(0, 120) : "";
+    const hint = c.logo || c.detail ? JSON.stringify({ logo: c.logo || undefined, detail: c.detail || undefined }) : "";
+    await sql`
+      update companies set
+        logo_hint = case when ${hint} <> '' then ${hint} else logo_hint end,
+        website = case when website = '' then ${website} else website end,
+        email = case when email = '' then ${email} else email end
+      where id = ${id}`;
+    if (hint) hints++;
+  }
+  await sql`update fitast_sync set info = ${JSON.stringify({ total: list.length, hints })}::jsonb where key = 'compagnie-loghi'`;
+}
+
+/**
+ * Loghi veri al posto degli stemmi disegnati: poche compagnie per volta (la pagina richiama finché ne
+ * restano), ognuna ricontrollata al massimo una volta al mese. Il logo trovato si serve da /api/logo/<id>.
+ */
+export const findCompanyLogos = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    const sql = await db();
+    await ensureMember(sql, context.userId);
+    const t0 = Date.now();
+    await refreshLogoHints(sql);
+    const until = t0 + 18_000;
+    const todo = await sql<{ id: number; website: string; email: string; logo_hint: string }>`
+      select id, website, email, logo_hint from companies
+      where source = 'fitast' and (logo_url is null or logo_url = '' or logo_url like 'data:image/svg+xml%')
+        and (logo_checked_at is null or logo_checked_at < now() - interval '30 days')
+      order by (website <> '' or logo_hint <> '') desc, id
+      limit 6`;
+    let checked = 0;
+    let found = 0;
+    for (const c of todo) {
+      if (Date.now() > until - 4000) break;
+      await sql`update companies set logo_checked_at = now() where id = ${asNum(c.id)}`;
+      checked++;
+      const img = await logoFor(c, until);
+      if (!img) continue;
+      await sql`
+        insert into company_logos (company_id, mime, data, source, found_at)
+        values (${asNum(c.id)}, ${img.mime}, ${img.data}, ${clip(img.source, 400)}, now())
+        on conflict (company_id) do update set mime = excluded.mime, data = excluded.data, source = excluded.source, found_at = now()`;
+      await sql`update companies set logo_url = ${`/api/logo/${asNum(c.id)}?v=${Date.now().toString(36)}`} where id = ${asNum(c.id)}`;
+      found++;
+    }
+    const left = await sql<{ n: number }>`
+      select count(*)::int as n from companies
+      where source = 'fitast' and (logo_url is null or logo_url = '' or logo_url like 'data:image/svg+xml%')
+        and (logo_checked_at is null or logo_checked_at < now() - interval '30 days')`;
+    return { checked, found, remaining: asNum(left[0]?.n) };
   });
 
 export type StandingRow = RankRow;

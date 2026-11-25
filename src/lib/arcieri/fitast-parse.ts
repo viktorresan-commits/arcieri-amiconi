@@ -6,7 +6,7 @@
  */
 
 export type FitastLink = { text: string; href: string };
-export type FitastCell = { text: string; href?: string; press?: string };
+export type FitastCell = { text: string; href?: string; press?: string; /** immagine dentro la cella (es. stemma della compagnia) */ img?: string };
 /**
  * source "script": righe trovate nei dati di uno script della pagina; "wd": tabella WEBDEV (le righe
  * arrivano in XML dentro lo script che la dichiara e poi con le richieste AJAX LIGNESTABLE).
@@ -386,6 +386,11 @@ export function parseHtml(html: string, url: string): Omit<FitastPage, "fetchedA
       continue;
     }
     if (tag === "img" && link && attrs.alt) link.text += ` ${attrs.alt} `;
+    if (tag === "img" && top?.cell && !top.cell.img) {
+      const src = attrs.src ?? attrs["data-src"] ?? "";
+      // la prima immagine "vera" della cella (non pallini, frecce o spazi del portale)
+      if (src && !/^data:/i.test(src) && !/spacer|pixel|blank|vide|puce|fleche|arrow|btn|bouton|loupe|picto/i.test(src)) top.cell.img = absolute(src, url);
+    }
     if (BLOCK.has(tag)) flush();
   }
   flush();

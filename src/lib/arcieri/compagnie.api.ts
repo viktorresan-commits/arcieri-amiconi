@@ -266,7 +266,9 @@ export const updateCompany = createServerFn({ method: "POST" })
         name = ${f.name}, motto = ${f.motto}, city = ${f.city}, bio = ${f.bio}, color = ${f.color},
         phone = ${f.phone}, whatsapp = ${f.whatsapp}, email = ${f.email}, website = ${f.website},
         instagram = ${f.instagram}, facebook = ${f.facebook}, youtube = ${f.youtube}, tiktok = ${f.tiktok}, address = ${f.address},
-        logo_url = case when ${data.logo === undefined} then logo_url else ${data.logo ?? null} end
+        logo_url = case when ${data.logo === undefined} then logo_url else ${data.logo ?? null} end,
+        -- sito o e-mail nuovi: il logo vero si ricerca alla prossima occasione
+        logo_checked_at = case when website <> ${f.website} or email <> ${f.email} then null else logo_checked_at end
       where id = ${data.id}`;
     return { ok: true };
   });

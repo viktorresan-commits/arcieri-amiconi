@@ -7,7 +7,26 @@ import { numIt } from "./fitast-gare";
 
 export const COMPAGNIE_URL = "http://89.46.73.21/FITAST_WEB/IT/View-COMPAGNIE.awp";
 
-export type PortalCompany = { name: string; city: string; province: string; region: string; code: string; president: string; phone: string; email: string; website: string; address: string };
+export type PortalCompany = {
+  name: string;
+  city: string;
+  province: string;
+  region: string;
+  code: string;
+  president: string;
+  phone: string;
+  email: string;
+  website: string;
+  address: string;
+  /** stemma mostrato dal portale nella riga della compagnia, se c'è */
+  logo?: string;
+  /** pagina della compagnia sul portale, se la riga ci porta */
+  detail?: string;
+};
+
+const IMG_PATH = /\.(png|jpe?g|gif|webp|svg)(\?|#|$)/i;
+/** immagini di servizio del portale (frecce, pulsanti, spazi): non sono stemmi */
+const NOT_LOGO = /spacer|pixel|blank|vide|puce|fleche|freccia|arrow|btn|bouton|button|loupe|search|cerca|icone?_|ico_|picto|sort|tri_|check|coche|plus|moins|close|chiudi|loading|attente/i;
 
 const clean = (s: string) => s.replace(/\s+/g, " ").trim();
 
@@ -86,7 +105,19 @@ export function parseCompanies(page: FitastPage): PortalCompany[] {
       const name = clean(r[nameCol]?.text ?? "");
       if (name.length < 3 || /^\d+$/.test(name)) continue;
       const email = at(r, HEAD.email) || (r.map((c) => c.text).join(" ").match(/[\w.+-]+@[\w-]+\.[\w.]+/)?.[0] ?? "");
-      add({ name, city: at(r, HEAD.city), province: at(r, HEAD.province), region: at(r, HEAD.region), code: at(r, HEAD.code), president: at(r, HEAD.president), phone: at(r, HEAD.phone), email, website: at(r, HEAD.website), address: at(r, HEAD.address) });
+      // stemma: un'immagine nella riga, oppure (righe WEBDEV) il percorso di un'immagine scritto in una colonna
+      const imgCell = r.find((c) => c.img && !NOT_LOGO.test(c.img))?.img ?? "";
+      const imgText = r.map((c) => clean(c.text)).find((x) => IMG_PATH.test(x) && !/\s/.test(x) && !NOT_LOGO.test(x)) ?? "";
+      let logo = imgCell;
+      if (!logo && imgText) {
+        try {
+          logo = new URL(imgText, page.url).href;
+        } catch {
+          logo = "";
+        }
+      }
+      const detail = r.map((c) => c.href ?? "").find((h) => /\.awp\b/i.test(h) && !/COMPAGNIE\.awp/i.test(h)) ?? "";
+      add({ name, city: at(r, HEAD.city), province: at(r, HEAD.province), region: at(r, HEAD.region), code: at(r, HEAD.code), president: at(r, HEAD.president), phone: at(r, HEAD.phone), email, website: at(r, HEAD.website), address: at(r, HEAD.address), logo, detail });
     }
     if (out.size >= 3) break;
   }
