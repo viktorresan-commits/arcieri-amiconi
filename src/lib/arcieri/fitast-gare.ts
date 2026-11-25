@@ -323,3 +323,25 @@ export function teamOfRow(head: string[], row: string[]) {
   const k = head.findIndex((h) => /compagn|societ/i.test(h));
   return k >= 0 ? (row[k] ?? "").trim() : "";
 }
+
+const GENERIC = new Set(["gara", "gare", "campionato", "invernale", "estivo", "estiva", "regionale", "provinciale", "nazionale", "finale", "trofeo", "coppa", "memorial", "torneo", "prova", "tappa", "giornata", "arcieri", "compagnia", "della", "delle", "degli"]);
+const words = (t: string) =>
+  t
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .split(" ")
+    .filter((w) => w.length > 2);
+/**
+ * Quanto il nome di una gara aperta somiglia a quello dell'elenco: 2 uguale, 1 una parola che la
+ * distingue in comune (Falconara, Natale…), 0.5 nessuna parola distintiva da confrontare, 0 diversa.
+ */
+export function titleScore(listTitle: string, pageTitle: string) {
+  const a = words(cleanTitle(listTitle));
+  const b = words(cleanTitle(pageTitle));
+  if (a.length && a.join(" ") === b.join(" ")) return 2;
+  const distinct = a.filter((w) => !GENERIC.has(w) && !/^\d+$/.test(w));
+  if (!distinct.length) return 0.5;
+  return distinct.some((w) => b.includes(w)) ? 1 : 0;
+}

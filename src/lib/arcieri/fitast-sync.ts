@@ -6,9 +6,9 @@
  */
 import { FITAST_HOME, fitastRead } from "./fitast.api";
 import type { FitastPage } from "./fitast-parse";
-import { classificaUrl, cleanTitle, findGare, garaDateOf, garaIdOf, garaTitleOf, seasonRange, seasonSelect } from "./fitast-gare";
+import { classificaUrl, cleanTitle, titleScore, findGare, garaDateOf, garaIdOf, garaTitleOf, seasonRange, seasonSelect } from "./fitast-gare";
 import { currentTexts, filterCombos, pressReq, type Req } from "./fitast-nav";
-import { rankingRows, SQUADRE_PAGES, teamKey, type RankRow } from "./fitast-league";
+import { rankingRows, SQUADRE_PAGES, type RankRow } from "./fitast-league";
 import { saveFitastStandings, type StandingKind } from "./fitast-league.api";
 
 export type SyncProgress = { step: string; pages: number; saved: number; diag?: string[]; done?: boolean; error?: string };
@@ -134,7 +134,7 @@ export async function syncStandings(opts: { onProgress: (p: SyncProgress) => voi
       if (!p0 || garaIdOf(p0) !== id) continue;
       // più gare nello stesso giorno: deve essere quella dell'elenco
       const title = cleanTitle(garaTitleOf(p0) || g.title) || g.title;
-      if (candidates.length > 1 && g.title && teamKey(title) && !teamKey(title).includes(teamKey(g.title).split(" ")[0] ?? "")) continue;
+      if (candidates.length > 1 && titleScore(g.title, title) < 1 && candidates.indexOf(id) < candidates.length - 1) continue;
       seen.add(id);
       const gara = { id, title, day: garaDateOf(p0) ?? g.date ?? "" };
       await allCombos(p0, r0, "gara-arcieri", 3, 24, gara);
