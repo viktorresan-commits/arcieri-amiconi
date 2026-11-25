@@ -17,6 +17,9 @@ import { listClubOrders, listGadgets, saveClubOrder, setClubOrder, skillBoard, s
 import { bowLabel, memberLabel, DIVISIONS } from "@/lib/arcieri/labels";
 import type { AvatarLook } from "@/lib/arcieri/avatar";
 import { SceneBackdrop } from "@/components/scene-2d";
+import { ArcherFront } from "@/components/archer-front";
+import { LevelCrest } from "@/components/level-crest";
+import { levelOf } from "@/lib/arcieri/xp";
 import type { Sky } from "@/lib/arcieri/sky3d";
 import { Glyph, type IconName } from "@/components/icons";
 import { fmtAvg } from "@/lib/arcieri/scoring";
@@ -69,6 +72,72 @@ function skillOf(row: { champ: number; compAvg: number | null; avg: number | nul
 
 function bySkill(a: Archer, b: Archer) {
   return b.skill - a.skill || b.arrows - a.arrows || a.name.localeCompare(b.name, "it");
+}
+
+const DIVISION_TINT: Record<string, string> = { Madonne: "#d46a9a", Messeri: "#4f8fd9", Pueri: "#4fb07a", Juniores: "#e08a3c" };
+
+/** Scheda di un arciere: mezzo busto che esce dalla nicchia con la sua ambientazione, livello, divisione e numeri */
+function ArcherCard({ row, look, index, me }: {
+  row: { id: number; userId: string; name: string; division: string; bowType: string; xp?: number; sessions: number; arrows: number; gare: number; bestDistance: number | null; avatarColor: string; photoUrl: string | null; admin: boolean };
+  look?: AvatarLook;
+  index: number;
+  me: boolean;
+}) {
+  const lv = levelOf(Math.max(0, row.xp ?? 0));
+  const tint = DIVISION_TINT[row.division] ?? "#9aa39c";
+  const stats: [string, string][] = [
+    [row.sessions.toLocaleString("it-IT"), row.sessions === 1 ? "allenamento" : "allenamenti"],
+    [row.arrows.toLocaleString("it-IT"), "frecce"],
+    [String(row.gare), row.gare === 1 ? "gara" : "gare"],
+  ];
+  return (
+    <Link to="/arciere/$id" params={{ id: String(row.id) }} className="block pt-4">
+      <div className={`aa-menu-row aa-archer-card relative flex items-stretch gap-3 rounded-[1.4rem] p-2 pr-2.5 ${me ? "is-me" : ""}`} style={{ animationDelay: `${Math.min(index, 10) * 40}ms`, ["--div" as string]: tint }}>
+        {/* nicchia: l'ambientazione dietro, il mezzo busto che sporge in alto */}
+        <div className="relative w-[5.6rem] shrink-0 self-stretch">
+          <div className="absolute inset-0 overflow-hidden rounded-[1.05rem] bg-[#16201b]">
+            {look?.scene ? (
+              <span className="absolute inset-x-[-60%] -bottom-[10%] top-[-60%] opacity-90">
+                <SceneBackdrop sky={MEMBER_SKY} scene={look.scene} id={`mb${row.id}`} />
+              </span>
+            ) : null}
+            <span className="absolute inset-0 bg-[radial-gradient(90%_70%_at_50%_30%,transparent,rgba(0,0,0,0.45))]" />
+          </div>
+          {look ? (
+            <div className="absolute inset-x-0 bottom-0 h-[128%] overflow-hidden rounded-b-[1.05rem]">
+              <ArcherFront look={{ ...look, lefty: false }} fit crop="28 2 144 150" className="aa-bust h-full w-full drop-shadow-[0_4px_6px_rgba(0,0,0,0.45)]" />
+            </div>
+          ) : (
+            <div className="absolute inset-0 grid place-items-center">
+              <Avatar size="lg" label={row.name} color={row.avatarColor} photo={row.photoUrl} admin={row.admin} />
+            </div>
+          )}
+          {/* livello: lo stemma in un angolo della nicchia */}
+          <span className="absolute -bottom-1.5 -right-2 z-[2] h-9 w-8 drop-shadow-[0_3px_4px_rgba(0,0,0,0.6)]"><LevelCrest xp={row.xp ?? 0} compact className="h-full w-full" /></span>
+        </div>
+        <div className="min-w-0 flex-1 py-1">
+          <div className="flex items-center gap-2">
+            <p className="min-w-0 truncate font-display text-[1.55rem] leading-none">{row.name}</p>
+            {me ? <span className="shrink-0 rounded-full bg-primary/25 px-2 py-0.5 text-[0.6rem] font-bold uppercase tracking-wider text-primary">Tu</span> : null}
+          </div>
+          <div className="mt-1.5 flex flex-wrap items-center gap-1">
+            {row.division ? <span className="rounded-full px-2 py-0.5 text-[0.62rem] font-bold uppercase tracking-wider" style={{ background: `color-mix(in srgb, ${tint} 26%, transparent)`, color: `color-mix(in srgb, ${tint} 70%, white)` }}>{row.division}</span> : null}
+            <span className="rounded-full bg-[#e0b15a]/15 px-2 py-0.5 text-[0.62rem] font-bold uppercase tracking-wider text-[#f1cf8a]">Liv. {lv.level}</span>
+            {row.bowType ? <span className="truncate text-[0.68rem] text-muted">{bowLabel(row.bowType)}</span> : null}
+          </div>
+          <div className="mt-2 grid grid-cols-3 gap-1">
+            {stats.map(([v, k]) => (
+              <span key={k} className="rounded-xl bg-white/[0.05] px-1.5 py-1 text-center">
+                <b className="block font-display text-[1.05rem] leading-none tabular-nums">{v}</b>
+                <span className="block truncate text-[0.6rem] text-muted">{k}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+        <span className="aa-bell grid h-8 w-8 shrink-0 self-center place-items-center rounded-full"><Glyph name="chevron" size={15} /></span>
+      </div>
+    </Link>
+  );
 }
 
 function axisName(name: string, peers: string[]) {
@@ -228,26 +297,7 @@ function Page() {
             </div>
             {me.role === "admin" ? <p className="px-1 text-xs text-muted">Tieni premuto su una persona per toglierla dall'app.</p> : null}
             {inDivision.filter((row) => !removed.includes(row.id)).map((row, i) => {
-              const card = (
-                <Link to="/arciere/$id" params={{ id: String(row.id) }}>
-                  <Card className="aa-menu-row aa-member relative flex items-center gap-3 overflow-hidden p-3" style={{ animationDelay: `${Math.min(i, 10) * 40}ms` }}>
-                    {/* l'ambientazione scelta da ognuno, a destra, che sfuma nella scheda */}
-                    {looks[row.userId]?.scene ? (
-                      <span aria-hidden className="aa-member-bg pointer-events-none absolute inset-y-0 right-0 w-[70%]">
-                        <span className="absolute inset-x-0 -bottom-[30%] -top-[72%]">
-                          <SceneBackdrop sky={MEMBER_SKY} scene={looks[row.userId]?.scene} id={`mb${row.id}`} />
-                        </span>
-                      </span>
-                    ) : null}
-                    <span className="relative z-[1]"><Avatar size="lg" label={row.name} color={row.avatarColor} photo={row.photoUrl} look={looks[row.userId]} admin={row.admin} /></span>
-                    <div className="relative z-[1] min-w-0 flex-1 [text-shadow:0_1px_6px_rgba(0,0,0,0.7)]">
-                      <p className="truncate font-display text-2xl leading-none">{row.name}</p>
-                      <p className="mt-1 text-xs text-white/75">{[row.division, `${row.sessions} allenamenti`, `${row.arrows} frecce`, `${row.gare} gare`, row.bestDistance != null ? `${row.bestDistance} m` : ""].filter(Boolean).join(" · ")}</p>
-                    </div>
-                    <span className="aa-bell relative z-[1] grid h-9 w-9 shrink-0 place-items-center rounded-full"><Glyph name="chevron" size={16} /></span>
-                  </Card>
-                </Link>
-              );
+              const card = <ArcherCard row={row} look={looks[row.userId]} index={i} me={row.userId === me.userId} />;
               if (me.role !== "admin" || row.userId === me.userId || (row.admin && !me.isSuper)) return <div key={row.id}>{card}</div>;
               return (
                 <HoldDelete

@@ -1132,9 +1132,9 @@ export const squadBoard = createServerFn({ method: "GET" })
 
     const everyone = await sql<{
       id: number; user_id: string; given_name: string; family_name: string; nickname: string; slug: string;
-      avatar_color: string; photo_url: string | null; bow_type: string; user_image: string | null; role: string;
+      avatar_color: string; photo_url: string | null; bow_type: string; user_image: string | null; role: string; xp: number | null;
     }>`
-      select m.id, m.user_id, m.given_name, m.family_name, m.nickname, m.slug, m.avatar_color, m.photo_url, m.bow_type, u.image as user_image, m.role
+      select m.id, m.user_id, m.given_name, m.family_name, m.nickname, m.slug, m.avatar_color, m.photo_url, m.bow_type, u.image as user_image, m.role, m.xp
       from members m
       join "user" u on u.id = m.user_id
       where m.user_id is not null
@@ -1142,6 +1142,9 @@ export const squadBoard = createServerFn({ method: "GET" })
     // si vedono solo gli arcieri della propria compagnia
     const peers = await companyPeers(sql, context.userId);
     const people = everyone.filter((row) => peers.has(row.user_id));
+    // livello di ognuno: punti del telefono più allenamenti e gare registrati
+    const xpOf = new Map<string, number>();
+    await Promise.all(people.map(async (row) => xpOf.set(row.user_id, asNum(row.xp) + (await activityXp(sql, row.user_id)))));
 
     const train = await sql<{ user_id: string; sessions: number; arrows: number; points: number }>`
       select s.user_id,
@@ -1296,6 +1299,7 @@ export const squadBoard = createServerFn({ method: "GET" })
           admin: row.role === "admin",
           photoUrl: row.photo_url || remote,
           bowType: row.bow_type,
+          xp: xpOf.get(row.user_id) ?? 0,
           sessions: asNum(shot?.sessions),
           arrows: arrows + garaArrows,
           trainArrows: arrows,
