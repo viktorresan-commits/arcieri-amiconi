@@ -121,6 +121,24 @@ export function bodyPoints(lm: Landmark[], aspect: number): Record<number, V3> |
   for (const i of [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]) if (out[i]) out[i][2] = earsZ;
   out[0][2] = earsZ + 0.09 * Math.sqrt(Math.max(0, 1 - faceTurn * faceTurn * 0.6));
   for (const i of [1, 2, 3, 4, 5, 6, 9, 10]) if (out[i]) out[i][2] = earsZ + 0.07 * Math.sqrt(Math.max(0, 1 - faceTurn * faceTurn * 0.6));
+  // punti in metri del modello (xw, yw, zw): quando ci sono per spalle, braccia e anche, il corpo
+  // viene da lì. Sono già un corpo 3D coerente (lunghezze vere, profondità vera): le braccia hanno
+  // l'inclinazione e la posizione del video, non quella ricostruita dalle sole lunghezze nell'immagine
+  const Wp = (i: number) => {
+    const p = lm[i];
+    return p && typeof p.xw === "number" && typeof p.yw === "number" && typeof p.zw === "number" && Number.isFinite(p.xw + p.yw + p.zw) ? p : null;
+  };
+  if ([11, 12, 13, 14, 15, 16, 23, 24].every((i) => Wp(i) && vis(lm[i]) > 0.2)) {
+    const feet = [27, 28, 29, 30, 31, 32].filter((i) => Wp(i) && vis(lm[i]) > 0.3).map((i) => lm[i].yw as number);
+    const hipYw = ((lm[23].yw as number) + (lm[24].yw as number)) / 2;
+    // y in su, con i piedi a terra (o il bacino all'altezza tipica se i piedi non si vedono)
+    const lift = anklesOk && feet.length ? Math.max(...feet) + 0.025 : hipYw + 0.93;
+    for (let i = 0; i < 33; i++) {
+      const p = Wp(i);
+      if (!p) continue;
+      out[i] = [p.xw as number, lift - (p.yw as number), -(p.zw as number)];
+    }
+  }
   // mani (21 punti per mano, se rilevate): profondità relativa al polso
   if (lm.length >= 133) {
     for (const [base, wr] of [[33, 15], [54, 16]] as const) {
@@ -144,10 +162,11 @@ export function bodyPoints(lm: Landmark[], aspect: number): Record<number, V3> |
     let zm = 0;
     for (let k = 0; k < FACE_IDS.length; k++) zm += lm[FACE0 + k].z ?? 0;
     zm /= FACE_IDS.length;
+    // posizione rispetto al naso: il viso resta sulla testa anche quando il corpo viene dai punti in metri
+    const n0 = XY(0);
     for (let k = 0; k < FACE_IDS.length; k++) {
       const q = XY(FACE0 + k);
-      q[2] = earZ + 0.07 + Math.max(-0.12, Math.min(0.12, -(((lm[FACE0 + k].z ?? 0) - zm) * aspect) / s));
-      out[FACE0 + k] = q;
+      out[FACE0 + k] = [out[0][0] + q[0] - n0[0], out[0][1] + q[1] - n0[1], earZ + 0.07 + Math.max(-0.12, Math.min(0.12, -(((lm[FACE0 + k].z ?? 0) - zm) * aspect) / s))];
     }
   }
   if (!hipsOk) {

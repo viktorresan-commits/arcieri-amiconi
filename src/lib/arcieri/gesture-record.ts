@@ -7,7 +7,7 @@ import { metricsOf, type Gear, type Hand, type Landmark, type Metrics, type Samp
 import { archeryKit, type KitNums } from "./pose-kit";
 import { evaluate, proMedian, proMetrics, proSteadiness, type ProMetrics, type ProSetup } from "./pose-pro";
 
-export type PackedLm = number[]; // x, y, z, visibilità, profondità in metri (zw) per ognuno dei 33 punti (i vecchi: 4 valori)
+export type PackedLm = number[]; // x, y, z, visibilità, zw, xw, yw (punto in metri) per ognuno dei 33 o 133 punti (i vecchi: 4 o 5 valori)
 
 export type GestureRecord = {
   v: 2;
@@ -41,7 +41,8 @@ export function packLm(lm: Landmark[] | null | undefined, full = true): PackedLm
   const out: number[] = [];
   for (let i = 0; i < n; i++) {
     const p: Landmark = lm[i] ?? { x: 0, y: 0, z: 0, visibility: 0 };
-    out.push(r3(p.x), r3(p.y), r3(p.z ?? 0), Math.round((p.visibility ?? 1) * 100) / 100, p.zw == null ? 9 : r3(p.zw));
+    const w = (v: number | undefined) => (v == null || !Number.isFinite(v) ? 9 : r3(v));
+    out.push(r3(p.x), r3(p.y), r3(p.z ?? 0), Math.round((p.visibility ?? 1) * 100) / 100, w(p.zw), w(p.xw), w(p.yw));
   }
   return out;
 }
@@ -49,12 +50,15 @@ export function packLm(lm: Landmark[] | null | undefined, full = true): PackedLm
 /** 33 o 133 punti (con mani e viso), 4 valori per punto nei vecchi salvataggi, 5 nei nuovi */
 export function unpackLm(a: PackedLm | null | undefined): Landmark[] | null {
   if (!Array.isArray(a) || a.length < 33 * 4) return null;
-  const k = a.length === 33 * 5 || a.length === 133 * 5 ? 5 : 4;
+  const k = a.length === 33 * 7 || a.length === 133 * 7 ? 7 : a.length === 33 * 5 || a.length === 133 * 5 ? 5 : 4;
   const n = Math.floor(a.length / k);
   const out: Landmark[] = [];
+  const val = (v: number) => (v === 9 ? undefined : v);
   for (let i = 0; i < n; i++) {
-    const zw = k === 5 && a[i * k + 4] !== 9 ? a[i * k + 4] : undefined;
-    out.push({ x: a[i * k], y: a[i * k + 1], z: a[i * k + 2], visibility: a[i * k + 3], zw });
+    const zw = k >= 5 ? val(a[i * k + 4]) : undefined;
+    const xw = k === 7 ? val(a[i * k + 5]) : undefined;
+    const yw = k === 7 ? val(a[i * k + 6]) : undefined;
+    out.push({ x: a[i * k], y: a[i * k + 1], z: a[i * k + 2], visibility: a[i * k + 3], zw, xw, yw });
   }
   return out;
 }

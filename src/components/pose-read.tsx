@@ -24,6 +24,7 @@ import {
   personBox,
   sides,
   smoothLm,
+  mixLm,
   withExtras,
   FACE_IDS,
   HAND_L,
@@ -343,7 +344,8 @@ export function PoseRead() {
 
   /** Rileva il corpo nel riquadro scelto (o seguito) e riporta i punti nel fotogramma intero. */
   async function detectOn(source: CanvasImageSource, W: number, H: number, extras = true): Promise<Landmark[] | null> {
-    const marker = await engine(qualityRef.current);
+    // nell'analisi completa sempre il modello più preciso
+    const marker = await (scanning.current ? engine("heavy").catch(() => engine(qualityRef.current)) : engine(qualityRef.current));
     const region = cropRef.current ?? (followRef.current ? autoBox.current : null) ?? { x: 0, y: 0, w: 1, h: 1 };
     const sx = region.x * W;
     const sy = region.y * H;
@@ -357,9 +359,9 @@ export function PoseRead() {
     if (!ctx) return null;
     ctx.drawImage(source, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
     let poses: Landmark[][] = [];
-    let worlds: { z: number }[][] = [];
+    let worlds: { x: number; y: number; z: number }[][] = [];
     try {
-      const res = marker.detect(canvas) as { landmarks?: Landmark[][]; worldLandmarks?: { z: number }[][] };
+      const res = marker.detect(canvas) as { landmarks?: Landmark[][]; worldLandmarks?: { x: number; y: number; z: number }[][] };
       poses = res.landmarks ?? [];
       worlds = res.worldLandmarks ?? [];
     } catch {
@@ -392,7 +394,7 @@ export function PoseRead() {
     const chosenBox = personBox(chosen.map((p) => ({ ...p, x: region.x + p.x * region.w, y: region.y + p.y * region.h })), 0);
     if (chosenBox) lastPerson.current = chosenBox;
     const world = worlds[poses.indexOf(chosen)];
-    const raw = chosen.map((p, i) => ({ x: region.x + p.x * region.w, y: region.y + p.y * region.h, z: p.z != null ? p.z * region.w : undefined, visibility: p.visibility, zw: world?.[i]?.z }));
+    const raw = chosen.map((p, i) => ({ x: region.x + p.x * region.w, y: region.y + p.y * region.h, z: p.z != null ? p.z * region.w : undefined, visibility: p.visibility, xw: world?.[i]?.x, yw: world?.[i]?.y, zw: world?.[i]?.z }));
     // video specchiato (fotocamera frontale) o arciere di spalle: il riconoscimento scambia sinistra e destra.
     // Si capisce dal gesto (mano della corda al viso, braccio dell'arco teso) e si raddrizza per tutto il video.
     // i punti restano dove sono (il 3D deve essere identico al video, anche se specchiato):
@@ -477,8 +479,7 @@ export function PoseRead() {
         // un punto visto solo in uno dei due fotogrammi non si trascina dall'altro
         if (va < 0.5 && vb >= 0.5) return q;
         if (vb < 0.5 && va >= 0.5) return p;
-        const mix = (x: number | undefined, y: number | undefined) => (x != null && y != null ? x + (y - x) * k : x ?? y);
-        return { x: p.x + (q.x - p.x) * k, y: p.y + (q.y - p.y) * k, z: mix(p.z, q.z), visibility: Math.min(va, vb), zw: mix(p.zw, q.zw) };
+        return mixLm(p, q, k, Math.min(va, vb));
       });
     } else lm = (k < 0.5 ? a.lm : b.lm) ?? a.lm ?? b.lm;
     if (!lm) return false;
@@ -713,7 +714,9 @@ export function PoseRead() {
       }
       const W = video.videoWidth;
       const H = video.videoHeight;
-      const step = Math.max(1 / 15, (to - from) / 240);
+      // ogni fotogramma (30 al secondo, fino a 600 fotogrammi) e il modello più preciso: l'analisi
+      // dura di più ma la sagoma segue il video senza buchi e con la profondità più affidabile
+      const step = Math.max(1 / 30, (to - from) / 600);
       const out: Sample[] = [];
       let prev: Landmark[] | null = null;
       // fotogrammi letti prima di sapere se i lati sono scambiati: si sistemano alla fine
@@ -1905,8 +1908,7 @@ function lmAt(samples: Sample[], t: number): Landmark[] | null {
   const b = hi >= 0 ? samples[hi] : null;
   if (a && b && a.lm && b.lm && b.t - a.t < 0.6) {
     const f = (t - a.t) / Math.max(1e-6, b.t - a.t);
-    const mix = (u: number | undefined, v: number | undefined) => (u != null && v != null ? u + (v - u) * f : u);
-    return a.lm.map((p, i) => ({ x: p.x + (b.lm![i].x - p.x) * f, y: p.y + (b.lm![i].y - p.y) * f, z: mix(p.z, b.lm![i].z), zw: mix(p.zw, b.lm![i].zw), visibility: Math.min(p.visibility ?? 1, b.lm![i].visibility ?? 1) }));
+    return a.lm.map((p, i) => mixLm(p, b.lm![i], f));
   }
   if (a?.lm && t - a.t < 0.4) return a.lm;
   if (b?.lm && b.t - t < 0.4) return b.lm;

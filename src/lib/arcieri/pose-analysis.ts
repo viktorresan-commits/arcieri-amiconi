@@ -9,8 +9,18 @@
  * alzata → trazione → ancoraggio (mano al viso, ferma) → rilascio (scatto del polso) → accompagnamento.
  */
 
-/** zw: profondità in metri dai punti "del mondo" del modello (più affidabile di z per il 3D) */
-export type Landmark = { x: number; y: number; z?: number; visibility?: number; zw?: number };
+/**
+ * zw: profondità in metri dai punti "del mondo" del modello (più affidabile di z per il 3D).
+ * xw, yw, zw insieme: il punto in metri, con l'origine tra le anche (x a destra, y in giù, z lontano
+ * dalla camera): con questi la sagoma 3D ha le braccia con l'inclinazione e la profondità vere.
+ */
+export type Landmark = { x: number; y: number; z?: number; visibility?: number; xw?: number; yw?: number; zw?: number };
+
+/** punto a metà strada (k da 0 a 1) tra due letture dello stesso punto, profondità comprese */
+export function mixLm(p: Landmark, q: Landmark, k: number, visibility = Math.min(p.visibility ?? 1, q.visibility ?? 1)): Landmark {
+  const m = (a: number | undefined, b: number | undefined) => (a != null && b != null && Number.isFinite(a) && Number.isFinite(b) ? a + (b - a) * k : b ?? a);
+  return { x: p.x + (q.x - p.x) * k, y: p.y + (q.y - p.y) * k, z: m(p.z, q.z), visibility, xw: m(p.xw, q.xw), yw: m(p.yw, q.yw), zw: m(p.zw, q.zw) };
+}
 export type Hand = "destro" | "mancino";
 
 export type Metrics = {
@@ -580,8 +590,7 @@ export function smoothLm(prev: Landmark[] | null, next: Landmark[], alpha = 0.6)
     if (i >= 33 && ((prev[i].visibility ?? 1) < 0.5 || (p.visibility ?? 1) < 0.5)) return p;
     const jump = Math.hypot(p.x - prev[i].x, p.y - prev[i].y);
     const a = jump > 0.6 * sw && bodyMove < 0.15 * sw && (prev[i].visibility ?? 1) > 0.3 ? 0.15 : alpha;
-    const m = (x: number | undefined, y: number | undefined) => (x != null && y != null ? a * x + (1 - a) * y : x);
-    return { x: a * p.x + (1 - a) * prev[i].x, y: a * p.y + (1 - a) * prev[i].y, z: m(p.z, prev[i].z), visibility: p.visibility, zw: m(p.zw, prev[i].zw) };
+    return mixLm(prev[i], p, a, p.visibility);
   });
 }
 
@@ -776,6 +785,9 @@ export function cleanSequence(samples: Sample[], hand: Hand, aspect: number, H: 
       let szw = 0;
       let wz = 0;
       let wzw = 0;
+      let sxw = 0;
+      let syw = 0;
+      let wxw = 0;
       let ws = 0;
       for (let k = Math.max(0, t - R); k <= Math.min(n - 1, t + R); k++) {
         const g = fixed[k];
@@ -792,6 +804,11 @@ export function cleanSequence(samples: Sample[], hand: Hand, aspect: number, H: 
         if (typeof p.zw === "number" && Number.isFinite(p.zw)) {
           szw += p.zw * w;
           wzw += w;
+          if (typeof p.xw === "number" && typeof p.yw === "number") {
+            sxw += p.xw * w;
+            syw += p.yw * w;
+            wxw += w;
+          }
         }
       }
       const q = out[t]![i];
@@ -799,6 +816,10 @@ export function cleanSequence(samples: Sample[], hand: Hand, aspect: number, H: 
       q.y = sy / ws;
       if (wz) q.z = sz / wz;
       if (wzw) q.zw = szw / wzw;
+      if (wxw) {
+        q.xw = sxw / wxw;
+        q.yw = syw / wxw;
+      }
     }
   }
   // arco e freccia: validi solo se ci sono anche in almeno uno dei due fotogrammi vicini

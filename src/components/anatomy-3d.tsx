@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { buildModel, v3, type Model, type V3 } from "@/lib/arcieri/anatomy-model";
 import { createAnatomyRenderer, lookAt, mul4, perspective } from "@/lib/arcieri/anatomy-render";
 import { BODY_CREDIT, loadBody } from "@/lib/arcieri/anatomy-body";
-import { sideEvidence, type Gear, type Hand, type Landmark } from "@/lib/arcieri/pose-analysis";
+import { mixLm, sideEvidence, type Gear, type Hand, type Landmark } from "@/lib/arcieri/pose-analysis";
 import { unpackLm, type PackedLm } from "@/lib/arcieri/gesture-record";
 import { cx } from "./kit";
 
@@ -24,8 +24,10 @@ function seqAt(seq: Seq, t: number): Landmark[] | null {
     if (t <= seq[i].t) {
       const a = seq[i - 1], b = seq[i];
       const k = (t - a.t) / Math.max(1e-3, b.t - a.t);
-      const out = a.lm.map((v, j) => v + (b.lm[j] - v) * k);
-      return unpackLm(out);
+      const la = unpackLm(a.lm);
+      const lb = unpackLm(b.lm);
+      if (!la || !lb || la.length !== lb.length) return la ?? lb;
+      return la.map((p, j) => mixLm(p, lb[j], k));
     }
   }
   return unpackLm(seq[seq.length - 1].lm);
@@ -159,13 +161,12 @@ export function Anatomy3D({
         // inseguimento continuo nel tempo: tra un rilevamento e l'altro il corpo scorre, non salta
         const t = target;
         const a = playing ? 1 : 1 - Math.exp(-dt / 0.075);
-        const mix = (x: number | undefined, y: number | undefined) => (x != null && y != null ? x + (y - x) * a : y);
         let far = 0;
         if (!smooth || smooth.length !== t.length) smooth = t.map((p) => ({ ...p }));
         else
           smooth = smooth.map((p, i) => {
             far = Math.max(far, Math.abs(t[i].x - p.x), Math.abs(t[i].y - p.y));
-            return { x: p.x + (t[i].x - p.x) * a, y: p.y + (t[i].y - p.y) * a, z: mix(p.z, t[i].z), zw: mix(p.zw, t[i].zw), visibility: t[i].visibility };
+            return mixLm(p, t[i], a, t[i].visibility);
           });
         if (far < 0.0006 && !playing) moving = false;
         model = buildModel(smooth, asp, hd, gr?.current ?? null) ?? model;
