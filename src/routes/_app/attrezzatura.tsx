@@ -10,6 +10,8 @@ import { Button, Card, Empty, ErrorNote, Field, Loading, PageHead, Select, TextA
 import { ARROW_USE, BOW_LENGTHS, BOW_TYPES, FLETCH_TYPES, LIMB_COLORS, POINT_TYPES, RISER_COLORS, SHAFT_MATERIALS, SWATCHES, ArrowIcon, BowIcon, CategoryIcon } from "@/components/gear-icons";
 import { ARROW_MODELS, FLETCH_STYLES } from "@/components/arrow-art";
 import { MainGearCard } from "@/components/main-gear";
+import { ArrowWeights, SpineField } from "@/components/arrow-weights";
+import { GRAINS_PER_G, spineLb, spineUnitOf, spineLabel, weightInfo, weightLabel } from "@/lib/arcieri/arrow-spec";
 
 export const Route = createFileRoute("/_app/attrezzatura")({ component: Page });
 
@@ -70,7 +72,26 @@ function Page() {
       setErr("Il numero di frecce è un intero, da 1 a 200.");
       return;
     }
-    saveEquipment({ data: { ...form, priceCents: parseEuro(form.price), specs: { ...form.specs, string: form.category === "corda" ? spec("material") : spec("string") } } })
+    // peso: si scrive in grammi; i grani (usati da FOC, simulatore e consigli) si ricavano da lì
+    const specsOut: Record<string, string> = { ...form.specs, string: form.category === "corda" ? spec("material") : spec("string") };
+    if (form.category === "freccia") {
+      const mode = specsOut.weightMode || "uguale";
+      if (mode !== "singole") delete specsOut.arrowsG;
+      if (mode !== "fascia") {
+        delete specsOut.weightMinG;
+        delete specsOut.weightMaxG;
+      }
+      const w = weightInfo(specsOut);
+      if (w) {
+        specsOut.weightG = String(Math.round(w.avgG * 10) / 10);
+        specsOut.weight = String(Math.round(w.avgG * GRAINS_PER_G));
+      }
+      if (specsOut.spine && !specsOut.spineUnit) specsOut.spineUnit = spineUnitOf(specsOut.spine);
+      const lb = spineLb(specsOut.spine, specsOut.spineUnit, specsOut.material);
+      if (lb) specsOut.spineLb = String(Math.round(lb));
+      else delete specsOut.spineLb;
+    }
+    saveEquipment({ data: { ...form, priceCents: parseEuro(form.price), specs: specsOut } })
       .then(() => {
         setErr("");
         setForm(EMPTY);
@@ -156,14 +177,14 @@ function Page() {
                 ))}
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               <Field label="Quante"><TextInput inputMode="numeric" value={spec("qty")} onChange={(e) => setSpec("qty", e.target.value)} placeholder="12" /></Field>
               <Field label="Numerate da"><TextInput inputMode="numeric" value={spec("numFrom")} onChange={(e) => setSpec("numFrom", e.target.value)} placeholder="1" /></Field>
-              <Field label="Spine"><TextInput value={spec("spine")} onChange={(e) => setSpec("spine", e.target.value)} placeholder="600" /></Field>
               <Field label="Lunghezza ″"><span className="flex items-center gap-1.5"><TextInput inputMode="decimal" value={spec("length")} onChange={(e) => setSpec("length", e.target.value)} placeholder="29" /><ConvertButton unit="pollici" value={spec("length")} onUse={(v) => setSpec("length", v)} className="h-11 min-w-9" /></span></Field>
               <Field label="Punta grani"><span className="flex items-center gap-1.5"><TextInput inputMode="numeric" value={spec("point")} onChange={(e) => setSpec("point", e.target.value)} placeholder="100" /><ConvertButton unit="grani" value={spec("point")} onUse={(v) => setSpec("point", v)} className="h-11 min-w-9" /></span></Field>
-              <Field label="Peso tot. grani"><span className="flex items-center gap-1.5"><TextInput inputMode="numeric" value={spec("weight")} onChange={(e) => setSpec("weight", e.target.value)} placeholder="360" /><ConvertButton unit="grani" value={spec("weight")} onUse={(v) => setSpec("weight", v)} className="h-11 min-w-9" /></span></Field>
             </div>
+            <SpineField specs={form.specs} set={setSpec} />
+            <ArrowWeights specs={form.specs} set={setSpec} />
             <Chips label="Uso" value={spec("use")} options={ARROW_USE} onPick={(v) => setSpec("use", v)} />
             <Chips label="Materiale" value={spec("material")} options={SHAFT_MATERIALS} onPick={(v) => setSpec("material", v)} />
             <Chips label="Impennaggio" value={spec("fletchType")} options={FLETCH_TYPES} onPick={(v) => setSpec("fletchType", v)} />
@@ -246,7 +267,9 @@ function Page() {
                   <div className="flex flex-wrap gap-1 text-[11px]">
                     {sp.use ? <span className={`rounded-full px-2 py-0.5 ${sp.use === "gara" ? "bg-accent text-accent-fg" : "border border-line"}`}>{ARROW_USE.find((u) => u.id === sp.use)?.label}</span> : null}
                     {sp.material ? <span className="rounded-full border border-line px-2 py-0.5">{SHAFT_MATERIALS.find((m) => m.id === sp.material)?.label ?? sp.material}</span> : null}
-                    {sp.spine ? <span className="rounded-full border border-line px-2 py-0.5">spine {sp.spine}</span> : null}
+                    {sp.spine ? <span className="rounded-full border border-line px-2 py-0.5">spine {spineLabel(sp)}</span> : null}
+                    {weightInfo(sp) ? <span className="rounded-full border border-line px-2 py-0.5 tabular-nums">{weightLabel(weightInfo(sp))}</span> : null}
+                    {sp.race ? <span className="rounded-full bg-accent/20 px-2 py-0.5">★ gara: {sp.race.split(",").join(", ")}</span> : null}
                     {sp.length ? <span className="rounded-full border border-line px-2 py-0.5">{sp.length}″</span> : null}
                     {sp.point ? <span className="rounded-full border border-line px-2 py-0.5">punta {sp.point} gr</span> : null}
                     {qty ? <span className="rounded-full border border-line px-2 py-0.5">{qty} frecce</span> : null}

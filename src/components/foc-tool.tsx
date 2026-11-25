@@ -10,16 +10,22 @@ import { useLoad } from "@/lib/arcieri/use-load";
 import { listEquipment } from "@/lib/arcieri/club.api";
 import { arrowPerformance } from "@/lib/arcieri/training.api";
 import { ArrowIcon } from "@/components/gear-icons";
+import { carbonSpineFor, catalogSpine, GRAINS_PER_G, spineLb, spineUnitOf, weightInfo, woodSpineBand, woodSpineIdeal } from "@/lib/arcieri/arrow-spec";
 
 /**
  * FOC (front of center): di quanto il punto di equilibrio della freccia sta davanti alla metà.
  * Due modi: misurato (lunghezza e punto di equilibrio) o stimato dai pesi dei componenti.
+ * Pensato per le aste di legno (asta pesata in grammi, spine in libbre); per carbonio e alluminio
+ * l'asta si dà in grani per pollice e lo spine come flessione.
  */
 type Store = {
   mode: "misura" | "pesi";
+  shaftMat?: "legno" | "carbonio";
+  shaftG?: string; // grammi dell'asta nuda (legno)
+  totalG?: string; // grammi della freccia finita (modo "Ho misurato")
   len: string; // cm, dalla gola della cocca alla fine dell'asta
   bal: string; // cm, dalla gola della cocca al punto di equilibrio
-  gpi: string; // grani per pollice dell'asta
+  gpi: string; // grani per pollice dell'asta (carbonio)
   point: string;
   insert: string;
   fletch: string; // tutte le penne insieme
@@ -32,9 +38,13 @@ type Store = {
   setId?: number | null; // serie di frecce analizzata
   lbAuto?: boolean; // libbre prese dall'arco principale
 };
-const DEFAULT: Store = { mode: "pesi", len: "72", bal: "41", gpi: "7,5", point: "100", insert: "10", fletch: "18", nock: "8", lb: "36", grains: "350", view: "equilibrio", dist: 30 };
+// di partenza: freccia di legno da 30″ con asta da 27 g, punta da 125 grani, tre penne naturali da 5″
+const DEFAULT: Store = { mode: "pesi", shaftMat: "legno", shaftG: "27", totalG: "", len: "76", bal: "44", gpi: "7,5", point: "125", insert: "0", fletch: "8", nock: "8", lb: "36", grains: "", view: "equilibrio", dist: 30 };
 const n = (s: string) => Number(String(s).replace(",", "."));
 const f1 = (x: number) => x.toFixed(1).replace(".", ",");
+const isWood = (st: Store) => (st.shaftMat ?? "legno") === "legno";
+/** grani dell'asta: dal peso in grammi (legno) o dai grani per pollice (carbonio) */
+const shaftGrains = (st: Store, L: number) => (isWood(st) ? (n(st.shaftG ?? "") || 0) * GRAINS_PER_G : (n(st.gpi) || 0) * (L / 2.54));
 
 function compute(st: Store) {
   const L = n(st.len);
@@ -44,7 +54,7 @@ function compute(st: Store) {
     if (!(B > 0 && B < L)) return null;
     return { L, B, foc: ((B - L / 2) / L) * 100, total: null as number | null };
   }
-  const shaft = n(st.gpi) * (L / 2.54);
+  const shaft = shaftGrains(st, L);
   // posizioni dalla gola della cocca (cm): cocca, penne, asta a metà, inserto e punta in fondo
   const parts: [number, number][] = [
     [n(st.nock) || 0, 0.6],
@@ -62,33 +72,46 @@ function compute(st: Store) {
 export function FocTool() {
   const mainLook = useMainArrowLook();
   const setup = useArcherSetup();
-  const [st0, setSt] = useLocalState<Store>("aa-foc-v1", { ...DEFAULT, lbAuto: true });
+  const [st0, setSt] = useLocalState<Store>("aa-foc-v2", { ...DEFAULT, lbAuto: true });
   const gear = useLoad("foc-arrows", () => listEquipment());
-  const sets = (gear.data ?? []).filter((x) => x.mine && x.category === "freccia" && !x.specs.flight).sort((x, y) => (Number(x.specs.weight) || 9999) - (Number(y.specs.weight) || 9999));
+  const sets = (gear.data ?? []).filter((x) => x.mine && x.category === "freccia" && !x.specs.flight).sort((x, y) => (weightInfo(x.specs as Record<string, string>)?.avgG ?? 9999) - (weightInfo(y.specs as Record<string, string>)?.avgG ?? 9999));
   const chosen = sets.find((x) => x.id === st0.setId) ?? null;
   const look = chosen ? arrowLookOf(chosen.specs as Record<string, string>) : mainLook;
   // libbre: quelle reali del tuo arco principale, finché non le cambi a mano
   const st: Store = st0.lbAuto !== false && setup.realLb > 0 ? { ...st0, lb: String(Math.round(setup.realLb)) } : st0;
   const r = compute(st);
-  const applySet = (x: (typeof sets)[number]) => {
+  const applySet = (x: (typeof sets)[number], use: "media" | "gara" = "media") => {
     const sp = x.specs as Record<string, string>;
     const lenIn = Number(String(sp.length ?? "").replace(",", ".")) || 0;
-    const w = Number(sp.weight) || 0;
-    const pt = Number(sp.point) || Number(st.point) || 100;
-    const next: Store = { ...st0, setId: x.id, mode: "pesi", point: String(pt) };
+    const wi = weightInfo(sp);
+    // le frecce da gara, se segnate e pesate, altrimenti la media della serie
+    const wG = use === "gara" && wi?.raceMinG != null && wi.raceMaxG != null ? (wi.raceMinG + wi.raceMaxG) / 2 : wi?.avgG ?? 0;
+    const pt = Number(sp.point) || Number(st.point) || 125;
+    const wood = (sp.material || "legno") === "legno";
+    const next: Store = { ...st0, setId: x.id, mode: "pesi", point: String(pt), shaftMat: wood ? "legno" : "carbonio" };
     if (lenIn) next.len = String(Math.round(lenIn * 2.54 * 10) / 10).replace(".", ",");
-    if (w) next.grains = String(w);
-    if (sp.spine) next.spine = String(sp.spine);
-    // grani per pollice stimati dal peso totale meno punta, inserto, penne e cocca
-    if (w && lenIn) {
-      const rest = w - pt - (n(st.insert) || 0) - (n(st.fletch) || 0) - (n(st.nock) || 0);
-      if (rest > 20) next.gpi = (rest / lenIn).toFixed(1).replace(".", ",");
+    if (wG) {
+      next.grains = String(Math.round(wG * GRAINS_PER_G));
+      next.totalG = f1(wG);
+    }
+    if (sp.spine) {
+      const lb = spineLb(sp.spine, sp.spineUnit, sp.material);
+      // nel FOC lo spine si scrive come si misura quell'asta: libbre per il legno, flessione per il carbonio
+      next.spine = wood ? (lb ? String(Math.round(lb)) : String(sp.spine)) : spineUnitOf(sp.spine, sp.spineUnit) === "defl" ? String(sp.spine) : lb ? String(catalogSpine(carbonSpineFor(lb) ?? 0)) : "";
+    }
+    // asta: peso totale meno punta, inserto, penne e cocca
+    if (wG) {
+      const restGr = wG * GRAINS_PER_G - pt - (n(st.insert) || 0) - (n(st.fletch) || 0) - (n(st.nock) || 0);
+      if (restGr > 20) {
+        if (wood) next.shaftG = f1(restGr / GRAINS_PER_G);
+        else if (lenIn) next.gpi = (restGr / lenIn).toFixed(1).replace(".", ",");
+      }
     }
     setSt(next);
   };
   const set = (k: keyof Store) => (e: { target: { value: string } }) => setSt({ ...st0, ...(k === "lb" ? { lbAuto: false } : {}), [k]: e.target.value });
   const verdict = !r ? null : r.foc < 6 ? { s: "warn" as const, t: "Basso: la freccia può essere instabile al vento. Prova una punta più pesante." } : r.foc <= 13 ? { s: "ok" as const, t: "Nella fascia giusta per il tiro alla targa (circa 7–13%)." } : r.foc <= 20 ? { s: "ok" as const, t: "Alto: buono per 3D e campagna, frecce più stabili e penetranti." } : { s: "warn" as const, t: "Molto alto: freccia pesante davanti, cala di più sulle lunghe distanze." };
-  const grains = r?.total ?? n(st.grains);
+  const grains = r?.total ?? (n(st.totalG ?? "") > 0 ? n(st.totalG ?? "") * GRAINS_PER_G : n(st.grains));
   const gpp = grains > 0 && n(st.lb) > 0 ? grains / n(st.lb) : null;
   const speed = estimateSpeed(n(st.lb), grains);
 
@@ -115,33 +138,47 @@ export function FocTool() {
                 <button key={x.id} type="button" aria-pressed={st0.setId === x.id} onClick={() => applySet(x)} className={`grid w-40 shrink-0 gap-1 rounded-2xl border p-2 text-left ${st0.setId === x.id ? "border-primary bg-primary/10" : "border-line bg-white/[0.03]"}`}>
                   <ArrowIcon material={sp.material} shaft={sp.shaft} fletch={sp.fletch} cock={sp.cock} nock={sp.nock} wrap={sp.wrap} fletchType={sp.fletchType} fletchStyle={sp.fletchStyle} fletch2={sp.fletch2} point={sp.pointType || "ogiva"} className="h-6 w-full" />
                   <span className="truncate text-[0.78rem] font-semibold">{x.name}</span>
-                  <span className="text-[0.66rem] text-muted">{sp.weight ? `${sp.weight} gr` : "peso ?"}{sp.spine ? ` · spine ${sp.spine}` : ""}{sp.length ? ` · ${sp.length}″` : ""}</span>
+                  <span className="text-[0.66rem] text-muted">{weightInfo(sp) ? `${f1(weightInfo(sp)!.avgG)} g` : "peso ?"}{sp.spine ? ` · ${spineLb(sp.spine, sp.spineUnit, sp.material) ? `${Math.round(spineLb(sp.spine, sp.spineUnit, sp.material)!)} lb` : sp.spine}` : ""}{sp.length ? ` · ${sp.length}″` : ""}</span>
                 </button>
               );
             })}
           </div>
+          {chosen && weightInfo(chosen.specs as Record<string, string>)?.raceMinG != null ? (
+            <div className="flex flex-wrap items-center gap-1.5 text-xs">
+              <span className="text-muted">Peso usato:</span>
+              <button type="button" className="aa-chip" onClick={() => applySet(chosen, "media")}>media della serie</button>
+              <button type="button" className="aa-chip" onClick={() => applySet(chosen, "gara")}>frecce da gara ★</button>
+            </div>
+          ) : null}
         </Card>
       ) : null}
-      <WeakArrow onAnalyze={(id) => { const x = sets.find((y) => y.id === id); if (x) applySet(x); }} weights={Object.fromEntries(sets.map((x) => [x.id, Number(x.specs.weight) || 0]))} />
+      <WeakArrow onAnalyze={(id) => { const x = sets.find((y) => y.id === id); if (x) applySet(x); }} weights={Object.fromEntries(sets.map((x) => [x.id, weightInfo(x.specs as Record<string, string>)?.avgG ?? 0]))} />
       {setup.has ? <p className="px-1 text-xs text-muted">Il tuo arco: <b className="text-fg">{setup.summary}</b>{st0.lbAuto !== false ? " · libbre usate nei calcoli" : ""}.{st0.lbAuto === false ? <button type="button" className="ml-1 underline" onClick={() => setSt({ ...st0, lbAuto: true })}>Usa le libbre del mio arco</button> : null}</p> : null}
-      <Chips value={st.mode} onChange={(mode) => setSt({ ...st0, mode })} options={[{ id: "pesi", label: "Dai pesi" }, { id: "misura", label: "Ho misurato" }]} />
+      <div className="grid gap-2">
+        <Chips value={st.shaftMat ?? "legno"} onChange={(shaftMat) => setSt({ ...st0, shaftMat, ...(shaftMat === "legno" ? { insert: "0" } : { insert: st0.insert === "0" ? "10" : st0.insert }) })} options={[{ id: "legno", label: "Asta di legno" }, { id: "carbonio", label: "Carbonio o alluminio" }]} />
+        <Chips value={st.mode} onChange={(mode) => setSt({ ...st0, mode })} options={[{ id: "pesi", label: "Dai pesi" }, { id: "misura", label: "Ho misurato" }]} />
+      </div>
       <Card className="grid gap-3">
         <div className="grid grid-cols-2 gap-2">
-          <Num label="Lunghezza asta" unit="cm" value={st.len} onChange={set("len")} />
+          <Num label="Lunghezza asta" unit="cm" value={st.len} onChange={set("len")} hint="Dalla gola della cocca" />
           {st.mode === "misura" ? (
             <>
               <Num label="Punto di equilibrio" unit="cm" value={st.bal} onChange={set("bal")} hint="Dalla cocca" />
-              <Num label="Peso freccia" unit="gr" value={st.grains} onChange={set("grains")} hint="Per il peso per libbra" />
-              <Num label="Libbre" unit="lb" value={st.lb} onChange={set("lb")} />
+              <Num label="Peso freccia" unit="g" value={st.totalG ?? ""} onChange={(e) => setSt({ ...st0, totalG: e.target.value, grains: String(Math.round(n(e.target.value) * GRAINS_PER_G) || "") })} hint="Finita, con punta e penne" />
+              <Num label="Libbre" unit="lb" value={st.lb} onChange={set("lb")} hint="Sulle dita" />
             </>
           ) : (
             <>
-              <Num label="Asta" unit="gpi" value={st.gpi} onChange={set("gpi")} hint="Grani per pollice" />
+              {isWood(st) ? (
+                <Num label="Asta nuda" unit="g" value={st.shaftG ?? ""} onChange={set("shaftG")} hint="Senza punta e penne" />
+              ) : (
+                <Num label="Asta" unit="gpi" value={st.gpi} onChange={set("gpi")} hint="Grani per pollice" />
+              )}
               <Num label="Punta" unit="gr" value={st.point} onChange={set("point")} />
-              <Num label="Inserto" unit="gr" value={st.insert} onChange={set("insert")} />
-              <Num label="Penne (tutte)" unit="gr" value={st.fletch} onChange={set("fletch")} />
+              <Num label={isWood(st) ? "Adattatore" : "Inserto"} unit="gr" value={st.insert} onChange={set("insert")} hint={isWood(st) ? "Se c'è" : undefined} />
+              <Num label="Penne (tutte)" unit="gr" value={st.fletch} onChange={set("fletch")} hint={isWood(st) ? "3 naturali da 5″ ≈ 8" : undefined} />
               <Num label="Cocca" unit="gr" value={st.nock} onChange={set("nock")} />
-              <Num label="Libbre" unit="lb" value={st.lb} onChange={set("lb")} hint="Facoltativo" />
+              <Num label="Libbre" unit="lb" value={st.lb} onChange={set("lb")} hint="Sulle dita" />
             </>
           )}
         </div>
@@ -155,7 +192,7 @@ export function FocTool() {
             </div>
             <div className="text-right text-xs text-muted">
               <p>Equilibrio a {f1(r.B)} cm</p>
-              {r.total ? <p>Peso totale {Math.round(r.total)} gr</p> : null}
+              {r.total ? <p>Peso totale {f1(r.total / GRAINS_PER_G)} g ({Math.round(r.total)} grani)</p> : null}
               {gpp ? <p>{f1(gpp)} grani per libbra</p> : null}
             </div>
           </div>
@@ -178,7 +215,7 @@ export function FocTool() {
               {verdict.t}
             </p>
           ) : null}
-          {gpp ? <p className="text-xs text-muted">{gpp < 6 ? "Sotto i 6 grani per libbra la freccia è leggera: occhio alla garanzia dei flettenti." : gpp > 9 ? "Freccia pesante per il carico: più stabile, ma cala di più." : "Peso equilibrato per il carico."}</p> : null}
+          {gpp ? <p className="text-xs text-muted">{gpp < 6 ? "Sotto i 6 grani per libbra la freccia è leggera: occhio alla garanzia dei flettenti." : gpp > (isWood(st) ? 12.5 : 9) ? "Freccia pesante per il carico: più stabile, ma cala di più." : "Peso equilibrato per il carico."}</p> : null}
         </Card>
       ) : null}
       {r ? <Analysis st={st} r={r} grains={grains} speed={speed} onSpine={(spine) => setSt({ ...st0, spine })} setup={setup} /> : null}
@@ -218,32 +255,25 @@ function Mini({ k, v }: { k: string; v: string }) {
   );
 }
 
-/** Spine consigliato (indicativo, tabelle per archi ricurvi a dita): libbre effettive per lunghezza e punta. */
-function spineFor(lb: number, lenIn: number, point: number) {
-  if (!(lb > 10 && lenIn > 20)) return null;
-  const eff = lb + 2.5 * (lenIn - 28) + 3 * ((point - 100) / 25);
-  if (!(eff > 8)) return null;
-  const raw = 23500 / eff;
-  const step = raw > 1000 ? 100 : 50;
-  return Math.round(raw / step) * step;
-}
-
 /** Riepilogo dei numeri della freccia e cosa cambiare per correggerla. */
 function Analysis({ st, r, grains, speed, onSpine, setup }: { st: Store; r: { L: number; B: number; foc: number; total: number | null }; grains: number; speed: number; onSpine: (v: string) => void; setup: ArcherSetup }) {
   const lb = n(st.lb);
   const lenIn = r.L / 2.54;
-  const point = st.mode === "pesi" ? n(st.point) || 0 : 100;
+  const point = n(st.point) || 125;
   const gpp = grains > 0 && lb > 0 ? grains / lb : null;
   const mass = grains * 6.48e-5;
   const energy = speed > 0 && grains > 0 ? 0.5 * mass * speed * speed : null;
   const momentum = speed > 0 && grains > 0 ? mass * speed : null;
-  const spineIdeal = spineFor(lb, lenIn, point);
-  const spineMine = n(st.spine ?? "");
+  const wood = isWood(st);
+  // spine in libbre (regola del legno), con l'equivalente in carbonio per chi usa quelle aste
+  const spineIdealLb = woodSpineIdeal(lb, lenIn, point || 125);
+  const spineMineLb = spineLb(st.spine ?? "", wood ? "lb" : "defl", wood ? "legno" : "carbonio");
+  const idealTxt = spineIdealLb ? (wood ? `${woodSpineBand(spineIdealLb)} lb` : `${catalogSpine(carbonSpineFor(spineIdealLb) ?? 0)} (≈ ${Math.round(spineIdealLb)} lb)`) : "—";
   // punta che porta il FOC al 10% (solo dai pesi): risolvo il baricentro con la massa della punta
   let pointFor10: number | null = null;
   if (st.mode === "pesi" && r.total) {
     const L = r.L;
-    const shaft = n(st.gpi) * (L / 2.54);
+    const shaft = shaftGrains(st, L);
     const parts: [number, number][] = [[n(st.nock) || 0, 0.6], [n(st.fletch) || 0, 6], [shaft || 0, L / 2], [n(st.insert) || 0, L - 1.6]];
     const M = parts.reduce((a, [m]) => a + m, 0);
     const S = parts.reduce((a, [m, x]) => a + m * x, 0);
@@ -253,7 +283,7 @@ function Analysis({ st, r, grains, speed, onSpine, setup }: { st: Store; r: { L:
     if (p > 0 && p < 400) pointFor10 = Math.round(p / 5) * 5;
   }
   const tips: { s: "ok" | "warn"; t: string }[] = [];
-  if (r.foc < 7) tips.push({ s: "warn", t: pointFor10 ? `FOC basso: con una punta da circa ${pointFor10} grani arrivi al 10%. In alternativa inserto più pesante o penne più leggere.` : "FOC basso: punta o inserto più pesanti, oppure penne più leggere." });
+  if (r.foc < 7) tips.push({ s: "warn", t: pointFor10 ? `FOC basso: con una punta da circa ${pointFor10} grani arrivi al 10%. In alternativa ${wood ? "un adattatore in ottone" : "un inserto più pesante"} o penne più corte.` : `FOC basso: punta più pesante${wood ? "" : " o inserto più pesante"}, oppure penne più leggere.` });
   else if (r.foc > 18) tips.push({ s: "warn", t: pointFor10 ? `FOC alto: per la targa una punta da circa ${pointFor10} grani riporta il FOC al 10%, la freccia cala meno.` : "FOC alto: punta più leggera se tiri alla targa sulle lunghe distanze." });
   else tips.push({ s: "ok", t: "FOC nella fascia buona: niente da cambiare sul peso davanti." });
   if (setup.has) {
@@ -263,39 +293,43 @@ function Analysis({ st, r, grains, speed, onSpine, setup }: { st: Store; r: { L:
     else if (room > 2.5) tips.push({ s: "warn", t: `Asta di ${f1(lenIn2)}″ per un allungo di ${f1(setup.drawIn)}″: ${f1(room)}″ di troppo, la freccia è più pesante e più morbida. Puoi accorciarla a circa ${f1(setup.drawIn + 1)}″.` });
     else tips.push({ s: "ok", t: `Lunghezza giusta per il tuo allungo di ${f1(setup.drawIn)}″ (${f1(room)}″ oltre).` });
     if (setup.grains && grains > 0) {
-      if (grains < setup.grains.min) tips.push({ s: "warn", t: `Per il tuo ${setup.summary} il peso consigliato è ${setup.grains.min}–${setup.grains.max} grani: questa freccia (${Math.round(grains)}) è leggera.` });
-      else if (grains > setup.grains.max) tips.push({ s: "warn", t: `Per il tuo ${setup.summary} il peso consigliato è ${setup.grains.min}–${setup.grains.max} grani: questa freccia (${Math.round(grains)}) è pesante.` });
+      const gg = (gr: number) => f1(gr / GRAINS_PER_G);
+      if (grains < setup.grains.min) tips.push({ s: "warn", t: `Per il tuo ${setup.summary} il peso consigliato è ${gg(setup.grains.min)}–${gg(setup.grains.max)} g: questa freccia (${gg(grains)} g) è leggera.` });
+      else if (grains > setup.grains.max) tips.push({ s: "warn", t: `Per il tuo ${setup.summary} il peso consigliato è ${gg(setup.grains.min)}–${gg(setup.grains.max)} g: questa freccia (${gg(grains)} g) è pesante.` });
     }
-    if (setup.spineRange && !n(st.spine ?? "")) tips.push({ s: "ok", t: `Spine indicato per il tuo arco: ${setup.spineRange}. Scrivilo sotto per il confronto.` });
+    if (setup.spineRange && !spineMineLb) tips.push({ s: "ok", t: `Spine indicato per il tuo arco: ${setup.spineRange}. Scrivilo sotto per il confronto.` });
   }
   if (gpp != null) {
-    if (gpp < 6) tips.push({ s: "warn", t: `${f1(gpp)} grani per libbra: troppo leggera per il carico, rischi di danneggiare i flettenti. Sali almeno a ${Math.round(lb * 6)} grani totali.` });
-    else if (gpp > 10) tips.push({ s: "warn", t: `${f1(gpp)} grani per libbra: molto pesante, traiettoria più curva. Per la targa resta tra 6 e 9.` });
+    if (gpp < 6) tips.push({ s: "warn", t: `${f1(gpp)} grani per libbra: troppo leggera per il carico, rischi di danneggiare i flettenti. Sali almeno a ${f1((lb * 6) / GRAINS_PER_G)} g.` });
+    else if (gpp > (wood ? 13 : 10)) tips.push({ s: "warn", t: `${f1(gpp)} grani per libbra: molto pesante, traiettoria più curva. ${wood ? "Con le aste di legno di solito si sta tra 8 e 12." : "Per la targa resta tra 6 e 9."}` });
     else tips.push({ s: "ok", t: `${f1(gpp)} grani per libbra: peso adatto al carico.` });
   }
-  if (spineIdeal && spineMine > 0) {
-    const diff = (spineMine - spineIdeal) / spineIdeal;
-    if (diff > 0.12) tips.push({ s: "warn", t: `Spine ${spineMine} più morbido del consigliato (~${spineIdeal}): con lo sgancio a dita la punta va a sinistra (arciere destro). Punta più leggera, asta più corta o spine più rigido.` });
-    else if (diff < -0.12) tips.push({ s: "warn", t: `Spine ${spineMine} più rigido del consigliato (~${spineIdeal}): la punta tende a destra (arciere destro). Punta più pesante o asta più lunga lo ammorbidiscono.` });
-    else tips.push({ s: "ok", t: `Spine ${spineMine} in linea con il carico (~${spineIdeal}).` });
+  if (spineIdealLb && spineMineLb) {
+    const d = spineMineLb - spineIdealLb;
+    const mine = wood ? `${Math.round(spineMineLb)} lb` : `${st.spine} (≈ ${Math.round(spineMineLb)} lb)`;
+    if (d < -5) tips.push({ s: "warn", t: `Spine ${mine} più morbido del consigliato (${idealTxt}): con lo sgancio a dita la punta va a sinistra (arciere destro). Punta più leggera, asta più corta o spine più rigido.` });
+    else if (d > 7) tips.push({ s: "warn", t: `Spine ${mine} più rigido del consigliato (${idealTxt}): la punta tende a destra (arciere destro). Punta più pesante o asta più lunga lo ammorbidiscono.` });
+    else tips.push({ s: "ok", t: `Spine ${mine} in linea con il carico (${idealTxt}).` });
   }
   if (lenIn > 0 && lb > 0 && r.L > 0 && st.mode === "pesi" && n(st.fletch) > 30) tips.push({ s: "warn", t: "Penne pesanti: spostano il baricentro indietro. Penne più corte o spin wing aumentano il FOC e la velocità." });
   return (
     <Card className="grid gap-2.5">
       <p className="aa-section-title">Analisi delle aste</p>
       <div className="grid grid-cols-3 gap-1.5 text-center">
-        <Mini k="Peso" v={grains > 0 ? `${Math.round(grains)} gr` : "—"} />
+        <Mini k="Peso" v={grains > 0 ? `${f1(grains / GRAINS_PER_G)} g` : "—"} />
         <Mini k="Velocità" v={speed > 0 ? `${Math.round(speed)} m/s` : "—"} />
         <Mini k="Energia" v={energy ? `${f1(energy)} J` : "—"} />
         <Mini k="Q. moto" v={momentum ? `${(momentum).toFixed(3).replace(".", ",")}` : "—"} />
-        <Mini k="Spine ideale" v={spineIdeal ? String(spineIdeal) : "—"} />
+        <Mini k="Spine ideale" v={idealTxt} />
         <Mini k="Lunghezza" v={`${lenIn.toFixed(1).replace(".", ",")}″`} />
       </div>
       <label className="grid gap-1">
         <span className="text-xs text-muted">Spine delle tue aste (facoltativo, per il confronto)</span>
         <span className="flex items-center gap-1 rounded-xl border border-hair bg-black/20 px-3">
-          <input inputMode="numeric" value={st.spine ?? ""} onChange={(e) => onSpine(e.target.value)} placeholder="es. 600" className="min-h-11 w-full min-w-0 bg-transparent text-base tabular-nums outline-none" />
+          <input inputMode="decimal" value={st.spine ?? ""} onChange={(e) => onSpine(e.target.value)} placeholder={wood ? "es. 45 oppure 45-50" : "es. 600"} className="min-h-11 w-full min-w-0 bg-transparent text-base tabular-nums outline-none" />
+          <span className="text-xs text-muted">{wood ? "lb" : "flessione"}</span>
         </span>
+        {!wood && spineMineLb ? <span className="text-[0.7rem] text-muted">Circa {Math.round(spineMineLb)} lb (31,5 ÷ flessione in pollici).</span> : null}
       </label>
       <ul className="grid gap-1.5">
         {tips.map((tip) => (
@@ -305,7 +339,7 @@ function Analysis({ st, r, grains, speed, onSpine, setup }: { st: Store; r: { L:
           </li>
         ))}
       </ul>
-      <p className="text-[0.68rem] text-muted">Valori stimati per archi ricurvi e tradizionali a dita; spine dalle tabelle indicative (libbre al tuo allungo, lunghezza e punta). La prova vera resta il tiro con frecce senza penne (bare shaft).</p>
+      <p className="text-[0.68rem] text-muted">Stime per archi tradizionali e ricurvi a dita. Spine in libbre con la regola del legno: libbre sulle dita, +5 lb per pollice oltre i 28″, +5 lb ogni 25 grani di punta oltre i 125. La prova vera resta l'asta nuda (senza penne).</p>
     </Card>
   );
 }
@@ -372,8 +406,8 @@ function WeakArrow({ onAnalyze, weights }: { onAnalyze: (setId: number) => void;
               {where ? <li>• Rotolala su un tavolo: se oscilla è storta (un gruppo spostato sempre dallo stesso lato è il segnale tipico).</li> : null}
               <li>• Cocca: crepata, storta o ruotata? Sostituiscila e allineala come le altre.</li>
               <li>• Penne: staccate, piegate o con la colla rovinata.</li>
-              <li>• Punta e inserto ben incollati e dritti.</li>
-              <li>• Pesala: deve stare entro ±2 grani dalle altre{w ? ` (serie da ${w} gr)` : ""}; con lo spine diverso va tolta dalla serie.</li>
+              <li>• Punta ben incollata e dritta (sul legno controlla anche che la conicità non sia spaccata).</li>
+              <li>• Pesala: deve stare entro mezzo grammo dalle altre{w ? ` (serie da ${f1(w)} g)` : ""}; con lo spine diverso va tolta dalla serie.</li>
             </ul>
             {r.setId != null ? <button type="button" onClick={() => onAnalyze(r.setId as number)} className="justify-self-start rounded-full border border-line px-3 py-1.5 text-xs font-semibold">Analizza questa serie</button> : null}
           </div>

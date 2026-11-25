@@ -51,7 +51,7 @@ function Page() {
   // suggerimenti: pezzi segnati "da sostituire" e frecce adatte al tuo arco
   const names = new Set(all.map((r) => r.name.toLowerCase()));
   const replace = (gear.data ?? []).filter((g) => g.mine && g.status === "replace" && !names.has(`nuovo ${g.name}`.toLowerCase()));
-  const arrowIdea = setup.has && setup.grains ? `Frecce spine ${setup.spineRange.split("–")[0]} · ${Math.round((setup.grains.min + setup.grains.max) / 2)} gr · ${(setup.drawIn + 1).toFixed(0)}″` : "";
+  const arrowIdea = setup.has && setup.grains ? `Frecce spine ${setup.spineRange.split(" (")[0]} · ${(((setup.grains.min + setup.grains.max) / 2) / 15.4324).toFixed(0)} g · ${(setup.drawIn + 1).toFixed(0)}″` : "";
 
   const add = (item: typeof EMPTY) =>
     saveShopping({ data: { ...item, qty: Number(item.qty) || 1, priceCents: parseEuro(item.price), status: "todo" } })

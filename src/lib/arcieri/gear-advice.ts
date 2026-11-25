@@ -4,22 +4,12 @@
  * Sono indicazioni di partenza, da verificare con la tabella del produttore e sul paglione.
  */
 
+import { carbonSpineFor, catalogSpine, GRAINS_PER_G, spineLb, woodSpineBand, woodSpineIdeal } from "./arrow-spec";
+
 const it = (n: number, d = 1) => (Number.isInteger(n) ? String(n) : n.toFixed(d)).replace(".", ",");
 
 export type BowLike = { bowType?: string; draw?: string; drawLen?: string };
-export type ArrowLike = { weight?: string; spine?: string; length?: string; material?: string };
-
-const SPINES: [number, string][] = [
-  [20, "1000–900"],
-  [24, "900–800"],
-  [28, "800–700"],
-  [32, "700–600"],
-  [36, "600–550"],
-  [40, "550–500"],
-  [45, "500–400"],
-  [50, "400–350"],
-  [60, "350–300"],
-];
+export type ArrowLike = { weight?: string; weightG?: string; spine?: string; spineUnit?: string; length?: string; material?: string; point?: string };
 
 /** Libbre reali all'allungo: ±2 lb per pollice rispetto a 28″ (archi senza camme). */
 export function realLb(bow: BowLike) {
@@ -29,13 +19,23 @@ export function realLb(bow: BowLike) {
   return bow.bowType === "compound" ? lb : lb + 2 * (inch - 28);
 }
 
-export function spineFor(bow: BowLike, arrowLengthInch?: number) {
-  let lb = realLb(bow);
+/**
+ * Spine consigliato in libbre (aste di legno, sgancio a dita): libbre reali sulle dita, +5 lb per
+ * pollice di freccia oltre i 28″, +5 lb ogni 25 grani di punta oltre i 125.
+ */
+export function spineLbFor(bow: BowLike, arrowLengthInch?: number, pointGr = 125) {
+  const lb = realLb(bow);
+  if (!lb) return null;
+  const eff = bow.bowType === "compound" ? lb * 0.75 : lb;
+  return woodSpineIdeal(eff, arrowLengthInch || 28, pointGr);
+}
+
+/** "45-50 lb (in carbonio ~600)" */
+export function spineFor(bow: BowLike, arrowLengthInch?: number, pointGr = 125) {
+  const lb = spineLbFor(bow, arrowLengthInch, pointGr);
   if (!lb) return "";
-  // freccia più lunga di 28″ = si comporta come più flessibile: si aggiungono ~1,5 lb per pollice
-  if (arrowLengthInch && arrowLengthInch > 28) lb += 1.5 * (arrowLengthInch - 28);
-  if (bow.bowType === "compound") lb *= 0.75;
-  return (SPINES.find(([max]) => lb <= max) ?? SPINES[SPINES.length - 1])[1];
+  const c = carbonSpineFor(lb);
+  return `${woodSpineBand(lb)} lb${c ? ` (in carbonio ~${catalogSpine(c)})` : ""}`;
 }
 
 /** Intervallo di peso freccia consigliato (grani totali). */
@@ -74,24 +74,27 @@ export function arrowAdvice(arrow: ArrowLike, bow?: BowLike | null): string[] {
   const out: string[] = [];
   const w = Number(arrow.weight) || 0;
   if (!bow || !realLb(bow)) {
-    if (!w) out.push("Aggiungi il peso totale (grani): così confronto la freccia col tuo arco.");
+    if (!w) out.push("Aggiungi il peso (in grammi): così confronto la freccia col tuo arco.");
     return out;
   }
   const g = grainsFor(bow);
   const lb = realLb(bow);
   if (w && g) {
     const gpp = w / lb;
-    if (w < g.min) out.push(`Leggera per il tuo arco: ${it(gpp)} gr/lb (consigliati ${it(g.gpp[0])}–${it(g.gpp[1])}). Più veloce ma più sensibile al vento.`);
-    else if (w > g.max) out.push(`Pesante per il tuo arco: ${it(gpp)} gr/lb. Traiettoria più curva, ma più stabile.`);
-    else out.push(`Peso giusto: ${it(gpp)} gr/lb con il tuo arco.`);
+    const gTxt = (gr: number) => `${it(gr / GRAINS_PER_G)} g`;
+    if (w < g.min) out.push(`Leggera per il tuo arco: ${gTxt(w)}, ${it(gpp)} grani per libbra (consigliati ${gTxt(g.min)}–${gTxt(g.max)}). Più veloce ma più sensibile al vento.`);
+    else if (w > g.max) out.push(`Pesante per il tuo arco: ${gTxt(w)}, ${it(gpp)} grani per libbra (consigliati ${gTxt(g.min)}–${gTxt(g.max)}). Traiettoria più curva, ma più stabile.`);
+    else out.push(`Peso giusto: ${gTxt(w)}, ${it(gpp)} grani per libbra con il tuo arco.`);
   }
-  const want = spineFor(bow, Number(arrow.length) || undefined);
-  if (arrow.spine && want) {
-    const [hi, lo] = want.split("–").map(Number);
-    const s = Number(arrow.spine);
-    if (s && s > hi + 50) out.push(`Spine ${s}: troppo flessibile per ${lb.toFixed(0)} lb reali (indicativo ${want}).`);
-    else if (s && s < lo - 50) out.push(`Spine ${s}: rigida per ${lb.toFixed(0)} lb reali (indicativo ${want}).`);
-    else if (s) out.push(`Spine ${s}: in linea con il tuo arco (${want}).`);
+  const point = Number(arrow.point) || 125;
+  const wantLb = spineLbFor(bow, Number(arrow.length) || undefined, point);
+  const want = spineFor(bow, Number(arrow.length) || undefined, point);
+  const mine = spineLb(arrow.spine, arrow.spineUnit, arrow.material);
+  if (mine && wantLb) {
+    const s = `${Math.round(mine)} lb`;
+    if (mine < wantLb - 5) out.push(`Spine ${s}: troppo morbida per ${lb.toFixed(0)} lb reali (indicativo ${want}). Con lo sgancio a dita la punta va a sinistra (arciere destro).`);
+    else if (mine > wantLb + 7) out.push(`Spine ${s}: rigida per ${lb.toFixed(0)} lb reali (indicativo ${want}). La punta tende a destra (arciere destro).`);
+    else out.push(`Spine ${s}: in linea con il tuo arco (${want}).`);
   } else if (want) out.push(`Spine indicativo per il tuo arco: ${want}.`);
   return out;
 }

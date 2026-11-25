@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { tagsOf } from "@/lib/arcieri/arrow-tags";
+import { parseRace } from "@/lib/arcieri/arrow-spec";
 import { lookOf, type ArrowLook } from "./target-3d";
 
 /** Una serie di frecce: la scheda "freccia" dell'attrezzatura (numeri e colori delle penne). */
@@ -68,6 +69,14 @@ export function ArrowPicker({
   const current = sets.find((s) => s.id === shown) ?? null;
   const tags = current ? tagsOf(current.specs) : fallbackTags ?? tagsOf("");
   const taken = used(shown);
+  // frecce da gara (segnate in Attrezzatura): una stellina sul numero
+  const race = (() => {
+    try {
+      return parseRace((JSON.parse(current?.specs || "{}") as { race?: string }).race);
+    } catch {
+      return [] as number[];
+    }
+  })();
   return (
     <div className="grid gap-2">
       {sets.length > 1 ? (
@@ -104,9 +113,11 @@ export function ArrowPicker({
                 rememberArrowSet(current?.id ?? null);
                 onPick(current?.id ?? null, on ? null : n);
               }}
-              className={`min-h-11 rounded-xl font-display text-lg tabular-nums transition ${on ? "bg-accent text-accent-fg" : busy ? "bg-white/[0.03] text-muted" : "bg-white/[0.07]"}`}
+              aria-label={race.includes(n) ? `Freccia ${n}, da gara` : `Freccia ${n}`}
+              className={`relative min-h-11 rounded-xl font-display text-lg tabular-nums transition ${on ? "bg-accent text-accent-fg" : busy ? "bg-white/[0.03] text-muted" : "bg-white/[0.07]"}`}
             >
               {n}
+              {race.includes(n) ? <span aria-hidden className={`absolute right-1 top-0.5 text-[0.6rem] leading-none ${on ? "" : "text-accent"}`}>★</span> : null}
             </button>
           );
         })}
