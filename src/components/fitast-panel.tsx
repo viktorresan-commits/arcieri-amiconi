@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Button, Card, ErrorNote, Field, Loading, Select, TextInput, cx } from "@/components/kit";
 import { Glyph } from "@/components/icons";
 import { saveEntry } from "@/lib/arcieri/club.api";
+import { DIVISIONS, divisionOf, type Division } from "@/lib/arcieri/labels";
 import { FITAST_HOME, fitastRead } from "@/lib/arcieri/fitast.api";
 import { type FitastCell, type FitastPage, type FitastTable } from "@/lib/arcieri/fitast-parse";
 import { currentTexts, FILTER_SELECT, filterCombos, filterSelects, norm, orderCombos, pressReq, type Req } from "@/lib/arcieri/fitast-nav";
@@ -1229,6 +1230,16 @@ function Pair({ k, v }: { k: string; v: string }) {
 }
 
 /** sceglie la gara del calendario e quali numeri sono punteggio e punti campionato */
+/** la categoria (Madonne, Messeri, Pueri, Juniores) scritta nel titolo della classifica o nella riga */
+function divisionIn(text: string): Division | "" {
+  const t = norm(text);
+  if (/\bpuer/.test(t)) return "Pueri";
+  if (/\bjunior/.test(t)) return "Juniores";
+  if (/\bmadonn|\bmadame|\bdam[ae]\b/.test(t)) return "Madonne";
+  if (/\bmesser/.test(t)) return "Messeri";
+  return "";
+}
+
 function SaveScore({ nums, row, m, comps, userId, onDone, onCancel }: { nums: { i: number; v: number; label: string }[]; row: FitastCell[]; m: Match; comps: Comp[]; userId: string; onDone: (compId: number) => void; onCancel: () => void }) {
   // la gara giusta: stesso codice nell'indirizzo, oppure la stessa data scritta nella pagina
   const guess = useMemo(() => {
@@ -1251,6 +1262,11 @@ function SaveScore({ nums, row, m, comps, userId, onDone, onCancel }: { nums: { 
     if (k >= 0) return k;
     return nums[0] && nums[0].i === 0 && nums[0].v >= 1 && nums[0].v <= 500 ? nums[0].i : -1;
   });
+  // categoria per il posto in classifica: quella già segnata nella gara, altrimenti quella della classifica letta
+  const [division, setDivision] = useState<Division | "">(() => {
+    const prev = comps.find((x) => x.id === guess)?.entries.find((e) => e.userId === userId);
+    return divisionOf(prev?.category ?? "") || divisionIn(`${m.req.label ?? ""} ${m.page.title} ${row.map((c) => c.text).join(" ")}`);
+  });
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const val = (i: number) => (i >= 0 ? Math.round(Number(row[i].text.replace(",", "."))) : null);
@@ -1262,9 +1278,14 @@ function SaveScore({ nums, row, m, comps, userId, onDone, onCancel }: { nums: { 
       setErr("In questa gara hai già segnato le piazzole: il totale viene da quelle.");
       return;
     }
+    const rank = rankCol >= 0 && (val(rankCol) ?? 0) >= 1 ? val(rankCol) : (old?.rank ?? null);
+    if (rank != null && !division) {
+      setErr("Per il posto in classifica scegli la categoria: Madonne, Messeri, Pueri o Juniores.");
+      return;
+    }
     setBusy(true);
     setErr("");
-    saveEntry({ data: { competitionId: comp.id, score: val(scoreCol), championshipPoints: val(champCol), rank: rankCol >= 0 && (val(rankCol) ?? 0) >= 1 ? val(rankCol) : (old?.rank ?? null), category: old?.category ?? "", laneCount: old?.laneCount ?? null, spot: old?.spot ?? null, targetKind: old?.targetKind ?? "", sagomaMax: old?.sagomaMax ?? null, notes: "Dal portale FITAST", piazzole: [] } })
+    saveEntry({ data: { competitionId: comp.id, score: val(scoreCol), championshipPoints: val(champCol), rank, category: rank != null ? division : (old?.category ?? division), laneCount: old?.laneCount ?? null, spot: old?.spot ?? null, targetKind: old?.targetKind ?? "", sagomaMax: old?.sagomaMax ?? null, notes: "Dal portale FITAST", piazzole: [] } })
       .then(() => onDone(comp.id))
       .catch((e: unknown) => setErr(e instanceof Error ? e.message : "Non salvato."))
       .finally(() => setBusy(false));
@@ -1295,6 +1316,14 @@ function SaveScore({ nums, row, m, comps, userId, onDone, onCancel }: { nums: { 
             {nums.map((x) => <option key={x.i} value={x.i}>{x.label}: {row[x.i].text}</option>)}
           </Select>
         </Field>
+      </div>
+      <div>
+        <p className="mb-1 text-[0.68rem] font-semibold uppercase tracking-[0.1em] text-muted">Categoria</p>
+        <div className="grid grid-cols-4 gap-1.5" role="radiogroup" aria-label="Categoria">
+          {DIVISIONS.map((name) => (
+            <button key={name} type="button" role="radio" aria-checked={division === name} onClick={() => { setDivision(name); setErr(""); }} className={cx("min-h-10 rounded-xl px-1 text-sm font-semibold", division === name ? "bg-primary text-primary-fg" : "border border-line")}>{name}</button>
+          ))}
+        </div>
       </div>
       {err ? <ErrorNote text={err} /> : null}
       <div className="grid grid-cols-2 gap-2">

@@ -154,7 +154,9 @@ function smoothTo(a: PoseDef, b: PoseDef, t: number): PoseDef {
     ...b,
     grip: lerpP(a.grip, b.grip, t),
     bowAngle: lerp(a.bowAngle, b.bowAngle, t),
-    hand: a.hand && b.hand ? lerpP(a.hand, b.hand, t) : b.hand,
+    // la mano libera che va sulla corda ci scivola (resta il suo punto finché l'aggancio non è quasi completo),
+    // invece di comparire di colpo sulla corda
+    hand: a.hand && b.hand ? lerpP(a.hand, b.hand, t) : a.hand && !b.hand && (a.hookW ?? (a.hooked ? 1 : 0)) < 0.97 ? a.hand : b.hand,
     pull: lerp(a.pull, b.pull, t),
     fore: lerp(a.fore, b.fore, t),
     hookW: lerp(a.hookW ?? (a.hooked ? 1 : 0), b.hookW ?? (b.hooked ? 1 : 0), t),
@@ -162,11 +164,45 @@ function smoothTo(a: PoseDef, b: PoseDef, t: number): PoseDef {
   };
 }
 
+/** spalla del braccio della corda (corporatura media): i tragitti della mano le girano attorno */
+const DRAW_SHOULDER = p(124, 128);
+
+/**
+ * Tragitto della mano libera fra due pose. Se la linea dritta passa sulla spalla (dalla nuca al fianco
+ * dopo il tiro) il gomito non sa più da che parte stare e il braccio si ribalta in un fotogramma:
+ * lì il tragitto si incurva dietro la spalla, restando uguale alle due estremità.
+ */
+function handPath(a: P, b: P, t: number): P {
+  const q = lerpP(a, b, t);
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const L = Math.hypot(dx, dy);
+  if (L < 1) return q;
+  const u = Math.max(0, Math.min(1, ((DRAW_SHOULDER.x - a.x) * dx + (DRAW_SHOULDER.y - a.y) * dy) / (L * L)));
+  const cx = a.x + dx * u;
+  const cy = a.y + dy * u;
+  const dist = Math.hypot(DRAW_SHOULDER.x - cx, DRAW_SHOULDER.y - cy);
+  const R = 30;
+  if (dist >= R || u <= 0 || u >= 1) return q;
+  // dalla parte opposta alla spalla; se ci passa proprio sopra, dietro (verso la schiena)
+  let nx = -dy / L;
+  let ny = dx / L;
+  const side = (cx - DRAW_SHOULDER.x) * nx + (cy - DRAW_SHOULDER.y) * ny;
+  if (side < -1e-6 || (Math.abs(side) <= 1e-6 && nx > 0)) {
+    nx = -nx;
+    ny = -ny;
+  }
+  // la spinta è massima dove il tragitto passa più vicino e svanisce alle estremità
+  const w = t <= u ? Math.sin((Math.PI / 2) * (t / u)) : Math.sin((Math.PI / 2) * ((1 - t) / (1 - u)));
+  const push = (R - dist) * w * w;
+  return p(q.x + nx * push, q.y + ny * push);
+}
+
 function mix(a: PoseDef, b: PoseDef, t: number): PoseDef {
   return {
     grip: lerpP(a.grip, b.grip, t),
     bowAngle: lerp(a.bowAngle, b.bowAngle, t),
-    hand: a.hand && b.hand ? lerpP(a.hand, b.hand, t) : (a.hand ?? b.hand),
+    hand: a.hand && b.hand ? handPath(a.hand, b.hand, t) : (a.hand ?? b.hand),
     pull: lerp(a.pull, b.pull, t),
     hooked: t < 0.5 ? a.hooked : b.hooked,
     hookW: lerp(a.hookW ?? (a.hooked ? 1 : 0), b.hookW ?? (b.hooked ? 1 : 0), t),
@@ -1835,7 +1871,13 @@ const IDLE_MOVES: Record<string, [number, number, PoseDef, number]> = {
 };
 
 /** Comando esterno (gioco): quanto è tesa la corda (0–1) e alzo in gradi (positivo = più in alto). */
-export type AvatarDrive = { pull: number; aim: number; released?: number | null };
+export type AvatarDrive = {
+  pull: number;
+  aim: number;
+  released?: number | null;
+  /** prima di tendere (0–1): prende la freccia, incocca, aggancia e va in pre-trazione; assente = già pronto */
+  ready?: number | null;
+};
 
 /**
  * L'arciere. `pose` = "animata" ripete la sequenza di tiro scelta (completa, rapida o da gara, con le
@@ -1917,22 +1959,38 @@ export function ArcherAvatar({ look, className = "h-72 w-auto", interactive = tr
   if (mode === "guidata" && drive) {
     // il giocatore tende e mira: da pre-trazione ad ancoraggio, l'arco sale o scende con l'alzo
     const k = Math.max(0, Math.min(1, drive.pull));
-    const base = k <= 0.02 ? POSES.predraw : mix(POSES.predraw, POSES.allungo, easeIO(k));
+    const ready = drive.ready == null ? 1 : Math.max(0, Math.min(1, drive.ready));
     const lift = Math.max(-14, Math.min(18, drive.aim)) * 1.5;
-    def = { ...base, grip: p(base.grip.x, base.grip.y - lift) };
+    let base: PoseDef;
+    let liftK = 1;
+    if (ready < 1) {
+      // prima di tendere: dalla posizione prende la freccia, la incocca, aggancia la corda e va in
+      // pre-trazione, come nella sequenza completa (prima saltava dalla posizione alla corda in un colpo)
+      const pesca = POSES[look.quiverPlace === "schiena" ? "pesca-schiena" : "pesca-fianco"];
+      const r = ready;
+      base =
+        r < 0.3 ? { ...mix(POSES.riposo, pesca, easeIO(r / 0.3)), holding: r > 0.26 }
+        : r < 0.58 ? mix(pesca, POSES.incocco, easeIO((r - 0.3) / 0.28))
+        : r < 0.8 ? mix(POSES.incocco, POSES.aggancio, easeIO((r - 0.58) / 0.22))
+        : mix(POSES.aggancio, POSES.predraw, easeIO((r - 0.8) / 0.2));
+      // l'arco sale verso la mira solo nell'ultimo tratto, insieme alla pre-trazione
+      liftK = r < 0.8 ? 0 : easeIO((r - 0.8) / 0.2);
+      phase = r < 0.3 ? PHASE_NAMES["pesca-fianco"] : r < 0.58 ? PHASE_NAMES.incocco : r < 0.8 ? PHASE_NAMES.aggancio : PHASE_NAMES.predraw;
+    } else {
+      base = k <= 0.02 ? POSES.predraw : mix(POSES.predraw, POSES.allungo, easeIO(k));
+    }
+    def = { ...base, grip: p(base.grip.x, base.grip.y - lift * liftK) };
     if (drive.released != null) {
       const dt = drive.released;
-      const pesca = POSES[look.quiverPlace === "schiena" ? "pesca-schiena" : "pesca-fianco"];
+      // dopo il rilascio: accompagnamento e ritorno in posizione; la freccia nuova si prende prima del tiro dopo
       def =
         dt < 0.12 ? mix(POSES.allungo, POSES.rilascio, dt / 0.12)
         : dt < 1.0 ? mix(POSES.rilascio, POSES.accompagna, Math.min(1, (dt - 0.12) / 0.6))
-        : dt < 1.6 ? mix(POSES.accompagna, pesca, easeIO((dt - 1.0) / 0.6))
-        : mix(pesca, POSES.riposo, easeIO(Math.min(1, (dt - 1.6) / 0.7)));
-      if (dt >= 1.6) def = { ...def, holding: true };
-      const fade = dt > 1.0 ? 1 - Math.min(1, (dt - 1.0) / 0.6) : 1;
+        : mix(POSES.accompagna, POSES.riposo, easeIO(Math.min(1, (dt - 1.0) / 0.9)));
+      const fade = dt > 1.0 ? 1 - easeIO(Math.min(1, (dt - 1.0) / 0.9)) : 1;
       def = { ...def, grip: p(def.grip.x, def.grip.y - lift * fade) };
     }
-    phase = drive.released != null ? (drive.released > 1.1 ? "Prendo la freccia" : PHASE_NAMES.accompagna) : k > 0.9 ? PHASE_NAMES.mira : k > 0.05 ? PHASE_NAMES.trazione : PHASE_NAMES.predraw;
+    if (!phase) phase = drive.released != null ? (drive.released > 1.1 ? PHASE_NAMES.riposo : PHASE_NAMES.accompagna) : k > 0.9 ? PHASE_NAMES.mira : k > 0.05 ? PHASE_NAMES.trazione : PHASE_NAMES.predraw;
   } else if (mode === "animata") {
     const tc = t % plan.cycle;
     const at = poseAt(plan, tc);

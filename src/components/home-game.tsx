@@ -41,6 +41,8 @@ const RINGS = ["#f4f1ea", "#f4f1ea", "#1a1c1e", "#1a1c1e", "#2a6294", "#2a6294",
 // field: due zone gialle (6 e 5) e quattro nere (4, 3, 2, 1), tutte della stessa larghezza
 const FIELD = ["#1a1c1e", "#1a1c1e", "#1a1c1e", "#1a1c1e", "#e6b325", "#e6b325"];
 const DRAW_S = 0.75;
+/** nella dimostrazione, prima di tendere: prende la freccia, incocca e aggancia (secondi) */
+const PREP_S = 1.6;
 /** tiri dimostrativi di fila prima che l'arciere si metta a riposo (riparte al primo tocco) */
 const DEMO_SHOTS = 3;
 // dopo il rilascio l'arciere accompagna, prende la freccia e torna a riposo: tutto in 2,4 s
@@ -86,7 +88,7 @@ const maskOf = (src: string) => {
 
 type Hit = { dx: number; dy: number; score: number; x10: boolean };
 type Flight = { from: { x: number; y: number }; to: { x: number; y: number }; hit: Hit; t0: number; dur: number; arc: number; demo: boolean };
-type Draw = { t0: number; sx: number; sy: number; ax: number; ay: number; aim: { x: number; y: number }; demo: boolean; releaseAt?: number };
+type Draw = { t0: number; sx: number; sy: number; ax: number; ay: number; aim: { x: number; y: number }; demo: boolean; releaseAt?: number; /** inizio della preparazione (solo dimostrazione) */ prep?: number };
 
 const radiusOf = (d: Dist) => 34 * Math.sqrt(18 / d);
 
@@ -399,7 +401,9 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
       return;
     }
     demoShots.current += 1;
-    const start = now();
+    // prima la preparazione (freccia, incocco, aggancio), poi la trazione: niente salto dalla posizione alla corda
+    const prep = now();
+    const start = prep + PREP_S;
     const land = goalAt(start + 1.6 + 0.36 + dist / 170);
     let ax: number;
     let ay: number;
@@ -416,7 +420,7 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
       ax = land.x - wind * (dist / 18) * 1.1 + (Math.random() - 0.5) * err * 2;
       ay = land.y + (Math.random() - 0.5) * err * 2;
     }
-    setDraw({ t0: start, sx: 0, sy: 0, ax, ay, aim: { x: ax, y: ay }, demo: true, releaseAt: start + DRAW_S + 0.9 + Math.random() * 0.5 });
+    setDraw({ t0: start, sx: 0, sy: 0, ax, ay, aim: { x: ax, y: ay }, demo: true, releaseAt: start + DRAW_S + 0.9 + Math.random() * 0.5, prep });
   }, [t, playing, draw, flight, released]);
   useEffect(() => {
     if (draw?.demo && draw.releaseAt && t >= draw.releaseAt) shoot(draw, t);
@@ -597,7 +601,8 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
   // dopo l'accompagnamento l'arciere torna in posizione: niente pose bloccate
   const since = released != null && !draw ? t - released : null;
   const active = draw != null || (since != null && since < FOLLOW_S);
-  const drive = useMemo(() => (active ? { pull, aim: aimLift, released: since != null && since < FOLLOW_S ? since : null } : null), [active, pull, aimLift, since]);
+  const ready = draw?.prep != null ? clamp((t - draw.prep) / PREP_S, 0, 1) : null;
+  const drive = useMemo(() => (active ? { pull, aim: aimLift, released: since != null && since < FOLLOW_S ? since : null, ready } : null), [active, pull, aimLift, since, ready]);
   // l'arciere è il disegno più pesante della Home: si ridisegna solo quando cambia qualcosa che lo riguarda,
   // non a ogni battito dell'orologio della scena
   const archerWind = indoor ? 0 : wind;

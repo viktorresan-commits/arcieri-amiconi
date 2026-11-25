@@ -6,11 +6,11 @@ type Pt = { x: number; y: number } | null;
 
 /** Dal tempo della routine (0 = rilascio) al comando dell'arciere disegnato. */
 export function driveAt(tt: number): AvatarDrive {
-  if (tt < -3.7) return { pull: 0, aim: 0, released: null };
+  // prima della trazione prende la freccia, incocca e aggancia (2,5 s); dopo il rilascio resta in posizione
+  if (tt < -3.7) return { pull: 0, aim: 0, released: null, ready: Math.max(0, Math.min(1, (tt + 6.2) / 2.5)) };
   if (tt < -2.3) return { pull: (tt + 3.7) / 1.4, aim: 0, released: null };
   if (tt < 0) return { pull: 1, aim: 0, released: null };
-  if (tt < 1.9) return { pull: 1, aim: 0, released: tt };
-  return { pull: 0, aim: 0, released: null };
+  return { pull: 1, aim: 0, released: tt };
 }
 
 /**
@@ -42,7 +42,7 @@ export function useAvatarSprite(look: AvatarLook) {
     if (now - last.current > 30) {
       last.current = now;
       const d = driveAt(tt);
-      const key = `${d.pull.toFixed(2)}|${d.released == null ? "-" : d.released.toFixed(2)}`;
+      const key = `${d.pull.toFixed(2)}|${d.released == null ? "-" : Math.min(d.released, 2).toFixed(2)}|${d.ready == null ? "-" : d.ready.toFixed(2)}`;
       if (key !== lastKey.current) {
         lastKey.current = key;
         setDrive(d);
