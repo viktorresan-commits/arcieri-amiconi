@@ -38,12 +38,54 @@ function codeOf(c: Comp) {
 }
 
 /** una richiesta al portale: una pagina, oppure un comando premuto (modulo rimandato) */
-type Req = { url: string; post?: { fields: Record<string, string>; charset: string }; referer?: string; label?: string };
+type Req = { url: string; post?: { fields: Record<string, string>; charset: string }; referer?: string; label?: string; filtered?: boolean };
 type Page = FitastPage & { cookie: string };
 type Match = { page: FitastPage; req: Req; table: FitastTable | null; index: number; line?: string };
 
 const KEY_BUTTON = /piazz|classific|generale|campionat|iscritt|risultat|elenco|partecip|turn/i;
-const reqKey = (r: Req) => `${r.url}|${r.post ? JSON.stringify(r.post.fields) : ""}`;
+/** pulsante che applica i filtri di una classifica (Categoria, Tipologia… e poi CERCA) */
+const FILTER_BUTTON = /^(cerca|filtra|aggiorna|visualizza|mostra|applica|ok|vai)\b/i;
+/** tendine di una classifica da provare tutte: categoria, tipologia, classe, divisione, arco */
+const FILTER_SELECT = /categ|tipolog|classe|divisi|arco|stile|sesso|special|tipo/i;
+/** tendine da non girare dentro una classifica: la gara e la stagione sono già scelte */
+const FIXED_SELECT = /gara|campionat|stagion|anno|data|evento/i;
+
+/**
+ * Le classifiche del portale mostrano una categoria alla volta (Categoria MESSERE, Tipologia
+ * TRADIZIONALE… e CERCA): per trovare un nome si prova ogni combinazione, prima quelle che
+ * somigliano alla categoria dell'arciere.
+ */
+function filterReqs(page: FitastPage, r: Req, preferred: string[]): Req[] {
+  const form = page.form;
+  if (!form || r.filtered) return [];
+  const sels = form.selects.filter((x) => x.options.length >= 2 && x.options.length <= 80);
+  const ranked = sels
+    .filter((x) => !FIXED_SELECT.test(`${x.label} ${x.name}`))
+    .sort((a, b) => Number(FILTER_SELECT.test(b.label)) - Number(FILTER_SELECT.test(a.label)))
+    .slice(0, 2);
+  if (!ranked.length) return [];
+  const btn = form.buttons.find((b) => FILTER_BUTTON.test(b.label.trim()));
+  // solo pagine che sono davvero classifiche con filtri: pulsante CERCA o tendine come Categoria
+  if (!btn && !ranked.some((x) => FILTER_SELECT.test(x.label))) return [];
+  const press = btn ? { code: btn.code, set: btn.set } : (ranked.find((x) => x.press)?.press ?? null);
+  if (!press) return [];
+  const base: Record<string, string> = Object.fromEntries(form.selects.map((x) => [x.name, (x.options.find((o) => o.selected) ?? x.options[0]).value]));
+  let combos: { choose: Record<string, string>; texts: string[] }[] = [{ choose: {}, texts: [] }];
+  for (const x of ranked) {
+    const next: typeof combos = [];
+    for (const c of combos) for (const o of x.options) if (o.value !== "" || o.text.trim()) next.push({ choose: { ...c.choose, [x.name]: o.value }, texts: [...c.texts, o.text.trim()] });
+    combos = next;
+  }
+  const pref = preferred.map(norm).filter(Boolean);
+  const score = (texts: string[]) => texts.reduce((n, t) => n + (pref.some((p) => norm(t).includes(p) || p.includes(norm(t))) ? 1 : 0), 0);
+  combos.sort((a, b) => score(b.texts) - score(a.texts));
+  return combos.slice(0, 150).flatMap((c) => {
+    const q = pressReq(page, press, { ...base, ...c.choose }, `${r.label ? `${r.label} · ` : ""}${c.texts.join(" · ")}`);
+    return q ? [{ ...q, filtered: true }] : [];
+  });
+}
+// i filtri di una classifica sono gli stessi in ogni gara: la gara si distingue dall'etichetta
+const reqKey = (r: Req) => `${r.url}|${r.post ? JSON.stringify(r.post.fields) : ""}${r.filtered ? `|${r.label ?? ""}` : ""}`;
 
 /** il comando premuto come richiesta: campi del modulo, scelte nelle tendine e alias WEBDEV */
 function pressReq(page: FitastPage, b: { code: string; set: Record<string, string> }, choose: Record<string, string>, label: string): Req | null {
@@ -131,15 +173,21 @@ export function FitastPanel({ comps, myName, userId, startCode, onSaved, onClose
     const home = await read({ url: FITAST_HOME });
     const queue: Req[] = [];
     const seen = new Set<string>([reqKey({ url: FITAST_HOME })]);
-    const push = (r: Req) => {
+    const push = (r: Req, first = false) => {
       const k = reqKey(r);
-      if (!seen.has(k) && !queue.some((x) => reqKey(x) === k)) queue.push(r);
+      if (seen.has(k) || queue.some((x) => reqKey(x) === k)) return;
+      if (first) queue.unshift(r);
+      else queue.push(r);
     };
+    // categoria dell'arciere (dalle sue gare nel calendario): le classifiche di quella categoria si leggono per prime
+    const preferred = [...new Set(comps.flatMap((c) => c.entries.filter((e) => e.userId === userId).map((e) => e.category)).filter(Boolean))];
     home.links.filter((l) => sameSite(l.href) && l.href !== FITAST_HOME).slice(0, 30).forEach((l) => push({ url: l.href, referer: home.url, label: l.text }));
     // portale a pulsanti: ogni gara della tendina × i comandi utili (prima le gare più recenti in elenco)
     const sel = garaSelect(home);
     const keys = (home.form?.buttons ?? []).filter((b) => KEY_BUTTON.test(b.label));
-    const named = keys.filter((b) => !/squadr/i.test(b.label));
+    // prima le classifiche (dove c'è il nome con la posizione), poi piazzole e iscritti
+    const rank = (b: { label: string }) => (/classific/i.test(b.label) ? 0 : /generale/i.test(b.label) ? 1 : 2);
+    const named = keys.filter((b) => !/squadr/i.test(b.label)).sort((a, b) => rank(a) - rank(b));
     if (sel) {
       for (const o of sel.options.slice(0, 120)) {
         for (const b of named.length ? named : sel.press ? [{ code: sel.press.code, set: sel.press.set, label: "" }] : []) {
@@ -191,7 +239,7 @@ export function FitastPanel({ comps, myName, userId, startCode, onSaved, onClose
     }
     let done = 0;
     setScan({ done, total: queue.length });
-    while (queue.length && !stop.current && seen.size < 400) {
+    while (queue.length && !stop.current && seen.size < 900) {
       // una pagina alla volta: il portale ricorda nella sessione (cookie) la gara scelta, e due comandi
       // premuti insieme si confondevano (risposta di una gara al posto dell'altra)
       const batch = queue.splice(0, 1).filter((r) => !seen.has(reqKey(r)));
@@ -200,6 +248,9 @@ export function FitastPanel({ comps, myName, userId, startCode, onSaved, onClose
       for (const x of pages) {
         if (!x) continue;
         take(x.p, x.r);
+        // classifica con i filtri (Categoria, Tipologia, CERCA): tutte le combinazioni, subito dopo questa
+        // pagina (il portale ricorda nella sessione la gara aperta)
+        filterReqs(x.p, x.r, preferred).reverse().forEach((q) => push(q, true));
         // un livello in più: le pagine di iscritti, piazzole e classifiche della gara
         // (anche dopo un comando premuto: CLASSIFICA spesso risponde con il collegamento al PDF)
         x.p.links

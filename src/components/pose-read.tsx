@@ -160,7 +160,10 @@ async function detectPart(kind: "hand" | "face", source: CanvasImageSource, W: n
   const pts = kind === "hand" ? res.landmarks?.[0] : res.faceLandmarks?.[0];
   if (!pts?.length) return null;
   const map = (p: Landmark) => ({ x: (x0 + p.x * sw) / W, y: (y0 + p.y * sh) / H, z: p.z != null ? (p.z * sw) / W : undefined, visibility: 0.9 });
-  return kind === "hand" ? pts.map(map) : FACE_IDS.map((id) => map(pts[id] ?? pts[0]));
+  const out = kind === "hand" ? pts.map(map) : FACE_IDS.map((id) => map(pts[id] ?? pts[0]));
+  // punti fuori dal fotogramma (lettura sbagliata): meglio nessun punto che misure assurde
+  if (out.some((p) => !Number.isFinite(p.x) || !Number.isFinite(p.y) || p.x < -0.3 || p.x > 1.3 || p.y < -0.3 || p.y > 1.3)) return null;
+  return out;
 }
 
 /** mani (attorno ai polsi) e viso (attorno al naso) per i 100 punti in più */
@@ -198,7 +201,6 @@ export function PoseRead() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const overlay = useRef<HTMLCanvasElement>(null);
-  const pip = useRef<HTMLCanvasElement>(null);
   const work = useRef<HTMLCanvasElement | null>(null);
   const [hand, setHandState] = useState<Hand>("destro");
   // lati della persona: null finché il gesto non lo dice, poi resta deciso per il video.
@@ -448,53 +450,12 @@ export function PoseRead() {
     if (lookRef.current !== "scheletro") drawSagoma(ctx, w, h, lm, handRef.current, gearRef.current, lookRef.current === "sagoma");
     // in «Mista» sopra la sagoma anche lo scheletro con tutti i punti
     if (lm && lookRef.current !== "sagoma" && (showRef.current || lookRef.current === "mista")) drawPose(ctx, w, h, lm, handRef.current, gearRef.current);
-    paintPip(lm);
     if (lm && proRef.current && showRef.current && lookRef.current !== "sagoma") drawPro(ctx, w, h, lm, handRef.current);
     if (draft) {
       ctx.strokeStyle = "#e6b325";
       ctx.lineWidth = 3 * dpr;
       ctx.strokeRect(draft.x * w, draft.y * h, draft.w * w, draft.h * h);
     }
-  }
-
-  /**
-   * Con la sagoma 3D a tutto riquadro, in un angolo resta il video con lo scheletro e i punti:
-   * si confronta il 3D con l'arciere vero fotogramma per fotogramma
-   */
-  function paintPip(lm: Landmark[] | null) {
-    const c = pip.current;
-    const media = videoRef.current ?? imageRef.current;
-    if (!c || !media || lookRef.current !== "sagoma") return;
-    const holder = box.current;
-    if (!holder) return;
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
-    // dal video stesso (questa funzione può arrivare da un disegno precedente, con misure vecchie)
-    const mw = media instanceof HTMLVideoElement ? media.videoWidth : media.naturalWidth;
-    const mh = media instanceof HTMLVideoElement ? media.videoHeight : media.naturalHeight;
-    if (!mw || !mh) return;
-    const ratio = mw / mh;
-    const cw = Math.max(60, Math.round(Math.min(holder.clientWidth * 0.3, holder.clientHeight * 0.3 * ratio)));
-    const ch = Math.round(cw / ratio);
-    if (c.style.width !== `${cw}px`) {
-      c.style.width = `${cw}px`;
-      c.style.height = `${ch}px`;
-    }
-    const W = Math.round(cw * dpr);
-    const H = Math.round(ch * dpr);
-    if (c.width !== W || c.height !== H) {
-      c.width = W;
-      c.height = H;
-    }
-    const ctx = c.getContext("2d");
-    if (!ctx) return;
-    try {
-      ctx.drawImage(media, 0, 0, W, H);
-    } catch {
-      ctx.fillStyle = "#000";
-      ctx.fillRect(0, 0, W, H);
-    }
-    resetLabels();
-    if (lm) drawPose(ctx, W, H, lm, handRef.current, gearRef.current);
   }
 
   /**
@@ -899,7 +860,7 @@ export function PoseRead() {
     }
     const kind = lookRef.current;
     const canvas = document.createElement("canvas");
-    // sagoma: il corpo 3D in alta definizione (1080p, la vista scelta nel 3D) con il video in piccolo;
+    // sagoma: il corpo 3D in alta definizione (1080p, la vista scelta nel 3D);
     // scheletro e mista: 640 px sul lato lungo, abbastanza nitido e leggero da disegnare a ogni fotogramma
     let painter: Awaited<ReturnType<typeof sagomaPainter>> = null;
     if (kind === "sagoma") {
@@ -970,28 +931,11 @@ export function PoseRead() {
     await seekTo(video, from);
     const paint = () => {
       if (painter) {
-        // corpo 3D a tutto schermo e, in alto a sinistra, il video con lo scheletro: si confrontano
+        // la sagoma 3D pulita, a tutto schermo
         const t = video.currentTime;
         const lm = lmAt(data, t);
         if (lm) painter.paint({ lm, aspect: size.w / Math.max(1, size.h), hand: handRef.current, gear: gearAt(t), cal, time: t, smooth: true });
         ctx.drawImage(painter.canvas, 0, 0);
-        const pw = Math.round(canvas.width * 0.3);
-        const ph = Math.round((pw * size.h) / Math.max(1, size.w));
-        const px = Math.round(canvas.width * 0.03);
-        ctx.drawImage(video, px, px, pw, ph);
-        if (lm) {
-          ctx.save();
-          ctx.translate(px, px);
-          ctx.beginPath();
-          ctx.rect(0, 0, pw, ph);
-          ctx.clip();
-          resetLabels();
-          drawPose(ctx, pw, ph, lm, handRef.current, null);
-          ctx.restore();
-        }
-        ctx.strokeStyle = "rgba(255,255,255,0.55)";
-        ctx.lineWidth = Math.max(2, canvas.width / 400);
-        ctx.strokeRect(px, px, pw, ph);
         return;
       }
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -1263,8 +1207,6 @@ export function PoseRead() {
             {used3d ? (
               <div className={`absolute inset-0 z-[1] ${look === "sagoma" ? "" : "hidden"}`}>
                 <Anatomy3D lmRef={lastLm} gearRef={gearRef} calFrames={calFrames} aspect={size.w / Math.max(1, size.h)} hand={effHand} inBox className="h-full" />
-                {/* il video con lo scheletro, in piccolo: per confrontare la sagoma con l'arciere vero */}
-                <canvas ref={pip} className="pointer-events-none absolute left-2 top-2 z-[2] rounded-lg shadow-lg ring-1 ring-white/40" aria-label="Il video con lo scheletro e i punti rilevati" />
               </div>
             ) : null}
             {zoomOn ? (
@@ -1275,7 +1217,7 @@ export function PoseRead() {
               </div>
             ) : null}
             <div className="absolute right-2 top-2 z-[2] flex gap-1 rounded-full bg-[#14181c]/75 p-1 text-xs font-semibold text-[#f4f1ea]">
-              {([["scheletro", "Scheletro"], ["sagoma", "Sagoma"], ["mista", "Mista"]] as const).map(([k, label]) => (
+              {([["scheletro", "Scheletro"], ["sagoma", "Sagoma"]] as const).map(([k, label]) => (
                 <button key={k} type="button" onClick={() => { setLook(k); if (k === "scheletro") setShowPose(true); }} className={`min-h-8 rounded-full px-2.5 ${look === k ? "bg-[#3ee08f] text-[#04140c]" : ""}`}>{label}</button>
               ))}
               {look === "scheletro" ? (

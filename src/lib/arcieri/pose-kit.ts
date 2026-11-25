@@ -70,10 +70,17 @@ export function archeryKit(lm: Landmark[], w: number, h: number, hand: Hand, gea
   // le stesse misure come numeri, per salvarle e per le statistiche
   const nums: KitNums = { drawCm: drawLenM * 100, anchorCm: null, anchorBelowCm: null, eyeArrowCm: null, stringNoseCm: null };
   // bocca: angolo della bocca dal lato della corda (viso rilevato), altrimenti il centro della bocca
-  const lipD = facePoint(lm, hand === "destro" ? 61 : 291);
-  if (lipD || ok(9, 10)) {
-    const mouth = lipD ? px2(lipD) : { x: (P(9).x + P(10).x) / 2, y: (P(9).y + P(10).y) / 2 };
-    const d = cm(Math.hypot(nock.x - mouth.x, nock.y - mouth.y));
+  // un punto del viso vale solo se sta sulla testa (entro 20 cm dal naso): un viso letto male
+  // dava ancoraggi di chilometri
+  const onHead = (p: { x: number; y: number }) => Number.isFinite(p.x) && Number.isFinite(p.y) && (!ok(0) || Math.hypot(p.x - P(0).x, p.y - P(0).y) < 0.2 * px);
+  const lipRaw = facePoint(lm, hand === "destro" ? 61 : 291);
+  const lipD = lipRaw && onHead(px2(lipRaw)) ? lipRaw : null;
+  const mouthAt = lipD ? px2(lipD) : ok(9, 10) ? { x: (P(9).x + P(10).x) / 2, y: (P(9).y + P(10).y) / 2 } : null;
+  const anchorD = mouthAt ? cm(Math.hypot(nock.x - mouthAt.x, nock.y - mouthAt.y)) : Infinity;
+  // oltre mezzo metro la mano non è al viso: niente misura dell'ancoraggio
+  if (mouthAt && anchorD < 50) {
+    const mouth = mouthAt;
+    const d = anchorD;
     const below = cm(nock.y - mouth.y);
     nums.anchorCm = d;
     nums.anchorBelowCm = below;
@@ -85,13 +92,15 @@ export function archeryKit(lm: Landmark[], w: number, h: number, hand: Hand, gea
     const b = facePoint(lm, hand === "destro" ? 133 : 263);
     return a && b ? { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } : null;
   })();
-  if (eyeF || ok(eyeId)) {
-    const e = eyeF ? px2(eyeF) : P(eyeId);
-    const off = cm(Math.abs((e.x - nock.x) * -u.y + (e.y - nock.y) * u.x));
+  const eyeOk = eyeF && onHead(px2(eyeF)) ? eyeF : null;
+  const eyeOff = eyeOk || ok(eyeId) ? cm(Math.abs(((eyeOk ? px2(eyeOk) : P(eyeId)).x - nock.x) * -u.y + ((eyeOk ? px2(eyeOk) : P(eyeId)).y - nock.y) * u.x)) : Infinity;
+  if (eyeOff < 40) {
+    const off = eyeOff;
     nums.eyeArrowCm = off;
     measures.push(`Occhio–freccia ${off.toFixed(1)} cm`);
   }
-  const noseF = facePoint(lm, 1);
+  const noseRaw = facePoint(lm, 1);
+  const noseF = noseRaw && onHead(px2(noseRaw)) ? noseRaw : null;
   if ((noseF || ok(0)) && drawn) {
     const nose = noseF ? px2(noseF) : P(0);
     // distanza del naso dal tratto di corda fra cocca e punta alta

@@ -119,12 +119,6 @@ export async function sagomaPainter(W: number, H: number) {
   };
 }
 
-const VIEWS = [
-  { id: "fronte", label: "Come il video", yaw: 0, pitch: 0.06 },
-  { id: "lato", label: "Lato", yaw: Math.PI / 2, pitch: 0.08 },
-  { id: "dietro", label: "Dietro", yaw: Math.PI - 0.35, pitch: 0.12 },
-  { id: "alto", label: "Dall'alto", yaw: 0.5, pitch: 1.05 },
-] as const;
 
 export function Anatomy3D({
   lm = null,
@@ -156,7 +150,7 @@ export function Anatomy3D({
   const layersRef = useRef(layers);
   layersRef.current = layers;
   // si parte come la ripresa del video (di fronte), fermi: si gira con il dito
-  const cam = useRef({ yaw: 0, pitch: 0.06, zoom: 1, auto: false });
+  const cam = useRef({ yaw: 0, pitch: 0.06, zoom: 1, auto: false, home: false });
   /** si sta girando o avvicinando con le dita: si usa il corpo leggero */
   const dragging = useRef(false);
   const [auto, setAuto] = useState(false);
@@ -292,6 +286,18 @@ export function Anatomy3D({
       }
       const c = cam.current;
       if (c.auto) c.yaw += dt * 0.35;
+      else if (c.home) {
+        // dopo «Ferma» si torna piano davanti, come nel video
+        const tw = Math.round(c.yaw / (Math.PI * 2)) * Math.PI * 2;
+        const k = 1 - Math.exp(-dt / 0.25);
+        c.yaw += (tw - c.yaw) * k;
+        c.pitch += (0.06 - c.pitch) * k;
+        if (Math.abs(tw - c.yaw) < 0.002 && Math.abs(0.06 - c.pitch) < 0.002) {
+          c.yaw = tw;
+          c.pitch = 0.06;
+          c.home = false;
+        }
+      }
       const L0 = layersRef.current;
       const key = `${c.yaw.toFixed(4)}|${c.pitch.toFixed(4)}|${c.zoom.toFixed(3)}|${L0.pelle}${L0.muscolo}${L0.osso}${L0.punti}${L0.quote}|${canvas.clientWidth}x${canvas.clientHeight}|${scale}|${bodyTick}`;
       // dopo un movimento si disegna ancora un attimo con il corpo leggero, poi una volta con quello pieno
@@ -376,6 +382,7 @@ export function Anatomy3D({
       ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
       dragging.current = true;
       cam.current.auto = false;
+      cam.current.home = false;
       setAuto(false);
     };
     const move = (e: PointerEvent) => {
@@ -426,47 +433,37 @@ export function Anatomy3D({
       <canvas ref={hudCanvas} className="pointer-events-none absolute inset-0 h-full w-full" />
       <p className="pointer-events-none absolute inset-x-0 bottom-0 truncate px-2 text-center text-[0.45rem] leading-[0.7rem] text-white/50">{BODY_CREDIT}</p>
       {empty ? <p className="absolute inset-x-0 top-1/2 -translate-y-1/2 text-center text-sm text-white/80">In attesa della posa: avvia il video o scegli un fotogramma.</p> : null}
-      <div className={inBox ? "absolute inset-x-2 bottom-11 flex flex-wrap justify-center gap-1" : "absolute left-2 top-2 flex flex-wrap gap-1"}>
-        {([["pelle", "Corpo"], ["muscolo", "Muscoli"], ["osso", "Scheletro"], ["punti", "Punti"], ["quote", "Misure"]] as const).map(([k, label]) => (
-          <button key={k} type="button" aria-pressed={layers[k]} onClick={() => toggle(k)} className={cx("min-h-8 rounded-full px-2.5 text-[0.7rem] font-semibold backdrop-blur", layers[k] ? "bg-[#5fd4ff]/25 text-white ring-1 ring-[#5fd4ff]/60" : "bg-black/40 text-white/60")}>
-            {label}
-          </button>
-        ))}
-      </div>
-      <div className="absolute inset-x-2 bottom-3 flex flex-wrap justify-center gap-1">
-        {VIEWS.map((v) => (
-          <button
-            key={v.id}
-            type="button"
-            onClick={() => {
-              cam.current = { ...cam.current, yaw: v.yaw, pitch: v.pitch, auto: false };
-              setAuto(false);
-            }}
-            className="min-h-8 rounded-full bg-black/45 px-2.5 text-[0.7rem] font-semibold text-white backdrop-blur"
-          >
-            {v.label}
-          </button>
-        ))}
+      {/* in alto: Gira e la foto in alta definizione; in basso cosa si vede (corpo, muscoli, scheletro…) */}
+      <div className={cx("absolute top-2 flex gap-1", inBox ? "left-2" : "right-2")}>
         <button
           type="button"
           aria-pressed={auto}
           onClick={() => {
+            // ferma: torna piano alla vista del video
             cam.current.auto = !cam.current.auto;
+            cam.current.home = !cam.current.auto;
             setAuto(cam.current.auto);
           }}
-          className={cx("min-h-8 rounded-full px-2.5 text-[0.7rem] font-semibold backdrop-blur", auto ? "bg-[#5fd4ff]/30 text-white" : "bg-black/45 text-white")}
+          className={cx("min-h-9 rounded-full px-3 text-xs font-semibold backdrop-blur", auto ? "bg-[#5fd4ff]/35 text-white ring-1 ring-[#5fd4ff]/70" : "bg-black/45 text-white")}
         >
-          Gira
+          {auto ? "Ferma" : "Gira"}
         </button>
         <button
           type="button"
           disabled={shooting || empty}
           onClick={() => void photoHD()}
           aria-label="Foto della sagoma in alta definizione"
-          className="min-h-8 rounded-full bg-black/45 px-2.5 text-[0.7rem] font-semibold text-white backdrop-blur disabled:opacity-50"
+          className="min-h-9 rounded-full bg-black/45 px-3 text-xs font-semibold text-white backdrop-blur disabled:opacity-50"
         >
           {shooting ? "Foto…" : "Foto HD"}
         </button>
+      </div>
+      <div className={cx("absolute inset-x-2 flex flex-wrap justify-center gap-1", inBox ? "bottom-4" : "bottom-4")}>
+        {([["pelle", "Corpo"], ["muscolo", "Muscoli"], ["osso", "Scheletro"], ["punti", "Punti"], ["quote", "Misure"]] as const).map(([k, label]) => (
+          <button key={k} type="button" aria-pressed={layers[k]} onClick={() => toggle(k)} className={cx("min-h-8 rounded-full px-2.5 text-[0.7rem] font-semibold backdrop-blur", layers[k] ? "bg-[#5fd4ff]/25 text-white ring-1 ring-[#5fd4ff]/60" : "bg-black/40 text-white/60")}>
+            {label}
+          </button>
+        ))}
       </div>
       {shotMsg ? <p className="pointer-events-none absolute inset-x-0 top-14 mx-auto w-fit rounded-full bg-black/60 px-3 py-1 text-xs font-semibold text-white">{shotMsg}</p> : null}
     </div>

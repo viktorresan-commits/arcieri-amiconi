@@ -207,7 +207,9 @@ export function bodyPoints(lm: Landmark[], aspect: number, cal: BoneCal | null =
   }
   // gambe nel piano del bacino (si stanno dritti per tirare), con un filo di profondità se il video la mostra
   for (const [hip, knee, ank, th, tb] of [[23, 25, 27, "femoreS", "tibiaS"], [24, 26, 28, "femoreD", "tibiaD"]] as const) {
-    const cap = (v: number) => Math.max(-0.12, Math.min(0.12, v * 0.6));
+    // in piedi per tirare le gambe sono dritte: la profondità stimata dal video (rumorosa sulle
+    // gambe, spesso in ombra) le piegava avanti e indietro, la sagoma sembrava storta
+    const cap = (v: number) => Math.max(-0.05, Math.min(0.05, v * 0.3));
     out[knee][2] = out[hip][2] + cap(depth(hip, knee, L(th)));
     out[ank][2] = out[knee][2] + cap(depth(knee, ank, L(tb)));
   }
@@ -229,14 +231,23 @@ export function bodyPoints(lm: Landmark[], aspect: number, cal: BoneCal | null =
   const mouth: V3 = out[9] && out[10] ? lerp(out[9], out[10], 0.5) : out[0];
   const neck: V3 = lerp(out[11], out[12], 0.5);
   const d2v = (a: V3, b: V3) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+  // davanti del busto (verso dove guarda il petto), solo in orizzontale: la mano all'ancoraggio sta
+  // sotto la mandibola dal lato del petto, quindi l'avambraccio passa davanti al collo, non dentro
+  const rx = out[12][0] - out[11][0];
+  const rz = out[12][2] - out[11][2];
+  const rl = Math.hypot(rx, rz) || 1;
+  const fwdZ = -rx / rl;
+  const headZ = earsZ;
   for (const [sh, el, wr, fa, osh, owr] of [[12, 14, 16, "avambraccioD", 11, 15], [11, 13, 15, "avambraccioS", 12, 16]] as const) {
     // punto del corpo più vicino al polso: viso e collo, spalla dello stesso lato, petto.
-    // Al viso la mano sta di lato alla mandibola (un filo dietro la bocca), su spalla e petto davanti
-    const sternum: V3 = [neck[0], neck[1] - 0.25, neck[2] + 0.06];
+    // La mano tocca la superficie: al viso sotto la mandibola, su collo, spalla e petto davanti
+    const sternum: V3 = [neck[0], neck[1] - 0.25, neck[2]];
+    const faceTop: V3 = [mouth[0], mouth[1], headZ];
+    const neckC: V3 = [neck[0], neck[1], neck[2]];
     const segs: [V3, V3, number, number][] = [
-      [mouth, neck, -0.035, 0.17],
-      [neck, out[sh], 0.06, 0.13],
-      [neck, sternum, 0.07, 0.13],
+      [faceTop, neckC, 0.085, 0.17],
+      [neckC, out[sh], 0.06, 0.13],
+      [neckC, sternum, 0.1, 0.13],
     ];
     let best: { d: number; z: number } | null = null;
     for (const [p, q, dz, lim] of segs) {
@@ -245,7 +256,7 @@ export function bodyPoints(lm: Landmark[], aspect: number, cal: BoneCal | null =
       const t = Math.max(0, Math.min(1, ((out[wr][0] - p[0]) * ax + (out[wr][1] - p[1]) * ay) / (ax * ax + ay * ay || 1)));
       const c = lerp(p, q, t);
       const d = d2v(out[wr], c);
-      if (d <= lim && (!best || d < best.d)) best = { d, z: c[2] + dz };
+      if (d <= lim && (!best || d < best.d)) best = { d, z: c[2] + fwdZ * dz };
     }
     if (!best) continue;
     const drawing = d2v(out[wr], mouth) < 0.16 && d2v(out[owr], out[osh]) > 0.4 && Math.abs(out[owr][1] - out[osh][1]) < 0.25 && Math.abs(out[el][1] - out[sh][1]) < 0.22;
@@ -638,13 +649,14 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gea
   // braccio dell'arco su e mano della corda verso il viso (o gomito della corda piegato)
   const mm = metricsOf(lm, hand, aspect, 1000);
   const drawn = Boolean(mm && mm.bowUp && (mm.handFace < 1.0 || drawAng < 115));
-  // all'ancoraggio le dita sono al viso: stessa profondità della bocca, mai dietro la linea delle spalle
+  // all'ancoraggio le dita sono al viso, alla profondità della mano (appoggiata sotto la mandibola,
+  // dal lato del petto), mai dietro la linea delle spalle
   const toFace = (p: V3): V3 => {
     let q: V3 = [p[0], p[1], p[2]];
     if (drawn) {
-      const mouthJ = J[9] && J[10] ? lerp(J[9], J[10], 0.5) : J[0];
+      const handZ = J[drwWrI]?.[2] ?? q[2];
       const k = Math.max(0, Math.min(1, 1 - ((mm?.handFace ?? 1) - 0.35) / 0.65));
-      q[2] += (mouthJ[2] - q[2]) * k;
+      q[2] += (handZ - q[2]) * k;
       const ahead = dot(sub(q, shM), fwd);
       if (ahead < 0.03) q = add(q, mul(fwd, 0.03 - ahead));
     }
