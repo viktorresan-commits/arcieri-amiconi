@@ -165,6 +165,55 @@ export function FitastPanel({ comps, myName, userId, startCode, onSaved, onClose
     return p;
   };
 
+  const [locating, setLocating] = useState("");
+  /**
+   * La gara toccata nell'elenco non ha il numero: la si cerca fra le classifiche per numero, partendo
+   * dalla gara nota con la data più vicina, finché la data (e il nome) corrispondono.
+   */
+  async function locate(g: Gara) {
+    if (!g.date) return;
+    const learned = loadIds();
+    const ids = Object.keys(learned).map(Number).filter((n) => Number.isFinite(n));
+    const near = ids.length ? ids.sort((a, b) => Math.abs(Date.parse(learned[String(a)]) - Date.parse(g.date!)) - Math.abs(Date.parse(learned[String(b)]) - Date.parse(g.date!)))[0] : SEED_GARA;
+    const order: number[] = [];
+    for (let k = 0; order.length < 90; k++) {
+      if (near + k > 0) order.push(near + k);
+      if (k && near - k > 0) order.push(near - k);
+    }
+    setErr("");
+    setLocating(`Cerco la classifica della gara del ${fmtDay(g.date)}…`);
+    const words = norm(g.title).split(" ").filter((w) => w.length > 3);
+    try {
+      for (let i = 0; i < order.length; i += 3) {
+        const batch = order.slice(i, i + 3).filter((n) => !learned[String(n)] || learned[String(n)] === g.date);
+        const found = await Promise.all(
+          batch.map(async (n) => {
+            const id = String(n);
+            const p = await read({ url: classificaUrl(id, FITAST_HOME), referer: FITAST_HOME }).catch(() => null);
+            if (!p || garaIdOf(p) !== id) return null;
+            const d = garaDateOf(p);
+            if (d) learned[id] = d;
+            const t = norm(garaTitleOf(p));
+            return d === g.date && (!words.length || words.some((w) => t.includes(w))) ? id : null;
+          }),
+        );
+        saveIds(learned);
+        const id = found.find(Boolean);
+        if (id) {
+          setLocating("");
+          go({ url: classificaUrl(id, FITAST_HOME), referer: FITAST_HOME, label: [fmtDay(g.date), id, g.title].filter(Boolean).join(" · ") });
+          return;
+        }
+        setLocating(`Cerco la classifica della gara del ${fmtDay(g.date)}… ${Math.min(order.length, i + 3)} gare guardate`);
+      }
+      setLocating("");
+      setErr(`Non ho trovato la classifica della gara del ${fmtDay(g.date)}.`);
+    } catch {
+      setLocating("");
+      setErr("Portale FITAST non raggiungibile.");
+    }
+  }
+
   const go = (next: Req, push = true) => {
     if (push && page) setBack((b) => [...b, req]);
     setReq(next);
@@ -740,10 +789,27 @@ export function FitastPanel({ comps, myName, userId, startCode, onSaved, onClose
         </div>
         {onClose ? <button type="button" onClick={onClose} aria-label="Chiudi" className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/[0.08] text-lg leading-none">×</button> : null}
       </div>
-      <div className="grid grid-cols-[1fr_auto] gap-2">
-        <TextInput value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cognome e nome" aria-label="Nome da cercare" />
-        {scan ? <Button variant="ghost" onClick={() => { stop.current = true; }}>Ferma</Button> : <Button onClick={() => void searchAll().catch((e: unknown) => { setScan(null); setErr(e instanceof Error ? e.message : "Ricerca non riuscita."); })} disabled={!q.trim()}>Cerca</Button>}
-      </div>
+      <form
+        className="grid grid-cols-[1fr_auto] gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!scan && q.trim()) void searchAll().catch((err: unknown) => { setScan(null); setErr(err instanceof Error ? err.message : "Ricerca non riuscita."); });
+        }}
+      >
+        <TextInput
+          value={q}
+          onChange={(e) => {
+            const v = e.target.value;
+            setQ(v);
+            // un indirizzo del portale incollato: la pagina si apre subito, senza premere Cerca
+            if (v.length - q.length > 10 && /^https?:\/\/89\.46\.73\.21\/FITAST_WEB\/\S+\.awp/i.test(v.trim()) && !scan) go({ url: v.trim().replace(/%20$/i, ""), referer: FITAST_HOME });
+          }}
+          placeholder="Cognome e nome"
+          aria-label="Nome da cercare"
+          enterKeyHint="search"
+        />
+        {scan ? <Button type="button" variant="ghost" onClick={() => { stop.current = true; }}>Ferma</Button> : <Button type="submit">Cerca</Button>}
+      </form>
       <p className="-mt-1.5 text-[0.7rem] text-muted">Cerca il nome nelle classifiche delle gare, dalla più recente all'indietro fino a {WINDOW_DAYS} giorni fa.</p>
       {scan ? (
         <p className="text-xs text-muted">
@@ -769,7 +835,8 @@ export function FitastPanel({ comps, myName, userId, startCode, onSaved, onClose
       </div>
       {busy ? <Loading /> : null}
       {err ? <ErrorNote text={err} /> : null}
-      {page && !busy ? <PageView page={page} label={req.label} q={q} rowField={rowFieldRef.current} onOpen={open} onGo={(r) => go(r)} /> : null}
+      {locating ? <p className="rounded-2xl bg-white/[0.04] p-3 text-sm text-muted">{locating}</p> : null}
+      {page && !busy ? <PageView page={page} label={req.label} q={q} rowField={rowFieldRef.current} onOpen={open} onGo={(r) => go(r)} onLocate={(g) => void locate(g)} /> : null}
     </Card>
   );
 }
@@ -825,7 +892,7 @@ function Commands({ page, onGo }: { page: FitastPage; onGo: (r: Req) => void }) 
 }
 
 /** la pagina letta: comandi, tabelle (con il nome evidenziato), testo e collegamenti utili */
-function PageView({ page, label, q, rowField, onOpen, onGo }: { page: FitastPage; label?: string; q: string; rowField: string | null; onOpen: (u: string) => void; onGo: (r: Req) => void }) {
+function PageView({ page, label, q, rowField, onOpen, onGo, onLocate }: { page: FitastPage; label?: string; q: string; rowField: string | null; onOpen: (u: string) => void; onGo: (r: Req) => void; onLocate?: (g: Gara) => void }) {
   if (page.kind === "pdf") {
     const mine = page.lines.filter((l) => hits(l, q));
     return (
@@ -841,12 +908,14 @@ function PageView({ page, label, q, rowField, onOpen, onGo }: { page: FitastPage
     );
   }
   const useful = page.links.filter((l) => (sameSite(l.href) || /\.pdf/i.test(l.href)) && l.href !== page.url).slice(0, 60);
-  const heading = label || (page.title && !/^view_/i.test(page.title) ? page.title : "");
+  // la gara aperta: numero, nome e data come li scrive il portale (2472 · GARA DI CAMPIONATO INVERNALE 3D · 15/11/2026)
+  const garaHead = garaIdOf(page) ? [garaIdOf(page), garaTitleOf(page), fmtDay(garaDateOf(page))].filter(Boolean).join(" · ") : "";
+  const heading = label || garaHead || (page.title && !/^view_/i.test(page.title) ? page.title : "");
   return (
     <div className="grid gap-3">
       {heading ? <p className="text-sm font-semibold">{heading}</p> : null}
       <Commands key={page.url + page.fetchedAt} page={page} onGo={onGo} />
-      <GareList page={page} rowField={rowField} onOpen={onOpen} onGo={onGo} />
+      <GareList page={page} rowField={rowField} onOpen={onOpen} onGo={onGo} onLocate={onLocate} />
       {page.tables.slice(0, 8).map((t, i) => <TableView key={i} t={t} q={q} onOpen={onOpen} onPress={(code) => { const p = JSON.parse(code) as { code: string; set: Record<string, string> }; const r = pressReq(page, p, {}, label ?? ""); if (r) onGo(r); }} />)}
       {!page.tables.length && page.diag?.length ? (
         <details className="rounded-2xl bg-white/[0.03] p-3 text-xs text-muted">
@@ -872,14 +941,27 @@ function PageView({ page, label, q, rowField, onOpen, onGo }: { page: FitastPage
 }
 
 /** le gare della stagione scelta, dalla più recente: un tocco apre la classifica (o la gara) */
-function GareList({ page, rowField, onOpen, onGo }: { page: FitastPage; rowField: string | null; onOpen: (u: string) => void; onGo: (r: Req) => void }) {
-  const gare = useMemo(() => findGare(page), [page]);
+function GareList({ page, rowField, onOpen, onGo, onLocate }: { page: FitastPage; rowField: string | null; onOpen: (u: string) => void; onGo: (r: Req) => void; onLocate?: (g: Gara) => void }) {
+  const today = isoDay(new Date());
+  // prima le gare già fatte (dalla più recente), poi quelle da fare
+  const gare = useMemo(() => {
+    const list = findGare(page);
+    const done = list.filter((g) => !g.date || g.date <= today);
+    const next = list.filter((g) => g.date && g.date > today).reverse();
+    return [...done, ...next];
+  }, [page, today]);
   const [all, setAll] = useState(false);
   if (!gare.length) return null;
   const btn = page.form?.buttons.find((b) => /classific/i.test(b.label) && !/squadr/i.test(b.label)) ?? null;
-  const today = isoDay(new Date());
+  const learned = loadIds();
   const action = (g: Gara): (() => void) | null => {
     const lbl = [fmtDay(g.date), g.id, g.title].filter(Boolean).join(" · ");
+    // la classifica per numero: dall'elenco, dalla riga o da una ricerca di prima (stessa data, una sola gara)
+    const sameDay = g.date ? Object.entries(learned).filter(([, d]) => d === g.date).map(([id]) => id) : [];
+    const direct = g.id || g.key || (sameDay.length === 1 ? sameDay[0] : "");
+    if (direct) return () => onOpen(classificaUrl(direct, FITAST_HOME));
+    const future = Boolean(g.date && g.date > today);
+    if (!future && onLocate) return () => onLocate(g);
     for (const a of g.alts) {
       if (a.kind === "href") return () => onOpen(a.href);
       if (a.kind === "press") return () => {
@@ -912,6 +994,7 @@ function GareList({ page, rowField, onOpen, onGo }: { page: FitastPage; rowField
                 {g.id ? <span className="text-muted"> · {g.id}</span> : null}
                 {future ? <span className="text-muted"> · da fare</span> : null}
               </span>
+              {act && !future ? <span className="shrink-0 text-xs font-semibold text-[#f1cf8a]">Classifica ›</span> : null}
             </button>
           );
         })}

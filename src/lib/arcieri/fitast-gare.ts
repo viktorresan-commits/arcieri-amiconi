@@ -97,7 +97,8 @@ export function garaIdOf(page: FitastPage): string {
 
 /** il nome della gara aperta, se la pagina lo mostra */
 export function garaTitleOf(page: FitastPage): string {
-  for (const l of page.lines.slice(0, 80)) if (/^\d{3,6}\s*[-–]\s*\S/.test(l.trim())) return l.trim().replace(/^\d{3,6}\s*[-–]\s*/, "");
+  // senza la data che a volte sta sulla stessa riga (2472-GARA … 15/11/2026)
+  for (const l of page.lines.slice(0, 80)) if (/^\d{3,6}\s*[-–]\s*\S/.test(l.trim())) return cleanTitle(l.trim().replace(/^\d{3,6}\s*[-–]\s*/, "")) || l.trim().replace(/^\d{3,6}\s*[-–]\s*/, "");
   return "";
 }
 
