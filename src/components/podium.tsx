@@ -1,6 +1,6 @@
 import { useId } from "react";
 import { Link } from "@tanstack/react-router";
-import { AVATAR_DEFAULT, type AvatarLook } from "@/lib/arcieri/avatar";
+import { AVATAR_DEFAULT, figureScale, type AvatarLook } from "@/lib/arcieri/avatar";
 import { ArcherAvatar, AvatarFace } from "./archer-avatar";
 import { Confetti, Sparkle } from "./celebrate";
 import { Card } from "./kit";
@@ -12,6 +12,13 @@ const METALS = {
   2: { a: "#ffffff", b: "#c9d2db", c: "#6f7b87", text: "#1d2430", label: "2°" },
   3: { a: "#f6c08c", b: "#c4844a", c: "#6e4019", text: "#2e1606", label: "3°" },
 } as const;
+
+/** riquadro dell'arciere nello scudo: per un adulto medio a sinistra -22%, in alto -12%, largo 192% */
+function frame(look: AvatarLook) {
+  const k = Math.max(0.85, Math.min(1.35, 1 / figureScale(look)));
+  // il punto dei piedi (150, 342 nel disegno) resta fermo: 110/300 della larghezza, 342/300 in altezza
+  return { left: `${(-22 - 70.4 * (k - 1)).toFixed(2)}%`, top: `${(-12 - 171 * (k - 1)).toFixed(2)}%`, width: `${(192 * k).toFixed(2)}%` };
+}
 
 /** Scudo con l'arciere dentro (vittoria per il primo, fiero per gli altri). */
 function Shield({ row, place, look }: { row: PodiumRow; place: 1 | 2 | 3; look: AvatarLook }) {
@@ -35,7 +42,8 @@ function Shield({ row, place, look }: { row: PodiumRow; place: 1 | 2 | 3; look: 
         <div className="absolute inset-0" style={{ clipPath: `url(#${uid}s)`, background: `linear-gradient(135deg, ${m.a}, ${m.b} 50%, ${m.c})` }} />
         <div className="absolute inset-[4%]" style={{ clipPath: `url(#${uid}s)` }}>
           <div className="absolute inset-0" style={{ background: `radial-gradient(120% 80% at 50% 10%, ${look.shirt}aa, #0d1b17 75%)` }} />
-          <div className="absolute left-[-22%] top-[-12%] w-[192%]">
+          {/* ragazzi e arcieri bassi: la figura si ingrandisce attorno ai piedi, così testa e busto stanno al centro come per gli altri */}
+          <div className="absolute" style={frame(look)}>
             <ArcherAvatar look={look} pose={big ? "vittoria" : "fiero"} still interactive={false} className="h-auto w-full" />
           </div>
           <div className="absolute inset-x-0 bottom-0 h-[46%] bg-gradient-to-t from-black/85 via-black/45 to-transparent" />

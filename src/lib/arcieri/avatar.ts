@@ -529,3 +529,13 @@ export function outfitIdea(base: AvatarLook): AvatarLook {
 
 const SCENE_IDEAS = ["campo", "foresta", "castello", "palazzo", "montagna", "lago", "deserto", "villaggio", "neve", "campagna", "torneo", "rovine", "spiaggia", "autunno", "fabriano"];
 
+
+/**
+ * Quanto è rimpicciolita la figura intera rispetto a un adulto di statura media (ragazzi e ragazze più
+ * piccoli, statura ±10%): serve a inquadrarla come gli altri nei ritratti (podio, profilo), senza
+ * lasciarla in basso con il vuoto sopra.
+ */
+export function figureScale(look: Pick<AvatarLook, "body" | "stature">, kidScale = 0.8) {
+  const kid = look.body === "ragazzo" || look.body === "ragazza";
+  return (kid ? kidScale : 1) * (0.9 + (tune(look.stature, 50, 0, 100) / 100) * 0.2);
+}

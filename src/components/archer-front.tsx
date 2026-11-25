@@ -14,7 +14,7 @@ const LONG_SLEEVES = ["felpa", "giacca", "camicia", "tunica", "tunica-lunga", "f
  * il peso su una gamba, respira, ondeggia appena, il mantello si muove. Stessi colori, abiti,
  * accessori e arco della figura di profilo.
  */
-export function ArcherFront({ look, className = "h-96 w-auto", crop }: { look: AvatarLook; className?: string; /** riquadro da mostrare (viewBox), per le miniature di un dettaglio */ crop?: string }) {
+export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false }: { look: AvatarLook; className?: string; /** riquadro da mostrare (viewBox), per le miniature di un dettaglio */ crop?: string; /** ritratto: ragazzi e arcieri bassi riempiono il riquadro come gli altri (niente vuoto sopra la testa) */ fit?: boolean }) {
   const live = !crop;
   const uid = (useId().replace(/[^a-zA-Z0-9]/g, "") + "_");
   const woman = look.body === "donna" || look.body === "ragazza";
@@ -168,7 +168,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop }: { look: A
         <DetailDefs uid={`${uid}-1`} />
         <clipPath id={`${uid}tcl`}><path d={torsoD} />{longTop ? <path d={tunicD} /> : null}</clipPath>
       </defs>
-      <g transform={`translate(100 360) scale(${((kid ? 0.84 : 1) * (0.9 + (tune(look.stature, 50, 0, 100) / 100) * 0.2)).toFixed(3)}) translate(-100 -360)`}>
+      <g transform={`translate(100 360) scale(${(fit ? 1 : (kid ? 0.84 : 1) * (0.9 + (tune(look.stature, 50, 0, 100) / 100) * 0.2)).toFixed(3)}) translate(-100 -360)`}>
         <ellipse cx="100" cy="356" rx="62" ry="7" fill="#000" opacity="0.3" />
         <g className={live ? "aa-front-sway" : undefined}>
         {/* dietro: mantello e faretra sulla schiena */}
