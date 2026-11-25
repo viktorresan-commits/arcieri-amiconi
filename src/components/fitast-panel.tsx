@@ -4,6 +4,7 @@ import { Glyph } from "@/components/icons";
 import { saveEntry } from "@/lib/arcieri/club.api";
 import { FITAST_HOME, fitastRead } from "@/lib/arcieri/fitast.api";
 import { pressFields, type FitastCell, type FitastPage, type FitastTable } from "@/lib/arcieri/fitast-parse";
+import { findGare, garaIdOf, garaTitleOf, rowFields, seasonRange, seasonSelect, type Gara } from "@/lib/arcieri/fitast-gare";
 import { openExternal } from "@/lib/arcieri/native";
 
 type Lane = { n: number; score: number; arrows: number[]; label: string; distanceM: number | null; note: string; aimAngle: string };
@@ -13,7 +14,6 @@ type Comp = { id: number; name: string; startsOn: string; notes?: string; entrie
 const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim();
 const rowText = (r: FitastCell[]) => r.map((c) => c.text).join(" ");
 const GROUP = /piazz|turn|grupp|paglion|bersagl|squadr|linea/i;
-const SUBPAGE = /classific|iscritt|piazz|turn|squadr|risultat|elenco|partecip|grupp|ordine/i;
 const sameSite = (href: string) => href.includes("89.46.73.21/FITAST_WEB/");
 
 /** il nome cercato sta nella riga: tutte le parole, in qualsiasi ordine (COGNOME Nome o Nome Cognome) */
@@ -38,7 +38,7 @@ function codeOf(c: Comp) {
 }
 
 /** una richiesta al portale: una pagina, oppure un comando premuto (modulo rimandato) */
-type Req = { url: string; post?: { fields: Record<string, string>; charset: string }; referer?: string; label?: string; filtered?: boolean };
+type Req = { url: string; post?: { fields: Record<string, string>; charset: string }; referer?: string; label?: string; filtered?: boolean; thenClassifica?: boolean };
 type Page = FitastPage & { cookie: string };
 type Match = { page: FitastPage; req: Req; table: FitastTable | null; index: number; line?: string };
 
@@ -50,19 +50,25 @@ const FILTER_SELECT = /categ|tipolog|classe|divisi|arco|stile|sesso|special|tipo
 /** tendine da non girare dentro una classifica: la gara e la stagione sono già scelte */
 const FIXED_SELECT = /gara|campionat|stagion|anno|data|evento/i;
 
-/**
- * Le classifiche del portale mostrano una categoria alla volta (Categoria MESSERE, Tipologia
- * TRADIZIONALE… e CERCA): per trovare un nome si prova ogni combinazione, prima quelle che
- * somigliano alla categoria dell'arciere.
- */
-function filterReqs(page: FitastPage, r: Req, preferred: string[]): Req[] {
-  const form = page.form;
-  if (!form || r.filtered) return [];
-  const sels = form.selects.filter((x) => x.options.length >= 2 && x.options.length <= 80);
-  const ranked = sels
-    .filter((x) => !FIXED_SELECT.test(`${x.label} ${x.name}`))
+type Combo = { req: Req; texts: string[] };
+/** le tendine-filtro di una classifica (Categoria, Tipologia…), al massimo due */
+function filterSelects(page: FitastPage) {
+  return (page.form?.selects ?? [])
+    .filter((x) => x.options.length >= 2 && x.options.length <= 80 && !FIXED_SELECT.test(`${x.label} ${x.name}`))
     .sort((a, b) => Number(FILTER_SELECT.test(b.label)) - Number(FILTER_SELECT.test(a.label)))
     .slice(0, 2);
+}
+/** le scelte attuali dei filtri della pagina (es. MESSERE · TRADIZIONALE) */
+const currentTexts = (page: FitastPage) => filterSelects(page).map((x) => (x.options.find((o) => o.selected) ?? x.options[0]).text.trim());
+
+/**
+ * Le classifiche del portale mostrano una categoria alla volta (Categoria MESSERE, Tipologia
+ * TRADIZIONALE… e CERCA): ogni combinazione diventa un comando CERCA da premere.
+ */
+function filterCombos(page: FitastPage, r: Req): Combo[] {
+  const form = page.form;
+  if (!form) return [];
+  const ranked = filterSelects(page);
   if (!ranked.length) return [];
   const btn = form.buttons.find((b) => FILTER_BUTTON.test(b.label.trim()));
   // solo pagine che sono davvero classifiche con filtri: pulsante CERCA o tendine come Categoria
@@ -76,16 +82,59 @@ function filterReqs(page: FitastPage, r: Req, preferred: string[]): Req[] {
     for (const c of combos) for (const o of x.options) if (o.value !== "" || o.text.trim()) next.push({ choose: { ...c.choose, [x.name]: o.value }, texts: [...c.texts, o.text.trim()] });
     combos = next;
   }
-  const pref = preferred.map(norm).filter(Boolean);
-  const score = (texts: string[]) => texts.reduce((n, t) => n + (pref.some((p) => norm(t).includes(p) || p.includes(norm(t))) ? 1 : 0), 0);
-  combos.sort((a, b) => score(b.texts) - score(a.texts));
-  return combos.slice(0, 150).flatMap((c) => {
-    const q = pressReq(page, press, { ...base, ...c.choose }, `${r.label ? `${r.label} · ` : ""}${c.texts.join(" · ")}`);
-    return q ? [{ ...q, filtered: true }] : [];
-  });
+  const now = currentTexts(page).map(norm).join("|");
+  return combos
+    .filter((c) => c.texts.map(norm).join("|") !== now)
+    .slice(0, 200)
+    .flatMap((c) => {
+      const q = pressReq(page, press, { ...base, ...c.choose }, `${r.label ? `${r.label} · ` : ""}${c.texts.join(" · ")}`);
+      return q ? [{ req: { ...q, filtered: true }, texts: c.texts }] : [];
+    });
 }
-// i filtri di una classifica sono gli stessi in ogni gara: la gara si distingue dall'etichetta
-const reqKey = (r: Req) => `${r.url}|${r.post ? JSON.stringify(r.post.fields) : ""}${r.filtered ? `|${r.label ?? ""}` : ""}`;
+
+/**
+ * In che ordine provare i filtri: quelli dove il nome è già comparso in questa ricerca e poi i vicini
+ * (stessa categoria o stessa tipologia) e basta; altrimenti tutti, prima quelli già visti in passato
+ * e quelli che somigliano alla categoria dell'arciere nel calendario.
+ */
+function orderCombos(all: Combo[], confirmed: string[][], hints: string[][], preferred: string[]) {
+  const key = (t: string[]) => t.map(norm).join("|");
+  const pref = preferred.map(norm).filter(Boolean);
+  const pscore = (c: Combo) => c.texts.reduce((n, t) => n + (pref.some((p) => norm(t).includes(p) || p.includes(norm(t))) ? 1 : 0), 0);
+  const isIn = (c: Combo, list: string[][]) => list.some((k) => key(k) === key(c.texts));
+  const near = (c: Combo, list: string[][]) => list.some((k) => c.texts.some((t) => k.map(norm).includes(norm(t))));
+  if (confirmed.length) {
+    return [...all.filter((c) => isIn(c, confirmed)), ...all.filter((c) => !isIn(c, confirmed) && near(c, confirmed)).sort((a, b) => pscore(b) - pscore(a)).slice(0, 10)];
+  }
+  return [...all].sort((a, b) => Number(isIn(b, hints)) - Number(isIn(a, hints)) || Number(near(b, hints)) - Number(near(a, hints)) || pscore(b) - pscore(a));
+}
+
+const COMBO_KEY = "aa-fitast-filtri";
+function loadCombos(): string[][] {
+  try {
+    const v = JSON.parse(localStorage.getItem(COMBO_KEY) ?? "[]") as unknown;
+    return Array.isArray(v) ? v.filter((x): x is string[] => Array.isArray(x) && x.every((t) => typeof t === "string")).slice(0, 4) : [];
+  } catch {
+    return [];
+  }
+}
+function saveCombos(list: string[][]) {
+  try {
+    localStorage.setItem(COMBO_KEY, JSON.stringify(list.slice(0, 4)));
+  } catch {
+    /* memoria del browser non disponibile */
+  }
+}
+
+const WINDOW_DAYS = 360;
+const MAX_PAGES = 900;
+const isoDay = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const fmtDay = (d: string | null) => (d ? `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}` : "");
+const rowsOf = (p: FitastPage) => p.tables.reduce((n, t) => n + Math.max(0, t.rows.length - 1), 0);
+/** una gara letta durante la ricerca: cosa si è aperto e cosa si è trovato */
+type Step = { id: string; date: string | null; title: string; pages: number; rows: number; found: number; note: string };
+
+const reqKey = (r: Req) => `${r.url}|${r.post ? JSON.stringify(r.post.fields) : ""}|${r.label ?? ""}`;
 
 /** il comando premuto come richiesta: campi del modulo, scelte nelle tendine e alias WEBDEV */
 function pressReq(page: FitastPage, b: { code: string; set: Record<string, string> }, choose: Record<string, string>, label: string): Req | null {
@@ -111,10 +160,13 @@ export function FitastPanel({ comps, myName, userId, startCode, onSaved, onClose
   const [busy, setBusy] = useState(false);
   const [q, setQ] = useState(myName);
   const [found, setFound] = useState<Match[] | null>(null);
-  const [scan, setScan] = useState<{ done: number; total: number } | null>(null);
+  const [scan, setScan] = useState<{ gara: number; label: string; pages: number } | null>(null);
+  const [steps, setSteps] = useState<Step[]>([]);
   const [extra, setExtra] = useState<{ text: string; req: Req; squadre: boolean }[]>([]);
   const stop = useRef(false);
   const cookie = useRef("");
+  // il campo che sceglie la riga dell'elenco gare, quando la ricerca l'ha scoperto
+  const rowFieldRef = useRef<string | null>(null);
 
   const read = async (r: Req) => {
     const p = await fitastRead({ data: { url: r.url, post: r.post, referer: r.referer, cookie: cookie.current } });
@@ -136,6 +188,13 @@ export function FitastPanel({ comps, myName, userId, startCode, onSaved, onClose
       .then((p) => {
         if (off) return;
         setPage(p);
+        // riga di gara toccata: il portale la sceglie e risponde con la stessa pagina, si apre la classifica
+        if (req.thenClassifica) {
+          const b = p.form?.buttons.find((x) => /classific/i.test(x.label) && !/squadr/i.test(x.label));
+          const r = b ? pressReq(p, b, {}, req.label ? `${req.label} · Classifica` : "Classifica") : null;
+          if (r) go(r, false);
+          return;
+        }
         // aperto da una gara del calendario: si va dritti alla sua pagina, se il calendario la collega
         if (startCode && req.url === FITAST_HOME && !req.post) {
           const re = new RegExp(`(^|\\D)${startCode}(\\D|$)`);
@@ -162,59 +221,56 @@ export function FitastPanel({ comps, myName, userId, startCode, onSaved, onClose
   }, [req]);
 
   /**
-   * cerca il nome in tutte le gare: le pagine collegate (iscritti, piazzole, classifiche) e, se il
-   * portale usa i pulsanti, ogni gara della tendina con PIAZZOLE, CLASSIFICA, GENERALE e Campionato
+   * Cerca il nome gara per gara, dalla più recente all'indietro fino a 360 giorni fa: per ogni stagione
+   * del portale (la più recente per prima) si riconoscono le gare con la data, si apre la classifica di
+   * ciascuna e se ne provano i filtri (Categoria, Tipologia) finché il nome compare.
    */
   async function searchAll() {
     if (!q.trim()) return;
     stop.current = false;
     setFound([]);
     setErr("");
-    const home = await read({ url: FITAST_HOME });
-    const queue: Req[] = [];
-    const seen = new Set<string>([reqKey({ url: FITAST_HOME })]);
-    const push = (r: Req, first = false) => {
-      const k = reqKey(r);
-      if (seen.has(k) || queue.some((x) => reqKey(x) === k)) return;
-      if (first) queue.unshift(r);
-      else queue.push(r);
-    };
-    // categoria dell'arciere (dalle sue gare nel calendario): le classifiche di quella categoria si leggono per prime
-    const preferred = [...new Set(comps.flatMap((c) => c.entries.filter((e) => e.userId === userId).map((e) => e.category)).filter(Boolean))];
-    home.links.filter((l) => sameSite(l.href) && l.href !== FITAST_HOME).slice(0, 30).forEach((l) => push({ url: l.href, referer: home.url, label: l.text }));
-    // portale a pulsanti: ogni gara della tendina × i comandi utili (prima le gare più recenti in elenco)
-    const sel = garaSelect(home);
-    const keys = (home.form?.buttons ?? []).filter((b) => KEY_BUTTON.test(b.label));
-    // prima le classifiche (dove c'è il nome con la posizione), poi piazzole e iscritti
-    const rank = (b: { label: string }) => (/classific/i.test(b.label) ? 0 : /generale/i.test(b.label) ? 1 : 2);
-    const named = keys.filter((b) => !/squadr/i.test(b.label)).sort((a, b) => rank(a) - rank(b));
-    if (sel) {
-      for (const o of sel.options.slice(0, 120)) {
-        for (const b of named.length ? named : sel.press ? [{ code: sel.press.code, set: sel.press.set, label: "" }] : []) {
-          const r = pressReq(home, b, { [sel.name]: o.value }, `${o.text}${b.label ? ` · ${b.label}` : ""}`);
-          if (r) push(r);
-        }
-      }
-    } else {
-      for (const b of named) {
-        const r = pressReq(home, b, {}, b.label);
-        if (r) push(r);
-      }
-    }
+    setSteps([]);
+    setExtra([]);
+    const todayIso = isoDay(new Date());
+    const from = isoDay(new Date(Date.now() - WINDOW_DAYS * 86_400_000));
     const out: Match[] = [];
     const hitKeys = new Set<string>();
-    const rankings: { text: string; req: Req; squadre: boolean }[] = [];
-    const take = (p: FitastPage, r: Req) => {
+    const log: Step[] = [];
+    let pages = 0;
+    let garaN = 0;
+    let label = "";
+    const show = () => setScan({ gara: garaN, label, pages });
+    show();
+    const get = async (r: Req | null) => {
+      if (!r || stop.current || pages >= MAX_PAGES) return null;
+      pages++;
+      show();
+      try {
+        return await read(r);
+      } catch {
+        return null;
+      }
+    };
+    // categoria dell'arciere (dalle sue gare nel calendario) e filtri dove il nome è comparso le altre volte
+    const preferred = [...new Set(comps.flatMap((c) => c.entries.filter((e) => e.userId === userId).map((e) => e.category)).filter(Boolean))];
+    const hints = loadCombos();
+    const confirmed: string[][] = [];
+    const calendar = new Map(comps.map((c) => [codeOf(c), c.startsOn.slice(0, 10)] as const).filter(([k]) => k));
+
+    /** righe con il nome nella pagina: quante nuove */
+    const take = (p: FitastPage, r: Req, texts: string[]) => {
+      let n = 0;
       let inTables = false;
       for (const t of p.tables) {
         t.rows.forEach((row, i) => {
-          // la stessa riga può comparire in più pagine (gara e classifica): una volta sola
           const key = `${r.label ?? p.title}|${rowText(row)}`;
           if (i && hits(rowText(row), q)) {
             inTables = true;
             if (!hitKeys.has(key)) {
               hitKeys.add(key);
               out.push({ page: p, req: r, table: t, index: i });
+              n++;
             }
           }
         });
@@ -226,43 +282,216 @@ export function FitastPanel({ comps, myName, userId, startCode, onSaved, onClose
           if (line.length < 400 && hits(line, q) && !hitKeys.has(key)) {
             hitKeys.add(key);
             out.push({ page: p, req: r, table: null, index: -1, line });
+            n++;
           }
         }
       }
-      for (const l of p.links) if (/classific/i.test(l.text + l.href) && !rankings.some((x) => x.req.url === l.href)) rankings.push({ text: l.text, req: { url: l.href, referer: p.url }, squadre: /squadr/i.test(l.text + l.href) });
-    };
-    take(home, { url: FITAST_HOME });
-    // classifiche a pulsante (anche squadre), da aprire a mano per la gara scelta in tendina
-    for (const b of keys.filter((x) => /classific|generale|campionat/i.test(x.label))) {
-      const r = pressReq(home, b, sel ? { [sel.name]: (sel.options.find((o) => o.selected) ?? sel.options[0]).value } : {}, b.label);
-      if (r) rankings.push({ text: `${b.label}${sel ? ` · ${(sel.options.find((o) => o.selected) ?? sel.options[0]).text}` : ""}`, req: r, squadre: /squadr/i.test(b.label) });
-    }
-    let done = 0;
-    setScan({ done, total: queue.length });
-    while (queue.length && !stop.current && seen.size < 900) {
-      // una pagina alla volta: il portale ricorda nella sessione (cookie) la gara scelta, e due comandi
-      // premuti insieme si confondevano (risposta di una gara al posto dell'altra)
-      const batch = queue.splice(0, 1).filter((r) => !seen.has(reqKey(r)));
-      batch.forEach((r) => seen.add(reqKey(r)));
-      const pages = await Promise.all(batch.map((r) => read(r).then((p) => ({ p, r })).catch(() => null)));
-      for (const x of pages) {
-        if (!x) continue;
-        take(x.p, x.r);
-        // classifica con i filtri (Categoria, Tipologia, CERCA): tutte le combinazioni, subito dopo questa
-        // pagina (il portale ricorda nella sessione la gara aperta)
-        filterReqs(x.p, x.r, preferred).reverse().forEach((q) => push(q, true));
-        // un livello in più: le pagine di iscritti, piazzole e classifiche della gara
-        // (anche dopo un comando premuto: CLASSIFICA spesso risponde con il collegamento al PDF)
-        x.p.links
-          .filter((l) => sameSite(l.href) && (/\.pdf($|\?)/i.test(l.href) || (!x.r.post && SUBPAGE.test(l.text + l.href))))
-          .slice(0, 6)
-          .forEach((l) => push({ url: l.href, referer: x.p.url, label: `${x.r.label ? `${x.r.label} · ` : ""}${l.text || "PDF"}` }));
+      if (n) {
+        setFound([...out]);
+        if (texts.length && !confirmed.some((c) => c.join("|") === texts.join("|"))) {
+          confirmed.push(texts);
+          saveCombos([texts, ...hints.filter((h) => h.join("|") !== texts.join("|"))]);
+        }
       }
-      done += batch.length;
-      setScan({ done, total: done + queue.length });
-      setFound([...out]);
+      return n;
+    };
+
+    const home = await get({ url: FITAST_HOME });
+    if (!home) throw new Error("Portale FITAST non raggiungibile.");
+    // classifiche a pulsante (anche squadre), da aprire a mano per la stagione scelta in tendina
+    const ss = seasonSelect(home);
+    const rankings: { text: string; req: Req; squadre: boolean }[] = [];
+    for (const b of (home.form?.buttons ?? []).filter((x) => /classific|generale|campionat/i.test(x.label))) {
+      const r = pressReq(home, b, {}, b.label);
+      const st = ss ? (ss.options.find((o) => o.selected) ?? ss.options[0]).text : "";
+      if (r) rankings.push({ text: [b.label, st].filter(Boolean).join(" · "), req: r, squadre: /squadr/i.test(b.label) });
     }
     setExtra(rankings);
+
+    // stagioni dalla più recente; solo quelle che toccano gli ultimi 360 giorni
+    type Season = { value: string | null; text: string; range: { from: string; to: string } | null };
+    let seasons: Season[] = [{ value: null, text: "", range: null }];
+    if (ss) {
+      const all: Season[] = ss.options.map((o) => ({ value: o.value, text: o.text, range: seasonRange(o.text) ?? seasonRange(o.value) }));
+      const dated = all.filter((x) => x.range && x.range.to >= from && x.range.from <= todayIso).sort((a, b) => (b.range?.to ?? "").localeCompare(a.range?.to ?? ""));
+      const sel = all.find((x) => x.value === (ss.options.find((o) => o.selected) ?? ss.options[0]).value);
+      seasons = dated.length ? dated : sel ? [sel, ...all.filter((x) => x !== sel).slice(0, 1)] : all.slice(0, 2);
+    }
+
+    const seenIds = new Set<string>();
+    let rowField: string | null | undefined;
+    const probe: { last: { id: string; p: FitastPage; r: Req } | null } = { last: null };
+    const btnOf = (p: FitastPage) => p.form?.buttons.find((b) => /classific/i.test(b.label) && !/squadr/i.test(b.label)) ?? null;
+    const pzOf = (p: FitastPage) => p.form?.buttons.find((b) => /piazzol/i.test(b.label)) ?? null;
+    const isClassifica = (p: FitastPage) => Boolean(p.form?.selects.some((x) => FILTER_SELECT.test(x.label))) && !btnOf(p);
+    const short = (t: string) => t.split(" - ").pop()?.trim() ?? t;
+
+    for (const season of seasons) {
+      if (stop.current || pages >= MAX_PAGES) break;
+      const choose: Record<string, string> = {};
+      /** la pagina della stagione, riletta da capo prima di ogni gara (come tornare INDIETRO nel portale) */
+      const seasonPage = async (): Promise<FitastPage | null> => {
+        const h = await get({ url: FITAST_HOME });
+        if (!h) return null;
+        const s2 = seasonSelect(h);
+        if (!s2 || season.value == null) return h;
+        choose[s2.name] = season.value;
+        const selected = (s2.options.find((o) => o.selected) ?? s2.options[0]).value;
+        if (selected === season.value || !s2.press) return h;
+        return (await get(pressReq(h, s2.press, { [s2.name]: season.value }, season.text))) ?? h;
+      };
+      let page = await seasonPage();
+      if (!page) continue;
+      const every: Gara[] = findGare(page).map((g) => ({ ...g, date: g.date ?? calendar.get(g.id) ?? null }));
+      // solo le gare già fatte, dalla più recente, fino a 360 giorni fa
+      let gare = every.filter((g) => !g.date || (g.date >= from && g.date <= todayIso));
+      if (!gare.length && every.some((g) => g.date)) continue;
+      if (!gare.length) gare = [{ id: "", date: null, title: season.text ? short(season.text) : "Gara scelta nel portale", alts: [{ kind: "current" }] }];
+
+      // il campo nascosto che sceglie la riga di un elenco: lo si cerca una volta (vale per tutte le stagioni)
+      const idx = (g: Gara) => g.alts.find((a): a is { kind: "row"; index: number } => a.kind === "row")?.index ?? 0;
+      const probeRow = async (p: FitastPage): Promise<string | null> => {
+        const btn = btnOf(p);
+        const g2 = every.find((g) => g.id && idx(g) > 1);
+        if (!btn || !g2) return null;
+        for (const f of rowFields(p)) {
+          const r = pressReq(p, btn, { ...choose, [f]: String(idx(g2)) }, "prova");
+          const t = await get(r);
+          if (t && r && garaIdOf(t) === g2.id) {
+            probe.last = { id: g2.id, p: t, r };
+            return f;
+          }
+        }
+        return null;
+      };
+
+      for (let gi = 0; gi < gare.length; gi++) {
+        const g = gare[gi];
+        if (stop.current || pages >= MAX_PAGES) break;
+        if (g.id && seenIds.has(g.id)) continue;
+        if (gi > 0) page = (await seasonPage()) ?? page;
+        if (!page) break;
+        const base: FitastPage = page;
+        garaN++;
+        label = [fmtDay(g.date), g.title || (g.id ? `gara ${g.id}` : "")].filter(Boolean).join(" · ");
+        const step: Step = { id: g.id, date: g.date, title: g.title, pages: 0, rows: 0, found: 0, note: "" };
+        log.push(step);
+        setSteps([...log]);
+        const startPages = pages;
+        const lbl = (what: string) => [fmtDay(g.date), g.id, g.title || short(season.text), what].filter(Boolean).join(" · ");
+        const wrong = (p: FitastPage) => {
+          const id = garaIdOf(p);
+          return Boolean(g.id && id && id !== g.id);
+        };
+
+        // si apre la classifica della gara, nel primo modo che funziona
+        let opened: { p: FitastPage; r: Req; via: { page: FitastPage; choose: Record<string, string> } } | null = null;
+        for (const how of g.alts) {
+          if (stop.current) break;
+          const btn = btnOf(base);
+          let via = { page: base, choose: { ...choose } };
+          let r: Req | null = null;
+          if (how.kind === "href" || how.kind === "press") {
+            const r0 = how.kind === "href" ? { url: how.href, referer: base.url, label: lbl("") } : pressReq(base, how.press, choose, lbl(""));
+            const p0 = await get(r0);
+            if (!p0 || !r0) continue;
+            if (isClassifica(p0)) {
+              if (wrong(p0)) continue;
+              opened = { p: p0, r: r0, via };
+              break;
+            }
+            const b2 = btnOf(p0);
+            if (b2) {
+              via = { page: p0, choose: {} };
+              r = pressReq(p0, b2, {}, lbl("Classifica"));
+            } else if (btn) r = pressReq(base, btn, choose, lbl("Classifica"));
+          } else if (how.kind === "option" || how.kind === "input" || how.kind === "row") {
+            let field = "";
+            let value = "";
+            if (how.kind === "option") [field, value] = [how.select, how.value];
+            else if (how.kind === "input") [field, value] = [how.input, g.id];
+            else {
+              if (!rowField) rowField = await probeRow(base);
+              if (!rowField) continue;
+              rowFieldRef.current = rowField;
+              [field, value] = [rowField, String(how.index)];
+            }
+            via = { page: base, choose: { ...choose, [field]: value } };
+            // la prova del campo ha già aperto proprio questa gara: la si usa
+            const pr = probe.last;
+            if (how.kind === "row" && pr && pr.id === g.id) {
+              opened = { p: pr.p, r: pr.r, via };
+              probe.last = null;
+              break;
+            }
+            r = btn ? pressReq(base, btn, via.choose, lbl("Classifica")) : null;
+          } else r = btn ? pressReq(base, btn, choose, lbl("Classifica")) : null;
+          if (!r) continue;
+          const p = await get(r);
+          if (!p) continue;
+          if (wrong(p)) {
+            step.note = `si apre un'altra gara (${garaIdOf(p)})`;
+            continue;
+          }
+          opened = { p, r, via };
+          break;
+        }
+        if (!opened) {
+          step.note ||= "classifica non aperta";
+          step.pages = pages - startPages;
+          setSteps([...log]);
+          continue;
+        }
+        step.note = "";
+        const gotId = garaIdOf(opened.p);
+        if (!g.id && gotId && seenIds.has(gotId)) {
+          step.note = "gara già letta";
+          step.pages = pages - startPages;
+          setSteps([...log]);
+          continue;
+        }
+        if (gotId) seenIds.add(gotId);
+        if (g.id) seenIds.add(g.id);
+        step.id ||= gotId;
+        step.title = garaTitleOf(opened.p) || step.title;
+        label = [fmtDay(g.date), step.title || (step.id ? `gara ${step.id}` : "")].filter(Boolean).join(" · ");
+        show();
+
+        let n = take(opened.p, opened.r, currentTexts(opened.p));
+        step.rows += rowsOf(opened.p);
+        // CLASSIFICA a volte risponde con il PDF
+        for (const l of opened.p.links.filter((x) => sameSite(x.href) && /\.pdf($|\?)/i.test(x.href)).slice(0, 2)) {
+          if (n) break;
+          const pdf = await get({ url: l.href, referer: opened.p.url, label: lbl(l.text || "PDF") });
+          if (pdf) {
+            step.rows += pdf.lines.length;
+            n += take(pdf, { url: l.href, referer: opened.p.url, label: lbl(l.text || "PDF") }, []);
+          }
+        }
+        // poi una categoria alla volta, finché il nome compare
+        if (!n) {
+          for (const c of orderCombos(filterCombos(opened.p, opened.r), confirmed, hints, preferred)) {
+            if (stop.current || pages >= MAX_PAGES) break;
+            const p = await get(c.req);
+            if (!p) continue;
+            step.rows += rowsOf(p);
+            n += take(p, c.req, c.texts);
+            if (n) break;
+          }
+        }
+        // trovato: anche le piazzole della stessa gara, per i compagni di piazzola
+        if (n) {
+          const pz = pzOf(opened.via.page);
+          const pr = pz ? pressReq(opened.via.page, pz, opened.via.choose, lbl("Piazzole")) : null;
+          const pp = await get(pr);
+          if (pp && pr) take(pp, pr, []);
+        }
+        step.found = n;
+        step.pages = pages - startPages;
+        setSteps([...log]);
+      }
+    }
+    if (pages >= MAX_PAGES) setErr(`Fermato dopo ${MAX_PAGES} pagine lette: riprova con il cognome o apri la gara qui sotto.`);
     setScan(null);
   }
 
@@ -279,9 +508,14 @@ export function FitastPanel({ comps, myName, userId, startCode, onSaved, onClose
         <TextInput value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cognome e nome" aria-label="Nome da cercare" />
         {scan ? <Button variant="ghost" onClick={() => { stop.current = true; }}>Ferma</Button> : <Button onClick={() => void searchAll().catch((e: unknown) => { setScan(null); setErr(e instanceof Error ? e.message : "Ricerca non riuscita."); })} disabled={!q.trim()}>Cerca</Button>}
       </div>
-      <p className="-mt-1.5 text-[0.7rem] text-muted">Cerca il nome in tutte le gare del portale: iscrizioni, piazzole e classifiche.</p>
-      {scan ? <p className="text-xs text-muted">Leggo le pagine delle gare… {scan.done} di {scan.total}</p> : null}
+      <p className="-mt-1.5 text-[0.7rem] text-muted">Cerca il nome nelle classifiche delle gare, dalla più recente all'indietro fino a {WINDOW_DAYS} giorni fa.</p>
+      {scan ? (
+        <p className="text-xs text-muted">
+          {scan.gara ? `Gara ${scan.gara}${scan.label ? ` · ${scan.label}` : ""}` : "Leggo l'elenco delle gare"} · {scan.pages} {scan.pages === 1 ? "pagina letta" : "pagine lette"}
+        </p>
+      ) : null}
       {found ? <Matches found={found} q={q} comps={comps} userId={userId} onSaved={onSaved} onOpen={(r) => go(r)} searching={Boolean(scan)} /> : null}
+      {steps.length ? <Steps steps={steps} searching={Boolean(scan)} /> : null}
       {extra.length ? (
         <div className="grid gap-1.5">
           <p className="text-sm font-semibold">Classifiche trovate</p>
@@ -297,7 +531,7 @@ export function FitastPanel({ comps, myName, userId, startCode, onSaved, onClose
       </div>
       {busy ? <Loading /> : null}
       {err ? <ErrorNote text={err} /> : null}
-      {page && !busy ? <PageView page={page} label={req.label} q={q} onOpen={open} onGo={(r) => go(r)} /> : null}
+      {page && !busy ? <PageView page={page} label={req.label} q={q} rowField={rowFieldRef.current} onOpen={open} onGo={(r) => go(r)} /> : null}
     </Card>
   );
 }
@@ -309,11 +543,12 @@ function Commands({ page, onGo }: { page: FitastPage; onGo: (r: Req) => void }) 
   if (!form || (!form.selects.length && !form.buttons.length)) return null;
   const textOf = (name: string) => form.selects.find((x) => x.name === name)?.options.find((o) => o.value === choose[name])?.text ?? "";
   const sel = garaSelect(page);
+  const season = seasonSelect(page);
   const label = (b: string) => [sel ? textOf(sel.name) : "", b].filter(Boolean).join(" · ");
   return (
     <div className="grid gap-2 rounded-2xl bg-white/[0.04] p-3">
       {form.selects.filter((x) => x.options.length >= 2).slice(0, 4).map((x) => (
-        <Field key={x.name} label={x.label || "Scegli"}>
+        <Field key={x.name} label={x === season ? "Campionato" : x.label || "Scegli"}>
           <Select
             value={choose[x.name] ?? ""}
             onChange={(e) => {
@@ -352,7 +587,7 @@ function Commands({ page, onGo }: { page: FitastPage; onGo: (r: Req) => void }) 
 }
 
 /** la pagina letta: comandi, tabelle (con il nome evidenziato), testo e collegamenti utili */
-function PageView({ page, label, q, onOpen, onGo }: { page: FitastPage; label?: string; q: string; onOpen: (u: string) => void; onGo: (r: Req) => void }) {
+function PageView({ page, label, q, rowField, onOpen, onGo }: { page: FitastPage; label?: string; q: string; rowField: string | null; onOpen: (u: string) => void; onGo: (r: Req) => void }) {
   if (page.kind === "pdf") {
     const mine = page.lines.filter((l) => hits(l, q));
     return (
@@ -373,8 +608,9 @@ function PageView({ page, label, q, onOpen, onGo }: { page: FitastPage; label?: 
     <div className="grid gap-3">
       {heading ? <p className="text-sm font-semibold">{heading}</p> : null}
       <Commands key={page.url + page.fetchedAt} page={page} onGo={onGo} />
+      <GareList page={page} rowField={rowField} onOpen={onOpen} onGo={onGo} />
       {page.tables.slice(0, 8).map((t, i) => <TableView key={i} t={t} q={q} onOpen={onOpen} onPress={(code) => { const p = JSON.parse(code) as { code: string; set: Record<string, string> }; const r = pressReq(page, p, {}, label ?? ""); if (r) onGo(r); }} />)}
-      {!page.tables.length && page.lines.length ? (
+      {!page.tables.length && page.lines.length && !findGare(page).length ? (
         <div className="grid max-h-80 gap-1 overflow-y-auto rounded-2xl bg-white/[0.03] p-3 text-sm">
           {page.lines.slice(0, 300).map((l, i) => <p key={i} className={cx(hits(l, q) && "rounded bg-[#e0b15a]/25 px-1")}>{l}</p>)}
         </div>
@@ -387,6 +623,56 @@ function PageView({ page, label, q, onOpen, onGo }: { page: FitastPage; label?: 
           </div>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/** le gare della stagione scelta, dalla più recente: un tocco apre la classifica (o la gara) */
+function GareList({ page, rowField, onOpen, onGo }: { page: FitastPage; rowField: string | null; onOpen: (u: string) => void; onGo: (r: Req) => void }) {
+  const gare = useMemo(() => findGare(page), [page]);
+  const [all, setAll] = useState(false);
+  if (!gare.length) return null;
+  const btn = page.form?.buttons.find((b) => /classific/i.test(b.label) && !/squadr/i.test(b.label)) ?? null;
+  const today = isoDay(new Date());
+  const action = (g: Gara): (() => void) | null => {
+    const lbl = [fmtDay(g.date), g.id, g.title].filter(Boolean).join(" · ");
+    for (const a of g.alts) {
+      if (a.kind === "href") return () => onOpen(a.href);
+      if (a.kind === "press") return () => {
+        const r = pressReq(page, a.press, {}, lbl);
+        if (r) onGo({ ...r, thenClassifica: true });
+      };
+      // senza ricerca fatta il campo della riga non è noto: si prova il più probabile (la classifica mostra il nome della gara)
+      const field = a.kind === "option" ? a.select : a.kind === "input" ? a.input : a.kind === "row" ? (rowField ?? rowFields(page)[0] ?? null) : null;
+      const value = a.kind === "option" ? a.value : a.kind === "input" ? g.id : a.kind === "row" ? String(a.index) : "";
+      if (field && btn) return () => {
+        const r = pressReq(page, btn, { [field]: value }, `${lbl} · Classifica`);
+        if (r) onGo(r);
+      };
+    }
+    return null;
+  };
+  const shown = all ? gare : gare.slice(0, 12);
+  return (
+    <div className="grid gap-1.5">
+      <p className="text-sm font-semibold">Gare della stagione</p>
+      <div className="grid gap-1">
+        {shown.map((g, i) => {
+          const act = action(g);
+          const future = Boolean(g.date && g.date > today);
+          return (
+            <button key={`${g.id}-${i}`} type="button" disabled={!act} onClick={act ?? undefined} className={cx("flex items-baseline gap-2 rounded-xl bg-white/[0.04] px-3 py-2 text-left text-sm", act ? "hover:bg-white/[0.07]" : "cursor-default opacity-70")}>
+              <span className="w-[5.2rem] shrink-0 tabular-nums text-muted">{fmtDay(g.date) || "—"}</span>
+              <span className="min-w-0 flex-1">
+                {g.title || "Gara"}
+                {g.id ? <span className="text-muted"> · {g.id}</span> : null}
+                {future ? <span className="text-muted"> · da fare</span> : null}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      {gare.length > 12 ? <button type="button" className="justify-self-start text-xs text-muted underline-offset-2 hover:underline" onClick={() => setAll((x) => !x)}>{all ? "Mostra meno" : `Mostra tutte le ${gare.length} gare`}</button> : null}
     </div>
   );
 }
@@ -418,9 +704,38 @@ function TableView({ t, q, onOpen, onPress }: { t: FitastTable; q: string; onOpe
   );
 }
 
+/** le gare lette, dalla più recente: cosa si è aperto, quante righe e se il nome c'era */
+function Steps({ steps, searching }: { steps: Step[]; searching: boolean }) {
+  const dates = steps.map((s) => s.date).filter((d): d is string => Boolean(d)).sort();
+  const span = dates.length ? ` dal ${fmtDay(dates[0])} al ${fmtDay(dates[dates.length - 1])}` : "";
+  const noRows = !searching && steps.length > 0 && steps.every((s) => !s.rows && !s.found);
+  return (
+    <details className="rounded-2xl bg-white/[0.03] p-3 text-xs" open={!searching && !steps.some((s) => s.found)}>
+      <summary className="cursor-pointer text-muted">
+        Gare lette: {steps.length}
+        {span}
+      </summary>
+      <ul className="mt-2 grid gap-1">
+        {steps.slice(0, 60).map((s, i) => (
+          <li key={i} className={cx("flex gap-2", s.found ? "text-[#f1cf8a]" : "text-muted")}>
+            <span className="w-[4.6rem] shrink-0 tabular-nums">{fmtDay(s.date) || "—"}</span>
+            <span className="min-w-0 flex-1">
+              {s.id ? `${s.id} · ` : ""}
+              {s.title.slice(0, 70) || "gara"}
+              {" — "}
+              {s.found ? `trovato (${s.found} ${s.found === 1 ? "riga" : "righe"})` : s.note || (searching && i === steps.length - 1 ? "in lettura…" : `non in classifica · ${s.rows} righe in ${s.pages} pagine`)}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {noRows ? <p className="mt-2 text-muted">Le classifiche lette non contengono righe: il portale le carica solo nel browser. Apri la gara qui sotto o sul sito.</p> : null}
+    </details>
+  );
+}
+
 /** dove compare il nome: riga, compagni di piazzola e il punteggio da portare nella gara */
 function Matches({ found, q, comps, userId, onSaved, onOpen, searching }: { found: Match[]; q: string; comps: Comp[]; userId: string; onSaved: () => void; onOpen: (r: Req) => void; searching: boolean }) {
-  if (!found.length) return <p className="rounded-2xl bg-white/[0.04] p-3 text-sm text-muted">{searching ? "Ancora nessuna riga con questo nome…" : `Nessuna riga con «${q}» nelle pagine lette. Prova solo il cognome, o apri la gara qui sotto.`}</p>;
+  if (!found.length) return <p className="rounded-2xl bg-white/[0.04] p-3 text-sm text-muted">{searching ? "Ancora nessuna riga con questo nome…" : `Nessuna riga con «${q}» nelle gare degli ultimi ${WINDOW_DAYS} giorni. Prova solo il cognome, o apri la gara qui sotto.`}</p>;
   return (
     <div className="grid gap-2">
       <p className="text-sm font-semibold">Trovato in {found.length} {found.length === 1 ? "riga" : "righe"}</p>

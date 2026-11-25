@@ -37,8 +37,10 @@ type Req = { url: string; body?: string; cookie: string; referer?: string };
 
 async function fetchPage(req: Req): Promise<FitastPage & { cookie: string }> {
   const key = `${req.url}|${req.body ?? ""}`;
+  // in cache solo i PDF: le pagine .awp cambiano con la sessione (gara e filtri scelti), e una
+  // risposta ricordata farebbe vedere la classifica di un'altra gara
   const hit = cache.get(key);
-  if (hit && Date.now() - hit.at < TTL) return { ...hit.page, cookie: req.cookie || hit.cookie };
+  if (hit && hit.page.kind === "pdf" && Date.now() - hit.at < TTL) return { ...hit.page, cookie: req.cookie || hit.cookie };
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 20_000);
   try {
@@ -87,7 +89,6 @@ async function fetchPage(req: Req): Promise<FitastPage & { cookie: string }> {
       html = new TextDecoder("utf-8").decode(buf);
     }
     const page: FitastPage = { ...parseHtml(html, finalUrl), kind: /html|xml|text/i.test(type) || !type ? "html" : "altro", charset, fetchedAt: now };
-    cache.set(key, { at: Date.now(), page, cookie });
     return { ...page, cookie };
   } catch (e) {
     if (e instanceof Error && e.name === "AbortError") throw new Error("Il portale FITAST non risponde: riprova più tardi.");

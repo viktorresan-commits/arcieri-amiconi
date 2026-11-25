@@ -7,12 +7,17 @@
 
 export type FitastLink = { text: string; href: string };
 export type FitastCell = { text: string; href?: string; press?: string };
-export type FitastTable = { rows: FitastCell[][] };
+/** source "script": righe trovate nei dati di uno script della pagina (tabelle che il browser disegna da sé) */
+export type FitastTable = { rows: FitastCell[][]; source?: "script" };
 export type FitastOption = { value: string; text: string; selected: boolean };
 export type FitastSelect = { name: string; label: string; options: FitastOption[]; press?: { code: string; set: Record<string, string> } };
 /** un comando della pagina: code è l'alias WEBDEV (A5…), set sono i campi che il click imposta prima dell'invio */
 export type FitastButton = { code: string; label: string; set: Record<string, string> };
-export type FitastForm = { action: string; fields: Record<string, string>; selects: FitastSelect[]; buttons: FitastButton[] };
+/** un campo di testo visibile del modulo (es. "Id Gara"), con l'etichetta che lo precede */
+export type FitastInput = { name: string; label: string; value: string };
+export type FitastForm = { action: string; fields: Record<string, string>; selects: FitastSelect[]; buttons: FitastButton[]; inputs?: FitastInput[] };
+/** un elemento cliccabile qualsiasi (riga di una zona ripetuta WEBDEV, div, span…) con il suo testo e il comando */
+export type FitastBlock = { text: string; press: string };
 export type FitastPage = {
   url: string;
   title: string;
@@ -23,6 +28,7 @@ export type FitastPage = {
   form: FitastForm | null;
   charset: string;
   fetchedAt: string;
+  blocks?: FitastBlock[];
 };
 
 const ENT: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ", agrave: "à", egrave: "è", eacute: "é", igrave: "ì", ograve: "ò", ugrave: "ù", Agrave: "À", Egrave: "È", Eacute: "É", Igrave: "Ì", Ograve: "Ò", Ugrave: "Ù", deg: "°", laquo: "«", raquo: "»", rsquo: "’", lsquo: "‘", ldquo: "“", rdquo: "”", ndash: "–", mdash: "—", euro: "€", ordm: "º", ordf: "ª" };
@@ -56,9 +62,11 @@ export function attrsOf(raw: string): Record<string, string> {
   return out;
 }
 
-type Token = { kind: "text"; text: string } | { kind: "tag"; name: string; close: boolean; attrs: Record<string, string>; self: boolean };
+type Token = { kind: "text"; text: string } | { kind: "script"; text: string } | { kind: "tag"; name: string; close: boolean; attrs: Record<string, string>; self: boolean };
 
-/** HTML → sequenza di tag e testo; commenti, doctype, script e stili saltati; virgolette rispettate */
+const hasSrc = (raw: string) => /\bsrc\s*=/i.test(raw);
+
+/** HTML → sequenza di tag e testo; commenti, doctype e stili saltati, script a parte; virgolette rispettate */
 export function tokenize(html: string): Token[] {
   const out: Token[] = [];
   let i = 0;
@@ -110,6 +118,8 @@ export function tokenize(html: string): Token[] {
       const endTag = html.toLowerCase().indexOf(`</${name}`, i);
       const inner = endTag < 0 ? html.slice(i) : html.slice(i, endTag);
       if (name === "textarea" && inner.trim()) out.push({ kind: "text", text: inner });
+      // gli script in linea si tengono a parte: a volte contengono le righe delle tabelle
+      if (name === "script" && !hasSrc(rawAttrs) && inner.trim()) out.push({ kind: "script", text: inner });
       if (endTag < 0) break;
       const gt = html.indexOf(">", endTag);
       i = gt < 0 ? n : gt + 1;
@@ -131,12 +141,16 @@ export function pressOf(js: string): { code: string; set: Record<string, string>
   return { code: call[1], set };
 }
 
+const VOID = new Set(["input", "img", "br", "hr", "meta", "link", "area", "base", "col", "embed", "source", "track", "wbr", "param"]);
+/** contenitori che WEBDEV rende cliccabili (righe di zone ripetute, celle composte): a, input e button sono già comandi */
+const CLICKABLE = new Set(["div", "tr", "span", "li", "p", "section", "article", "label", "table", "tbody", "ul"]);
+
 const BLOCK = new Set(["br", "p", "div", "li", "ul", "ol", "h1", "h2", "h3", "h4", "h5", "h6", "section", "article", "header", "footer", "form", "fieldset", "legend", "label", "dt", "dd", "hr"]);
 
 /** pagina HTML → tabelle (anche annidate: ogni tabella tiene le sue righe), righe di testo, link e comandi */
 export function parseHtml(html: string, url: string): Omit<FitastPage, "fetchedAt" | "kind" | "charset"> {
   const toks = tokenize(html);
-  type T = { rows: FitastCell[][]; row: FitastCell[] | null; cell: FitastCell | null };
+  type T = { rows: FitastCell[][]; row: FitastCell[] | null; cell: FitastCell | null; rowPress?: string };
   const stack: T[] = [];
   const tables: FitastTable[] = [];
   const lines: string[] = [];
@@ -149,6 +163,11 @@ export function parseHtml(html: string, url: string): Omit<FitastPage, "fetchedA
   let select: (FitastSelect & { pending: FitastOption | null }) | null = null;
   let button: { code: string; set: Record<string, string>; text: string } | null = null;
   const buttons: FitastButton[] = [];
+  const inputs: FitastInput[] = [];
+  // elementi cliccabili aperti (div, tr, span… con onclick WEBDEV): il testo che contengono è la loro etichetta
+  const open: { tag: string; depth: number; text: string; press: string }[] = [];
+  const blocks: FitastBlock[] = [];
+  let scripts = "";
   const addButton = (code: string, label: string, set: Record<string, string>) => {
     const l = label.replace(/\s+/g, " ").trim();
     if (!code || !l || l.length > 60) return;
@@ -176,6 +195,7 @@ export function parseHtml(html: string, url: string): Omit<FitastPage, "fetchedA
     }
     const top = stack[stack.length - 1];
     if (top?.cell) top.cell.text += t;
+    for (const b of open) b.text += t;
     line += t;
     if (link) link.text += t;
     if (button) button.text += t;
@@ -185,7 +205,32 @@ export function parseHtml(html: string, url: string): Omit<FitastPage, "fetchedA
       text(tk.text);
       continue;
     }
+    if (tk.kind === "script") {
+      if (scripts.length < 3_000_000) scripts += `\n${tk.text}`;
+      continue;
+    }
     const { name: tag, close, attrs } = tk;
+    // fra una cella e l'altra di un elemento cliccabile ci va uno spazio
+    if (open.length && (BLOCK.has(tag) || tag === "td" || tag === "th" || tag === "tr")) for (const b of open) b.text += " ";
+    if (!VOID.has(tag) && !tk.self) {
+      if (!close) {
+        for (const b of open) if (b.tag === tag) b.depth++;
+        const p = CLICKABLE.has(tag) ? pressOf(attrs.onclick ?? "") : null;
+        if (p && open.length < 40) open.push({ tag, depth: 0, text: "", press: JSON.stringify(p) });
+      } else {
+        for (let k = open.length - 1; k >= 0; k--) {
+          if (open[k].tag !== tag) continue;
+          if (open[k].depth > 0) {
+            open[k].depth--;
+            continue;
+          }
+          const [b] = open.splice(k, 1);
+          const t = b.text.replace(/\s+/g, " ").trim();
+          if (t && blocks.length < 2000) blocks.push({ text: t.slice(0, 400), press: b.press });
+          break;
+        }
+      }
+    }
     if (tag === "title") {
       inTitle = !close;
       continue;
@@ -219,6 +264,9 @@ export function parseHtml(html: string, url: string): Omit<FitastPage, "fetchedA
       top.cell = null;
       if (top.row?.length) top.rows.push(top.row);
       top.row = close ? null : [];
+      // riga intera cliccabile: il comando va sulla sua prima cella
+      const rp = close ? null : pressOf(attrs.onclick ?? "");
+      top.rowPress = rp ? JSON.stringify(rp) : undefined;
       flush();
       continue;
     }
@@ -230,6 +278,7 @@ export function parseHtml(html: string, url: string): Omit<FitastPage, "fetchedA
       // una riga cliccabile di WEBDEV: il comando sta sull'onclick della cella
       const p = close ? null : pressOf(attrs.onclick ?? "");
       if (p && top.cell) top.cell.press = JSON.stringify(p);
+      else if (top.cell && top.rowPress && !top.row?.length) top.cell.press = top.rowPress;
       continue;
     }
     if (tag === "tr" || tag === "td" || tag === "th") continue;
@@ -265,6 +314,7 @@ export function parseHtml(html: string, url: string): Omit<FitastPage, "fetchedA
       const value = attrs.value ?? "";
       // come il browser: i campi disabilitati non si inviano
       if (nm && !("disabled" in attrs) && ["hidden", "text", "search", "number", "date", "email", "tel", "password"].includes(type)) ensureForm().fields[nm] = value;
+      if (nm && ["text", "search", "number"].includes(type) && inputs.length < 60) inputs.push({ name: nm, label: (line.replace(/\s+/g, " ").trim() || lastLabel).slice(-40), value });
       if (nm && (type === "checkbox" || type === "radio") && "checked" in attrs) ensureForm().fields[nm] = value || "on";
       if (["button", "submit", "image"].includes(type)) {
         const p = pressOf(attrs.onclick ?? "");
@@ -311,13 +361,137 @@ export function parseHtml(html: string, url: string): Omit<FitastPage, "fetchedA
     if (BLOCK.has(tag)) flush();
   }
   flush();
-  if (form) (form as FitastForm).buttons = buttons;
+  for (const b of open) {
+    const t = b.text.replace(/\s+/g, " ").trim();
+    if (t && blocks.length < 2000) blocks.push({ text: t.slice(0, 400), press: b.press });
+  }
+  if (form) {
+    (form as FitastForm).buttons = buttons;
+    (form as FitastForm).inputs = inputs;
+  }
+  // tabelle disegnate dal browser: le righe stanno negli script della pagina
+  if (scripts) tables.push(...scriptTables(scripts));
   // niente doppioni fra i link
   const seen = new Set<string>();
   const uniq = links.filter((l) => (seen.has(l.href + l.text) ? false : (seen.add(l.href + l.text), true)));
   // niente righe ripetute di seguito (menu ripetuti, intestazioni)
   const tidy = lines.filter((l, i) => l !== lines[i - 1]);
-  return { url, title: clean(title), tables, lines: tidy.slice(0, 2000), links: uniq.slice(0, 400), form };
+  return { url, title: clean(title), tables, lines: tidy.slice(0, 2000), links: uniq.slice(0, 400), form, blocks };
+}
+
+/** fine di una stringa JavaScript che comincia in i (virgolette comprese) */
+function skipString(js: string, i: number) {
+  const q = js[i];
+  for (let j = i + 1; j < js.length; j++) {
+    if (js[j] === "\\") j++;
+    else if (js[j] === q) return j;
+    else if (js[j] === "\n") return j;
+  }
+  return js.length;
+}
+
+function unescapeJs(raw: string) {
+  return raw.replace(/\\(u\{([0-9a-fA-F]{1,6})\}|u([0-9a-fA-F]{4})|x([0-9a-fA-F]{2})|.)/g, (_, all: string, ub?: string, u?: string, x?: string) => {
+    if (ub || u) return String.fromCodePoint(parseInt(ub || u || "0", 16));
+    if (x) return String.fromCharCode(parseInt(x, 16));
+    return ({ n: " ", r: "", t: " ", b: "", f: "", v: "" } as Record<string, string>)[all] ?? all;
+  });
+}
+
+type Lit = { v: string; end: number };
+/** un valore semplice in i: stringa, numero, true/false/null */
+function literalAt(js: string, i: number): Lit | null {
+  const c = js[i];
+  if (c === '"' || c === "'") {
+    const e = skipString(js, i);
+    if (js[e] !== c) return null;
+    return { v: decode(unescapeJs(js.slice(i + 1, e))), end: e };
+  }
+  const m = /^(-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?|true|false|null|undefined)/.exec(js.slice(i, i + 40));
+  if (!m) return null;
+  return { v: m[1] === "null" || m[1] === "undefined" ? "" : m[1], end: i + m[1].length - 1 };
+}
+
+const ws = (js: string, i: number) => {
+  while (i < js.length && /\s/.test(js[i])) i++;
+  return i;
+};
+
+/** un array piatto [..] o un oggetto piatto {..} di soli valori semplici, a partire da i */
+function flatAt(js: string, i: number): { cells: string[]; keys: string[] | null; end: number } | null {
+  const obj = js[i] === "{";
+  const close = obj ? "}" : "]";
+  const cells: string[] = [];
+  const keys: string[] = [];
+  let j = ws(js, i + 1);
+  while (j < js.length && cells.length < 60) {
+    if (js[j] === close) return cells.length >= 2 ? { cells, keys: obj ? keys : null, end: j } : null;
+    if (obj) {
+      const id = /^[A-Za-z_$][\w$]*/.exec(js.slice(j, j + 60))?.[0];
+      const k = js[j] === '"' || js[j] === "'" ? literalAt(js, j) : id ? { v: id, end: j + id.length - 1 } : null;
+      if (!k) return null;
+      j = ws(js, k.end + 1);
+      if (js[j] !== ":") return null;
+      j = ws(js, j + 1);
+      keys.push(k.v);
+    }
+    const v = literalAt(js, j);
+    if (!v) return null;
+    cells.push(v.v.replace(/\s+/g, " ").trim().slice(0, 300));
+    j = ws(js, v.end + 1);
+    if (js[j] === ",") j = ws(js, j + 1);
+    else if (js[j] !== close) return null;
+  }
+  return null;
+}
+
+/**
+ * Righe di dati scritte negli script della pagina (le tabelle "lato browser" di WEBDEV e simili):
+ * array o oggetti piatti di valori, uno dopo l'altro, diventano le righe di una tabella.
+ */
+export function scriptTables(js: string): FitastTable[] {
+  const rows: { cells: string[]; keys: string[] | null; start: number; end: number }[] = [];
+  for (let i = 0; i < js.length && rows.length < 6000; i++) {
+    const c = js[i];
+    if (c === '"' || c === "'") {
+      i = skipString(js, i);
+      continue;
+    }
+    if (c === "/" && js[i + 1] === "/") {
+      const e = js.indexOf("\n", i);
+      i = e < 0 ? js.length : e;
+      continue;
+    }
+    if (c === "/" && js[i + 1] === "*") {
+      const e = js.indexOf("*/", i + 2);
+      i = e < 0 ? js.length : e + 1;
+      continue;
+    }
+    if (c !== "[" && c !== "{") continue;
+    const r = flatAt(js, i);
+    if (r) {
+      rows.push({ ...r, start: i });
+      i = r.end;
+    }
+  }
+  const out: FitastTable[] = [];
+  let group: typeof rows = [];
+  const done = () => {
+    const data = group.filter((r) => r.cells.some((c) => /[A-Za-zÀ-ÿ]{2}/.test(c)));
+    if (data.length >= 2 && data.length >= group.length / 2) {
+      const width = Math.max(...group.map((r) => r.cells.length));
+      const keys = group[0].keys && group.every((r) => r.keys?.join("|") === group[0].keys?.join("|")) ? group[0].keys : null;
+      const head = (keys ?? Array.from({ length: width }, (_, k) => `Colonna ${k + 1}`)).map((text) => ({ text }));
+      out.push({ source: "script", rows: [head, ...group.map((r) => r.cells.map((text) => ({ text })))] });
+    }
+    group = [];
+  };
+  for (let k = 0; k < rows.length; k++) {
+    if (group.length && !/^[\s,\[\]]*$/.test(js.slice(group[group.length - 1].end + 1, rows[k].start))) done();
+    group.push(rows[k]);
+  }
+  done();
+  return out.slice(0, 20);
 }
 
 /** campi da inviare per premere un comando, con le scelte fatte nelle tendine */
