@@ -1987,3 +1987,23 @@ svg .aa-fall { stroke-dasharray: 4 3; animation: aa-fall 0.8s linear infinite; }
 .aa-niche-halo::before { content: ""; position: absolute; left: 50%; top: 50%; width: 200%; aspect-ratio: 1; translate: -50% -50%; background: conic-gradient(from 0deg, var(--halo-a), var(--halo-b), var(--halo-c), var(--halo-a), var(--halo-b), var(--halo-a)); animation: aa-halo-spin 5s linear infinite; }
 @keyframes aa-niche-breathe { 0%, 100% { box-shadow: 0 0 8px -2px color-mix(in srgb, var(--halo-a) 55%, transparent); } 50% { box-shadow: 0 0 18px 0 color-mix(in srgb, var(--halo-a) 80%, transparent); } }
 @media (prefers-reduced-motion: reduce) { .aa-niche-halo, .aa-niche-halo::before { animation: none; } }
+/* barra delle sezioni in basso: icona e nome, quella attiva accesa nel suo colore; scorre se è stretta */
+.aa-secbar { mask-image: linear-gradient(90deg, transparent 0, #000 10px, #000 calc(100% - 10px), transparent 100%); }
+.aa-secbar-item { color: rgb(255 255 255 / 0.62); transition: color 0.2s ease; }
+.aa-secbar-item .aa-appicon-ins { transition: transform 0.25s cubic-bezier(0.22, 1.4, 0.36, 1), filter 0.25s ease; filter: saturate(0.75) brightness(0.92); }
+.aa-secbar-item.is-on { color: color-mix(in srgb, var(--acc) 60%, #fff); }
+.aa-secbar-item.is-on .aa-appicon-ins { transform: translateY(-2px) scale(1.12); filter: none; }
+.aa-secbar-item.is-on::before { content: ""; position: absolute; top: 0; left: 50%; width: 1.6rem; height: 3px; translate: -50% 0; border-radius: 0 0 4px 4px; background: var(--acc); box-shadow: 0 0 10px var(--acc); }
+.aa-secbar-item.is-on::after { content: ""; position: absolute; inset: 0.3rem 0.35rem; z-index: -1; border-radius: 1rem; background: radial-gradient(closest-side, color-mix(in srgb, var(--acc) 26%, transparent), transparent); }
+.aa-secbar-item:active .aa-appicon-ins { transform: scale(0.92); }
+/* riquadro delle voci che sale dalla barra */
+.aa-tray { border: 1px solid color-mix(in srgb, var(--cat) 45%, rgb(255 255 255 / 0.12)); box-shadow: 0 -18px 50px -12px rgb(0 0 0 / 0.75), 0 0 0 1px rgb(0 0 0 / 0.35), inset 0 1px 0 rgb(255 255 255 / 0.12); transform-origin: var(--at) 100%; animation: aa-tray-in 0.34s cubic-bezier(0.22, 1.25, 0.36, 1) both; }
+.aa-tray-tip { background: #0e131a; border-right: 1px solid color-mix(in srgb, var(--cat) 45%, rgb(255 255 255 / 0.12)); border-bottom: 1px solid color-mix(in srgb, var(--cat) 45%, rgb(255 255 255 / 0.12)); }
+.aa-tray-veil { animation: aa-veil-in 0.25s ease both; }
+.aa-tray-item { animation: aa-tray-item 0.38s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.aa-tray-item:active { transform: scale(0.94); background: color-mix(in srgb, var(--cat) 20%, transparent); }
+.aa-tray-item.is-here { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--cat) 70%, transparent); background: color-mix(in srgb, var(--cat) 14%, transparent); }
+@keyframes aa-tray-in { from { opacity: 0; transform: translateY(18px) scale(0.9); } to { opacity: 1; transform: none; } }
+@keyframes aa-veil-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes aa-tray-item { from { opacity: 0; transform: translateY(10px) scale(0.9); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .aa-tray, .aa-tray-veil, .aa-tray-item { animation: none; } }

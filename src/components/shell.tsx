@@ -9,6 +9,7 @@ import { memberLabel, initials } from "@/lib/arcieri/labels";
 import { Avatar, LevelHalo, Loading, Mark, cx } from "./kit";
 import { SHORTCUTS, STATIONS, currentShortcut } from "@/lib/arcieri/shortcuts";
 import { NextCard, PathMap, ShortcutEditor, TipCard, rememberPage } from "./shortcuts";
+import { SectionBar } from "./section-bar";
 import { CompanyWelcome } from "./compagnia";
 import { PercorsoWelcome } from "./percorso-welcome";
 import { percorsoOf } from "@/lib/arcieri/percorso";
@@ -292,11 +293,6 @@ export function Shell({ children }: { children: ReactNode }) {
     { to: "/allenamento", label: "Tiro", icon: "bow" as IconName },
     { to: "/squadra", label: "Compagnia", icon: "team" as IconName },
   ] as const;
-  const bottom = [
-    { to: "/", label: "Casa", icon: "home" as IconName, match: (p: string) => p === "/" },
-    // le gare stanno dentro la Compagnia: una sola voce
-    { to: "/squadra", label: "Compagnia e gare", icon: "team" as IconName, match: (p: string) => p === "/squadra" || p.startsWith("/gare") || p.startsWith("/arciere/") || p.startsWith("/compagnia") },
-  ];
 
   return (
     <MemberCtx.Provider value={{ me, reload: () => setNonce((n) => n + 1) }}>
@@ -414,13 +410,8 @@ export function Shell({ children }: { children: ReactNode }) {
             {me.percorso === "" ? <PercorsoWelcome onDone={() => setNonce((n) => n + 1)} /> : null}
           </main>
           {/* barra in basso: solo voci che in Home non ci sono già (Tiro rapido, Da foto, Segnapunti e Statistiche stanno sul gioco) */}
-          <nav className="aa-bottomnav aa-bar-bottom fixed inset-x-0 bottom-0 z-30 grid grid-cols-3 items-end border-t pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden">
-            {bottom.map((item) => <BottomLink key={item.to} item={item} active={item.match(path)} />)}
-            <button type="button" className={cx("flex min-h-16 flex-col items-center justify-center gap-0.5 text-[11px] font-medium", menu ? "aa-tone-hi" : "text-white/75")} onClick={() => setMenu(true)}>
-              <span className="grid h-8 w-14 place-items-center"><Glyph name="grid" size={22} /></span>
-              Menu
-            </button>
-          </nav>
+          {/* barra in basso: Casa e le sette sezioni; un tocco apre le voci della sezione sopra la barra */}
+          <SectionBar path={path} hide={hide} onSearch={() => { setMenuSearch(true); setMenu(true); }} />
           {menu ? (
             <div ref={menuBox} data-menu-scroll className="aa-sheet fixed inset-0 z-40 overflow-y-auto bg-bg pb-[calc(env(safe-area-inset-bottom)+1.5rem)] md:hidden">
               {/* niente intestazione: Cerca e Chiudi stanno sul margine destro, sotto le sezioni */}
@@ -449,16 +440,6 @@ export function Shell({ children }: { children: ReactNode }) {
   );
 }
 
-function BottomLink({ item, active }: { item: { to: string; label: string; icon: IconName }; active: boolean }) {
-  return (
-    <Link to={item.to} className={cx("aa-tab flex min-h-16 flex-col items-center justify-center gap-0.5 text-[11px] font-medium", active ? "is-active aa-tone-hi" : "text-white/75")}>
-      <span className="aa-tab-pill relative grid h-8 w-14 place-items-center rounded-full">
-        <Glyph name={item.icon} size={22} strokeWidth={active ? 2.1 : 1.7} className="relative transition-transform duration-300" />
-      </span>
-      {item.label}
-    </Link>
-  );
-}
 
 function NavLink({ to, label, active }: { to: string; label: string; active: boolean }) {
   return (
