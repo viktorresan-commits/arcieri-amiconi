@@ -15,6 +15,7 @@ import { Glyph } from "@/components/icons";
 import { useTeamAvatars } from "@/components/avatar-hero";
 import { FitastPanel } from "@/components/fitast-panel";
 import { Medal, teamResultText } from "@/components/palmares";
+import { KindEmblem } from "@/components/kind-emblem";
 import type { TeamResult } from "@/lib/arcieri/palmares.api";
 
 export const Route = createFileRoute("/_app/gare")({ component: Page });
@@ -116,7 +117,8 @@ function Page() {
       <PageHead title="Gare" lede="Segni solo quelle a cui hai partecipato. Il punteggio degli altri si vede, ma si cambia solo il tuo." />
       <MainGearCard compact />
       {totals.gare > 0 ? (
-        <Card>
+        <Card className="relative">
+          <span className="absolute right-3 top-3"><KindEmblem kind="campionato" size={54} glow /></span>
           <p className="text-xs uppercase tracking-wide text-muted">Tutte le gare</p>
           <p className="font-display text-4xl tabular-nums leading-none">{totals.points}</p>
           <p className="mt-1 text-sm text-muted">punti in {totals.gare} gare{totals.avg != null ? ` · media ${totals.avg.toFixed(1)}` : ""}</p>

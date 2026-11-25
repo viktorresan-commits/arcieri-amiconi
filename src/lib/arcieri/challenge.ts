@@ -1,15 +1,46 @@
 import type { TallyShot } from "./scoring";
+import type { ActivityKind } from "./kinds";
 
-export type Metric = "total" | "avg" | "tens" | "sessions" | "improvement";
+export type Metric = "total" | "avg" | "tens" | "sessions" | "improvement" | "best" | "rounds" | "points" | "champ" | "rank";
 
 export type Rule = {
+  /** tipologia della sfida: allenamento (predefinita), minigioco, gara di campionato */
+  kind?: ActivityKind;
   metric: Metric;
   arrows: number | null;
   distanceM: number | null;
   bowType: string;
   face: string;
   discipline: string;
+  /** minigioco: bersaglio e livello, tutti uguali */
+  gameMode?: string;
+  gameLevel?: string;
 };
+
+/** cosa si può misurare in ogni tipologia; lowerWins: vince il numero più basso (posizione) */
+export const METRICS_BY_KIND: Record<ActivityKind, { id: Metric; label: string; short: string; lowerWins?: boolean }[]> = {
+  allenamento: [
+    { id: "avg", label: "Miglior media sulle frecce indicate", short: "miglior media" },
+    { id: "total", label: "Punteggio più alto sulle frecce indicate", short: "punteggio più alto" },
+    { id: "tens", label: "Più 10 nel periodo", short: "più 10" },
+    { id: "sessions", label: "Più allenamenti validi", short: "più allenamenti" },
+    { id: "improvement", label: "Miglioramento rispetto al periodo prima", short: "miglioramento" },
+  ],
+  minigioco: [
+    { id: "best", label: "Miglior giro", short: "miglior giro" },
+    { id: "avg", label: "Media dei giri (almeno 3)", short: "media dei giri" },
+    { id: "rounds", label: "Più giri giocati", short: "più giri" },
+  ],
+  campionato: [
+    { id: "points", label: "Somma dei punteggi nelle gare del periodo", short: "somma dei punteggi" },
+    { id: "best", label: "Miglior punteggio in una gara", short: "miglior punteggio" },
+    { id: "champ", label: "Più punti campionato", short: "punti campionato" },
+    { id: "rank", label: "Miglior posizione in classifica", short: "miglior posizione", lowerWins: true },
+  ],
+};
+
+export const ruleKind = (rule: Pick<Rule, "kind">): ActivityKind => (rule.kind === "minigioco" || rule.kind === "campionato" ? rule.kind : "allenamento");
+export const metricInfo = (rule: Pick<Rule, "kind" | "metric">) => METRICS_BY_KIND[ruleKind(rule)].find((m) => m.id === rule.metric) ?? METRICS_BY_KIND[ruleKind(rule)][0];
 
 export type ChallengeSession = {
   userId: string;
@@ -22,6 +53,13 @@ export type ChallengeSession = {
 };
 
 export function rulesFair(rule: Rule): string | null {
+  const kind = ruleKind(rule);
+  if (!METRICS_BY_KIND[kind].some((m) => m.id === rule.metric)) return "Scegli cosa conta nella sfida.";
+  if (kind === "minigioco") {
+    if (!rule.gameMode || !rule.gameLevel) return "Scegli bersaglio e livello del gioco: ogni combinazione ha un punteggio massimo diverso.";
+    return null;
+  }
+  if (kind === "campionato") return null;
   if (!rule.bowType || rule.distanceM == null || !rule.face || !rule.discipline) {
     return "Servono arco, distanza, bersaglio e disciplina. Senza, la sfida mescola tiri che non si possono confrontare.";
   }
@@ -127,7 +165,7 @@ function arrowsOf(list: ChallengeSession[], n: number | null) {
   return { count, avg: count ? points / count : 0 };
 }
 
-export function teamMeans(rows: { userId: string; team: string; value: number }[]) {
+export function teamMeans(rows: { userId: string; team: string; value: number }[], lowerWins = false) {
   const map = new Map<string, number[]>();
   for (const row of rows) {
     if (!row.team) continue;
@@ -141,5 +179,56 @@ export function teamMeans(rows: { userId: string; team: string; value: number }[
       members: values.length,
       value: values.reduce((a, b) => a + b, 0) / values.length,
     }))
-    .sort((a, b) => b.value - a.value);
+    .sort((a, b) => (lowerWins ? a.value - b.value : b.value - a.value));
+}
+
+/** un giro del minigioco */
+export type GameRound = { userId: string; mode: string; level: string; total: number; at: string };
+
+/** sfida di tipo minigioco: stesso bersaglio e livello, nel periodo */
+export function gameScores(rule: Rule, rounds: GameRound[], fromIso: string, toIso: string) {
+  const byUser = new Map<string, number[]>();
+  for (const r of rounds) {
+    if (r.mode !== rule.gameMode || r.level !== rule.gameLevel || !inWindow(r.at, fromIso, toIso)) continue;
+    const list = byUser.get(r.userId) ?? [];
+    list.push(r.total);
+    byUser.set(r.userId, list);
+  }
+  const rows: { userId: string; value: number }[] = [];
+  for (const [userId, list] of byUser) {
+    if (rule.metric === "rounds") rows.push({ userId, value: list.length });
+    else if (rule.metric === "avg") {
+      if (list.length >= 3) rows.push({ userId, value: list.reduce((a, b) => a + b, 0) / list.length });
+    } else rows.push({ userId, value: Math.max(...list) });
+  }
+  return rows.sort((x, y) => y.value - x.value);
+}
+
+/** un risultato di gara del calendario */
+export type GaraScore = { userId: string; day: string; score: number | null; rank: number | null; champ: number | null };
+
+/** sfida di tipo gara di campionato: le gare del calendario fra le due date */
+export function garaScores(rule: Rule, results: GaraScore[], fromDay: string, toDay: string) {
+  const byUser = new Map<string, GaraScore[]>();
+  for (const r of results) {
+    if (r.day < fromDay || r.day > toDay) continue;
+    const list = byUser.get(r.userId) ?? [];
+    list.push(r);
+    byUser.set(r.userId, list);
+  }
+  const rows: { userId: string; value: number }[] = [];
+  for (const [userId, list] of byUser) {
+    const scores = list.map((r) => r.score).filter((v): v is number => v != null);
+    if (rule.metric === "points" && scores.length) rows.push({ userId, value: scores.reduce((a, b) => a + b, 0) });
+    if (rule.metric === "best" && scores.length) rows.push({ userId, value: Math.max(...scores) });
+    if (rule.metric === "champ") {
+      const pts = list.map((r) => r.champ).filter((v): v is number => v != null);
+      if (pts.length) rows.push({ userId, value: pts.reduce((a, b) => a + b, 0) });
+    }
+    if (rule.metric === "rank") {
+      const ranks = list.map((r) => r.rank).filter((v): v is number => v != null && v > 0);
+      if (ranks.length) rows.push({ userId, value: Math.min(...ranks) });
+    }
+  }
+  return rule.metric === "rank" ? rows.sort((x, y) => x.value - y.value) : rows.sort((x, y) => y.value - x.value);
 }

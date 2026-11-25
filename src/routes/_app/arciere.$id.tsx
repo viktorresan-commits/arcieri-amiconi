@@ -11,6 +11,8 @@ import { useLoad } from "@/lib/arcieri/use-load";
 import { AvgLine, ScoreLine } from "@/components/charts";
 import { Avatar, Card, ErrorNote, Loading } from "@/components/kit";
 import { PrizeMark, prizeTier, topPrizes } from "@/components/prize-mark";
+import { KindEmblem, KindHeading } from "@/components/kind-emblem";
+import { KINDS } from "@/lib/arcieri/kinds";
 import { AVATAR_DEFAULT } from "@/lib/arcieri/avatar";
 import { useState } from "react";
 import { setRole } from "@/lib/arcieri/staff.api";
@@ -103,10 +105,23 @@ function Page() {
           )}
         </div>
       </div>
+      {/* numeri veri: allenamenti e gare; il minigioco ha il suo riquadro più sotto */}
       <div className="grid grid-cols-3 gap-2 text-center">
-        <Card className="p-3"><p className="text-xs text-muted">Frecce</p><p className="font-display text-3xl tabular-nums">{arrows}</p></Card>
-        <Card className="p-3"><p className="text-xs text-muted">Media</p><p className="font-display text-3xl tabular-nums">{arrows ? fmtAvg(points / arrows) : "—"}</p></Card>
-        <Card className="p-3"><p className="text-xs text-muted">Gare</p><p className="font-display text-3xl tabular-nums">{data.comps.length}</p></Card>
+        <Card className="grid justify-items-center gap-0.5 p-2.5" style={{ boxShadow: `inset 0 -3px 0 ${KINDS.allenamento.color}55` }}>
+          <KindEmblem kind="allenamento" size={26} />
+          <p className="text-[0.68rem] text-muted">Frecce in allenamento</p>
+          <p className="font-display text-3xl tabular-nums">{arrows}</p>
+        </Card>
+        <Card className="grid justify-items-center gap-0.5 p-2.5" style={{ boxShadow: `inset 0 -3px 0 ${KINDS.allenamento.color}55` }}>
+          <KindEmblem kind="allenamento" size={26} />
+          <p className="text-[0.68rem] text-muted">Media allenamenti</p>
+          <p className="font-display text-3xl tabular-nums">{arrows ? fmtAvg(points / arrows) : "—"}</p>
+        </Card>
+        <Card className="grid justify-items-center gap-0.5 p-2.5" style={{ boxShadow: `inset 0 -3px 0 ${KINDS.campionato.color}55` }}>
+          <KindEmblem kind="campionato" size={26} />
+          <p className="text-[0.68rem] text-muted">Gare di campionato</p>
+          <p className="font-display text-3xl tabular-nums">{data.comps.length}</p>
+        </Card>
       </div>
       <RolesCard data={data} />
       {data.viewer.level === "super" && !data.viewer.self ? <InsertFor memberId={data.id} name={name} hasAccount={Boolean(data.userId)} /> : null}
@@ -135,12 +150,12 @@ function Page() {
           </div>
         )}
       </Card>
-      <Card>
-        <h2 className="mb-2 font-display text-2xl">Allenamento dopo allenamento</h2>
+      <Card className="grid gap-2">
+        <KindHeading kind="allenamento" title="Allenamento dopo allenamento" sub="Media per freccia delle ultime sessioni" />
         <AvgLine data={train} />
       </Card>
-      <Card>
-        <h2 className="mb-2 font-display text-2xl">Gara dopo gara</h2>
+      <Card className="grid gap-2">
+        <KindHeading kind="campionato" title="Gara dopo gara" sub="Punteggio nelle gare del calendario" />
         <ScoreLine data={comps} />
       </Card>
       <p className="text-sm text-muted">Qui si vede solo il riassunto. Note, attrezzatura personale e acquisti restano di chi li ha scritti.</p>
@@ -224,10 +239,7 @@ function GameRecords({ games, mine }: { games: Board["games"]; mine: boolean }) 
   const [open, setOpen] = useState(0);
   return (
     <Card className="grid gap-3">
-      <div>
-        <h2 className="font-display text-2xl">Record al gioco</h2>
-        <p className="text-xs text-muted">Giro di 20 piazzole da 3 frecce, sul gioco della Home.</p>
-      </div>
+      <KindHeading kind="minigioco" title="Record al minigioco" sub="Giro di 20 piazzole da 3 frecce sul gioco della Home. Solo per divertimento: non entra nelle medie." />
       {!list.length ? (
         <p className="text-sm text-muted">{mine ? "Finisci un giro di 20 piazzole sul gioco della Home: il record compare qui." : "Nessun giro completo, per ora."}</p>
       ) : (

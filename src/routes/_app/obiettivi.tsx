@@ -7,9 +7,11 @@ import { fmtDay } from "@/lib/arcieri/time";
 import { useLoad } from "@/lib/arcieri/use-load";
 import { useMember } from "@/components/shell";
 import { Button, Card, ErrorNote, Field, Loading, PageHead, Select, TextInput } from "@/components/kit";
-import { MetalCoin, PrizeMark, prizeTier } from "@/components/prize-mark";
+import { PrizeMark, prizeTier } from "@/components/prize-mark";
+import { Insignia, type InsSymbol } from "@/components/insignia";
+import { KindChip } from "@/components/kind-emblem";
 import { Confetti, Sparkle } from "@/components/celebrate";
-import { AppIcon, Glyph, type IconName } from "@/components/icons";
+import { Glyph } from "@/components/icons";
 
 export const Route = createFileRoute("/_app/obiettivi")({ component: Page });
 
@@ -46,7 +48,7 @@ function Page() {
           const label = g.metric === "avg" ? `${fmtAvg(g.progress)} / ${fmtAvg(g.target)}` : `${Math.round(g.progress)} / ${g.target}`;
           const done = pct >= 100;
           const C = 2 * Math.PI * 24;
-          const icon: IconName = g.metric === "arrows" ? "quiver" : g.metric === "sessions" ? "bow" : g.metric === "days" ? "calendar" : "chart";
+          const sym: InsSymbol = g.metric === "arrows" ? "quiver" : g.metric === "sessions" ? "bow" : g.metric === "days" ? "calendar" : "rise";
           return (
             <Card key={g.id} className={`aa-prize relative flex items-center gap-3 ${done ? "aa-prize-on" : ""}`} style={{ animationDelay: `${i * 60}ms` }}>
               {done ? <Confetti count={14} /> : null}
@@ -55,11 +57,12 @@ function Page() {
                   <circle cx="28" cy="28" r="24" fill="none" stroke="currentColor" strokeOpacity={0.1} strokeWidth="5" />
                   <circle cx="28" cy="28" r="24" fill="none" stroke={done ? "#e2b340" : "var(--primary)"} strokeWidth="5" strokeLinecap="round" strokeDasharray={C} strokeDashoffset={C * (1 - pct / 100)} style={{ transition: "stroke-dashoffset 1s cubic-bezier(.22,1,.36,1)" }} />
                 </svg>
-                {/* moneta del traguardo: bronzo all'inizio, argento a metà strada, oro raggiunto (platino se di gruppo) */}
-                <MetalCoin metal={done ? (g.collective ? "platinum" : "gold") : pct >= 50 ? "silver" : "bronze"} icon={done ? "trophy" : icon} size={50} ribbon={false} />
+                {/* insegna del traguardo: bronzo all'inizio, argento a metà strada, oro raggiunto (platino se di gruppo) */}
+                <Insignia symbol={done ? "peak" : sym} metal={done ? (g.collective ? "platinum" : "gold") : pct >= 50 ? "silver" : "bronze"} enamel={done ? "teal" : "emerald"} shape={done ? "rosette" : "round"} glow={done} size={52} />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="font-semibold">{g.title}{g.collective ? " · gruppo" : ""}</p>
+                <KindChip kind="allenamento" />
+                <p className="mt-1 font-semibold">{g.title}{g.collective ? " · gruppo" : ""}</p>
                 <p className="text-sm tabular-nums text-muted">{label} · {Math.round(pct)}%</p>
                 {done ? <p className="text-xs font-semibold text-amber-300">Raggiunto!</p> : null}
                 {g.mine || me.role === "admin" ? <button type="button" className="mt-1 text-xs text-danger" onClick={() => deleteGoal({ data: { id: g.id } }).then(() => setNonce((n) => n + 1))}>Elimina</button> : null}
@@ -73,7 +76,7 @@ function Page() {
         const got = prizes.filter((p) => p.holders.some((h) => h.userId === me.userId)).length;
         return (
           <div className="flex items-end justify-between gap-3">
-            <h2 className="flex items-center gap-2 font-display text-3xl"><AppIcon name="trophy" size={34} />Premi</h2>
+            <h2 className="flex items-center gap-2.5 font-display text-3xl"><Insignia symbol="trophy" metal="gold" enamel="sapphire" shape="rosette" size={42} glow />Premi</h2>
             {prizes.length ? (
               <div className="grid min-w-32 gap-1 text-right">
                 <span className="text-xs text-muted">{got} di {prizes.length} sbloccati</span>
@@ -106,11 +109,11 @@ function Page() {
           ))}
         </div>
       ) : null}
-      <h2 className="flex items-center gap-2 font-display text-3xl"><AppIcon name="book" size={32} />Albo</h2>
+      <h2 className="flex items-center gap-2.5 font-display text-3xl"><Insignia symbol="laurel" metal="gold" enamel="ruby" shape="shield" size={38} />Albo</h2>
       <Card className="grid gap-1">
         {(data?.albo ?? []).map((b, i) => (
           <div key={`${b.title}-${i}`} className="aa-menu-row flex items-center gap-2 border-b border-white/5 py-1.5 text-sm last:border-0" style={{ animationDelay: `${Math.min(i, 12) * 30}ms` }}>
-            <span className="shrink-0"><MetalCoin metal="gold" icon="trophy" size={26} ribbon={false} /></span>
+            <span className="shrink-0"><Insignia symbol="trophy" metal="gold" enamel="night" size={28} /></span>
             <span className="min-w-0 flex-1 truncate">{b.title}</span>
             <span className="text-xs text-muted">{memberLabel(b, data?.albo ?? [])}</span>
           </div>

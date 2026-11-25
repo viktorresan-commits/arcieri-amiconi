@@ -40,6 +40,10 @@ export const saveGameRound = createServerFn({ method: "POST" })
         xs = case when excluded.best > game_records.best then excluded.xs else game_records.xs end,
         misses = case when excluded.best > game_records.best then excluded.misses else game_records.misses end,
         best_at = case when excluded.best > game_records.best then now() else game_records.best_at end`;
+    // ogni giro anche nello storico, con l'ora: per le sfide di tipo minigioco
+    await sql`
+      insert into game_rounds (user_id, mode, level, total, max_points, tens, xs, misses)
+      values (${context.userId}, ${data.mode}, ${data.level}, ${total}, ${max}, ${data.tens}, ${data.xs}, ${data.misses})`.catch(() => undefined);
     return { ok: true as const, record, total };
   });
 

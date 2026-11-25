@@ -4,14 +4,15 @@ import { asBool, asIso, asNum, asNumOrNull, canScore, clip, db, ensureMember, PR
 import { syncBadges } from "./badges";
 import { companyPeers, myMembership } from "./compagnie.api";
 import { teamResultsOf } from "./palmares.api";
-import { challengeScores, rulesFair, teamMeans, type Metric, type Rule } from "./challenge";
+import { challengeScores, gameScores, garaScores, metricInfo, ruleKind, rulesFair, teamMeans, type Metric, type Rule } from "./challenge";
+import { kindOf } from "./kinds";
 import { romeMidnightUtc, ymdAdd } from "./time";
 import { divisionOf } from "./labels";
 import { accountWriter, writerFor } from "./acting.api";
 import type { TallyShot } from "./scoring";
 import { aimSpot, faceById, ringPoint, scoreAtRadius } from "./scoring";
 
-const METRICS: Metric[] = ["total", "avg", "tens", "sessions", "improvement"];
+const METRICS: Metric[] = ["total", "avg", "tens", "sessions", "improvement", "best", "rounds", "points", "champ", "rank"];
 
 function optionalInt(value: unknown, min: number, max: number, message: string) {
   if (value == null || value === "") return null;
@@ -203,7 +204,16 @@ export const deleteSetup = createServerFn({ method: "POST" })
 function parseRule(raw: Record<string, unknown>): Rule {
   const metric = METRICS.includes(raw.metric as Metric) ? (raw.metric as Metric) : "avg";
   const distance = Number(raw.distanceM);
+  const kind = kindOf(raw.kind);
+  // minigioco e gare non hanno arco, distanza e bersaglio da fissare
+  if (kind !== "allenamento") {
+    const rule: Rule = { kind, metric, arrows: null, distanceM: null, bowType: "", face: "", discipline: "", gameMode: kind === "minigioco" ? clip(raw.gameMode, 20) : "", gameLevel: kind === "minigioco" ? clip(raw.gameLevel, 20) : "" };
+    const problem = rulesFair(rule);
+    if (problem) throw new Error(problem);
+    return rule;
+  }
   const rule: Rule = {
+    kind,
     metric,
     arrows: raw.arrows == null || raw.arrows === "" ? null : Math.max(1, asNum(raw.arrows)),
     distanceM: Number.isFinite(distance) ? distance : null,
@@ -352,6 +362,48 @@ export const challengeBoard = createServerFn({ method: "POST" })
       select user_id, state, team_name from challenge_members where challenge_id = ${data.id} and state = 'accepted'`;
     const ids = people.map((p) => p.user_id);
     if (!ids.length) return { title: ch[0].title, rule, rows: [], teams: [] };
+    const kind = ruleKind(rule);
+    const lowerWins = Boolean(metricInfo(rule).lowerWins);
+    const members = await sql<MemberRow>`select * from members where user_id is not null`;
+    const byUser = new Map(members.map((m) => [m.user_id, m]));
+    const teamOf = new Map(people.map((p) => [p.user_id, p.team_name]));
+    const toRows = (scores: { userId: string; value: number }[]) =>
+      scores.map((s, index) => {
+        const member = byUser.get(s.userId);
+        return {
+          position: index + 1,
+          userId: s.userId,
+          value: s.value,
+          givenName: member?.given_name ?? "Arciere",
+          familyName: member?.family_name ?? "",
+          nickname: member?.nickname ?? "",
+          slug: member?.slug ?? "",
+          avatarColor: member?.avatar_color ?? "#1f5c38",
+          team: teamOf.get(s.userId) ?? "",
+        };
+      });
+    const allowed = new Set(ids);
+    // minigioco: i giri del gioco nel periodo, stesso bersaglio e livello
+    if (kind === "minigioco") {
+      const rounds = await sql<{ user_id: string; mode: string; level: string; total: number; played_at: unknown }>`
+        select user_id, mode, level, total, played_at from game_rounds
+        where played_at >= ${from.toISOString()}::timestamptz and played_at < ${to.toISOString()}::timestamptz`.catch(() => []);
+      const list = rounds.filter((r) => allowed.has(r.user_id)).map((r) => ({ userId: r.user_id, mode: r.mode, level: r.level, total: asNum(r.total), at: asIso(r.played_at) }));
+      const rows = toRows(gameScores(rule, list, from.toISOString(), to.toISOString()));
+      return { title: ch[0].title, rule, rows, teams: teamMeans(rows.map((r) => ({ userId: r.userId, team: r.team, value: r.value }))) };
+    }
+    // gara di campionato: i risultati delle gare del calendario fra le due date
+    if (kind === "campionato") {
+      const res = await sql<{ user_id: string; starts_on: string; score: number | null; rank: number | null; championship_points: number | null }>`
+        select e.user_id, c.starts_on::text as starts_on, e.score, e.rank, e.championship_points
+        from competition_entries e join competitions c on c.id = e.competition_id
+        where c.starts_on >= ${start}::date and c.starts_on <= ${end}::date`;
+      const list = res
+        .filter((r) => allowed.has(r.user_id))
+        .map((r) => ({ userId: r.user_id, day: String(r.starts_on).slice(0, 10), score: asNumOrNull(r.score), rank: asNumOrNull(r.rank), champ: asNumOrNull(r.championship_points) }));
+      const rows = toRows(garaScores(rule, list, start, end));
+      return { title: ch[0].title, rule, rows, teams: teamMeans(rows.map((r) => ({ userId: r.userId, team: r.team, value: r.value })), lowerWins) };
+    }
     const shots = await sql<{
       user_id: string; session_id: number; started_at: unknown; distance_m: unknown; bow_type: string; face: string; discipline: string;
       block_index: number; end_index: number; arrow_index: number; score: number; is_x: boolean; miss: boolean;
@@ -360,7 +412,6 @@ export const challengeBoard = createServerFn({ method: "POST" })
         sh.block_index, sh.end_index, sh.arrow_index, sh.score, sh.is_x, sh.miss
       from sessions s join shots sh on sh.session_id = s.id
       where s.started_at >= ${prevFrom.toISOString()}::timestamptz and s.started_at < ${to.toISOString()}::timestamptz`;
-    const allowed = new Set(ids);
     const grouped = new Map<number, { userId: string; startedAt: string; distanceM: number; bowType: string; face: string; discipline: string; shots: TallyShot[] }>();
     for (const shot of shots) {
       if (!allowed.has(shot.user_id)) continue;
@@ -387,23 +438,7 @@ export const challengeBoard = createServerFn({ method: "POST" })
       });
     }
     const scores = challengeScores(rule, [...grouped.values()], from.toISOString(), to.toISOString(), prevFrom.toISOString());
-    const members = await sql<MemberRow>`select * from members where user_id is not null`;
-    const byUser = new Map(members.map((m) => [m.user_id, m]));
-    const teamOf = new Map(people.map((p) => [p.user_id, p.team_name]));
-    const rows = scores.map((s, index) => {
-      const member = byUser.get(s.userId);
-      return {
-        position: index + 1,
-        userId: s.userId,
-        value: s.value,
-        givenName: member?.given_name ?? "Arciere",
-        familyName: member?.family_name ?? "",
-        nickname: member?.nickname ?? "",
-        slug: member?.slug ?? "",
-        avatarColor: member?.avatar_color ?? "#1f5c38",
-        team: teamOf.get(s.userId) ?? "",
-      };
-    });
+    const rows = toRows(scores);
     return { title: ch[0].title, rule, rows, teams: teamMeans(rows.map((r) => ({ userId: r.userId, team: r.team, value: r.value }))) };
   });
 

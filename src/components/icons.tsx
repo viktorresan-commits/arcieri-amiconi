@@ -1,5 +1,16 @@
 import { useId, type CSSProperties, type ReactNode } from "react";
 import { DETAILED_MORE } from "./icons-more";
+import { Insignia, type InsigniaProps } from "./insignia";
+
+/** gare, premi, sfide, obiettivi e classifiche: al posto della tessera, un'insegna coniata */
+const INSIGNIA_FOR: Partial<Record<string, Pick<InsigniaProps, "symbol" | "metal" | "enamel" | "shape">>> = {
+  trophy: { symbol: "trophy", metal: "gold", enamel: "ruby", shape: "rosette" },
+  medal: { symbol: "laurel", metal: "gold", enamel: "sapphire", shape: "rosette" },
+  duel: { symbol: "duel", metal: "silver", enamel: "ruby", shape: "shield" },
+  flag: { symbol: "peak", metal: "gold", enamel: "teal", shape: "round" },
+  podium: { symbol: "podium", metal: "gold", enamel: "night", shape: "hex" },
+  game: { symbol: "dice", metal: "silver", enamel: "amethyst", shape: "hex" },
+};
 
 /**
  * Set di icone dell'app, disegnato apposta (griglia 24×24, tratto 1.7, due toni).
@@ -826,8 +837,16 @@ export function Glyph({ name, size = 20, className, strokeWidth = 1.7, title, de
 
 /** Tessera d'icona: placca scura con riflesso e cornice, disegno inciso in metallo del colore dell'app.
  *  Stesso aspetto ovunque. `accent` (solo nel Menu) dà a una sezione la sua tinta, sullo stesso materiale. */
-export function AppIcon({ name, size = 52, className, accent, fluid = false }: { name: IconName; color?: string; size?: number; className?: string; accent?: string; /** riempie il contenitore invece di una misura fissa */ fluid?: boolean }) {
+export function AppIcon({ name, size = 52, className, accent, fluid = false, plain = false }: { name: IconName; color?: string; size?: number; className?: string; accent?: string; /** riempie il contenitore invece di una misura fissa */ fluid?: boolean; /** tessera semplice anche per gare, premi e obiettivi */ plain?: boolean }) {
   const id = `ai${(useId().replace(/[^a-zA-Z0-9]/g, "") + "_")}`;
+  const ins = !plain && !fluid ? INSIGNIA_FOR[name] : undefined;
+  if (ins) {
+    return (
+      <span className={["aa-appicon-ins relative grid shrink-0 place-items-center", className].filter(Boolean).join(" ")} style={{ width: size, height: size }}>
+        <Insignia {...ins} size={Math.round(size * 1.04)} glow={size >= 56} />
+      </span>
+    );
+  }
   const art = DETAILED[name] ?? ICONS[name];
   const sw = size >= 56 ? 1.45 : size >= 40 ? 1.6 : 1.75;
   const g = Math.round(size * 0.6);

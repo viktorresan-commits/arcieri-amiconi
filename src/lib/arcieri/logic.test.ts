@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { elapsed, pauseClock, startClock } from "./clock.ts";
-import { challengeScores, rulesFair } from "./challenge.ts";
+import { challengeScores, gameScores, garaScores, rulesFair } from "./challenge.ts";
 import { simplePdf } from "./pdf.ts";
 import { buildRanks, sortRanks } from "./rank.ts";
 import { cursor, faceById, scoreAtRadius, summarize } from "./scoring.ts";
@@ -86,4 +86,28 @@ test("pdf is a real file", () => {
   assert.ok(text.startsWith("%PDF-1.4"));
   assert.ok(text.includes("startxref"));
   assert.ok(text.includes("%%EOF"));
+});
+
+test("challenge kinds: minigioco and gara di campionato", () => {
+  // minigioco: bersaglio e livello obbligatori, poi miglior giro nel periodo
+  assert.ok(rulesFair({ kind: "minigioco", metric: "best", arrows: null, distanceM: null, bowType: "", face: "", discipline: "" }));
+  const game = { kind: "minigioco" as const, metric: "best" as const, arrows: null, distanceM: null, bowType: "", face: "", discipline: "", gameMode: "fita", gameLevel: "normale" };
+  assert.equal(rulesFair(game), null);
+  const rounds = [
+    { userId: "a", mode: "fita", level: "normale", total: 480, at: "2026-11-02T10:00:00.000Z" },
+    { userId: "a", mode: "fita", level: "normale", total: 512, at: "2026-11-03T10:00:00.000Z" },
+    { userId: "b", mode: "fita", level: "esperto", total: 590, at: "2026-11-03T10:00:00.000Z" },
+    { userId: "b", mode: "fita", level: "normale", total: 500, at: "2026-10-01T10:00:00.000Z" },
+  ];
+  assert.deepEqual(gameScores(game, rounds, "2026-11-01T00:00:00.000Z", "2026-11-10T00:00:00.000Z"), [{ userId: "a", value: 512 }]);
+  // gara: somma dei punteggi e miglior posizione (vince il numero più basso)
+  const res = [
+    { userId: "a", day: "2026-11-15", score: 192, rank: 68, champ: 13 },
+    { userId: "a", day: "2026-11-22", score: 210, rank: 40, champ: 15 },
+    { userId: "b", day: "2026-11-15", score: 300, rank: 5, champ: 30 },
+    { userId: "b", day: "2026-12-30", score: 999, rank: 1, champ: 50 },
+  ];
+  const base = { kind: "campionato" as const, arrows: null, distanceM: null, bowType: "", face: "", discipline: "" };
+  assert.deepEqual(garaScores({ ...base, metric: "points" }, res, "2026-11-01", "2026-11-30"), [{ userId: "a", value: 402 }, { userId: "b", value: 300 }]);
+  assert.deepEqual(garaScores({ ...base, metric: "rank" }, res, "2026-11-01", "2026-11-30"), [{ userId: "b", value: 5 }, { userId: "a", value: 40 }]);
 });

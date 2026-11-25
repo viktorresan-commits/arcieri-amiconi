@@ -11,6 +11,7 @@ import { useMember } from "@/components/shell";
 import { ActivityHeat, AvgLine, ComboBars, DistBars, Ring, ScoreLine } from "@/components/charts";
 import { GaraTrend, type GaraPoint } from "@/components/gara-trend";
 import { Card, Chips, ErrorNote, Kpi, Loading, PageHead, SectionHead, Segmented } from "@/components/kit";
+import { KindChip, KindEmblem } from "@/components/kind-emblem";
 import { bowLabel } from "@/lib/arcieri/labels";
 import { animalByLabel } from "@/lib/arcieri/sagome";
 
@@ -113,13 +114,16 @@ function Page() {
   return (
     <div className="grid gap-3">
       <PageHead kicker="I tuoi numeri" title="Statistiche" lede="Allenamento e campionato, confrontati periodo su periodo e gara contro gara.">
-        <Segmented value={tab} onChange={setTab} options={[{ id: "allenamento", label: <IconLabel icon="bow" size={14}>Allenamento</IconLabel> }, { id: "corpo", label: <IconLabel icon="posture" size={14}>Corpo</IconLabel> }, { id: "gare", label: <IconLabel icon="trophy" size={14}>Gare</IconLabel> }]} />
+        <Segmented value={tab} onChange={setTab} options={[{ id: "allenamento", label: <span className="inline-flex items-center gap-1.5"><KindEmblem kind="allenamento" size={18} />Allenamento</span> }, { id: "corpo", label: <IconLabel icon="posture" size={14}>Corpo</IconLabel> }, { id: "gare", label: <span className="inline-flex items-center gap-1.5"><KindEmblem kind="campionato" size={18} />Gare</span> }]} />
       </PageHead>
       {loading ? <Loading /> : null}
       {error ? <ErrorNote text={error} /> : null}
 
       {tab === "allenamento" ? (
         <>
+          <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted">
+            <KindChip kind="minigioco" /> non entra in queste statistiche: qui contano solo gli allenamenti veri.
+          </p>
           <Chips value={period} onChange={setPeriod} options={PERIODS} />
           <div className="grid grid-cols-2 gap-2">
             <Kpi label="Allenamenti" value={String(inPeriod.length)} delta={period === "all" ? null : delta(inPeriod.length, prevPeriod.length)} color="#5aa6e8" icon={<Glyph name="calendar" size={16} />} />

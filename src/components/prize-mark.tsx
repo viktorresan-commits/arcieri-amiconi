@@ -1,5 +1,6 @@
 import { useId, type ReactNode } from "react";
 import { glyphArt, type IconName } from "./icons";
+import { Insignia, type InsEnamel, type InsMetal, type InsShape, type InsSymbol } from "./insignia";
 
 const LADDERS = {
   arrow: ["arrows_100", "arrows_500", "arrows_1000", "arrows_5000"],
@@ -209,18 +210,28 @@ export function MetalCoin({ metal, symbol, icon, size = 56, ribbon = true, locke
   );
 }
 
+/** ogni famiglia di premi: simbolo e smalto (le gare in rubino, gli allenamenti in smeraldo…) */
+const FAMILY_ART: Record<PrizeTier["symbol"], { symbol: InsSymbol; enamel: InsEnamel }> = {
+  arrow: { symbol: "arrow", enamel: "emerald" },
+  bow: { symbol: "bow", enamel: "teal" },
+  target: { symbol: "target", enamel: "ruby" },
+  medal: { symbol: "laurel", enamel: "ruby" },
+  flame: { symbol: "flame", enamel: "amber" },
+  rise: { symbol: "rise", enamel: "sapphire" },
+};
+const TIER_METAL: Record<PrizeTier["metal"], InsMetal> = { base: "iron", bronze: "bronze", silver: "silver", gold: "gold", platinum: "platinum" };
+const TIER_SHAPE: Record<PrizeTier["metal"], InsShape> = { base: "round", bronze: "round", silver: "round", gold: "rosette", platinum: "rosette" };
+
+/** premio coniato: metallo del livello, smalto della famiglia, nastro, raggi per oro e platino, stelle sotto */
 export function PrizeMark({ code, locked = false, size = "md" }: { code: string; locked?: boolean; size?: "md" | "lg" }) {
   const tier = prizeTier(code);
   const ring = RING[tier.metal];
-  const px = size === "lg" ? 80 : 58;
+  const px = size === "lg" ? 80 : 60;
+  const art = FAMILY_ART[tier.symbol];
+  const precious = tier.metal === "gold" || tier.metal === "platinum";
   return (
     <span className={`inline-flex w-16 shrink-0 flex-col items-center ${size === "lg" ? "w-20" : ""}`}>
-      <span className="aa-medal relative">
-        <span className="block drop-shadow-[0_6px_10px_rgba(0,0,0,0.5)]">
-          <MetalCoin metal={tier.metal} symbol={tier.symbol} size={px} locked={locked} />
-        </span>
-        {!locked && tier.metal !== "base" ? <span className="aa-medal-shine" style={{ bottom: "10.7%" }} aria-hidden /> : null}
-      </span>
+      <Insignia symbol={art.symbol} enamel={art.enamel} metal={TIER_METAL[tier.metal]} shape={TIER_SHAPE[tier.metal]} ribbon laurel={tier.metal === "platinum"} glow={precious && !locked} locked={locked} size={px} />
       <span className="mt-1 flex h-3 items-center justify-center gap-px">
         {Array.from({ length: tier.stars }, (_, index) => (
           <Star key={index} color={ring.color} />
