@@ -12,7 +12,16 @@ export type FitastCell = { text: string; href?: string; press?: string };
  * arrivano in XML dentro lo script che la dichiara e poi con le richieste AJAX LIGNESTABLE).
  * alias e total servono a chiedere al portale le righe che mancano.
  */
-export type FitastTable = { rows: FitastCell[][]; source?: "script" | "wd"; alias?: string; total?: number };
+export type FitastTable = {
+  rows: FitastCell[][];
+  source?: "script" | "wd";
+  alias?: string;
+  total?: number;
+  /** chiave del record di ogni riga di dati (attributo CLEENREG delle righe WEBDEV), se il portale la manda */
+  keys?: string[];
+  /** chiave di scorrimento della tabella (CLEENREGAP): va rimandata per avere le righe dopo */
+  ap?: string;
+};
 export type FitastOption = { value: string; text: string; selected: boolean };
 export type FitastSelect = { name: string; label: string; options: FitastOption[]; press?: { code: string; set: Record<string, string> } };
 /** un comando della pagina: code è l'alias WEBDEV (A5…), set sono i campi che il click imposta prima dell'invio */
@@ -35,6 +44,12 @@ export type FitastPage = {
   blocks?: FitastBlock[];
   /** tabelle WEBDEV della pagina (alias come A12): le loro righe si chiedono al portale con AJAX */
   wdAliases?: string[];
+  /** indirizzi di pagine .awp con parametri (es. pagView-Class-Arcieri-Gara.awp?P1=2472) scritti ovunque nella pagina */
+  refs?: string[];
+  /** la pagina rimanda subito a un'altra (meta refresh o location in uno script): dove */
+  redirect?: string;
+  /** nomi delle pagine .awp citate (es. pagView-Class-Squadre-Gara.awp), anche dove il numero si aggiunge in JavaScript */
+  awp?: string[];
 };
 
 const ENT: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ", agrave: "à", egrave: "è", eacute: "é", igrave: "ì", ograve: "ò", ugrave: "ù", Agrave: "À", Egrave: "È", Eacute: "É", Igrave: "Ì", Ograve: "Ò", Ugrave: "Ù", deg: "°", laquo: "«", raquo: "»", rsquo: "’", lsquo: "‘", ldquo: "“", rdquo: "”", ndash: "–", mdash: "—", euro: "€", ordm: "º", ordf: "ª" };
@@ -292,7 +307,12 @@ export function parseHtml(html: string, url: string): Omit<FitastPage, "fetchedA
       if (!close) {
         ensureForm();
         const p = pressOf(attrs.onchange ?? "");
-        select = { name: attrs.name || attrs.id || "", label: attrs.title || attrs["aria-label"] || "", options: [], pending: null, ...(p ? { press: p } : {}) };
+        // l'etichetta senza <label>: il testo della cella accanto (Categoria | [tendina]) se c'è
+        const top2 = stack[stack.length - 1];
+        const cellText = (c: FitastCell | null | undefined) => (c?.text ?? "").replace(/\s+/g, " ").trim();
+        const prev = [...(top2?.row ?? [])].reverse().find((c) => c !== top2?.cell && cellText(c));
+        const near = top2 ? cellText(top2.cell) || cellText(prev) : "";
+        select = { name: attrs.name || attrs.id || "", label: attrs.title || attrs["aria-label"] || (near.length > 1 && near.length < 40 ? near : ""), options: [], pending: null, ...(p ? { press: p } : {}) };
       } else if (select) {
         if (select.pending) select.options.push(select.pending);
         const s = select;
@@ -391,7 +411,38 @@ export function parseHtml(html: string, url: string): Omit<FitastPage, "fetchedA
   const uniq = links.filter((l) => (seen.has(l.href + l.text) ? false : (seen.add(l.href + l.text), true)));
   // niente righe ripetute di seguito (menu ripetuti, intestazioni)
   const tidy = lines.filter((l, i) => l !== lines[i - 1]);
-  return { url, title: clean(title), tables, lines: tidy.slice(0, 2000), links: uniq.slice(0, 400), form, blocks, wdAliases };
+  const refs = awpRefs(html, url);
+  const awp = [...new Set([...html.matchAll(/[\w-]+\.awp\b/gi)].map((m) => m[0]))].slice(0, 80);
+  const redirect = redirectOf(html, url, tables.length === 0 && tidy.length < 15 && !(form as FitastForm | null)?.buttons.length);
+  return { url, title: clean(title), tables, lines: tidy.slice(0, 2000), links: uniq.slice(0, 400), form, blocks, wdAliases, ...(refs.length ? { refs } : {}), ...(awp.length ? { awp } : {}), ...(redirect ? { redirect } : {}) };
+}
+
+/** pagine .awp con parametri citate nella pagina (link, onclick, script): pagView-Class-Arcieri-Gara.awp?P1=2472 */
+export function awpRefs(html: string, base: string): string[] {
+  const out = new Set<string>();
+  const src = html.replace(/&amp;/g, "&");
+  for (const m of src.matchAll(/[\w./-]*\.awp\?P\d+=[^"'\s<>\\]*/gi)) {
+    const abs = absolute(m[0], base);
+    if (abs) out.add(abs);
+    if (out.size >= 300) break;
+  }
+  return [...out];
+}
+
+/**
+ * Rimando immediato: meta refresh, oppure (solo in una pagina quasi vuota) location/_JCL in uno script.
+ * Dopo un invio WEBDEV a volte risponde così invece che con un 302.
+ */
+export function redirectOf(html: string, base: string, thin: boolean): string | null {
+  const meta = /<meta[^>]+http-equiv=["']?refresh["']?[^>]*content=["']?\s*\d+\s*;\s*url=([^"'>\s]+)/i.exec(html);
+  if (meta) return absolute(meta[1].replace(/&amp;/g, "&"), base) || null;
+  if (!thin) return null;
+  for (const sc of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)) {
+    const js = sc[1];
+    const m = /(?:(?:window|document|top|self|parent)\.)?location(?:\.href)?\s*=\s*["']([^"']+)["']/.exec(js) ?? /location\.(?:replace|assign)\(\s*["']([^"']+)["']/.exec(js) ?? /_JCL\(\s*["']([^"']+)["']/.exec(js);
+    if (m) return absolute(m[1].replace(/&amp;/g, "&"), base) || null;
+  }
+  return null;
 }
 
 /** fine di una stringa JavaScript che comincia in i (virgolette comprese) */
@@ -490,6 +541,13 @@ function xmlTree(xml: string): XNode {
   return root;
 }
 const xText = (n: XNode): string => (n.text + n.kids.map(xText).join(" ")).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+function xAll(n: XNode, out: XNode[] = []): XNode[] {
+  for (const k of n.kids) {
+    out.push(k);
+    xAll(k, out);
+  }
+  return out;
+}
 function xFind(n: XNode, name: string, out: XNode[] = []): XNode[] {
   for (const k of n.kids) {
     if (k.name === name) out.push(k);
@@ -508,12 +566,16 @@ export function wdXmlTable(xml: string, alias = ""): FitastTable | null {
   const lignes = xFind(root, "ligne");
   if (!lignes.length) return null;
   const cols = xFind(root, "colonne");
-  const withTotal = [root, ...xFind(root, "lignes"), ...xFind(root, "liste"), ...xFind(root, "champ")].find((n) => n.attrs.nombre != null);
+  // NOMBRE (righe in tutto) e CLEENREGAP sono attributi dell'elemento della tabella, qualunque sia il suo nome
+  const all = xAll(root);
+  const withTotal = all.find((n) => n.attrs.nombre != null && n.name !== "ligne");
   const total = withTotal ? Number(withTotal.attrs.nombre) : NaN;
+  const ap = all.find((n) => n.attrs.cleenregap)?.attrs.cleenregap;
   const rows = lignes.map((l) => l.kids.filter((k) => k.name !== "ruptures").map((k) => ({ text: xText(k) })));
+  const keys = lignes.map((l) => l.attrs.cleenreg ?? "");
   const width = Math.max(cols.length, ...rows.map((r) => r.length));
   const head = Array.from({ length: width }, (_, k) => ({ text: (cols[k]?.attrs.titre || cols[k]?.attrs.alias || `Colonna ${k + 1}`).replace(/\s+/g, " ").trim() }));
-  return { source: "wd", alias, total: Number.isFinite(total) ? total : undefined, rows: [head, ...rows] };
+  return { source: "wd", alias, total: Number.isFinite(total) ? total : undefined, rows: [head, ...rows], ...(keys.some(Boolean) ? { keys } : {}), ...(ap ? { ap } : {}) };
 }
 
 /** configurazione di WEBDEV, non dati: stili delle righe e immagini dei pulsanti della tabella */
@@ -636,35 +698,58 @@ export function formBodyPairs(pairs: [string, string][], charset: string) {
 export async function fillWdTables(page: FitastPage, post: (action: string, body: string) => Promise<string | null>) {
   const aliases = page.wdAliases ?? [];
   if (!aliases.length || !page.form) return;
-  const action = page.form.action || page.url;
+  // dove manda le richieste il browser: l'azione del modulo; se non risponde, l'indirizzo della pagina
+  // con i suoi parametri (le pagine AWP come ...awp?P1=2472 non hanno sessione: la gara sta nell'indirizzo)
+  const targets = [...new Set([page.form.action || page.url, page.url])];
   for (const alias of aliases.slice(0, 4)) {
     let t: FitastTable | undefined = page.tables.find((x) => x.source === "wd" && x.alias === alias);
+    // righe in tutto: anche dal campo nascosto _ALIAS_OCC
+    const occ = Number(page.form.fields[`_${alias}_OCC`] ?? NaN);
+    if (t && t.total == null && Number.isFinite(occ) && occ > 0) t.total = occ;
+    let target = targets[0];
     for (let round = 0; round < 15; round++) {
       const got = t ? t.rows.length - 1 : 0;
       if (t?.total != null && got >= t.total) break;
       if (got >= 3000) break;
+      // come WDTable.js: LIGNESTABLE=alias & inizio=quante, poi i campi della pagina AWP
       const pairs: [string, string][] = [
         ["WD_ACTION_", "AJAXEXECUTE"],
         ["LIGNESTABLE", alias],
         [String(got), "100"],
       ];
+      if (t?.ap) pairs.push(["WD_TABLE_CLEENREGAP_POS_", String(t.total ?? got)], ["WD_TABLE_CLEENREGAP_", t.ap]);
       const data = page.form.fields[`${alias}_DATA`];
       if (data != null) pairs.push([`${alias}_DATA`, data]);
       const sel = page.form.fields[alias];
-      if (sel != null) pairs.push([alias, sel]);
-      const xml = await post(action, formBodyPairs(pairs, page.charset));
-      const more = xml ? wdXmlTable(xml, alias) : null;
+      if (sel != null) pairs.push([`${alias}_SEL`, sel], [alias, sel]);
+      // la chiave dell'ultima riga già avuta: il portale riparte da lì
+      const lastKey = t?.keys?.[got - 1];
+      if (lastKey) pairs.push(["WD_TABLE_CLEENREG_POS_", String(got - 1)], ["WD_TABLE_CLEENREG_", lastKey]);
+      const body = formBodyPairs(pairs, page.charset);
+      let xml = await post(target, body);
+      let more = xml ? wdXmlTable(xml, alias) : null;
+      if ((!more || more.rows.length < 2) && round === 0 && targets.length > 1) {
+        target = targets[1];
+        xml = await post(target, body);
+        more = xml ? wdXmlTable(xml, alias) : null;
+      }
       if (!more || more.rows.length < 2) break;
       if (!t) {
         t = more;
         page.tables.push(t);
       } else {
-        t.rows.push(...more.rows.slice(1));
+        // il portale a volte rimanda anche righe già avute: si tengono solo quelle nuove
+        const seen = new Set(t.rows.slice(1).map((r) => r.map((c) => c.text).join("|")));
+        const fresh = more.rows.slice(1).map((r, k) => ({ r, key: more!.keys?.[k] ?? "" })).filter((x) => !seen.has(x.r.map((c) => c.text).join("|")));
+        if (!fresh.length) break;
+        if (t.keys || more.keys) t.keys = [...(t.keys ?? Array(t.rows.length - 1).fill("")), ...fresh.map((x) => x.key)];
+        t.rows.push(...fresh.map((x) => x.r));
         if (more.total != null) t.total = more.total;
+        if (more.ap) t.ap = more.ap;
         // titoli delle colonne arrivati solo adesso
         if (t.rows[0].every((c) => /^Colonna \d+$/.test(c.text)) && more.rows[0].some((c) => !/^Colonna \d+$/.test(c.text))) t.rows[0] = more.rows[0];
       }
-      if (t.total == null) break;
+      if (t.total == null && !t.ap) break;
     }
   }
   // una tabella WEBDEV rimasta vuota non serve

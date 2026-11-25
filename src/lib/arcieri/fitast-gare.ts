@@ -13,7 +13,31 @@ export type GaraHow =
   | { kind: "input"; input: string }
   | { kind: "row"; index: number }
   | { kind: "current" };
-export type Gara = { id: string; date: string | null; title: string; alts: GaraHow[] };
+/** key: la chiave del record della riga (CLEENREG), forse lo stesso numero della gara: da verificare aprendola */
+export type Gara = { id: string; date: string | null; title: string; alts: GaraHow[]; key?: string };
+
+/** la classifica arcieri di una gara si apre direttamente: pagView-Class-Arcieri-Gara.awp?P1=2472 */
+export const CLASSIFICA_PAGE = "pagView-Class-Arcieri-Gara.awp";
+export function classificaUrl(id: string, base: string) {
+  return new URL(`${CLASSIFICA_PAGE}?P1=${encodeURIComponent(id)}`, base).toString();
+}
+/** le pagine di classifica citate nella pagina (link, onclick, script): numero della gara e indirizzo */
+export function classificaRefs(page: FitastPage): { id: string; href: string }[] {
+  const out = new Map<string, string>();
+  for (const h of [...(page.refs ?? []), ...page.links.map((l) => l.href)]) {
+    const m = /class[^/?]*\.awp\?P1=(\d{3,6})\b/i.exec(h);
+    if (m && !/squadr|compagn|societ/i.test(h) && !out.has(m[1])) out.set(m[1], h);
+  }
+  return [...out].map(([id, href]) => ({ id, href }));
+}
+/** la data della gara aperta: la prima data in cima alla pagina */
+export function garaDateOf(page: FitastPage): string | null {
+  for (const l of [page.title, ...page.lines.slice(0, 40)]) {
+    const d = dateIn(l);
+    if (d) return d;
+  }
+  return null;
+}
 
 const MONTHS: Record<string, number> = { gen: 1, feb: 2, mar: 3, apr: 4, mag: 5, giu: 6, lug: 7, ago: 8, set: 9, ott: 10, nov: 11, dic: 12 };
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -137,7 +161,8 @@ export function findGare(page: FitastPage): Gara[] {
         alts.push({ kind: "press", press });
       }
       alts.push({ kind: "row", index: k + 1 });
-      add({ id: ID.test(id) ? id : "", date, title, alts });
+      const key = (t.keys?.[k] ?? "").trim();
+      add({ id: ID.test(id) ? id : "", date, title, alts, ...(ID.test(key) ? { key } : {}) });
     });
   }
 
@@ -200,6 +225,9 @@ export function findGare(page: FitastPage): Gara[] {
     add({ id, date, title: cleanTitle(l.text, id), alts: [{ kind: "href", href: l.href }] });
   }
 
+  // 6) classifiche citate nella pagina (anche negli script): si aprono direttamente
+  for (const r of classificaRefs(page)) add({ id: r.id, date: null, title: "", alts: [{ kind: "href", href: r.href }] });
+
   // una gara sola per id: si tengono la data e tutti i modi di aprirla, i migliori per primi
   const byKey = new Map<string, Gara>();
   for (const g of found) {
@@ -208,6 +236,7 @@ export function findGare(page: FitastPage): Gara[] {
     if (!old) byKey.set(key, { ...g, alts: [...g.alts] });
     else {
       old.date ??= g.date;
+      old.key ??= g.key;
       // fra i titoli trovati si tiene il più corto con parole: di solito è il nome pulito della gara
       if (!old.title || (g.title && HAS_WORDS.test(g.title) && g.title.length < old.title.length)) old.title = g.title;
       for (const a of g.alts) if (!old.alts.some((x) => JSON.stringify(x) === JSON.stringify(a))) old.alts.push(a);

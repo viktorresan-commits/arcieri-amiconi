@@ -57,7 +57,7 @@ async function fillWd(page: FitastPage, cookie: string, signal: AbortSignal, hea
   return jar;
 }
 
-async function fetchPage(req: Req): Promise<FitastPage & { cookie: string }> {
+async function fetchPage(req: Req, depth = 0): Promise<FitastPage & { cookie: string }> {
   const key = `${req.url}|${req.body ?? ""}`;
   // in cache solo i PDF: le pagine .awp cambiano con la sessione (gara e filtri scelti), e una
   // risposta ricordata farebbe vedere la classifica di un'altra gara
@@ -111,6 +111,19 @@ async function fetchPage(req: Req): Promise<FitastPage & { cookie: string }> {
       html = new TextDecoder("utf-8").decode(buf);
     }
     const page: FitastPage = { ...parseHtml(html, finalUrl), kind: /html|xml|text/i.test(type) || !type ? "html" : "altro", charset, fetchedAt: now };
+    // rimando scritto nella pagina (meta refresh, location in uno script): lo si segue come il browser
+    if (page.redirect && depth < 2) {
+      let next: URL | null = null;
+      try {
+        next = new URL(page.redirect);
+      } catch {
+        next = null;
+      }
+      if (next && next.hostname === HOST && next.pathname.startsWith("/FITAST_WEB/") && next.toString() !== finalUrl) {
+        clearTimeout(timer);
+        return await fetchPage({ url: next.toString(), cookie, referer: finalUrl }, depth + 1);
+      }
+    }
     cookie = await fillWd(page, cookie, ctrl.signal, headers);
     return { ...page, cookie };
   } catch (e) {
