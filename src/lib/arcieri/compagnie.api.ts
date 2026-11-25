@@ -7,7 +7,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 import type { Sql } from "@/lib/db";
 import { asNum, cleanPhoto, clip, db, ensureMember, staffLevel } from "./access";
-import { fitastPointsBy } from "./fitast-league.api";
+import { fitastAvgBy, fitastPointsBy } from "./fitast-league.api";
 import { teamKey } from "./fitast-league";
 
 export const HOME_SLUG = "fabriano";
@@ -156,6 +156,8 @@ export const listCompanies = createServerFn({ method: "GET" })
       group by user_id`;
     // punti del campionato FITAST (classifica generale squadre letta dal portale), per nome della compagnia
     const fitastPts = await fitastPointsBy(sql).catch(() => new Map<string, { points: number; place: number | null; season: string }>());
+    // media dei punti campionato per arciere: tutti gli arcieri di ogni compagnia nella generale arcieri FITAST
+    const fitastAvg = await fitastAvgBy(sql).catch(() => new Map<string, { avg: number; archers: number }>());
     const trainOf = new Map(train.map((row) => [row.user_id, row]));
     const compOf = new Map(comps.map((row) => [row.user_id, row]));
     const board = companies.map((row) => {
@@ -176,11 +178,14 @@ export const listCompanies = createServerFn({ method: "GET" })
         gareRaw += asNum(c?.points);
       }
       const fp = fitastPts.get(teamKey(row.fitast_name || "")) ?? fitastPts.get(teamKey(row.name));
+      const fa = fitastAvg.get(teamKey(row.fitast_name || "")) ?? fitastAvg.get(teamKey(row.name));
       return {
         ...toCompany(row),
         fitastPoints: fp ? fp.points : null,
         fitastPlace: fp ? fp.place : null,
         fitastSeason: fp ? fp.season : "",
+        fitastAvg: fa ? fa.avg : null,
+        fitastArchers: fa ? fa.archers : 0,
         members: crew.length,
         arrows,
         sessions,

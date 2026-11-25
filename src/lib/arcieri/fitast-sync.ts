@@ -108,7 +108,8 @@ export async function syncStandings(opts: { onProgress: (p: SyncProgress) => voi
   if (genAr && !opts.stop()) {
     step = `Classifica generale arcieri · ${seasonName}`;
     const r0 = pressReq(base, genAr, choose, step);
-    await allCombos(await read(r0), r0, "generale-arcieri", 10, 24);
+    // tutta la classifica (non solo i primi dieci): serve la media di tutti gli arcieri di ogni compagnia
+    await allCombos(await read(r0), r0, "generale-arcieri", 600, 24);
   }
 
   // gare del campionato già fatte: classifica arcieri (primi 3 per categoria) e squadre

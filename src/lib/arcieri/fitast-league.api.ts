@@ -356,7 +356,7 @@ export const fitastStandings = createServerFn({ method: "GET" })
       garaTitle: r.gara_title,
       day: r.held_on ?? "",
       category: r.category,
-      rows: Array.isArray(r.rows) ? r.rows : [],
+      rows: Array.isArray(r.rows) ? (r.kind === "generale-arcieri" ? r.rows.slice(0, 10) : r.rows) : [],
       updatedAt: new Date(r.updated_at).toISOString(),
     }));
     const updatedAt = items.reduce((m, x) => (x.updatedAt > m ? x.updatedAt : m), "");
@@ -379,7 +379,9 @@ export const saveFitastStandings = createServerFn({ method: "POST" })
         .map((item) => {
           const r = (item ?? {}) as Record<string, unknown>;
           const day = String(r.day ?? "").slice(0, 10);
-          const rows = (Array.isArray(r.rows) ? r.rows.slice(0, 40) : []).map((x) => {
+          // la generale arcieri si tiene intera (serve la media di tutti gli arcieri di ogni compagnia); le altre i primi
+          const keep = String(r.kind ?? "") === "generale-arcieri" ? 600 : 40;
+          const rows = (Array.isArray(r.rows) ? r.rows.slice(0, keep) : []).map((x) => {
             const o = (x ?? {}) as Record<string, unknown>;
             const place = optNum(o.place, 9999);
             return { place: place == null ? null : Math.round(place), name: clip(o.name, 90), team: clip(o.team, 110), score: optNum(o.score, 10_000_000), camp: optNum(o.camp, 10_000_000) };
@@ -413,6 +415,34 @@ export const saveFitastStandings = createServerFn({ method: "POST" })
   });
 
 /** punti FITAST delle compagnie nel campionato più recente (classifica generale squadre), per nome */
+/**
+ * Media dei punti campionato per arciere di ogni compagnia: tutti i suoi arcieri nella classifica generale
+ * arcieri del campionato (ognuno contato una volta, anche se compare in più categorie).
+ */
+export async function fitastAvgBy(sql: Sql) {
+  const latest = await sql<{ season: string }>`select season from fitast_standings where kind = 'generale-arcieri' order by updated_at desc limit 1`;
+  const map = new Map<string, { avg: number; archers: number }>();
+  if (!latest[0]) return map;
+  const rows = await sql<{ rows: StandingRow[] }>`select rows from fitast_standings where kind = 'generale-arcieri' and season = ${latest[0].season}`;
+  const seen = new Map<string, Map<string, number>>();
+  for (const r of rows) {
+    for (const x of Array.isArray(r.rows) ? r.rows : []) {
+      const team = teamKey(x.team || "");
+      const pts = x.camp ?? x.score;
+      if (!team || pts == null) continue;
+      const who = teamKey(x.name);
+      const list = seen.get(team) ?? new Map<string, number>();
+      list.set(who, Math.max(list.get(who) ?? 0, pts));
+      seen.set(team, list);
+    }
+  }
+  for (const [team, list] of seen) {
+    const vals = [...list.values()];
+    map.set(team, { avg: vals.reduce((a, b) => a + b, 0) / vals.length, archers: vals.length });
+  }
+  return map;
+}
+
 export async function fitastPointsBy(sql: Sql) {
   const latest = await sql<{ season: string; season_name: string }>`select season, season_name from fitast_standings where kind = 'generale-squadre' order by updated_at desc limit 1`;
   const map = new Map<string, { points: number; place: number | null; season: string }>();

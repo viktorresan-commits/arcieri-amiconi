@@ -9,6 +9,7 @@ import { findCompanyLogos, syncFitastCompanies } from "@/lib/arcieri/fitast-leag
 import { Avatar, Button, Card, ErrorNote, Field, Segmented, TextInput } from "./kit";
 import { RankBars } from "./rank-bars";
 import { CrestPodium } from "./podium";
+import { crestOf as drawnCrest } from "@/lib/arcieri/fitast-league";
 
 type Board = Awaited<ReturnType<typeof listCompanies>>;
 type Co = Board["companies"][number];
@@ -299,14 +300,21 @@ export function CompanyLeague({ board, onJoin, busy, onSynced, part, fitastBoard
   }
   const unit: Record<Metric, string> = { fitast: "pt", points: "pt", arrows: "frecce", members: "arcieri", gare: "gare", avg: "" };
   const season = board.companies.find((co) => co.fitastSeason)?.fitastSeason ?? "";
-  const rows = board.companies.filter((co) => metric !== "fitast" || co.fitastPoints != null).map((co) => {
-    const value = metric === "avg" ? co.avg ?? 0 : metric === "fitast" ? co.fitastPoints ?? 0 : co[metric];
+  // media: quella di tutti gli arcieri di ogni compagnia nella generale FITAST (punti campionato per arciere);
+  // senza classifica FITAST, la media per freccia degli arcieri nell'app
+  const fitastAvgOn = board.companies.some((co) => co.fitastAvg != null);
+  const rows = board.companies.filter((co) => (metric !== "fitast" || co.fitastPoints != null) && (metric !== "avg" || !fitastAvgOn || co.fitastAvg != null)).map((co) => {
+    const avgValue = fitastAvgOn ? co.fitastAvg ?? 0 : co.avg ?? 0;
+    const value = metric === "avg" ? avgValue : metric === "fitast" ? co.fitastPoints ?? 0 : co[metric];
     return {
       id: String(co.id),
       name: co.name,
       value,
-      label: metric === "avg" ? (co.avg == null ? "—" : co.avg.toFixed(2).replace(".", ",")) : undefined,
-      sub: [metric === "fitast" && co.fitastPlace ? `${co.fitastPlace}ª nel campionato` : "", co.city, `${co.members} arcieri`].filter(Boolean).join(" · "),
+      label: metric === "avg" ? (fitastAvgOn ? (co.fitastAvg == null ? "—" : co.fitastAvg.toFixed(1).replace(".", ",")) : co.avg == null ? "—" : co.avg.toFixed(2).replace(".", ",")) : undefined,
+      sub: (metric === "avg" && fitastAvgOn
+        ? [`${co.fitastArchers} ${co.fitastArchers === 1 ? "arciere" : "arcieri"} in classifica`, co.avg != null ? `media freccia ${co.avg.toFixed(2).replace(".", ",")}` : ""]
+        : [metric === "fitast" && co.fitastPlace ? `${co.fitastPlace}ª nel campionato` : "", co.city, `${co.members} arcieri`]
+      ).filter(Boolean).join(" · "),
       color: co.color,
       logo: co.logoUrl,
       badge: co.logoUrl ? undefined : <DefaultCrest color={co.color} letter={co.name.replace(/^Compagnia (degli |dei |di )?/i, "").slice(0, 1)} />,
@@ -317,7 +325,7 @@ export function CompanyLeague({ board, onJoin, busy, onSynced, part, fitastBoard
       <Card className="grid grid-cols-[minmax(0,1fr)] gap-3">
         <div>
           <h2 className="font-display text-2xl">Classifica compagnie</h2>
-          <p className="text-sm text-muted">{metric === "fitast" ? `Punti del campionato FITAST${season ? ` (${season})` : ""}, letti dal portale.` : "Tutte le frecce e i punti dei loro arcieri, in allenamento e in gara."}</p>
+          <p className="text-sm text-muted">{metric === "fitast" ? `Punti del campionato FITAST${season ? ` (${season})` : ""}, letti dal portale.` : metric === "avg" && fitastAvgOn ? "Media dei punti campionato per arciere: tutti gli arcieri di ogni compagnia nella classifica generale FITAST." : metric === "avg" ? "Media per freccia degli arcieri di ogni compagnia, in allenamento." : "Tutte le frecce e i punti dei loro arcieri, in allenamento e in gara."}</p>
         </div>
         <div className="-mx-1 overflow-x-auto px-1 [scrollbar-width:none]">
         <Segmented<Metric>
@@ -338,7 +346,7 @@ export function CompanyLeague({ board, onJoin, busy, onSynced, part, fitastBoard
             {(() => {
               // le prime tre compagnie sul podio, con i loro stemmi
               const top = [...rows].filter((r) => r.value > 0).sort((a, b) => b.value - a.value).slice(0, 3);
-              return top.length >= 2 ? <CrestPodium rows={top.map((r) => ({ key: r.id, name: r.name, mark: r.label ?? `${Number(r.value).toLocaleString("it-IT")} ${unit[metric]}`.trim(), logo: r.logo ?? null, color: r.color }))} /> : null;
+              return top.length >= 2 ? <CrestPodium rows={top.map((r) => ({ key: r.id, name: r.name, mark: r.label ? `${r.label} ${metric === "avg" && fitastAvgOn ? "pt per arciere" : "media"}` : `${Number(r.value).toLocaleString("it-IT")} ${unit[metric]}`.trim(), logo: r.logo ?? drawnCrest(r.name).logo, color: r.color }))} /> : null;
             })()}
             <RankBars rows={rows} unit={unit[metric]} limit={12} empty={metric === "fitast" ? "Ancora nessun punto FITAST: tocca Aggiorna dal portale." : "Ancora nessun dato per questa classifica."} />
           </>
