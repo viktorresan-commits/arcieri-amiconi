@@ -232,8 +232,8 @@ function useLogoSearch(onFound?: () => void) {
   useEffect(() => {
     let off = false;
     try {
-      if (sessionStorage.getItem("aa-company-logos") === "1") return;
-      sessionStorage.setItem("aa-company-logos", "1");
+      if (sessionStorage.getItem("aa-company-logos-v2") === "1") return;
+      sessionStorage.setItem("aa-company-logos-v2", "1");
     } catch {
       /* niente memoria di sessione: si cerca lo stesso */
     }
