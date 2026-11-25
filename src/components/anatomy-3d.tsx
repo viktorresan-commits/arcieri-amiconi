@@ -4,6 +4,7 @@ import { createAnatomyRenderer, lookAt, mul4, perspective } from "@/lib/arcieri/
 import { BODY_CREDIT, loadBody } from "@/lib/arcieri/anatomy-body";
 import { mixLm, sideEvidence, type Gear, type Hand, type Landmark } from "@/lib/arcieri/pose-analysis";
 import { unpackLm, type PackedLm } from "@/lib/arcieri/gesture-record";
+import { saveFile } from "@/lib/arcieri/native";
 import { cx } from "./kit";
 
 /**
@@ -31,6 +32,90 @@ function seqAt(seq: Seq, t: number): Landmark[] | null {
     }
   }
   return unpackLm(seq[seq.length - 1].lm);
+}
+
+/** camera che inquadra il corpo da un angolo (yaw, pitch) con lo zoom scelto */
+function sceneCamera(camSm: { c: V3; h: number }, c: { yaw: number; pitch: number; zoom: number }, W: number, H: number) {
+  const target3: V3 = camSm.c;
+  const fov = (34 * Math.PI) / 180;
+  const fit = (camSm.h * 0.62) / Math.tan(fov / 2) / Math.min(1, W / H + 0.15);
+  const dist = Math.max(1.6, fit) / c.zoom;
+  const eye: V3 = [target3[0] + Math.sin(c.yaw) * Math.cos(c.pitch) * dist, target3[1] + Math.sin(c.pitch) * dist, target3[2] + Math.cos(c.yaw) * Math.cos(c.pitch) * dist];
+  return { eye, VP: mul4(perspective(fov, W / H, 0.05, 30), lookAt(eye, target3)) };
+}
+
+/** la vista scelta nella sagoma 3D: la usano anche foto e video in alta definizione */
+export const sagomaView: { yaw: number; pitch: number; zoom: number; layers: Record<Layer, boolean> } = {
+  yaw: 0,
+  pitch: 0.06,
+  zoom: 1,
+  layers: { pelle: true, muscolo: true, osso: true, punti: true, quote: true },
+};
+
+const BG_STOPS: [number, string][] = [
+  [0, "#3f9fe6"],
+  [0.42, "#1c6fc2"],
+  [0.78, "#0b3f82"],
+  [1, "#072a5c"],
+];
+
+/**
+ * Pittore della sagoma 3D fuori schermo, in alta definizione (foto 4K, video 1080p): stesso corpo,
+ * stessa luce, stessa vista dello schermo, con lo sfondo e i crediti dell'atlante anatomico.
+ */
+export async function sagomaPainter(W: number, H: number) {
+  const gl = document.createElement("canvas");
+  gl.width = W;
+  gl.height = H;
+  const R = createAnatomyRenderer(gl, true);
+  if (!R) return null;
+  const body = (await loadBody("pieno")) ?? (await loadBody("leggero"));
+  if (body) R.setBody(body, "pieno");
+  const out = document.createElement("canvas");
+  out.width = W;
+  out.height = H;
+  const ctx = out.getContext("2d");
+  if (!ctx) return null;
+  // il testo e le linee come sullo schermo di un telefono largo 400 punti
+  const dpr = Math.min(W, H) / 400;
+  let camSm: { c: V3; h: number } | null = null;
+  let lastT = 0;
+  return {
+    canvas: out,
+    /** disegna la posa; smooth: inquadratura che segue piano (video), altrimenti esatta (foto) */
+    paint(o: { lm: Landmark[]; aspect: number; hand: Hand; gear: Gear | null; cal: BoneCal | null; time: number; smooth?: boolean; view?: typeof sagomaView }) {
+      const view = o.view ?? sagomaView;
+      const model = buildModel(o.lm, o.aspect, o.hand, o.gear, o.cal);
+      const g = ctx.createRadialGradient(W * 0.45, H * 0.35, 0, W * 0.45, H * 0.35, Math.max(W, H) * 0.8);
+      for (const [k, c] of BG_STOPS) g.addColorStop(k, c);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+      if (!model) return false;
+      const dt = Math.max(0, Math.min(0.2, o.time - lastT));
+      lastT = o.time;
+      const kc = camSm && o.smooth ? 1 - Math.exp(-dt / 0.35) : 1;
+      camSm = camSm && o.smooth
+        ? { c: [camSm.c[0] + (model.center[0] - camSm.c[0]) * kc, camSm.c[1] + (model.height * 0.5 - camSm.c[1]) * kc, camSm.c[2] + (model.center[2] - camSm.c[2]) * kc], h: camSm.h + (model.height - camSm.h) * kc }
+        : { c: [model.center[0], model.height * 0.5, model.center[2]], h: model.height };
+      const { VP, eye } = sceneCamera(camSm, view, W, H);
+      R.clear(W, H);
+      R.draw(model, VP, eye, o.time, view.layers, null, false);
+      ctx.drawImage(gl, 0, 0);
+      paintHud(ctx, model, VP, W, H, dpr, view.layers, o.time);
+      // crediti dell'atlante (licenze CC BY e CC BY-SA): restano sull'immagine
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.font = `500 ${Math.round(9 * dpr)}px system-ui, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "alphabetic";
+      ctx.fillStyle = "rgba(255,255,255,0.55)";
+      ctx.fillText(BODY_CREDIT, W / 2, H - 8 * dpr);
+      return true;
+    },
+    dispose() {
+      R.dispose();
+    },
+  };
 }
 
 const VIEWS = [
@@ -99,6 +184,40 @@ export function Anatomy3D({
   useEffect(() => {
     live.current = { frames: [], cal: null, n: 0 };
   }, [calFrames, aspect]);
+  /** l'ultima posa disegnata: serve alla foto in alta definizione */
+  const lastShot = useRef<{ lm: Landmark[] | null; aspect: number; hand: Hand; gear: Gear | null; cal: BoneCal | null; time: number } | null>(null);
+  const [shooting, setShooting] = useState(false);
+  const [shotMsg, setShotMsg] = useState("");
+  /**
+   * Foto della sagoma in alta definizione (4K sul lato lungo, come il riquadro sullo schermo), con la
+   * vista, i livelli e le quote scelti; si salva o si condivide come immagine PNG
+   */
+  async function photoHD() {
+    const shot = lastShot.current;
+    const box = glCanvas.current;
+    if (!shot?.lm || !box || shooting) return;
+    setShooting(true);
+    setShotMsg("");
+    try {
+      const ratio = (box.clientWidth || 9) / (box.clientHeight || 16);
+      const long = 3840;
+      const W = ratio >= 1 ? long : Math.round((long * ratio) / 2) * 2;
+      const H = ratio >= 1 ? Math.round(long / ratio / 2) * 2 : long;
+      const painter = await sagomaPainter(W, H);
+      if (!painter) throw new Error("3D");
+      painter.paint({ lm: shot.lm, aspect: shot.aspect, hand: shot.hand, gear: shot.gear, cal: shot.cal, time: shot.time });
+      const blob = await new Promise<Blob | null>((res) => painter.canvas.toBlob(res, "image/png"));
+      painter.dispose();
+      if (!blob) throw new Error("vuota");
+      await saveFile(blob, `sagoma-${W}x${H}.png`);
+      setShotMsg(`Foto ${W}×${H} salvata`);
+    } catch {
+      setShotMsg("Foto non riuscita su questo telefono");
+    } finally {
+      setShooting(false);
+      window.setTimeout(() => setShotMsg(""), 3500);
+    }
+  }
   const input = useRef({ lm, lmRef, seq, aspect, hand: effHand, gearRef, cal: fixedCal });
   input.current = { lm, lmRef, seq, aspect, hand: effHand, gearRef, cal: fixedCal };
 
@@ -173,11 +292,14 @@ export function Anatomy3D({
       const c = cam.current;
       if (c.auto) c.yaw += dt * 0.35;
       const L0 = layersRef.current;
-      const dprBase = Math.min(2, window.devicePixelRatio || 1);
       const key = `${c.yaw.toFixed(4)}|${c.pitch.toFixed(4)}|${c.zoom.toFixed(3)}|${L0.pelle}${L0.muscolo}${L0.osso}${L0.punti}${L0.quote}|${canvas.clientWidth}x${canvas.clientHeight}|${scale}|${bodyTick}`;
       // dopo un movimento si disegna ancora un attimo con il corpo leggero, poi una volta con quello pieno
       const fast = now - lastChange < 450 || dragging.current;
       if (!moving && key === lastKey && !playing && fast === lastFast) return;
+      // fermo: alla risoluzione piena dello schermo (fino a 3×), nitido come una tavola anatomica;
+      // in movimento a 2× e, se il telefono non sta al passo, un po' meno
+      const resting = !fast && !playing;
+      const dprBase = Math.min(resting ? 3 : 2, window.devicePixelRatio || 1);
       lastKey = key;
       lastFast = fast;
       if (target && moving) {
@@ -200,7 +322,7 @@ export function Anatomy3D({
       }
       const t1 = performance.now();
 
-      const dpr = dprBase * scale;
+      const dpr = dprBase * (resting ? 1 : scale);
       const W = Math.max(1, Math.round(canvas.clientWidth * dpr));
       const H = Math.max(1, Math.round(canvas.clientHeight * dpr));
       if (canvas.width !== W || canvas.height !== H) {
@@ -215,8 +337,8 @@ export function Anatomy3D({
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, W, H);
       if (!model) return;
-      // se un disegno costa troppo, la volta dopo si disegna a risoluzione più bassa
-      queueMicrotask(() => {
+      // se un disegno in movimento costa troppo, la volta dopo si disegna a risoluzione più bassa
+      if (!resting) queueMicrotask(() => {
         const cost = performance.now() - t1;
         slow = cost > 28 ? slow + 1 : Math.max(0, slow - 1);
         if (slow > 3 && scale > 0.6) {
@@ -231,122 +353,17 @@ export function Anatomy3D({
         ? { c: [camSm.c[0] + (model.center[0] - camSm.c[0]) * kc, camSm.c[1] + (model.height * 0.5 - camSm.c[1]) * kc, camSm.c[2] + (model.center[2] - camSm.c[2]) * kc], h: camSm.h + (model.height - camSm.h) * kc }
         : { c: [model.center[0], model.height * 0.5, model.center[2]], h: model.height };
       if (Math.abs(camSm.h - model.height) > 0.002) lastChange = now;
-      const target3: V3 = camSm.c;
-      const fov = (34 * Math.PI) / 180;
-      const fit = (camSm.h * 0.62) / Math.tan(fov / 2) / Math.min(1, W / H + 0.15);
-      const dist = Math.max(1.6, fit) / c.zoom;
-      const eye: V3 = [target3[0] + Math.sin(c.yaw) * Math.cos(c.pitch) * dist, target3[1] + Math.sin(c.pitch) * dist, target3[2] + Math.cos(c.yaw) * Math.cos(c.pitch) * dist];
-      const VP = mul4(perspective(fov, W / H, 0.05, 30), lookAt(eye, target3));
+      const { VP, eye } = sceneCamera(camSm, c, W, H);
       const L = layersRef.current;
+      // la vista scelta (angolo, distanza, livelli) vale anche per foto e video in alta definizione
+      sagomaView.yaw = c.yaw;
+      sagomaView.pitch = c.pitch;
+      sagomaView.zoom = c.zoom;
+      sagomaView.layers = { ...L };
+      lastShot.current = { lm: smooth, aspect: asp, hand: hd, gear: gr?.current ?? null, cal: fc ?? live.current.cal, time };
       R.draw(model, VP, eye, time, L, null, fast);
 
-      // ---------- quote (2D sopra la scena) ----------
-      const proj = (p: V3): [number, number, number] => {
-        const x = VP[0] * p[0] + VP[4] * p[1] + VP[8] * p[2] + VP[12];
-        const y = VP[1] * p[0] + VP[5] * p[1] + VP[9] * p[2] + VP[13];
-        const w = VP[3] * p[0] + VP[7] * p[1] + VP[11] * p[2] + VP[15];
-        return [((x / w) * 0.5 + 0.5) * W, (1 - ((y / w) * 0.5 + 0.5)) * H, w];
-      };
-      const hudD = model.hud;
-      ctx.lineWidth = 1.2 * dpr;
-      // anelli a terra
-      for (const [r, a] of [[0.45, 0.55], [0.62, 0.3], [0.8, 0.16]] as const) {
-        ctx.strokeStyle = `rgba(95,212,255,${a})`;
-        ctx.setLineDash(r > 0.5 ? [4 * dpr, 5 * dpr] : []);
-        ctx.beginPath();
-        for (let i = 0; i <= 64; i++) {
-          const an = (i / 64) * Math.PI * 2;
-          const q = proj([hudD.feet[0] + Math.cos(an) * r, 0.002, hudD.feet[2] + Math.sin(an) * r]);
-          if (i) ctx.lineTo(q[0], q[1]);
-          else ctx.moveTo(q[0], q[1]);
-        }
-        ctx.stroke();
-      }
-      ctx.setLineDash([]);
-      for (let i = 0; i < 24; i++) {
-        const an = (i / 24) * Math.PI * 2 + time * 0.2;
-        const a = proj([hudD.feet[0] + Math.cos(an) * 0.45, 0.002, hudD.feet[2] + Math.sin(an) * 0.45]);
-        const b = proj([hudD.feet[0] + Math.cos(an) * 0.5, 0.002, hudD.feet[2] + Math.sin(an) * 0.5]);
-        ctx.strokeStyle = "rgba(95,212,255,0.55)";
-        ctx.beginPath();
-        ctx.moveTo(a[0], a[1]);
-        ctx.lineTo(b[0], b[1]);
-        ctx.stroke();
-      }
-      if (L.punti && model.J) drawJoints(ctx, model.J, proj, dpr, model.hand ?? "destro");
-      if (!L.quote) return;
-      // archi degli angoli ai gomiti
-      for (const a of hudD.arcs) {
-        const o = proj(a.at);
-        const p1 = proj(a.a);
-        const p2 = proj(a.b);
-        const a1 = Math.atan2(p1[1] - o[1], p1[0] - o[0]);
-        let a2 = Math.atan2(p2[1] - o[1], p2[0] - o[0]);
-        let d = a2 - a1;
-        while (d > Math.PI) d -= Math.PI * 2;
-        while (d < -Math.PI) d += Math.PI * 2;
-        a2 = a1 + d;
-        ctx.strokeStyle = "rgba(255,214,120,0.9)";
-        ctx.lineWidth = 2 * dpr;
-        ctx.beginPath();
-        ctx.arc(o[0], o[1], 16 * dpr, Math.min(a1, a2), Math.max(a1, a2));
-        ctx.stroke();
-      }
-      // quota dell'allungo
-      ctx.font = `600 ${11 * dpr}px system-ui, sans-serif`;
-      for (const d of hudD.dims) {
-        const a = proj(d.a);
-        const b = proj(d.b);
-        const nx = -(b[1] - a[1]);
-        const ny = b[0] - a[0];
-        const nl = Math.hypot(nx, ny) || 1;
-        const off = 18 * dpr;
-        const ox = (nx / nl) * off * (ny / nl > 0 ? -1 : 1);
-        const oy = (ny / nl) * off * (ny / nl > 0 ? -1 : 1);
-        ctx.strokeStyle = "rgba(255,214,120,0.95)";
-        ctx.lineWidth = 1.2 * dpr;
-        ctx.setLineDash([5 * dpr, 4 * dpr]);
-        ctx.beginPath();
-        ctx.moveTo(a[0] + ox, a[1] + oy);
-        ctx.lineTo(b[0] + ox, b[1] + oy);
-        ctx.stroke();
-        ctx.setLineDash([]);
-        for (const q of [a, b]) {
-          ctx.beginPath();
-          ctx.moveTo(q[0], q[1]);
-          ctx.lineTo(q[0] + ox * 1.3, q[1] + oy * 1.3);
-          ctx.stroke();
-        }
-      }
-      // etichette con linea guida: a sinistra o a destra della figura, senza sovrapporsi
-      const mid = proj(model.center)[0];
-      const items = [...hudD.labels, ...hudD.dims.map((d) => ({ at: v3.lerp(d.a, d.b, 0.55), text: d.text, tone: "gold" as const }))].map((l) => {
-        const p = proj(l.at);
-        return { ...l, p, side: p[0] < mid ? -1 : 1 };
-      });
-      for (const side of [-1, 1]) {
-        const col = items.filter((i) => i.side === side).sort((a, b) => a.p[1] - b.p[1]);
-        let y = -1e9;
-        for (const it of col) {
-          const ty = Math.max(it.p[1] - 14 * dpr, y + 24 * dpr);
-          y = ty;
-          ctx.font = `600 ${11 * dpr}px system-ui, sans-serif`;
-          const tw = ctx.measureText(it.text).width + 12 * dpr;
-          // la casella resta dentro il riquadro: la linea guida arriva al suo bordo
-          const tx = side < 0 ? Math.max(4 * dpr + tw, it.p[0] - 70 * dpr) : Math.min(W - 4 * dpr - tw, it.p[0] + 70 * dpr);
-          ctx.strokeStyle = it.tone === "warn" ? "rgba(255,160,110,0.9)" : it.tone === "gold" ? "rgba(255,214,120,0.9)" : "rgba(95,212,255,0.85)";
-          ctx.lineWidth = 1 * dpr;
-          ctx.beginPath();
-          ctx.moveTo(it.p[0], it.p[1]);
-          ctx.lineTo(tx, ty);
-          ctx.stroke();
-          ctx.fillStyle = ctx.strokeStyle;
-          ctx.beginPath();
-          ctx.arc(it.p[0], it.p[1], 2.5 * dpr, 0, Math.PI * 2);
-          ctx.fill();
-          tag(ctx, it.text, tx, ty, it.tone, dpr, false, side);
-        }
-      }
+      paintHud(ctx, model, VP, W, H, dpr, L, time);
     };
     raf = requestAnimationFrame(frame);
 
@@ -440,9 +457,129 @@ export function Anatomy3D({
         >
           Gira
         </button>
+        <button
+          type="button"
+          disabled={shooting || empty}
+          onClick={() => void photoHD()}
+          aria-label="Foto della sagoma in alta definizione"
+          className="min-h-8 rounded-full bg-black/45 px-2.5 text-[0.7rem] font-semibold text-white backdrop-blur disabled:opacity-50"
+        >
+          {shooting ? "Foto…" : "Foto HD"}
+        </button>
       </div>
+      {shotMsg ? <p className="pointer-events-none absolute inset-x-0 top-14 mx-auto w-fit rounded-full bg-black/60 px-3 py-1 text-xs font-semibold text-white">{shotMsg}</p> : null}
     </div>
   );
+}
+
+/** quote, punti e anelli a terra disegnati sopra la scena (2D), per lo schermo e per le immagini HD */
+function paintHud(ctx: CanvasRenderingContext2D, model: Model, VP: Float32Array, W: number, H: number, dpr: number, L: Record<Layer, boolean>, time: number) {
+  const proj = (p: V3): [number, number, number] => {
+    const x = VP[0] * p[0] + VP[4] * p[1] + VP[8] * p[2] + VP[12];
+    const y = VP[1] * p[0] + VP[5] * p[1] + VP[9] * p[2] + VP[13];
+    const w = VP[3] * p[0] + VP[7] * p[1] + VP[11] * p[2] + VP[15];
+    return [((x / w) * 0.5 + 0.5) * W, (1 - ((y / w) * 0.5 + 0.5)) * H, w];
+  };
+  const hudD = model.hud;
+  ctx.lineWidth = 1.2 * dpr;
+  // anelli a terra
+  for (const [r, a] of [[0.45, 0.55], [0.62, 0.3], [0.8, 0.16]] as const) {
+    ctx.strokeStyle = `rgba(95,212,255,${a})`;
+    ctx.setLineDash(r > 0.5 ? [4 * dpr, 5 * dpr] : []);
+    ctx.beginPath();
+    for (let i = 0; i <= 64; i++) {
+      const an = (i / 64) * Math.PI * 2;
+      const q = proj([hudD.feet[0] + Math.cos(an) * r, 0.002, hudD.feet[2] + Math.sin(an) * r]);
+      if (i) ctx.lineTo(q[0], q[1]);
+      else ctx.moveTo(q[0], q[1]);
+    }
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  for (let i = 0; i < 24; i++) {
+    const an = (i / 24) * Math.PI * 2 + time * 0.2;
+    const a = proj([hudD.feet[0] + Math.cos(an) * 0.45, 0.002, hudD.feet[2] + Math.sin(an) * 0.45]);
+    const b = proj([hudD.feet[0] + Math.cos(an) * 0.5, 0.002, hudD.feet[2] + Math.sin(an) * 0.5]);
+    ctx.strokeStyle = "rgba(95,212,255,0.55)";
+    ctx.beginPath();
+    ctx.moveTo(a[0], a[1]);
+    ctx.lineTo(b[0], b[1]);
+    ctx.stroke();
+  }
+  if (L.punti && model.J) drawJoints(ctx, model.J, proj, dpr, model.hand ?? "destro");
+  if (!L.quote) return;
+  // archi degli angoli ai gomiti
+  for (const a of hudD.arcs) {
+    const o = proj(a.at);
+    const p1 = proj(a.a);
+    const p2 = proj(a.b);
+    const a1 = Math.atan2(p1[1] - o[1], p1[0] - o[0]);
+    let a2 = Math.atan2(p2[1] - o[1], p2[0] - o[0]);
+    let d = a2 - a1;
+    while (d > Math.PI) d -= Math.PI * 2;
+    while (d < -Math.PI) d += Math.PI * 2;
+    a2 = a1 + d;
+    ctx.strokeStyle = "rgba(255,214,120,0.9)";
+    ctx.lineWidth = 2 * dpr;
+    ctx.beginPath();
+    ctx.arc(o[0], o[1], 16 * dpr, Math.min(a1, a2), Math.max(a1, a2));
+    ctx.stroke();
+  }
+  // quota dell'allungo
+  ctx.font = `600 ${11 * dpr}px system-ui, sans-serif`;
+  for (const d of hudD.dims) {
+    const a = proj(d.a);
+    const b = proj(d.b);
+    const nx = -(b[1] - a[1]);
+    const ny = b[0] - a[0];
+    const nl = Math.hypot(nx, ny) || 1;
+    const off = 18 * dpr;
+    const ox = (nx / nl) * off * (ny / nl > 0 ? -1 : 1);
+    const oy = (ny / nl) * off * (ny / nl > 0 ? -1 : 1);
+    ctx.strokeStyle = "rgba(255,214,120,0.95)";
+    ctx.lineWidth = 1.2 * dpr;
+    ctx.setLineDash([5 * dpr, 4 * dpr]);
+    ctx.beginPath();
+    ctx.moveTo(a[0] + ox, a[1] + oy);
+    ctx.lineTo(b[0] + ox, b[1] + oy);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    for (const q of [a, b]) {
+      ctx.beginPath();
+      ctx.moveTo(q[0], q[1]);
+      ctx.lineTo(q[0] + ox * 1.3, q[1] + oy * 1.3);
+      ctx.stroke();
+    }
+  }
+  // etichette con linea guida: a sinistra o a destra della figura, senza sovrapporsi
+  const mid = proj(model.center)[0];
+  const items = [...hudD.labels, ...hudD.dims.map((d) => ({ at: v3.lerp(d.a, d.b, 0.55), text: d.text, tone: "gold" as const }))].map((l) => {
+    const p = proj(l.at);
+    return { ...l, p, side: p[0] < mid ? -1 : 1 };
+  });
+  for (const side of [-1, 1]) {
+    const col = items.filter((i) => i.side === side).sort((a, b) => a.p[1] - b.p[1]);
+    let y = -1e9;
+    for (const it of col) {
+      const ty = Math.max(it.p[1] - 14 * dpr, y + 24 * dpr);
+      y = ty;
+      ctx.font = `600 ${11 * dpr}px system-ui, sans-serif`;
+      const tw = ctx.measureText(it.text).width + 12 * dpr;
+      // la casella resta dentro il riquadro: la linea guida arriva al suo bordo
+      const tx = side < 0 ? Math.max(4 * dpr + tw, it.p[0] - 70 * dpr) : Math.min(W - 4 * dpr - tw, it.p[0] + 70 * dpr);
+      ctx.strokeStyle = it.tone === "warn" ? "rgba(255,160,110,0.9)" : it.tone === "gold" ? "rgba(255,214,120,0.9)" : "rgba(95,212,255,0.85)";
+      ctx.lineWidth = 1 * dpr;
+      ctx.beginPath();
+      ctx.moveTo(it.p[0], it.p[1]);
+      ctx.lineTo(tx, ty);
+      ctx.stroke();
+      ctx.fillStyle = ctx.strokeStyle;
+      ctx.beginPath();
+      ctx.arc(it.p[0], it.p[1], 2.5 * dpr, 0, Math.PI * 2);
+      ctx.fill();
+      tag(ctx, it.text, tx, ty, it.tone, dpr, false, side);
+    }
+  }
 }
 
 /** collegamenti dei punti: corpo, piedi, mani (21 punti per mano) */

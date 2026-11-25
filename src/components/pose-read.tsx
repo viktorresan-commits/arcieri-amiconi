@@ -1,6 +1,7 @@
 import { Glyph, IconLabel, StatusMark } from "./icons";
 import { Link } from "@tanstack/react-router";
-import { Anatomy3D } from "@/components/anatomy-3d";
+import { Anatomy3D, sagomaPainter } from "@/components/anatomy-3d";
+import { boneCal } from "@/lib/arcieri/anatomy-model";
 import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from "react";
 import { MediaPick } from "@/components/media-pick";
 import { saveFile } from "@/lib/arcieri/native";
@@ -896,32 +897,54 @@ export function PoseRead() {
       if (!fresh) return;
       data = fresh;
     }
+    const kind = lookRef.current;
     const canvas = document.createElement("canvas");
-    // 640 px sul lato lungo: abbastanza nitido e leggero da disegnare a ogni fotogramma sul telefono
-    const k = Math.min(1, 640 / Math.max(size.w, size.h));
-    canvas.width = Math.round((size.w * k) / 2) * 2;
-    canvas.height = Math.round((size.h * k) / 2) * 2;
+    // sagoma: il corpo 3D in alta definizione (1080p, la vista scelta nel 3D) con il video in piccolo;
+    // scheletro e mista: 640 px sul lato lungo, abbastanza nitido e leggero da disegnare a ogni fotogramma
+    let painter: Awaited<ReturnType<typeof sagomaPainter>> = null;
+    if (kind === "sagoma") {
+      setInfo("Preparo il 3D in alta definizione…");
+      const portrait = size.h >= size.w;
+      const W = portrait ? 1080 : Math.round((1080 * size.w) / size.h / 2) * 2;
+      const H = portrait ? Math.round((1080 * size.h) / size.w / 2) * 2 : 1080;
+      painter = await sagomaPainter(W, H).catch(() => null);
+      setInfo("");
+      canvas.width = W;
+      canvas.height = H;
+    }
+    if (!painter) {
+      const k = Math.min(1, 640 / Math.max(size.w, size.h));
+      canvas.width = Math.round((size.w * k) / 2) * 2;
+      canvas.height = Math.round((size.h * k) / 2) * 2;
+    }
     const ctx = canvas.getContext("2d", { alpha: false });
     if (!ctx) return;
+    // lunghezze vere delle ossa dell'arciere e arco/freccia di ogni fotogramma, per il 3D
+    const cal = painter ? boneCal(data.map((x) => x.lm), size.w / Math.max(1, size.h)) : null;
+    const gearAt = (t: number) => {
+      let best: Sample | null = null;
+      for (const x of data) if (!best || Math.abs(x.t - t) < Math.abs(best.t - t)) best = x;
+      return best && Math.abs(best.t - t) < 0.25 ? (best.g ?? null) : null;
+    };
     // le ombre sfocate (shadowBlur) sul telefono costano decine di ms a fotogramma: in registrazione niente ombre
     Object.defineProperty(ctx, "shadowBlur", { configurable: true, get: () => 0, set: () => undefined });
     const stream = (canvas as HTMLCanvasElement & { captureStream: (fps: number) => MediaStream }).captureStream(30);
     const type = ["video/mp4;codecs=avc1", "video/webm;codecs=vp8", "video/webm", "video/mp4"].find((t) => MediaRecorder.isTypeSupported(t)) ?? "";
     let rec: MediaRecorder;
     try {
-      rec = new MediaRecorder(stream, { ...(type ? { mimeType: type } : {}), videoBitsPerSecond: 2_500_000 });
+      rec = new MediaRecorder(stream, { ...(type ? { mimeType: type } : {}), videoBitsPerSecond: painter ? 10_000_000 : 2_500_000 });
     } catch {
       setError("Questo telefono non riesce a registrare il video: salva i fotogrammi uno per volta.");
       return;
     }
     const chunks: Blob[] = [];
     rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
-    const kind = lookRef.current;
-    const name = kind === "scheletro" ? "scheletro" : "sagoma";
+    const name = kind === "scheletro" ? "scheletro" : painter ? "sagoma-3d-hd" : "sagoma";
     const wasMuted = video.muted;
     let watchdog = 0;
     rec.onstop = () => {
       window.clearInterval(watchdog);
+      painter?.dispose();
       stream.getTracks().forEach((t) => t.stop());
       video.muted = wasMuted;
       recRef.current = null;
@@ -946,6 +969,31 @@ export function PoseRead() {
     video.playbackRate = 0.5;
     await seekTo(video, from);
     const paint = () => {
+      if (painter) {
+        // corpo 3D a tutto schermo e, in alto a sinistra, il video con lo scheletro: si confrontano
+        const t = video.currentTime;
+        const lm = lmAt(data, t);
+        if (lm) painter.paint({ lm, aspect: size.w / Math.max(1, size.h), hand: handRef.current, gear: gearAt(t), cal, time: t, smooth: true });
+        ctx.drawImage(painter.canvas, 0, 0);
+        const pw = Math.round(canvas.width * 0.3);
+        const ph = Math.round((pw * size.h) / Math.max(1, size.w));
+        const px = Math.round(canvas.width * 0.03);
+        ctx.drawImage(video, px, px, pw, ph);
+        if (lm) {
+          ctx.save();
+          ctx.translate(px, px);
+          ctx.beginPath();
+          ctx.rect(0, 0, pw, ph);
+          ctx.clip();
+          resetLabels();
+          drawPose(ctx, pw, ph, lm, handRef.current, null);
+          ctx.restore();
+        }
+        ctx.strokeStyle = "rgba(255,255,255,0.55)";
+        ctx.lineWidth = Math.max(2, canvas.width / 400);
+        ctx.strokeRect(px, px, pw, ph);
+        return;
+      }
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       const lm = lmAt(data, video.currentTime);
       if (kind !== "scheletro") drawSagoma(ctx, canvas.width, canvas.height, lm, handRef.current, null, kind === "sagoma");
@@ -1274,7 +1322,7 @@ export function PoseRead() {
                   <button type="button" disabled={!duration || Boolean(busy)} onClick={() => void scanAll()} className="min-h-11 rounded-xl bg-accent px-3 text-sm font-semibold text-accent-fg disabled:opacity-60"><Glyph name="scan" size={15} className="mr-1 inline -translate-y-px" />{range ? "Analizza la parte" : "Analizza tutto il video"}</button>
                 )}
                 <button type="button" onClick={snapshot} className="min-h-11 rounded-xl border border-line px-3 text-sm font-semibold"><IconLabel icon="download" size={15}>Salva fotogramma</IconLabel></button>
-                <button type="button" disabled={recording || progress != null} onClick={() => void recordAnnotated()} className="min-h-11 rounded-xl border border-line px-3 text-sm font-semibold disabled:opacity-60">{recording ? "● Registro…" : look === "scheletro" ? "⏺ Salva video con scheletro" : "⏺ Salva video con sagoma"}</button>
+                <button type="button" disabled={recording || progress != null} onClick={() => void recordAnnotated()} className="min-h-11 rounded-xl border border-line px-3 text-sm font-semibold disabled:opacity-60">{recording ? "● Registro…" : look === "scheletro" ? "⏺ Salva video con scheletro" : look === "sagoma" ? "⏺ Salva video 3D in HD" : "⏺ Salva video con sagoma"}</button>
                 <button type="button" disabled={!samples.length} onClick={exportCsv} className="min-h-11 rounded-xl border border-line px-3 text-sm font-semibold disabled:opacity-60"><IconLabel icon="download" size={15}>Dati CSV</IconLabel></button>
               </div>
             </div>

@@ -4,6 +4,7 @@
  */
 import { v3, type Model, type Part, type V3 } from "./anatomy-model";
 import { bodyMatrices, groupValues, type BodyBatch, type BodyData, type BodyLevel, type BodyMeta } from "./anatomy-body";
+import { flexInfo, flexValues, skinWithMuscles, type FlexInfo } from "./anatomy-flex";
 
 export type Layers = { pelle: boolean; muscolo: boolean; osso: boolean };
 
@@ -64,11 +65,17 @@ void main(){
 const BVS = `
 attribute vec3 aP; attribute vec3 aN; attribute vec2 aJ; attribute vec4 aM; attribute float aT;
 uniform mat4 uVP; uniform mat4 uSeg[21]; uniform vec3 uLo; uniform vec3 uHi;
-uniform vec4 uAct[16]; uniform vec4 uFoc[16];
+uniform vec4 uAct[16]; uniform vec4 uBul[16]; uniform float uLayerV;
 varying vec3 vW; varying vec3 vN; varying vec2 vF; varying float vAct; varying float vFoc; varying float vTend; varying float vStr;
 float pick(vec4 v, int k){ return k == 0 ? v.x : k == 1 ? v.y : k == 2 ? v.z : v.w; }
 void main(){
-  vec3 p = uLo + aP * (uHi - uLo);
+  int g = int(aM.y + 0.5); int gi = g / 4; int gk = g - gi * 4;
+  // il ventre del muscolo si gonfia quando si accorcia e si assottiglia quando si allunga (tendini fermi);
+  // la pelle sopra lo segue quanto gli è vicina
+  float tt = aM.z / 255.0;
+  float belly = pow(max(sin(3.14159 * tt), 0.0), 0.75);
+  float follow = uLayerV < 0.5 ? aM.w / 255.0 : (uLayerV > 1.5 ? 1.0 - aT : 0.0);
+  vec3 p = uLo + aP * (uHi - uLo) + aN * (pick(uBul[gi], gk) * belly * follow);
   float w = aM.x / 255.0;
   mat4 MA = uSeg[int(aJ.x + 0.5)]; mat4 MB = uSeg[int(aJ.y + 0.5)];
   mat4 M = MA * w + MB * (1.0 - w);
@@ -77,14 +84,15 @@ void main(){
   float gap = length((MA * vec4(p, 1.0) - MB * vec4(p, 1.0)).xyz) * 4.0 * w * (1.0 - w);
   vStr = smoothstep(0.02, 0.09, gap);
   vN = normalize(mat3(M[0].xyz, M[1].xyz, M[2].xyz) * aN);
-  int g = int(aM.y + 0.5); int gi = g / 4; int gk = g - gi * 4;
-  vAct = pick(uAct[gi], gk); vFoc = pick(uFoc[gi], gk);
+  // lavoro e messa in evidenza nello stesso numero (meno uniformi: alcuni telefoni ne hanno poche)
+  float pv = pick(uAct[gi], gk); float fc = floor(pv / 2.0) - 1.0;
+  vAct = pv - (fc + 1.0) * 2.0; vFoc = fc;
   vF = vec2(aM.z, aM.w) / 255.0; vTend = aT;
   vW = wp.xyz; gl_Position = uVP * wp;
 }`;
 const BFS = `${PREC}
 varying vec3 vW; varying vec3 vN; varying vec2 vF; varying float vAct; varying float vFoc; varying float vTend; varying float vStr;
-uniform vec3 uEye; uniform float uLayer; uniform float uAlpha; uniform float uDim;
+uniform vec3 uEye; uniform float uLayer; uniform float uAlpha; uniform float uDim; uniform float uTime;
 void main(){
   vec3 N = normalize(vN); vec3 V = normalize(uEye - vW);
   // si disegnano solo le facce verso chi guarda: ai bordi la normale può sfiorare il lato opposto
@@ -134,8 +142,12 @@ void main(){
     base = mix(base, vec3(0.93, 0.9, 0.86), vTend * 0.85);
     float spec = pow(max(dot(R, V), 0.0), 40.0) * (0.1 + 0.18 * on);
     float edge = mix(1.0, 0.62, pow(1.0 - ndv, 2.4));
+    // il muscolo che lavora si accende dall'interno (arancio che va verso il giallo al centro del ventre)
+    // e pulsa piano, come nelle animazioni anatomiche
+    float pulse = 0.82 + 0.18 * sin(uTime * 4.4);
+    vec3 glow = mix(vec3(1.0, 0.42, 0.16), vec3(1.0, 0.78, 0.32), pow(ndv, 3.0) * on);
     col = base * (0.3 + 0.16 * hemi + dif * 0.72) * mix(fib, 1.0, vTend) * edge
-        + work * on * (0.32 + 0.5 * rim) * (1.0 - vTend)
+        + glow * on * (0.3 + 0.55 * rim) * (1.0 - vTend) * pulse
         + vec3(1.0, 0.92, 0.85) * spec;
   }
   gl_FragColor = vec4(col, a);
@@ -246,6 +258,17 @@ export function mul4(a: Float32Array, b: Float32Array) {
 }
 
 
+/** attacchi e spessori dei muscoli: si calcolano una volta per corpo */
+const flexCache = new WeakMap<ArrayBuffer, FlexInfo>();
+function flexOf(data: BodyData) {
+  let f = flexCache.get(data.buf);
+  if (!f) {
+    f = flexInfo(data);
+    flexCache.set(data.buf, f);
+  }
+  return f;
+}
+
 export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
   const gl = canvas.getContext("webgl", { antialias: true, premultipliedAlpha: false, alpha: true, preserveDrawingBuffer: keep });
   if (!gl) return null;
@@ -305,13 +328,15 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     uLo: gl.getUniformLocation(bprog, "uLo"),
     uHi: gl.getUniformLocation(bprog, "uHi"),
     uAct: gl.getUniformLocation(bprog, "uAct"),
-    uFoc: gl.getUniformLocation(bprog, "uFoc"),
     uEye: gl.getUniformLocation(bprog, "uEye"),
     uLayer: gl.getUniformLocation(bprog, "uLayer"),
     uAlpha: gl.getUniformLocation(bprog, "uAlpha"),
     uDim: gl.getUniformLocation(bprog, "uDim"),
+    uBul: gl.getUniformLocation(bprog, "uBul"),
+    uLayerV: gl.getUniformLocation(bprog, "uLayerV"),
+    uTime: gl.getUniformLocation(bprog, "uTime"),
   };
-  type GpuBody = { meta: BodyMeta; batches: { layer: BodyBatch["layer"]; vb: WebGLBuffer; ib: WebGLBuffer; count: number }[] };
+  type GpuBody = { meta: BodyMeta; flex: FlexInfo; batches: { layer: BodyBatch["layer"]; vb: WebGLBuffer; ib: WebGLBuffer; count: number }[] };
   const bodies: Partial<Record<BodyLevel, GpuBody>> = {};
   /** il corpo usato per il disegno in corso */
   let body: GpuBody | null = null;
@@ -319,6 +344,7 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
   const drawBodyLayer = (layer: BodyBatch["layer"], code: number, alpha: number) => {
     if (!body) return;
     gl.uniform1f(bl.uLayer, code);
+    gl.uniform1f(bl.uLayerV, code);
     gl.uniform1f(bl.uAlpha, alpha);
     const st = body.meta.stride;
     for (const b of body.batches) {
@@ -365,13 +391,15 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     bound = "";
     for (const p of parts) one(p);
   };
-  const drawBody = (model: Model, VP: Float32Array, eye: V3, L: Layers, focus?: Set<string> | null) => {
+  const bul = new Float32Array(64);
+  const drawBody = (model: Model, VP: Float32Array, eye: V3, L: Layers, focus: Set<string> | null | undefined, time: number) => {
     if (!body || !model.J || !model.hand) return;
     const meta = body.meta;
     const mats = bodyMatrices(meta, model.J);
     const acts = new Map<string, number>();
     for (const p of model.parts) if (p.layer === "muscolo" && p.id) acts.set(p.id, Math.max(acts.get(p.id) ?? 0, p.act));
     const g = groupValues(meta, model.hand, acts, focus);
+    flexValues(body.flex, model.J, g.act, bul);
     gl.enable(gl.DEPTH_TEST);
     gl.enable(gl.BLEND);
     gl.disable(gl.CULL_FACE);
@@ -388,11 +416,10 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     gl.uniform3fv(bl.uLo, meta.lo);
     gl.uniform3fv(bl.uHi, meta.hi);
     const a16 = new Float32Array(64);
-    a16.set(g.act.subarray(0, 64));
-    const f16 = new Float32Array(64);
-    f16.set(g.foc.subarray(0, 64));
+    for (let k = 0; k < 64; k++) a16[k] = Math.max(0, Math.min(1, g.act[k] ?? 0)) + ((g.foc[k] ?? 0) + 1) * 2;
     gl.uniform4fv(bl.uAct, a16);
-    gl.uniform4fv(bl.uFoc, f16);
+    gl.uniform4fv(bl.uBul, bul);
+    gl.uniform1f(bl.uTime, time);
     gl.uniform3fv(bl.uEye, eye);
     gl.uniform1f(bl.uDim, L.muscolo ? 1 : 0);
     // le superfici del corpo sono chiuse e orientate verso l'esterno: le facce interne non si disegnano
@@ -427,13 +454,14 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
       const batches = data.meta.batches.map((b) => {
         const vb = gl.createBuffer()!;
         gl.bindBuffer(gl.ARRAY_BUFFER, vb);
-        gl.bufferData(gl.ARRAY_BUFFER, new Uint8Array(data.buf, b.vOffset, b.vertices * data.meta.stride), gl.STATIC_DRAW);
+        // la pelle sa quale muscolo ha sotto: si gonfia con lui
+        gl.bufferData(gl.ARRAY_BUFFER, b.layer === "skin" ? skinWithMuscles(data, b) : new Uint8Array(data.buf, b.vOffset, b.vertices * data.meta.stride), gl.STATIC_DRAW);
         const ib = gl.createBuffer()!;
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib);
         gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(data.buf, b.iOffset, b.indices), gl.STATIC_DRAW);
         return { layer: b.layer, vb, ib, count: b.indices };
       });
-      bodies[level] = { meta: data.meta, batches };
+      bodies[level] = { meta: data.meta, flex: flexOf(data), batches };
       bound = "";
     },
     hasBody() {
@@ -449,7 +477,7 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
       // in movimento il corpo leggero (scorre senza scatti), fermo quello pieno
       body = (fast ? (bodies.leggero ?? bodies.pieno) : (bodies.pieno ?? bodies.leggero)) ?? null;
       if (body && model.J && model.hand) {
-        drawBody(model, VP, eye, L, focus);
+        drawBody(model, VP, eye, L, focus, time);
         return;
       }
       gl.useProgram(prog);
