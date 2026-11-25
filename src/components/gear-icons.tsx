@@ -60,7 +60,7 @@ function hexShade(hex: string, k: number) {
 }
 
 export function BowIcon({ type, className = "h-16 w-16", riser = "", limbs = "" }: { type: string; className?: string; color?: string; riser?: string; limbs?: string }) {
-  const u = useId().replace(/[^a-zA-Z0-9]/g, "");
+  const u = (useId().replace(/[^a-zA-Z0-9]/g, "") + "_");
   const wood = type === "longbow" || type === "ricurvo" || type === "storico";
   const limb = `url(#${u}l)`;
   return (

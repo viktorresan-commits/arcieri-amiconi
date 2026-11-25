@@ -1,6 +1,6 @@
 /** L'arciere della Home: aspetto, abiti, accessori e attrezzatura. Salvato sul telefono e sul profilo. */
 export type HairStyle = "corti" | "rasati" | "mossi" | "ricci" | "lunghi" | "coda" | "chignon" | "treccia" | "codini" | "caschetto" | "cresta" | "calvo" | "spettinati" | "lunghi-mossi" | "raccolti" | "afro" | "trecce" | "frangia" | "ciuffo" | "undercut" | "dread" | "vichinga" | "coda-alta";
-export type Pose = "animata" | "riposo" | "incocco" | "mira" | "allungo" | "accompagna" | "vittoria" | "fiero" | "saluto";
+export type Pose = "animata" | "riposo" | "incocco" | "mira" | "allungo" | "accompagna" | "vittoria" | "fiero" | "saluto" | "esulta" | "pensa" | "mostra" | "spalla";
 
 export type AvatarLook = {
   body: "uomo" | "donna" | "ragazzo" | "ragazza";
@@ -154,14 +154,25 @@ export function tune(value: string | number | undefined, fallback: number, min: 
   return Math.max(min, Math.min(max, n));
 }
 
-export const SKINS = ["#f8dcc8", "#eec5a4", "#dba57d", "#c0865c", "#9a6440", "#6e4429", "#4a2c1a"];
-export const HAIR_COLORS = ["#16110d", "#3b2a1d", "#5e3b22", "#8a5a2e", "#b88a4a", "#e2c48a", "#f1e6c8", "#8a8a8a", "#e8e8e8", "#a0301f", "#2c3e66", "#7c3aed", "#2f9e7a"];
-export const EYE_COLORS = ["#5b3a1e", "#2f2116", "#3d7a4f", "#3b6ea8", "#7a8a96", "#8a6a2c", "#6b4fa0"];
+export const SKINS = ["#f8dcc8", "#eec5a4", "#dba57d", "#c0865c", "#9a6440", "#6e4429", "#4a2c1a",
+  // nove carnagioni in più, dalle più chiare con sottotono rosato alle più scure
+  "#fbe7dd", "#f3d0b5", "#e8b896", "#d9a47c", "#b97a52", "#8a5634", "#7a4b30", "#5c3a24", "#3b2315"];
+export const HAIR_COLORS = ["#16110d", "#3b2a1d", "#5e3b22", "#8a5a2e", "#b88a4a", "#e2c48a", "#f1e6c8", "#8a8a8a", "#e8e8e8", "#a0301f", "#2c3e66", "#7c3aed", "#2f9e7a",
+  // dodici tinte in più: castani caldi, ramati, biondi, grigi e colori di fantasia
+  "#2a1a12", "#4a2a1a", "#6e3a1e", "#9a4a22", "#c4622d", "#d99a5a", "#efd9a8", "#b9b2a6", "#5a5a5a", "#d14f8a", "#3a8fd1", "#e0e060"];
+export const EYE_COLORS = ["#5b3a1e", "#2f2116", "#3d7a4f", "#3b6ea8", "#7a8a96", "#8a6a2c", "#6b4fa0",
+  "#7a4a1a", "#a07a3a", "#5a7a3a", "#2f8a8a", "#5a8ad1", "#9aa8b8", "#b0403a", "#c9a227"];
 export const CLOTH_COLORS = ["#2f6f62", "#1f3a5f", "#5b2b6e", "#8a2f2f", "#c46b2b", "#d9c39a", "#3a3a3a", "#e9e4d8", "#4b6b2e", "#2a5d8a", "#c7a03a", "#1d1d1f", "#d8cdb6", "#4a4a2c", "#55585a", "#6b5a48", "#c9b08a", "#5a3a22", "#2f4a2a", "#7a2a3a",
   // 24 tinte nuove: naturali, nobili e moderne
   "#0f5257", "#3c6e71", "#7d8f69", "#a3b18a", "#bc6c25", "#dda15e", "#9c6644", "#7f5539", "#6d597a", "#b56576", "#e56b6f", "#355070",
-  "#14213d", "#fca311", "#e5e5e5", "#2b2d42", "#8d99ae", "#ef233c", "#06d6a0", "#118ab2", "#ffd166", "#073b4c", "#f4a261", "#264653"];
-export const GEAR_COLORS = ["#2f6fbe", "#1d2126", "#b02a2a", "#3fae6a", "#e6b325", "#c9c9c9", "#7a4a26", "#7c3aed", "#e07a2f", "#f4f1ea", "#ff5fa2", "#14181c"];
+  "#14213d", "#fca311", "#e5e5e5", "#2b2d42", "#8d99ae", "#ef233c", "#06d6a0", "#118ab2", "#ffd166", "#073b4c", "#f4a261", "#264653",
+  // 26 tinte in più: terre, tessuti tinti a mano, pastelli e colori delle compagnie
+  "#6b2d2d", "#8c3b2e", "#a65d3b", "#c2884a", "#8a7a4a", "#5f6b3a", "#3f5a3f", "#2d4a4a", "#2f4f6f", "#3a3f6b", "#4a2f5a", "#6a2f4a",
+  "#b8a07a", "#cbbf9a", "#e8dcc0", "#f2e6d0", "#a8c3a0", "#9fc0d0", "#c0b0d8", "#e0a8b0", "#f0c8a0", "#d0d0c0",
+  "#0a0a0c", "#1c2a1f", "#2a1c1c", "#1c1f2a"];
+export const GEAR_COLORS = ["#2f6fbe", "#1d2126", "#b02a2a", "#3fae6a", "#e6b325", "#c9c9c9", "#7a4a26", "#7c3aed", "#e07a2f", "#f4f1ea", "#ff5fa2", "#14181c",
+  // legni, metalli e colori da gara
+  "#5a3418", "#8a5a2a", "#b07a3a", "#3a2412", "#9aa3ad", "#d9b45a", "#b06a3a", "#0f5257", "#264653", "#e63946", "#06d6a0", "#fca311"];
 
 export const TOPS: Record<AvatarLook["style"], { id: AvatarLook["top"]; label: string }[]> = {
   moderno: [
@@ -310,27 +321,27 @@ export const AVATAR_DEFAULT: AvatarLook = {
  * file di miniature da scorrere nell'editor.
  */
 export const EXTRA_OPTIONS = {
-  pattern: { label: "Fantasia della veste", tab: "abiti", items: [["nessuno", "Tinta unita"], ["righe", "A righe"], ["righe-verticali", "Righe verticali"], ["quadri", "A quadri"], ["scozzese", "Scozzese"], ["pois", "A pois"], ["rombi", "A rombi"], ["chevron", "A spina"], ["mimetico", "Mimetico"], ["ricamo", "Ricamata"], ["bordure", "Con bordure"], ["fasce", "A fasce"], ["sfumata", "Sfumata"]] },
-  emblem: { label: "Stemma sul petto", tab: "abiti", items: [["nessuno", "Nessuno"], ["compagnia", "Stemma della compagnia"], ["cervo", "Cervo"], ["lupo", "Lupo"], ["drago", "Drago"], ["freccia", "Freccia"], ["bersaglio", "Bersaglio"], ["giglio", "Giglio"], ["stella", "Stella"], ["scudo", "Scudo"], ["quercia", "Quercia"], ["aquila", "Aquila"], ["falco", "Falco"], ["leone", "Leone"], ["croce", "Croce"], ["sole", "Sole"], ["luna", "Luna"], ["corona", "Corona"]] },
-  paint: { label: "Pittura sul viso", tab: "viso", items: [["nessuna", "Nessuna"], ["strisce", "Strisce"], ["maschera", "Maschera sugli occhi"], ["punti", "Punti"], ["tribale", "Tribale"], ["fulmine", "Fulmine"], ["mezza", "Mezzo viso"], ["naso", "Riga sul naso"], ["guance", "Guance"], ["volpe", "Volpe"], ["lupo", "Lupo"]] },
-  tattoo: { label: "Tatuaggio", tab: "viso", items: [["nessuno", "Nessuno"], ["rune", "Rune sul braccio"], ["onde", "Onde sul braccio"], ["freccia", "Freccia sul braccio"], ["stelle", "Stelle sul collo"], ["lacrima", "Lacrima sul viso"], ["punti", "Punti sulla mano"], ["drago", "Drago sul braccio"], ["sole", "Sole sulla spalla"]] },
-  earringType: { label: "Tipo di orecchino", tab: "accessori", items: [["cerchio", "Cerchio"], ["perla", "Perla"], ["pendente", "Pendente"], ["piuma", "Piuma"], ["doppio", "Doppio"], ["croce", "Croce"], ["zanna", "Zanna"]] },
-  hairAcc: { label: "Nei capelli", tab: "capelli", items: [["nessuno", "Niente"], ["perline", "Perline"], ["fermaglio", "Fermaglio"], ["nastro", "Nastro"], ["fiori", "Fiori"], ["piume", "Due piume"], ["anelli", "Anelli"], ["filo", "Filo dorato"], ["pettine", "Pettine"]] },
-  bowDeco: { label: "Decorazione dell'arco", tab: "attrezzatura", items: [["nessuna", "Nessuna"], ["nastrini", "Nastrini"], ["intagli", "Intagli"], ["pelliccia", "Pelliccia"], ["dipinto", "Dipinto"], ["rune", "Rune"], ["piume", "Piume"], ["perline", "Perline"], ["fasce", "Fasce colorate"]] },
+  pattern: { label: "Fantasia della veste", tab: "abiti", items: [["nessuno", "Tinta unita"], ["righe", "A righe"], ["righe-verticali", "Righe verticali"], ["quadri", "A quadri"], ["scozzese", "Scozzese"], ["pois", "A pois"], ["rombi", "A rombi"], ["chevron", "A spina"], ["mimetico", "Mimetico"], ["ricamo", "Ricamata"], ["bordure", "Con bordure"], ["fasce", "A fasce"], ["sfumata", "Sfumata"], ["zigzag", "A zig-zag"], ["stelline", "Stelline"], ["foglie", "Foglie"], ["onde", "Onde"], ["diagonali", "Righe oblique"], ["nido", "Nido d'ape"], ["gigli", "Gigli"], ["croci", "Crocette"]] },
+  emblem: { label: "Stemma sul petto", tab: "abiti", items: [["nessuno", "Nessuno"], ["compagnia", "Stemma della compagnia"], ["cervo", "Cervo"], ["lupo", "Lupo"], ["drago", "Drago"], ["freccia", "Freccia"], ["bersaglio", "Bersaglio"], ["giglio", "Giglio"], ["stella", "Stella"], ["scudo", "Scudo"], ["quercia", "Quercia"], ["aquila", "Aquila"], ["falco", "Falco"], ["leone", "Leone"], ["croce", "Croce"], ["sole", "Sole"], ["luna", "Luna"], ["corona", "Corona"], ["orso", "Orso"], ["cinghiale", "Cinghiale"], ["volpe", "Volpe"], ["civetta", "Civetta"], ["spade", "Spade incrociate"], ["torre", "Torre"], ["chiave", "Chiave"], ["ancora", "Ancora"], ["fiore", "Fiore"], ["trifoglio", "Trifoglio"], ["fiamma", "Fiamma"], ["cuore", "Cuore"]] },
+  paint: { label: "Pittura sul viso", tab: "viso", items: [["nessuna", "Nessuna"], ["strisce", "Strisce"], ["maschera", "Maschera sugli occhi"], ["punti", "Punti"], ["tribale", "Tribale"], ["fulmine", "Fulmine"], ["mezza", "Mezzo viso"], ["naso", "Riga sul naso"], ["guance", "Guance"], ["volpe", "Volpe"], ["lupo", "Lupo"], ["occhi", "Occhi scuri"], ["zigzag", "Zig-zag"], ["croce", "Croce in fronte"], ["spirale", "Spirali"]] },
+  tattoo: { label: "Tatuaggio", tab: "viso", items: [["nessuno", "Nessuno"], ["rune", "Rune sul braccio"], ["onde", "Onde sul braccio"], ["freccia", "Freccia sul braccio"], ["stelle", "Stelle sul collo"], ["lacrima", "Lacrima sul viso"], ["punti", "Punti sulla mano"], ["drago", "Drago sul braccio"], ["sole", "Sole sulla spalla"], ["luna", "Luna sul braccio"], ["foglia", "Foglia sul braccio"], ["bersaglio", "Bersaglio sul braccio"], ["spine", "Rami sul braccio"]] },
+  earringType: { label: "Tipo di orecchino", tab: "accessori", items: [["cerchio", "Cerchio"], ["perla", "Perla"], ["pendente", "Pendente"], ["piuma", "Piuma"], ["doppio", "Doppio"], ["croce", "Croce"], ["zanna", "Zanna"], ["stella", "Stella"], ["freccia", "Freccia"], ["luna", "Luna"]] },
+  hairAcc: { label: "Nei capelli", tab: "capelli", items: [["nessuno", "Niente"], ["perline", "Perline"], ["fermaglio", "Fermaglio"], ["nastro", "Nastro"], ["fiori", "Fiori"], ["piume", "Due piume"], ["anelli", "Anelli"], ["filo", "Filo dorato"], ["pettine", "Pettine"], ["corona-fiori", "Corona di fiori"], ["gemma", "Gemma"], ["osso", "Osso"], ["farfalla", "Farfalla"]] },
+  bowDeco: { label: "Decorazione dell'arco", tab: "attrezzatura", items: [["nessuna", "Nessuna"], ["nastrini", "Nastrini"], ["intagli", "Intagli"], ["pelliccia", "Pelliccia"], ["dipinto", "Dipinto"], ["rune", "Rune"], ["piume", "Piume"], ["perline", "Perline"], ["fasce", "Fasce colorate"], ["spirale", "Fasciatura a spirale"], ["oro", "Punte d'oro"], ["stelle", "Stelle"], ["nappe", "Nappa"]] },
   fletchStyle: { label: "Forma delle penne", tab: "attrezzatura", items: [["classica", "Classica"], ["scudo", "A scudo"], ["parabolica", "Parabolica"], ["vela", "A vela"], ["lunga", "Lunga"], ["spirale", "A spirale"]] },
-  quiverStyle: { label: "Tipo di faretra", tab: "accessori", items: [["cuoio", "Cuoio"], ["decorata", "Decorata"], ["pelliccia", "Con pelliccia"], ["tubo", "Tubo moderno"], ["cestino", "Intrecciata"], ["legno", "Legno"], ["stoffa", "Stoffa"], ["borchie", "Con borchie"]] },
+  quiverStyle: { label: "Tipo di faretra", tab: "accessori", items: [["cuoio", "Cuoio"], ["decorata", "Decorata"], ["pelliccia", "Con pelliccia"], ["tubo", "Tubo moderno"], ["cestino", "Intrecciata"], ["legno", "Legno"], ["stoffa", "Stoffa"], ["borchie", "Con borchie"], ["nastri", "Con nastri"], ["scaglie", "A scaglie"], ["dipinta", "Dipinta"]] },
   eyeShape: { label: "Forma degli occhi", tab: "viso", items: [["normali", "Normali"], ["mandorla", "A mandorla"], ["tondi", "Tondi"], ["allungati", "Allungati"], ["socchiusi", "Socchiusi"], ["grandi", "Grandi e vivaci"]] },
   mouth: { label: "Labbra", tab: "viso", items: [["normale", "Normali"], ["sottile", "Sottili"], ["piena", "Piene"], ["ghigno", "Sorriso storto"], ["aperta", "Aperte"], ["broncio", "Broncio"]] },
   ears: { label: "Orecchie", tab: "viso", items: [["normali", "Normali"], ["piccole", "Piccole"], ["grandi", "Grandi"], ["punta", "A punta"]] },
   blush: { label: "Colorito", tab: "viso", items: [["nessuno", "Naturale"], ["leggero", "Leggero"], ["rosato", "Rosato"], ["abbronzato", "Abbronzato"]] },
   age: { label: "Età", tab: "viso", items: [["giovane", "Giovane"], ["adulto", "Adulto"], ["maturo", "Maturo"], ["anziano", "Anziano"]] },
-  mark: { label: "Segni particolari", tab: "viso", items: [["nessuno", "Nessuno"], ["neo", "Neo sulla guancia"], ["neo-labbro", "Neo sul labbro"], ["mento", "Cicatrice sul mento"], ["sopracciglio", "Sopracciglio tagliato"]] },
-  buckle: { label: "Fibbia della cintura", tab: "abiti", items: [["semplice", "Semplice"], ["oro", "Oro"], ["argento", "Argento"], ["celtica", "Celtica"], ["ovale", "Ovale"], ["quadrata", "Quadrata"]] },
-  pouchType: { label: "Tipo di borsello", tab: "accessori", items: [["borsello", "Borsello"], ["tascapane", "Tascapane"], ["sacchetto", "Sacchetto"], ["cofanetto", "Cofanetto"], ["corno", "Corno"], ["borraccia", "Borraccia"]] },
-  clasp: { label: "Fermaglio del mantello", tab: "accessori", items: [["nessuno", "Nessuno"], ["oro", "Oro"], ["argento", "Argento"], ["foglia", "Foglia"], ["drago", "Drago"], ["gemma", "Gemma"]] },
-  capePattern: { label: "Fantasia del mantello", tab: "accessori", items: [["liscio", "Liscio"], ["bordato", "Bordato"], ["righe", "A righe"], ["stelle", "Stellato"], ["scacchi", "A scacchi"], ["stemma", "Con stemma"]] },
-  frame: { label: "Cornice della foto profilo", tab: "scena", items: [["nessuna", "Nessuna"], ["oro", "Oro"], ["argento", "Argento"], ["bronzo", "Bronzo"], ["foglie", "Foglie"], ["frecce", "Frecce"], ["fuoco", "Fuoco"], ["ghiaccio", "Ghiaccio"], ["notte", "Notte"], ["arcobaleno", "Arcobaleno"], ["legno", "Legno"], ["bersaglio", "Bersaglio"]] },
-  idle: { label: "Movimento da fermo", tab: "posa", items: [["fermo", "Fermo"], ["respiro", "Respira"], ["guarda", "Si guarda intorno"], ["corda", "Controlla la corda"], ["stretching", "Si sgranchisce"], ["saluta", "Saluta ogni tanto"]] },
+  mark: { label: "Segni particolari", tab: "viso", items: [["nessuno", "Nessuno"], ["neo", "Neo sulla guancia"], ["neo-labbro", "Neo sul labbro"], ["mento", "Cicatrice sul mento"], ["sopracciglio", "Sopracciglio tagliato"], ["neo-fronte", "Neo sulla fronte"], ["guancia", "Cicatrice sulla guancia"], ["fossette", "Fossette"]] },
+  buckle: { label: "Fibbia della cintura", tab: "abiti", items: [["semplice", "Semplice"], ["oro", "Oro"], ["argento", "Argento"], ["celtica", "Celtica"], ["ovale", "Ovale"], ["quadrata", "Quadrata"], ["bronzo", "Bronzo"], ["rombo", "A rombo"], ["leone", "Leone"], ["freccia", "Con freccia"]] },
+  pouchType: { label: "Tipo di borsello", tab: "accessori", items: [["borsello", "Borsello"], ["tascapane", "Tascapane"], ["sacchetto", "Sacchetto"], ["cofanetto", "Cofanetto"], ["corno", "Corno"], ["borraccia", "Borraccia"], ["bisaccia", "Bisaccia"], ["astuccio", "Astuccio"]] },
+  clasp: { label: "Fermaglio del mantello", tab: "accessori", items: [["nessuno", "Nessuno"], ["oro", "Oro"], ["argento", "Argento"], ["foglia", "Foglia"], ["drago", "Drago"], ["gemma", "Gemma"], ["bronzo", "Bronzo"], ["luna", "Luna"], ["freccia", "Freccia"], ["nodo", "Nodo"]] },
+  capePattern: { label: "Fantasia del mantello", tab: "accessori", items: [["liscio", "Liscio"], ["bordato", "Bordato"], ["righe", "A righe"], ["stelle", "Stellato"], ["scacchi", "A scacchi"], ["stemma", "Con stemma"], ["zigzag", "A zig-zag"], ["onde", "Onde"], ["diagonali", "Righe oblique"], ["gigli", "Gigli"], ["foglie", "Foglie"]] },
+  frame: { label: "Cornice della foto profilo", tab: "scena", items: [["nessuna", "Nessuna"], ["oro", "Oro"], ["argento", "Argento"], ["bronzo", "Bronzo"], ["foglie", "Foglie"], ["frecce", "Frecce"], ["fuoco", "Fuoco"], ["ghiaccio", "Ghiaccio"], ["notte", "Notte"], ["arcobaleno", "Arcobaleno"], ["legno", "Legno"], ["bersaglio", "Bersaglio"], ["smeraldo", "Smeraldo"], ["rubino", "Rubino"], ["zaffiro", "Zaffiro"], ["corda", "Corda"], ["stelle", "Stelle"], ["alloro", "Alloro"], ["pietra", "Pietra"], ["tramonto", "Tramonto"]] },
+  idle: { label: "Movimento da fermo", tab: "posa", items: [["fermo", "Fermo"], ["respiro", "Respira"], ["guarda", "Si guarda intorno"], ["corda", "Controlla la corda"], ["stretching", "Si sgranchisce"], ["saluta", "Saluta ogni tanto"], ["esulta", "Esulta ogni tanto"], ["pensa", "Pensa al tiro"]] },
 } as const;
 
 export type ExtraKey = keyof typeof EXTRA_OPTIONS;
@@ -387,6 +398,31 @@ export const AVATAR_PRESETS: { id: string; label: string; look: Partial<AvatarLo
   { id: "volpe", label: "Volpe rossa", look: { body: "ragazza", style: "medievale", top: "ranger", shirt: "#bc6c25", trim: "#f4f1ea", bottom: "calzamaglia", pants: "#3a2a1e", footwear: "stivaletti", hair: "frangia", hairColor: "#c46b2b", paint: "volpe", cape: true, capeColor: "#9c6644", hat: "cappuccio", hatColor: "#9c6644", scene: "autunno", bowType: "flatbow", useMain: false } },
   { id: "notturno", label: "Arciere della notte", look: { body: "uomo", style: "medievale", top: "incrociata", shirt: "#14213d", trim: "#8d99ae", pattern: "fasce", bottom: "larghi", pants: "#14181c", footwear: "stivali-alti", cape: true, capeColor: "#14181c", capePattern: "stelle", mask: true, hat: "cappuccio", hatColor: "#14181c", scene: "castello", frame: "notte", bowType: "longbow", useMain: false, fletchStyle: "vela" } },
   { id: "contadino", label: "Arciere del villaggio", look: { body: "uomo", style: "medievale", top: "tunica", shirt: "#a3b18a", trim: "#7f5539", bottom: "brache", pants: "#7f5539", footwear: "mocassini", hat: "tesa", hatColor: "#c9b08a", pouch: true, pouchType: "tascapane", beard: "barbetta", scene: "villaggio", bowType: "longbow", useMain: false, quiverStyle: "cestino" } },
+  // 24 stili nuovi, con le fantasie, gli stemmi e le cornici nuove
+  { id: "orso", label: "Guardiano dell'orso", look: { body: "uomo", style: "medievale", top: "giubba", shirt: "#4a2a1a", trim: "#c2884a", emblem: "orso", bottom: "brache", pants: "#3a2a1e", footwear: "stivali-pelliccia", fur: true, furColor: "#5a4632", beard: "piena", hair: "spettinati", hairColor: "#4a2a1a", scene: "montagna", bowType: "longbow", useMain: false, quiverStyle: "pelliccia", clasp: "bronzo", frame: "pietra" } },
+  { id: "civetta", label: "Arciera della civetta", look: { body: "donna", style: "medievale", top: "incrociata", shirt: "#3a3f6b", trim: "#cbbf9a", emblem: "civetta", pattern: "stelline", bottom: "calzamaglia", pants: "#1c1f2a", footwear: "stivali-alti", hair: "lunghi", hairColor: "#2a1a12", cape: true, capeColor: "#1c1f2a", capePattern: "stelle", clasp: "luna", earring: true, earringType: "luna", scene: "castello", bowType: "ricurvo", useMain: false, frame: "zaffiro" } },
+  { id: "cinghiale", label: "Cacciatore del cinghiale", look: { body: "uomo", style: "medievale", top: "corpetto", shirt: "#6b2d2d", trim: "#c2884a", emblem: "cinghiale", bottom: "larghi", pants: "#3a2a1e", footwear: "stivali-alti", beard: "corta", stache: "folti", scene: "autunno", bowType: "longbow", useMain: false, pouch: true, pouchType: "corno", quiverStyle: "scaglie", bowDeco: "nappe" } },
+  { id: "marinaio", label: "Arciere del porto", look: { body: "uomo", style: "moderno", top: "maglia", shirt: "#f2e6d0", trim: "#2f4f6f", pattern: "righe", emblem: "ancora", bottom: "pantaloni", pants: "#2f4f6f", footwear: "mocassini", hat: "berretto", hatColor: "#2f4f6f", beard: "barbetta", scene: "spiaggia", bowType: "ricurvo", useMain: false, earring: true, earringType: "cerchio" } },
+  { id: "torre", label: "Sentinella della torre", look: { body: "uomo", style: "medievale", top: "cotta", shirt: "#8d949b", trim: "#2f4f6f", emblem: "torre", bottom: "brache", pants: "#3a3f6b", footwear: "stivali", hat: "elmo", cape: true, capeColor: "#2f4f6f", capePattern: "diagonali", clasp: "argento", scene: "castello", bowType: "storico", useMain: false, buckle: "quadrata" } },
+  { id: "giardiniera", label: "Arciera dei fiori", look: { body: "ragazza", style: "moderno", top: "camicia", shirt: "#e0a8b0", trim: "#a8c3a0", pattern: "foglie", emblem: "fiore", bottom: "gonna", pants: "#5f6b3a", footwear: "sandali", hair: "trecce", hairColor: "#c4622d", hairAcc: "corona-fiori", freckles: true, scene: "campagna", bowType: "flatbow", useMain: false, frame: "foglie" } },
+  { id: "fiamma", label: "Arciere di fuoco", look: { body: "uomo", style: "medievale", top: "farsetto", shirt: "#8c3b2e", trim: "#fca311", emblem: "fiamma", pattern: "zigzag", bottom: "calzamaglia", pants: "#2a1c1c", footwear: "stivali-alti", hair: "cresta", hairColor: "#c4622d", paint: "fulmine", cape: true, capeColor: "#2a1c1c", capePattern: "zigzag", scene: "rovine", bowType: "ricurvo", useMain: false, frame: "fuoco", bowDeco: "oro" } },
+  { id: "ghiaccio", label: "Arciera del nord", look: { body: "donna", style: "medievale", top: "cappotto-lungo", shirt: "#d0d0c0", trim: "#9fc0d0", pattern: "onde", bottom: "pantaloni", pants: "#2d4a4a", footwear: "stivali-pelliccia", fur: true, furColor: "#e8dcc0", hair: "vichinga", hairColor: "#efd9a8", scene: "neve", bowType: "flatbow", useMain: false, frame: "ghiaccio", clasp: "nodo" } },
+  { id: "trifoglio", label: "Arciere del trifoglio", look: { body: "uomo", style: "medievale", top: "tunica", shirt: "#3f5a3f", trim: "#c2884a", emblem: "trifoglio", pattern: "bordure", bottom: "brache", pants: "#5a3a22", footwear: "mocassini", hat: "robin", hatColor: "#3f5a3f", beard: "accenno", hair: "ricci", hairColor: "#9a4a22", scene: "foresta", bowType: "longbow", useMain: false, quiverStyle: "nastri" } },
+  { id: "spadaccino", label: "Arciere della guardia", look: { body: "uomo", style: "medievale", top: "giubbetto", shirt: "#1c2a1f", trim: "#d9b45a", emblem: "spade", bottom: "calzamaglia", pants: "#1c2a1f", footwear: "stivali-alti", cape: true, capeColor: "#6b2d2d", capePattern: "gigli", clasp: "freccia", buckle: "leone", scene: "salone", bowType: "storico", useMain: false, stache: "manubrio", frame: "oro" } },
+  { id: "custode", label: "Custode delle chiavi", look: { body: "uomo", style: "medievale", top: "cappotto", shirt: "#2a1c1c", trim: "#b8a07a", emblem: "chiave", bottom: "pantaloni", pants: "#1c1f2a", footwear: "stivali", age: "maturo", beard: "piena", beardColor: "#8a8a8a", hair: "corti", hairColor: "#5a5a5a", scene: "palazzo", bowType: "asiatico", useMain: false, pouch: true, pouchType: "cofanetto" } },
+  { id: "volpe-argento", label: "Volpe d'argento", look: { body: "donna", style: "medievale", top: "ranger", shirt: "#8d99ae", trim: "#e5e5e5", emblem: "volpe", bottom: "calzamaglia", pants: "#2b2d42", footwear: "stivaletti", hair: "coda-alta", hairColor: "#b9b2a6", paint: "volpe", cape: true, capeColor: "#2b2d42", hat: "cappuccio", hatColor: "#2b2d42", scene: "neve", bowType: "ricurvo", useMain: false, frame: "argento" } },
+  { id: "cuore", label: "Arciere del cuore", look: { body: "ragazzo", style: "moderno", top: "felpa", shirt: "#e56b6f", trim: "#f2e6d0", emblem: "cuore", bottom: "jeans", pants: "#2f4f6f", footwear: "sportive", hair: "ciuffo", hairColor: "#3b2a1d", scene: "campo", bowType: "nudo", useMain: false, blush: "rosato" } },
+  { id: "geometra", label: "Arciere geometrico", look: { body: "uomo", style: "moderno", top: "giacca", shirt: "#2d4a4a", trim: "#f0c8a0", pattern: "nido", bottom: "cargo", pants: "#3a3a3a", footwear: "scarponi", hair: "undercut", hairColor: "#16110d", glasses: true, scene: "palazzetto", bowType: "olimpico", useMain: false, watch: true, chestguard: true } },
+  { id: "pellegrina", label: "Pellegrina", look: { body: "donna", style: "medievale", top: "tunica-lunga", shirt: "#cbbf9a", trim: "#6b2d2d", pattern: "croci", bottom: "calzamaglia", pants: "#5a3a22", footwear: "sandali", hat: "tesa", hatColor: "#8a7a4a", hair: "raccolti", hairColor: "#6e3a1e", pouch: true, pouchType: "bisaccia", scene: "deserto", bowType: "asiatico", useMain: false, amulet: true } },
+  { id: "dragone", label: "Cavaliere del drago", look: { body: "uomo", style: "medievale", top: "cotta", shirt: "#55585a", trim: "#06d6a0", emblem: "drago", bottom: "brache", pants: "#1c2a1f", footwear: "stivali-alti", cape: true, capeColor: "#0f5257", capePattern: "stemma", clasp: "drago", tattoo: "drago", scene: "rovine", bowType: "storico", useMain: false, frame: "smeraldo" } },
+  { id: "sole-dorato", label: "Arciera del sole", look: { body: "donna", style: "medievale", top: "corpetto", shirt: "#fca311", trim: "#8c3b2e", emblem: "sole", bottom: "larghi", pants: "#6b2d2d", footwear: "mocassini", hair: "afro", hairColor: "#16110d", skin: "#7a4b30", earring: true, earringType: "stella", hairAcc: "gemma", scene: "deserto", bowType: "flatbow", useMain: false, frame: "tramonto" } },
+  { id: "scout", label: "Giovane esploratore", look: { body: "ragazzo", style: "moderno", top: "camicia", shirt: "#7d8f69", trim: "#c2884a", pattern: "diagonali", bottom: "pantaloncini", pants: "#5f6b3a", footwear: "scarponi", scarf: true, scarfColor: "#e63946", hat: "tesa", hatColor: "#8a7a4a", pouch: true, pouchType: "borraccia", scene: "montagna", bowType: "ricurvo", useMain: false } },
+  { id: "corvo", label: "Arciere del corvo", look: { body: "uomo", style: "medievale", top: "cappotto-lungo", shirt: "#0a0a0c", trim: "#5a5a5a", emblem: "falco", bottom: "pantaloni", pants: "#0a0a0c", footwear: "stivali-alti", cape: true, capeStyle: "frastagliato", capeColor: "#0a0a0c", hat: "cappuccio", hatColor: "#0a0a0c", paint: "occhi", scene: "castello", bowType: "longbow", useMain: false, fletchStyle: "lunga", frame: "notte" } },
+  { id: "lago", label: "Arciera del lago", look: { body: "donna", style: "medievale", top: "incrociata", shirt: "#9fc0d0", trim: "#2f4f6f", pattern: "onde", bottom: "calzamaglia", pants: "#2f4f6f", footwear: "stivaletti", hair: "lunghi-mossi", hairColor: "#efd9a8", hairAcc: "filo", cape: true, capeColor: "#2d4a4a", capePattern: "onde", scene: "lago", bowType: "ricurvo", useMain: false, earring: true, earringType: "perla" } },
+  { id: "festa", label: "Arciere del palio", look: { body: "uomo", style: "medievale", top: "farsetto", shirt: "#e63946", trim: "#ffd166", pattern: "scozzese", bottom: "calzamaglia", pants: "#ffd166", footwear: "mocassini", hat: "piuma", hatColor: "#e63946", scene: "torneo", bowType: "longbow", useMain: false, bowDeco: "nastrini", pose: "vittoria", frame: "arcobaleno" } },
+  { id: "allievo", label: "Allievo del corso", look: { body: "ragazza", style: "moderno", top: "polo", shirt: "#118ab2", trim: "#f2e6d0", emblem: "bersaglio", bottom: "pantaloni", pants: "#2b2d42", footwear: "sportive", hair: "coda", hairColor: "#5e3b22", chestguard: true, scene: "palestra", bowType: "nudo", useMain: false } },
+  { id: "veterano", label: "Veterano dei tornei", look: { body: "uomo", style: "medievale", top: "giubba", shirt: "#5a3a22", trim: "#d9b45a", emblem: "corona", bottom: "brache", pants: "#3a2a1e", footwear: "stivali-risvolto", age: "anziano", beard: "lunga", beardColor: "#d0d0c0", hair: "lunghi", hairColor: "#d0d0c0", mark: "guancia", scene: "torneo", bowType: "longbow", useMain: false, frame: "alloro", pose: "fiero" } },
+  { id: "notte-stellata", label: "Arciera delle stelle", look: { body: "donna", style: "medievale", top: "tunica-lunga", shirt: "#14213d", trim: "#ffd166", pattern: "stelline", bottom: "calzamaglia", pants: "#14213d", footwear: "stivali-alti", cape: true, capeColor: "#0a0a0c", capePattern: "stelle", clasp: "gemma", hair: "chignon", hairColor: "#16110d", hairAcc: "farfalla", scene: "lago", bowType: "ricurvo", useMain: false, bowDeco: "stelle", frame: "stelle" } },
 ];
 
 function pick<T>(list: readonly T[], r: number) {
@@ -461,3 +497,35 @@ export function randomLook(base: AvatarLook): AvatarLook {
     quiverPlace: r() < 0.5 ? "fianco" : "schiena",
   });
 }
+
+/**
+ * Un'idea di abbigliamento per il tuo arciere: abiti, colori, accessori e dettagli nuovi a caso,
+ * ma il viso e il corpo restano i tuoi.
+ */
+export function outfitIdea(base: AvatarLook): AvatarLook {
+  const r = () => Math.random();
+  const rl = randomLook(base);
+  const out: Partial<AvatarLook> = {};
+  for (const [k, v] of Object.entries(rl) as [keyof AvatarLook, unknown][]) if (!PERSONAL.includes(k)) (out as Record<string, unknown>)[k] = v;
+  const extra = (k: ExtraKey, chance: number) => {
+    if (r() > chance) return;
+    const items = EXTRA_OPTIONS[k].items as readonly (readonly [string, string])[];
+    (out as Record<string, unknown>)[k] = pick(items, r())[0];
+  };
+  extra("pattern", 0.45);
+  extra("emblem", 0.5);
+  extra("capePattern", 0.4);
+  extra("clasp", 0.4);
+  extra("buckle", 0.5);
+  extra("quiverStyle", 0.5);
+  extra("bowDeco", 0.35);
+  extra("fletchStyle", 0.4);
+  extra("frame", 0.3);
+  out.scene = pick(SCENE_IDEAS, r());
+  out.useMain = false;
+  out.bowType = pick(["olimpico", "nudo", "ricurvo", "longbow", "storico", "flatbow", "asiatico"], r());
+  return presetLook(base, out);
+}
+
+const SCENE_IDEAS = ["campo", "foresta", "castello", "palazzo", "montagna", "lago", "deserto", "villaggio", "neve", "campagna", "torneo", "rovine", "spiaggia", "autunno", "fabriano"];
+

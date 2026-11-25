@@ -16,7 +16,7 @@ export function ToolChart({ title, series, xLabel, yLabel, marker, fmtX = (x) =>
   fmtY?: (y: number) => string;
   band?: { from: number; to: number; label: string };
 }) {
-  const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
+  const uid = (useId().replace(/[^a-zA-Z0-9]/g, "") + "_");
   const [cursor, setCursor] = useState<number | null>(null);
   const [drawn, setDrawn] = useState(0);
   const sig = series.map((s) => `${s.name}:${s.points.length}:${s.points[0]?.y.toFixed(2)}:${s.points[s.points.length - 1]?.y.toFixed(2)}`).join("|");

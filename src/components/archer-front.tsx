@@ -1,6 +1,6 @@
 import { useId } from "react";
 import { tune, type AvatarLook } from "@/lib/arcieri/avatar";
-import { AvatarFace, bodyWidth, shade } from "./archer-avatar";
+import { AvatarFace, bodyWidth, CAPE_CLOTH, shade } from "./archer-avatar";
 import { Buckle, ChestEmblem, Clasp, ClothPattern, Fletching, Pouch, QuiverBody, zigQ } from "./avatar-extras";
 import { seamOf, BeltDetail, ClothButton, ClothDetail, DetailDefs, LeatherBand, SleeveDetail } from "./avatar-detail";
 import { BUTTON_TOPS } from "./archer-avatar";
@@ -16,7 +16,7 @@ const LONG_SLEEVES = ["felpa", "giacca", "camicia", "tunica", "tunica-lunga", "f
  */
 export function ArcherFront({ look, className = "h-96 w-auto", crop }: { look: AvatarLook; className?: string; /** riquadro da mostrare (viewBox), per le miniature di un dettaglio */ crop?: string }) {
   const live = !crop;
-  const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
+  const uid = (useId().replace(/[^a-zA-Z0-9]/g, "") + "_");
   const woman = look.body === "donna" || look.body === "ragazza";
   const kid = look.body === "ragazzo" || look.body === "ragazza";
   const W = bodyWidth(look);
@@ -201,7 +201,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop }: { look: A
                       </g>
                     </g>
                   ) : (
-                    <ClothPattern kind={look.capePattern === "scacchi" ? "quadri" : look.capePattern === "bordato" ? "bordure" : "righe-verticali"} shapes={[d]} base={look.capeColor} trim={look.trim} uid={`${uid}cpp${side}`} box={[Math.min(sx, outX) - 8, 96, Math.max(sx, outX) + 8, hemY + 8]} />
+                    <ClothPattern kind={CAPE_CLOTH[look.capePattern] ?? "righe-verticali"} shapes={[d]} base={look.capeColor} trim={look.trim} uid={`${uid}cpp${side}`} box={[Math.min(sx, outX) - 8, 96, Math.max(sx, outX) + 8, hemY + 8]} />
                   )
                 ) : null}
                 <path d={lining} fill={shade(look.capeColor, -0.6)} opacity="0.85" />

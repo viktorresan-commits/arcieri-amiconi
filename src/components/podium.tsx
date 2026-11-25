@@ -15,7 +15,7 @@ const METALS = {
 
 /** Scudo con l'arciere dentro (vittoria per il primo, fiero per gli altri). */
 function Shield({ row, place, look }: { row: PodiumRow; place: 1 | 2 | 3; look: AvatarLook }) {
-  const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
+  const uid = (useId().replace(/[^a-zA-Z0-9]/g, "") + "_");
   const m = METALS[place];
   const big = place === 1;
   const shield = "M0.5 0.02 L0.97 0.09 L0.97 0.64 C0.97 0.8 0.76 0.93 0.5 1 C0.24 0.93 0.03 0.8 0.03 0.64 L0.03 0.09 Z";

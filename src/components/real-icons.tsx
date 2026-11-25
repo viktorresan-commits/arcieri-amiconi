@@ -1397,7 +1397,7 @@ export function hasRealIcon(name: string) {
 }
 
 export function RealIcon({ name, size = 40, className }: { name: string; size?: number; className?: string }) {
-  const u = useId().replace(/[^a-zA-Z0-9]/g, "");
+  const u = (useId().replace(/[^a-zA-Z0-9]/g, "") + "_");
   const draw = DRAW[name];
   if (!draw) return null;
   return (

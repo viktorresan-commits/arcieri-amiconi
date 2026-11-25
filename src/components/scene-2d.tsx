@@ -1,3 +1,4 @@
+import { SceneLife } from "./scene-life";
 import { memo, type ReactNode } from "react";
 import type { Sky } from "@/lib/arcieri/sky3d";
 import { sceneById, type SceneId } from "@/lib/arcieri/scenes";
@@ -221,6 +222,7 @@ export const SceneBackdrop = memo(function SceneBackdrop({ sky, id = "bk", scene
       </>}
 
       {LAYERS[sc.id]?.(id, night) ?? LAYERS.campo(id, night)}
+      {indoor ? null : <SceneLife scene={sc.id} night={night} rain={rain} dusk={sky.tod === "tramonto"} />}
       {indoor ? <IndoorLight id={id} /> : <Atmosphere id={id} sunX={sunX} sunY={sunY} sun={p.sun} night={night} tod={sky.tod} />}
       {indoor ? null : <>
       {/* velo dell'ora: la stessa luce su tutto */}
@@ -1088,6 +1090,124 @@ const LAYERS: Record<SceneId, (id: string, night: boolean) => ReactNode> = {
     </g>
   ),
   // ---------- al chiuso ----------
+  cascata: (id, night) => (
+    <g>
+      <Hills far={night ? "#1c2a44" : "#9db3c6"} near={night ? "#141f33" : "#6e8f86"} night={night} />
+      {/* pareti di roccia ai lati della valle, la cascata che scende in mezzo */}
+      <path d="M120 214 L128 120 L150 96 L168 104 L176 214 Z" fill={night ? "#262a34" : "#7d8085"} />
+      <path d="M228 214 L232 110 L252 92 L274 108 L284 214 Z" fill={night ? "#22262f" : "#70747a"} />
+      <path d="M150 96 L168 104 L172 150 L156 140 Z M252 92 L274 108 L270 150 L256 136 Z" fill="#fff" opacity="0.08" />
+      <rect x="176" y="100" width="52" height="118" fill={`url(#${id}water)`} />
+      <g className="aa-life-fallwater" stroke="#ffffff" strokeOpacity="0.65" strokeWidth="1.6" strokeLinecap="round">
+        {Array.from({ length: 12 }, (_, i) => <path key={i} d={`M${180 + i * 4} ${100 + (i % 3) * 14} v${20 + (i % 4) * 8}`} />)}
+      </g>
+      <TreeLine y={206} colors={night ? ["#10201a", "#0c1914"] : ["#3b6a3e", "#2f5a35"]} n={20} />
+      <ellipse cx="202" cy="222" rx="90" ry="14" fill={`url(#${id}water)`} />
+      <g className="aa-life-spray" fill="#ffffff" opacity="0.55">
+        {[178, 192, 206, 220].map((x, i) => <circle key={x} cx={x} cy={214 - (i % 2) * 3} r={6 + (i % 3) * 2} />)}
+      </g>
+      <Ground id={id} night={night} y={232} />
+      {[60, 340].map((x, i) => <Pine key={x} x={x} y={238} h={70 + i * 12} c={night ? "#0c1914" : "#2f5a35"} />)}
+    </g>
+  ),
+  porto: (id, night) => (
+    <g>
+      <rect y="186" width="400" height="56" fill={`url(#${id}water)`} />
+      <rect y="186" width="400" height="1.6" fill="#fff" opacity="0.3" />
+      {/* faro sul molo, case del porto, barche ormeggiate */}
+      <g transform="translate(286 120)">
+        <path d="M-7 70 L-4 0 H4 L7 70 Z" fill={night ? "#cfd2d8" : "#f4f1ea"} />
+        {[14, 30, 46].map((y) => <rect key={y} x="-6" y={y} width="12" height="6" fill="#c4473d" />)}
+        <rect x="-6" y="-8" width="12" height="9" fill={night ? "#ffe08a" : "#9fd8ff"} />
+        <path d="M-8 -8 L0 -16 L8 -8 Z" fill="#3a3a44" />
+        {night ? <path className="aa-life-beam" d="M0 -4 L-180 -30 L-180 22 Z" fill="#fff4c0" opacity="0.18" /> : null}
+      </g>
+      <g>
+        {[[70, 162, 34, "#e8c89a"], [106, 158, 28, "#c46b2b"], [136, 164, 30, "#e9e4d8"], [168, 160, 26, "#a8c3a0"]].map(([x, y, w, c]) => (
+          <g key={x as number}>
+            <rect x={x as number} y={y as number} width={w as number} height={190 - (y as number)} fill={night ? "#4a4238" : (c as string)} />
+            <path d={`M${(x as number) - 2} ${y} L${(x as number) + (w as number) / 2} ${(y as number) - 10} L${(x as number) + (w as number) + 2} ${y} Z`} fill="#a0503a" />
+            <rect x={(x as number) + 6} y={(y as number) + 8} width="6" height="8" fill={night ? "#ffd27a" : "#5a3a22"} />
+          </g>
+        ))}
+      </g>
+      <path d="M0 190 H200 V196 H0 Z" fill={night ? "#3a3026" : "#8a7a62"} />
+      {[[236, 214, 1], [150, 226, 0.8]].map(([x, y, k]) => (
+        <g key={x} transform={`translate(${x} ${y}) scale(${k})`}>
+          <g className="aa-life-bob" style={{ animationDelay: `${(x as number) % 3}s` }}>
+            <path d="M-22 0 H22 L16 9 H-16 Z" fill={night ? "#2a2420" : "#7a4a2a"} />
+            <path d="M-22 0 H22" stroke="#e6b325" strokeWidth="1.2" />
+            <path d="M0 0 V-38" stroke="#3a2a1e" strokeWidth="1.4" />
+            <path d="M1 -36 L20 -4 H1 Z" fill={night ? "#8a90a0" : "#f4f1ea"} />
+          </g>
+        </g>
+      ))}
+      <g className="aa-shimmer" stroke="#fff" strokeOpacity="0.5" strokeWidth="1">
+        {Array.from({ length: 18 }, (_, i) => <path key={i} d={`M${(i * 61) % 400} ${200 + (i % 6) * 6} h${6 + (i % 3) * 4}`} />)}
+      </g>
+      <path d="M0 240 H400 V300 H0 Z" fill={night ? "#2a2420" : "#9a8a6e"} />
+      {Array.from({ length: 10 }, (_, i) => <path key={i} d={`M${i * 44} 240 V300`} stroke="#000" strokeOpacity="0.12" />)}
+      <Ground id={id} night={night} y={262} grass="#8a9a5a" flowers={false} density={0.25} />
+    </g>
+  ),
+  giardino: (id, night) => (
+    <g>
+      <Hills far={night ? "#1c2a44" : "#b6c6d6"} near={night ? "#141f33" : "#8aa69a"} night={night} />
+      {/* portale di legno rosso, laghetto con il ponticello, ciliegi in fiore */}
+      <g transform="translate(200 150)">
+        <rect x="-44" y="0" width="7" height="62" fill={night ? "#5a2020" : "#c4302a"} />
+        <rect x="37" y="0" width="7" height="62" fill={night ? "#5a2020" : "#c4302a"} />
+        <path d="M-58 -8 Q0 -16 58 -8 L56 -2 Q0 -10 -56 -2 Z" fill={night ? "#3a1414" : "#2a1d14"} />
+        <rect x="-48" y="8" width="96" height="6" fill={night ? "#5a2020" : "#c4302a"} />
+      </g>
+      <Ground id={id} night={night} y={214} grass="#7aa05a" />
+      <ellipse cx="200" cy="236" rx="120" ry="16" fill={`url(#${id}water)`} />
+      <path d="M140 236 Q200 206 260 236" stroke={night ? "#5a2020" : "#c4302a"} strokeWidth="4" fill="none" />
+      <path d="M140 236 Q200 214 260 236" stroke={night ? "#3a1414" : "#8a2a22"} strokeWidth="1.2" fill="none" />
+      {[[108, 218, 1.1], [300, 212, 1], [140, 206, 0.6]].map(([x, y, k]) => (
+        <g key={x} transform={`translate(${x} ${y}) scale(${k})`}>
+          <path d="M-3 0 C-4 -20 -10 -34 -18 -44 M-1 -16 C4 -30 14 -36 22 -40 M-2 -26 C-2 -40 2 -50 0 -60" stroke={night ? "#2a1a14" : "#5a3a2a"} strokeWidth="4" fill="none" strokeLinecap="round" />
+          <g className="aa-tree">
+            {[[-18, -48, 16], [0, -64, 18], [22, -44, 15], [-6, -46, 14], [12, -56, 14]].map(([cx, cy, r]) => <circle key={`${cx}${cy}`} cx={cx} cy={cy} r={r} fill={night ? "#5a3a4a" : "#f7b8cc"} opacity="0.95" />)}
+            {[[-12, -54], [6, -70], [18, -50], [-20, -42], [4, -48]].map(([cx, cy]) => <circle key={`${cx}${cy}`} cx={cx} cy={cy} r="5" fill="#fff" opacity={night ? 0.15 : 0.5} />)}
+          </g>
+        </g>
+      ))}
+      {[70, 300, 330].map((x) => <g key={x} transform={`translate(${x} 262)`}><path d="M-8 0 C-8 -6 8 -6 8 0 Z" fill={night ? "#3a3a44" : "#9a9a94"} /></g>)}
+    </g>
+  ),
+  mulino: (id, night) => (
+    <g>
+      <path d="M0 196 C80 168 160 176 220 186 C290 168 350 170 400 182 V230 H0 Z" fill={night ? "#1a2a22" : "#9ab85a"} />
+      {/* il mulino a vento con le pale che girano piano */}
+      <g transform="translate(252 120)">
+        <path d="M-12 76 L-8 0 H8 L12 76 Z" fill={night ? "#4a4238" : "#e8dcc0"} />
+        <path d="M-10 0 L0 -12 L10 0 Z" fill="#a0503a" />
+        <rect x="-4" y="54" width="8" height="22" fill={night ? "#2a1d14" : "#5a3a22"} />
+        <rect x="-3" y="20" width="6" height="7" fill={night ? "#ffd27a" : "#5a3a22"} />
+        <g className="aa-life-sails">
+          {[0, 90, 180, 270].map((a) => (
+            <g key={a} transform={`rotate(${a})`}>
+              <path d="M0 0 L3 -44" stroke={night ? "#2a1d14" : "#5a3a22"} strokeWidth="1.6" />
+              <path d="M3 -12 L12 -13 L10 -44 L3 -44 Z" fill={night ? "#6a6458" : "#f4f1ea"} stroke={night ? "#2a1d14" : "#8a6a42"} strokeWidth="0.6" />
+            </g>
+          ))}
+          <circle r="3" fill="#3a2a1e" />
+        </g>
+      </g>
+      {/* girasoli in file */}
+      {Array.from({ length: 14 }, (_, i) => (
+        <g key={i} transform={`translate(${12 + i * 29} ${214 + (i % 2) * 6})`}>
+          <g className="aa-tree" style={{ animationDelay: `${(i % 5) * 0.4}s` }}>
+            <path d="M0 0 V-14" stroke={night ? "#1f3a2a" : "#4f7a2a"} strokeWidth="1.4" />
+            <circle cy="-16" r="5" fill={night ? "#6a5a2a" : "#f2c84b"} />
+            <circle cy="-16" r="2.2" fill="#5a3a1a" />
+          </g>
+        </g>
+      ))}
+      <Ground id={id} night={night} y={226} grass="#8aaa4a" />
+    </g>
+  ),
   palestra: (id) => (
     <g>
       <rect width="400" height="214" fill="#c9cfd4" />

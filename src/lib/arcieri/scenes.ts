@@ -15,6 +15,10 @@ export type SceneId =
   | "rovine"
   | "spiaggia"
   | "autunno"
+  | "cascata"
+  | "porto"
+  | "giardino"
+  | "mulino"
   | "palestra"
   | "palazzetto"
   | "capannone"
@@ -36,6 +40,10 @@ export const SCENES: { id: SceneId; label: string; ground: [string, string]; ton
   { id: "rovine", label: "Rovine antiche", ground: ["#8a9a5a", "#7a8a4c"], tone: "#a89a7a" },
   { id: "spiaggia", label: "Spiaggia", ground: ["#e6cf9a", "#d9bf86"], tone: "#2f8aa8" },
   { id: "autunno", label: "Bosco d'autunno", ground: ["#8a7a3a", "#7a6a30"], tone: "#b0602a" },
+  { id: "cascata", label: "Cascata nella valle", ground: ["#5d8a45", "#4c7639"], tone: "#2f7a8a" },
+  { id: "porto", label: "Porto al tramonto", ground: ["#8a7a62", "#74664f"], tone: "#2f5a8a" },
+  { id: "giardino", label: "Giardino dei ciliegi", ground: ["#7aa05a", "#6a904c"], tone: "#c4607a" },
+  { id: "mulino", label: "Prateria del mulino", ground: ["#8aaa4a", "#7a9a3e"], tone: "#c9a227" },
   // al chiuso: niente cielo né vento
   { id: "palestra", label: "Palestra (al chiuso)", ground: ["#b98a55", "#a0723f"], tone: "#6a7a8a", indoor: true },
   { id: "palazzetto", label: "Palazzetto federale (al chiuso)", ground: ["#2f5f8a", "#264e72"], tone: "#2a4a7a", indoor: true },
@@ -47,4 +55,4 @@ export const isIndoor = (id: string | undefined) => Boolean(sceneById(id).indoor
 
 export const sceneById = (id: string | undefined) => SCENES.find((s) => s.id === id) ?? SCENES[0];
 
-export const FACE_BGS = ["", "#1f3a5f", "#2f6f62", "#5b2b6e", "#8a2f2f", "#c7a03a", "#3a3a3a", "#e9e4d8", "#2a5d8a", "#c46b2b", "#4b6b2e", "#ff5fa2"];
+export const FACE_BGS = ["", "#1f3a5f", "#2f6f62", "#5b2b6e", "#8a2f2f", "#c7a03a", "#3a3a3a", "#e9e4d8", "#2a5d8a", "#c46b2b", "#4b6b2e", "#ff5fa2", "#14213d", "#0f5257", "#6d597a", "#b56576", "#e56b6f", "#355070", "#bc6c25", "#7d8f69", "#2b2d42", "#06d6a0", "#118ab2", "#ffd166"];

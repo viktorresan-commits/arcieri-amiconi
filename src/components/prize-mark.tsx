@@ -104,7 +104,7 @@ function symbolArt(symbol: string, sw = 4): ReactNode {
  * campo lucido e simbolo in rilievo con ombra e luce. Usata per premi e obiettivi.
  */
 export function MetalCoin({ metal, symbol, icon, size = 56, ribbon = true, locked = false }: { metal: Metal; symbol?: string; icon?: IconName; size?: number; ribbon?: boolean; locked?: boolean }) {
-  const raw = useId().replace(/[^a-zA-Z0-9]/g, "");
+  const raw = (useId().replace(/[^a-zA-Z0-9]/g, "") + "_");
   const id = `mc${raw}`;
   const [lux, hi, mid, lo, deep] = METAL[metal];
   const [rib, ribStripe] = RIBBON[metal];

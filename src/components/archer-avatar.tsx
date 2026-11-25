@@ -61,7 +61,16 @@ const POSES: Record<string, PoseDef> = {
   // pesca: la mano della corda va a prendere la freccia nella faretra, dietro la spalla o al fianco
   "pesca-schiena": { grip: p(204, 196), bowAngle: 10, hand: p(116, 70), pull: 0, hooked: false, arrow: false, fore: 46, bend: 1, holding: true },
   "pesca-fianco": { grip: p(204, 196), bowAngle: 10, hand: p(110, 192), pull: 0, hooked: false, arrow: false, fore: 42, bend: 1, holding: true },
-  vittoria: { grip: p(206, 34), bowAngle: -12, hand: p(100, 56), pull: 0, hooked: false, arrow: false, fore: 44, face: "felice", bend: 1 },
+  // vittoria: l'arco alzato in alto davanti, il pugno chiuso accanto al viso (non più dietro la testa)
+  vittoria: { grip: p(236, 50), bowAngle: -26, hand: p(150, 114), pull: 0, hooked: false, arrow: false, fore: 40, face: "felice", bend: 1 },
+  // esulta: l'arco giù lungo il fianco, il pugno che si chiude all'altezza del petto
+  esulta: { grip: p(200, 212), bowAngle: 8, hand: p(104, 98), pull: 0, hooked: false, arrow: false, fore: 38, face: "felice", bend: -1 },
+  // pensa: la mano al mento, l'arco a riposo
+  pensa: { grip: p(196, 208), bowAngle: 5, hand: p(150, 112), pull: 0, hooked: false, arrow: false, fore: 40, face: "concentrato", bend: 1 },
+  // mostra l'arco: tenuto di traverso davanti, la mano libera sul flettente
+  mostra: { grip: p(214, 160), bowAngle: -78, hand: p(176, 150), pull: 0, hooked: false, arrow: false, fore: 44, face: "sorriso", bend: 1 },
+  // arco in spalla: la mano dell'arco alta, il legno appoggiato alla spalla
+  spalla: { grip: p(190, 118), bowAngle: 52, hand: p(110, 196), pull: 0, hooked: false, arrow: false, fore: 42, face: "sereno", bend: 1 },
   // fiero: mano sul fianco, gomito in fuori
   fiero: { grip: p(194, 206), bowAngle: 2, hand: p(122, 190), pull: 0, hooked: false, arrow: false, fore: 40, face: "sorriso", bend: 1 },
   // saluto: la mano libera si alza aperta accanto alla testa
@@ -442,7 +451,7 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4, cssBlink = fals
           );
         })() : null}
         {!sleeveLong ? limb(lerpP(s, e, 0.62), e, foreW + 1, skin) : null}
-        {which === "bow" && ["rune", "onde", "freccia", "drago"].includes(look.tattoo) ? (() => {
+        {which === "bow" && ["rune", "onde", "freccia", "drago", "luna", "foglia", "bersaglio", "spine"].includes(look.tattoo) ? (() => {
           // il tatuaggio sta sull'avambraccio, dove la manica non arriva (o sul braccio, se senza maniche)
           const a = sleeveLong ? null : sleeveless ? lerpP(s, e, 0.5) : lerpP(e, h, 0.2);
           if (!a) return null;
@@ -454,6 +463,10 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4, cssBlink = fals
               {look.tattoo === "onde" ? <path d="M-7 0 q2 -3 4 0 t4 0 t4 0" stroke={ink} strokeWidth="1" fill="none" /> : null}
               {look.tattoo === "freccia" ? <path d="M-7 0 H6 M6 0 l-3 -2 M6 0 l-3 2 M-7 0 l-2 -2 M-7 0 l-2 2" stroke={ink} strokeWidth="0.9" fill="none" /> : null}
               {look.tattoo === "drago" ? <path d="M-7 1 C-4 -3 -1 3 2 -1 C4 -3 6 -1 7 -2 M5 -2 l2 -1" stroke={ink} strokeWidth="1.1" fill="none" /> : null}
+              {look.tattoo === "luna" ? <path d="M1.5 -3.4 A3.6 3.6 0 1 0 1.5 3.4 A2.8 2.8 0 1 1 1.5 -3.4 Z" fill={ink} /> : null}
+              {look.tattoo === "foglia" ? <g><path d="M-6 1 C-3 -3.4 3 -3.4 6 0 C3 3 -3 3.4 -6 1 Z" fill="none" stroke={ink} strokeWidth="0.9" /><path d="M-6 1 L5 0" stroke={ink} strokeWidth="0.6" /></g> : null}
+              {look.tattoo === "bersaglio" ? <g fill="none" stroke={ink}><circle r="3.6" strokeWidth="0.8" /><circle r="1.8" strokeWidth="0.8" /><circle r="0.6" fill={ink} /></g> : null}
+              {look.tattoo === "spine" ? <path d="M-7 0 H7 M-5 0 l-1 -2 M-2 0 l-1 -2 M1 0 l-1 -2 M4 0 l-1 -2 M-5 0 l-1 2 M-2 0 l-1 2 M1 0 l-1 2 M4 0 l-1 2" stroke={ink} strokeWidth="0.8" fill="none" /> : null}
             </g>
           );
         })() : null}
@@ -660,7 +673,7 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4, cssBlink = fals
   const capeDecor = (d: string, box: [number, number, number, number]) => {
     const cp = look.capePattern;
     if (!cp || cp === "liscio") return null;
-    if (cp === "righe" || cp === "scacchi" || cp === "bordato") return <ClothPattern kind={cp === "scacchi" ? "quadri" : cp === "bordato" ? "bordure" : "righe-verticali"} shapes={[d]} base={look.capeColor} trim={look.trim} uid={`${uid}cp`} box={box} />;
+    if (CAPE_CLOTH[cp]) return <ClothPattern kind={CAPE_CLOTH[cp]} shapes={[d]} base={look.capeColor} trim={look.trim} uid={`${uid}cp`} box={box} />;
     if (cp === "stelle") {
       return (
         <g>
@@ -1341,6 +1354,9 @@ function Head({ look, H, face, blink, uid, t, cssBlink = false }: { look: Avatar
       {look.mark === "neo" ? <circle cx="160" cy="92" r="0.9" fill="#3a2414" /> : null}
       {look.mark === "neo-labbro" ? <circle cx="170.6" cy="97.6" r="0.8" fill="#3a2414" /> : null}
       {look.mark === "mento" ? <path d="M166 104 l3 3" stroke={shade(skin, -0.42)} strokeWidth="1" strokeLinecap="round" /> : null}
+      {look.mark === "neo-fronte" ? <circle cx="164" cy="70.5" r="0.85" fill="#3a2414" /> : null}
+      {look.mark === "guancia" ? <path d="M155 89 l5 6" stroke={shade(skin, -0.42)} strokeWidth="1" strokeLinecap="round" /> : null}
+      {look.mark === "fossette" ? <path d="M167.2 98.2 q0.8 1.2 0 2.2" stroke={shade(skin, -0.38)} strokeWidth="0.8" fill="none" strokeLinecap="round" /> : null}
       {look.tattoo === "lacrima" ? <path d="M165.4 88 q-1.2 2 0 3 q1.2 -1 0 -3 Z" fill="#24324a" /> : null}
       {look.tattoo === "stelle" ? <g fill="#24324a">{[[146, 104], [149, 108], [145, 109]].map(([x, y]) => <path key={x + y} d={`M${x} ${y - 1.4} l0.5 1 l1.1 0.1 l-0.8 0.7 l0.3 1.1 l-1.1 -0.6 l-1.1 0.6 l0.3 -1.1 l-0.8 -0.7 l1.1 -0.1 Z`} />)}</g> : null}
       <FacePaintProfile kind={look.paint} color={look.paint === "volpe" ? "#d9822a" : look.paint === "guance" ? "#c4473d" : "#2a3a5a"} />
@@ -1805,12 +1821,17 @@ function Defs({ look, uid }: { look: AvatarLook; uid: string }) {
   );
 }
 
+/** fantasie del mantello che sono fantasie di stoffa */
+export const CAPE_CLOTH: Record<string, string> = { righe: "righe-verticali", scacchi: "quadri", bordato: "bordure", zigzag: "zigzag", onde: "onde", diagonali: "diagonali", gigli: "gigli", foglie: "foglie" };
+
 /** gesti da fermo: ogni quanti secondi, quanto dura, verso quale posa e quanto */
 const IDLE_MOVES: Record<string, [number, number, PoseDef, number]> = {
   guarda: [7, 1.8, POSES.fiero, 0.7],
   corda: [6, 1.6, CHECK_STRING, 1],
   stretching: [8, 2, POSES.vittoria, 0.55],
   saluta: [9, 1.6, POSES.saluto, 1],
+  esulta: [10, 1.4, POSES.esulta, 1],
+  pensa: [11, 2.4, POSES.pensa, 0.9],
 };
 
 /** Comando esterno (gioco): quanto è tesa la corda (0–1) e alzo in gradi (positivo = più in alto). */
@@ -1822,7 +1843,7 @@ export type AvatarDrive = { pull: number; aim: number; released?: number | null 
  * una posa ferma, scocca una freccia. Con `drive` lo muove il giocatore (tendere, mirare, rilasciare).
  */
 export function ArcherAvatar({ look, className = "h-72 w-auto", interactive = true, pose, onShot, hideFlight = false, still = false, drive, onPhase, wind = -1.4, light }: { look: AvatarLook; className?: string; interactive?: boolean; pose?: Pose; onShot?: () => void; hideFlight?: boolean; still?: boolean; drive?: AvatarDrive | null; onPhase?: (name: string) => void; /** vento in m/s, positivo verso dove guarda l'arciere: muove il mantello */ wind?: number; /** id di un filtro di luce ambiente (scene-2d), applicato dentro l'SVG così resta nitido */ light?: string }) {
-  const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
+  const uid = (useId().replace(/[^a-zA-Z0-9]/g, "") + "_");
   const mode = drive ? "guidata" : pose ?? look.pose ?? "animata";
   const plan = useMemo(() => routinePlan(look), [look.routine, look.hold, look.volley, look.quiverPlace]);
   const [tState, setT] = useState(0);
@@ -1983,7 +2004,7 @@ export function ArcherAvatar({ look, className = "h-72 w-auto", interactive = tr
 
 /** Volto di fronte (per l'intestazione, il podio e le classifiche). */
 export function AvatarFace({ look, className = "h-10 w-10", bare = false, part }: { look: AvatarLook; className?: string; /** solo la testa, senza sfondo né spalle: per il ritratto a figura intera */ bare?: boolean; /** figura intera: "back" disegna solo capelli lunghi e cappuccio (dietro il corpo), "front" tutto il resto */ part?: "back" | "front" }) {
-  const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
+  const uid = (useId().replace(/[^a-zA-Z0-9]/g, "") + "_");
   const skin = look.skin;
   const skinD = shade(skin, -0.2);
   const hair = look.hairColor;
@@ -2337,6 +2358,9 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false, part }
         {look.mark === "neo" ? <circle cx="62" cy={fy + 4} r="0.9" fill="#3a2414" /> : null}
         {look.mark === "neo-labbro" ? <circle cx="56" cy={fy + 11} r="0.8" fill="#3a2414" /> : null}
         {look.mark === "mento" ? <path d={`M47 ${fy + ry - 4} l3 3`} stroke={shade(skin, -0.42)} strokeWidth="1" strokeLinecap="round" /> : null}
+        {look.mark === "neo-fronte" ? <circle cx="55" cy={fy - 14} r="0.9" fill="#3a2414" /> : null}
+        {look.mark === "guancia" ? <path d={`M35.5 ${fy + 2} l4 7`} stroke={shade(skin, -0.42)} strokeWidth="1" strokeLinecap="round" /> : null}
+        {look.mark === "fossette" ? <g stroke={shade(skin, -0.38)} strokeWidth="0.8" fill="none" strokeLinecap="round"><path d={`M40.5 ${fy + 11} q-0.8 1.2 0 2.2`} /><path d={`M59.5 ${fy + 11} q0.8 1.2 0 2.2`} /></g> : null}
         {look.tattoo === "lacrima" ? <path d={`M61 ${eyeY + 5} q-1.2 2 0 3 q1.2 -1 0 -3 Z`} fill="#24324a" /> : null}
         <FacePaintFront kind={look.paint} ey={eyeY} fy={fy} rx={rx} color={look.paint === "volpe" ? "#d9822a" : look.paint === "guance" ? "#c4473d" : "#2a3a5a"} />
         {look.freckles ? <g fill={shade(skin, -0.42)} opacity="0.6">{[[36, 54], [39, 56], [42, 53], [58, 53], [61, 56], [64, 54]].map(([x, y]) => <circle key={`${x}${y}`} cx={x} cy={y + (fy - 50)} r="0.8" />)}</g> : null}

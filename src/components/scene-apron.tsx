@@ -699,6 +699,7 @@ function scenePart(scene: SceneId, k: K): Part {
   const leftBot = { x: 100, y: k.yb - 0.9 };
   switch (scene) {
     case "fabriano":
+    case "porto":
       return {
         base: (
           <g>
@@ -725,8 +726,11 @@ function scenePart(scene: SceneId, k: K): Part {
     case "torneo":
     case "villaggio":
     case "campagna":
+    case "cascata":
+    case "giardino":
+    case "mulino":
     case "rovine": {
-      const hues = scene === "campagna" ? ["#5f8a38", "#6e9840", "#7aa446", "#567f32"] : scene === "rovine" ? ["#6a7a42", "#7a8a4a", "#86965a", "#5e6e3a"] : ["#3f6a30", "#4f7e3a", "#5d8c42", "#46743a"];
+      const hues = scene === "campagna" || scene === "mulino" ? ["#5f8a38", "#6e9840", "#7aa446", "#567f32"] : scene === "rovine" ? ["#6a7a42", "#7a8a4a", "#86965a", "#5e6e3a"] : ["#3f6a30", "#4f7e3a", "#5d8c42", "#46743a"];
       const extra: ReactNode[] = [];
       const life: ReactNode[] = [];
       if (scene === "campo") {

@@ -827,7 +827,7 @@ export function Glyph({ name, size = 20, className, strokeWidth = 1.7, title, de
 /** Tessera d'icona: placca scura con riflesso e cornice, disegno inciso in metallo del colore dell'app.
  *  Stesso aspetto ovunque. `accent` (solo nel Menu) dà a una sezione la sua tinta, sullo stesso materiale. */
 export function AppIcon({ name, size = 52, className, accent, fluid = false }: { name: IconName; color?: string; size?: number; className?: string; accent?: string; /** riempie il contenitore invece di una misura fissa */ fluid?: boolean }) {
-  const id = `ai${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
+  const id = `ai${(useId().replace(/[^a-zA-Z0-9]/g, "") + "_")}`;
   const art = DETAILED[name] ?? ICONS[name];
   const sw = size >= 56 ? 1.45 : size >= 40 ? 1.6 : 1.75;
   const g = Math.round(size * 0.6);

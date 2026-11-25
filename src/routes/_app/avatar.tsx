@@ -25,6 +25,7 @@ import {
   SKINS,
   EXTRA_OPTIONS,
   randomLook,
+  outfitIdea,
   presetLook,
   tune,
   type AvatarLook,
@@ -52,6 +53,7 @@ const HAIR_OPTS: [AvatarLook["hair"], string][] = [
 ];
 const HAT_OPTS: [AvatarLook["hat"], string][] = [["nessuno", "Niente"], ["berretto", "Berretto"], ["cuffia", "Cuffia"], ["fascia", "Fascia"], ["bandana", "Bandana"], ["piuma", "Con piuma"], ["robin", "A punta"], ["tesa", "Tesa larga"], ["cappuccio", "Cappuccio"], ["cerchietto", "Diadema"], ["alloro", "Alloro"], ["elmo", "Elmo"]];
 const BOTTOM_OPTS: [AvatarLook["bottom"], string][] = [["pantaloni", "Pantaloni"], ["jeans", "Jeans"], ["cargo", "Con tasche"], ["pantaloncini", "Pantaloncini"], ["calzamaglia", "Calzamaglia"], ["brache", "Brache"], ["larghi", "Larghi"], ["gonna", "Gonnellino"]];
+const POSE_OPTS: [AvatarLook["pose"], string][] = [["animata", "Tira in continuo"], ["riposo", "Posizione"], ["incocco", "Incocca"], ["mira", "Mira"], ["accompagna", "Accompagna"], ["vittoria", "Vittoria"], ["esulta", "Esulta"], ["fiero", "Fiero"], ["saluto", "Saluto"], ["pensa", "Pensa"], ["mostra", "Mostra l'arco"], ["spalla", "Arco imbracciato"]];
 const FOOT_OPTS: [AvatarLook["footwear"], string][] = [["sportive", "Sportive"], ["stivaletti", "Stivaletti"], ["scarponi", "Scarponi"], ["mocassini", "Mocassini"], ["sandali", "Sandali"], ["stivali", "Stivali"], ["stivali-risvolto", "Con risvolto"], ["stivali-alti", "Alti"], ["stivali-pelliccia", "Con pelliccia"]];
 
 /**
@@ -133,6 +135,35 @@ function ExtraStrips({ tab, look, shown, set }: { tab: string; look: AvatarLook;
         />
       ))}
     </div>
+  );
+}
+
+/**
+ * Idee per te: nove abbigliamenti nuovi sul tuo arciere (viso e corpo restano i tuoi).
+ * Si tocca quella che piace; "Altre idee" ne propone altre nove.
+ */
+function OutfitIdeas({ base, onPick }: { base: AvatarLook; onPick: (l: AvatarLook) => void }) {
+  const [ideas, setIdeas] = useState<AvatarLook[] | null>(null);
+  const list = ideas ?? [];
+  const more = () => setIdeas(Array.from({ length: 9 }, () => outfitIdea(base)));
+  return (
+    <section className="grid gap-2">
+      <div className="flex items-baseline justify-between gap-2 px-0.5">
+        <h3 className="text-sm font-semibold">Idee per te</h3>
+        <button type="button" className="aa-chip" onClick={more}><Glyph name="sparkle" size={13} /> {ideas ? "Altre idee" : "Mostra idee"}</button>
+      </div>
+      {ideas ? (
+        <div className="grid grid-cols-3 gap-2">
+          {list.map((l, i) => (
+            <button key={i} type="button" onClick={() => onPick(l)} className="aa-press relative h-36 overflow-hidden rounded-2xl bg-gradient-to-b from-white/[0.07] to-transparent ring-1 ring-white/5" aria-label={`Idea ${i + 1}: prova questo abbigliamento`}>
+              <ArcherFront look={{ ...l, lefty: false }} crop="10 0 180 360" className="h-full w-full" />
+            </button>
+          ))}
+        </div>
+      ) : (
+        <p className="px-0.5 text-xs text-muted">Nove abbigliamenti pensati per il tuo arciere, con stemmi, fantasie e ambientazioni: il viso resta il tuo.</p>
+      )}
+    </section>
   );
 }
 
@@ -363,6 +394,8 @@ export function AvatarEditor() {
       </div>
       {mode === "semplice" ? (
         <Card className="grid gap-5">
+          <OutfitIdeas base={shown} onPick={(l) => setLook(l)} />
+          <Strip title="Posa" current={look.pose} onPick={(id) => set("pose", id as AvatarLook["pose"])} items={POSE_OPTS.map(([id, label]) => ({ id, label, preview: <span className="absolute left-[-14%] top-[-4%] w-[128%]"><ArcherAvatar look={{ ...shown, pose: id, lefty: false }} pose={id === "animata" ? "mira" : id} still interactive={false} className="h-auto w-full" /></span> }))} />
           <Strip title="Stili pronti" current="" hint="tocca per provarne uno" onPick={(id) => { const p = AVATAR_PRESETS.find((x) => x.id === id); if (p) setLook((l) => presetLook(l, p.look)); }} items={AVATAR_PRESETS.map((p) => ({ id: p.id, label: p.label, preview: <AvatarFace look={{ ...presetLook(shown, p.look), frame: "nessuna" }} className="absolute left-[-6%] top-[-4%] h-[112%] w-[112%]" /> }))} />
           <Strip title="Ambientazione" current={look.scene} onPick={(id) => set("scene", id)} items={SCENES.map((sc) => ({ id: sc.id, label: sc.label.replace(" (al chiuso)", ""), preview: <SceneThumb scene={sc.id} sky={sky} className="h-full w-full" /> }))} />
           <Strip title="Capelli" current={look.hair} onPick={(id) => set("hair", id as AvatarLook["hair"])} items={HAIR_OPTS.map(([id, label]) => ({ id, label, preview: <AvatarFace look={{ ...shown, hair: id, hat: "nessuno", frame: "nessuna" }} className="h-full w-full" /> }))} />
@@ -560,7 +593,7 @@ export function AvatarEditor() {
         {tab === "posa" ? (
           <>
             <Row label="Come sta">
-              <Chips value={look.pose} onChange={(v) => set("pose", v)} options={[{ id: "animata", label: "Tira in continuo" }, { id: "riposo", label: "Posizione" }, { id: "incocco", label: "Incocca" }, { id: "mira", label: "Mira" }, { id: "accompagna", label: "Accompagna" }, { id: "saluto", label: "Saluto" }, { id: "vittoria", label: "Vittoria" }, { id: "fiero", label: "Fiero" }]} />
+              <Chips value={look.pose} onChange={(v) => set("pose", v)} options={POSE_OPTS.map(([id, label]) => ({ id, label }))} />
               <p className="text-xs text-muted">Nelle pose ferme tocca l'arciere: tende, rilascia e torna in posa.</p>
             </Row>
             <Row label="Sequenza di tiro">

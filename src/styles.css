@@ -1859,3 +1859,37 @@ html[data-motion="ridotta"] .aa-sock-flap { animation: none; }
 .aa-club-tab { color: color-mix(in srgb, var(--fg) 62%, transparent); transition: background-color 0.2s ease, color 0.2s ease; }
 .aa-club-tab[aria-pressed="true"] { background: color-mix(in srgb, var(--primary) 22%, transparent); color: var(--fg); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 55%, transparent); }
 .aa-club-tab[aria-pressed="true"] svg { color: var(--primary); }
+
+/* ── la vita delle ambientazioni: tutto con trasformazioni CSS, la scena non si ridisegna ── */
+.aa-life-mist { animation: aa-life-mist 26s ease-in-out infinite alternate; }
+@keyframes aa-life-mist { from { transform: translateX(-24px); } to { transform: translateX(24px); } }
+.aa-life-glint { animation: aa-life-glint 3s ease-in-out infinite; opacity: 0; }
+@keyframes aa-life-glint { 0%, 100% { opacity: 0; } 45% { opacity: 0.95; } 60% { opacity: 0.2; } }
+.aa-life-boat { animation: aa-life-boat 90s linear infinite; }
+@keyframes aa-life-boat { from { transform: translateX(0); } to { transform: translateX(460px); } }
+.aa-life-bob { animation: aa-life-bob 3.2s ease-in-out infinite; }
+@keyframes aa-life-bob { 0%, 100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(1.4px) rotate(1.6deg); } }
+.aa-life-glide { animation: aa-life-glide 26s linear infinite; }
+@keyframes aa-life-glide { from { transform: translate(-60px, 10px); } 50% { transform: translate(200px, -6px); } to { transform: translate(470px, 8px); } }
+.aa-life-soar { animation: aa-life-soar 18s ease-in-out infinite; }
+@keyframes aa-life-soar { 0% { transform: translate(0, 0); } 25% { transform: translate(-60px, 14px); } 50% { transform: translate(-110px, -4px); } 75% { transform: translate(-50px, -16px); } 100% { transform: translate(0, 0); } }
+.aa-life-flap-slow { transform-box: fill-box; transform-origin: 50% 60%; animation: aa-life-flap-slow 2.6s ease-in-out infinite; }
+@keyframes aa-life-flap-slow { 0%, 70%, 100% { transform: scaleY(1); } 80% { transform: scaleY(-0.4); } 90% { transform: scaleY(1); } }
+.aa-life-mote { animation: aa-life-mote 9s ease-in-out infinite; }
+@keyframes aa-life-mote { 0% { transform: translate(0, 0); opacity: 0; } 20% { opacity: 0.9; } 80% { opacity: 0.6; } 100% { transform: translate(14px, -40px); opacity: 0; } }
+.aa-life-fall { animation: aa-life-fall 10s linear infinite; opacity: 0; }
+@keyframes aa-life-fall { 0% { transform: translate(0, -20px) rotate(0deg); opacity: 0; } 8% { opacity: 1; } 50% { transform: translate(-26px, 110px) rotate(200deg); } 92% { opacity: 1; } 100% { transform: translate(-10px, 230px) rotate(420deg); opacity: 0; } }
+.aa-life-flutter { animation: aa-life-flutter 14s ease-in-out infinite; }
+@keyframes aa-life-flutter { 0% { transform: translate(0, 0); } 20% { transform: translate(34px, -22px); } 40% { transform: translate(70px, -6px); } 60% { transform: translate(40px, -36px); } 80% { transform: translate(-12px, -18px); } 100% { transform: translate(0, 0); } }
+.aa-life-flap { animation: aa-life-flap 0.22s ease-in-out infinite alternate; }
+@keyframes aa-life-flap { from { transform: scaleX(1); } to { transform: scaleX(0.25); } }
+.aa-life-fallwater { animation: aa-life-fallwater 0.9s linear infinite; }
+@keyframes aa-life-fallwater { from { transform: translateY(-14px); opacity: 0.3; } 50% { opacity: 1; } to { transform: translateY(30px); opacity: 0.2; } }
+.aa-life-spray { transform-box: fill-box; transform-origin: 50% 100%; animation: aa-life-spray 1.8s ease-in-out infinite alternate; }
+@keyframes aa-life-spray { from { transform: scale(0.92); opacity: 0.45; } to { transform: scale(1.08); opacity: 0.7; } }
+.aa-life-beam { transform-box: view-box; transform-origin: 0 0; animation: aa-life-beam 6s ease-in-out infinite alternate; }
+@keyframes aa-life-beam { from { transform: rotate(-8deg); opacity: 0.1; } to { transform: rotate(8deg); opacity: 0.22; } }
+.aa-life-sails { animation: aa-life-sails 9s linear infinite; }
+@keyframes aa-life-sails { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .aa-life * , .aa-life-fallwater, .aa-life-spray, .aa-life-beam, .aa-life-sails, .aa-life-bob { animation: none !important; } }
+html[data-motion="ridotta"] :is(.aa-life *, .aa-life-fallwater, .aa-life-spray, .aa-life-beam, .aa-life-sails, .aa-life-bob) { animation: none !important; }

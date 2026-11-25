@@ -100,6 +100,30 @@ export function ClothPattern({ kind, shapes, base, trim, uid, box }: { kind: str
         </linearGradient>
       );
       break;
+    case "zigzag":
+      tile = <pattern id={id} width="10" height="7" patternUnits="userSpaceOnUse"><path d="M0 5 L2.5 1.5 L5 5 L7.5 1.5 L10 5" stroke={trim} strokeWidth="1.3" fill="none" opacity="0.7" /></pattern>;
+      break;
+    case "stelline":
+      tile = <pattern id={id} width="11" height="11" patternUnits="userSpaceOnUse"><path d="M3 1 L3.7 2.6 L5.4 2.7 L4.1 3.8 L4.5 5.4 L3 4.5 L1.5 5.4 L1.9 3.8 L0.6 2.7 L2.3 2.6 Z" fill={trim} opacity="0.8" /><circle cx="8.5" cy="8" r="0.7" fill={trim} opacity="0.7" /></pattern>;
+      break;
+    case "foglie":
+      tile = <pattern id={id} width="12" height="12" patternUnits="userSpaceOnUse"><path d="M2 9 C2 5 5 3 8 3 C8 6 6 9 2 9 Z" fill={trim} opacity="0.55" /><path d="M2 9 L7 4" stroke={dark} strokeWidth="0.5" opacity="0.6" /><path d="M8 11.5 C8 9.5 9.5 8.5 11 8.5 C11 10 10 11.5 8 11.5 Z" fill={trim} opacity="0.45" /></pattern>;
+      break;
+    case "onde":
+      tile = <pattern id={id} width="12" height="8" patternUnits="userSpaceOnUse"><path d="M0 4 Q3 0.5 6 4 T12 4" stroke={trim} strokeWidth="1.2" fill="none" opacity="0.65" /></pattern>;
+      break;
+    case "diagonali":
+      tile = <pattern id={id} width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(35)"><rect width="3" height="8" fill={trim} opacity="0.45" /></pattern>;
+      break;
+    case "nido":
+      tile = <pattern id={id} width="10" height="17.3" patternUnits="userSpaceOnUse"><path d="M5 0 L10 2.9 L10 8.7 L5 11.5 L0 8.7 L0 2.9 Z M5 11.5 V17.3" stroke={dark} strokeWidth="0.8" fill="none" opacity="0.6" /></pattern>;
+      break;
+    case "gigli":
+      tile = <pattern id={id} width="14" height="14" patternUnits="userSpaceOnUse"><g transform="translate(7 7) scale(0.42)" fill={trim} opacity="0.75"><path d="M0 -9 C3 -5 3 -1 0 3 C-3 -1 -3 -5 0 -9 Z M0 3 C-2 -2 -8 -3 -8 2 C-6 0 -3 1 -1 4 Z M0 3 C2 -2 8 -3 8 2 C6 0 3 1 1 4 Z" /><rect x="-5" y="3.5" width="10" height="2.2" /></g></pattern>;
+      break;
+    case "croci":
+      tile = <pattern id={id} width="10" height="10" patternUnits="userSpaceOnUse"><path d="M4.2 2 h1.6 v2.2 h2.2 v1.6 h-2.2 v2.2 h-1.6 v-2.2 h-2.2 v-1.6 h2.2 Z" fill={trim} opacity="0.6" /></pattern>;
+      break;
     default:
       return null;
   }
@@ -170,6 +194,42 @@ export function EmblemGlyph({ kind, color, bg }: { kind: string; color: string; 
     case "corona":
       g = <g><path d="M-9 5 L-9 -5 L-4.5 0 L0 -7 L4.5 0 L9 -5 L9 5 Z" {...s} /><rect x="-9" y="5" width="18" height="2.6" {...s} /></g>;
       break;
+    case "orso":
+      g = <g><circle cx="-5.6" cy="-6" r="2.6" {...s} /><circle cx="5.6" cy="-6" r="2.6" {...s} /><path d="M-7.5 -2 C-7.5 -7 7.5 -7 7.5 -2 C7.5 4 4 8.5 0 8.5 C-4 8.5 -7.5 4 -7.5 -2 Z" {...s} /><ellipse cx="0" cy="3.6" rx="3" ry="2.2" fill={bg ?? "#000"} opacity="0.35" /></g>;
+      break;
+    case "cinghiale":
+      g = <g><path d="M-9 2 C-9 -5 -2 -8 4 -6 L9 -8 L7 -3 C9 -1 9 3 7 5 L-6 6 Z" {...s} /><path d="M6 1 C8 1 9 -1 9.6 -3" stroke={bg ?? "#000"} strokeWidth="0.9" fill="none" opacity="0.6" /><path d="M-6 6 V9 M-2 6 V9 M2 6 V9 M5 5.5 V9" {...st} strokeWidth={1.4} /></g>;
+      break;
+    case "volpe":
+      g = <path d="M-9 -8 L-3.5 -3 L3.5 -3 L9 -8 L8 -1 C7 3 3 7 0 9 C-3 7 -7 3 -8 -1 Z M-3 1 L0 4 L3 1" {...s} />;
+      break;
+    case "civetta":
+      g = <g><path d="M-7 -8 L-4 -4 H4 L7 -8 V3 C7 7 3 9.5 0 9.5 C-3 9.5 -7 7 -7 3 Z" {...s} /><circle cx="-3" cy="-1" r="2.2" fill={bg ?? "#000"} opacity="0.45" /><circle cx="3" cy="-1" r="2.2" fill={bg ?? "#000"} opacity="0.45" /><path d="M-1 2 L0 4 L1 2 Z" fill={bg ?? "#000"} opacity="0.45" /></g>;
+      break;
+    case "spade":
+      g = <g>{[45, -45].map((r) => <g key={r} transform={`rotate(${r})`}><path d="M0 -10 L1.4 -7 V4 H-1.4 V-7 Z" {...s} /><path d="M-4 4 H4" {...st} strokeWidth={1.6} /><path d="M0 4.5 V8.5" {...st} strokeWidth={1.6} /></g>)}</g>;
+      break;
+    case "torre":
+      g = <path d="M-6 9 V-3 L-7.5 -3 V-9 H-4.5 V-6.5 H-1.5 V-9 H1.5 V-6.5 H4.5 V-9 H7.5 V-3 L6 -3 V9 Z M-1.6 9 V4 A1.6 1.6 0 0 1 1.6 4 V9" {...s} fillRule="evenodd" />;
+      break;
+    case "chiave":
+      g = <g><circle cx="0" cy="-5" r="4.4" {...st} strokeWidth={2} /><path d="M0 -0.6 V9 M0 5 H3.6 M0 8 H2.6" {...st} strokeWidth={2} /></g>;
+      break;
+    case "ancora":
+      g = <g><circle cx="0" cy="-7" r="1.8" {...st} strokeWidth={1.4} /><path d="M0 -5 V8 M-4 -2 H4 M-8 2 C-7 7 -3 9 0 9 C3 9 7 7 8 2" {...st} strokeWidth={1.7} /><path d="M-8 2 L-9.4 4.4 M-8 2 L-5.6 3 M8 2 L9.4 4.4 M8 2 L5.6 3" {...st} strokeWidth={1.3} /></g>;
+      break;
+    case "fiore":
+      g = <g>{Array.from({ length: 6 }, (_, i) => { const a = (i / 6) * Math.PI * 2; return <ellipse key={i} cx={f(Math.cos(a) * 5)} cy={f(Math.sin(a) * 5)} rx="3.4" ry="2.2" transform={`rotate(${f((a * 180) / Math.PI)} ${f(Math.cos(a) * 5)} ${f(Math.sin(a) * 5)})`} {...s} />; })}<circle r="2.6" fill={bg ?? "#000"} opacity="0.4" /></g>;
+      break;
+    case "trifoglio":
+      g = <g><circle cx="0" cy="-4.6" r="3.8" {...s} /><circle cx="-4.4" cy="1" r="3.8" {...s} /><circle cx="4.4" cy="1" r="3.8" {...s} /><path d="M0 1 C0 5 1 7.5 3 9.5" {...st} strokeWidth={1.4} /></g>;
+      break;
+    case "fiamma":
+      g = <path d="M0 9.5 C-6 9.5 -8 4 -6 -1 C-5 2 -3 2.6 -3 1 C-3 -3 0 -6 1 -10 C3 -6 7 -3 7 2.6 C7 7 4 9.5 0 9.5 Z" {...s} />;
+      break;
+    case "cuore":
+      g = <path d="M0 8.6 C-6 4 -9.4 0.6 -9.4 -3.4 C-9.4 -6.8 -6.8 -8.8 -4.4 -8.8 C-2.4 -8.8 -0.8 -7.6 0 -6 C0.8 -7.6 2.4 -8.8 4.4 -8.8 C6.8 -8.8 9.4 -6.8 9.4 -3.4 C9.4 0.6 6 4 0 8.6 Z" {...s} />;
+      break;
     default:
       return null;
   }
@@ -215,7 +275,7 @@ const SHIELD = "M-11 -12 H11 V2 C11 8.5 5 11.5 0 14 C-5 11.5 -11 8.5 -11 2 Z";
  */
 export function CompanyCrest({ id, x, y, s = 1 }: { id?: string; x: number; y: number; s?: number }) {
   const crest = useCrest(id);
-  const clip = `cc${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
+  const clip = `cc${(useId().replace(/[^a-zA-Z0-9]/g, "") + "_")}`;
   const chief = crest?.color || "#b3262a";
   return (
     <g transform={`translate(${f(x)} ${f(y)}) scale(${s})`}>
@@ -390,6 +450,14 @@ export function FacePaintFront({ kind, ey, fy, rx, color }: { kind: string; ey: 
           {pair((sd) => [0, 4, 8].map((d) => <PaintStroke key={d} a={[50 + sd * (rx - 3), ey + 6 + d]} b={[50 + sd * 9, ey + 6 + d * 0.8]} bend={sd * (d - 4) * 0.3} w={1.8 - d * 0.08} color={color} />))}
         </g>
       );
+    case "occhi":
+      return pair((sd) => <ellipse cx={50 + sd * 9.5} cy={ey} rx="6.2" ry="4.6" fill={color} opacity="0.55" />);
+    case "zigzag":
+      return pair((sd) => <path d={`M${50 + sd * 8} ${ey + 6} l${sd * 2.6} 3 l${sd * 2.6} -3 l${sd * 2.6} 3 l${sd * 2.6} -3`} stroke={color} strokeWidth="1.8" fill="none" strokeLinejoin="round" strokeLinecap="round" opacity="0.88" />);
+    case "croce":
+      return <g><PaintStroke a={[50, ey - 15]} b={[50, ey - 5]} w={2.2} color={color} /><PaintStroke a={[45.5, ey - 11]} b={[54.5, ey - 11]} w={2} color={color} /></g>;
+    case "spirale":
+      return pair((sd) => <path d={`M${50 + sd * 14} ${ey + 8} m${sd * 0.8} 0 a0.8 0.8 0 1 0 ${sd * -1.6} 0 a1.8 1.8 0 1 0 ${sd * 3.6} 0 a2.8 2.8 0 1 0 ${sd * -5.6} 0`} stroke={color} strokeWidth="1.1" fill="none" opacity="0.85" />);
     default:
       return null;
   }
@@ -456,6 +524,14 @@ export function FacePaintProfile({ kind, color }: { kind: string; color: string 
           {[0, 4, 8].map((d) => <PaintStroke key={d} a={[151, 89 + d]} b={[163, 88.5 + d * 0.8]} bend={(d - 4) * 0.25} w={1.8 - d * 0.08} color={color} />)}
         </g>
       );
+    case "occhi":
+      return <ellipse cx="163" cy="82" rx="7" ry="5" fill={color} opacity="0.55" />;
+    case "zigzag":
+      return <path d="M151 90 l2.6 3 l2.6 -3 l2.6 3 l2.6 -3 l2.6 3" stroke={color} strokeWidth="1.8" fill="none" strokeLinejoin="round" strokeLinecap="round" opacity="0.88" />;
+    case "croce":
+      return <g><PaintStroke a={[159, 64]} b={[160.5, 73]} w={2} color={color} /><PaintStroke a={[155.5, 68]} b={[164.5, 68.6]} w={1.8} color={color} /></g>;
+    case "spirale":
+      return <path d="M160.5 93 m0.8 0 a0.8 0.8 0 1 0 -1.6 0 a1.8 1.8 0 1 0 3.6 0 a2.8 2.8 0 1 0 -5.6 0" stroke={color} strokeWidth="1.1" fill="none" opacity="0.85" />;
     default:
       return null;
   }
@@ -478,6 +554,12 @@ export function Earring({ kind, x, y }: { kind: string; x: number; y: number }) 
       return <path d={`M${x - 0.6} ${y} h1.2 v1.6 h1.6 v1.2 h-1.6 v3 h-1.2 v-3 h-1.6 v-1.2 h1.6 Z`} fill={gold} />;
     case "zanna":
       return <g><path d={`M${x} ${y} V${y + 1.4}`} stroke="#6b4224" strokeWidth="0.8" /><path d={`M${x - 1.2} ${y + 1.4} Q${x} ${y + 8} ${x + 1.6} ${y + 1.4} Z`} fill="#f2ead8" stroke="#b9ae98" strokeWidth="0.4" /></g>;
+    case "stella":
+      return <path d={`M${x} ${y - 2} L${x + 0.6} ${y - 0.6} L${x + 2} ${y - 0.5} L${x + 0.9} ${y + 0.4} L${x + 1.3} ${y + 1.9} L${x} ${y + 1.1} L${x - 1.3} ${y + 1.9} L${x - 0.9} ${y + 0.4} L${x - 2} ${y - 0.5} L${x - 0.6} ${y - 0.6} Z`} fill="#d9b45a" />;
+    case "freccia":
+      return <g><path d={`M${x} ${y - 1} V${y + 7}`} stroke="#d9b45a" strokeWidth="0.7" /><path d={`M${x - 1.3} ${y + 5.4} L${x} ${y + 8.2} L${x + 1.3} ${y + 5.4}`} fill="#d9b45a" /><path d={`M${x} ${y - 1} l-1.2 -1.6 M${x} ${y - 1} l1.2 -1.6`} stroke="#c4473d" strokeWidth="0.7" /></g>;
+    case "luna":
+      return <path d={`M${x + 1} ${y - 2.4} A2.6 2.6 0 1 0 ${x + 1} ${y + 2.4} A2 2 0 1 1 ${x + 1} ${y - 2.4} Z`} fill="#e8e3d8" stroke="#b9ae98" strokeWidth="0.3" />;
     default:
       return <circle cx={x} cy={y} r="1.8" fill="none" stroke={gold} strokeWidth="1" />;
   }
@@ -504,6 +586,14 @@ export function HairOrnament({ kind, x, y, s = 1, tilt = 0, color }: { kind: str
         return <path d="M-6 -2 Q-2 2 0 -1 Q2 -4 6 0 Q2 4 -1 3" stroke="#e8c870" strokeWidth="0.9" fill="none" />;
       case "pettine":
         return <g><path d="M-6 -2 Q0 -5 6 -2 L6 0 L-6 0 Z" fill="#c9a46a" />{[-5, -3, -1, 1, 3, 5].map((dx) => <path key={dx} d={`M${dx} 0 V3.4`} stroke="#a3824e" strokeWidth="0.9" />)}</g>;
+      case "corona-fiori":
+        return <g>{[-6, -3, 0, 3, 6].map((dx, i) => <g key={dx}>{[0, 1, 2, 3, 4].map((k) => <circle key={k} cx={dx + Math.cos((k / 5) * 6.28) * 1.1} cy={-Math.abs(dx) * 0.2 + Math.sin((k / 5) * 6.28) * 1.1} r="0.9" fill={["#ff8fa3", "#ffd166", "#f4f1ea", "#b8a1ff", "#ff8fa3"][i]} />)}<circle cx={dx} cy={-Math.abs(dx) * 0.2} r="0.55" fill="#e6b325" /></g>)}</g>;
+      case "gemma":
+        return <g><path d="M0 -3 L2.6 0 L0 3 L-2.6 0 Z" fill="#2f9e7a" stroke="#d9b45a" strokeWidth="0.7" /><path d="M-0.8 -1.2 L0 -2.2" stroke="#fff" strokeOpacity="0.7" strokeWidth="0.5" /></g>;
+      case "osso":
+        return <g><path d="M-5 0 H5" stroke="#efe6d2" strokeWidth="1.8" strokeLinecap="round" /><circle cx="-5.4" cy="-0.9" r="1.1" fill="#efe6d2" /><circle cx="-5.4" cy="0.9" r="1.1" fill="#efe6d2" /><circle cx="5.4" cy="-0.9" r="1.1" fill="#efe6d2" /><circle cx="5.4" cy="0.9" r="1.1" fill="#efe6d2" /></g>;
+      case "farfalla":
+        return <g><path d="M0 0 C-3 -4 -6 -3 -5 0 C-6 3 -3 4 0 0 Z" fill="#2f6fbe" /><path d="M0 0 C3 -4 6 -3 5 0 C6 3 3 4 0 0 Z" fill="#2f6fbe" /><circle cx="-3" cy="-0.8" r="0.7" fill="#ffd166" /><circle cx="3" cy="-0.8" r="0.7" fill="#ffd166" /><path d="M0 -2 V2" stroke="#1d1f22" strokeWidth="0.8" /></g>;
       default:
         return null;
     }
@@ -571,6 +661,9 @@ export function QuiverBody({ kind, color, w = 20, h = 82, top = -42 }: { kind: s
           ) : null}
           {kind === "pelliccia" ? <g>{[-7, -3.5, 0, 3.5, 7].map((dx, i) => <circle key={dx} cx={dx} cy={top + 3 + (i % 2) * 1.6} r="3.8" fill={i % 2 ? "#e3d6be" : "#cdbb9c"} />)}</g> : null}
           {kind === "borchie" ? <g fill="#d9dde2">{Array.from({ length: 10 }, (_, i) => <circle key={i} cx={i % 2 ? x + w - 4 : x + 4} cy={top + 10 + i * (h - 20) / 9} r="1.2" />)}</g> : null}
+          {kind === "nastri" ? <g>{[0.2, 0.45, 0.7].map((u, i) => <path key={u} d={`M${x - 0.5} ${top + h * u} l${w + 1} 6 v3 l${-(w + 1)} -6 Z`} fill={["#c4473d", "#e6c84a", "#2f6fbe"][i]} opacity="0.9" />)}</g> : null}
+          {kind === "scaglie" ? <g fill="none" stroke={dark} strokeWidth="0.8" opacity="0.75">{Array.from({ length: Math.floor((h - 16) / 6) }, (_, r) => [0, 1, 2].map((c) => <path key={`${r}${c}`} d={`M${x + 2 + c * (w - 4) / 3 + (r % 2 ? 2.5 : 0)} ${top + 10 + r * 6} a3 3 0 0 0 5 0`} />))}</g> : null}
+          {kind === "dipinta" ? <g><path d={`M0 ${top + h * 0.22} C${w * 0.35} ${top + h * 0.32} ${-w * 0.35} ${top + h * 0.42} 0 ${top + h * 0.52} C${w * 0.35} ${top + h * 0.62} ${-w * 0.35} ${top + h * 0.72} 0 ${top + h * 0.82}`} stroke="#f4f1ea" strokeWidth="1.4" fill="none" opacity="0.85" />{[0.3, 0.5, 0.7].map((u) => <circle key={u} cx="0" cy={top + h * u} r="1.3" fill="#c4473d" />)}</g> : null}
         </g>
       );
   }
@@ -602,6 +695,16 @@ export function BowDeco({ kind, up, down, color }: { kind: string; up: [number, 
     }
     case "fasce":
       return <g>{[up, down].flatMap((pt, i) => [0.3, 0.7].map((u) => { const [x, y] = at(pt, u); return <rect key={`${i}${u}`} x={f(x - 3)} y={f(y - 1.4)} width="6" height="2.8" rx="0.8" fill={color} />; }))}</g>;
+    case "spirale":
+      return <g stroke={color} strokeWidth="0.9" fill="none">{[up, down].flatMap((pt, i) => [0.28, 0.36, 0.44, 0.52, 0.6].map((u) => { const [x, y] = at(pt, u); return <path key={`${i}${u}`} d={`M${f(x - 2.4)} ${f(y - 1)} l4.8 2`} />; }))}</g>;
+    case "oro":
+      return <g>{[up, down].flatMap((pt, i) => [0.94].map((u) => { const [x, y] = at(pt, u); return <circle key={`${i}${u}`} cx={f(x)} cy={f(y)} r="2" fill="#e8c870" stroke="#8a6a20" strokeWidth="0.5" />; }))}</g>;
+    case "stelle":
+      return <g fill="#f4f1ea">{[up, down].flatMap((pt, i) => [0.4, 0.62].map((u) => { const [x, y] = at(pt, u); return <path key={`${i}${u}`} d={`M${f(x)} ${f(y - 1.8)} l0.5 1.3 l1.3 0.1 l-1 0.8 l0.4 1.3 l-1.2 -0.7 l-1.2 0.7 l0.4 -1.3 l-1 -0.8 l1.3 -0.1 Z`} />; }))}</g>;
+    case "nappe": {
+      const [x, y] = at(down, 0.5);
+      return <g transform={`translate(${f(x)} ${f(y)})`}><path d="M0 0 V6" stroke="#c4473d" strokeWidth="0.8" /><path d="M-2 6 H2 L2.6 14 H-2.6 Z" fill="#c4473d" /><path d="M-1.6 8 V14 M0 8 V14 M1.6 8 V14" stroke="#7a1f1a" strokeWidth="0.4" /></g>;
+    }
     default:
       return null;
   }
@@ -640,6 +743,14 @@ export function Buckle({ kind, x, y, s = 1 }: { kind: string; x: number; y: numb
         return <g><ellipse rx="7" ry="5" fill="none" stroke="#d9b45a" strokeWidth="1.8" /><path d="M-2 0 H5" stroke="#d9b45a" strokeWidth="1.2" /></g>;
       case "quadrata":
         return <g><rect x="-5.4" y="-5.4" width="10.8" height="10.8" fill="none" stroke="#9aa3ad" strokeWidth="2" /><path d="M0 -5 V5" stroke="#9aa3ad" strokeWidth="1.2" /></g>;
+      case "bronzo":
+        return <g><rect x="-6" y="-5" width="12" height="10" rx="2.6" fill="#b06a3a" stroke="#5a2e12" strokeWidth="0.8" /><circle r="2" fill="none" stroke="#5a2e12" strokeWidth="0.8" /></g>;
+      case "rombo":
+        return <g><path d="M0 -6 L7 0 L0 6 L-7 0 Z" fill="#d9b45a" stroke="#8a6a20" strokeWidth="0.8" /><path d="M0 -3 L3.5 0 L0 3 L-3.5 0 Z" fill="none" stroke="#8a6a20" strokeWidth="0.7" /></g>;
+      case "leone":
+        return <g><circle r="5.8" fill="#e8c870" stroke="#8a6a20" strokeWidth="0.8" /><circle r="3.4" fill="#c9a44a" /><path d="M-1.4 -0.6 h0.8 M0.6 -0.6 h0.8 M-1 1.4 Q0 2.2 1 1.4" stroke="#6b4a10" strokeWidth="0.6" /></g>;
+      case "freccia":
+        return <g><rect x="-6.4" y="-4.6" width="12.8" height="9.2" rx="1.8" fill="#9aa3ad" stroke="#4d555d" strokeWidth="0.8" /><path d="M-4 2 L4 -2 M4 -2 L1.6 -2.2 M4 -2 L3.2 0" stroke="#4d555d" strokeWidth="0.9" /></g>;
       default:
         return null;
     }
@@ -661,6 +772,10 @@ export function Pouch({ kind, x, y, s = 1 }: { kind: string; x: number; y: numbe
         return <g><path d="M-2 0 C6 2 10 8 4 16 C3 12 0 6 -4 4 Z" fill="#efe3c4" stroke="#8a7a5a" strokeWidth="0.8" /><path d="M-3 1 L-4 4" stroke="#6b4224" strokeWidth="2" /></g>;
       case "borraccia":
         return <g><ellipse cx="0" cy="9" rx="7" ry="8" fill="#6b5a48" stroke="#3a2a1e" strokeWidth="0.8" /><rect x="-2" y="-1" width="4" height="4" fill="#3a2a1e" /><path d="M-6 6 Q0 4 6 6" stroke="#c9a46a" strokeWidth="1" fill="none" /></g>;
+      case "bisaccia":
+        return <g><path d="M-9 0 H9 V11 Q9 15 5 15 H-5 Q-9 15 -9 11 Z" fill="#6b5a48" stroke="#3a2a1e" strokeWidth="0.8" /><path d="M-9 0 Q0 7 9 0" fill="#5a4a38" stroke="#3a2a1e" strokeWidth="0.6" /><path d="M-5 8 H5" stroke="#c9a46a" strokeWidth="0.8" /></g>;
+      case "astuccio":
+        return <g><rect x="-3.6" y="0" width="7.2" height="17" rx="2" fill="#3a3d42" stroke="#1d1f22" strokeWidth="0.8" /><rect x="-3.6" y="3" width="7.2" height="1.6" fill="#c4473d" /></g>;
       default:
         return <path d="M-6 0 h12 v14 a3 3 0 0 1 -3 3 h-6 a3 3 0 0 1 -3 -3 z" fill="#7a4a26" stroke="#4a2c16" strokeWidth="0.8" />;
     }
@@ -727,6 +842,35 @@ export function Clasp({ kind, x, y, s = 1 }: { kind: string; x: number; y: numbe
             <circle cx="-1.2" cy="-1.4" r="0.5" fill="#fff" opacity="0.9" />
           </g>
         );
+      case "bronzo":
+        return (
+          <g>
+            {metal("#f6caa0", "#b5713e", "#5a2e12")}
+            <path d="M-2.4 -2.4 L2.4 2.4 M2.4 -2.4 L-2.4 2.4" stroke="#5a2e12" strokeWidth="0.9" strokeLinecap="round" />
+          </g>
+        );
+      case "luna":
+        return (
+          <g>
+            {metal("#ffffff", "#d6dbe1", "#5d646b")}
+            <path d="M1 -3 A3.2 3.2 0 1 0 1 3 A2.4 2.4 0 1 1 1 -3 Z" fill="#5d646b" />
+          </g>
+        );
+      case "freccia":
+        return (
+          <g>
+            <path d="M-7 3.6 L5.4 -3.6" stroke="#c9a24e" strokeWidth="1.6" strokeLinecap="round" />
+            <path d="M5.4 -3.6 L1.6 -3.4 L4 -0.4 Z" fill="#e2bd5c" stroke="#7a5614" strokeWidth="0.5" />
+            <path d="M-7 3.6 l-1 -2.2 M-7 3.6 l2.4 0.6" stroke="#b8323a" strokeWidth="1" strokeLinecap="round" />
+          </g>
+        );
+      case "nodo":
+        return (
+          <g>
+            <path d="M-5 -2 C-2 -6 2 2 5 -2 M-5 2 C-2 6 2 -2 5 2" stroke="#d9b45a" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+            <circle r="1.4" fill="#d9b45a" />
+          </g>
+        );
       default:
         return null;
     }
@@ -773,6 +917,22 @@ export function FaceFrame({ kind }: { kind: string }) {
       return ring("#7a4a26", 6, <circle cx="50" cy="50" r="44.6" fill="none" stroke="#4a2c16" strokeWidth="0.8" />);
     case "bersaglio":
       return <g>{["#f4f1ea", "#14181c", "#2f7fd0", "#d0302a", "#f2c84b"].map((c, i) => <circle key={c} cx="50" cy="50" r={49 - i * 1.6} fill="none" stroke={c} strokeWidth="1.6" />)}</g>;
+    case "smeraldo":
+      return ring("url(#aa-fr-sm)", 6, <defs><linearGradient id="aa-fr-sm" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#c9ffe6" /><stop offset="0.5" stopColor="#1f9e6a" /><stop offset="1" stopColor="#0b4a32" /></linearGradient></defs>);
+    case "rubino":
+      return ring("url(#aa-fr-ru)", 6, <defs><linearGradient id="aa-fr-ru" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#ffd0d6" /><stop offset="0.5" stopColor="#c4243a" /><stop offset="1" stopColor="#5a0a16" /></linearGradient></defs>);
+    case "zaffiro":
+      return ring("url(#aa-fr-za)", 6, <defs><linearGradient id="aa-fr-za" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#d6e6ff" /><stop offset="0.5" stopColor="#2a5bd1" /><stop offset="1" stopColor="#0d2260" /></linearGradient></defs>);
+    case "corda":
+      return <g>{ring("#c9a46a", 4)}{Array.from({ length: 36 }, (_, i) => { const a = (i / 36) * Math.PI * 2; return <path key={i} d={`M${f(50 + Math.cos(a) * 46)} ${f(50 + Math.sin(a) * 46)} l${f(Math.cos(a + 0.9) * 3)} ${f(Math.sin(a + 0.9) * 3)}`} stroke="#7a5a2a" strokeWidth="0.9" />; })}</g>;
+    case "stelle":
+      return <g>{ring("#2b2d42", 5)}{Array.from({ length: 8 }, (_, i) => { const a = (i / 8) * Math.PI * 2 - Math.PI / 2; const x = 50 + Math.cos(a) * 47.5; const y = 50 + Math.sin(a) * 47.5; return <path key={i} d={`M${f(x)} ${f(y - 3)} l0.9 2 l2.1 0.2 l-1.6 1.4 l0.5 2.1 l-1.9 -1.1 l-1.9 1.1 l0.5 -2.1 l-1.6 -1.4 l2.1 -0.2 Z`} fill="#ffd166" />; })}</g>;
+    case "alloro":
+      return <g>{[-1, 1].map((sd) => Array.from({ length: 9 }, (_, i) => { const a = Math.PI / 2 + sd * (0.35 + i * 0.27); const x = 50 + Math.cos(a) * 46; const y = 50 + Math.sin(a) * 46; return <ellipse key={`${sd}${i}`} cx={f(x)} cy={f(y)} rx="2.2" ry="4.6" fill={i % 2 ? "#c9a44a" : "#e8c870"} transform={`rotate(${f((a * 180) / Math.PI + 90 + sd * 30)} ${f(x)} ${f(y)})`} />; }))}</g>;
+    case "pietra":
+      return ring("#7d8085", 7, <g>{Array.from({ length: 12 }, (_, i) => { const a = (i / 12) * Math.PI * 2; return <path key={i} d={`M${f(50 + Math.cos(a) * 43)} ${f(50 + Math.sin(a) * 43)} L${f(50 + Math.cos(a) * 50)} ${f(50 + Math.sin(a) * 50)}`} stroke="#4d5054" strokeWidth="0.9" />; })}</g>);
+    case "tramonto":
+      return ring("url(#aa-fr-tr)", 6, <defs><linearGradient id="aa-fr-tr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#ffb86b" /><stop offset="0.5" stopColor="#e5566b" /><stop offset="1" stopColor="#5b3a8a" /></linearGradient></defs>);
     default:
       return null;
   }

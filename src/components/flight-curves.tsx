@@ -14,7 +14,7 @@ const MODES: { id: Mode; label: string; unit: string; color: string; note: strin
  * che si disegna e un cursore da trascinare per leggere i valori a ogni metro.
  */
 export function FlightCurves({ hit, distance, replay = 0 }: { hit: FlightHit; distance: number; replay?: number }) {
-  const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
+  const uid = (useId().replace(/[^a-zA-Z0-9]/g, "") + "_");
   const [mode, setMode] = useState<Mode>("velocita");
   const [cursor, setCursor] = useState<number | null>(null);
   const [drawn, setDrawn] = useState(0);
