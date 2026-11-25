@@ -6,7 +6,7 @@ import { RedirectToSignIn } from "@/lib/auth/gates";
 import { getMe } from "@/lib/arcieri/members.api";
 import type { PublicMember } from "@/lib/arcieri/access";
 import { memberLabel, initials } from "@/lib/arcieri/labels";
-import { Avatar, Loading, Mark, cx } from "./kit";
+import { Avatar, LevelHalo, Loading, Mark, cx } from "./kit";
 import { SHORTCUTS, STATIONS, currentShortcut } from "@/lib/arcieri/shortcuts";
 import { NextCard, PathMap, ShortcutEditor, TipCard, rememberPage } from "./shortcuts";
 import { CompanyWelcome } from "./compagnia";
@@ -294,8 +294,8 @@ export function Shell({ children }: { children: ReactNode }) {
   ] as const;
   const bottom = [
     { to: "/", label: "Casa", icon: "home" as IconName, match: (p: string) => p === "/" },
-    { to: "/gare", label: "Gare", icon: "flag" as IconName, match: (p: string) => p.startsWith("/gare") },
-    { to: "/squadra", label: "Compagnia", icon: "team" as IconName, match: (p: string) => p === "/squadra" || p.startsWith("/arciere/") || p.startsWith("/compagnia") },
+    // le gare stanno dentro la Compagnia: una sola voce
+    { to: "/squadra", label: "Compagnia e gare", icon: "team" as IconName, match: (p: string) => p === "/squadra" || p.startsWith("/gare") || p.startsWith("/arciere/") || p.startsWith("/compagnia") },
   ];
 
   return (
@@ -338,7 +338,7 @@ export function Shell({ children }: { children: ReactNode }) {
             </Link>
           </nav>
           <Link to="/profilo" className="mt-auto flex items-center gap-3 pt-4">
-            <Avatar label={initials(label)} color={me.avatarColor} photo={me.photoUrl} size="lg" className="aa-pin" />
+            <Avatar label={initials(label)} color={me.avatarColor} photo={me.photoUrl} size="lg" className="aa-pin" xp={xp.xp} />
             <span className="truncate text-sm font-semibold">{label}</span>
           </Link>
         </aside>
@@ -346,11 +346,14 @@ export function Shell({ children }: { children: ReactNode }) {
           {path === "/" ? (
             /* Home: in alto il profilo (volto, nome, categoria e livello, esperienza) e gli avvisi */
             <header className="aa-appheader aa-homehead aa-bar sticky top-0 z-20 flex items-center gap-3 border-b px-3 py-2 backdrop-blur-md md:px-4">
+              {/* il tuo volto con l'alone del colore del tuo livello */}
+              <LevelHalo xp={xp.xp} size="md">
               <Link to="/profilo" aria-label="Il tuo profilo" className={cx("relative grid h-11 w-11 shrink-0 place-items-center rounded-full p-[2.5px]", me.role === "admin" ? "aa-facering aa-facering-admin" : "aa-ring")}>
                 <span className="relative z-[1] grid h-full w-full place-items-center overflow-hidden rounded-full bg-bg">
                   <AvatarFace look={avatar.shown} className="h-full w-full" />
                 </span>
               </Link>
+              </LevelHalo>
               <Link to="/obiettivi" className="min-w-0 flex-1" aria-label={`${label}, livello ${lvl.level}`}>
                 <p className="flex min-w-0 items-baseline gap-2">
                   <b className="truncate font-display text-[1.15rem] leading-none">{label}</b>
@@ -411,7 +414,7 @@ export function Shell({ children }: { children: ReactNode }) {
             {me.percorso === "" ? <PercorsoWelcome onDone={() => setNonce((n) => n + 1)} /> : null}
           </main>
           {/* barra in basso: solo voci che in Home non ci sono già (Tiro rapido, Da foto, Segnapunti e Statistiche stanno sul gioco) */}
-          <nav className="aa-bottomnav aa-bar-bottom fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 items-end border-t pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden">
+          <nav className="aa-bottomnav aa-bar-bottom fixed inset-x-0 bottom-0 z-30 grid grid-cols-3 items-end border-t pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden">
             {bottom.map((item) => <BottomLink key={item.to} item={item} active={item.match(path)} />)}
             <button type="button" className={cx("flex min-h-16 flex-col items-center justify-center gap-0.5 text-[11px] font-medium", menu ? "aa-tone-hi" : "text-white/75")} onClick={() => setMenu(true)}>
               <span className="grid h-8 w-14 place-items-center"><Glyph name="grid" size={22} /></span>

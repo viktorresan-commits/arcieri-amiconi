@@ -23,6 +23,7 @@ import { levelOf } from "@/lib/arcieri/xp";
 import { Glyph } from "@/components/icons";
 import { ArcherPalmares, Medal } from "@/components/palmares";
 import { RankBanner } from "@/components/rank-banner";
+import { haloOfXp } from "@/components/level-crest";
 import { titleName } from "@/lib/arcieri/fitast-league";
 
 type Board = Awaited<ReturnType<typeof archerBoard>>;
@@ -69,7 +70,7 @@ function Page() {
       <div className="aa-profile-stage relative h-[34rem] overflow-hidden rounded-[1.75rem]">
         <SceneBackdrop sky={sky} id={`pf${data.id}`} scene={look.scene} />
         {/* luce morbida dietro l'arciere e ombra a terra: l'arciere sta nella scena, non sopra */}
-        <div className={`aa-stage-glow pointer-events-none absolute inset-x-0 top-[18%] bottom-[8%] ${rank ? "px-[22%]" : "pr-[22%]"}`} aria-hidden />
+        <div style={{ ["--glow" as string]: haloOfXp(data.xp).a }} className={`aa-stage-glow aa-stage-glow-lv pointer-events-none absolute inset-x-0 top-[18%] bottom-[8%] ${rank ? "px-[22%]" : "pr-[22%]"}`} aria-hidden />
         <div className={`aa-stage-shadow pointer-events-none absolute bottom-[3.5%] h-[4.5%] w-[34%] -translate-x-1/2 ${rank ? "left-1/2" : "left-[39%]"}`} aria-hidden />
         <div className={`absolute inset-x-0 bottom-[1%] top-[11%] flex justify-center ${rank ? "px-[22%]" : "pr-[22%]"}`}>
           <ArcherFront look={look} fit className="h-full w-auto drop-shadow-[0_16px_24px_rgba(0,0,0,0.5)]" />
@@ -83,7 +84,7 @@ function Page() {
         </div>
         <div className="absolute inset-x-0 top-0 flex items-center gap-3 bg-gradient-to-b from-black/65 to-transparent p-3 pb-8">
           <span className="relative shrink-0">
-            <Avatar size="lg" label={name} color={data.avatarColor} photo={data.photoUrl} look={looks[data.userId]} admin={data.admin} />
+            <Avatar size="lg" label={name} color={data.avatarColor} photo={data.photoUrl} look={looks[data.userId]} admin={data.admin} xp={data.xp} />
           </span>
           <div className="min-w-0">
             <h1 className="truncate font-display text-3xl leading-none text-white">{name}</h1>

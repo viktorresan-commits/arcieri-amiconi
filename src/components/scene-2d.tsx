@@ -1,4 +1,5 @@
 import { SceneLife } from "./scene-life";
+import { FOUNDER_LAYERS } from "./scene-founder";
 import { memo, type ReactNode } from "react";
 import type { Sky } from "@/lib/arcieri/sky3d";
 import { sceneById, type SceneId } from "@/lib/arcieri/scenes";
@@ -130,6 +131,8 @@ export const SceneBackdrop = memo(function SceneBackdrop({ sky, id = "bk", scene
   const sunY = sky.tod === "pomeriggio" ? 46 : sky.tod === "tramonto" ? 150 : sky.tod === "mattina" ? 110 : 60;
   const desert = sc.id === "deserto" || sc.id === "spiaggia";
   const indoor = Boolean(sc.indoor);
+  // Sala del Trono, Picco del Drago e Cittadella Celeste hanno cielo e luce loro: niente sole, nuvole, velo dell'ora né meteo
+  const own = Boolean(sc.ownSky);
   return (
     <>
     <svg viewBox="0 0 400 300" preserveAspectRatio="xMidYMax slice" className="absolute inset-0 h-full w-full" aria-hidden>
@@ -177,7 +180,7 @@ export const SceneBackdrop = memo(function SceneBackdrop({ sky, id = "bk", scene
         </linearGradient>
       </defs>
       <rect width="400" height="300" fill={`url(#${id}sky)`} />
-      {indoor ? null : <>
+      {indoor || own ? null : <>
       {night ? (
         <g fill="#fff">
           {Array.from({ length: 70 }, (_, i) => (
@@ -222,9 +225,9 @@ export const SceneBackdrop = memo(function SceneBackdrop({ sky, id = "bk", scene
       </>}
 
       {LAYERS[sc.id]?.(id, night) ?? LAYERS.campo(id, night)}
-      {indoor ? null : <SceneLife scene={sc.id} night={night} rain={rain} dusk={sky.tod === "tramonto"} />}
-      {indoor ? <IndoorLight id={id} /> : <Atmosphere id={id} sunX={sunX} sunY={sunY} sun={p.sun} night={night} tod={sky.tod} />}
-      {indoor ? null : <>
+      {indoor || own ? null : <SceneLife scene={sc.id} night={night} rain={rain} dusk={sky.tod === "tramonto"} />}
+      {own ? null : indoor ? <IndoorLight id={id} /> : <Atmosphere id={id} sunX={sunX} sunY={sunY} sun={p.sun} night={night} tod={sky.tod} />}
+      {indoor || own ? null : <>
       {/* velo dell'ora: la stessa luce su tutto */}
       {p.shadeA ? <rect width="400" height="300" fill={p.shade} opacity={p.shadeA} style={{ mixBlendMode: night ? "multiply" : "soft-light" }} /> : null}
       {rain ? <rect width="400" height="300" fill="#3a4450" opacity={0.2} /> : cloudy ? <rect width="400" height="300" fill="#3a4450" opacity={0.08} /> : null}
@@ -240,7 +243,7 @@ export const SceneBackdrop = memo(function SceneBackdrop({ sky, id = "bk", scene
       ) : null}
       </>}
     </svg>
-    {indoor ? null : <SkyLayer id={id} tod={sky.tod} night={night} rain={rain} cloudy={cloudy} desert={desert} wind={wind} high={sc.id === "fabriano"} amount={sky.clouds ?? (cloudy ? 0.75 : 0.15)} seed={sky.seed ?? 1} />}
+    {indoor || own ? null : <SkyLayer id={id} tod={sky.tod} night={night} rain={rain} cloudy={cloudy} desert={desert} wind={wind} high={sc.id === "fabriano"} amount={sky.clouds ?? (cloudy ? 0.75 : 0.15)} seed={sky.seed ?? 1} />}
     </>
   );
 });
@@ -709,6 +712,9 @@ function FabrianoPiazza({ id, night }: { id: string; night: boolean }) {
 }
 
 const LAYERS: Record<SceneId, (id: string, night: boolean) => ReactNode> = {
+  trono: (id) => FOUNDER_LAYERS.trono(id),
+  drago: (id) => FOUNDER_LAYERS.drago(id),
+  cielo: (id) => FOUNDER_LAYERS.cielo(id),
   fabriano: (id, night) => <FabrianoPiazza id={id} night={night} />,
   campo: (id, night) => (
     <g>

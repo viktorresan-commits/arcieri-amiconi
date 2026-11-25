@@ -1969,3 +1969,21 @@ svg .aa-fall { stroke-dasharray: 4 3; animation: aa-fall 0.8s linear infinite; }
 .aa-menu-rail { background: color-mix(in srgb, var(--bg) 82%, black); }
 .aa-menu-item:active { transform: scale(0.95); }
 .aa-menu-item.is-here span:last-child { color: color-mix(in srgb, var(--cat) 60%, #fff); }
+/* alone del livello attorno al ritratto: anello di colore che gira e una luce che respira dietro */
+.aa-halo { isolation: isolate; padding: 3px; }
+.aa-halo.aa-halo-sm { padding: 2px; }
+.aa-halo::before { content: ""; position: absolute; inset: 0; z-index: 0; border-radius: 9999px; background: conic-gradient(from 0deg, var(--halo-a), var(--halo-b), var(--halo-c), var(--halo-a), var(--halo-b), var(--halo-a)); animation: aa-halo-spin 5s linear infinite; }
+.aa-halo::after { content: ""; position: absolute; inset: -6px; z-index: -1; border-radius: 9999px; background: radial-gradient(closest-side, color-mix(in srgb, var(--halo-a) 70%, transparent), color-mix(in srgb, var(--halo-b) 35%, transparent) 70%, transparent); filter: blur(3px); animation: aa-halo-breathe 2.8s ease-in-out infinite; }
+.aa-halo-sm::after { inset: -4px; }
+.aa-halo > * { position: relative; z-index: 1; }
+@keyframes aa-halo-spin { to { transform: rotate(360deg); } }
+@keyframes aa-halo-breathe { 0%, 100% { opacity: 0.45; transform: scale(0.94); } 50% { opacity: 0.95; transform: scale(1.06); } }
+@media (prefers-reduced-motion: reduce) { .aa-halo::before, .aa-halo::after { animation: none; } }
+/* sul profilo la luce dietro l'arciere prende il colore del suo livello e respira */
+.aa-stage-glow-lv { background: radial-gradient(42% 48% at 50% 46%, color-mix(in srgb, var(--glow) 55%, transparent), color-mix(in srgb, var(--glow) 18%, transparent) 55%, transparent 75%); mix-blend-mode: screen; opacity: 0.55; animation: aa-halo-breathe 3.4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .aa-stage-glow-lv { animation: none; } }
+/* nicchia dell'arciere nell'elenco: lo stesso alone del livello, a forma di nicchia */
+.aa-niche-halo { overflow: hidden; isolation: isolate; box-shadow: 0 0 14px -2px color-mix(in srgb, var(--halo-a) 70%, transparent); animation: aa-niche-breathe 2.8s ease-in-out infinite; }
+.aa-niche-halo::before { content: ""; position: absolute; left: 50%; top: 50%; width: 200%; aspect-ratio: 1; translate: -50% -50%; background: conic-gradient(from 0deg, var(--halo-a), var(--halo-b), var(--halo-c), var(--halo-a), var(--halo-b), var(--halo-a)); animation: aa-halo-spin 5s linear infinite; }
+@keyframes aa-niche-breathe { 0%, 100% { box-shadow: 0 0 8px -2px color-mix(in srgb, var(--halo-a) 55%, transparent); } 50% { box-shadow: 0 0 18px 0 color-mix(in srgb, var(--halo-a) 80%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .aa-niche-halo, .aa-niche-halo::before { animation: none; } }

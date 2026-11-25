@@ -1,4 +1,6 @@
 import { useEntryState } from "@/lib/arcieri/back-restore";
+import { haloOfXp } from "@/components/level-crest";
+import { GareBody } from "@/components/gare-body";
 import { AvatarChallenge } from "@/components/avatar-challenge";
 import { removeTeamMember } from "@/lib/arcieri/account.api";
 import { TargetGL } from "@/components/target-gl";
@@ -40,13 +42,14 @@ const MEMBER_SKY: Sky = { tod: "pomeriggio", weather: "sereno", clouds: 0.25, se
 
 export const Route = createFileRoute("/_app/squadra")({ component: Page });
 
-type Section = "arcieri" | "bersaglio" | "bacheca" | "compagnie" | "sfida";
+type Section = "arcieri" | "gare" | "bersaglio" | "bacheca" | "compagnie" | "sfida";
 /** le schede della Compagnia, una cosa per scheda: chi c'è, chi va meglio, dove tiriamo, cosa abbiamo vinto */
 const SECTIONS: { id: Section; label: string; icon: IconName; lede: string }[] = [
   { id: "arcieri", label: "Arcieri", icon: "team", lede: "Chi tira con noi e i podi per divisione: tocca un nome per la scheda, confronta fino a tre arcieri." },
+  { id: "gare", label: "Gare", icon: "flag", lede: "Segni solo quelle a cui hai partecipato. Il punteggio degli altri si vede, ma si cambia solo il tuo." },
   { id: "bersaglio", label: "Bersaglio", icon: "target", lede: "Dove arrivano le frecce della compagnia, sul paglione e sulle sagome 3D." },
   { id: "bacheca", label: "Trofei", icon: "trophy", lede: "Il palmarès della compagnia, i premi e la spesa comune." },
-  { id: "compagnie", label: "Compagnie", icon: "flag", lede: "Classifica delle compagnie e campionato FITAST letto dal portale: arcieri, gare, squadre. Qui entri in un'altra compagnia o ne fondi una." },
+  { id: "compagnie", label: "Compagnie", icon: "shield", lede: "Classifica delle compagnie e campionato FITAST letto dal portale: arcieri, gare, squadre. Qui entri in un'altra compagnia o ne fondi una." },
   { id: "sfida", label: "Sfida", icon: "duel", lede: "Sfida gli altri arcieri con il tuo avatar." },
 ];
 /** le schede salvate dalla versione di prima */
@@ -95,6 +98,8 @@ function ArcherCard({ row, look, index, me }: {
       <div className={`aa-menu-row aa-archer-card relative flex items-stretch gap-3 rounded-[1.4rem] p-2 pr-2.5 ${me ? "is-me" : ""}`} style={{ animationDelay: `${Math.min(index, 10) * 40}ms`, ["--div" as string]: tint }}>
         {/* nicchia: l'ambientazione dietro, il mezzo busto che sporge in alto */}
         <div className="relative w-[5.6rem] shrink-0 self-stretch">
+          {/* alone del colore del livello attorno alla nicchia: anello che gira e luce che respira */}
+          <span aria-hidden className="aa-niche-halo pointer-events-none absolute -inset-[3px] rounded-[1.25rem]" style={{ ["--halo-a" as string]: haloOfXp(row.xp ?? 0).a, ["--halo-b" as string]: haloOfXp(row.xp ?? 0).b, ["--halo-c" as string]: haloOfXp(row.xp ?? 0).c }} />
           <div className="absolute inset-0 overflow-hidden rounded-[1.05rem] bg-[#16201b]">
             {look?.scene ? (
               <span className="absolute inset-x-[-60%] -bottom-[10%] top-[-60%] opacity-90">
@@ -109,7 +114,7 @@ function ArcherCard({ row, look, index, me }: {
             </div>
           ) : (
             <div className="absolute inset-0 grid place-items-center">
-              <Avatar size="lg" label={row.name} color={row.avatarColor} photo={row.photoUrl} admin={row.admin} />
+              <Avatar size="lg" label={row.name} color={row.avatarColor} photo={row.photoUrl} admin={row.admin} xp={row.xp ?? null} />
             </div>
           )}
           {/* livello: lo stemma in un angolo della nicchia */}
@@ -149,14 +154,26 @@ function axisName(name: string, peers: string[]) {
 }
 
 function Page() {
+  return <CompagniaPage />;
+}
+
+/** La Compagnia, con le gare dentro: una sola voce nella barra in basso. `initial` apre una scheda (da /gare: Gare). */
+export function CompagniaPage({ initial }: { initial?: Section } = {}) {
   const ink = useThemeInk();
   const palette = [ink.primary, ink.accent, ink.soft];
   const { me } = useMember();
   const [nonce, setNonce] = useState(0);
   const { data, error, loading } = useLoad(`squad-board-${nonce}`, () => squadBoard());
   const companies = useLoad(`companies-${nonce}`, () => listCompanies());
-  const [sectionRaw, setSection] = useLocalState<string>("aa-compagnia-tab", "arcieri");
-  const section: Section = SECTIONS.some((x) => x.id === sectionRaw) ? (sectionRaw as Section) : OLD_SECTION[sectionRaw] ?? "arcieri";
+  const [sectionRaw, setStored] = useLocalState<string>("aa-compagnia-tab", "arcieri");
+  // aperta da /gare si parte da Gare; un tocco sulle schede sceglie e ricorda
+  const [opened, setOpened] = useState<Section | undefined>(initial);
+  const setSection = (x: Section) => {
+    setOpened(undefined);
+    setStored(x);
+  };
+  const stored: Section = SECTIONS.some((x) => x.id === sectionRaw) ? (sectionRaw as Section) : OLD_SECTION[sectionRaw] ?? "arcieri";
+  const section: Section = opened ?? stored;
   const [editing, setEditing] = useState<"none" | "edit" | "new">("none");
   const [busy, setBusy] = useState<number | null>(null);
   const looks = useTeamAvatars();
@@ -259,7 +276,7 @@ function Page() {
         />
       ) : null}
       <nav aria-label="Sezioni della compagnia" className="aa-club-tabs sticky top-[calc(env(safe-area-inset-top)+3.6rem)] z-20 -mx-1 px-1">
-        <div className="grid grid-cols-5 gap-1 rounded-2xl p-1">
+        <div className="grid grid-cols-6 gap-1 rounded-2xl p-1">
           {SECTIONS.map((x) => (
             <button key={x.id} type="button" aria-pressed={section === x.id} onClick={() => setSection(x.id)} className="aa-club-tab grid min-h-14 place-items-center gap-0.5 rounded-xl px-0 py-1 text-[0.62rem] font-semibold leading-tight tracking-tight">
               <Glyph name={x.icon} size={18} />
@@ -388,6 +405,8 @@ function Page() {
       ) : null}
 
       {section === "sfida" ? <AvatarChallenge looks={looks} /> : null}
+
+      {section === "gare" ? <GareBody embedded /> : null}
 
 
       {section === "compagnie" ? (

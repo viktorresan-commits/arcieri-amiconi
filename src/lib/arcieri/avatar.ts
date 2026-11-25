@@ -20,7 +20,7 @@ export type AvatarLook = {
   stache: "auto" | "nessuno" | "sottili" | "classici" | "folti" | "manubrio" | "ferro";
   /** colore di barba e baffi ("" = come i capelli) */
   beardColor: string;
-  hat: "nessuno" | "berretto" | "fascia" | "piuma" | "cappuccio" | "elmo" | "bandana" | "robin" | "tesa" | "cerchietto" | "cuffia" | "alloro";
+  hat: "nessuno" | "berretto" | "fascia" | "piuma" | "cappuccio" | "elmo" | "bandana" | "robin" | "tesa" | "cerchietto" | "cuffia" | "alloro" | "corona";
   hatColor: string;
   /** stile degli abiti: moderno o medievale */
   style: "moderno" | "medievale";
@@ -321,7 +321,7 @@ export const AVATAR_DEFAULT: AvatarLook = {
  * file di miniature da scorrere nell'editor.
  */
 export const EXTRA_OPTIONS = {
-  pattern: { label: "Fantasia della veste", tab: "abiti", items: [["nessuno", "Tinta unita"], ["righe", "A righe"], ["righe-verticali", "Righe verticali"], ["quadri", "A quadri"], ["scozzese", "Scozzese"], ["pois", "A pois"], ["rombi", "A rombi"], ["chevron", "A spina"], ["mimetico", "Mimetico"], ["ricamo", "Ricamata"], ["bordure", "Con bordure"], ["fasce", "A fasce"], ["sfumata", "Sfumata"], ["zigzag", "A zig-zag"], ["stelline", "Stelline"], ["foglie", "Foglie"], ["onde", "Onde"], ["diagonali", "Righe oblique"], ["nido", "Nido d'ape"], ["gigli", "Gigli"], ["croci", "Crocette"], ["losanghe", "A losanghe"], ["puntini", "A puntini"], ["tartan", "Tartan"], ["fiamme", "Fiamme in fondo"]] },
+  pattern: { label: "Fantasia della veste", tab: "abiti", items: [["nessuno", "Tinta unita"], ["righe", "A righe"], ["righe-verticali", "Righe verticali"], ["quadri", "A quadri"], ["scozzese", "Scozzese"], ["pois", "A pois"], ["rombi", "A rombi"], ["chevron", "A spina"], ["mimetico", "Mimetico"], ["ricamo", "Ricamata"], ["bordure", "Con bordure"], ["fasce", "A fasce"], ["sfumata", "Sfumata"], ["zigzag", "A zig-zag"], ["stelline", "Stelline"], ["foglie", "Foglie"], ["onde", "Onde"], ["diagonali", "Righe oblique"], ["nido", "Nido d'ape"], ["gigli", "Gigli"], ["croci", "Crocette"], ["losanghe", "A losanghe"], ["puntini", "A puntini"], ["tartan", "Tartan"], ["fiamme", "Fiamme in fondo"], ["scaglie", "Scaglie di drago"]] },
   emblem: { label: "Stemma sul petto", tab: "abiti", items: [["nessuno", "Nessuno"], ["compagnia", "Stemma della compagnia"], ["cervo", "Cervo"], ["lupo", "Lupo"], ["drago", "Drago"], ["freccia", "Freccia"], ["bersaglio", "Bersaglio"], ["giglio", "Giglio"], ["stella", "Stella"], ["scudo", "Scudo"], ["quercia", "Quercia"], ["aquila", "Aquila"], ["falco", "Falco"], ["leone", "Leone"], ["croce", "Croce"], ["sole", "Sole"], ["luna", "Luna"], ["corona", "Corona"], ["orso", "Orso"], ["cinghiale", "Cinghiale"], ["volpe", "Volpe"], ["civetta", "Civetta"], ["spade", "Spade incrociate"], ["torre", "Torre"], ["chiave", "Chiave"], ["ancora", "Ancora"], ["fiore", "Fiore"], ["trifoglio", "Trifoglio"], ["fiamma", "Fiamma"], ["cuore", "Cuore"], ["spiga", "Spiga"], ["ascia", "Ascia"], ["cavallo", "Cavallo"], ["pesce", "Pesce"], ["gatto", "Gatto"], ["albero", "Albero"]] },
   paint: { label: "Pittura sul viso", tab: "viso", items: [["nessuna", "Nessuna"], ["strisce", "Strisce"], ["maschera", "Maschera sugli occhi"], ["punti", "Punti"], ["tribale", "Tribale"], ["fulmine", "Fulmine"], ["mezza", "Mezzo viso"], ["naso", "Riga sul naso"], ["guance", "Guance"], ["volpe", "Volpe"], ["lupo", "Lupo"], ["occhi", "Occhi scuri"], ["zigzag", "Zig-zag"], ["croce", "Croce in fronte"], ["spirale", "Spirali"]] },
   tattoo: { label: "Tatuaggio", tab: "viso", items: [["nessuno", "Nessuno"], ["rune", "Rune sul braccio"], ["onde", "Onde sul braccio"], ["freccia", "Freccia sul braccio"], ["stelle", "Stelle sul collo"], ["lacrima", "Lacrima sul viso"], ["punti", "Punti sulla mano"], ["drago", "Drago sul braccio"], ["sole", "Sole sulla spalla"], ["luna", "Luna sul braccio"], ["foglia", "Foglia sul braccio"], ["bersaglio", "Bersaglio sul braccio"], ["spine", "Rami sul braccio"]] },
@@ -339,7 +339,7 @@ export const EXTRA_OPTIONS = {
   buckle: { label: "Fibbia della cintura", tab: "abiti", items: [["semplice", "Semplice"], ["oro", "Oro"], ["argento", "Argento"], ["celtica", "Celtica"], ["ovale", "Ovale"], ["quadrata", "Quadrata"], ["bronzo", "Bronzo"], ["rombo", "A rombo"], ["leone", "Leone"], ["freccia", "Con freccia"]] },
   pouchType: { label: "Tipo di borsello", tab: "accessori", items: [["borsello", "Borsello"], ["tascapane", "Tascapane"], ["sacchetto", "Sacchetto"], ["cofanetto", "Cofanetto"], ["corno", "Corno"], ["borraccia", "Borraccia"], ["bisaccia", "Bisaccia"], ["astuccio", "Astuccio"]] },
   clasp: { label: "Fermaglio del mantello", tab: "accessori", items: [["nessuno", "Nessuno"], ["oro", "Oro"], ["argento", "Argento"], ["foglia", "Foglia"], ["drago", "Drago"], ["gemma", "Gemma"], ["bronzo", "Bronzo"], ["luna", "Luna"], ["freccia", "Freccia"], ["nodo", "Nodo"]] },
-  capePattern: { label: "Fantasia del mantello", tab: "accessori", items: [["liscio", "Liscio"], ["bordato", "Bordato"], ["righe", "A righe"], ["stelle", "Stellato"], ["scacchi", "A scacchi"], ["stemma", "Con stemma"], ["zigzag", "A zig-zag"], ["onde", "Onde"], ["diagonali", "Righe oblique"], ["gigli", "Gigli"], ["foglie", "Foglie"]] },
+  capePattern: { label: "Fantasia del mantello", tab: "accessori", items: [["liscio", "Liscio"], ["bordato", "Bordato"], ["righe", "A righe"], ["stelle", "Stellato"], ["scacchi", "A scacchi"], ["stemma", "Con stemma"], ["zigzag", "A zig-zag"], ["onde", "Onde"], ["diagonali", "Righe oblique"], ["gigli", "Gigli"], ["foglie", "Foglie"], ["scaglie", "Scaglie di drago"], ["fenice", "Piume di fenice"]] },
   frame: { label: "Cornice della foto profilo", tab: "scena", items: [["nessuna", "Nessuna"], ["oro", "Oro"], ["argento", "Argento"], ["bronzo", "Bronzo"], ["foglie", "Foglie"], ["frecce", "Frecce"], ["fuoco", "Fuoco"], ["ghiaccio", "Ghiaccio"], ["notte", "Notte"], ["arcobaleno", "Arcobaleno"], ["legno", "Legno"], ["bersaglio", "Bersaglio"], ["smeraldo", "Smeraldo"], ["rubino", "Rubino"], ["zaffiro", "Zaffiro"], ["corda", "Corda"], ["stelle", "Stelle"], ["alloro", "Alloro"], ["pietra", "Pietra"], ["tramonto", "Tramonto"], ["perle", "Perle"], ["ferro", "Ferro battuto"], ["nastro", "Nastro"], ["fiori", "Fiori"]] },
   idle: { label: "Movimento da fermo", tab: "posa", items: [["fermo", "Fermo"], ["respiro", "Respira"], ["guarda", "Si guarda intorno"], ["corda", "Controlla la corda"], ["stretching", "Si sgranchisce"], ["saluta", "Saluta ogni tanto"], ["esulta", "Esulta ogni tanto"], ["pensa", "Pensa al tiro"]] },
 } as const;
@@ -354,6 +354,67 @@ export function normalizeLook(raw: unknown): AvatarLook {
   const out = { ...AVATAR_DEFAULT, ...r } as AvatarLook;
   if (!TOPS[out.style]?.some((t) => t.id === out.top)) out.top = TOPS[out.style][0].id;
   return out;
+}
+
+/**
+ * I tre completi del Fondatore: abiti, accessori, arco e ambientazione, sopra il suo viso e i suoi capelli.
+ * Li vede e li indossa solo il Fondatore.
+ */
+export const FOUNDER_LOOKS: { id: string; label: string; motto: string; look: Partial<AvatarLook> }[] = [
+  {
+    id: "sovrano",
+    label: "Il Sovrano",
+    motto: "Oro, cremisi ed ermellino davanti al trono",
+    look: {
+      style: "medievale", top: "cappotto-lungo", shirt: "#7a1426", trim: "#e8c25a", sleeves: "#f2e6c8", pattern: "bordure", emblem: "corona",
+      bottom: "calzamaglia", pants: "#1c1418", footwear: "stivali-alti", shoes: "#2a1a12",
+      cape: true, capeStyle: "liscio", capeColor: "#8a1424", capePattern: "gigli", clasp: "gemma", fur: true, furColor: "#f4f1ea", cowl: false, scarf: false, mask: false,
+      hat: "corona", hatColor: "#e8b93e", sash: false, straps: false, wraps: false,
+      belt: "larga", beltColor: "#3a1a12", buckle: "oro", bracers: "#c9a03a", gloves: true, necklace: true, amulet: true, pouch: false,
+      bowType: "storico", useMain: false, riser: "#d9b45a", limbs: "#2a1a12", string: "#f4f1ea", bowDeco: "oro", fletch: "#8a1424", cock: "#e8b93e", nock: "#e8b93e", shaft: "#3a2412", fletchStyle: "scudo",
+      quiver: "#3a1a12", quiverStyle: "decorata", quiverPlace: "fianco", chestguard: false, frame: "oro", faceBg: "#8a1424", scene: "trono",
+    },
+  },
+  {
+    id: "drago",
+    label: "Il Signore del Drago",
+    motto: "Scaglie nere e fuoco smeraldo sul vulcano",
+    look: {
+      style: "medievale", top: "giubba", shirt: "#16161a", trim: "#3fd18a", sleeves: "#22252a", pattern: "scaglie", emblem: "drago",
+      bottom: "pantaloni", pants: "#141418", footwear: "stivali-alti", shoes: "#0e0e10",
+      cape: true, capeStyle: "frastagliato", capeColor: "#1a1d1f", capePattern: "scaglie", clasp: "drago", fur: false, cowl: false, scarf: false, mask: false,
+      hat: "nessuno", sash: false, straps: true, wraps: false,
+      belt: "larga", beltColor: "#1a1a1a", buckle: "celtica", bracers: "#2a2d33", gloves: true, necklace: false, amulet: true, pouch: false,
+      bowType: "ricurvo", useMain: false, riser: "#141418", limbs: "#0f5257", string: "#3fd18a", bowDeco: "rune", fletch: "#2fbf71", cock: "#14181c", nock: "#3fd18a", shaft: "#14181c", fletchStyle: "parabolica",
+      quiver: "#1a1d1f", quiverStyle: "scaglie", quiverPlace: "schiena", chestguard: false, frame: "smeraldo", faceBg: "#0f2a1e", scene: "drago",
+    },
+  },
+  {
+    id: "fenice",
+    label: "La Fenice",
+    motto: "Avorio e piume di fuoco sopra le nuvole",
+    look: {
+      style: "medievale", top: "tunica-lunga", shirt: "#f4ead6", trim: "#e0a43a", sleeves: "#fff8ea", pattern: "fiamme", emblem: "sole",
+      bottom: "calzamaglia", pants: "#e9dcc0", footwear: "stivali-alti", shoes: "#7a3a14",
+      cape: true, capeStyle: "frastagliato", capeColor: "#c2361a", capePattern: "fenice", clasp: "oro", fur: false, cowl: false, scarf: false, mask: false,
+      hat: "cerchietto", hatColor: "#e0a43a", hairFeather: true, sash: true, sashColor: "#e0a43a", straps: false, wraps: false,
+      belt: "larga", beltColor: "#7a3a14", buckle: "oro", bracers: "#e0a43a", gloves: false, necklace: true, amulet: true, pouch: false,
+      bowType: "asiatico", useMain: false, riser: "#e0a43a", limbs: "#7a1f10", string: "#ffe08a", bowDeco: "piume", fletch: "#ff7a1a", cock: "#ffd24a", nock: "#ffd24a", shaft: "#7a1f10", fletchStyle: "vela",
+      quiver: "#7a2a10", quiverStyle: "dipinta", quiverPlace: "fianco", chestguard: false, frame: "fuoco", faceBg: "#c2361a", scene: "cielo",
+    },
+  },
+];
+
+/** I pezzi dei completi del Fondatore: nell'editor li vede e li sceglie solo lui (le ambientazioni sono di tutti). */
+export const FOUNDER_ONLY: Partial<Record<keyof AvatarLook, readonly string[]>> = { hat: ["corona"], capePattern: ["scaglie", "fenice"], pattern: ["scaglie"] };
+
+export const founderOnly = (k: string, v: string) => Boolean(FOUNDER_ONLY[k as keyof AvatarLook]?.includes(v));
+
+/** chi non è il Fondatore non porta i suoi pezzi: tornano alla scelta di base */
+export function withoutFounderPieces<T extends Partial<Record<keyof AvatarLook, unknown>>>(look: T): T {
+  const out = { ...look } as Record<string, unknown>;
+  for (const [k, list] of Object.entries(FOUNDER_ONLY)) if (typeof out[k] === "string" && list?.includes(out[k] as string)) out[k] = AVATAR_DEFAULT[k as keyof AvatarLook];
+  return out as T;
 }
 
 /** Partenze già pronte: si cambia tutto dopo. */

@@ -4,8 +4,8 @@
  */
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
-import { db, ensureMember } from "./access";
-import { AVATAR_DEFAULT } from "./avatar";
+import { db, ensureMember, staffLevel } from "./access";
+import { AVATAR_DEFAULT, withoutFounderPieces } from "./avatar";
 
 /** Tiene solo le voci conosciute, con testi corti o vero/falso. */
 function cleanLook(raw: unknown) {
@@ -24,10 +24,12 @@ export const saveAvatar = createServerFn({ method: "POST" })
   .validator((input: unknown) => ({ look: cleanLook((input as { look?: unknown } | null)?.look) }))
   .handler(async ({ data, context }) => {
     const sql = await db();
-    await ensureMember(sql, context.userId);
+    const me = await ensureMember(sql, context.userId);
+    // corona, scaglie e piume di fenice sono del Fondatore: chi non lo è non li salva
+    const look = staffLevel(me) === "super" ? data.look : withoutFounderPieces(data.look);
     await sql`
       insert into avatars (user_id, look, updated_at)
-      values (${context.userId}, ${JSON.stringify(data.look)}::jsonb, now())
+      values (${context.userId}, ${JSON.stringify(look)}::jsonb, now())
       on conflict (user_id) do update set look = excluded.look, updated_at = now()`;
     return { ok: true };
   });

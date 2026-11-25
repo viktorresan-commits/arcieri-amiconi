@@ -142,6 +142,46 @@ export function ClothPattern({ kind, shapes, base, trim, uid, box }: { kind: str
     case "fiamme":
       fill = <g>{Array.from({ length: Math.ceil(w / 10) + 1 }, (_, i) => <path key={i} d={`M${x0 + i * 10 - 5} ${y1} C${x0 + i * 10 - 6} ${y1 - 10} ${x0 + i * 10 + 2} ${y1 - 14} ${x0 + i * 10} ${y1 - 24} C${x0 + i * 10 + 6} ${y1 - 14} ${x0 + i * 10 + 6} ${y1 - 8} ${x0 + i * 10 + 5} ${y1} Z`} fill={i % 2 ? "#ffb02e" : trim} opacity="0.8" />)}</g>;
       break;
+    case "scaglie":
+      // scaglie di drago a file sfalsate, bordate del colore delle finiture
+      tile = (
+        <pattern id={id} width="10" height="8" patternUnits="userSpaceOnUse">
+          <path d="M0 0 A5 5 0 0 0 10 0" fill={dark} fillOpacity="0.4" stroke={trim} strokeWidth="0.7" strokeOpacity="0.8" />
+          <path d="M-5 4 A5 5 0 0 0 5 4 M5 4 A5 5 0 0 0 15 4" fill={light} fillOpacity="0.14" stroke={trim} strokeWidth="0.7" strokeOpacity="0.8" />
+        </pattern>
+      );
+      break;
+    case "fenice": {
+      // piume di fuoco: il colore si accende verso l'orlo, file di piume e lingue di fiamma in fondo
+      const g = `${id}fg`;
+      const rows = [0.42, 0.56, 0.7, 0.84];
+      fill = (
+        <g>
+          <defs>
+            <linearGradient id={g} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0.2" stopColor="#ff6a1a" stopOpacity="0" />
+              <stop offset="0.6" stopColor="#ff6a1a" stopOpacity="0.45" />
+              <stop offset="1" stopColor="#ffd24a" stopOpacity="0.9" />
+            </linearGradient>
+          </defs>
+          <rect x={x0} y={y0} width={w} height={h} fill={`url(#${g})`} />
+          {rows.map((k, ri) =>
+            Array.from({ length: Math.ceil(w / 8) + 1 }, (_, i) => {
+              const x = x0 + i * 8 + (ri % 2) * 4;
+              const y = y0 + h * k;
+              return (
+                <g key={`${ri}-${i}`}>
+                  <path d={`M${x} ${y} C${x - 3.4} ${y + 4} ${x - 2.4} ${y + 10} ${x} ${y + 14} C${x + 2.4} ${y + 10} ${x + 3.4} ${y + 4} ${x} ${y} Z`} fill={["#ffe08a", "#ffb02e", "#ff6a1a", "#e0401a"][(i + ri) % 4]} opacity={0.55 + ri * 0.1} />
+                  <path d={`M${x} ${y + 1} V${y + 12}`} stroke="#7a1f0a" strokeWidth="0.45" opacity="0.6" />
+                </g>
+              );
+            }),
+          )}
+          {Array.from({ length: Math.ceil(w / 9) + 1 }, (_, i) => <path key={i} d={`M${x0 + i * 9 - 4.5} ${y1} C${x0 + i * 9 - 6} ${y1 - 12} ${x0 + i * 9 + 2} ${y1 - 16} ${x0 + i * 9} ${y1 - 28} C${x0 + i * 9 + 6} ${y1 - 16} ${x0 + i * 9 + 6} ${y1 - 8} ${x0 + i * 9 + 4.5} ${y1} Z`} fill={i % 2 ? "#ffd24a" : "#ff8a2a"} opacity="0.85" />)}
+        </g>
+      );
+      break;
+    }
     default:
       return null;
   }

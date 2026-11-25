@@ -22,9 +22,13 @@ export type SceneId =
   | "palestra"
   | "palazzetto"
   | "capannone"
-  | "salone";
+  | "salone"
+  // del Fondatore
+  | "trono"
+  | "drago"
+  | "cielo";
 
-export const SCENES: { id: SceneId; label: string; ground: [string, string]; tone: string; indoor?: boolean }[] = [
+export const SCENES: { id: SceneId; label: string; ground: [string, string]; tone: string; indoor?: boolean; /** cielo e luce propri, uguali a ogni ora */ ownSky?: boolean }[] = [
   { id: "fabriano", label: "Piazza del Comune, Fabriano", ground: ["#86827b", "#5f5c57"], tone: "#a8402f" },
   { id: "campo", label: "Campo di tiro", ground: ["#5d8a45", "#4c7639"], tone: "#3f6a3a" },
   { id: "foresta", label: "Foresta", ground: ["#3f6a32", "#33592a"], tone: "#24452a" },
@@ -49,6 +53,10 @@ export const SCENES: { id: SceneId; label: string; ground: [string, string]; ton
   { id: "palazzetto", label: "Palazzetto federale (al chiuso)", ground: ["#2f5f8a", "#264e72"], tone: "#2a4a7a", indoor: true },
   { id: "capannone", label: "Fienile del club (al chiuso)", ground: ["#8a6a42", "#74583a"], tone: "#7a5a3a", indoor: true },
   { id: "salone", label: "Sala d'armi del castello (al chiuso)", ground: ["#6a4a30", "#583c26"], tone: "#5a4a3a", indoor: true },
+  // nate per i completi del Fondatore, ma di tutti
+  { id: "trono", label: "Sala del Trono", ground: ["#3a2c34", "#140d12"], tone: "#8a1424", indoor: true, ownSky: true },
+  { id: "drago", label: "Picco del Drago", ground: ["#1a0e0e", "#0a0606"], tone: "#9a2a0c", ownSky: true },
+  { id: "cielo", label: "Cittadella Celeste", ground: ["#f4ecdc", "#c9b89a"], tone: "#5a3c86", ownSky: true },
 ];
 
 export const isIndoor = (id: string | undefined) => Boolean(sceneById(id).indoor);

@@ -52,7 +52,7 @@ export function RankBars({ rows, unit = "", tint = "var(--color-primary)", limit
             ) : row.logo ? (
               <img src={row.logo} alt="" className="h-9 w-9 shrink-0 object-contain" />
             ) : (
-              <Avatar size="sm" label={row.name} color={row.color || "#3d8a4e"} photo={row.photo} look={row.look} className="h-9 w-9 shrink-0" />
+              <Avatar size="sm" label={row.name} color={row.color || "#3d8a4e"} photo={row.photo} look={row.look} userId={row.id} className="h-9 w-9 shrink-0" />
             )}
             <div className="min-w-0 flex-1">
               <div className="flex items-baseline justify-between gap-2">

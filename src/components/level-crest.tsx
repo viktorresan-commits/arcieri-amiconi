@@ -9,6 +9,20 @@ function metalOf(level: number) {
 }
 
 /**
+ * Colori dell'alone attorno al ritratto, quelli dello stemma del livello: bronzo e cuoio, argento e
+ * azzurro, oro e rubino, oro reale e smeraldo. a = metallo, b = smalto, c = luce.
+ */
+export function levelHalo(level: number) {
+  if (level >= 20) return { a: "#f5c94a", b: "#2fbf71", c: "#fff3c4", name: "Oro reale" };
+  if (level >= 10) return { a: "#e8b93e", b: "#e0435a", c: "#fff0b8", name: "Oro" };
+  if (level >= 5) return { a: "#c9d3dc", b: "#5aa8ff", c: "#ffffff", name: "Argento" };
+  return { a: "#d9925a", b: "#a8562a", c: "#ffd9b0", name: "Bronzo" };
+}
+
+/** lo stesso alone a partire dai punti */
+export const haloOfXp = (xp: number) => levelHalo(levelOf(Math.max(0, xp)).level);
+
+/**
  * Stemma del livello dell'arciere: scudo araldico con il numero, nastro e barra dei punti verso il
  * livello successivo. compact: solo lo scudo piccolo, da appoggiare sul ritratto.
  */

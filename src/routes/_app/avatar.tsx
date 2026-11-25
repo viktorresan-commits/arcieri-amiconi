@@ -24,6 +24,8 @@ import {
   HAIR_COLORS,
   SKINS,
   EXTRA_OPTIONS,
+  FOUNDER_LOOKS,
+  founderOnly,
   randomLook,
   outfitIdea,
   presetLook,
@@ -120,7 +122,7 @@ function ExtraPreview({ k, look, value }: { k: ExtraKey; look: AvatarLook; value
 }
 
 /** tutte le novità di una sezione dell'editor, ognuna nel suo nastro */
-function ExtraStrips({ tab, look, shown, set }: { tab: string; look: AvatarLook; shown: AvatarLook; set: (k: ExtraKey, v: string) => void }) {
+function ExtraStrips({ tab, look, shown, set, founder = false }: { tab: string; look: AvatarLook; shown: AvatarLook; set: (k: ExtraKey, v: string) => void; /** il Fondatore vede anche i pezzi dei suoi completi */ founder?: boolean }) {
   const keys = (Object.keys(EXTRA_OPTIONS) as ExtraKey[]).filter((k) => EXTRA_OPTIONS[k].tab === tab);
   if (!keys.length) return null;
   return (
@@ -131,7 +133,7 @@ function ExtraStrips({ tab, look, shown, set }: { tab: string; look: AvatarLook;
           title={EXTRA_OPTIONS[k].label}
           current={String(look[k] ?? "")}
           onPick={(id) => set(k, id)}
-          items={(EXTRA_OPTIONS[k].items as readonly (readonly [string, string])[]).map(([id, label]) => ({ id, label, preview: <ExtraPreview k={k} look={shown} value={id} /> }))}
+          items={(EXTRA_OPTIONS[k].items as readonly (readonly [string, string])[]).filter(([id]) => founder || !founderOnly(k, id)).map(([id, label]) => ({ id, label, preview: <ExtraPreview k={k} look={shown} value={id} /> }))}
         />
       ))}
     </div>
@@ -335,6 +337,9 @@ export function AvatarEditor() {
   const { sky } = useSky();
   const member = useMemberMaybe();
   const profileName = member ? [member.me.givenName, member.me.familyName].filter(Boolean).join(" ").trim() || member.me.nickname : "";
+  // i completi del Fondatore (e i loro pezzi: corona, scaglie, piume di fenice) li vede e li sceglie solo lui
+  const founder = Boolean(member?.me.isSuper) && member?.me.role === "admin";
+  const hats: [AvatarLook["hat"], string][] = founder ? [...HAT_OPTS, ["corona", "Corona"]] : HAT_OPTS;
   const set = <K extends keyof AvatarLook>(k: K, v: AvatarLook[K]) => setLook((l) => ({ ...l, [k]: v }));
   const opts = <T extends string>(list: readonly T[]) => list.map((id) => ({ id, label: id.charAt(0).toUpperCase() + id.slice(1) }));
 
@@ -377,6 +382,9 @@ export function AvatarEditor() {
         </div>
       </div>
       <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 [scrollbar-width:none]">
+        {founder ? FOUNDER_LOOKS.map((c) => (
+          <button key={c.id} type="button" className="aa-chip shrink-0 border-[#e8b93e]/60 bg-[#e8b93e]/15 text-[#f5d36b]" onClick={() => setLook((l) => presetLook(l, c.look))}><Glyph name="medal" size={14} /> {c.label}</button>
+        )) : null}
         {AVATAR_PRESETS.map((p) => (
           <button key={p.id} type="button" className="aa-chip shrink-0" onClick={() => setLook((l) => presetLook(l, p.look))}>{p.label}</button>
         ))}
@@ -394,6 +402,24 @@ export function AvatarEditor() {
       </div>
       {mode === "semplice" ? (
         <Card className="grid gap-5">
+          {founder ? (
+            <Strip
+              title="Completi del Fondatore"
+              current=""
+              hint="solo tuoi: abiti, arco e sfondo"
+              onPick={(id) => { const c = FOUNDER_LOOKS.find((x) => x.id === id); if (c) setLook((l) => presetLook(l, c.look)); }}
+              items={FOUNDER_LOOKS.map((c) => ({
+                id: c.id,
+                label: c.label,
+                preview: (
+                  <span className="absolute inset-0">
+                    <span className="absolute inset-0"><SceneThumb scene={c.look.scene ?? "campo"} sky={sky} className="h-full w-full rounded-none" /></span>
+                    <ArcherFront look={{ ...presetLook(shown, c.look), lefty: false }} crop="10 0 180 360" className="absolute inset-0 h-full w-full" />
+                  </span>
+                ),
+              }))}
+            />
+          ) : null}
           <OutfitIdeas base={shown} onPick={(l) => setLook(l)} />
           <Strip title="Posa" current={look.pose} onPick={(id) => set("pose", id as AvatarLook["pose"])} items={POSE_OPTS.map(([id, label]) => ({ id, label, preview: <span className="absolute left-[-14%] top-[-4%] w-[128%]"><ArcherAvatar look={{ ...shown, pose: id, lefty: false }} pose={id === "animata" ? "mira" : id} still interactive={false} className="h-auto w-full" /></span> }))} />
           <Strip title="Stili pronti" current="" hint="tocca per provarne uno" onPick={(id) => { const p = AVATAR_PRESETS.find((x) => x.id === id); if (p) setLook((l) => presetLook(l, p.look)); }} items={AVATAR_PRESETS.map((p) => ({ id: p.id, label: p.label, preview: <AvatarFace look={{ ...presetLook(shown, p.look), frame: "nessuna" }} className="absolute left-[-6%] top-[-4%] h-[112%] w-[112%]" /> }))} />
@@ -415,7 +441,7 @@ export function AvatarEditor() {
               <Toggle on={look.freckles} label="Lentiggini" onChange={(v) => set("freckles", v)} />
             </div>
           </Row>
-          <Strip title="In testa" current={look.hat} onPick={(id) => set("hat", id as AvatarLook["hat"])} items={HAT_OPTS.map(([id, label]) => ({ id, label, preview: <AvatarFace look={{ ...shown, hat: id, frame: "nessuna" }} className="h-full w-full" /> }))} />
+          <Strip title="In testa" current={look.hat} onPick={(id) => set("hat", id as AvatarLook["hat"])} items={hats.map(([id, label]) => ({ id, label, preview: <AvatarFace look={{ ...shown, hat: id, frame: "nessuna" }} className="h-full w-full" /> }))} />
           <Strip title="Sopra" current={look.top} onPick={(id) => set("top", id as AvatarLook["top"])} items={[...TOPS.moderno, ...TOPS.medievale].map((t) => ({ id: t.id, label: t.label, preview: <ArcherFront look={{ ...shown, top: t.id, cape: false, lefty: false }} crop="30 70 140 170" className="h-full w-full" /> }))} />
           <Row label="Colore della veste"><Tint value={look.shirt} onPick={(c) => set("shirt", c)} quick={CLOTH_COLORS} /></Row>
           <Strip title="Sotto" current={look.bottom} onPick={(id) => set("bottom", id as AvatarLook["bottom"])} items={BOTTOM_OPTS.map(([id, label]) => ({ id, label, preview: <ArcherFront look={{ ...shown, bottom: id, cape: false, lefty: false }} crop="35 180 130 170" className="h-full w-full" /> }))} />
@@ -514,7 +540,7 @@ export function AvatarEditor() {
             <Slider label="Volume" value={tune(look.hairVolume, 50, 0, 100)} min={0} max={100} onChange={(v) => set("hairVolume", String(Math.round(v)))} format={(v) => `${v}%`} ends={["Aderenti", "Gonfi"]} />
             <Row label="Colore"><Tint value={look.hairColor} onPick={(c) => set("hairColor", c)} quick={HAIR_COLORS} /></Row>
             <Row label="In testa">
-              <FaceGrid look={shown} current={look.hat} items={HAT_OPTS.map(([id, label]) => ({ id, label, patch: { hat: id } }))} onPick={(id) => set("hat", id as AvatarLook["hat"])} />
+              <FaceGrid look={shown} current={look.hat} items={hats.map(([id, label]) => ({ id, label, patch: { hat: id } }))} onPick={(id) => set("hat", id as AvatarLook["hat"])} />
             </Row>
             {look.hat !== "nessuno" ? <Row label="Colore del copricapo"><Tint value={look.hatColor} onPick={(c) => set("hatColor", c)} quick={CLOTH_COLORS} /></Row> : null}
             {look.hat !== "nessuno" && look.hat !== "cappuccio" ? <Slider label="Gira il copricapo sulla testa" value={tune(look.hatRot, 0, -180, 180)} min={-180} max={180} onChange={(v) => set("hatRot", String(Math.round(v)))} format={(v) => `${v}°`} ends={["Visiera dietro", "Visiera dietro"]} /> : null}
@@ -671,7 +697,7 @@ export function AvatarEditor() {
             {look.chestguard ? <Row label="Colore della pettorina"><Colors value={look.chestColor} colors={GEAR_COLORS} onPick={(c) => set("chestColor", c)} /></Row> : null}
           </>
         ) : null}
-        <ExtraStrips tab={tab} look={look} shown={shown} set={setX} />
+        <ExtraStrips tab={tab} look={look} shown={shown} set={setX} founder={founder} />
       </Card>
       </> : null}
       <Button variant="ghost" onClick={() => history.back()}>Fatto</Button>

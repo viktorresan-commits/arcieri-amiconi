@@ -2,6 +2,8 @@ import { useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type CSSP
 import { clsx } from "clsx";
 import type { AvatarLook } from "@/lib/arcieri/avatar";
 import { AvatarFace } from "./archer-avatar";
+import { haloOfXp } from "./level-crest";
+import { useLevels } from "@/lib/arcieri/levels";
 import { useRouterState } from "@tanstack/react-router";
 import { currentShortcut } from "@/lib/arcieri/shortcuts";
 import { Glyph } from "./icons";
@@ -211,7 +213,30 @@ export function ErrorNote({ text }: { text: string }) {
   return <p className="rounded-xl border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">{text}</p>;
 }
 
-export function Avatar({ label, color, photo, className, size = "md", look, admin = false }: { label: string; color: string; photo?: string | null; className?: string; size?: "sm" | "md" | "lg" | "xl"; look?: AvatarLook | null; /** privilegio dello staff: anello che gira attorno alla foto */ admin?: boolean }) {
+/** Alone animato attorno a un ritratto tondo, nel colore del livello dell'arciere: anello che gira e luce che respira. */
+export function LevelHalo({ xp, size = "md", children, className }: { xp: number; size?: "sm" | "md" | "lg" | "xl"; children: ReactNode; className?: string }) {
+  const h = haloOfXp(xp);
+  return (
+    <span
+      className={cx("aa-halo relative inline-grid shrink-0 place-items-center rounded-full", size === "sm" ? "aa-halo-sm" : "", className)}
+      style={{ "--halo-a": h.a, "--halo-b": h.b, "--halo-c": h.c } as CSSProperties}
+      title={`Livello ${h.name.toLowerCase()}`}
+    >
+      {children}
+    </span>
+  );
+}
+
+export function Avatar({ label, color, photo, className, size = "md", look, admin = false, userId, xp }: { label: string; color: string; photo?: string | null; className?: string; size?: "sm" | "md" | "lg" | "xl"; look?: AvatarLook | null; /** privilegio dello staff: anello che gira attorno alla foto */ admin?: boolean; /** l'arciere: l'alone prende il colore del suo livello */ userId?: string | null; /** punti già noti (altrimenti si leggono dai livelli di tutti) */ xp?: number | null }) {
+  const levels = useLevels();
+  const points = xp ?? (userId ? levels[userId] : undefined);
+  if (points != null) {
+    return (
+      <LevelHalo xp={points} size={size}>
+        <Avatar label={label} color={color} photo={photo} size={size} look={look} admin={admin} className={cx(className, "relative z-[1]")} />
+      </LevelHalo>
+    );
+  }
   if (admin) {
     return (
       <span className={cx("aa-admin-ring relative inline-grid shrink-0 place-items-center rounded-full", size === "sm" ? "p-[2px]" : "p-[3px]", className)} title="Staff">

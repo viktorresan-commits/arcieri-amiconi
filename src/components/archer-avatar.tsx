@@ -1772,6 +1772,29 @@ function Hat({ look }: { look: AvatarLook }) {
           <path d="M168 71 l3 -4 l3 4 l-3 3 z" fill="#3fae6a" stroke={c} strokeWidth="0.8" />
         </g>
       );
+    case "corona": {
+      // corona d'oro a cinque punte con le perle e le gemme sulla fascia
+      const yAt = (x: number) => 66 - (x - 133) * (4 / 38);
+      const tips = [134, 143, 152, 161, 170];
+      const hs = [9, 11.5, 14, 11.5, 9];
+      const pts = tips.flatMap((x, i) => {
+        const tip = `L${x} ${(yAt(x) - hs[i]).toFixed(1)}`;
+        const nx = tips[i + 1];
+        return nx ? [tip, `L${((x + nx) / 2).toFixed(1)} ${(yAt((x + nx) / 2) - 2.5).toFixed(1)}`] : [tip];
+      });
+      return (
+        <g>
+          <path d={`M133 ${yAt(133) + 1} ${pts.join(" ")} L171 ${yAt(171) + 1} Z`} fill={c} stroke={shade(c, -0.5)} strokeWidth="0.8" />
+          <path d={`M133 ${yAt(133) + 1} ${pts.join(" ")}`} stroke={shade(c, 0.45)} strokeWidth="0.7" fill="none" opacity="0.8" />
+          {tips.map((x, i) => <circle key={x} cx={x} cy={yAt(x) - hs[i]} r="1.7" fill="#fff6dc" stroke={shade(c, -0.35)} strokeWidth="0.5" />)}
+          <path d="M132 66 L172 61.6 L172 69 L132 73.6 Z" fill={shade(c, -0.18)} stroke={shade(c, -0.5)} strokeWidth="0.8" />
+          <path d="M132 66 L172 61.6" stroke={shade(c, 0.45)} strokeWidth="0.8" />
+          <ellipse cx="152" cy="66" rx="2.6" ry="2" fill="#c41d3a" stroke="#fff0b0" strokeWidth="0.5" />
+          <circle cx="141" cy="67.4" r="1.5" fill="#2063c8" />
+          <circle cx="163" cy="65" r="1.5" fill="#14905c" />
+        </g>
+      );
+    }
     case "cuffia":
       return (
         <g>
@@ -1858,7 +1881,7 @@ function Defs({ look, uid }: { look: AvatarLook; uid: string }) {
 }
 
 /** fantasie del mantello che sono fantasie di stoffa */
-export const CAPE_CLOTH: Record<string, string> = { righe: "righe-verticali", scacchi: "quadri", bordato: "bordure", zigzag: "zigzag", onde: "onde", diagonali: "diagonali", gigli: "gigli", foglie: "foglie" };
+export const CAPE_CLOTH: Record<string, string> = { righe: "righe-verticali", scacchi: "quadri", bordato: "bordure", zigzag: "zigzag", onde: "onde", diagonali: "diagonali", gigli: "gigli", foglie: "foglie", scaglie: "scaglie", fenice: "fenice" };
 
 /** gesti da fermo: ogni quanti secondi, quanto dura, verso quale posa e quanto */
 const IDLE_MOVES: Record<string, [number, number, PoseDef, number]> = {
@@ -2454,6 +2477,26 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false, part }
         {look.hat === "tesa" ? <g><ellipse cx="50" cy={fy - 10} rx="44" ry="8" fill={shade(look.hatColor, -0.15)} /><path d={`M${50 - rx} ${fy - 10} C${50 - rx} ${fy - ry - 16} ${50 + rx} ${fy - ry - 16} ${50 + rx} ${fy - 10} Z`} fill={look.hatColor} /><path d={`M${50 - rx} ${fy - 15} H${50 + rx}`} stroke={shade(look.hatColor, -0.45)} strokeWidth="3" /></g> : null}
         {look.hat === "cuffia" ? <g><path d={`M${50 - rx - 3} ${fy - 6} C${50 - rx - 3} ${fy - ry - 18} ${50 + rx + 3} ${fy - ry - 18} ${50 + rx + 3} ${fy - 6} Z`} fill={look.hatColor} />{[-12, -6, 0, 6, 12].map((dx) => <path key={dx} d={`M${50 + dx} ${fy - ry - 8} L${50 + dx * 1.2} ${fy - 8}`} stroke={shade(look.hatColor, -0.3)} strokeWidth="0.8" />)}<rect x={50 - rx - 4} y={fy - 12} width={rx * 2 + 8} height="7" rx="2.5" fill={shade(look.hatColor, -0.18)} /><circle cx="50" cy={fy - ry - 16} r="5.5" fill={look.trim} /></g> : null}
         {look.hat === "alloro" ? <g>{Array.from({ length: 10 }, (_, i) => { const a = Math.PI * (0.15 + (i / 9) * 0.7); const x = 50 - Math.cos(a) * (rx + 1); const y = fy - 10 - Math.sin(a) * 9; return <ellipse key={i} cx={x} cy={y} rx="1.8" ry="3.6" fill={i % 2 ? "#6f9a3a" : "#4f7a2a"} transform={`rotate(${(i - 4.5) * 14} ${x} ${y})`} />; })}</g> : null}
+        {look.hat === "corona" ? (() => {
+          // corona d'oro sopra i capelli: cinque punte con le perle, fascia con le gemme
+          const c = look.hatColor;
+          const bw = rx - 1;
+          const y0 = fy - ry - 1;
+          const tips: [number, number][] = [[50 - bw - 1, 9], [50 - bw * 0.5, 11.5], [50, 15], [50 + bw * 0.5, 11.5], [50 + bw + 1, 9]];
+          const d = `M${50 - bw} ${y0 + 1} ` + tips.map(([x, h], i) => `L${x.toFixed(1)} ${(y0 - h).toFixed(1)}${i < tips.length - 1 ? ` L${((x + tips[i + 1][0]) / 2).toFixed(1)} ${(y0 - 2).toFixed(1)}` : ""}`).join(" ") + ` L${50 + bw} ${y0 + 1} Z`;
+          return (
+            <g>
+              <path d={d} fill={c} stroke={shade(c, -0.5)} strokeWidth="0.7" />
+              <path d={`M50 ${y0 - 13} L50 ${y0 - 2}`} stroke={shade(c, 0.5)} strokeWidth="0.8" opacity="0.7" />
+              {tips.map(([x, h]) => <circle key={x} cx={x} cy={y0 - h} r="1.8" fill="#fff6dc" stroke={shade(c, -0.35)} strokeWidth="0.5" />)}
+              <path d={`M${50 - bw - 1.5} ${y0} Q50 ${y0 + 4} ${50 + bw + 1.5} ${y0} L${50 + bw + 1.5} ${y0 + 6} Q50 ${y0 + 10} ${50 - bw - 1.5} ${y0 + 6} Z`} fill={shade(c, -0.15)} stroke={shade(c, -0.5)} strokeWidth="0.7" />
+              <path d={`M${50 - bw - 1.5} ${y0} Q50 ${y0 + 4} ${50 + bw + 1.5} ${y0}`} stroke={shade(c, 0.5)} strokeWidth="0.8" fill="none" />
+              <ellipse cx="50" cy={y0 + 5} rx="2.8" ry="2.2" fill="#c41d3a" stroke="#fff0b0" strokeWidth="0.5" />
+              <circle cx={50 - bw * 0.55} cy={y0 + 4.2} r="1.5" fill="#2063c8" />
+              <circle cx={50 + bw * 0.55} cy={y0 + 4.2} r="1.5" fill="#14905c" />
+            </g>
+          );
+        })() : null}
         {look.hat === "cerchietto" ? <g><path d={`M${50 - rx} ${fy - 14} Q50 ${fy - 20} ${50 + rx} ${fy - 14}`} stroke={look.hatColor} strokeWidth="2.2" fill="none" /><path d={`M50 ${fy - 22} l3 3 l-3 3 l-3 -3 z`} fill="#3fae6a" stroke={look.hatColor} strokeWidth="0.8" /></g> : null}
         </g>
         {look.warpaint ? <g>{[0, 5].map((d) => <g key={d}><PaintStroke a={[41, fy + 3.5 + d]} b={[32.5, fy + 1.5 + d]} bend={0.8} w={2.3 - d * 0.05} color="#2a3a5a" /><PaintStroke a={[59, fy + 3.5 + d]} b={[67.5, fy + 1.5 + d]} bend={-0.8} w={2.3 - d * 0.05} color="#2a3a5a" /></g>)}</g> : null}

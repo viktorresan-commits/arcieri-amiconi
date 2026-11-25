@@ -486,7 +486,7 @@ export function CompanyLeague({ board, onJoin, busy, onSynced, part, fitastBoard
                       <p className="text-xs font-semibold uppercase tracking-wider text-muted">Iscritti</p>
                       {co.crew.map((m) => (
                         <Link key={m.userId} to="/arciere/$id" params={{ id: String(m.memberId) }} className="flex items-center gap-2.5 rounded-xl bg-black/15 p-2">
-                          <Avatar size="sm" label={[m.givenName, m.familyName].filter(Boolean).join(" ") || m.nickname} color={m.avatarColor} photo={m.photoUrl} />
+                          <Avatar size="sm" label={[m.givenName, m.familyName].filter(Boolean).join(" ") || m.nickname} color={m.avatarColor} photo={m.photoUrl} userId={m.userId} />
                           <span className="min-w-0 flex-1 truncate text-sm font-semibold">{m.nickname || [m.givenName, m.familyName].filter(Boolean).join(" ")}</span>
                           {m.owner ? <span className="rounded-full bg-[#d9b45a]/20 px-2 py-0.5 text-[0.62rem] font-semibold text-[#e8c870]">Fondatore</span> : null}
                           <span className="text-xs tabular-nums text-muted">{m.arrows} frecce</span>
