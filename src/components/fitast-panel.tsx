@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Button, Card, ErrorNote, Field, Loading, Select, TextInput, cx } from "@/components/kit";
 import { Glyph } from "@/components/icons";
 import { saveEntry } from "@/lib/arcieri/club.api";
+import { refreshActivity } from "@/lib/arcieri/xp";
 import { DIVISIONS, divisionOf, type Division } from "@/lib/arcieri/labels";
 import { FITAST_HOME, fitastRead } from "@/lib/arcieri/fitast.api";
 import { type FitastCell, type FitastPage, type FitastTable } from "@/lib/arcieri/fitast-parse";
@@ -1286,7 +1287,10 @@ function SaveScore({ nums, row, m, comps, userId, onDone, onCancel }: { nums: { 
     setBusy(true);
     setErr("");
     saveEntry({ data: { competitionId: comp.id, score: val(scoreCol), championshipPoints: val(champCol), rank, category: rank != null ? division : (old?.category ?? division), laneCount: old?.laneCount ?? null, spot: old?.spot ?? null, targetKind: old?.targetKind ?? "", sagomaMax: old?.sagomaMax ?? null, notes: "Dal portale FITAST", piazzole: [] } })
-      .then(() => onDone(comp.id))
+      .then(() => {
+        refreshActivity();
+        onDone(comp.id);
+      })
       .catch((e: unknown) => setErr(e instanceof Error ? e.message : "Non salvato."))
       .finally(() => setBusy(false));
   };

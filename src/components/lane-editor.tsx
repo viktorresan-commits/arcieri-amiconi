@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { saveEntry } from "@/lib/arcieri/club.api";
+import { refreshActivity } from "@/lib/arcieri/xp";
 import { DIVISIONS, divisionOf } from "@/lib/arcieri/labels";
 import { PADIGLIONE_SCORES, faceById, scoreAtRadius } from "@/lib/arcieri/scoring";
 import { ANIMALS, animalByLabel } from "@/lib/arcieri/sagome";
@@ -300,7 +301,10 @@ export function LaneEditor({ compId, mine, onDone, onSaved }: { compId: number; 
         piazzole: lanesOn ? filled : [],
       },
     })
-      .then(onDone)
+      .then(() => {
+        refreshActivity();
+        onDone();
+      })
       .catch((e: unknown) => setErr(e instanceof Error ? e.message : "Errore"));
   }
 

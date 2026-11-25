@@ -51,6 +51,42 @@ export function adoptXp(serverXp: number) {
   window.dispatchEvent(new CustomEvent(EVENT, { detail: null }));
 }
 
+const ACT_KEY = "aa-xp-attivita";
+const REFRESH = "aa-xp-refresh";
+
+/** punti di allenamenti e gare registrati, calcolati dal server (ultimo valore ricevuto) */
+export function readActivity(): number | null {
+  try {
+    const raw = localStorage.getItem(ACT_KEY);
+    return raw == null ? null : Number(raw) || 0;
+  } catch {
+    return null;
+  }
+}
+
+/** nuovo valore dal server: se cresce si vede il "+N", come per gli altri punti */
+export function setActivity(n: number) {
+  if (typeof localStorage === "undefined" || !Number.isFinite(n)) return;
+  const prev = readActivity();
+  if (prev === n) return;
+  try {
+    localStorage.setItem(ACT_KEY, String(n));
+  } catch {
+    /* memoria piena */
+  }
+  window.dispatchEvent(new CustomEvent(EVENT, { detail: prev != null && n > prev ? { n: n - prev, why: "Allenamenti e gare registrati" } : null }));
+}
+
+/** dopo aver salvato un allenamento o una gara: si richiedono i punti al server */
+export function refreshActivity() {
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(REFRESH));
+}
+
+export function onActivityRefresh(fn: () => void) {
+  window.addEventListener(REFRESH, fn);
+  return () => window.removeEventListener(REFRESH, fn);
+}
+
 /** Livello: 1 → 100 punti, poi ogni livello chiede 25 punti in più. */
 export function levelOf(xp: number) {
   let level = 1;
@@ -64,10 +100,18 @@ export function levelOf(xp: number) {
   return { level, into: left, need };
 }
 
+/**
+ * Punti dell'arciere: `xp` è il totale (telefono + allenamenti e gare registrati) e fa il livello;
+ * `own` sono solo quelli del telefono, che si mandano al server.
+ */
 export function useXp() {
-  const [st, setSt] = useState<XpState>({ xp: 0, log: [], days: [] });
+  const [st, setSt] = useState<XpState & { own: number; activity: number }>({ xp: 0, own: 0, activity: 0, log: [], days: [] });
   useEffect(() => {
-    const sync = () => setSt(readXp());
+    const sync = () => {
+      const local = readXp();
+      const activity = readActivity() ?? 0;
+      setSt({ ...local, own: local.xp, activity, xp: local.xp + activity });
+    };
     sync();
     window.addEventListener(EVENT, sync);
     window.addEventListener("storage", sync);

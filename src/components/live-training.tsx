@@ -24,6 +24,7 @@ import { AimPick } from "./aim-pick";
 import { BoarTarget } from "./boar-target";
 import { fmtClock } from "@/lib/arcieri/time";
 import { getSession, listSessions, saveSession, trainingBootstrap } from "@/lib/arcieri/training.api";
+import { refreshActivity } from "@/lib/arcieri/xp";
 import { Button, Card, ErrorNote, Field, Loading, Select, TextArea, TextInput } from "./kit";
 import { TargetFace } from "./target-face";
 import { PhotoSession } from "./photo-session";
@@ -439,6 +440,7 @@ export function LiveTraining({ sessionId, openHistory = false, start }: { sessio
     try {
       const saved = await saveSession({ data: payload(stopped, true) });
       saveDraft(null);
+      refreshActivity();
       for (const badge of saved.badges) toast.success(badge);
       void navigate({ to: "/allenamento/$id", params: { id: String(saved.id) } });
     } catch (e) {

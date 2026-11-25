@@ -9,6 +9,7 @@ import { kindOf } from "./kinds";
 import { romeMidnightUtc, ymdAdd } from "./time";
 import { divisionOf } from "./labels";
 import { accountWriter, writerFor } from "./acting.api";
+import { activityXp } from "./xp.api";
 import type { TallyShot } from "./scoring";
 import { aimSpot, faceById, ringPoint, scoreAtRadius } from "./scoring";
 
@@ -844,6 +845,8 @@ export const archerBoard = createServerFn({ method: "POST" })
     const theirs = await myMembership(sql, member.user_id);
     const mineCo = await myMembership(sql, context.userId);
     const coName = await sql<{ name: string; color: string }>`select name, color from companies where id = ${theirs.companyId} limit 1`;
+    // punti dell'avatar: quelli del telefono (minigioco, quiz, esercizi) più allenamenti e gare registrati
+    const theirXp = asNum((member as MemberRow & { xp?: number }).xp) + (await activityXp(sql, member.user_id));
     const games = await sql<{ mode: string; level: string; best: number; max_points: number; stations: string; arrows: number; tens: number; xs: number; misses: number; rounds: number; best_at: unknown }>`
       select mode, level, best, max_points, stations, arrows, tens, xs, misses, rounds, best_at from game_records where user_id = ${member.user_id}`.catch(() => []);
     const sessions = await sql<{ started_at: unknown; distance_m: unknown; arrows: number; points: number }>`
@@ -870,7 +873,7 @@ export const archerBoard = createServerFn({ method: "POST" })
     return {
       id: asNum(member.id),
       userId: member.user_id,
-      xp: asNum((member as MemberRow & { xp?: number }).xp),
+      xp: theirXp,
       givenName: member.given_name,
       familyName: member.family_name,
       nickname: member.nickname,
@@ -916,9 +919,9 @@ export const archerBoard = createServerFn({ method: "POST" })
         day: String(c.starts_on).slice(0, 10),
         score: asNum(c.score),
       })),
-      stats: await archerStats(sql, member.user_id, `${member.given_name} ${member.family_name}`, asNum((member as MemberRow & { xp?: number }).xp)),
+      stats: await archerStats(sql, member.user_id, `${member.given_name} ${member.family_name}`, theirXp),
       // i numeri di chi guarda, per «Confronta con me»
-      viewerStats: member.user_id === context.userId ? null : await archerStats(sql, context.userId, `${viewer.given_name} ${viewer.family_name}`, asNum((viewer as MemberRow & { xp?: number }).xp)),
+      viewerStats: member.user_id === context.userId ? null : await archerStats(sql, context.userId, `${viewer.given_name} ${viewer.family_name}`, asNum((viewer as MemberRow & { xp?: number }).xp) + (await activityXp(sql, context.userId))),
     };
   });
 

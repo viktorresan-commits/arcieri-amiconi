@@ -1,10 +1,35 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
+import type { Sql } from "@/lib/db";
 import { asNum, db, ensureMember } from "./access";
 
 /**
- * Punti esperienza: il telefono manda i suoi, il server tiene il valore più alto e lo rimanda.
- * Così il livello si vede sul profilo e un telefono nuovo riparte dai punti già guadagnati.
+ * Punti che vengono da quello che si registra (non dal telefono): ogni allenamento segnato, ogni gara
+ * con il suo risultato (di più se presa dal portale FITAST) e i podi. Si ricalcolano sempre dai dati,
+ * così non si contano due volte e valgono anche per quello registrato prima.
+ */
+export async function activityXp(sql: Sql, userId: string) {
+  const s = await sql<{ n: number; pts: number }>`
+    select count(*)::int as n, coalesce(sum(least(12, floor(arrows / 10.0))), 0)::int as pts from (
+      select count(sh.id)::int as arrows from sessions s join shots sh on sh.session_id = s.id
+      where s.user_id = ${userId} group by s.id having count(sh.id) >= 6
+    ) t`.catch(() => []);
+  const g = await sql<{ n: number; fitast: number; first: number; second: number; third: number }>`
+    select count(*)::int as n,
+      count(*) filter (where notes ilike '%FITAST%')::int as fitast,
+      count(*) filter (where rank = 1)::int as first,
+      count(*) filter (where rank = 2)::int as second,
+      count(*) filter (where rank = 3)::int as third
+    from competition_entries
+    where user_id = ${userId} and (score is not null or rank is not null or championship_points is not null)`.catch(() => []);
+  const trainings = asNum(s[0]?.n) * 8 + asNum(s[0]?.pts);
+  const gare = asNum(g[0]?.n) * 25 + asNum(g[0]?.fitast) * 10 + asNum(g[0]?.first) * 30 + asNum(g[0]?.second) * 20 + asNum(g[0]?.third) * 10;
+  return trainings + gare;
+}
+
+/**
+ * Punti esperienza: il telefono manda i suoi, il server tiene il valore più alto e lo rimanda, insieme ai
+ * punti di allenamenti e gare registrati. Così il livello si vede sul profilo e un telefono nuovo riparte da lì.
  */
 export const syncXp = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
@@ -16,5 +41,6 @@ export const syncXp = createServerFn({ method: "POST" })
     const sql = await db();
     const me = await ensureMember(sql, context.userId);
     const rows = await sql<{ xp: number }>`update members set xp = greatest(xp, ${data.xp}) where id = ${me.id} returning xp`;
-    return { xp: asNum(rows[0]?.xp) };
+    // xp: i punti del telefono (minigioco, quiz, esercizi); activity: allenamenti e gare registrati
+    return { xp: asNum(rows[0]?.xp), activity: await activityXp(sql, context.userId) };
   });
