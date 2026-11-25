@@ -573,8 +573,16 @@ function median(list: number[]) {
 
 export function smoothLm(prev: Landmark[] | null, next: Landmark[], alpha = 0.6): Landmark[] {
   if (!prev || prev.length !== next.length) return next;
-  const mix = (a: number | undefined, b: number | undefined) => (a != null && b != null ? alpha * a + (1 - alpha) * b : a);
-  return next.map((p, i) => i >= 33 && ((prev[i].visibility ?? 1) < 0.5 || (p.visibility ?? 1) < 0.5) ? p : ({ x: alpha * p.x + (1 - alpha) * prev[i].x, y: alpha * p.y + (1 - alpha) * prev[i].y, z: mix(p.z, prev[i].z), visibility: p.visibility, zw: mix(p.zw, prev[i].zw) }));
+  // salto improvviso di un solo punto (il corpo è fermo): è un errore di lettura, il punto resta dov'era
+  const sw = Math.hypot(prev[11].x - prev[12].x, prev[11].y - prev[12].y) || 0.05;
+  const bodyMove = Math.hypot((next[11].x + next[12].x - prev[11].x - prev[12].x) / 2, (next[11].y + next[12].y - prev[11].y - prev[12].y) / 2);
+  return next.map((p, i) => {
+    if (i >= 33 && ((prev[i].visibility ?? 1) < 0.5 || (p.visibility ?? 1) < 0.5)) return p;
+    const jump = Math.hypot(p.x - prev[i].x, p.y - prev[i].y);
+    const a = jump > 0.6 * sw && bodyMove < 0.15 * sw && (prev[i].visibility ?? 1) > 0.3 ? 0.15 : alpha;
+    const m = (x: number | undefined, y: number | undefined) => (x != null && y != null ? a * x + (1 - a) * y : x);
+    return { x: a * p.x + (1 - a) * prev[i].x, y: a * p.y + (1 - a) * prev[i].y, z: m(p.z, prev[i].z), visibility: p.visibility, zw: m(p.zw, prev[i].zw) };
+  });
 }
 
 /* ---------- 100 punti in più: mani (21 + 21) e viso (58) ---------- */
@@ -671,4 +679,136 @@ export function withExtras(body: Landmark[], left: Landmark[] | null, right: Lan
   fill(right, 21, body[16]);
   fill(face, FACE_IDS.length, body[0]);
   return out;
+}
+
+/* ---------- pulizia: niente arco e freccia inventati, niente punti che saltano ---------- */
+
+type Pt = { x: number; y: number };
+function distToSegment(p: Pt, a: Pt, b: Pt) {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const L = dx * dx + dy * dy || 1e-9;
+  const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / L));
+  return Math.hypot(p.x - (a.x + dx * t), p.y - (a.y + dy * t));
+}
+
+/** l'arciere è in trazione (o ci sta arrivando): braccio dell'arco su e mano della corda verso il viso */
+export function isDrawing(m: Metrics | null) {
+  return Boolean(m && m.bowUp && (m.handFace < 1.1 || m.draw < 120));
+}
+
+/**
+ * Tiene solo arco e freccia credibili: l'arco deve passare per la mano dell'arco (non l'arco di
+ * un altro arciere sullo sfondo), la freccia esiste solo in trazione e passa per tutte e due le mani.
+ */
+export function validateGear(g: Gear | null, lm: Landmark[], hand: Hand, aspect: number): Gear | null {
+  if (!g) return null;
+  const s = sides(hand);
+  const Q = (p: { x: number; y: number }) => ({ x: p.x * aspect, y: p.y });
+  const sw = Math.hypot((lm[11].x - lm[12].x) * aspect, lm[11].y - lm[12].y) || 0.05;
+  const bowWr = s.bow[2] as 15 | 16;
+  const drwWr = s.draw[2] as 15 | 16;
+  const palm = handPoint(lm, bowWr, 9) ?? lm[bowWr];
+  const grip = Q(palm);
+  const fingers = Q(handPoint(lm, drwWr, 6) ?? lm[s.drawFinger] ?? lm[drwWr]);
+  let bow = g.bow;
+  if (bow && distToSegment(grip, Q({ x: bow.x1, y: bow.y1 }), Q({ x: bow.x2, y: bow.y2 })) > 0.4 * sw) bow = null;
+  let arrow = g.arrow;
+  const m = metricsOf(lm, hand, aspect, 1000);
+  if (arrow) {
+    const a = Q({ x: arrow.x1, y: arrow.y1 });
+    const b = Q({ x: arrow.x2, y: arrow.y2 });
+    if (!isDrawing(m) || distToSegment(grip, a, b) > 0.35 * sw || distToSegment(fingers, a, b) > 0.35 * sw) arrow = null;
+  }
+  return bow || arrow ? { bow, arrow } : null;
+}
+
+/**
+ * Dopo l'analisi completa: ogni punto viene ripulito lungo il tempo. Prima si tolgono i salti
+ * (un punto che in un fotogramma scappa lontano dalla mediana dei vicini torna al suo posto), poi
+ * una media pesata in avanti e indietro (nessun ritardo). Mani e viso solo dove sono stati visti.
+ * Arco e freccia: si tengono quelli coerenti con i fotogrammi vicini.
+ */
+export function cleanSequence(samples: Sample[], hand: Hand, aspect: number, H: number): Sample[] {
+  const n = samples.length;
+  if (n < 3) return samples;
+  const L = samples.find((s) => s.lm)?.lm?.length ?? 0;
+  if (!L) return samples;
+  // larghezza delle spalle tipica: misura dei salti
+  const sws = samples.filter((s) => s.lm).map((s) => Math.hypot((s.lm![11].x - s.lm![12].x) * aspect, s.lm![11].y - s.lm![12].y)).sort((a, b) => a - b);
+  const sw = sws[Math.floor(sws.length / 2)] || 0.1;
+  const R = 3;
+  const sigma = 1.3;
+  const out: (Landmark[] | null)[] = samples.map((s) => (s.lm ? s.lm.map((p) => ({ ...p })) : null));
+  const seen = (s: Sample, i: number) => Boolean(s.lm && s.lm[i] && (i < 33 ? (s.lm[i].visibility ?? 1) > 0.2 : (s.lm[i].visibility ?? 0) >= 0.5));
+  const median = (v: number[]) => {
+    const a = [...v].sort((p, q) => p - q);
+    return a[Math.floor(a.length / 2)];
+  };
+  for (let i = 0; i < L; i++) {
+    // 1. salti: confronto con la mediana dei vicini
+    const fixed: (Pt | null)[] = samples.map(() => null);
+    for (let t = 0; t < n; t++) {
+      if (!seen(samples[t], i)) continue;
+      const xs: number[] = [];
+      const ys: number[] = [];
+      for (let k = Math.max(0, t - R); k <= Math.min(n - 1, t + R); k++) {
+        if (k === t || !seen(samples[k], i)) continue;
+        xs.push(samples[k].lm![i].x);
+        ys.push(samples[k].lm![i].y);
+      }
+      const p = samples[t].lm![i];
+      if (xs.length >= 2) {
+        const mx = median(xs);
+        const my = median(ys);
+        const d = Math.hypot((p.x - mx) * aspect, p.y - my);
+        // oltre mezza spalla dalla mediana dei vicini (che invece stanno fermi tra loro): è un salto
+        fixed[t] = d > (i < 33 ? 0.5 : 0.35) * sw ? { x: mx, y: my } : { x: p.x, y: p.y };
+      } else fixed[t] = { x: p.x, y: p.y };
+    }
+    // 2. media gaussiana avanti e indietro, pesata con la visibilità
+    for (let t = 0; t < n; t++) {
+      const f = fixed[t];
+      if (!f || !out[t]) continue;
+      let sx = 0;
+      let sy = 0;
+      let sz = 0;
+      let szw = 0;
+      let wz = 0;
+      let wzw = 0;
+      let ws = 0;
+      for (let k = Math.max(0, t - R); k <= Math.min(n - 1, t + R); k++) {
+        const g = fixed[k];
+        if (!g) continue;
+        const p = samples[k].lm![i];
+        const w = Math.exp(-((k - t) * (k - t)) / (2 * sigma * sigma)) * Math.max(0.2, p.visibility ?? 1);
+        sx += g.x * w;
+        sy += g.y * w;
+        ws += w;
+        if (typeof p.z === "number") {
+          sz += p.z * w;
+          wz += w;
+        }
+        if (typeof p.zw === "number" && Number.isFinite(p.zw)) {
+          szw += p.zw * w;
+          wzw += w;
+        }
+      }
+      const q = out[t]![i];
+      q.x = sx / ws;
+      q.y = sy / ws;
+      if (wz) q.z = sz / wz;
+      if (wzw) q.zw = szw / wzw;
+    }
+  }
+  // arco e freccia: validi solo se ci sono anche in almeno uno dei due fotogrammi vicini
+  const gears = samples.map((s, t) => (s.lm && out[t] ? validateGear(s.g ?? null, out[t]!, hand, aspect) : null));
+  const near = (t: number, key: "bow" | "arrow") => [t - 1, t + 1].some((k) => k >= 0 && k < n && gears[k]?.[key]);
+  return samples.map((s, t) => {
+    const lm = out[t];
+    if (!lm) return { ...s, g: null };
+    const g0 = gears[t];
+    const g = g0 ? { bow: g0.bow && near(t, "bow") ? g0.bow : null, arrow: g0.arrow && near(t, "arrow") ? g0.arrow : null } : null;
+    return { t: s.t, lm, m: metricsOf(lm, hand, aspect, H), g: g && (g.bow || g.arrow) ? g : null };
+  });
 }

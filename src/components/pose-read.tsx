@@ -8,6 +8,7 @@ import { saveGesture } from "@/lib/arcieri/gesture.api";
 import { ProPanel, drawPro, type ProSave } from "./pose-pro";
 import { archeryKit } from "@/lib/arcieri/pose-kit";
 import { buildRecord } from "@/lib/arcieri/gesture-record";
+import { placeLabel, resetLabels } from "@/lib/arcieri/overlay-labels";
 export { archeryKit };
 import {
   PHASE_COLORS,
@@ -15,6 +16,9 @@ import {
   analyzeShots,
   cameraDistance,
   detectGear,
+  cleanSequence,
+  validateGear,
+  isDrawing,
   metricsOf,
   notesFor,
   personBox,
@@ -49,10 +53,14 @@ type Quality = "lite" | "full" | "heavy";
 type Rect = { x: number; y: number; w: number; h: number };
 
 const LINKS: [number, number][] = [
-  [11, 13], [13, 15], [12, 14], [14, 16], [15, 19], [16, 20],
+  [11, 13], [13, 15], [12, 14], [14, 16],
+  // mani: polso, pollice, indice, mignolo
+  [15, 17], [15, 19], [15, 21], [17, 19], [16, 18], [16, 20], [16, 22], [18, 20],
   [11, 23], [12, 24], [23, 24], [23, 25], [25, 27], [24, 26], [26, 28],
+  // piedi: caviglia, tallone, punta
+  [27, 29], [29, 31], [27, 31], [28, 30], [30, 32], [28, 32],
 ];
-const JOINTS = [0, 11, 12, 13, 14, 15, 16, 19, 20, 23, 24, 25, 26, 27, 28];
+const JOINTS = [0, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32];
 const VISION = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.17";
 const MODELS: Record<Quality, string> = {
   lite: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
@@ -243,6 +251,8 @@ export function PoseRead() {
   const lookRef = useRef(look);
   lookRef.current = look;
   const [samples, setSamples] = useState<Sample[]>([]);
+  /** riquadro dell'arciere nell'ultimo fotogramma: serve a seguire sempre la stessa persona */
+  const lastPerson = useRef<Rect | null>(null);
   const samplesRef = useRef<Sample[]>(samples);
   samplesRef.current = samples;
   const [progress, setProgress] = useState<number | null>(null);
@@ -362,7 +372,23 @@ export function PoseRead() {
       const b = personBox(lm, 0);
       return b ? b.w * b.h : 0;
     };
-    const chosen = [...poses].sort((a, b) => area(b) - area(a))[0];
+    // l'arciere seguito: tra un fotogramma e l'altro resta la stessa persona (vicina a dove era e
+    // grande uguale), così chi passa sullo sfondo non "ruba" i punti
+    const prevB = lastPerson.current;
+    const score = (lm: Landmark[]) => {
+      const b = personBox(lm, 0);
+      if (!b) return 0;
+      const a = b.w * b.h;
+      if (!prevB) return a;
+      const cx = b.x + b.w / 2 - (prevB.x + prevB.w / 2);
+      const cy = b.y + b.h / 2 - (prevB.y + prevB.h / 2);
+      const d = Math.hypot(cx, cy) / Math.max(0.05, Math.max(prevB.w, prevB.h));
+      const sizeRatio = Math.min(a, prevB.w * prevB.h) / Math.max(1e-6, Math.max(a, prevB.w * prevB.h));
+      return a * sizeRatio / (1 + 4 * d * d);
+    };
+    const chosen = [...poses].sort((a, b) => score(b) - score(a))[0];
+    const chosenBox = personBox(chosen.map((p) => ({ ...p, x: region.x + p.x * region.w, y: region.y + p.y * region.h })), 0);
+    if (chosenBox) lastPerson.current = chosenBox;
     const world = worlds[poses.indexOf(chosen)];
     const raw = chosen.map((p, i) => ({ x: region.x + p.x * region.w, y: region.y + p.y * region.h, z: p.z != null ? p.z * region.w : undefined, visibility: p.visibility, zw: world?.[i]?.z }));
     // video specchiato (fotocamera frontale) o arciere di spalle: il riconoscimento scambia sinistra e destra.
@@ -399,6 +425,7 @@ export function PoseRead() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     ctx.clearRect(0, 0, w, h);
+    resetLabels();
     const region = cropRef.current;
     if (region) {
       ctx.fillStyle = "rgba(0,0,0,0.45)";
@@ -568,6 +595,7 @@ export function PoseRead() {
     cropRef.current = null;
     setCropMode(false);
     autoBox.current = null;
+    lastPerson.current = null;
     lastLm.current = null;
     smoothRef.current = { lm: null, t: -1 };
     setShotIndex(0);
@@ -654,6 +682,7 @@ export function PoseRead() {
     setProgress(0);
     setError("");
     autoBox.current = null;
+    lastPerson.current = null;
     try {
       try {
         await video.play();
@@ -690,6 +719,9 @@ export function PoseRead() {
         }
       }
       if (!cancel.current) {
+        // punti ripuliti lungo il tempo: niente salti, niente arco o freccia inventati
+        const clean = cleanSequence(out, handRef.current, W / H, H);
+        out.splice(0, out.length, ...clean);
         result = out;
         setSamples(out);
         setShotIndex(0);
@@ -1251,7 +1283,8 @@ export function PoseRead() {
 
 function safeGear(source: CanvasImageSource, W: number, H: number, lm: Landmark[], hand: Hand): Gear | null {
   try {
-    return detectGear(source, W, H, lm, hand);
+    // solo arco e freccia credibili: niente archi di altri arcieri, niente freccia a riposo
+    return validateGear(detectGear(source, W, H, lm, hand), lm, hand, W / H);
   } catch {
     return null;
   }
@@ -1423,7 +1456,7 @@ function Timeline({ samples, shots, time, duration, onSeek }: { samples: Sample[
   );
 }
 
-function drawPose(ctx: CanvasRenderingContext2D, w: number, h: number, lm: Landmark[], hand: Hand, gear: Gear | null) {
+export function drawPose(ctx: CanvasRenderingContext2D, w: number, h: number, lm: Landmark[], hand: Hand, gear: Gear | null) {
   drawPoseBody(ctx, w, h, lm, hand, gear);
   drawExtras(ctx, w, h, lm);
 }
@@ -1530,16 +1563,18 @@ function drawPoseBody(ctx: CanvasRenderingContext2D, w: number, h: number, lm: L
     const p = at(i);
     if (p.v < 0.4) continue;
     ctx.beginPath();
-    ctx.fillStyle = i === draw[1] || i === bow[1] ? "#ef4444" : "#4aa3ff";
-    ctx.arc(p.x, p.y, 2.6 * s, 0, Math.PI * 2);
+    ctx.fillStyle = i === draw[1] || i === bow[1] ? "#ef4444" : i >= 29 ? "#34d399" : i >= 17 && i <= 22 ? "#f472b6" : "#4aa3ff";
+    ctx.arc(p.x, p.y, (i >= 17 && i <= 22 ? 2 : 2.6) * s, 0, Math.PI * 2);
     ctx.fill();
   }
   const m = metricsOf(lm, hand, w / h, h);
   const label = (text: string, x: number, y: number, color: string) => {
     ctx.font = `600 ${Math.round(13 * s)}px system-ui, sans-serif`;
     const tw = ctx.measureText(text).width;
-    const px = Math.min(w - tw - 10 * s, Math.max(4 * s, x));
-    const py = Math.min(h - 6 * s, Math.max(18 * s, y));
+    // posto libero: le etichette non si coprono a vicenda
+    const at0 = placeLabel(x - 5 * s, y - 14 * s, tw + 10 * s, 19 * s, w, h);
+    const px = at0.x + 5 * s;
+    const py = at0.y + 14 * s;
     ctx.fillStyle = "rgba(20,24,28,0.72)";
     ctx.beginPath();
     if (typeof ctx.roundRect === "function") ctx.roundRect(px - 5 * s, py - 14 * s, tw + 10 * s, 19 * s, 6 * s);
@@ -1563,8 +1598,9 @@ function drawPoseBody(ctx: CanvasRenderingContext2D, w: number, h: number, lm: L
     const de = at(draw[1]);
     const be = at(bow[1]);
     const mark = (good: boolean) => (good ? "✓ " : "! ");
-    label(`${mark(m.line >= 168)}Gomito in linea ${m.line.toFixed(0)}°`, de.x + 16 * s, de.y - 6 * s, m.line >= 168 ? "#b9ffd9" : "#fde68a");
-    label(`${mark(m.bow >= 165)}Braccio arco ${m.bow.toFixed(0)}°`, be.x + 16 * s, be.y + 22 * s, m.bow >= 165 ? "#b9ffd9" : "#fde68a");
+    // gomito in linea e braccio teso hanno senso solo quando l'arciere tira: a riposo non si giudicano
+    if (isDrawing(m)) label(`${mark(m.line >= 168)}Gomito in linea ${m.line.toFixed(0)}°`, de.x + 16 * s, de.y - 6 * s, m.line >= 168 ? "#b9ffd9" : "#fde68a");
+    if (m.bowUp) label(`${mark(m.bow >= 165)}Braccio arco ${m.bow.toFixed(0)}°`, be.x + 16 * s, be.y + 22 * s, m.bow >= 165 ? "#b9ffd9" : "#fde68a");
     label(`${mark(Math.abs(m.shoulder) <= 4)}Spalle ${Math.abs(m.shoulder).toFixed(1)}°`, (l.x + r.x) / 2 - 30 * s, Math.min(l.y, r.y) - 12 * s, Math.abs(m.shoulder) <= 4 ? "#b9ffd9" : "#fde68a");
     if (m.handFace < 0.85) label("✓ Ancorato", at(draw[2]).x - 30 * s, at(draw[2]).y + 26 * s, "#b9ffd9");
   }

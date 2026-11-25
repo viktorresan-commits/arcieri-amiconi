@@ -8,6 +8,7 @@ import { BOW_TYPES } from "./gear-icons";
 import { Glyph } from "./icons";
 import { AREA_MUSCLES, renderAreaImages } from "@/lib/arcieri/muscle-areas";
 import { loadBody } from "@/lib/arcieri/anatomy-body";
+import { placeLabel } from "@/lib/arcieri/overlay-labels";
 
 export type ProSave = { total: number; areas: Record<string, number | null>; issues: string[]; m: Partial<ProMetrics>; setup: ProSetup; at: number | null };
 
@@ -590,8 +591,9 @@ export function drawPro(ctx: CanvasRenderingContext2D, w: number, h: number, lm:
     const text = `polso ${dev.toFixed(0)}°`;
     ctx.font = `600 ${Math.round(11 * s)}px system-ui, sans-serif`;
     const tw = ctx.measureText(text).width;
-    const x = Math.min(w - tw - 8 * s, Math.max(4 * s, W.x - tw / 2));
-    const y = W.y - 16 * s;
+    const pl = placeLabel(W.x - tw / 2 - 4 * s, W.y - 27 * s, tw + 8 * s, 15 * s, w, h);
+    const x = pl.x + 4 * s;
+    const y = pl.y + 11 * s;
     ctx.fillStyle = "rgba(20,24,28,0.75)";
     ctx.fillRect(x - 4 * s, y - 11 * s, tw + 8 * s, 15 * s);
     ctx.fillStyle = dev > 22 ? "#fde68a" : "#b9ffd9";
@@ -607,8 +609,9 @@ export function drawPro(ctx: CanvasRenderingContext2D, w: number, h: number, lm:
     const text = `testa ${tilt.toFixed(0)}°`;
     ctx.font = `600 ${Math.round(11 * s)}px system-ui, sans-serif`;
     const tw = ctx.measureText(text).width;
-    const x = Math.min(w - tw - 8 * s, Math.max(4 * s, (a.x + b.x) / 2 - tw / 2));
-    const y = Math.max(14 * s, Math.min(a.y, b.y) - 26 * s);
+    const pl = placeLabel((a.x + b.x) / 2 - tw / 2 - 4 * s, Math.max(3 * s, Math.min(a.y, b.y) - 37 * s), tw + 8 * s, 15 * s, w, h);
+    const x = pl.x + 4 * s;
+    const y = pl.y + 11 * s;
     ctx.fillStyle = "rgba(20,24,28,0.75)";
     ctx.fillRect(x - 4 * s, y - 11 * s, tw + 8 * s, 15 * s);
     ctx.fillStyle = tilt > 6 ? "#fde68a" : "#b9ffd9";

@@ -336,7 +336,7 @@ def open_rectus():
             nb = tr.query_ball_point([c[1]], 0.012)
             if not nb: continue
             rx = np.abs(R[nb, 0]).max()
-            if abs(c[0]) < rx + 0.004: keep[k] = False
+            if abs(c[0]) < rx - 0.006: keep[k] = False  # il bordo dell'obliquo copre di poco il retto: nessuna fessura
         before = len(I)
         I = I[keep]
         used = np.unique(I); remap = -np.ones(len(P), int); remap[used] = np.arange(len(used))
@@ -507,10 +507,23 @@ for x in parts:
     # retto dell'addome: tre intersezioni tendinee chiare (i "quadretti" degli addominali)
     if 'rectus abdominis' in x['name'].lower():
         tt = x['T']
+        cuts = (0.46, 0.66, 0.84)
         band = np.zeros(n)
-        for c in (0.46, 0.66, 0.84):
-            band = np.maximum(band, np.clip((1 - np.abs(tt - c) / 0.02) * 2.2, 0, 1))
-        x['TD'] = np.maximum(x['TD'], band)
+        for c in cuts:
+            band = np.maximum(band, np.clip((1 - np.abs(tt - c) / 0.014) * 1.6, 0, 1))
+        x['TD'] = np.maximum(x['TD'], band * 0.7)
+        # rilievo vero dei "quadretti": ogni tratto tra due intersezioni si gonfia in avanti,
+        # le intersezioni restano incavate (si leggono anche con la luce, non solo col colore)
+        edges = (0.0,) + cuts + (1.0,)
+        prof = np.zeros(n)
+        for a0, a1 in zip(edges[:-1], edges[1:]):
+            inside = (tt >= a0) & (tt <= a1)
+            u = (tt[inside] - a0) / max(1e-6, a1 - a0)
+            prof[inside] = np.sin(np.pi * u) ** 0.7
+        front = np.clip((x['N'][:, 2] - 0.2) / 0.5, 0, 1)
+        x['P'] = x['P'] + x['N'] * (0.0045 * prof * front - 0.0015 * band * front)[:, None]
+        x['N'] = recompute_normals(x['P'], x['I'])
+        if 'full' in x: x['full'] = x['P']
     g = muscle_group(x['name'])
     if g:
         if g not in groups: groups.append(g)
@@ -580,7 +593,9 @@ if not os.environ.get('NOLIGHT'):
     light = []
     for x in parts:
         nt = len(x['I'])
-        target = max(40, int(nt * (0.28 if x['kind'] != 'skin' else 0.4)))
+        # addominali e muscoli del busto davanti: più triangoli anche nel leggero (si vedono da vicino)
+        keepmore = re.search(r"rectus abdominis|external abdominal oblique|pectoralis", x['name'], re.I)
+        target = max(40, int(nt * (0.55 if keepmore else 0.28 if x['kind'] != 'skin' else 0.4)))
         if nt <= 60:
             light.append(x); continue
         P2, I2, used = qem_simplify(x['P'], x['I'], target)

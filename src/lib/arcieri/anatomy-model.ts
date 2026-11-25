@@ -64,12 +64,12 @@ export function bodyPoints(lm: Landmark[], aspect: number): Record<number, V3> |
   const shM = { x: (P(11).x + P(12).x) / 2, y: (P(11).y + P(12).y) / 2 };
   const hipsOk = vis(lm[23]) > 0.35 && vis(lm[24]) > 0.35 && lm[23].y < 1.05 && lm[24].y < 1.05;
   const anklesOk = lm.length > 28 && vis(lm[27]) > 0.45 && vis(lm[28]) > 0.45 && lm[27].y < 1.0 && lm[28].y < 1.0;
-  // unità d'immagine per metro: spalle, busto e corpo intero, la mediana
-  const est: number[] = [d2(P(11), P(12)) / 0.36];
-  if (hipsOk) est.push(d2(shM, { x: (P(23).x + P(24).x) / 2, y: (P(23).y + P(24).y) / 2 }) / 0.5);
-  if (hipsOk && anklesOk) est.push((Math.max(P(27).y, P(28).y) - shM.y) / 1.36);
-  est.sort((a, b) => a - b);
-  const s = est[Math.floor(est.length / 2)] || 1;
+  // unità d'immagine per metro: la misura che cambia meno quando l'arciere gira il busto.
+  // Corpo intero (spalle-caviglie) se si vede, poi il busto; la larghezza delle spalle (che si
+  // accorcia girandosi e faceva "saltare" la grandezza del corpo) solo se non c'è altro
+  const torsoS = hipsOk ? d2(shM, { x: (P(23).x + P(24).x) / 2, y: (P(23).y + P(24).y) / 2 }) / 0.5 : 0;
+  const fullS = hipsOk && anklesOk ? (Math.max(P(27).y, P(28).y) - shM.y) / 1.36 : 0;
+  const s = (fullS > 0 && torsoS > 0 ? fullS * 0.7 + torsoS * 0.3 : torsoS || fullS || d2(P(11), P(12)) / 0.36) || 1;
   const hipY = hipsOk ? (P(23).y + P(24).y) / 2 : shM.y + 0.5 * s;
   const floorY = anklesOk ? Math.max(P(27).y, P(28).y) + 0.075 * s : hipY + 0.93 * s;
   const cx = shM.x;
