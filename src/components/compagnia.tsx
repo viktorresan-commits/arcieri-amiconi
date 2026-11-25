@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { Link } from "@tanstack/react-router";
 import type { listCompanies } from "@/lib/arcieri/compagnie.api";
 import { companyWelcome, createCompany, joinCompany, updateCompany } from "@/lib/arcieri/compagnie.api";
+import { syncFitastCompanies } from "@/lib/arcieri/fitast-league.api";
 import { Avatar, Button, Card, ErrorNote, Field, Segmented, TextInput } from "./kit";
 import { RankBars } from "./rank-bars";
 
@@ -215,20 +216,47 @@ function DefaultCrest({ color, letter }: { color: string; letter: string }) {
 
 /* ---------------- classifica tra compagnie ---------------- */
 
-type Metric = "points" | "arrows" | "members" | "gare" | "avg";
+type Metric = "fitast" | "points" | "arrows" | "members" | "gare" | "avg";
 
-export function CompanyLeague({ board, onJoin, busy }: { board: Board; onJoin: (id: number) => void; busy: number | null }) {
-  const [metric, setMetric] = useState<Metric>("points");
+export function CompanyLeague({ board, onJoin, busy, onSynced }: { board: Board; onJoin: (id: number) => void; busy: number | null; /** arrivate compagnie nuove dal portale FITAST */ onSynced?: () => void }) {
+  const hasFitast = board.companies.some((co) => co.fitastPoints != null);
+  const [metric, setMetric] = useState<Metric>(hasFitast ? "fitast" : "points");
   const [open, setOpen] = useState<number | null>(null);
-  const unit: Record<Metric, string> = { points: "pt", arrows: "frecce", members: "arcieri", gare: "gare", avg: "" };
-  const rows = board.companies.map((co) => {
-    const value = metric === "avg" ? co.avg ?? 0 : co[metric];
+  const [find, setFind] = useState("");
+  const [sync, setSync] = useState<{ busy: boolean; text: string }>({ busy: false, text: "" });
+  // l'elenco delle compagnie FITAST si prepara da solo (una volta alla settimana)
+  useEffect(() => {
+    let off = false;
+    syncFitastCompanies({ data: {} })
+      .then((r) => {
+        if (!off && r.added > 0) onSynced?.();
+      })
+      .catch(() => undefined);
+    return () => {
+      off = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  async function forceSync() {
+    setSync({ busy: true, text: "" });
+    try {
+      const r = await syncFitastCompanies({ data: { force: true } });
+      setSync({ busy: false, text: r.total ? `Elenco FITAST letto: ${r.total} compagnie, ${r.added} nuove, ${r.linked} già nell'app.` : `Elenco FITAST non letto.${r.diag.length ? ` Dettagli: ${r.diag.join(" | ")}` : ""}` });
+      if (r.added > 0) onSynced?.();
+    } catch (e) {
+      setSync({ busy: false, text: e instanceof Error ? e.message : "Non riuscito" });
+    }
+  }
+  const unit: Record<Metric, string> = { fitast: "pt", points: "pt", arrows: "frecce", members: "arcieri", gare: "gare", avg: "" };
+  const season = board.companies.find((co) => co.fitastSeason)?.fitastSeason ?? "";
+  const rows = board.companies.filter((co) => metric !== "fitast" || co.fitastPoints != null).map((co) => {
+    const value = metric === "avg" ? co.avg ?? 0 : metric === "fitast" ? co.fitastPoints ?? 0 : co[metric];
     return {
       id: String(co.id),
       name: co.name,
       value,
       label: metric === "avg" ? (co.avg == null ? "—" : co.avg.toFixed(2).replace(".", ",")) : undefined,
-      sub: [co.city, `${co.members} arcieri`].filter(Boolean).join(" · "),
+      sub: [metric === "fitast" && co.fitastPlace ? `${co.fitastPlace}ª nel campionato` : "", co.city, `${co.members} arcieri`].filter(Boolean).join(" · "),
       color: co.color,
       logo: co.logoUrl,
       badge: co.logoUrl ? undefined : <DefaultCrest color={co.color} letter={co.name.replace(/^Compagnia (degli |dei |di )?/i, "").slice(0, 1)} />,
@@ -240,13 +268,14 @@ export function CompanyLeague({ board, onJoin, busy }: { board: Board; onJoin: (
       <Card className="grid grid-cols-[minmax(0,1fr)] gap-3">
         <div>
           <h2 className="font-display text-2xl">Classifica compagnie</h2>
-          <p className="text-sm text-muted">Tutte le frecce e i punti dei loro arcieri, in allenamento e in gara.</p>
+          <p className="text-sm text-muted">{metric === "fitast" ? `Punti del campionato FITAST${season ? ` (${season})` : ""}, letti dal portale.` : "Tutte le frecce e i punti dei loro arcieri, in allenamento e in gara."}</p>
         </div>
         <div className="-mx-1 overflow-x-auto px-1 [scrollbar-width:none]">
         <Segmented<Metric>
           value={metric}
           onChange={setMetric}
           options={[
+            { id: "fitast", label: "FITAST" },
             { id: "points", label: "Punti" },
             { id: "arrows", label: "Frecce" },
             { id: "members", label: "Iscritti" },
@@ -255,12 +284,19 @@ export function CompanyLeague({ board, onJoin, busy }: { board: Board; onJoin: (
           ]}
         />
         </div>
-        <RankBars rows={rows} unit={unit[metric]} limit={12} empty="Ancora nessun dato per questa classifica." />
+        <RankBars rows={rows} unit={unit[metric]} limit={12} empty={metric === "fitast" ? "Ancora nessun punto FITAST: si leggono dalla scheda Compagnie FITAST (Aggiorna dal portale)." : "Ancora nessun dato per questa classifica."} />
       </Card>
       <Card className="grid grid-cols-[minmax(0,1fr)] gap-2">
         <h2 className="font-display text-2xl">Tutte le compagnie</h2>
         {board.isAdmin ? <p className="text-xs text-muted">Sei il fondatore: tocca una compagnia per vedere contatti e iscritti.</p> : <p className="text-xs text-muted">Tocca una compagnia per vedere i contatti.</p>}
-        {board.companies.map((co) => {
+        {board.companies.length > 8 ? <input value={find} onChange={(e) => setFind(e.target.value)} placeholder="Cerca per nome o città" aria-label="Cerca una compagnia" className="min-h-11 rounded-2xl border border-line bg-white/[0.04] px-3 text-sm" /> : null}
+        {board.isAdmin ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" disabled={sync.busy} onClick={() => void forceSync()} className="aa-chip">{sync.busy ? "Leggo l'elenco FITAST…" : "Aggiorna l'elenco dal portale FITAST"}</button>
+            {sync.text ? <p className="w-full break-words text-xs text-muted">{sync.text}</p> : null}
+          </div>
+        ) : null}
+        {board.companies.filter((co) => !find.trim() || `${co.name} ${co.city}`.toLowerCase().includes(find.trim().toLowerCase())).map((co) => {
           const expanded = open === co.id;
           const kinds = ["phone", "whatsapp", "email", "website", "instagram", "facebook", "youtube", "tiktok", "address"] as const;
           const links = kinds.map((kind) => ({ kind, href: hrefOf(kind, co[kind]) })).filter((item) => item.href);
@@ -271,7 +307,7 @@ export function CompanyLeague({ board, onJoin, busy }: { board: Board; onJoin: (
                   {co.logoUrl ? <img src={co.logoUrl} alt="" className="h-12 w-11 shrink-0 object-contain" /> : <span className="h-12 w-11 shrink-0"><DefaultCrest color={co.color} letter={co.name.replace(/^Compagnia (degli |dei |di )?/i, "").slice(0, 1)} /></span>}
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-semibold">{co.name}</span>
-                    <span className="block truncate text-xs text-muted">{[co.city, `${co.members} arcieri`, `${co.arrows.toLocaleString("it-IT")} frecce`].filter(Boolean).join(" · ")}</span>
+                    <span className="block truncate text-xs text-muted">{[co.city, `${co.members} arcieri`, co.fitastPoints != null ? `FITAST ${co.fitastPlace ? `${co.fitastPlace}ª · ` : ""}${co.fitastPoints.toLocaleString("it-IT")} pt` : `${co.arrows.toLocaleString("it-IT")} frecce`].filter(Boolean).join(" · ")}</span>
                   </span>
                 </button>
                 {co.id === board.mine ? (
@@ -494,6 +530,7 @@ export function CompanyWelcome() {
   const [mode, setMode] = useState<"scegli" | "fonda">("scegli");
   const [busy, setBusy] = useState<number | null>(null);
   const [err, setErr] = useState("");
+  const [find, setFind] = useState("");
   useEffect(() => {
     let off = false;
     try {
@@ -510,7 +547,13 @@ export function CompanyWelcome() {
           } catch {
             /* niente */
           }
-        } else setW(res);
+        } else {
+          setW(res);
+          // le compagnie del portale FITAST: se l'elenco è da preparare o da rinfrescare, arrivano subito dopo
+          syncFitastCompanies({ data: {} })
+            .then((sync) => (sync.added > 0 && !off ? companyWelcome().then((again) => !off && !again.chosen && setW(again)) : undefined))
+            .catch(() => undefined);
+        }
       })
       .catch(() => undefined);
     return () => {
@@ -539,7 +582,9 @@ export function CompanyWelcome() {
     }
   }
   const home = w.companies.find((c) => c.id === w.homeId) ?? w.companies[0];
-  const others = w.companies.filter((c) => c.id !== home?.id);
+  const needle = find.trim().toLowerCase();
+  const allOthers = w.companies.filter((c) => c.id !== home?.id);
+  const others = needle ? allOthers.filter((c) => `${c.name} ${c.city}`.toLowerCase().includes(needle)) : allOthers;
   return createPortal(
     <div className="fixed inset-0 z-[80] overflow-y-auto bg-[#07100b]/92 backdrop-blur-md" role="dialog" aria-modal="true" aria-label="Scegli la tua compagnia">
       <div className="mx-auto grid max-w-md gap-4 px-4 pb-10 pt-[calc(env(safe-area-inset-top)+2rem)]">
@@ -565,9 +610,13 @@ export function CompanyWelcome() {
                 </div>
               </button>
             ) : null}
-            {others.length ? (
+            {allOthers.length ? (
               <div className="grid gap-2">
-                <p className="px-1 text-xs font-semibold uppercase tracking-wider text-white/55">Altre compagnie</p>
+                <p className="px-1 text-xs font-semibold uppercase tracking-wider text-white/55">Altre compagnie{allOthers.length > 6 ? ` · ${allOthers.length}` : ""}</p>
+                {allOthers.length > 6 ? (
+                  <input value={find} onChange={(e) => setFind(e.target.value)} placeholder="Cerca per nome o città" aria-label="Cerca una compagnia" className="min-h-11 rounded-2xl border border-white/15 bg-white/[0.06] px-3 text-sm text-white placeholder:text-white/45" />
+                ) : null}
+                {!others.length ? <p className="px-1 text-sm text-white/60">Nessuna compagnia con «{find.trim()}».</p> : null}
                 {others.map((c) => (
                   <div key={c.id} className="flex items-center gap-3 rounded-2xl bg-white/[0.06] p-2.5">
                     <span className="h-12 w-11 shrink-0">{c.logoUrl ? <img src={c.logoUrl} alt="" className="h-full w-full object-contain" /> : <DefaultCrest color={c.color} letter={c.name.replace(/^Compagnia (degli |dei |di )?/i, "").slice(0, 1)} />}</span>

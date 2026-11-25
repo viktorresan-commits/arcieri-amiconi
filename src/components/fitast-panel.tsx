@@ -3,7 +3,8 @@ import { Button, Card, ErrorNote, Field, Loading, Select, TextInput, cx } from "
 import { Glyph } from "@/components/icons";
 import { saveEntry } from "@/lib/arcieri/club.api";
 import { FITAST_HOME, fitastRead } from "@/lib/arcieri/fitast.api";
-import { pressFields, type FitastCell, type FitastPage, type FitastTable } from "@/lib/arcieri/fitast-parse";
+import { type FitastCell, type FitastPage, type FitastTable } from "@/lib/arcieri/fitast-parse";
+import { currentTexts, FILTER_SELECT, filterCombos, filterSelects, norm, orderCombos, pressReq, type Req } from "@/lib/arcieri/fitast-nav";
 import { classificaUrl, findGare, garaDateOf, garaIdOf, garaTitleOf, rowFields, seasonRange, seasonSelect, teamOfRow, teamRowsOf, teamTokens, type Gara } from "@/lib/arcieri/fitast-gare";
 import { fitastTeam, saveCompanyResults } from "@/lib/arcieri/palmares.api";
 import { openExternal } from "@/lib/arcieri/native";
@@ -12,7 +13,6 @@ type Lane = { n: number; score: number; arrows: number[]; label: string; distanc
 type Entry = { userId: string; score: number | null; rank: number | null; laneCount: number | null; spot: number | null; championshipPoints: number | null; targetKind: "" | "padiglione" | "sagoma"; sagomaMax: 11 | 10 | 8 | null; category: string; piazzole: Lane[] };
 type Comp = { id: number; name: string; startsOn: string; notes?: string; entries: Entry[] };
 
-const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim();
 const rowText = (r: FitastCell[]) => r.map((c) => c.text).join(" ");
 const GROUP = /piazz|turn|grupp|paglion|bersagl|squadr|linea/i;
 const sameSite = (href: string) => href.includes("89.46.73.21/FITAST_WEB/");
@@ -39,85 +39,16 @@ function codeOf(c: Comp) {
 }
 
 /** una richiesta al portale: una pagina, oppure un comando premuto (modulo rimandato) */
-type Req = { url: string; post?: { fields: Record<string, string>; charset: string }; referer?: string; label?: string; filtered?: boolean; thenClassifica?: boolean };
 type Page = FitastPage & { cookie: string };
 type Match = { page: FitastPage; req: Req; table: FitastTable | null; index: number; line?: string };
 
 const KEY_BUTTON = /piazz|classific|generale|campionat|iscritt|risultat|elenco|partecip|turn/i;
-/** pulsante che applica i filtri di una classifica (Categoria, Tipologia… e poi CERCA) */
-const FILTER_BUTTON = /^(cerca|filtra|aggiorna|visualizza|mostra|applica|ok|vai)\b/i;
-/** tendine di una classifica da provare tutte: categoria, tipologia, classe, divisione, arco */
-const FILTER_SELECT = /categ|tipolog|classe|divisi|arco|stile|sesso|special|tipo/i;
-/** tendine da non girare dentro una classifica: la gara e la stagione sono già scelte */
-const FIXED_SELECT = /gara|campionat|stagion|anno|data|evento/i;
-
-type Combo = { req: Req; texts: string[] };
-/** le tendine-filtro di una classifica (Categoria, Tipologia…), al massimo due */
-function filterSelects(page: FitastPage) {
-  const season = seasonSelect(page);
-  // Categoria e Tipologia sempre; le altre tendine solo se non sono gara, stagione o data
-  return (page.form?.selects ?? [])
-    .filter((x) => x !== season && x.options.length >= 2 && x.options.length <= 120 && (FILTER_SELECT.test(x.label) || !FIXED_SELECT.test(x.label)))
-    .sort((a, b) => Number(FILTER_SELECT.test(b.label)) - Number(FILTER_SELECT.test(a.label)))
-    .slice(0, 2);
-}
 /** cosa si è letto di una pagina, per capire dove la ricerca si ferma: indirizzo, righe e filtri */
 function seenOf(p: FitastPage) {
   const t = [...p.tables].sort((a, b) => b.rows.length - a.rows.length)[0];
   const sel = filterSelects(p).map((x) => x.label.replace(/[:\s]+$/, "") || x.name).join("/");
   return [fileOf(p.url), t ? `${t.rows.length - 1}${t.total ? ` su ${t.total}` : ""} righe` : "nessuna tabella", sel ? `filtri ${sel}` : "nessun filtro"].join(" · ");
 }
-/** le scelte attuali dei filtri della pagina (es. MESSERE · TRADIZIONALE) */
-const currentTexts = (page: FitastPage) => filterSelects(page).map((x) => (x.options.find((o) => o.selected) ?? x.options[0]).text.trim());
-
-/**
- * Le classifiche del portale mostrano una categoria alla volta (Categoria MESSERE, Tipologia
- * TRADIZIONALE… e CERCA): ogni combinazione diventa un comando CERCA da premere.
- */
-function filterCombos(page: FitastPage, r: Req): Combo[] {
-  const form = page.form;
-  if (!form) return [];
-  const ranked = filterSelects(page);
-  if (!ranked.length) return [];
-  const btn = form.buttons.find((b) => FILTER_BUTTON.test(b.label.trim()));
-  // solo pagine che sono davvero classifiche con filtri: pulsante CERCA o tendine come Categoria
-  if (!btn && !ranked.some((x) => FILTER_SELECT.test(x.label))) return [];
-  const press = btn ? { code: btn.code, set: btn.set } : (ranked.find((x) => x.press)?.press ?? null);
-  if (!press) return [];
-  const base: Record<string, string> = Object.fromEntries(form.selects.map((x) => [x.name, (x.options.find((o) => o.selected) ?? x.options[0]).value]));
-  let combos: { choose: Record<string, string>; texts: string[] }[] = [{ choose: {}, texts: [] }];
-  for (const x of ranked) {
-    const next: typeof combos = [];
-    for (const c of combos) for (const o of x.options) if (o.value !== "" || o.text.trim()) next.push({ choose: { ...c.choose, [x.name]: o.value }, texts: [...c.texts, o.text.trim()] });
-    combos = next;
-  }
-  const now = currentTexts(page).map(norm).join("|");
-  return combos
-    .filter((c) => c.texts.map(norm).join("|") !== now)
-    .slice(0, 200)
-    .flatMap((c) => {
-      const q = pressReq(page, press, { ...base, ...c.choose }, `${r.label ? `${r.label} · ` : ""}${c.texts.join(" · ")}`);
-      return q ? [{ req: { ...q, filtered: true }, texts: c.texts }] : [];
-    });
-}
-
-/**
- * In che ordine provare i filtri: quelli dove il nome è già comparso in questa ricerca e poi i vicini
- * (stessa categoria o stessa tipologia) e basta; altrimenti tutti, prima quelli già visti in passato
- * e quelli che somigliano alla categoria dell'arciere nel calendario.
- */
-function orderCombos(all: Combo[], confirmed: string[][], hints: string[][], preferred: string[]) {
-  const key = (t: string[]) => t.map(norm).join("|");
-  const pref = preferred.map(norm).filter(Boolean);
-  const pscore = (c: Combo) => c.texts.reduce((n, t) => n + (pref.some((p) => norm(t).includes(p) || p.includes(norm(t))) ? 1 : 0), 0);
-  const isIn = (c: Combo, list: string[][]) => list.some((k) => key(k) === key(c.texts));
-  const near = (c: Combo, list: string[][]) => list.some((k) => c.texts.some((t) => k.map(norm).includes(norm(t))));
-  if (confirmed.length) {
-    return [...all.filter((c) => isIn(c, confirmed)), ...all.filter((c) => !isIn(c, confirmed) && near(c, confirmed)).sort((a, b) => pscore(b) - pscore(a)).slice(0, 10)];
-  }
-  return [...all].sort((a, b) => Number(isIn(b, hints)) - Number(isIn(a, hints)) || Number(near(b, hints)) - Number(near(a, hints)) || pscore(b) - pscore(a));
-}
-
 const COMBO_KEY = "aa-fitast-filtri";
 function loadCombos(): string[][] {
   try {
@@ -197,12 +128,6 @@ const rowsOf = (p: FitastPage) => p.tables.reduce((n, t) => n + Math.max(0, t.ro
 type Step = { id: string; date: string | null; title: string; pages: number; rows: number; found: number; note: string; team: string; combos: number; seen?: string; diag?: string[] };
 
 const reqKey = (r: Req) => `${r.url}|${r.post ? JSON.stringify(r.post.fields) : ""}|${r.label ?? ""}`;
-
-/** il comando premuto come richiesta: campi del modulo, scelte nelle tendine e alias WEBDEV */
-function pressReq(page: FitastPage, b: { code: string; set: Record<string, string> }, choose: Record<string, string>, label: string): Req | null {
-  if (!page.form) return null;
-  return { url: page.form.action || page.url, post: { fields: pressFields(page.form, b.code, b.set, choose), charset: page.charset }, referer: page.url, label };
-}
 
 /** la tendina con più voci è di solito l'elenco delle gare */
 function garaSelect(page: FitastPage) {

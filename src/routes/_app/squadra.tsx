@@ -6,6 +6,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { listCompanies } from "@/lib/arcieri/compagnie.api";
 import { CompanyForm, CompanyHero, CompanyLeague, joinAndReload } from "@/components/compagnia";
 import { CompanyTrophies } from "@/components/palmares";
+import { FitastLeague } from "@/components/fitast-league";
 import { RankBars } from "@/components/rank-bars";
 import { Heat } from "@/components/shot-lab";
 import { useLocalState } from "@/lib/arcieri/local-store";
@@ -36,7 +37,7 @@ const MEMBER_SKY: Sky = { tod: "pomeriggio", weather: "sereno", clouds: 0.25, se
 
 export const Route = createFileRoute("/_app/squadra")({ component: Page });
 
-type Section = "arcieri" | "classifiche" | "bersaglio" | "bacheca" | "compagnie" | "sfida";
+type Section = "arcieri" | "classifiche" | "bersaglio" | "bacheca" | "compagnie" | "fitast" | "sfida";
 /** le schede della Compagnia, una cosa per scheda: chi c'è, chi va meglio, dove tiriamo, cosa abbiamo vinto */
 const SECTIONS: { id: Section; label: string; icon: IconName; lede: string }[] = [
   { id: "arcieri", label: "Arcieri", icon: "team", lede: "Chi tira con noi: tocca un nome per vedere la scheda, i podi e i premi." },
@@ -44,6 +45,7 @@ const SECTIONS: { id: Section; label: string; icon: IconName; lede: string }[] =
   { id: "bersaglio", label: "Bersaglio", icon: "target", lede: "Dove arrivano le frecce della compagnia, sul paglione e sulle sagome 3D." },
   { id: "bacheca", label: "Trofei", icon: "trophy", lede: "Il palmarès della compagnia, i premi e la spesa comune." },
   { id: "compagnie", label: "Compagnie", icon: "flag", lede: "Le altre compagnie in classifica: puoi entrare in una o fondarne una nuova." },
+  { id: "fitast", label: "FITAST", icon: "medal", lede: "Compagnie FITAST: classifiche del campionato lette dal portale, compagnie e arcieri, gara per gara." },
   { id: "sfida", label: "Sfida", icon: "duel", lede: "Sfida gli altri arcieri con il tuo avatar." },
 ];
 /** le schede salvate dalla versione di prima */
@@ -181,7 +183,7 @@ function Page() {
         />
       ) : null}
       <nav aria-label="Sezioni della compagnia" className="aa-club-tabs sticky top-[calc(env(safe-area-inset-top)+3.6rem)] z-20 -mx-1 px-1">
-        <div className="grid grid-cols-6 gap-1 rounded-2xl p-1">
+        <div className="grid grid-cols-7 gap-1 rounded-2xl p-1">
           {SECTIONS.map((x) => (
             <button key={x.id} type="button" aria-pressed={section === x.id} onClick={() => setSection(x.id)} className="aa-club-tab grid min-h-14 place-items-center gap-0.5 rounded-xl px-0 py-1 text-[0.62rem] font-semibold leading-tight tracking-tight">
               <Glyph name={x.icon} size={18} />
@@ -247,9 +249,11 @@ function Page() {
 
       {section === "sfida" ? <AvatarChallenge looks={looks} /> : null}
 
+      {section === "fitast" ? <FitastLeague companies={companies.data?.companies ?? []} /> : null}
+
       {section === "compagnie" ? (
         <>
-          {companies.data ? <CompanyLeague board={companies.data} onJoin={(id) => void join(id)} busy={busy} /> : companies.error ? <ErrorNote text={companies.error} /> : <Loading />}
+          {companies.data ? <CompanyLeague board={companies.data} onJoin={(id) => void join(id)} busy={busy} onSynced={() => setNonce((n) => n + 1)} /> : companies.error ? <ErrorNote text={companies.error} /> : <Loading />}
           {editing === "none" ? (
             <Card className="grid gap-2">
               <h2 className="font-display text-2xl">Una nuova compagnia</h2>

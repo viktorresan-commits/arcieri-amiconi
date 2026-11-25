@@ -7,13 +7,15 @@ import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 import type { Sql } from "@/lib/db";
 import { asNum, cleanPhoto, clip, db, ensureMember, staffLevel } from "./access";
+import { fitastPointsBy } from "./fitast-league.api";
+import { teamKey } from "./fitast-league";
 
 export const HOME_SLUG = "fabriano";
 
 type CompanyRow = {
   id: number; slug: string; name: string; motto: string; city: string; bio: string; logo_url: string | null; color: string;
   phone: string; whatsapp: string; email: string; website: string; instagram: string; facebook: string; youtube: string; tiktok: string;
-  address: string; created_by: string | null; created_at: unknown;
+  address: string; created_by: string | null; created_at: unknown; fitast_name?: string | null; source?: string | null;
 };
 
 const LINK_FIELDS = ["phone", "whatsapp", "email", "website", "instagram", "facebook", "youtube", "tiktok", "address"] as const;
@@ -38,6 +40,9 @@ function toCompany(row: CompanyRow) {
     youtube: row.youtube,
     tiktok: row.tiktok,
     address: row.address,
+    /** preparata dall'elenco del portale FITAST */
+    fitast: row.source === "fitast",
+    fitastName: row.fitast_name ?? "",
   };
 }
 
@@ -149,6 +154,8 @@ export const listCompanies = createServerFn({ method: "GET" })
       from competition_entries
       where score is not null
       group by user_id`;
+    // punti del campionato FITAST (classifica generale squadre letta dal portale), per nome della compagnia
+    const fitastPts = await fitastPointsBy(sql).catch(() => new Map<string, { points: number; place: number | null; season: string }>());
     const trainOf = new Map(train.map((row) => [row.user_id, row]));
     const compOf = new Map(comps.map((row) => [row.user_id, row]));
     const board = companies.map((row) => {
@@ -168,8 +175,12 @@ export const listCompanies = createServerFn({ method: "GET" })
         gare += asNum(c?.gare);
         gareRaw += asNum(c?.points);
       }
+      const fp = fitastPts.get(teamKey(row.fitast_name || "")) ?? fitastPts.get(teamKey(row.name));
       return {
         ...toCompany(row),
+        fitastPoints: fp ? fp.points : null,
+        fitastPlace: fp ? fp.place : null,
+        fitastSeason: fp ? fp.season : "",
         members: crew.length,
         arrows,
         sessions,
@@ -289,6 +300,9 @@ export const joinCompany = createServerFn({ method: "POST" })
 export async function dropIfEmpty(sql: Sql, companyId: number) {
   const home = await homeId(sql);
   if (companyId === home) return;
+  // le compagnie dell'elenco FITAST restano anche senza iscritti
+  const kept = await sql<{ source: string }>`select source from companies where id = ${companyId} limit 1`;
+  if (kept[0]?.source === "fitast") return;
   const left = await sql<{ n: number }>`select count(*)::int as n from company_members where company_id = ${companyId}`;
   if (asNum(left[0]?.n) === 0) await sql`delete from companies where id = ${companyId}`;
 }

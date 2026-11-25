@@ -146,6 +146,11 @@ async function fetchPage(req: Req, depth = 0): Promise<FitastPage & { cookie: st
   }
 }
 
+/** una pagina del portale letta dal server (per le letture che fa l'app da sola, es. l'elenco delle compagnie) */
+export async function readFitastPage(url: string) {
+  return fetchPage({ url: onPortal(url), cookie: "" });
+}
+
 function onPortal(raw: string) {
   let u: URL;
   try {
