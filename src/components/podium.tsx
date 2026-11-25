@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { useId, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { AVATAR_DEFAULT, figureScale, type AvatarLook } from "@/lib/arcieri/avatar";
 import { ArcherAvatar, AvatarFace } from "./archer-avatar";
@@ -20,39 +20,173 @@ function frame(look: AvatarLook) {
   return { left: `${(-22 - 70.4 * (k - 1)).toFixed(2)}%`, top: `${(-12 - 171 * (k - 1)).toFixed(2)}%`, width: `${(192 * k).toFixed(2)}%` };
 }
 
-/** Scudo con l'arciere dentro (vittoria per il primo, fiero per gli altri). */
-function Shield({ row, place, look }: { row: PodiumRow; place: 1 | 2 | 3; look: AvatarLook }) {
+type Place = 1 | 2 | 3;
+
+/** Corona d'alloro attorno allo scudo: due rami di foglie nel metallo del posto. */
+export function Laurel({ place, className = "" }: { place: Place; className?: string }) {
+  const uid = (useId().replace(/[^a-zA-Z0-9]/g, "") + "_");
+  const m = METALS[place];
+  const leaves: { x: number; y: number; r: number; s: number }[] = [];
+  for (const side of [-1, 1]) {
+    const n = 9;
+    for (let i = 0; i < n; i += 1) {
+      const t = i / (n - 1);
+      // dal fondo (nastro) su lungo il fianco: angolo da 98° a 228° (sinistra), specchiato a destra
+      const deg = side < 0 ? 98 + t * 130 : 82 - t * 130;
+      const a = (deg * Math.PI) / 180;
+      const R = 45;
+      const x = 50 + Math.cos(a) * R;
+      const y = 54 + Math.sin(a) * R;
+      // tangente al ramo, verso la cima; le foglie si alternano dentro e fuori
+      const tan = deg + (side < 0 ? 90 : -90);
+      const out = i % 2 ? 38 : -38;
+      leaves.push({ x, y, r: tan + out * side, s: 1 - t * 0.35 });
+    }
+  }
+  return (
+    <svg viewBox="0 0 100 100" className={className} aria-hidden>
+      <defs>
+        <linearGradient id={`${uid}l`} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor={m.a} />
+          <stop offset="0.55" stopColor={m.b} />
+          <stop offset="1" stopColor={m.c} />
+        </linearGradient>
+      </defs>
+      <path d="M50 99 C22 97 4 76 6 46 M50 99 C78 97 96 76 94 46" fill="none" stroke={m.c} strokeWidth="1.6" strokeLinecap="round" />
+      {leaves.map((l, i) => (
+        <g key={i} transform={`translate(${l.x.toFixed(2)} ${l.y.toFixed(2)}) rotate(${l.r.toFixed(1)}) scale(${l.s.toFixed(2)})`}>
+          <path d="M0 0 C3 -4.2 10 -4.4 14 0 C10 4.4 3 4.2 0 0 Z" fill={`url(#${uid}l)`} stroke={m.c} strokeWidth="0.6" />
+          <path d="M1 0 L12 0" stroke={m.c} strokeWidth="0.45" opacity="0.7" />
+        </g>
+      ))}
+      {/* nastro che lega i due rami */}
+      <path d="M43 95 L50 99 L57 95 L60 101 L50 98.5 L40 101 Z" fill={place === 1 ? "#b3262c" : place === 2 ? "#2f5d9a" : "#2e7a4f"} />
+    </svg>
+  );
+}
+
+/** Coppa d'oro sopra il primo posto */
+export function Cup({ className = "" }: { className?: string }) {
+  const uid = (useId().replace(/[^a-zA-Z0-9]/g, "") + "_");
+  return (
+    <svg viewBox="0 0 64 64" className={className} aria-hidden>
+      <defs>
+        <linearGradient id={`${uid}g`} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#fff6c8" />
+          <stop offset="0.45" stopColor="#f0c24c" />
+          <stop offset="1" stopColor="#8a5a12" />
+        </linearGradient>
+        <linearGradient id={`${uid}s`} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stopColor="#fff" stopOpacity="0" />
+          <stop offset="0.5" stopColor="#fff" stopOpacity="0.75" />
+          <stop offset="1" stopColor="#fff" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      {/* manici */}
+      <path d="M16 13 C4 13 4 31 20 33" fill="none" stroke="#6b440c" strokeWidth="5.5" strokeLinecap="round" />
+      <path d="M48 13 C60 13 60 31 44 33" fill="none" stroke="#6b440c" strokeWidth="5.5" strokeLinecap="round" />
+      <path d="M16 13 C4 13 4 31 20 33" fill="none" stroke={`url(#${uid}g)`} strokeWidth="3.4" strokeLinecap="round" />
+      <path d="M48 13 C60 13 60 31 44 33" fill="none" stroke={`url(#${uid}g)`} strokeWidth="3.4" strokeLinecap="round" />
+      {/* coppa, gambo e base */}
+      <path d="M14 8 L50 8 C50 26 44 36 32 39 C20 36 14 26 14 8 Z" fill={`url(#${uid}g)`} stroke="#6b440c" strokeWidth="1.4" />
+      <path d="M28 39 L36 39 L35 47 L29 47 Z" fill={`url(#${uid}g)`} stroke="#6b440c" strokeWidth="1.2" />
+      <path d="M20 54 C20 48 44 48 44 54 L46 58 L18 58 Z" fill={`url(#${uid}g)`} stroke="#6b440c" strokeWidth="1.4" />
+      <rect x="23" y="51" width="18" height="3.2" rx="1" fill="#6b440c" opacity="0.55" />
+      {/* stella sbalzata e riflesso */}
+      <path d="M32 14 L34.4 19.6 L40.4 20 L35.8 23.8 L37.3 29.6 L32 26.4 L26.7 29.6 L28.2 23.8 L23.6 20 L29.6 19.6 Z" fill="#fff3b8" stroke="#8a5a12" strokeWidth="0.9" />
+      <path d="M18 10 L24 10 C24 22 27 30 30 35 C22 31 18 22 18 10 Z" fill={`url(#${uid}s)`} opacity="0.65" />
+      <ellipse cx="32" cy="8" rx="18" ry="2.4" fill="#fff6c8" opacity="0.55" />
+    </svg>
+  );
+}
+
+/** gradino del podio: piano di marmo con il bordo nel metallo e il numero inciso */
+function Step({ place }: { place: Place }) {
+  const m = METALS[place];
+  const h = place === 1 ? "h-16" : place === 2 ? "h-11" : "h-8";
+  return (
+    <div className={`relative w-full ${h}`}>
+      <div className="absolute inset-x-0 top-0 h-2 rounded-t-md" style={{ background: `linear-gradient(90deg, ${m.c}, ${m.a} 45%, ${m.b} 70%, ${m.c})` }} />
+      <div className="absolute inset-x-0 bottom-0 top-2 grid place-items-center rounded-b-md border-x border-b border-white/10" style={{ background: "linear-gradient(180deg, #2c3a35, #18221f 70%, #111915)" }}>
+        <span className="font-display leading-none" style={{ fontSize: place === 1 ? "2rem" : "1.5rem", color: m.b, textShadow: `0 1px 0 ${m.c}, 0 0 12px ${m.b}55` }}>{place}</span>
+      </div>
+    </div>
+  );
+}
+
+/** raggi di luce che girano lenti dietro al primo */
+function Glory() {
+  return (
+    <div aria-hidden className="aa-glory pointer-events-none absolute left-1/2 top-[-22%] aspect-square w-[200%] -translate-x-1/2 rounded-full" />
+  );
+}
+
+type Slot = { key: string; place: Place; art: ReactNode; to?: { id: number }; /** l'alloro lo disegna già l'arte (attorno allo stemma) */ ownWreath?: boolean };
+
+/**
+ * Podio epico: tre colonne (secondo, primo, terzo) con la corona d'alloro, la coppa sul primo,
+ * i raggi di luce dietro e i gradini di marmo. `art` è lo scudo con l'arciere o lo stemma della compagnia.
+ */
+function Stage({ slots }: { slots: Slot[] }) {
+  const at = (p: Place) => slots.find((x) => x.place === p);
+  return (
+    <div className="relative flex items-end justify-center gap-1 pb-1 pt-14">
+      {([2, 1, 3] as Place[]).map((p) => {
+        const s = at(p);
+        const big = p === 1;
+        const width = big ? "w-[37%]" : "w-[30%]";
+        if (!s) return <div key={p} className={width} />;
+        const body = (
+          <div className="relative">
+            {big ? <Glory /> : null}
+            {big ? (
+              <>
+                <span aria-hidden className="pointer-events-none absolute -top-12 left-1/2 z-10 aspect-square w-[60%] -translate-x-1/2 rounded-full bg-[radial-gradient(circle,rgba(255,214,110,0.55),transparent_65%)] blur-md" />
+                <Cup className="aa-cup absolute -top-14 left-1/2 z-20 w-[44%] -translate-x-1/2 drop-shadow-[0_6px_10px_rgba(0,0,0,0.6)]" />
+                <Sparkle size={10} className="aa-twinkle absolute -top-12 left-[14%] z-20" />
+                <Sparkle size={8} className="aa-twinkle absolute -top-5 right-[16%] z-20" style={{ animationDelay: "1.1s" }} />
+              </>
+            ) : null}
+            {s.ownWreath ? null : <Laurel place={p} className="pointer-events-none absolute -inset-x-[11%] -bottom-[6%] z-0 h-auto w-[122%]" />}
+            <div className="relative z-10">{s.art}</div>
+          </div>
+        );
+        return (
+          <div key={s.key} className={`aa-pop relative grid ${width} ${big ? "z-10" : ""}`} style={{ animationDelay: `${0.25 + (3 - p) * 0.15}s` }}>
+            {s.to ? <Link to="/arciere/$id" params={{ id: String(s.to.id) }} className="block">{body}</Link> : body}
+            <div className="mt-2"><Step place={p} /></div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Scudo con l'arciere dentro (vittoria per il primo, fiero per gli altri), nome e valore in basso. */
+function Shield({ row, place, look }: { row: PodiumRow; place: Place; look: AvatarLook }) {
   const uid = (useId().replace(/[^a-zA-Z0-9]/g, "") + "_");
   const m = METALS[place];
   const big = place === 1;
   const shield = "M0.5 0.02 L0.97 0.09 L0.97 0.64 C0.97 0.8 0.76 0.93 0.5 1 C0.24 0.93 0.03 0.8 0.03 0.64 L0.03 0.09 Z";
   return (
-    <Link to="/arciere/$id" params={{ id: String(row.id) }} className={`aa-pop relative block ${big ? "z-10 -mx-2 w-[38%]" : "w-[31%] translate-y-5"}`} style={{ animationDelay: `${0.25 + (3 - place) * 0.15}s` }}>
+    <div className="relative aspect-[100/128] w-full drop-shadow-[0_14px_18px_rgba(0,0,0,0.55)]">
       <svg width="0" height="0" className="absolute" aria-hidden>
         <defs>
           <clipPath id={`${uid}s`} clipPathUnits="objectBoundingBox"><path d={shield} /></clipPath>
-          <linearGradient id={`${uid}m`} x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stopColor={m.a} />
-            <stop offset="0.5" stopColor={m.b} />
-            <stop offset="1" stopColor={m.c} />
-          </linearGradient>
         </defs>
       </svg>
-      <div className="relative aspect-[100/128] w-full drop-shadow-[0_14px_18px_rgba(0,0,0,0.55)]">
-        <div className="absolute inset-0" style={{ clipPath: `url(#${uid}s)`, background: `linear-gradient(135deg, ${m.a}, ${m.b} 50%, ${m.c})` }} />
-        <div className="absolute inset-[4%]" style={{ clipPath: `url(#${uid}s)` }}>
-          <div className="absolute inset-0" style={{ background: `radial-gradient(120% 80% at 50% 10%, ${look.shirt}aa, #0d1b17 75%)` }} />
-          {/* ragazzi e arcieri bassi: la figura si ingrandisce attorno ai piedi, così testa e busto stanno al centro come per gli altri */}
-          <div className="absolute" style={frame(look)}>
-            <ArcherAvatar look={look} pose={big ? "vittoria" : "fiero"} still interactive={false} className="h-auto w-full" />
-          </div>
-          <div className="absolute inset-x-0 bottom-0 h-[46%] bg-gradient-to-t from-black/85 via-black/45 to-transparent" />
-          <div className="absolute inset-x-[8%] bottom-[16%] text-center">
-            <p className="truncate font-display text-[1.05rem] uppercase leading-none tracking-wide text-white">{row.name}</p>
-            <p className="mt-0.5 truncate text-[0.62rem] font-semibold text-white/75">{row.mark}</p>
-          </div>
+      <div className="absolute inset-0" style={{ clipPath: `url(#${uid}s)`, background: `linear-gradient(135deg, ${m.a}, ${m.b} 50%, ${m.c})` }} />
+      <div className="absolute inset-[4%]" style={{ clipPath: `url(#${uid}s)` }}>
+        <div className="absolute inset-0" style={{ background: `radial-gradient(120% 80% at 50% 10%, ${look.shirt}aa, #0d1b17 75%)` }} />
+        {/* ragazzi e arcieri bassi: la figura si ingrandisce attorno ai piedi, così testa e busto stanno al centro come per gli altri */}
+        <div className="absolute" style={frame(look)}>
+          <ArcherAvatar look={look} pose={big ? "vittoria" : "fiero"} still interactive={false} className="h-auto w-full" />
         </div>
-        <span className="absolute bottom-[-2%] left-1/2 grid h-7 min-w-11 -translate-x-1/2 place-items-center rounded-full px-2 font-display text-base shadow" style={{ background: `linear-gradient(180deg, ${m.a}, ${m.b})`, color: m.text }}>{m.label}</span>
+        <div className="absolute inset-x-0 bottom-0 h-[46%] bg-gradient-to-t from-black/85 via-black/45 to-transparent" />
+        <div className="absolute inset-x-[8%] bottom-[12%] text-center">
+          <p className="truncate font-display text-[1.05rem] uppercase leading-none tracking-wide text-white">{row.name}</p>
+          <p className="mt-0.5 truncate text-[0.62rem] font-semibold text-white/75">{row.mark}</p>
+        </div>
       </div>
       {big ? (
         <>
@@ -60,23 +194,52 @@ function Shield({ row, place, look }: { row: PodiumRow; place: 1 | 2 | 3; look: 
           <Sparkle size={9} className="aa-twinkle absolute -right-1 top-12" style={{ animationDelay: "0.8s" }} />
         </>
       ) : null}
-    </Link>
+    </div>
   );
 }
 
-/** Podio a scudi con l'avatar di ciascuno, in posa. */
+/** Podio degli arcieri: scudi con l'avatar di ciascuno, in posa, sul podio con alloro e coppa. */
 export function Podium({ title, rows, looks }: { title: string; rows: PodiumRow[]; looks: Record<string, AvatarLook> }) {
-  const slots: [PodiumRow | undefined, 1 | 2 | 3][] = [[rows[1], 2], [rows[0], 1], [rows[2], 3]];
+  const slots: Slot[] = rows.slice(0, 3).map((row, i) => ({ key: row.userId, place: (i + 1) as Place, to: { id: row.id }, art: <Shield row={row} place={(i + 1) as Place} look={looks[row.userId] ?? AVATAR_DEFAULT} /> }));
   return (
-    <Card className="relative overflow-hidden bg-[radial-gradient(120%_70%_at_50%_0%,rgba(43,140,120,0.35),transparent_70%)]">
-      {rows[0] ? <Confetti count={18} /> : null}
-      <h2 className="relative mb-3 font-display text-2xl uppercase tracking-wide">{title}</h2>
-      {rows.length === 0 ? <p className="text-sm text-muted">Nessuno con un risultato, per ora.</p> : (
-        <div className="relative flex items-start justify-center pb-6">
-          {slots.map(([row, place]) => (row ? <Shield key={row.userId} row={row} place={place} look={looks[row.userId] ?? AVATAR_DEFAULT} /> : <div key={place} className="w-[31%]" />))}
-        </div>
-      )}
+    <Card className="relative overflow-hidden bg-[radial-gradient(120%_70%_at_50%_0%,rgba(224,177,90,0.22),transparent_70%)]">
+      {rows[0] ? <Confetti count={22} /> : null}
+      <h2 className="relative mb-1 font-display text-2xl uppercase tracking-wide">{title}</h2>
+      {rows.length === 0 ? <p className="text-sm text-muted">Nessuno con un risultato, per ora.</p> : <Stage slots={slots} />}
     </Card>
+  );
+}
+
+export type CrestPodiumRow = { key: string; name: string; mark: string; logo: string | null; color: string };
+
+/** Medaglione con lo stemma della compagnia, nome e valore */
+function CrestMedal({ row, place }: { row: CrestPodiumRow; place: Place }) {
+  const m = METALS[place];
+  return (
+    <div className="grid justify-items-center text-center">
+      <div className="relative w-[86%]">
+        <Laurel place={place} className="pointer-events-none absolute -inset-x-[16%] -bottom-[14%] z-0 h-auto w-[132%]" />
+        <div className="relative z-10 aspect-square w-full rounded-full p-[5%] shadow-[0_14px_18px_rgba(0,0,0,0.55)]" style={{ background: `linear-gradient(135deg, ${m.a}, ${m.b} 50%, ${m.c})` }}>
+          <div className="grid h-full w-full place-items-center rounded-full" style={{ background: `radial-gradient(circle at 50% 30%, ${row.color}66, #0d1b17 75%)` }}>
+            {row.logo ? <img src={row.logo} alt="" className="h-[74%] w-[74%] object-contain drop-shadow-[0_4px_6px_rgba(0,0,0,0.5)]" /> : <span className="font-display text-3xl text-white">{row.name.slice(0, 1)}</span>}
+          </div>
+        </div>
+      </div>
+      <p className="relative z-10 mt-3 line-clamp-2 w-full font-display text-[0.86rem] uppercase leading-tight tracking-wide text-white">{row.name}</p>
+      <p className="text-[0.64rem] font-semibold text-white/70">{row.mark}</p>
+    </div>
+  );
+}
+
+/** Podio delle compagnie: i loro stemmi sul podio con alloro e coppa */
+export function CrestPodium({ rows }: { rows: CrestPodiumRow[] }) {
+  if (!rows.length) return null;
+  const slots: Slot[] = rows.slice(0, 3).map((row, i) => ({ key: row.key, place: (i + 1) as Place, ownWreath: true, art: <CrestMedal row={row} place={(i + 1) as Place} /> }));
+  return (
+    <div className="relative overflow-hidden rounded-2xl bg-[radial-gradient(120%_80%_at_50%_0%,rgba(224,177,90,0.2),transparent_70%)] px-1">
+      <Confetti count={14} />
+      <Stage slots={slots} />
+    </div>
   );
 }
 

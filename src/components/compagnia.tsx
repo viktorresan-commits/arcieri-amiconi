@@ -8,6 +8,7 @@ import { companyWelcome, createCompany, joinCompany, updateCompany } from "@/lib
 import { findCompanyLogos, syncFitastCompanies } from "@/lib/arcieri/fitast-league.api";
 import { Avatar, Button, Card, ErrorNote, Field, Segmented, TextInput } from "./kit";
 import { RankBars } from "./rank-bars";
+import { CrestPodium } from "./podium";
 
 type Board = Awaited<ReturnType<typeof listCompanies>>;
 type Co = Board["companies"][number];
@@ -332,7 +333,16 @@ export function CompanyLeague({ board, onJoin, busy, onSynced, part, fitastBoard
           ]}
         />
         </div>
-        {metric === "fitast" && fitastBoard ? fitastBoard : <RankBars rows={rows} unit={unit[metric]} limit={12} empty={metric === "fitast" ? "Ancora nessun punto FITAST: tocca Aggiorna dal portale." : "Ancora nessun dato per questa classifica."} />}
+        {metric === "fitast" && fitastBoard ? fitastBoard : (
+          <>
+            {(() => {
+              // le prime tre compagnie sul podio, con i loro stemmi
+              const top = [...rows].filter((r) => r.value > 0).sort((a, b) => b.value - a.value).slice(0, 3);
+              return top.length >= 2 ? <CrestPodium rows={top.map((r) => ({ key: r.id, name: r.name, mark: r.label ?? `${Number(r.value).toLocaleString("it-IT")} ${unit[metric]}`.trim(), logo: r.logo ?? null, color: r.color }))} /> : null;
+            })()}
+            <RankBars rows={rows} unit={unit[metric]} limit={12} empty={metric === "fitast" ? "Ancora nessun punto FITAST: tocca Aggiorna dal portale." : "Ancora nessun dato per questa classifica."} />
+          </>
+        )}
       </Card>
   );
   const directory = (

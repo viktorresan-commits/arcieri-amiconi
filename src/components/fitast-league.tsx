@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, ErrorNote, Loading, cx } from "@/components/kit";
 import { Medal } from "@/components/palmares";
+import { CrestPodium } from "@/components/podium";
 import { Insignia } from "@/components/insignia";
 import { useLoad } from "@/lib/arcieri/use-load";
 import { fitastStandings, type Standing, type StandingRow } from "@/lib/arcieri/fitast-league.api";
@@ -94,6 +95,16 @@ function RankList({ rows, crestOf, team, limit }: { rows: StandingRow[]; crestOf
 }
 
 /** una classifica divisa per categoria (e tipologia): pastiglie e la lista */
+/** i primi tre della classifica sul podio, con gli stemmi delle compagnie */
+function TeamPodium({ rows, crestOf }: { rows: StandingRow[]; crestOf: (t: string) => Crest | null }) {
+  const top = rows.slice(0, 3).map((r) => {
+    const c = crestOf(r.name);
+    const drawnCrest = c?.logoUrl ? null : drawCrest(r.name);
+    return { key: r.name, name: titleName(r.name), mark: `${num(pts(r))} ${r.camp != null ? "pt camp." : "punti"}`, logo: c?.logoUrl ?? drawnCrest?.logo ?? null, color: c?.color ?? drawnCrest?.color ?? "#1f7a46" };
+  });
+  return <CrestPodium rows={top} />;
+}
+
 function SplitBoard({ items, crestOf, team, limit, empty }: { items: Standing[]; crestOf: (t: string) => Crest | null; team?: boolean; limit: number; empty: string }) {
   const { groups, order } = useSplit(items);
   const [g, setG] = useState("");
@@ -107,7 +118,12 @@ function SplitBoard({ items, crestOf, team, limit, empty }: { items: Standing[];
     <div className="grid gap-2">
       <Chips value={group} options={order} onChange={setG} />
       <Chips value={tip} options={tips} onChange={setT} />
-      {it ? <RankList rows={it.rows} crestOf={crestOf} team={team} limit={limit} /> : null}
+      {it && team && it.rows.length >= 3 ? (
+        <>
+          <TeamPodium rows={it.rows} crestOf={crestOf} />
+          <RankList rows={it.rows.slice(3)} crestOf={crestOf} team={team} limit={limit - 3} />
+        </>
+      ) : it ? <RankList rows={it.rows} crestOf={crestOf} team={team} limit={limit} /> : null}
     </div>
   );
 }

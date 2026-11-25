@@ -14,7 +14,7 @@ import { Podium } from "@/components/podium";
 import { useTeamAvatars } from "@/components/avatar-hero";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { listClubOrders, listGadgets, saveClubOrder, setClubOrder, skillBoard, squadBoard } from "@/lib/arcieri/club.api";
-import { memberLabel, DIVISIONS } from "@/lib/arcieri/labels";
+import { bowLabel, memberLabel, DIVISIONS } from "@/lib/arcieri/labels";
 import type { AvatarLook } from "@/lib/arcieri/avatar";
 import { SceneBackdrop } from "@/components/scene-2d";
 import type { Sky } from "@/lib/arcieri/sky3d";
@@ -97,6 +97,8 @@ function Page() {
   const [face, setFace] = useState("io");
   // Arcieri: una divisione per podio, elenco e classifiche ("" = tutti)
   const [division, setDivision] = useState<"" | (typeof DIVISIONS)[number]>("");
+  // e un tipo d'arco ("" = tutti): ogni arco ha il suo podio
+  const [bow, setBow] = useState("");
   const [stat, setStat] = useState<"frecce" | "allenamenti" | "distanze" | "gare">("frecce");
   const [picked, setPicked] = useState<string[]>([]);
   const [pick, setPick] = useState<string[]>([]);
@@ -116,9 +118,12 @@ function Page() {
   if (error || !data) return <ErrorNote text={error || "Errore"} />;
   if (people.length === 0) return <Empty title="Ancora nessuno" text="Il primo account apre la compagnia. Gli altri si registrano da soli." />;
 
-  const podium = (division: "" | "Madonne" | "Messeri" | "Pueri" | "Juniores") =>
-    ranked.filter((row) => row.skill >= 0 && (division === "" || row.division === division)).slice(0, 3);
-  const inDivision = division ? people.filter((row) => row.division === division) : people;
+  const bows: string[] = [...new Set<string>(people.map((row) => String(row.bowType ?? "")).filter(Boolean))].sort((a, b) => bowLabel(a).localeCompare(bowLabel(b), "it"));
+  const bowOn = bows.includes(bow) ? bow : "";
+  const fits = (row: (typeof people)[number]) => (division === "" || row.division === division) && (bowOn === "" || row.bowType === bowOn);
+  const podium = () => ranked.filter((row) => row.skill >= 0 && fits(row)).slice(0, 3);
+  // l'elenco va dal più bravo al meno bravo (stesso ordine del podio), senza dirlo
+  const inDivision = ranked.filter(fits);
 
   function toggle(userId: string) {
     setPick((current) => {
@@ -206,11 +211,20 @@ function Page() {
               </button>
             ))}
           </div>
-          <Podium title={division || "Generale"} rows={podium(division)} looks={looks} />
+          {bows.length > 1 ? (
+            <div className="-mx-1 -mt-2 flex gap-1.5 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none]" role="group" aria-label="Tipo d'arco">
+              {["", ...bows].map((b) => (
+                <button key={b || "tutti"} type="button" aria-pressed={bowOn === b} onClick={() => setBow(b)} className={`aa-chip shrink-0 ${bowOn === b ? "border-[#e0b15a]/60 bg-[#e0b15a]/15 text-[#f1cf8a]" : ""}`}>
+                  {b ? bowLabel(b) : "Tutti gli archi"}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          <Podium title={[division || (bowOn ? "" : "Generale"), bowOn ? bowLabel(bowOn) : ""].filter(Boolean).join(" · ")} rows={podium()} looks={looks} />
           <div className="grid gap-2">
             <div className="flex items-baseline justify-between px-1">
               <h2 className="font-display text-2xl">Gli arcieri</h2>
-              <span className="text-xs text-muted">{inDivision.length} {inDivision.length === 1 ? "iscritto" : "iscritti"}{division ? ` · ${division}` : ""}</span>
+              <span className="text-xs text-muted">{inDivision.length} {inDivision.length === 1 ? "iscritto" : "iscritti"}{division ? ` · ${division}` : ""}{bowOn ? ` · ${bowLabel(bowOn)}` : ""}</span>
             </div>
             {me.role === "admin" ? <p className="px-1 text-xs text-muted">Tieni premuto su una persona per toglierla dall'app.</p> : null}
             {inDivision.filter((row) => !removed.includes(row.id)).map((row, i) => {
