@@ -1,6 +1,6 @@
 import { useArcherSetup } from "@/lib/arcieri/setup";
 import { CURIOSITA, randomCuriosita } from "@/lib/arcieri/curiosita";
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "@tanstack/react-router";
 import { SHORTCUTS, STATIONS, nextShortcut, shortcutById, usePinned, type Shortcut } from "@/lib/arcieri/shortcuts";
@@ -190,7 +190,7 @@ function readRecent() {
 }
 
 /** Menu: cerca, riprendi una pagina recente, oppure scegli dalle sezioni, tutte in vista. */
-export function PathMap({ onPick, current, showSearch = false, focus = null, hide = [] }: { onPick?: () => void; current?: string; showSearch?: boolean; /** percorso dei nuovi: le voci da mostrare prima di tutte */ focus?: string[] | null; /** voci che questa persona non può aprire */ hide?: string[] }) {
+export function PathMap({ onPick, current, showSearch = false, focus = null, hide = [], onSearch, onClose }: { onPick?: () => void; current?: string; showSearch?: boolean; /** percorso dei nuovi: le voci da mostrare prima di tutte */ focus?: string[] | null; /** voci che questa persona non può aprire */ hide?: string[]; /** pulsanti sul margine destro, sotto l'indice delle sezioni */ onSearch?: () => void; onClose?: () => void }) {
   const [q, setQ] = useState("");
   const [all, setAll] = useState(() => !focus || menuAllOpen());
   const query = q.trim().toLowerCase();
@@ -255,125 +255,101 @@ export function PathMap({ onPick, current, showSearch = false, focus = null, hid
               ) : null}
             </section>
           ) : null}
-          {all ? <CategoryCarousel current={current} onGo={(s) => { touch(s); go(); }} isHere={isHere} hide={hide} lastTouched={lastTouched} /> : null}
         </>
       )}
+      <SectionStack showSections={!query && all} searching={showSearch} onSearch={onSearch} onClose={onClose} onGo={(s) => { touch(s); go(); }} isHere={isHere} hide={hide} lastTouched={lastTouched} />
     </div>
   );
 }
 
 /**
- * Sezioni del Menu in un carosello infinito: si scorre a destra e a sinistra senza fine, una
- * categoria per pagina con tutte le sue voci; in alto le linguette per saltare a una categoria.
+ * Menu: tutte le sezioni una sotto l'altra in un'unica pagina che scorre, voci tre per fila.
+ * A destra, sul margine, l'indice delle sezioni (quella in vista è evidenziata; un tocco ci porta)
+ * e sotto i pulsanti Cerca e Chiudi.
  */
-function CategoryCarousel({ current, onGo, isHere, hide = [], lastTouched = {} }: { current?: string; onGo: (s: Shortcut) => void; isHere: (s: Shortcut) => boolean; hide?: string[]; /** per sezione, l'ultima voce toccata */ lastTouched?: Record<string, string> }) {
-  const COPIES = 5;
-  const n = STATIONS.length;
-  const mid = Math.floor(COPIES / 2) * n;
-  const here = current ? SHORTCUTS.filter((s) => s.to !== "/" && current.startsWith(s.to)).sort((x, y) => y.to.length - x.to.length)[0] : undefined;
-  // si riapre sulla categoria in cui si era (anche tornando indietro da una voce), altrimenti su quella della pagina
-  const remembered = (() => {
-    try {
-      return sessionStorage.getItem("aa-menu-cat") || "";
-    } catch {
-      return "";
-    }
-  })();
-  const startAt = Math.max(0, STATIONS.findIndex((st) => st.id === (remembered || here?.group || "allena")));
-  const ref = useRef<HTMLDivElement>(null);
-  const timer = useRef<number | null>(null);
-  const [active, setActive] = useState(startAt);
-  const [cur, setCur] = useState(mid + startAt);
+function SectionStack({ onGo, isHere, hide = [], lastTouched = {}, searching, onSearch, onClose, showSections }: { onGo: (s: Shortcut) => void; isHere: (s: Shortcut) => boolean; hide?: string[]; lastTouched?: Record<string, string>; searching: boolean; onSearch?: () => void; onClose?: () => void; showSections: boolean }) {
+  const box = useRef<HTMLDivElement>(null);
+  const [active, setActive] = useState<string>(STATIONS[0].id);
+  // dopo un tocco sull'indice la sezione scelta resta accesa mentre la pagina scorre fin lì
+  const lock = useRef(0);
+  const scroller = () => (box.current?.closest("[data-menu-scroll]") as HTMLElement | null) ?? null;
+  // la sezione in vista: l'ultima il cui titolo è già salito in cima (in fondo alla pagina vale l'ultima)
   useEffect(() => {
-    try {
-      sessionStorage.setItem("aa-menu-cat", STATIONS[active].id);
-    } catch {
-      /* niente */
-    }
-  }, [active]);
-  const pageW = () => (ref.current?.firstElementChild as HTMLElement | null)?.offsetWidth ?? 1;
-  const gap = 0;
-  const leftOf = (i: number) => {
-    const el = ref.current;
-    const page = el?.children[i] as HTMLElement | undefined;
-    if (!el || !page) return 0;
-    return page.offsetLeft - (el.clientWidth - page.offsetWidth) / 2;
+    const root = scroller();
+    if (!root || !showSections) return;
+    const spy = () => {
+      if (Date.now() < lock.current) return;
+      const secs = Array.from(box.current?.querySelectorAll<HTMLElement>("[data-sec]") ?? []);
+      if (!secs.length) return;
+      const atEnd = root.scrollTop + root.clientHeight >= root.scrollHeight - 4;
+      const top = root.getBoundingClientRect().top + 90;
+      let cur = secs[0].dataset.sec ?? "";
+      for (const el of secs) if (el.getBoundingClientRect().top <= top) cur = el.dataset.sec ?? cur;
+      if (atEnd) cur = secs[secs.length - 1].dataset.sec ?? cur;
+      setActive(cur);
+    };
+    spy();
+    root.addEventListener("scroll", spy, { passive: true });
+    return () => root.removeEventListener("scroll", spy);
+  }, [showSections]);
+  const jump = (id: string) => {
+    const root = scroller();
+    const el = box.current?.querySelector<HTMLElement>(`[data-sec="${id}"]`);
+    if (!root || !el) return;
+    setActive(id);
+    lock.current = Date.now() + 900;
+    root.scrollTo({ top: root.scrollTop + el.getBoundingClientRect().top - root.getBoundingClientRect().top - 12, behavior: "smooth" });
   };
-  const jump = (i: number, smooth: boolean) => ref.current?.scrollTo({ left: leftOf(i), behavior: smooth ? "smooth" : "auto" });
-  useLayoutEffect(() => {
-    jump(mid + startAt, false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  const onScroll = () => {
-    const el = ref.current;
-    if (!el) return;
-    const i = Math.round(el.scrollLeft / (pageW() + gap));
-    const st = ((i % n) + n) % n;
-    if (st !== active) setActive(st);
-    if (i !== cur) setCur(i);
-    if (timer.current) window.clearTimeout(timer.current);
-    // fermo: se sono vicino ai bordi della lista ripetuta, torno al centro senza scatti visibili
-    timer.current = window.setTimeout(() => {
-      if (i < n || i >= (COPIES - 1) * n) jump(mid + st, false);
-    }, 140);
-  };
-  const pages = Array.from({ length: COPIES * n }, (_, i) => STATIONS[i % n]);
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_4.1rem] items-start gap-1.5">
-      <div ref={ref} onScroll={onScroll} className="relative -ml-4 flex snap-x snap-mandatory overflow-x-auto [scrollbar-width:none]" style={{ overscrollBehaviorX: "contain" }}>
-        {pages.map((st, i) => {
-          const items = SHORTCUTS.filter((s) => s.group === st.id && !hide.includes(s.id));
-          const k = i % n;
-          return (
-            <section key={i} className={cx("aa-cat-page grid min-h-[calc(100dvh-10rem)] w-full shrink-0 snap-center content-start gap-3 rounded-r-[1.6rem] pb-8 pl-4 pr-2.5 pt-2", i === cur && "is-active")} data-k={k} style={{ ["--cat" as string]: st.color, background: `linear-gradient(180deg, color-mix(in srgb, ${st.color} 16%, transparent) 0%, color-mix(in srgb, ${st.color} 9%, transparent) 35%, color-mix(in srgb, ${st.color} 5%, transparent) 70%, color-mix(in srgb, ${st.color} 2%, transparent) 100%)` }}>
-              {/* intestazione della sezione: icona con alone, titolo e bersaglio decorativo */}
-              <div className="aa-cat-hero relative overflow-hidden rounded-[1.3rem] px-3 py-2.5" style={{ ["--cat" as string]: st.color, background: `linear-gradient(135deg, color-mix(in srgb, ${st.color} 28%, transparent), color-mix(in srgb, ${st.color} 8%, transparent) 55%, rgba(255,255,255,0.02))` }}>
-                <svg aria-hidden viewBox="0 0 200 200" className="aa-cat-rings pointer-events-none absolute -right-12 -top-14 h-44 w-44 opacity-[0.2]">
-                  {[96, 78, 60, 42, 24].map((r, j) => <circle key={r} cx="100" cy="100" r={r} fill="none" stroke="#fff" strokeWidth={j === 4 ? 10 : 6} />)}
-                </svg>
-                <div className="relative flex items-center gap-3">
-                  <span className="aa-cat-icon relative grid place-items-center">
-                    <span aria-hidden className="absolute inset-[-8px] rounded-full blur-xl" style={{ background: `color-mix(in srgb, ${st.color} 40%, transparent)` }} />
-                    <AppIcon name={st.icon} size={46} className="relative" />
-                  </span>
-                  <div className="min-w-0">
-                    <p className="font-display text-[1.6rem] leading-none text-white [text-shadow:0_2px_10px_rgba(0,0,0,0.35)]">{st.title}</p>
-                    <p className="mt-0.5 text-[0.72rem] leading-snug text-white/80">{st.sub}</p>
-                  </div>
-                  <span className="ml-auto self-start rounded-full bg-black/30 px-2 py-0.5 text-[0.6rem] font-semibold tabular-nums text-white/85">{items.length}</span>
+    <div ref={box}>
+      {showSections ? (
+        <div className="grid gap-5">
+          {STATIONS.map((st) => {
+            const items = SHORTCUTS.filter((s) => s.group === st.id && !hide.includes(s.id));
+            if (!items.length) return null;
+            return (
+              <section key={st.id} data-sec={st.id} className="aa-menu-sec" style={{ ["--cat" as string]: st.color }}>
+                <div className="mb-2.5 flex items-baseline gap-2 border-b pb-1.5" style={{ borderColor: `color-mix(in srgb, ${st.color} 55%, transparent)` }}>
+                  <h2 className="shrink-0 font-display text-[1.45rem] leading-none" style={{ color: `color-mix(in srgb, ${st.color} 65%, white)` }}>{st.title}</h2>
+                  <span className="truncate text-[0.7rem] text-muted">{st.sub}</span>
                 </div>
-              </div>
-              {/* le voci: tre per fila, icone tutte della stessa misura e allineate */}
-              <div className="grid grid-cols-3 gap-x-1.5 gap-y-2">
-                {items.map((s, j) => (
-                  <Link key={s.id} to={s.to as "/"} search={(s.search ?? {}) as never} onClick={() => onGo(s)} aria-current={isHere(s) ? "page" : undefined} className={cx("aa-short aa-cat-tile flex min-w-0 flex-col items-center gap-1 rounded-[1.2rem] px-0.5 pb-2 pt-2.5 text-center", isHere(s) && "is-here")} style={{ ["--i" as string]: j }}>
-                    <AppIcon name={s.icon} size={58} className="aa-short-icon" glow={lastTouched[st.id] === s.id} />
-                    <span className="line-clamp-2 min-h-[2em] w-full text-[0.74rem] font-semibold leading-tight">{s.label}</span>
-                    <span className="line-clamp-2 w-full text-[0.58rem] leading-tight text-muted">{s.hint}</span>
-                  </Link>
-                ))}
-              </div>
-            </section>
-          );
-        })}
-      </div>
-      {/* sezioni in colonna sul margine destro: icona e nome, quella aperta in evidenza */}
-      <nav className="aa-sec-rail sticky top-16 z-[5] -mr-2 grid gap-1 py-1" role="tablist" aria-label="Sezioni del menu" aria-orientation="vertical">
-        {STATIONS.map((st, k) => (
-          <button
-            key={st.id}
-            type="button"
-            role="tab"
-            aria-selected={k === active}
-            onClick={() => jump(mid + k, true)}
-            className={cx("aa-sec-tab grid justify-items-center gap-0.5 rounded-2xl px-0.5 pb-1 pt-1.5 text-[0.6rem] font-semibold leading-tight transition", k === active && "is-on")}
-            style={{ ["--acc" as string]: st.color }}
-          >
-            <AppIcon name={st.icon} size={k === active ? 38 : 32} />
-            <span className="w-full truncate text-center">{st.title}</span>
+                <div className="grid grid-cols-3 gap-y-3.5">
+                  {items.map((s) => (
+                    <Link key={s.id} to={s.to as "/"} search={(s.search ?? {}) as never} onClick={() => onGo(s)} aria-current={isHere(s) ? "page" : undefined} className={cx("aa-short aa-menu-item flex min-w-0 flex-col items-center gap-1 rounded-2xl px-0.5 py-1 text-center", isHere(s) && "is-here")}>
+                      <AppIcon name={s.icon} size={58} className="aa-short-icon" glow={lastTouched[st.id] === s.id} />
+                      <span className="line-clamp-2 w-full text-[0.76rem] font-semibold leading-tight">{s.label}</span>
+                    </Link>
+                  ))}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      ) : null}
+      {onClose && typeof document !== "undefined" ? createPortal(
+        <nav className="aa-menu-rail aa-sheet fixed inset-y-0 right-0 z-[41] flex w-[3.6rem] md:hidden flex-col items-center justify-center gap-1 overflow-y-auto border-l border-white/10 pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] [scrollbar-width:none]" aria-label="Sezioni del menu">
+          {showSections
+            ? STATIONS.map((st) => {
+                const on = st.id === active;
+                return (
+                  <button key={st.id} type="button" onClick={() => jump(st.id)} aria-current={on ? "true" : undefined} className={cx("aa-rail-item relative grid w-full shrink-0 justify-items-center gap-0.5 py-1", on && "is-on")} style={{ ["--acc" as string]: st.color }}>
+                    {on ? <span aria-hidden className="absolute inset-y-1 right-0 w-[3px] rounded-l" style={{ background: st.color }} /> : null}
+                    <span className={cx("transition", on ? "" : "opacity-60 grayscale-[35%]")}><AppIcon name={st.icon} size={on ? 40 : 32} /></span>
+                    <span className="text-[0.56rem] font-semibold leading-tight" style={{ color: on ? `color-mix(in srgb, ${st.color} 60%, white)` : "rgb(255 255 255 / 0.55)" }}>{st.title}</span>
+                  </button>
+                );
+              })
+            : null}
+          <span aria-hidden className="my-1.5 h-px w-8 shrink-0 bg-white/15" />
+          <button type="button" onClick={onSearch} aria-label="Cerca" aria-pressed={searching} className={cx("grid h-11 w-11 shrink-0 place-items-center rounded-full", searching ? "bg-primary text-primary-fg" : "bg-white/[0.07]")}>
+            <Glyph name="search" size={19} />
           </button>
-        ))}
-      </nav>
+          <button type="button" onClick={onClose} aria-label="Chiudi il menu" className="mt-1 grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white/[0.07]">
+            <Glyph name="close" size={20} />
+          </button>
+        </nav>,
+        document.body,
+      ) : null}
     </div>
   );
 }

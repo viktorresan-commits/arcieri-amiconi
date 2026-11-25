@@ -419,24 +419,16 @@ export function Shell({ children }: { children: ReactNode }) {
             </button>
           </nav>
           {menu ? (
-            <div ref={menuBox} className="aa-sheet fixed inset-0 z-40 overflow-y-auto bg-bg pb-[calc(env(safe-area-inset-bottom)+1.5rem)] md:hidden">
-              <div className="aa-appheader aa-bar sticky top-0 z-10 flex h-14 items-center justify-between border-b px-4 backdrop-blur-md">
-                <p className="font-display text-xl">Menu</p>
-                <div className="flex items-center gap-2">
-                  <button type="button" className={cx("grid h-11 w-11 place-items-center rounded-full", menuSearch ? "bg-primary text-primary-fg" : "bg-white/5")} onClick={() => setMenuSearch((v) => !v)} aria-label="Cerca" aria-pressed={menuSearch}>
-                    <Glyph name="search" size={19} />
-                  </button>
-                  <button type="button" className="grid h-11 w-11 place-items-center rounded-full bg-white/5" onClick={() => setMenu(false)} aria-label="Chiudi">
-                    <Glyph name="close" size={20} />
-                  </button>
-                </div>
-              </div>
-              <div className="grid gap-3 px-4">
+            <div ref={menuBox} data-menu-scroll className="aa-sheet fixed inset-0 z-40 overflow-y-auto bg-bg pb-[calc(env(safe-area-inset-bottom)+1.5rem)] md:hidden">
+              {/* niente intestazione: Cerca e Chiudi stanno sul margine destro, sotto le sezioni */}
+              <div className="grid gap-3 pl-4 pr-[4.4rem] pt-[calc(env(safe-area-inset-top)+0.9rem)]">
                 <PathMap
                   current={path}
                   showSearch={menuSearch}
                   focus={focus}
                   hide={hide}
+                  onSearch={() => setMenuSearch((v) => !v)}
+                  onClose={() => setMenu(false)}
                   onPick={() => {
                     rememberMenu(menuBox.current?.scrollTop ?? 0, menuSearch);
                     setMenu(false);

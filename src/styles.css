@@ -1949,3 +1949,23 @@ html[data-motion="ridotta"] :is(.aa-life *, .aa-life-fallwater, .aa-life-spray, 
 }
 /* le insegne al posto delle tessere: l'anello "sei qui" segue il tondo */
 .aa-appicon-ins { border-radius: 9999px; }
+/* scene del Fondatore: vetrata e cratere che pulsano, drago in volo, braci, ali di fuoco, lanterne */
+svg .aa-rose-glow { transform-box: fill-box; transform-origin: center; animation: aa-rose-glow 5s ease-in-out infinite; }
+@keyframes aa-rose-glow { 0%, 100% { opacity: 0.8; transform: scale(0.96); } 50% { opacity: 1; transform: scale(1.04); } }
+svg .aa-dragon { animation: aa-dragon 14s ease-in-out infinite; }
+@keyframes aa-dragon { 0%, 100% { transform: translate(0, 0) rotate(0deg); } 50% { transform: translate(-14px, 6px) rotate(-2deg); } }
+svg .aa-smoke { animation: aa-smoke 12s ease-in-out infinite alternate; }
+@keyframes aa-smoke { from { transform: translate(0, 0); } to { transform: translate(10px, -6px); } }
+svg .aa-ember { transform-box: fill-box; animation: aa-ember 6s linear infinite; }
+@keyframes aa-ember { 0% { transform: translate(0, 0); opacity: 0; } 15% { opacity: 1; } 100% { transform: translate(-12px, -150px); opacity: 0; } }
+svg .aa-wingbeat { transform-origin: 200px 104px; animation: aa-wingbeat 4.5s ease-in-out infinite; }
+@keyframes aa-wingbeat { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(1.04, 0.95); } }
+svg .aa-lantern { animation: aa-lantern 12s linear infinite; }
+@keyframes aa-lantern { 0% { transform: translate(0, 30px); opacity: 0; } 15% { opacity: 1; } 85% { opacity: 1; } 100% { transform: translate(8px, -110px); opacity: 0; } }
+svg .aa-fall { stroke-dasharray: 4 3; animation: aa-fall 0.8s linear infinite; }
+@keyframes aa-fall { to { stroke-dashoffset: -7; } }
+@media (prefers-reduced-motion: reduce) { svg .aa-rose-glow, svg .aa-dragon, svg .aa-smoke, svg .aa-ember, svg .aa-wingbeat, svg .aa-lantern, svg .aa-fall { animation: none; } }
+/* Menu: indice delle sezioni sul margine destro e voci a griglia */
+.aa-menu-rail { background: color-mix(in srgb, var(--bg) 82%, black); }
+.aa-menu-item:active { transform: scale(0.95); }
+.aa-menu-item.is-here span:last-child { color: color-mix(in srgb, var(--cat) 60%, #fff); }
