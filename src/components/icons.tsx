@@ -835,6 +835,42 @@ export function Glyph({ name, size = 20, className, strokeWidth = 1.7, title, de
   );
 }
 
+/** metallo, smalto e forma di ogni insegna: colori diversi e ben contrastati, come le insegne delle gare */
+type Coin = [InsigniaProps["metal"], string, InsigniaProps["shape"]?];
+const COIN: Partial<Record<IconName, Coin>> = {
+  bolt: ["gold", "sapphire", "rosette"], camera: ["silver", "sapphire"], bow: ["gold", "emerald"], archer: ["gold", "teal"],
+  notebook: ["bronze", "night"], history: ["silver", "amethyst"], chart: ["gold", "sapphire", "hex"], ballistics: ["silver", "teal", "hex"],
+  quiver: ["bronze", "emerald"], team: ["gold", "sapphire", "shield"], calendar: ["silver", "ruby"], megaphone: ["gold", "ruby"],
+  compare: ["silver", "sapphire", "hex"], bag: ["bronze", "teal"], user: ["silver", "sapphire"], breath: ["silver", "teal"],
+  posture: ["gold", "amethyst"], timer: ["silver", "ruby"], stopwatch: ["silver", "ruby"], palette: ["gold", "amethyst", "rosette"],
+  pin: ["silver", "ruby"], wind: ["silver", "sapphire"], windsock: ["silver", "sapphire"], follow: ["gold", "teal"],
+  target: ["gold", "ruby"], video: ["silver", "amethyst"], image: ["silver", "teal"], download: ["silver", "night"],
+  import: ["silver", "night"], share: ["silver", "night"], link: ["silver", "night"], save: ["silver", "night"],
+  key: ["gold", "night"], lock: ["gold", "night"], trash: ["iron", "ruby"], shield: ["silver", "sapphire", "shield"],
+  sparkle: ["gold", "amethyst", "rosette"], ticket: ["gold", "teal"], gear: ["silver", "night", "hex"], wrench: ["bronze", "night", "hex"],
+  caliper: ["silver", "night", "hex"], ruler: ["bronze", "sapphire", "hex"], plus: ["gold", "emerald"], check: ["gold", "emerald"],
+  play: ["gold", "ruby"], stack: ["silver", "amethyst"], flame: ["gold", "ruby", "rosette"], level: ["silver", "emerald"],
+  arrow: ["gold", "emerald"], hand: ["gold", "amethyst"], hold: ["gold", "amethyst"], scan: ["silver", "teal"],
+  crosshair: ["silver", "teal"], sight: ["silver", "teal"], edit: ["silver", "sapphire"], eye: ["silver", "teal"],
+  binoculars: ["silver", "teal"], home: ["gold", "emerald"], grid: ["silver", "night"], checklist: ["gold", "teal"],
+  foc: ["silver", "amethyst"], steps: ["bronze", "emerald"], footprints: ["bronze", "emerald"], lungs: ["silver", "sapphire"],
+  scorecard: ["gold", "teal"], spine: ["silver", "amethyst"], energy: ["gold", "ruby"], span: ["bronze", "sapphire"],
+  bareshaft: ["silver", "emerald"], daily: ["gold", "sapphire", "rosette"], quiz: ["gold", "amethyst"], book: ["bronze", "ruby"],
+  rules: ["bronze", "ruby"], search: ["silver", "sapphire"], help: ["silver", "sapphire"], trend: ["gold", "emerald"],
+  mountain: ["silver", "teal"], medal: ["gold", "sapphire", "rosette"], expand: ["silver", "night"],
+  bowstring: ["bronze", "sapphire"], rest: ["silver", "emerald"], stabilizer: ["silver", "night"], armguard: ["bronze", "ruby"],
+  release: ["gold", "night"], chestguard: ["bronze", "teal"], bowcase: ["bronze", "emerald"], bowstand: ["silver", "amethyst"],
+  shirt: ["silver", "ruby"], shoe: ["bronze", "sapphire"],
+};
+const COIN_FALLBACK: Coin[] = [["gold", "sapphire"], ["silver", "ruby"], ["gold", "emerald"], ["silver", "amethyst"], ["bronze", "teal"], ["gold", "night"]];
+function coinOf(name: string): Coin {
+  const c = COIN[name as IconName];
+  if (c) return c;
+  let h = 0;
+  for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return COIN_FALLBACK[h % COIN_FALLBACK.length];
+}
+
 /** Tessera d'icona: placca scura con riflesso e cornice, disegno inciso in metallo del colore dell'app.
  *  Stesso aspetto ovunque. `accent` (solo nel Menu) dà a una sezione la sua tinta, sullo stesso materiale. */
 export function AppIcon({ name, size = 52, className, accent, color, fluid = false, plain = false }: { name: IconName; color?: string; size?: number; className?: string; accent?: string; /** riempie il contenitore invece di una misura fissa */ fluid?: boolean; /** tessera semplice (vecchio stile) */ plain?: boolean }) {
@@ -848,7 +884,11 @@ export function AppIcon({ name, size = 52, className, accent, color, fluid = fal
         {ins ? (
           <Insignia {...ins} size={Math.round(size * 1.04)} glow={size >= 56} />
         ) : (
-          <Insignia art={DETAILED[name] ?? ICONS[name]} metal="silver" enamel={accent ?? color ?? "#2c8a57"} size={Math.round(size * 1.02)} />
+          (() => {
+            // ogni voce ha il suo metallo e il suo smalto (non la tinta della sezione): colorate e ben staccate
+            const [metal, enamel, shape] = coinOf(name);
+            return <Insignia art={DETAILED[name] ?? ICONS[name]} metal={metal} enamel={enamel} shape={shape ?? "round"} size={Math.round(size * 1.02)} glow={size >= 64} still />;
+          })()
         )}
       </span>
     );

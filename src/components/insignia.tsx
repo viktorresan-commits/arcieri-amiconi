@@ -304,6 +304,8 @@ export type InsigniaProps = {
   laurel?: boolean;
   /** raggi di luce e scintille dietro (insegne preziose) */
   glow?: boolean;
+  /** raggi fermi (tante insegne insieme, come nel Menu): niente rotazione continua */
+  still?: boolean;
   /** ancora da conquistare: spenta e in grigio */
   locked?: boolean;
   /** entra con un piccolo salto */
@@ -315,7 +317,7 @@ export type InsigniaProps = {
 };
 
 /** Insegna coniata: bordo di metallo, smalto, simbolo in rilievo, riflessi; si anima al tocco. */
-export function Insignia({ symbol = "star", art, metal = "gold", enamel = "night", shape = "round", size = 64, ribbon = false, crown = false, laurel = false, glow = false, locked = false, pop = false, badge, className, title }: InsigniaProps) {
+export function Insignia({ symbol = "star", art, metal = "gold", enamel = "night", shape = "round", size = 64, ribbon = false, crown = false, laurel = false, glow = false, still = false, locked = false, pop = false, badge, className, title }: InsigniaProps) {
   const id = `in${useId().replace(/[^a-zA-Z0-9]/g, "")}_`;
   const [tap, setTap] = useState(0);
   const [lux, hi, mid, lo, deep] = METAL[metal];
@@ -331,12 +333,36 @@ export function Insignia({ symbol = "star", art, metal = "gold", enamel = "night
   const h = (size * vb.h) / vb.w;
   const field = shape === "shield" ? 0.8 : shape === "rosette" ? 0.76 : 0.82;
   const symBox = shape === "shield" ? { x: 31, y: 26, s: 58 } : shape === "rosette" ? { x: 33, y: 33, s: 54 } : { x: 31, y: 31, s: 58 };
+  const sw = size >= 44 ? 1.9 : 2.3;
+  /** il disegno a linee 24×24 in una passata: colore pieno, oppure (metal) sfumato come il bordo */
+  const artPass = (c: string, dx: number, dy: number, op: number, width: number, metalFill = false, key?: string) => (
+    <svg key={key} x={symBox.x - 1 + dx} y={symBox.y - 1 + dy} width={symBox.s + 2} height={symBox.s + 2} viewBox="0 0 24 24" overflow="visible" opacity={op} fill="none" stroke="currentColor" strokeWidth={width} strokeLinecap="round" strokeLinejoin="round" className={metalFill ? `${id}m` : undefined} style={{ color: c }}>
+      {metalFill ? (
+        <defs>
+          <linearGradient id={`${id}art`} gradientUnits="userSpaceOnUse" x1="5" y1="1.5" x2="17" y2="23">
+            <stop offset="0" stopColor={lux} />
+            <stop offset="0.32" stopColor={hi} />
+            <stop offset="0.66" stopColor={mid} />
+            <stop offset="1" stopColor={lo} />
+          </linearGradient>
+        </defs>
+      ) : null}
+      {art}
+    </svg>
+  );
   const symbolAt = (c: string, dd: string, dx = 0, dy = 0, op = 1) =>
     art ? (
-      // disegno a linee: colori pieni (currentColor), il metallo del rilievo è il tono chiaro
-      <svg x={symBox.x - 1 + dx} y={symBox.y - 1 + dy} width={symBox.s + 2} height={symBox.s + 2} viewBox="0 0 24 24" overflow="visible" opacity={op} fill="none" stroke="currentColor" strokeWidth={size >= 44 ? 1.9 : 2.3} strokeLinecap="round" strokeLinejoin="round" style={{ color: c.startsWith("url(") ? hi : c }}>
-        {art}
-      </svg>
+      c.startsWith("url(") ? (
+        // il disegno coniato: contorno scuro che lo stacca dallo smalto, metallo sfumato, filo di luce in alto
+        <g>
+          {artPass(deep, 0, 0, 0.9, sw + (size >= 44 ? 1.5 : 1.2), false, "edge")}
+          {artPass(hi, 0, 0, 1, sw, true, "metal")}
+          {size >= 44 ? artPass(lux, -0.45, -0.55, 0.75, sw * 0.32, false, "lux") : null}
+          <style>{`.${id}m{stroke:url(#${id}art)}.${id}m [stroke="currentColor"]{stroke:url(#${id}art)}.${id}m [fill="currentColor"]{fill:url(#${id}art)}`}</style>
+        </g>
+      ) : (
+        artPass(c, dx, dy, op, sw + (c === dd ? 1.2 : 0))
+      )
     ) : (
       <svg x={symBox.x + dx} y={symBox.y + dy} width={symBox.s} height={symBox.s} viewBox="0 0 100 100" overflow="visible" opacity={op}>
         {symbolArt(symbol, c, dd)}
@@ -407,7 +433,7 @@ export function Insignia({ symbol = "star", art, metal = "gold", enamel = "night
 
         {/* raggi di luce dietro */}
         {glow && !locked ? (
-          <g className="aa-ins-rays" style={{ transformOrigin: "60px 60px" }}>
+          <g className={still ? undefined : "aa-ins-rays"} style={{ transformOrigin: "60px 60px" }}>
             {Array.from({ length: 16 }, (_, i) => {
               const a0 = ((i * 22.5 - 4) * Math.PI) / 180;
               const a1 = ((i * 22.5 + 4) * Math.PI) / 180;
