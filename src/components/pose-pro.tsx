@@ -130,6 +130,8 @@ export function ProPanel({
         <p className="text-[0.68rem] text-muted">"sp" = larghezze di spalle. Fascia verde = zona consigliata. L'ancoraggio atteso per l'arco {setup.bowType}: {at.text}.</p>
       </div>
 
+      <DetailTable m={m} series={series} />
+
       {steady ? (
         <div className="grid grid-cols-4 gap-1.5 text-center">
           {([["Testa", steady.head], ["Gomito", steady.elbow], ["Braccio", steady.bowArm], ["Polso", steady.bowWrist]] as const).map(([k, v]) => (
@@ -161,6 +163,8 @@ export function ProPanel({
               m: {
                 headTilt: m.headTilt, headTurn: m.headTurn, shrug: m.shrug, bowArm: m.bowArm, bowWrist: m.bowWrist, drawWrist: m.drawWrist,
                 elbowLine: m.elbowLine, anchorV: m.anchorV, trunk: m.trunk, stance: m.stance, drawLenCm: m.drawLenCm,
+                stanceOpen: m.stanceOpen, footBow: m.footBow, footDraw: m.footDraw, shoulderRot: m.shoulderRot, trunkTwist: m.trunkTwist, trunkForward: m.trunkForward,
+                bowArmTilt: m.bowArmTilt, drawForearmTilt: m.drawForearmTilt, bowKnuckles: m.bowKnuckles, drawKnuckles: m.drawKnuckles, drawHook: m.drawHook, fingersOnString: m.fingersOnString, bowGrip: m.bowGrip,
               },
               setup,
               at: shot ? (shot.anchorFrom + (shot.release ?? shot.anchorTo)) / 2 : null,
@@ -304,6 +308,82 @@ function GaugeRow({ g, score, i }: { g: ReturnType<typeof evaluate>["gauges"][nu
 }
 
 /** Andamento di tre misure nel video, con la fase di ancoraggio evidenziata. */
+/** righe delle misure di dettaglio: valore (mediana in ancoraggio) e da quanto a quanto nel video */
+const DETAIL: { group: string; rows: { k: keyof ProMetrics; label: string; unit: "°" | "" ; signed?: boolean; note: (v: number) => string }[] }[] = [
+  {
+    group: "Piedi",
+    rows: [
+      { k: "stance", label: "Larghezza", unit: "", note: (v) => (v < 0.6 ? "stretti: meno base" : v > 1.4 ? "molto larghi" : "alla larghezza delle spalle") },
+      { k: "stanceOpen", label: "Posizione rispetto alla linea di tiro", unit: "°", signed: true, note: (v) => (Math.abs(v) < 6 ? "parallela" : v > 0 ? "aperta" : "chiusa") },
+      { k: "footBow", label: "Punta del piede dell'arco", unit: "°", signed: true, note: (v) => (Math.abs(v) < 10 ? "dritta" : v > 0 ? "girata verso il bersaglio" : "girata indietro") },
+      { k: "footDraw", label: "Punta del piede della corda", unit: "°", signed: true, note: (v) => (Math.abs(v) < 10 ? "dritta" : v > 0 ? "girata verso il bersaglio" : "girata indietro") },
+    ],
+  },
+  {
+    group: "Tronco",
+    rows: [
+      { k: "trunk", label: "Inclinazione laterale", unit: "°", signed: true, note: (v) => (Math.abs(v) <= 4 ? "dritto" : v > 0 ? "verso il bersaglio" : "indietro") },
+      { k: "trunkForward", label: "Avanti / indietro", unit: "°", signed: true, note: (v) => (Math.abs(v) <= 5 ? "dritto" : v > 0 ? "in avanti" : "indietro") },
+      { k: "shoulderRot", label: "Rotazione delle spalle", unit: "°", signed: true, note: (v) => (Math.abs(v) <= 8 ? "sulla linea di tiro" : v > 0 ? "aperte verso il bersaglio" : "chiuse") },
+      { k: "trunkTwist", label: "Torsione spalle-anche", unit: "°", signed: true, note: (v) => (Math.abs(v) <= 8 ? "busto unito al bacino" : "spalle girate sul bacino") },
+    ],
+  },
+  {
+    group: "Braccia",
+    rows: [
+      { k: "bowArmTilt", label: "Braccio dell'arco", unit: "°", signed: true, note: (v) => (v < -5 ? "sotto la spalla" : v > 12 ? "molto alto" : "all'altezza della spalla") },
+      { k: "drawUpperTilt", label: "Omero della corda", unit: "°", signed: true, note: (v) => (v < -8 ? "gomito basso" : v > 12 ? "gomito alto" : "gomito in linea") },
+      { k: "drawForearmTilt", label: "Avambraccio della corda", unit: "°", signed: true, note: (v) => (Math.abs(v) <= 10 ? "in linea con la freccia" : v > 0 ? "polso più alto del gomito" : "polso più basso del gomito") },
+      { k: "bowKnuckles", label: "Rotazione mano dell'arco", unit: "°", note: (v) => (v < 25 ? "nocche quasi verticali" : v > 60 ? "nocche quasi orizzontali" : "nocche a 45°: mano rilassata") },
+      { k: "drawKnuckles", label: "Rotazione mano della corda", unit: "°", note: (v) => (v < 25 ? "dorso della mano piatto" : "mano girata") },
+    ],
+  },
+  {
+    group: "Dita",
+    rows: [
+      { k: "fingersOnString", label: "Dita sulla corda", unit: "", note: (v) => (v >= 3 ? "tre dita" : v >= 2 ? "due dita" : "poche dita piegate") },
+      { k: "drawHook", label: "Piega delle dita della corda", unit: "°", note: (v) => (v < 30 ? "dita quasi tese" : v > 95 ? "dita molto chiuse" : "gancio sulla prima falange") },
+      { k: "bowGrip", label: "Chiusura della mano dell'arco", unit: "°", note: (v) => (v > 80 ? "stringe l'arco" : "dita rilassate") },
+    ],
+  },
+];
+
+function DetailTable({ m, series }: { m: ProMetrics; series: { t: number; m: ProMetrics }[] | null }) {
+  const fmt = (v: number, unit: string, signed?: boolean, k?: keyof ProMetrics) =>
+    k === "stance" ? `${v.toFixed(2).replace(".", ",")} sp` : k === "fingersOnString" ? String(Math.round(v)) : `${signed && v > 0 ? "+" : ""}${v.toFixed(0)}${unit}`;
+  const range = (k: keyof ProMetrics) => {
+    if (!series) return null;
+    const vs = series.map((p) => p.m[k]).filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+    if (vs.length < 4) return null;
+    return [Math.min(...vs), Math.max(...vs)] as const;
+  };
+  const groups = DETAIL.map((g) => ({ ...g, rows: g.rows.filter((r) => typeof m[r.k] === "number") })).filter((g) => g.rows.length);
+  if (!groups.length) return null;
+  return (
+    <div className="grid gap-2">
+      <p className="text-sm font-semibold">Piedi, dita, inclinazioni e rotazioni</p>
+      {groups.map((g) => (
+        <div key={g.group} className="grid gap-1 rounded-2xl bg-white/[0.04] p-2.5">
+          <p className="text-xs font-semibold text-muted">{g.group}</p>
+          {g.rows.map((r) => {
+            const v = m[r.k] as number;
+            const rg = range(r.k);
+            return (
+              <div key={r.k} className="grid grid-cols-[1fr_auto] items-baseline gap-x-2 text-sm">
+                <span>{r.label}</span>
+                <b className="font-display text-lg tabular-nums">{fmt(v, r.unit, r.signed, r.k)}</b>
+                <span className="text-[0.7rem] text-muted">{r.note(v)}</span>
+                <span className="text-right text-[0.68rem] tabular-nums text-muted">{rg ? `nel video da ${fmt(rg[0], r.unit, r.signed, r.k)} a ${fmt(rg[1], r.unit, r.signed, r.k)}` : ""}</span>
+              </div>
+            );
+          })}
+        </div>
+      ))}
+      <p className="text-[0.68rem] text-muted">Misure prese su ogni fotogramma del video: il valore grande è quello dell'ancoraggio, sotto da quanto a quanto è andato nel video. Rotazioni e piedi usano la profondità stimata dal video: con una ripresa di lato o da dietro sono più precise.</p>
+    </div>
+  );
+}
+
 function Trend({ series, shot }: { series: { t: number; m: ProMetrics }[]; shot: Shot | null }) {
   const [k, setK] = useState<"gomito" | "testa" | "polso">("gomito");
   const W = 320;

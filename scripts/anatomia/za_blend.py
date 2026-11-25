@@ -3,7 +3,7 @@ import sys, collections, struct, numpy as np, pickle, os
 sys.path.insert(0, os.path.dirname(__file__))
 from blend import Blend
 SRC = os.environ.get('ZA_BLEND', '/tmp/ext/zam/Z-Anatomy/Startup.blend')
-CACHE = '/tmp/za_blend.pkl'
+CACHE = '/tmp/za_blend2.pkl'
 
 def collections_tree(B):
     obcol = collections.defaultdict(list); kids = {}
@@ -59,7 +59,10 @@ def mesh_data(B, mptr):
 
 MOD = {5: 'mirror', 4: 'subsurf', 27: 'solidify', 23: 'shrinkwrap', 22: 'smooth', 25: 'triangulate', 3: 'curve', 9: 'armature', 19: 'displace', 13: 'decimate', 17: 'hook', 40: 'weld'}
 
-def load(roots=('Skeletal system', 'Muscular system', 'Integument')):
+# dal sistema nervoso e organi di senso servono solo gli occhi
+EXTRA = {'7: Nervous system & Sense organs': ('Sclera.l', 'Sclera.r', 'Iris.l', 'Iris.r')}
+
+def load(roots=('Skeletal system', 'Muscular system', 'Integument') + tuple(EXTRA)):
     if os.path.exists(CACHE): return pickle.load(open(CACHE, 'rb'))
     B = Blend(SRC)
     obcol, kids = collections_tree(B)
@@ -71,6 +74,7 @@ def load(roots=('Skeletal system', 'Muscular system', 'Integument')):
         cat = next((r for r in roots if any(c in cats[r] for c in cols)), None)
         if cat is None: continue
         name = B.field(b, 'id.name')[2:]
+        if cat in EXTRA and name not in EXTRA[cat]: continue
         M = B.field(b, 'obmat').reshape(4, 4).astype(np.float64)  # colonna-maggiore: M[i] = colonna i
         mods = []
         for md in B.listbase(B.read_field(b[5], 'Object', 'modifiers')):

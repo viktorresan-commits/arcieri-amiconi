@@ -8,7 +8,7 @@
  * Le distanze sono in "spalle" (larghezza tra le spalle) o in cm se conosciamo l'altezza.
  * Inquadratura attesa: di fronte all'arciere, con la freccia di traverso.
  */
-import { joint, sides, type Hand, type Landmark } from "./pose-analysis";
+import { handPoint, joint, sides, type Hand, type Landmark } from "./pose-analysis";
 
 export type ProSetup = {
   bowType: string; // olimpico | compound | nudo | longbow | ricurvo | storico
@@ -42,6 +42,37 @@ export type ProMetrics = {
   scaleFrom: "piedi" | "spalle" | null;
   /** centimetri per unità d'immagine (altezza del fotogramma = 1), se conosco la statura */
   cmPerUnit: number | null;
+  // ---- piedi (dai punti tallone e punta, con la profondità stimata) ----
+  /** piedi rispetto alla linea di tiro, gradi: + = posizione aperta (verso il bersaglio), − = chiusa */
+  stanceOpen: number | null;
+  /** punta del piede dell'arco / della corda: 0 = dritta in avanti, + = girata verso il bersaglio */
+  footBow: number | null;
+  footDraw: number | null;
+  // ---- tronco ----
+  /** spalle rispetto alla linea di tiro, gradi (rotazione del busto) */
+  shoulderRot: number | null;
+  /** spalle girate rispetto alle anche, gradi (torsione del tronco) */
+  trunkTwist: number | null;
+  /** busto in avanti (+) o indietro (−), gradi */
+  trunkForward: number | null;
+  // ---- braccia ----
+  /** braccio dell'arco (spalla-polso) rispetto all'orizzontale, + = in su */
+  bowArmTilt: number;
+  /** avambraccio della corda rispetto all'orizzontale */
+  drawForearmTilt: number;
+  /** omero della corda rispetto all'orizzontale (gomito alto = +) */
+  drawUpperTilt: number;
+  /** rotazione della mano dell'arco: linea delle nocche rispetto alla verticale, gradi */
+  bowKnuckles: number | null;
+  /** rotazione della mano della corda: linea delle nocche rispetto alla verticale */
+  drawKnuckles: number | null;
+  // ---- dita ----
+  /** piega media di indice, medio e anulare della corda (gradi alla seconda falange) */
+  drawHook: number | null;
+  /** dita sulla corda (piegate oltre 25°) */
+  fingersOnString: number | null;
+  /** chiusura delle dita della mano dell'arco (0 = aperte, 90+ = pugno) */
+  bowGrip: number | null;
 };
 
 const vis = (p: Landmark | undefined) => (p ? (p.visibility ?? 1) : 0);
@@ -179,7 +210,92 @@ export function proMetrics(lm: Landmark[], hand: Hand, aspect: number, setup: Pr
     }
   }
 
-  return { headTilt, headTurn, headLean, shrug, shoulderLevel, bowArm, bowArmHeight, bowWrist, bowWristDir, drawWrist, elbowLine, elbowHeight, anchorV, anchorH, anchorDist, trunk, sideLean, kneeBow, kneeDraw, stance, weight, drawLenCm, scaleFrom, cmPerUnit };
+  // ---- profondità: rotazioni sul piano orizzontale (x in metri dalle spalle, z dal modello di posa) ----
+  const mPerUnit = 0.36 / w;
+  const zw = (i: number) => {
+    const v = lm[i]?.zw;
+    return typeof v === "number" && Number.isFinite(v) ? v : null;
+  };
+  // la camera vede il petto (si vede il viso) o la schiena
+  const chestToCam = vis(lm[0]) > 0.5 ? 1 : -1;
+  /** angolo sul piano orizzontale della linea a→b rispetto alla linea di tiro (verso il bersaglio) */
+  const rotOf = (a: number, b: number, need = 0.4) => {
+    const za = zw(a);
+    const zb = zw(b);
+    if (za == null || zb == null || !ok(a, need) || !ok(b, need)) return null;
+    const dx = (P(b).x - P(a).x) * mPerUnit * dir;
+    const dz = zb - za;
+    if (Math.hypot(dx, dz) < 0.05) return null;
+    // + = l'estremo b più lontano dalla camera
+    return deg(Math.atan2(dz, Math.abs(dx)));
+  };
+  // linea dei piedi: dal piede della corda a quello dell'arco; aperta = piede dell'arco indietro (lontano dal petto)
+  const ankB = pick(27, 28);
+  const ankD = pick(28, 27);
+  const feetLine = feet ? rotOf(ankD, ankB, 0.5) : null;
+  const stanceOpen = feetLine == null ? null : feetLine * chestToCam;
+  const footDir = (heel: number, toe: number) => {
+    const zh = zw(heel);
+    const zt = zw(toe);
+    if (zh == null || zt == null || !ok(heel, 0.5) || !ok(toe, 0.5)) return null;
+    const along = (P(toe).x - P(heel).x) * mPerUnit * dir; // verso il bersaglio
+    const fwdc = -(zt - zh) * chestToCam; // in avanti = verso il petto
+    if (Math.hypot(along, fwdc) < 0.05) return null;
+    return deg(Math.atan2(along, Math.abs(fwdc)));
+  };
+  const footBow = footDir(pick(29, 30), pick(31, 32));
+  const footDraw = footDir(pick(30, 29), pick(32, 31));
+  const shLine = rotOf(s.draw[0], s.bow[0], 0.4);
+  const hipLine = hips ? rotOf(pick(24, 23), pick(23, 24), 0.5) : null;
+  const shoulderRot = shLine == null ? null : shLine * chestToCam;
+  const trunkTwist = shLine != null && hipLine != null ? (shLine - hipLine) * chestToCam : null;
+  let trunkForward: number | null = null;
+  if (hMid) {
+    const zs = [zw(11), zw(12)];
+    const zh = [zw(23), zw(24)];
+    if (zs.every((v) => v != null) && zh.every((v) => v != null)) {
+      const dz = (zs[0]! + zs[1]!) / 2 - (zh[0]! + zh[1]!) / 2;
+      const dy = (hMid.y - sMid.y) * mPerUnit;
+      // spalle più vicine alla camera del bacino: in avanti se la camera guarda il petto
+      trunkForward = deg(Math.atan2(-dz * chestToCam, Math.max(0.05, dy)));
+    }
+  }
+  const tiltOf = (a: { x: number; y: number }, b: { x: number; y: number }) => deg(Math.atan2(a.y - b.y, Math.abs(b.x - a.x) || 1e-3));
+  const bowArmTilt = tiltOf(bS, bW);
+  const drawForearmTilt = tiltOf(dW, dE);
+  const drawUpperTilt = tiltOf(dS, dE);
+  // mani (21 punti): nocche, dita
+  const H = (wr: number, k: number) => {
+    const p = handPoint(lm, wr as 15 | 16, k);
+    return p ? { x: p.x * aspect, y: p.y } : null;
+  };
+  const knuckles = (wr: number) => {
+    const a = H(wr, 5);
+    const b = H(wr, 17);
+    if (!a || !b) return null;
+    // 0 = nocche in verticale, 90 = in orizzontale
+    return deg(Math.atan2(Math.abs(b.x - a.x), Math.abs(b.y - a.y) || 1e-6));
+  };
+  const flex = (wr: number, f: number) => {
+    const a = H(wr, f);
+    const b = H(wr, f + 1);
+    const c = H(wr, f + 2);
+    return a && b && c ? 180 - joint(a, b, c) : null;
+  };
+  const bowWr = s.bow[2];
+  const drwWr = s.draw[2];
+  const bowKnuckles = knuckles(bowWr);
+  const drawKnuckles = knuckles(drwWr);
+  const hooks = [5, 9, 13].map((f) => flex(drwWr, f)).filter((v): v is number => v != null);
+  const drawHook = hooks.length ? hooks.reduce((a, b) => a + b, 0) / hooks.length : null;
+  const fingersOnString = hooks.length ? hooks.filter((v) => v > 25).length : null;
+  const grips = [5, 9, 13, 17].map((f) => flex(bowWr, f)).filter((v): v is number => v != null);
+  const bowGrip = grips.length ? grips.reduce((a, b) => a + b, 0) / grips.length : null;
+
+  return {
+    headTilt, headTurn, headLean, shrug, shoulderLevel, bowArm, bowArmHeight, bowWrist, bowWristDir, drawWrist, elbowLine, elbowHeight, anchorV, anchorH, anchorDist, trunk, sideLean, kneeBow, kneeDraw, stance, weight, drawLenCm, scaleFrom, cmPerUnit,
+    stanceOpen, footBow, footDraw, shoulderRot, trunkTwist, trunkForward, bowArmTilt, drawForearmTilt, drawUpperTilt, bowKnuckles, drawKnuckles, drawHook, fingersOnString, bowGrip,
+  };
 }
 
 /** Mediana di più fotogrammi (es. tutta la fase di ancoraggio): più stabile di un fotogramma solo. */

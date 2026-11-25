@@ -104,17 +104,26 @@ void main(){
     // ossa: bianco azzurro, morbide
     // con i muscoli accesi le ossa tra un muscolo e l'altro restano azzurrine, non bianche
     vec3 boneCol = mix(vec3(0.88, 0.93, 0.98), vec3(0.6, 0.72, 0.86), uDim);
+    // iride degli occhi (segnata nel canale dei tendini)
+    if (vTend > 0.5) boneCol = vec3(0.24, 0.36, 0.48);
     col = boneCol * (0.32 + 0.12 * hemi + dif * 0.55) + vec3(0.55, 0.8, 1.0) * rim * 0.35;
   } else {
     // muscoli: rosso bruno con le fibre lungo il muscolo, tendini chiari, lucidi
-    // fibre: si attenuano dove sullo schermo sarebbero più fitte di un paio di pixel (niente puntinato)
-    float fy = vF.y * 34.0;
+    // fibre: fasci separati da solchi sottili, come nelle tavole; si attenuano dove sullo schermo
+    // sarebbero più fitti di un paio di pixel (niente puntinato)
+    float fy = vF.y * 34.0 + 0.18 * sin(vF.x * 9.0);
 #ifdef HAS_DERIV
-    float amp = 1.0 - smoothstep(0.18, 0.5, fwidth(fy));
+    float fw = fwidth(fy);
+    float amp = 1.0 - smoothstep(0.16, 0.45, fw);
 #else
-    float amp = 0.45;
+    float fw = 0.08;
+    float amp = 0.5;
 #endif
-    float fib = 0.88 + amp * (0.08 * sin(fy * 6.2832 + sin(vF.x * 9.0) * 1.4) + 0.04 * sin(fy * 6.2832 * 2.44));
+    float fr = fract(fy);
+    float dl = min(fr, 1.0 - fr);
+    float groove = 1.0 - smoothstep(0.02, 0.09 + fw * 1.2, dl);
+    float bundle = 0.5 + 0.5 * sin(fy * 6.2832 * 0.5 + 1.3);
+    float fib = 1.0 - amp * (0.24 * groove - 0.05 * bundle) - amp * 0.03 * sin(fy * 6.2832 * 3.0);
     vec3 rest = vec3(0.74, 0.35, 0.31);
     vec3 work = vec3(1.0, 0.36, 0.2);
     float act = clamp(vAct, 0.0, 1.0);

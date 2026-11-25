@@ -45,7 +45,7 @@ def bone_segment(name):
     if re.search(r"thoracic vertebra|rib|sternum|manubrium|xiphoid|costal", n): return 'torace'
     if re.search(r"(fifth|sixth|seventh) cervical", n): return 'torace'
     if re.search(r"cervical|atlas|axis", n): return 'testa'
-    if re.search(r"frontal|parietal|occipital|temporal|maxilla|zygomatic|mandible|nasal|skull", n): return 'testa'
+    if re.search(r"frontal|parietal|occipital|temporal|maxilla|zygomatic|mandible|nasal|skull|sclera|iris", n): return 'testa'
     return None
 
 def muscle_candidates(name):
@@ -254,7 +254,7 @@ from za_fit2 import bone_field, world as za_world
 from qem import simplify as qem_simplify
 za_warp, _, za_info = bone_field()
 print('Z-Anatomy -> ossa: scarto mediano ossa mm', round(za_info['err_mm'], 2))
-ZA_SKIP = re.compile(r"fascia|bursa|sheath|retinacul|septum|aponeuros|ligament|tendinous (ring|arch)|tendon of|intercostal|transversus (abdominis|thoracis)|internal abdominal oblique|diaphragm|arytenoid|cricothyroid|thyro-|epiglott|pharyn|stylopharyn|glossus|palpebr|(superior|inferior|lateral|medial) rectus muscle|(superior|inferior) oblique muscle|trochlea|tarsus|sphincter|coccygeus|iliococcygeus|pubococcygeus|pubo-analis|interspinales|intertransversarii|rotatores|multifidus|levatores|longus colli|longus capitis|rectus (anterior|lateralis|posterior) |obliquus|semispinalis|splenius colli|spinalis (colli|capitis)|longissimus (colli|capitis)|iliocostalis colli|serratus posterior|quadratus lumborum|psoas|iliacus|obturator|gemellus|piriformis|quadratus femoris|pectineus|adductor minimus|adductor brevis|vastus intermedius|gluteus minimus|tibialis posterior|flexor digitorum longus|flexor hallucis|popliteus|plantaris|subclavius|pectoralis minor|subscapularis|supinator|pronator quadratus|flexor digitorum profundus|extensor indicis|lumbrical|palmar interossei|plantar interossei|dorsal interossei muscles of foot|quadratus plantae|digastric|stylohyoid|mylohyoid|geniohyoid|pterygoid|epicranial|platysma|temporoparietalis|deep part of masseter|adductor hallucis|opponens digiti minimi muscle of foot|flexor digiti minimi of foot|deep head of flexor pollicis|scalenus posterior|levator nasolabialis|depressor septi", re.I)
+ZA_SKIP = re.compile(r"frontalis|occipitalis|temporalis|masseter|orbicularis|zygomaticus|risorius|depressor|levator labii|levator anguli|nasalis|procerus|mentalis|corrugator|bucinator|buccinator|auricular|modiolus|levator veli|tensor veli|uvula|fascia|bursa|sheath|retinacul|septum|aponeuros|ligament|tendinous (ring|arch)|tendon of|intercostal|transversus (abdominis|thoracis)|internal abdominal oblique|diaphragm|arytenoid|cricothyroid|thyro-|epiglott|pharyn|stylopharyn|glossus|palpebr|(superior|inferior|lateral|medial) rectus muscle|(superior|inferior) oblique muscle|trochlea|tarsus|sphincter|coccygeus|iliococcygeus|pubococcygeus|pubo-analis|interspinales|intertransversarii|rotatores|multifidus|levatores|longus colli|longus capitis|rectus (anterior|lateralis|posterior) |obliquus|semispinalis|splenius colli|spinalis (colli|capitis)|longissimus (colli|capitis)|iliocostalis colli|serratus posterior|quadratus lumborum|psoas|iliacus|obturator|gemellus|piriformis|quadratus femoris|pectineus|adductor minimus|adductor brevis|vastus intermedius|gluteus minimus|tibialis posterior|flexor digitorum longus|flexor hallucis|popliteus|plantaris|subclavius|pectoralis minor|subscapularis|supinator|pronator quadratus|flexor digitorum profundus|extensor indicis|lumbrical|palmar interossei|plantar interossei|dorsal interossei muscles of foot|quadratus plantae|digastric|stylohyoid|mylohyoid|geniohyoid|pterygoid|epicranial|platysma|temporoparietalis|deep part of masseter|adductor hallucis|opponens digiti minimi muscle of foot|flexor digiti minimi of foot|deep head of flexor pollicis|scalenus posterior|levator nasolabialis|depressor septi", re.I)
 def za_name(n):
     b = re.sub(r"\.(l|r)$", "", n).strip("()")
     m = re.search(r"\.(l|r)$", n)
@@ -278,6 +278,8 @@ for z in za_all:
     nm = z['name']
     if z['cat'] == 'Skeletal system' and re.match(r"Costal cartilage of \w+ rib\.(l|r)$", nm):
         kind = 'bone'; outname = za_name(nm)  # cartilagini costali: chiudono la gabbia toracica davanti
+    elif z['cat'].startswith('7:') and re.match(r"(Sclera|Iris)\.(l|r)$", nm):
+        kind = 'bone'; outname = za_name(nm)  # occhi: bianco dell'occhio e iride
     elif z['cat'] == 'Muscular system' and not z['mods'] and not ZA_SKIP.search(nm) and (not nm.startswith('(') or nm.startswith('(Abdominal part of pectoralis')):
         kind = 'muscle'; outname = za_name(nm)
     else:
@@ -318,6 +320,29 @@ def inflate_skin(gap=0.004, rad=0.03):
     skin['full'] = skin['P']
     skin['N'] = recompute_normals(skin['P'], skin['I'])
     print('pelle allargata sui muscoli: vertici', int((push > 0.001).sum()), 'massimo mm', round(float(push.max()) * 1000, 1))
+# obliquo esterno: la sua lamina davanti al retto (aponeurosi) copriva gli addominali; si toglie,
+# così si vedono il retto e le sue intersezioni come nelle tavole
+def open_rectus():
+    rect = [x for x in parts if x['kind'] == 'muscle' and 'rectus abdominis' in x['name'].lower()]
+    if not rect: return
+    R = np.vstack([x['P'] for x in rect])
+    tr = cKDTree(R[:, [1]])
+    for x in parts:
+        if x['kind'] != 'muscle' or 'external abdominal oblique' not in x['name'].lower(): continue
+        P, I = x['P'], x['I']
+        C = P[I].mean(1)
+        keep = np.ones(len(I), bool)
+        for k, c in enumerate(C):
+            nb = tr.query_ball_point([c[1]], 0.012)
+            if not nb: continue
+            rx = np.abs(R[nb, 0]).max()
+            if abs(c[0]) < rx + 0.004: keep[k] = False
+        before = len(I)
+        I = I[keep]
+        used = np.unique(I); remap = -np.ones(len(P), int); remap[used] = np.arange(len(used))
+        x['P'] = P[used]; x['I'] = remap[I]; x['N'] = recompute_normals(x['P'], x['I']); x['full'] = x['P']
+        print('obliquo: tolta la lamina davanti al retto', before - len(I), 'triangoli')
+open_rectus()
 inflate_skin()
 SP = skin['P']
 print('Z-Anatomy: parti', n_za, 'muscoli', sum(1 for x in parts if x['kind'] == 'muscle'), 'triangoli muscoli', sum(len(x['I']) for x in parts if x['kind'] == 'muscle'))
@@ -431,7 +456,10 @@ groups = ['']
 for x in parts:
     n = len(x['P'])
     x['T'] = np.zeros(n); x['A'] = np.zeros(n); x['TD'] = np.zeros(n); x['g'] = 0
-    if x['kind'] != 'muscle': continue
+    if x['kind'] != 'muscle':
+        # iride: segnata nel canale dei tendini, la scheda grafica la colora scura
+        if re.search(r"iris", x['name'], re.I): x['TD'][:] = 1
+        continue
     Q = x['P'] - x['P'].mean(0)
     _, sv, vt = np.linalg.svd(Q, full_matrices=False)
     # direzione delle fibre: da un attacco all'altro (dalla parte del primo segmento a quella del secondo),
@@ -447,6 +475,7 @@ for x in parts:
                 ca = x['P'][dom == segs[o[0]]].mean(0); cb = x['P'][dom == segs[o[1]]].mean(0)
                 d = cb - ca
                 if np.linalg.norm(d) > 0.02: ax = d / np.linalg.norm(d)
+    if 'rectus abdominis' in x['name'].lower() and ax[1] < 0: ax = -ax  # dal pube verso lo sterno
     t = Q @ ax; t = (t - t.min()) / max(1e-6, t.max() - t.min())
     # di traverso: l'asse più largo tra quelli perpendicolari alle fibre (niente cucitura come con l'angolo)
     R = Q - np.outer(Q @ ax, ax)
@@ -475,6 +504,13 @@ for x in parts:
         tl = np.clip(Q @ vt[0], None, None); tl = (tl - tl.min()) / max(1e-6, tl.max() - tl.min())
         x['TD'] = np.clip(np.maximum((0.1 - tl) / 0.08, (tl - 0.9) / 0.08), 0, 1)
     if 'calcaneal' in x['name'].lower(): x['TD'][:] = 1
+    # retto dell'addome: tre intersezioni tendinee chiare (i "quadretti" degli addominali)
+    if 'rectus abdominis' in x['name'].lower():
+        tt = x['T']
+        band = np.zeros(n)
+        for c in (0.46, 0.66, 0.84):
+            band = np.maximum(band, np.clip((1 - np.abs(tt - c) / 0.02) * 2.2, 0, 1))
+        x['TD'] = np.maximum(x['TD'], band)
     g = muscle_group(x['name'])
     if g:
         if g not in groups: groups.append(g)
