@@ -4,6 +4,7 @@ import { Card, Chips, PageHead, Segmented } from "@/components/kit";
 import { useEntryState } from "@/lib/arcieri/back-restore";
 import { RoutineBody } from "./routine";
 import { RespiroBody } from "./respiro";
+import { TimerBody } from "./timer";
 import { Glyph } from "@/components/icons";
 import { useLocalState, useWakeLock, whistle } from "@/lib/arcieri/local-store";
 import { award } from "@/lib/arcieri/xp";
@@ -159,15 +160,19 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-/** A secco, routine di tiro e respiro: un'unica sezione con tre schede */
+/** Ritmo del tiro: timer da gara, a secco, routine e respiro, un'unica sezione con quattro schede */
 function Page() {
-  const [view, setView] = useEntryState<"secco" | "routine" | "respiro">("secco-vista", "secco");
-  const lede = view === "routine" ? "Sempre gli stessi passi, nello stesso ordine: è così che il tiro diventa ripetibile." : view === "respiro" ? "Pochi respiri lenti abbassano il battito e fermano la mira." : "Arco o elastico in ancoraggio: tieni quando fischia una volta, rilascia piano con due.";
+  const [view, setView] = useEntryState<"timer" | "secco" | "routine" | "respiro">("secco-vista", "secco");
+  const lede =
+    view === "timer" ? "Semaforo, fischi e turni AB/CD come in gara. Lo schermo resta acceso mentre corre."
+    : view === "routine" ? "Sempre gli stessi passi, nello stesso ordine: è così che il tiro diventa ripetibile."
+    : view === "respiro" ? "Pochi respiri lenti abbassano il battito e fermano la mira."
+    : "Arco o elastico in ancoraggio: tieni quando fischia una volta, rilascia piano con due.";
   return (
     <div className="grid gap-3">
-      <PageHead kicker="Allenati" title="A secco, routine e respiro" lede={lede} />
-      <Segmented value={view} onChange={setView} options={[{ id: "secco", label: "A secco" }, { id: "routine", label: "Routine" }, { id: "respiro", label: "Respiro" }]} />
-      {view === "routine" ? <RoutineBody embedded /> : view === "respiro" ? <RespiroBody embedded /> : <SeccoBody embedded />}
+      <PageHead kicker="Allenati" title="Ritmo del tiro" lede={lede} />
+      <Segmented value={view} onChange={setView} options={[{ id: "timer", label: "Timer" }, { id: "secco", label: "A secco" }, { id: "routine", label: "Routine" }, { id: "respiro", label: "Respiro" }]} />
+      {view === "timer" ? <TimerBody embedded /> : view === "routine" ? <RoutineBody embedded /> : view === "respiro" ? <RespiroBody embedded /> : <SeccoBody embedded />}
     </div>
   );
 }

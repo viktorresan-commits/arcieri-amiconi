@@ -16,6 +16,11 @@ const DEFAULTS: Settings = { shoot: 120, walk: 10, ends: 10, turns: "singolo", w
 type Phase = "pronto" | "avvicinamento" | "tiro" | "fine";
 
 function Page() {
+  return <TimerBody />;
+}
+
+/** il timer, anche dentro «Ritmo del tiro» (senza intestazione) */
+export function TimerBody({ embedded = false }: { embedded?: boolean }) {
   const [cfg, setCfg] = useLocalState<Settings>("aa-timer-v1", DEFAULTS);
   const [phase, setPhase] = useState<Phase>("pronto");
   const [left, setLeft] = useState(cfg.walk);
@@ -98,7 +103,7 @@ function Page() {
 
   return (
     <div className="grid gap-3">
-      <PageHead kicker="Come in gara" title="Timer di tiro" lede="Semaforo, fischi e turni AB/CD. Lo schermo resta acceso mentre corre." />
+      {embedded ? null : <PageHead kicker="Come in gara" title="Timer di tiro" lede="Semaforo, fischi e turni AB/CD. Lo schermo resta acceso mentre corre." />}
       <Card className="grid justify-items-center gap-3 overflow-hidden">
         <div className="flex w-full items-center justify-between text-xs text-muted">
           <span>Volée <b className="text-fg">{end}</b> di {cfg.ends}</span>

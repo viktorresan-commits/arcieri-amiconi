@@ -144,7 +144,7 @@ function Home() {
             </div>
             {/* azione principale: lo stesso avvio di sempre del tiro rapido */}
             <Link to="/allenamento" search={{ avvia: "rapido" }} className="aa-cta aa-press flex min-h-[58px] items-center gap-3 rounded-2xl px-3 text-left">
-              <span className="aa-cta-ico grid h-11 w-11 shrink-0 place-items-center rounded-full"><Glyph name="bolt" detailed size={24} /></span>
+              <AppIcon name="bolt" size={44} />
               <span className="min-w-0 flex-1"><b className="block truncate font-display text-[1.45rem] uppercase leading-none tracking-wide">Tiro rapido</b><span className="block truncate text-[0.74rem] font-semibold opacity-85">Registra le frecce di oggi</span></span>
               <Glyph name="chevron" size={18} className="shrink-0 opacity-80" />
             </Link>

@@ -5,7 +5,7 @@ import { useSky } from "@/lib/arcieri/sky3d";
 import { useLocalState } from "@/lib/arcieri/local-store";
 import { award, readXp, today } from "@/lib/arcieri/xp";
 import { ArcherAvatar } from "./archer-avatar";
-import { Glyph, type IconName } from "./icons";
+import { AppIcon, Glyph, type IconName } from "./icons";
 import { ArcherLightDefs, SceneBackdrop, isPainted, lightMode } from "./scene-2d";
 import { GameApron } from "./scene-apron";
 import { SCENES, isIndoor } from "@/lib/arcieri/scenes";
@@ -790,7 +790,7 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
         <div className="grid w-[8.4rem] shrink-0 justify-items-stretch gap-1.5 text-white">
           {/* record (o punti della partita in corso): coppa d'oro, numero grande, etichetta sotto */}
           <div className="aa-hud aa-hud-record grid grid-cols-[auto_1fr] items-center gap-x-2 rounded-2xl px-2.5 pb-2 pt-1.5">
-            <Glyph name="trophy" detailed size={26} className="aa-trophy row-span-2 shrink-0" />
+            <AppIcon name="trophy" size={32} className="aa-trophy row-span-2 shrink-0" />
             <b className="aa-game-score text-center text-[2rem] leading-none tabular-nums">{playing ? total : bestHere}</b>
             <span className="text-center text-[0.56rem] font-semibold uppercase tracking-[0.2em] text-white/75">{playing ? `punti · record ${bestHere}` : "record"}</span>
           </div>

@@ -282,7 +282,7 @@ export function Shell({ children }: { children: ReactNode }) {
   // squadra admin, allenatori e segreteria li vede solo chi ha un incarico
   // voci che ora vivono dentro un'altra pagina: Il tuo arciere nel Profilo, Stima distanze in Distanze e bersagli,
   // Quiz in Lezioni, Tempo di allungo in Allungo, Convertitore a comparsa vicino ai campi, Segreteria in Gestione compagnia
-  const hide = ["avatar", "stima", "quiz", "tempi", "unita", "segreteria", "routine", "respiro", "storico-gesto", ...(me.hasPlans ? [] : ["schede"]), ...(me.canCoach ? [] : ["istruttore"]), ...(me.canSegreteria ? [] : ["segreteria"]), ...(me.canStaff ? [] : ["staff"])];
+  const hide = ["avatar", "stima", "quiz", "tempi", "unita", "segreteria", "routine", "respiro", "timer", "storico-gesto", ...(me.hasPlans ? [] : ["schede"]), ...(me.canCoach ? [] : ["istruttore"]), ...(me.canSegreteria ? [] : ["segreteria"]), ...(me.canStaff ? [] : ["staff"])];
   const focus = me.essenziale ? percorsoOf(me.percorso)?.focus ?? null : null;
   const lvl = levelOf(xp.xp);
 

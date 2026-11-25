@@ -881,13 +881,13 @@ export function AppIcon({ name, size = 52, className, accent, color, fluid = fal
     const ins = INSIGNIA_FOR[name];
     return (
       <span className={["aa-appicon-ins relative grid shrink-0 place-items-center", glow && "aa-appicon-hot", className].filter(Boolean).join(" ")} style={{ width: size, height: size }}>
+        {/* tutte uguali: moneta tonda d'oro; cambia solo lo smalto (il colore) e il disegno in rilievo */}
         {ins ? (
-          <Insignia {...ins} size={Math.round(size * 1.04 * (glow ? 1.13 : 1))} glow={glow} />
+          <Insignia symbol={ins.symbol} enamel={ins.enamel} metal="gold" shape="round" size={Math.round(size * 1.02 * (glow ? 1.13 : 1))} glow={glow} />
         ) : (
           (() => {
-            // ogni voce ha il suo metallo e il suo smalto (non la tinta della sezione): colorate e ben staccate
-            const [metal, enamel, shape] = coinOf(name);
-            return <Insignia art={DETAILED[name] ?? ICONS[name]} metal={metal} enamel={enamel} shape={shape ?? "round"} size={Math.round(size * 1.02 * (glow ? 1.13 : 1))} glow={glow} />;
+            const [, enamel] = coinOf(name);
+            return <Insignia art={DETAILED[name] ?? ICONS[name]} metal="gold" enamel={enamel} shape="round" size={Math.round(size * 1.02 * (glow ? 1.13 : 1))} glow={glow} />;
           })()
         )}
       </span>

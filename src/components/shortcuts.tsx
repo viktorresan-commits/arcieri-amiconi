@@ -291,12 +291,6 @@ function CategoryCarousel({ current, onGo, isHere, hide = [], lastTouched = {} }
       /* niente */
     }
   }, [active]);
-  const tabs = useRef<HTMLDivElement>(null);
-  // la linguetta della sezione aperta resta sempre in vista
-  useEffect(() => {
-    const el = tabs.current?.children[active] as HTMLElement | undefined;
-    el?.scrollIntoView({ block: "nearest", inline: "center", behavior: "smooth" });
-  }, [active]);
   const pageW = () => (ref.current?.firstElementChild as HTMLElement | null)?.offsetWidth ?? 1;
   const gap = 0;
   const leftOf = (i: number) => {
@@ -325,57 +319,37 @@ function CategoryCarousel({ current, onGo, isHere, hide = [], lastTouched = {} }
   };
   const pages = Array.from({ length: COPIES * n }, (_, i) => STATIONS[i % n]);
   return (
-    <div className="grid gap-3">
-      {/* linguette delle sezioni: nome e icona nella tinta della sezione, quella aperta in evidenza */}
-      <div ref={tabs} className="aa-sec-tabs sticky top-14 z-[5] -mx-4 flex gap-1.5 overflow-x-auto px-4 py-2 [scrollbar-width:none]" role="tablist" aria-label="Sezioni del menu">
-        {STATIONS.map((st, k) => (
-          <button
-            key={st.id}
-            type="button"
-            role="tab"
-            aria-selected={k === active}
-            onClick={() => jump(mid + k, true)}
-            className={cx("aa-sec-tab flex shrink-0 items-center gap-1.5 rounded-full py-1 pl-1 pr-3 text-[0.72rem] font-semibold transition", k === active && "is-on")}
-            style={{ ["--acc" as string]: st.color }}
-          >
-            <AppIcon name={st.icon} accent={st.color} size={24} />
-            {st.title}
-          </button>
-        ))}
-      </div>
-      <div ref={ref} onScroll={onScroll} className="relative -mx-4 flex snap-x snap-mandatory overflow-x-auto [scrollbar-width:none]" style={{ overscrollBehaviorX: "contain" }}>
+    <div className="grid grid-cols-[minmax(0,1fr)_4.1rem] items-start gap-1.5">
+      <div ref={ref} onScroll={onScroll} className="relative -ml-4 flex snap-x snap-mandatory overflow-x-auto [scrollbar-width:none]" style={{ overscrollBehaviorX: "contain" }}>
         {pages.map((st, i) => {
           const items = SHORTCUTS.filter((s) => s.group === st.id && !hide.includes(s.id));
           const k = i % n;
           return (
-            <section key={i} className={cx("aa-cat-page grid min-h-[calc(100dvh-15rem)] w-full shrink-0 snap-center content-start gap-4 px-4 pb-8 pt-1", i === cur && "is-active")} data-k={k} style={{ ["--cat" as string]: st.color, background: `linear-gradient(180deg, color-mix(in srgb, ${st.color} 16%, transparent) 0%, color-mix(in srgb, ${st.color} 9%, transparent) 35%, color-mix(in srgb, ${st.color} 5%, transparent) 70%, color-mix(in srgb, ${st.color} 2%, transparent) 100%)` }}>
-              {/* intestazione illustrata della categoria: grande icona con alone, titolo e bersaglio decorativo */}
-              <div className="aa-cat-hero relative overflow-hidden rounded-[1.5rem] p-3.5" style={{ ["--cat" as string]: st.color, background: `linear-gradient(135deg, color-mix(in srgb, ${st.color} 28%, transparent), color-mix(in srgb, ${st.color} 8%, transparent) 55%, rgba(255,255,255,0.02))` }}>
-                <svg aria-hidden viewBox="0 0 200 200" className="aa-cat-rings pointer-events-none absolute -right-10 -top-12 h-52 w-52 opacity-[0.22]">
-                  {[96, 78, 60, 42, 24].map((r, k) => <circle key={r} cx="100" cy="100" r={r} fill="none" stroke="#fff" strokeWidth={k === 4 ? 10 : 6} />)}
-                  <path d="M0 160 L120 96" stroke="#fff" strokeWidth="4" strokeLinecap="round" />
-                  <path d="M10 150 l-14 -2 m14 2 l-6 12" stroke="#fff" strokeWidth="4" strokeLinecap="round" />
+            <section key={i} className={cx("aa-cat-page grid min-h-[calc(100dvh-10rem)] w-full shrink-0 snap-center content-start gap-3 rounded-r-[1.6rem] pb-8 pl-4 pr-2.5 pt-2", i === cur && "is-active")} data-k={k} style={{ ["--cat" as string]: st.color, background: `linear-gradient(180deg, color-mix(in srgb, ${st.color} 16%, transparent) 0%, color-mix(in srgb, ${st.color} 9%, transparent) 35%, color-mix(in srgb, ${st.color} 5%, transparent) 70%, color-mix(in srgb, ${st.color} 2%, transparent) 100%)` }}>
+              {/* intestazione della sezione: icona con alone, titolo e bersaglio decorativo */}
+              <div className="aa-cat-hero relative overflow-hidden rounded-[1.3rem] px-3 py-2.5" style={{ ["--cat" as string]: st.color, background: `linear-gradient(135deg, color-mix(in srgb, ${st.color} 28%, transparent), color-mix(in srgb, ${st.color} 8%, transparent) 55%, rgba(255,255,255,0.02))` }}>
+                <svg aria-hidden viewBox="0 0 200 200" className="aa-cat-rings pointer-events-none absolute -right-12 -top-14 h-44 w-44 opacity-[0.2]">
+                  {[96, 78, 60, 42, 24].map((r, j) => <circle key={r} cx="100" cy="100" r={r} fill="none" stroke="#fff" strokeWidth={j === 4 ? 10 : 6} />)}
                 </svg>
-                <span aria-hidden className="pointer-events-none absolute -left-16 -bottom-20 h-48 w-48 rounded-full blur-3xl" style={{ background: `color-mix(in srgb, ${st.color} 34%, transparent)` }} />
-                <div className="relative flex items-center gap-4">
+                <div className="relative flex items-center gap-3">
                   <span className="aa-cat-icon relative grid place-items-center">
-                    <span aria-hidden className="absolute inset-[-10px] rounded-[2rem] blur-xl" style={{ background: `color-mix(in srgb, ${st.color} 40%, transparent)` }} />
-                    <AppIcon name={st.icon} accent={st.color} size={60} className="relative" />
+                    <span aria-hidden className="absolute inset-[-8px] rounded-full blur-xl" style={{ background: `color-mix(in srgb, ${st.color} 40%, transparent)` }} />
+                    <AppIcon name={st.icon} size={46} className="relative" />
                   </span>
                   <div className="min-w-0">
-                    <p className="text-[0.62rem] font-semibold uppercase tracking-[0.22em] text-white/70">Sezione {k + 1} di {n}</p>
-                    <p className="font-display text-[1.8rem] leading-none text-white [text-shadow:0_2px_10px_rgba(0,0,0,0.35)]">{st.title}</p>
-                    <p className="mt-1 text-[0.78rem] leading-snug text-white/80">{st.sub}</p>
+                    <p className="font-display text-[1.6rem] leading-none text-white [text-shadow:0_2px_10px_rgba(0,0,0,0.35)]">{st.title}</p>
+                    <p className="mt-0.5 text-[0.72rem] leading-snug text-white/80">{st.sub}</p>
                   </div>
+                  <span className="ml-auto self-start rounded-full bg-black/30 px-2 py-0.5 text-[0.6rem] font-semibold tabular-nums text-white/85">{items.length}</span>
                 </div>
-                <span className="absolute right-3 top-3 rounded-full bg-black/30 px-2 py-0.5 text-[0.62rem] font-semibold text-white/85 backdrop-blur">{items.length} voci</span>
               </div>
-              <div className="grid grid-cols-3 gap-2.5 pt-1">
+              {/* le voci: tre per fila, icone tutte della stessa misura e allineate */}
+              <div className="grid grid-cols-3 gap-x-1.5 gap-y-2">
                 {items.map((s, j) => (
-                  <Link key={s.id} to={s.to as "/"} search={(s.search ?? {}) as never} onClick={() => onGo(s)} aria-current={isHere(s) ? "page" : undefined} className={cx("aa-short aa-cat-tile flex min-w-0 flex-col items-center gap-1.5 rounded-[1.4rem] px-1 pb-3 pt-3.5 text-center", isHere(s) && "is-here")} style={{ ["--i" as string]: j }}>
-                    <AppIcon name={s.icon} accent={st.color} size={80} className="aa-short-icon" glow={lastTouched[st.id] === s.id} />
-                    <span className="line-clamp-2 w-full text-[0.82rem] font-semibold leading-tight">{s.label}</span>
-                    <span className="line-clamp-2 w-full text-[0.62rem] leading-tight text-muted">{s.hint}</span>
+                  <Link key={s.id} to={s.to as "/"} search={(s.search ?? {}) as never} onClick={() => onGo(s)} aria-current={isHere(s) ? "page" : undefined} className={cx("aa-short aa-cat-tile flex min-w-0 flex-col items-center gap-1 rounded-[1.2rem] px-0.5 pb-2 pt-2.5 text-center", isHere(s) && "is-here")} style={{ ["--i" as string]: j }}>
+                    <AppIcon name={s.icon} size={58} className="aa-short-icon" glow={lastTouched[st.id] === s.id} />
+                    <span className="line-clamp-2 min-h-[2em] w-full text-[0.74rem] font-semibold leading-tight">{s.label}</span>
+                    <span className="line-clamp-2 w-full text-[0.58rem] leading-tight text-muted">{s.hint}</span>
                   </Link>
                 ))}
               </div>
@@ -383,6 +357,23 @@ function CategoryCarousel({ current, onGo, isHere, hide = [], lastTouched = {} }
           );
         })}
       </div>
+      {/* sezioni in colonna sul margine destro: icona e nome, quella aperta in evidenza */}
+      <nav className="aa-sec-rail sticky top-16 z-[5] -mr-2 grid gap-1 py-1" role="tablist" aria-label="Sezioni del menu" aria-orientation="vertical">
+        {STATIONS.map((st, k) => (
+          <button
+            key={st.id}
+            type="button"
+            role="tab"
+            aria-selected={k === active}
+            onClick={() => jump(mid + k, true)}
+            className={cx("aa-sec-tab grid justify-items-center gap-0.5 rounded-2xl px-0.5 pb-1 pt-1.5 text-[0.6rem] font-semibold leading-tight transition", k === active && "is-on")}
+            style={{ ["--acc" as string]: st.color }}
+          >
+            <AppIcon name={st.icon} size={k === active ? 38 : 32} />
+            <span className="w-full truncate text-center">{st.title}</span>
+          </button>
+        ))}
+      </nav>
     </div>
   );
 }
