@@ -124,6 +124,24 @@ export function ClothPattern({ kind, shapes, base, trim, uid, box }: { kind: str
     case "croci":
       tile = <pattern id={id} width="10" height="10" patternUnits="userSpaceOnUse"><path d="M4.2 2 h1.6 v2.2 h2.2 v1.6 h-2.2 v2.2 h-1.6 v-2.2 h-2.2 v-1.6 h2.2 Z" fill={trim} opacity="0.6" /></pattern>;
       break;
+    case "losanghe":
+      tile = <pattern id={id} width="12" height="16" patternUnits="userSpaceOnUse"><path d="M6 0 L12 8 L6 16 L0 8 Z" fill={dark} opacity="0.35" /><path d="M0 0 L12 16 M12 0 L0 16" stroke={trim} strokeWidth="0.5" opacity="0.7" /></pattern>;
+      break;
+    case "puntini":
+      tile = <pattern id={id} width="5" height="5" patternUnits="userSpaceOnUse"><circle cx="2.5" cy="2.5" r="0.7" fill={trim} opacity="0.75" /></pattern>;
+      break;
+    case "tartan":
+      tile = (
+        <pattern id={id} width="20" height="20" patternUnits="userSpaceOnUse">
+          <rect width="20" height="8" fill={dark} opacity="0.4" /><rect width="8" height="20" fill={dark} opacity="0.4" />
+          <rect y="13" width="20" height="2" fill={trim} opacity="0.7" /><rect x="13" width="2" height="20" fill={trim} opacity="0.7" />
+          <rect y="4" width="20" height="0.8" fill={light} opacity="0.6" /><rect x="4" width="0.8" height="20" fill={light} opacity="0.6" />
+        </pattern>
+      );
+      break;
+    case "fiamme":
+      fill = <g>{Array.from({ length: Math.ceil(w / 10) + 1 }, (_, i) => <path key={i} d={`M${x0 + i * 10 - 5} ${y1} C${x0 + i * 10 - 6} ${y1 - 10} ${x0 + i * 10 + 2} ${y1 - 14} ${x0 + i * 10} ${y1 - 24} C${x0 + i * 10 + 6} ${y1 - 14} ${x0 + i * 10 + 6} ${y1 - 8} ${x0 + i * 10 + 5} ${y1} Z`} fill={i % 2 ? "#ffb02e" : trim} opacity="0.8" />)}</g>;
+      break;
     default:
       return null;
   }
@@ -229,6 +247,24 @@ export function EmblemGlyph({ kind, color, bg }: { kind: string; color: string; 
       break;
     case "cuore":
       g = <path d="M0 8.6 C-6 4 -9.4 0.6 -9.4 -3.4 C-9.4 -6.8 -6.8 -8.8 -4.4 -8.8 C-2.4 -8.8 -0.8 -7.6 0 -6 C0.8 -7.6 2.4 -8.8 4.4 -8.8 C6.8 -8.8 9.4 -6.8 9.4 -3.4 C9.4 0.6 6 4 0 8.6 Z" {...s} />;
+      break;
+    case "spiga":
+      g = <g><path d="M0 9.5 V-9" {...st} strokeWidth={1.2} />{[-6, -2.4, 1.2].map((y) => <g key={y}><ellipse cx="-2.4" cy={y} rx="2" ry="3.4" transform={`rotate(-30 -2.4 ${y})`} {...s} /><ellipse cx="2.4" cy={y} rx="2" ry="3.4" transform={`rotate(30 2.4 ${y})`} {...s} /></g>)}<ellipse cx="0" cy="-8.6" rx="1.6" ry="2.6" {...s} /></g>;
+      break;
+    case "ascia":
+      g = <g><path d="M-6 9 L5 -6" {...st} strokeWidth={2} /><path d="M2 -9 C9 -9 10 -1 6 2 L1 -3 Z" {...s} /></g>;
+      break;
+    case "cavallo":
+      g = <path d="M-6 9 L-5 2 C-8 0 -8 -5 -4 -7 L-1 -9 L0 -6 C4 -7 8 -4 8 0 L5 1 L3 -1 L1 2 L2 9 Z" {...s} />;
+      break;
+    case "pesce":
+      g = <g><path d="M-8 0 C-4 -6 4 -6 6 0 C4 6 -4 6 -8 0 Z M6 0 L10 -5 L10 5 Z" {...s} /><circle cx="-4" cy="-1" r="1" fill={bg ?? "#000"} opacity="0.5" /></g>;
+      break;
+    case "gatto":
+      g = <g><path d="M-7 -8 L-4 -3 H4 L7 -8 L7 2 C7 6 3 9 0 9 C-3 9 -7 6 -7 2 Z" {...s} /><path d="M-3 0 h1.4 M1.6 0 h1.4 M-1 3 L0 4 L1 3 M-8 3 h4 M4 3 h4" stroke={bg ?? "#000"} strokeWidth="0.8" opacity="0.55" /></g>;
+      break;
+    case "albero":
+      g = <g><circle cx="0" cy="-3" r="6.6" {...s} /><circle cx="-5" cy="0" r="4" {...s} /><circle cx="5" cy="0" r="4" {...s} /><path d="M0 2 V9.5 M-3 9.5 H3" {...st} strokeWidth={1.8} /></g>;
       break;
     default:
       return null;
@@ -560,6 +596,10 @@ export function Earring({ kind, x, y }: { kind: string; x: number; y: number }) 
       return <g><path d={`M${x} ${y - 1} V${y + 7}`} stroke="#d9b45a" strokeWidth="0.7" /><path d={`M${x - 1.3} ${y + 5.4} L${x} ${y + 8.2} L${x + 1.3} ${y + 5.4}`} fill="#d9b45a" /><path d={`M${x} ${y - 1} l-1.2 -1.6 M${x} ${y - 1} l1.2 -1.6`} stroke="#c4473d" strokeWidth="0.7" /></g>;
     case "luna":
       return <path d={`M${x + 1} ${y - 2.4} A2.6 2.6 0 1 0 ${x + 1} ${y + 2.4} A2 2 0 1 1 ${x + 1} ${y - 2.4} Z`} fill="#e8e3d8" stroke="#b9ae98" strokeWidth="0.3" />;
+    case "goccia":
+      return <g><path d={`M${x} ${y - 1} V${y + 2}`} stroke="#d9b45a" strokeWidth="0.6" /><path d={`M${x} ${y + 2} C${x + 2.2} ${y + 5} ${x + 1.6} ${y + 7.4} ${x} ${y + 7.4} C${x - 1.6} ${y + 7.4} ${x - 2.2} ${y + 5} ${x} ${y + 2} Z`} fill="#3b6ea8" stroke="#d9b45a" strokeWidth="0.4" /></g>;
+    case "triplo":
+      return <g fill="none" stroke="#d9b45a" strokeWidth="0.8"><circle cx={x} cy={y} r="1.5" /><circle cx={x - 0.5} cy={y - 3.2} r="1" /><circle cx={x - 0.9} cy={y - 5.8} r="0.8" /></g>;
     default:
       return <circle cx={x} cy={y} r="1.8" fill="none" stroke={gold} strokeWidth="1" />;
   }
@@ -594,6 +634,10 @@ export function HairOrnament({ kind, x, y, s = 1, tilt = 0, color }: { kind: str
         return <g><path d="M-5 0 H5" stroke="#efe6d2" strokeWidth="1.8" strokeLinecap="round" /><circle cx="-5.4" cy="-0.9" r="1.1" fill="#efe6d2" /><circle cx="-5.4" cy="0.9" r="1.1" fill="#efe6d2" /><circle cx="5.4" cy="-0.9" r="1.1" fill="#efe6d2" /><circle cx="5.4" cy="0.9" r="1.1" fill="#efe6d2" /></g>;
       case "farfalla":
         return <g><path d="M0 0 C-3 -4 -6 -3 -5 0 C-6 3 -3 4 0 0 Z" fill="#2f6fbe" /><path d="M0 0 C3 -4 6 -3 5 0 C6 3 3 4 0 0 Z" fill="#2f6fbe" /><circle cx="-3" cy="-0.8" r="0.7" fill="#ffd166" /><circle cx="3" cy="-0.8" r="0.7" fill="#ffd166" /><path d="M0 -2 V2" stroke="#1d1f22" strokeWidth="0.8" /></g>;
+      case "corona":
+        return <g><path d="M-7 2 L-7 -3 L-3.5 0 L0 -5 L3.5 0 L7 -3 L7 2 Z" fill="#e8c870" stroke="#8a6a20" strokeWidth="0.5" /><circle cx="0" cy="-1" r="0.9" fill="#c4473d" /></g>;
+      case "spilloni":
+        return <g>{[-3, 3].map((dx) => <g key={dx} transform={`rotate(${dx * 6})`}><path d={`M${dx} 4 V-8`} stroke="#c9a46a" strokeWidth="0.9" /><circle cx={dx} cy="-8.6" r="1.5" fill={dx < 0 ? "#c4473d" : "#2f9e7a"} /></g>)}</g>;
       default:
         return null;
     }
@@ -705,6 +749,10 @@ export function BowDeco({ kind, up, down, color }: { kind: string; up: [number, 
       const [x, y] = at(down, 0.5);
       return <g transform={`translate(${f(x)} ${f(y)})`}><path d="M0 0 V6" stroke="#c4473d" strokeWidth="0.8" /><path d="M-2 6 H2 L2.6 14 H-2.6 Z" fill="#c4473d" /><path d="M-1.6 8 V14 M0 8 V14 M1.6 8 V14" stroke="#7a1f1a" strokeWidth="0.4" /></g>;
     }
+    case "cuoio":
+      return <g>{[up, down].map((pt, i) => { const [x, y] = at(pt, 0.16); return <rect key={i} x={f(x - 3.4)} y={f(y - 5)} width="6.8" height="10" rx="1.6" fill="#7a4a26" stroke="#4a2c16" strokeWidth="0.5" />; })}</g>;
+    case "serpente":
+      return <g fill="none" stroke="#5a6a3a" strokeWidth="1.1" opacity="0.85">{[up, down].flatMap((pt, i) => [0.3, 0.45, 0.6, 0.75].map((u) => { const [x, y] = at(pt, u); return <path key={`${i}${u}`} d={`M${f(x - 2.4)} ${f(y)} q1.2 -2 2.4 0 t2.4 0`} />; }))}</g>;
     default:
       return null;
   }
@@ -933,6 +981,14 @@ export function FaceFrame({ kind }: { kind: string }) {
       return ring("#7d8085", 7, <g>{Array.from({ length: 12 }, (_, i) => { const a = (i / 12) * Math.PI * 2; return <path key={i} d={`M${f(50 + Math.cos(a) * 43)} ${f(50 + Math.sin(a) * 43)} L${f(50 + Math.cos(a) * 50)} ${f(50 + Math.sin(a) * 50)}`} stroke="#4d5054" strokeWidth="0.9" />; })}</g>);
     case "tramonto":
       return ring("url(#aa-fr-tr)", 6, <defs><linearGradient id="aa-fr-tr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#ffb86b" /><stop offset="0.5" stopColor="#e5566b" /><stop offset="1" stopColor="#5b3a8a" /></linearGradient></defs>);
+    case "perle":
+      return <g>{Array.from({ length: 30 }, (_, i) => { const a = (i / 30) * Math.PI * 2; return <circle key={i} cx={f(50 + Math.cos(a) * 47)} cy={f(50 + Math.sin(a) * 47)} r="2.6" fill="#f6f2ea" stroke="#c9bfae" strokeWidth="0.4" />; })}</g>;
+    case "ferro":
+      return <g>{ring("#55585a", 6)}{Array.from({ length: 8 }, (_, i) => { const a = (i / 8) * Math.PI * 2; return <circle key={i} cx={f(50 + Math.cos(a) * 47)} cy={f(50 + Math.sin(a) * 47)} r="1.5" fill="#9aa3ad" />; })}</g>;
+    case "nastro":
+      return <g>{ring("#c4473d", 5)}<path d="M30 92 L50 84 L70 92 L66 99 L50 93 L34 99 Z" fill="#a0302a" /></g>;
+    case "fiori":
+      return <g>{Array.from({ length: 12 }, (_, i) => { const a = (i / 12) * Math.PI * 2; const x = 50 + Math.cos(a) * 46; const y = 50 + Math.sin(a) * 46; return <g key={i}>{[0, 1, 2, 3, 4].map((k) => <circle key={k} cx={f(x + Math.cos(k * 1.256) * 2.4)} cy={f(y + Math.sin(k * 1.256) * 2.4)} r="1.8" fill={["#ff8fa3", "#ffd166", "#f4f1ea", "#b8a1ff"][i % 4]} />)}<circle cx={f(x)} cy={f(y)} r="1.2" fill="#e6b325" /></g>; })}</g>;
     default:
       return null;
   }
