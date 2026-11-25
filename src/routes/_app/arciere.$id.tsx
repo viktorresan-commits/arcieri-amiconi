@@ -16,6 +16,7 @@ import { useState } from "react";
 import { setRole } from "@/lib/arcieri/staff.api";
 import { refreshCrests } from "@/lib/arcieri/crest";
 import { GAME_LEVELS, GAME_MODES, modeOf } from "@/lib/arcieri/game-modes";
+import { LevelCrest } from "@/components/level-crest";
 
 type Board = Awaited<ReturnType<typeof archerBoard>>;
 
@@ -61,11 +62,22 @@ function Page() {
       {/* il suo arciere, grande e di fronte, con accanto gli ultimi premi */}
       <div className="aa-profile-stage relative h-[34rem] overflow-hidden rounded-[1.75rem]">
         <SceneBackdrop sky={sky} id={`pf${data.id}`} scene={look.scene} />
+        {/* luce morbida dietro l'arciere e ombra a terra: l'arciere sta nella scena, non sopra */}
+        <div className="aa-stage-glow pointer-events-none absolute inset-x-0 top-[18%] bottom-[8%] pr-[22%]" aria-hidden />
+        <div className="aa-stage-shadow pointer-events-none absolute bottom-[3.5%] left-[39%] h-[4.5%] w-[34%] -translate-x-1/2" aria-hidden />
         <div className="absolute inset-x-0 bottom-[1%] top-[11%] flex justify-center pr-[22%]">
           <ArcherFront look={look} className="h-full w-auto drop-shadow-[0_16px_24px_rgba(0,0,0,0.5)]" />
         </div>
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[16%] bg-gradient-to-t from-black/35 to-transparent" aria-hidden />
+        {/* il livello dell'arciere, come uno stemma in basso a sinistra */}
+        <div className="aa-prize-float absolute bottom-4 left-2 w-[24%]" style={{ animationDelay: "0.1s" }}>
+          <LevelCrest xp={data.xp} />
+        </div>
         <div className="absolute inset-x-0 top-0 flex items-center gap-3 bg-gradient-to-b from-black/65 to-transparent p-3 pb-8">
-          <Avatar size="lg" label={name} color={data.avatarColor} photo={data.photoUrl} look={looks[data.userId]} admin={data.admin} />
+          <span className="relative shrink-0">
+            <Avatar size="lg" label={name} color={data.avatarColor} photo={data.photoUrl} look={looks[data.userId]} admin={data.admin} />
+            <LevelCrest xp={data.xp} compact className="absolute -bottom-1.5 -right-2 z-[2] h-8 w-7 drop-shadow-[0_3px_4px_rgba(0,0,0,0.6)]" />
+          </span>
           <div className="min-w-0">
             <h1 className="truncate font-display text-3xl leading-none text-white">{name}</h1>
             {nick ? <p className="text-xs italic text-white/75">«{nick}»</p> : null}

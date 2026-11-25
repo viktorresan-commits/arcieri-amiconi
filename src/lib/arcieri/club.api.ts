@@ -740,6 +740,7 @@ export const archerBoard = createServerFn({ method: "POST" })
     return {
       id: asNum(member.id),
       userId: member.user_id,
+      xp: asNum((member as MemberRow & { xp?: number }).xp),
       givenName: member.given_name,
       familyName: member.family_name,
       nickname: member.nickname,

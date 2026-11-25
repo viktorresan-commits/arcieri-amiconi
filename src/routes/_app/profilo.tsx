@@ -20,6 +20,8 @@ import { AvatarEditor } from "./avatar";
 import { Migrazione } from "@/components/migrazione";
 import { PersonalizePanel } from "@/components/personalize";
 import { Glyph, IconTitle } from "@/components/icons";
+import { LevelCrest } from "@/components/level-crest";
+import { useXp } from "@/lib/arcieri/xp";
 import { unlockAdmin } from "@/lib/arcieri/account.api";
 import { ClaimCard, DeleteAccountCard, InviteCard, PrivacyCard, ResetCard, TeamAdmin } from "@/components/profile-tools";
 
@@ -189,6 +191,7 @@ function Page() {
     { id: "squadra", label: "Squadra" },
   ] as const;
 
+  const xpNow = useXp();
   return (
     <div className="grid gap-3">
       <section className="aa-hero grid gap-3 p-4">
@@ -203,6 +206,10 @@ function Page() {
             <p className="mt-1 truncate text-xs text-white/70">{me.email ?? ""}</p>
             <span className={`mt-1.5 inline-flex rounded-full px-2 py-0.5 text-[0.65rem] font-semibold ${me.role === "admin" ? "bg-amber-400 text-black" : "bg-white/10"}`}>{me.role === "admin" ? "Fondatore" : me.role === "archer" ? "Arciere" : "Ospite"}</span>
           </div>
+          {/* il proprio livello, lo stesso stemma che gli altri vedono sul profilo */}
+          <Link to="/obiettivi" className="ml-auto shrink-0" aria-label="Livello e punti">
+            <LevelCrest xp={xpNow.xp} className="scale-[0.85]" />
+          </Link>
         </div>
         <AvatarPhotoButton look={avatar.shown} onDone={reload} />
         <div className="grid grid-cols-2 gap-2">

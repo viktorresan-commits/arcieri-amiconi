@@ -38,6 +38,19 @@ export function award(n: number, why: string, once?: string) {
   window.dispatchEvent(new CustomEvent(EVENT, { detail: { n, why } }));
 }
 
+/** Punti arrivati dal server (altro telefono): se sono di più, diventano quelli di questo telefono. */
+export function adoptXp(serverXp: number) {
+  if (typeof localStorage === "undefined") return;
+  const st = readXp();
+  if (!(serverXp > st.xp)) return;
+  try {
+    localStorage.setItem(KEY, JSON.stringify({ ...st, xp: serverXp }));
+  } catch {
+    /* memoria piena */
+  }
+  window.dispatchEvent(new CustomEvent(EVENT, { detail: null }));
+}
+
 /** Livello: 1 → 100 punti, poi ogni livello chiede 25 punti in più. */
 export function levelOf(xp: number) {
   let level = 1;

@@ -412,6 +412,21 @@ for x in parts:
         x['drop'] = True
 parts = [x for x in parts if not x.get('drop')]
 # ---------- fibre, tendini e gruppi ----------
+def fan_insertion(name):
+    """punto verso cui convergono le fibre dei muscoli a ventaglio (coordinate di riposo)"""
+    n = name.lower()
+    side = 'L' if n.startswith('left') else 'R' if n.startswith('right') else None
+    if side is None: return None
+    sh, el, hip = (11, 13, 23) if side == 'L' else (12, 14, 24)
+    S, E, H = rest[sh], rest[el], rest[hip]
+    lat = np.array([1.0 if side == 'L' else -1.0, 0, 0])
+    if re.search(r"deltoid", n): return S + (E - S) * 0.42
+    if re.search(r"pectoralis major|latissimus|teres major", n): return S + (E - S) * 0.22
+    if re.search(r"trapezius", n): return S - lat * 0.03
+    if re.search(r"infraspinatus|supraspinatus|teres minor", n): return S + (E - S) * 0.06
+    if re.search(r"gluteus (maximus|medius)", n): return H + lat * 0.08 - np.array([0, 0.06, 0])
+    return None
+
 groups = ['']
 for x in parts:
     n = len(x['P'])
@@ -419,17 +434,46 @@ for x in parts:
     if x['kind'] != 'muscle': continue
     Q = x['P'] - x['P'].mean(0)
     _, sv, vt = np.linalg.svd(Q, full_matrices=False)
+    # direzione delle fibre: da un attacco all'altro (dalla parte del primo segmento a quella del secondo),
+    # come nelle tavole: il pettorale va dallo sterno all'omero, il dorsale dalla schiena al braccio
     ax = vt[0]
+    Jm, Wm = x.get('J'), x.get('W')
+    if Jm is not None and Wm is not None:
+        dom = np.where(Wm >= 0.5, Jm[:, 0], Jm[:, 1])
+        segs, cnt = np.unique(dom, return_counts=True)
+        if len(segs) >= 2:
+            o = np.argsort(-cnt)[:2]
+            if cnt[o[1]] >= 0.12 * len(dom):
+                ca = x['P'][dom == segs[o[0]]].mean(0); cb = x['P'][dom == segs[o[1]]].mean(0)
+                d = cb - ca
+                if np.linalg.norm(d) > 0.02: ax = d / np.linalg.norm(d)
     t = Q @ ax; t = (t - t.min()) / max(1e-6, t.max() - t.min())
-    if sv[1] / max(sv[2], 1e-6) > 1.8:
-        # muscolo piatto: fibre parallele, la coordinata attraversa il muscolo
-        c2 = Q @ vt[1]; a = (c2 - c2.min()) / max(1e-6, c2.max() - c2.min()) * (sv[1] / max(sv[0], 1e-6)) * 0.6
-    else:
-        a = np.arctan2(Q @ vt[2], Q @ vt[1]); a = (a + np.pi) / (2 * np.pi)
+    # di traverso: l'asse più largo tra quelli perpendicolari alle fibre (niente cucitura come con l'angolo)
+    R = Q - np.outer(Q @ ax, ax)
+    _, _, vt2 = np.linalg.svd(R, full_matrices=False)
+    c2 = R @ vt2[0]
+    wdt = max(1e-6, c2.max() - c2.min())
+    # righe ogni 4-5 mm sui muscoli stretti, più larghe sui muscoli molto larghi
+    a = (c2 - c2.min()) / max(wdt, 0.15)
+    # muscoli a ventaglio (pettorale, dorsale, deltoide, trapezio, glutei): le fibre convergono
+    # verso l'inserzione, come nelle tavole anatomiche
+    ins = fan_insertion(x['name'])
+    if ins is not None:
+        V = x['P'] - ins
+        nrm = vt[2]
+        Vp = V - np.outer(V @ nrm, nrm)
+        dist = np.linalg.norm(Vp, axis=1)
+        b1 = Vp.mean(0); b1 = b1 / max(1e-9, np.linalg.norm(b1)); b2 = np.cross(nrm, b1)
+        th = np.arctan2(Vp @ b2, Vp @ b1)
+        arc = (th - th.min()) * np.median(dist)
+        a = arc / max(arc.max(), 0.15)
+        t = (dist - dist.min()) / max(1e-6, dist.max() - dist.min())
     x['T'] = t; x['A'] = a
     long_ = sv[0] / max(sv[1], 1e-6) > 3.2
-    if (long_ and not x.get('za')) or 'calcaneal' in x['name'].lower():
-        x['TD'] = np.clip(np.maximum((0.12 - t) / 0.1, (t - 0.88) / 0.1), 0, 1)
+    # tendini chiari alle estremità dei muscoli lunghi (braccia, gambe, collo)
+    if long_ or 'calcaneal' in x['name'].lower():
+        tl = np.clip(Q @ vt[0], None, None); tl = (tl - tl.min()) / max(1e-6, tl.max() - tl.min())
+        x['TD'] = np.clip(np.maximum((0.1 - tl) / 0.08, (tl - 0.9) / 0.08), 0, 1)
     if 'calcaneal' in x['name'].lower(): x['TD'][:] = 1
     g = muscle_group(x['name'])
     if g:

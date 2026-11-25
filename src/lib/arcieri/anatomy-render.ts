@@ -98,7 +98,8 @@ void main(){
   if (uLayer < 0.5) {
     // pelle: vetro azzurro, il bordo si accende come nelle tavole mediche
     col = vec3(0.4, 0.72, 1.0) * (0.36 + rim * 1.5) + vec3(0.85, 0.95, 1.0) * pow(rim, 3.0) * 0.6;
-    a = uAlpha * (0.16 + rim * 0.7) * (1.0 - 0.85 * vStr);
+    // vetro sottile: i muscoli sotto si leggono bene anche su gambe e busto
+    a = uAlpha * (0.08 + rim * 0.55) * (1.0 - 0.85 * vStr);
   } else if (uLayer < 1.5) {
     // ossa: bianco azzurro, morbide
     // con i muscoli accesi le ossa tra un muscolo e l'altro restano azzurrine, non bianche
@@ -174,6 +175,25 @@ function spindleMesh(rings = 18, lon = 16) {
       const b = a + lon + 1;
       idx.push(a, b, a + 1, b, b + 1, a + 1);
     }
+  return { pos: new Float32Array(p), nor: new Float32Array(n), idx: new Uint16Array(idx) };
+}
+
+/** tubo (cilindro aperto lungo y da -1 a 1): arco, corda e freccia senza "perline" */
+function tubeMesh(lon = 14) {
+  const p: number[] = [];
+  const n: number[] = [];
+  const idx: number[] = [];
+  for (let i = 0; i <= 1; i++)
+    for (let j = 0; j <= lon; j++) {
+      const a = (j / lon) * Math.PI * 2;
+      p.push(Math.cos(a), i * 2 - 1, Math.sin(a));
+      n.push(Math.cos(a), 0, Math.sin(a));
+    }
+  for (let j = 0; j < lon; j++) {
+    const a = j;
+    const b = j + lon + 1;
+    idx.push(a, b, a + 1, b, b + 1, a + 1);
+  }
   return { pos: new Float32Array(p), nor: new Float32Array(n), idx: new Uint16Array(idx) };
 }
 
@@ -257,7 +277,7 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, mesh.idx, gl.STATIC_DRAW);
     return { p, n, i, count: mesh.idx.length };
   };
-  const meshes = { sphere: upload(sphereMesh()), torus: upload(torusMesh()), spindle: upload(spindleMesh()) };
+  const meshes = { sphere: upload(sphereMesh()), torus: upload(torusMesh()), spindle: upload(spindleMesh()), tube: upload(tubeMesh()) };
   // ---- corpo anatomico vero ----
   const bprog = gl.createProgram()!;
   gl.attachShader(bprog, sh(gl.VERTEX_SHADER, BVS));

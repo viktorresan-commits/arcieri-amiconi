@@ -13,7 +13,8 @@ import { CompanyWelcome } from "./compagnia";
 import { PercorsoWelcome } from "./percorso-welcome";
 import { percorsoOf } from "@/lib/arcieri/percorso";
 import { Scene } from "./scene";
-import { levelOf, useXp, useXpToasts } from "@/lib/arcieri/xp";
+import { adoptXp, levelOf, useXp, useXpToasts } from "@/lib/arcieri/xp";
+import { syncXp } from "@/lib/arcieri/xp.api";
 import { AvatarFace } from "./archer-avatar";
 import { useAvatar, useAvatarSync } from "./avatar-hero";
 import { PersonalizeSheet } from "./personalize";
@@ -113,6 +114,20 @@ export function Shell({ children }: { children: ReactNode }) {
   const avatar = useAvatar();
   useAvatarSync(avatar.shown);
   const xp = useXp();
+  // i punti vanno anche sul server (poco dopo ogni guadagno): il livello si vede sul profilo
+  // e un altro telefono riparte da lì. Mentre il fondatore inserisce per un altro, non si manda niente.
+  const actingNow = Boolean(me?.acting);
+  useEffect(() => {
+    if (!me || actingNow) return;
+    const t = window.setTimeout(() => {
+      syncXp({ data: { xp: xp.xp } })
+        .then((r) => adoptXp(r.xp))
+        .catch(() => {
+          /* senza rete: si riprova al prossimo guadagno */
+        });
+    }, 2500);
+    return () => window.clearTimeout(t);
+  }, [xp.xp, Boolean(me), actingNow]);
   // notizie non lette: le scrive la Home quando carica la bacheca
   const [unread, setUnread] = useState(0);
   useEffect(() => {

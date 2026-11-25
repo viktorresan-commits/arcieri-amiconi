@@ -9,7 +9,7 @@ import { archeryKit } from "./pose-kit";
 
 export type V3 = [number, number, number];
 export type Mode = 0 | 1 | 2 | 3; // 0 pelle (bordo luminoso), 1 osso, 2 muscolo, 3 materiale semplice
-export type Part = { mesh: "sphere" | "torus" | "spindle"; m: Float32Array; nm: Float32Array; color: V3; mode: Mode; alpha: number; act: number; layer: "pelle" | "osso" | "muscolo" | "arco"; deep?: boolean; id?: string };
+export type Part = { mesh: "sphere" | "torus" | "spindle" | "tube"; m: Float32Array; nm: Float32Array; color: V3; mode: Mode; alpha: number; act: number; layer: "pelle" | "osso" | "muscolo" | "arco"; deep?: boolean; id?: string };
 export type Hud = {
   pts: Record<string, V3>;
   labels: { at: V3; text: string; tone: "cyan" | "gold" | "warn" }[];
@@ -132,7 +132,8 @@ export function bodyPoints(lm: Landmark[], aspect: number): Record<number, V3> |
       for (let k = 0; k < 21; k++) {
         const p = lm[base + k];
         const q = XY(base + k);
-        q[2] = out[wr][2] + (-(((p.z ?? 0) - (w0.z ?? 0)) * aspect) / s) * 0.8;
+        // profondità relativa al polso, limitata: la stima delle dita è rumorosa
+        q[2] = out[wr][2] + Math.max(-0.1, Math.min(0.1, (-(((p.z ?? 0) - (w0.z ?? 0)) * aspect) / s) * 0.6));
         out[base + k] = add(q, off);
       }
     }
@@ -145,7 +146,7 @@ export function bodyPoints(lm: Landmark[], aspect: number): Record<number, V3> |
     zm /= FACE_IDS.length;
     for (let k = 0; k < FACE_IDS.length; k++) {
       const q = XY(FACE0 + k);
-      q[2] = earZ + 0.07 - (((lm[FACE0 + k].z ?? 0) - zm) * aspect) / s;
+      q[2] = earZ + 0.07 + Math.max(-0.12, Math.min(0.12, -(((lm[FACE0 + k].z ?? 0) - zm) * aspect) / s));
       out[FACE0 + k] = q;
     }
   }
@@ -477,29 +478,55 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gea
   // verso il bersaglio: dalla spalla della corda a quella dell'arco, in orizzontale
   let toT = sub(bow.sh, drw.sh);
   toT = norm([toT[0], 0, toT[2]]);
+  // punto del fotogramma (0..1) -> metri, alla profondità di un punto del corpo vicino
+  const bowWrI = S.bow[2];
+  const drwWrI = S.draw[2];
+  const sImg = Math.abs(lm[23].y - lm[11].y) / Math.max(1e-6, Math.abs(J[11][1] - J[23][1]));
+  const fromImage = (x: number, y: number, ref: V3, refI: number): V3 => [ref[0] + ((x - lm[refI].x) * aspect) / sImg, ref[1] - (y - lm[refI].y) / sImg, ref[2]];
   // trazione: si decide sul fotogramma (2D), non sulla profondità stimata, che sbaglia spesso:
   // braccio dell'arco su e mano della corda verso il viso (o gomito della corda piegato)
   const mm = metricsOf(lm, hand, aspect, 1000);
   const drawn = Boolean(mm && mm.bowUp && (mm.handFace < 1.0 || drawAng < 115));
-  let nock: V3;
-  if (drawn) {
-    nock = [fingers[0], fingers[1], fingers[2]];
-    // all'ancoraggio le dita sono al viso: stessa profondità della bocca
-    const mouthJ = J[9] && J[10] ? lerp(J[9], J[10], 0.5) : J[0];
-    const k = Math.max(0, Math.min(1, 1 - ((mm?.handFace ?? 1) - 0.35) / 0.65));
-    nock[2] += (mouthJ[2] - nock[2]) * k;
-    // le dita della corda non vanno mai dietro la linea delle spalle (sarebbero dietro la nuca)
-    const ahead = dot(sub(nock, shM), fwd);
-    if (ahead < 0.03) nock = add(nock, mul(fwd, 0.03 - ahead));
-  } else {
-    // arco a riposo: la cocca sta sulla corda a 22 cm dalla presa
-    nock = sub(grip, mul(toT, 0.22));
+  // all'ancoraggio le dita sono al viso: stessa profondità della bocca, mai dietro la linea delle spalle
+  const toFace = (p: V3): V3 => {
+    let q: V3 = [p[0], p[1], p[2]];
+    if (drawn) {
+      const mouthJ = J[9] && J[10] ? lerp(J[9], J[10], 0.5) : J[0];
+      const k = Math.max(0, Math.min(1, 1 - ((mm?.handFace ?? 1) - 0.35) / 0.65));
+      q[2] += (mouthJ[2] - q[2]) * k;
+      const ahead = dot(sub(q, shM), fwd);
+      if (ahead < 0.03) q = add(q, mul(fwd, 0.03 - ahead));
+    }
+    return q;
+  };
+  // la freccia vista nel fotogramma comanda: la cocca è la sua estremità dalla parte della mano della corda
+  let arrowSeen: { nock: V3; tip: V3 } | null = null;
+  if (gear?.arrow && sImg > 0) {
+    const g = gear.arrow;
+    const dw = lm[drwWrI];
+    const d1 = Math.hypot((g.x1 - dw.x) * aspect, g.y1 - dw.y);
+    const d2 = Math.hypot((g.x2 - dw.x) * aspect, g.y2 - dw.y);
+    const [nx, ny, tx, ty] = d1 < d2 ? [g.x1, g.y1, g.x2, g.y2] : [g.x2, g.y2, g.x1, g.y1];
+    // la cocca deve stare vicino alla mano della corda (entro 25 cm), altrimenti la linea trovata non è la freccia
+    if (Math.min(d1, d2) / sImg < 0.25) {
+      const nk = toFace(fromImage(nx, ny, fingers, drwWrI));
+      const tp = fromImage(tx, ty, grip, bowWrI);
+      if (len(sub(tp, nk)) > 0.3) arrowSeen = { nock: nk, tip: tp };
+    }
   }
-  const u = norm(sub(grip, nock));
-  // punto del fotogramma (0..1) -> metri, alla profondità di un punto del corpo vicino
-  const bowWrI = S.bow[2];
-  const sImg = Math.abs(lm[23].y - lm[11].y) / Math.max(1e-6, Math.abs(J[11][1] - J[23][1]));
-  const fromImage = (x: number, y: number, ref: V3, refI: number): V3 => [ref[0] + ((x - lm[refI].x) * aspect) / sImg, ref[1] - (y - lm[refI].y) / sImg, ref[2]];
+  // dita sulla corda: in trazione, oppure con la mano vicina all'arco (incocco e preparazione)
+  const onString = drawn || len(sub(fingers, grip)) < 0.35;
+  let nock: V3;
+  if (arrowSeen) nock = arrowSeen.nock;
+  else if (onString) nock = toFace(fingers);
+  else nock = sub(grip, mul(toT, 0.22)); // arco a riposo: la cocca sta sulla corda a 22 cm dalla presa
+  // se la mano sta proprio sulla presa la freccia non ha direzione: si usa il verso del bersaglio
+  let u = len(sub(grip, nock)) > 0.08 ? norm(sub(grip, nock)) : toT;
+  if (len(sub(grip, nock)) <= 0.08) nock = sub(grip, mul(toT, 0.22));
+  if (arrowSeen) {
+    const ua = norm(sub(arrowSeen.tip, arrowSeen.nock));
+    if (dot(ua, u) > Math.cos((25 * Math.PI) / 180)) u = ua;
+  }
   let n = perp(u, [0, 1, 0]);
   let half = 0.8;
   // arco trovato nel video: inclinazione e lunghezza vere
@@ -521,26 +548,23 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gea
     const s1 = -1 + (2 * (i + 1)) / steps;
     const mid = (s0 + s1) / 2;
     const r = Math.abs(mid) < 0.28 ? 0.018 : 0.011 - Math.abs(mid) * 0.004;
-    push("sphere", seg(curve(s0), curve(s1), r, r * 0.7, 1.7, u), WOOD, 3, 1, "arco");
+    push("tube", seg(curve(s0), curve(s1), r, r * 0.7, 1.04, u), WOOD, 3, 1, "arco");
   }
   const tipU = curve(1);
   const tipD = curve(-1);
-  push("sphere", seg(tipU, nock, 0.0028, 0.0028, 1.0), [0.95, 0.95, 0.9], 3, 0.9, "arco");
-  push("sphere", seg(tipD, nock, 0.0028, 0.0028, 1.0), [0.95, 0.95, 0.9], 3, 0.9, "arco");
+  push("tube", seg(tipU, nock, 0.0022, 0.0022, 1.0), [0.95, 0.95, 0.9], 3, 0.9, "arco");
+  push("tube", seg(tipD, nock, 0.0022, 0.0022, 1.0), [0.95, 0.95, 0.9], 3, 0.9, "arco");
   // freccia: incoccata quando le dita sono sulla corda (in trazione o pronte a tirare)
-  const nocked = drawn || len(sub(fingers, nock)) < 0.14;
+  const nocked = Boolean(arrowSeen) || onString;
   if (nocked) {
     const gn = len(sub(grip, nock));
+    // la freccia sporge sempre oltre la presa; se il video la mostra, finisce dove finisce davvero
     let arrowTip = add(nock, mul(u, Math.max(0.72, gn + 0.06)));
-    // freccia trovata nel video: la punta è dove finisce davvero
-    if (gear?.arrow?.measured && sImg > 0) {
-      const a = fromImage(gear.arrow.x1, gear.arrow.y1, bow.wr, bowWrI);
-      const b = fromImage(gear.arrow.x2, gear.arrow.y2, bow.wr, bowWrI);
-      const tip = len(sub(a, nock)) > len(sub(b, nock)) ? a : b;
-      const along = dot(sub(tip, nock), u);
-      if (along > gn * 0.8 && along < gn + 0.4) arrowTip = add(nock, mul(u, along));
+    if (arrowSeen && gear?.arrow?.measured) {
+      const along = dot(sub(arrowSeen.tip, nock), u);
+      if (along > gn * 0.8 && along < gn + 0.45) arrowTip = add(nock, mul(u, along));
     }
-    push("sphere", seg(nock, arrowTip, 0.0045, 0.0045, 1.0), [0.98, 0.82, 0.35], 3, 1, "arco");
+    push("tube", seg(nock, arrowTip, 0.004, 0.004, 1.0), [0.98, 0.82, 0.35], 3, 1, "arco");
     push("sphere", seg(nock, add(nock, mul(u, 0.09)), 0.012, 0.003, 1.0, n), [0.95, 0.35, 0.3], 3, 0.9, "arco"); // alette
   }
 

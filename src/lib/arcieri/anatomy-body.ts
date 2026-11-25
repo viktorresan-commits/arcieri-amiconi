@@ -102,8 +102,8 @@ function frame(a: V3, b: V3, ref: V3, fallback: V3): Frame {
 }
 
 /** matrice (colonne, come WebGL) che porta il segmento di riposo su quello attuale */
-function segMatrix(r: Frame, c: Frame, thick: number, out: Float32Array, at: number) {
-  const s1 = c.L / r.L;
+function segMatrix(r: Frame, c: Frame, thick: number, out: Float32Array, at: number, lo = 0, hi = 99) {
+  const s1 = Math.max(lo, Math.min(hi, c.L / r.L));
   // M = Tc * Bc * S * Br^T * T(-ro)
   const Bc = [c.e1, c.e2, c.e3];
   const Br = [r.e1, r.e2, r.e3];
@@ -192,13 +192,28 @@ export function bodyMatrices(meta: BodyMeta, J: Record<number, V3>): Float32Arra
       Fc[`clav_${s}`] = frame(nCur, sh, up, [0, 0, 1]);
     }
   }
-  // testa: con i punti del viso si gira come nel video (mento -> fronte, linea degli occhi)
+  // scala del corpo nel video: dal busto, che è la misura più stabile
+  const kT = Math.max(0.5, Math.min(2, Fc.torace.L / Fr.torace.L));
+  // testa: con i punti del viso si gira come nel video (mento -> fronte, linea degli occhi);
+  // dal viso si prende solo la direzione: posizione e grandezza restano quelle del collo,
+  // così un viso letto male non stira la testa fuori dal corpo
   const fi = (id: number) => FACE0 + FACE_IDS.indexOf(id);
   const chin = J[fi(152)], brow = J[fi(10)], eyeL = J[fi(263)], eyeR = J[fi(33)];
   const r0 = rest("mento"), r1 = rest("fronte");
   if (chin && brow && eyeL && eyeR && r0 && r1) {
-    Fr.testa = frame(r0, r1, [1, 0, 0], [0, 0, 1]);
-    Fc.testa = frame(chin, brow, sub(eyeL, eyeR), [0, 0, 1]);
+    const def = Fc.testa;
+    const defR = Fr.testa;
+    const dir = norm(sub(brow, chin));
+    // il viso deve essere girato in modo credibile rispetto al collo (meno di 60 gradi)
+    if (len(sub(brow, chin)) > 1e-4 && dot(dir, def.e1) > 0.5) {
+      // mento attuale: il mento di riposo portato con la testa che segue il collo
+      const d = sub(r0, defR.o);
+      const k = def.L / defR.L;
+      const chinNow = add(def.o, add(add(mul(def.e1, dot(d, defR.e1) * k), mul(def.e2, dot(d, defR.e2))), mul(def.e3, dot(d, defR.e3))));
+      const Lr = len(sub(r1, r0));
+      Fr.testa = frame(r0, r1, [1, 0, 0], [0, 0, 1]);
+      Fc.testa = frame(chinNow, add(chinNow, mul(dir, Lr * kT)), sub(eyeL, eyeR), [0, 0, 1]);
+    }
   }
   // dita (quattro insieme) e pollice: con i 21 punti della mano si piegano; senza, seguono la mano
   for (const s of ["L", "R"] as const) {
@@ -210,9 +225,16 @@ export function bodyMatrices(meta: BodyMeta, J: Record<number, V3>): Float32Arra
     const palmR = cross(sub(rest(s === "L" ? 19 : 20) ?? d0, rest(s === "L" ? 15 : 16) ?? d0), sub(rest(s === "L" ? 17 : 18) ?? d0, rest(s === "L" ? 15 : 16) ?? d0));
     const palmC = cross(sub(J[base + 5], J[base]), sub(J[base + 17], J[base]));
     Fr[`dita_${s}`] = frame(d0, d1, palmR, [0, 0, 1]);
-    Fc[`dita_${s}`] = frame(avg([5, 9, 13, 17]), avg([8, 12, 16, 20]), palmC, [0, 0, 1]);
     Fr[`pollice_${s}`] = frame(p0, p1, palmR, [0, 0, 1]);
-    Fc[`pollice_${s}`] = frame(J[base + 2], J[base + 4], palmC, [0, 0, 1]);
+    // dita e pollice: direzione dai punti della mano, lunghezza vera (mai stirate)
+    const fingers = (a: V3, b: V3, r: Frame) => {
+      const v = sub(b, a);
+      const l = len(v);
+      const Lk = r.L * kT;
+      return frame(a, l > 1e-5 ? add(a, mul(v, Math.min(1.15, Math.max(0.35, l / Lk)) * (Lk / l))) : add(a, mul(r.e1, Lk)), palmC, [0, 0, 1]);
+    };
+    Fc[`dita_${s}`] = fingers(avg([5, 9, 13, 17]), avg([8, 12, 16, 20]), Fr[`dita_${s}`]);
+    Fc[`pollice_${s}`] = fingers(J[base + 2], J[base + 4], Fr[`pollice_${s}`]);
   }
   const out = new Float32Array(meta.segments.length * 16);
   const idx = (name: string) => meta.segments.indexOf(name);
@@ -223,7 +245,11 @@ export function bodyMatrices(meta: BodyMeta, J: Record<number, V3>): Float32Arra
       out.set([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1], i * 16);
       return;
     }
-    segMatrix(r, c, 1, out, i * 16);
+    // nessun pezzo si allunga o si accorcia oltre il credibile rispetto al busto:
+    // gli errori di profondità del video non stirano più braccia, gambe e testa
+    const lo = name === "torace" || name === "bacino" ? 0 : kT * 0.8;
+    const hi = name === "torace" || name === "bacino" ? 99 : kT * 1.22;
+    segMatrix(r, c, 1, out, i * 16, lo, hi);
   });
   // dita senza punti della mano: stessa trasformazione della mano
   for (const s of ["L", "R"] as const) {
