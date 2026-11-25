@@ -25,7 +25,11 @@ import { useXp } from "@/lib/arcieri/xp";
 import { unlockAdmin } from "@/lib/arcieri/account.api";
 import { ClaimCard, DeleteAccountCard, InviteCard, PrivacyCard, ResetCard, TeamAdmin } from "@/components/profile-tools";
 
-export const Route = createFileRoute("/_app/profilo")({ component: Page });
+export const Route = createFileRoute("/_app/profilo")({
+  component: Page,
+  // ?tab=colori apre subito la scheda (dal Menu)
+  validateSearch: (search: Record<string, unknown>): { tab?: string } => (typeof search.tab === "string" ? { tab: search.tab } : {}),
+});
 
 function Page() {
   const { me, reload } = useMember();
@@ -36,14 +40,19 @@ function Page() {
   const [bow, setBow] = useState(me.bowType);
   const [bio, setBio] = useState(me.bio);
   const [tab, setTab] = useEntryState<string>("profilo-tab", "io");
+  const wanted = Route.useSearch().tab;
   useEffect(() => {
+    if (wanted) {
+      setTab(wanted);
+      return;
+    }
     try {
       const t = localStorage.getItem("aa-profilo-tab");
       if (t) setTab(t);
     } catch {
       /* niente */
     }
-  }, []);
+  }, [wanted]);
   const pickTab = (t: string) => {
     setTab(t);
     try {
@@ -185,6 +194,7 @@ function Page() {
   const myPrizes = prizes.filter((p) => p.holders.some((h) => h.userId === me.userId));
   const TABS = [
     { id: "io", label: "Io" },
+    { id: "colori", label: "Colori dell'app" },
     { id: "aspetto", label: "Il tuo arciere" },
     { id: "gesti", label: "Analisi del gesto" },
     { id: "account", label: "Account" },
@@ -262,15 +272,14 @@ function Page() {
           </Card>
         ) : null}
 
-        {tab === "aspetto" ? (
-          <>
-          <AvatarEditor />
+        {tab === "colori" ? (
           <Card className="grid gap-1">
-            <IconTitle icon="palette" color="#7652d1" sub="Ogni scelta si salva da sola.">Personalizza</IconTitle>
+            <IconTitle icon="palette" color="#7652d1" sub="Il colore cambia tutta l'app. Ogni scelta si salva da sola.">Colori e aspetto dell'app</IconTitle>
             <PersonalizePanel />
           </Card>
-          </>
         ) : null}
+
+        {tab === "aspetto" ? <AvatarEditor /> : null}
 
         {tab === "gesti" ? <GestureGallery /> : null}
 

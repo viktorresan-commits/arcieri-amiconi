@@ -162,6 +162,18 @@ function Stage({ slots }: { slots: Slot[] }) {
   );
 }
 
+/** dove l'arciere può uscire dallo scudo: tutto sopra e ai lati in alto, il fondo dello scudo in basso */
+const ESCAPE = "polygon(-45% -70%, 145% -70%, 145% 40%, 97% 62%, 96% 70%, 90% 80%, 78% 89%, 64% 95.5%, 50% 100%, 36% 95.5%, 22% 89%, 10% 80%, 4% 70%, 3% 62%, -45% 40%)";
+
+/** «172 pt campionato» → 172 sopra, «pt camp.» sotto; «media gara 7,20» → 7,20 sopra, «media gara» sotto */
+function splitMark(mark: string) {
+  const first = /^([\d.,]+)\s+(.+)$/.exec(mark.trim());
+  if (first) return { value: first[1], unit: first[2].replace(/campionato/i, "camp.") };
+  const last = /^(.*?)\s+([\d.,]+)$/.exec(mark.trim());
+  if (last) return { value: last[2], unit: last[1] };
+  return { value: mark, unit: "" };
+}
+
 /** Scudo con l'arciere dentro (vittoria per il primo, fiero per gli altri), nome e valore in basso. */
 function Shield({ row, place, look }: { row: PodiumRow; place: Place; look: AvatarLook }) {
   const uid = (useId().replace(/[^a-zA-Z0-9]/g, "") + "_");
@@ -178,14 +190,27 @@ function Shield({ row, place, look }: { row: PodiumRow; place: Place; look: Avat
       <div className="absolute inset-0" style={{ clipPath: `url(#${uid}s)`, background: `linear-gradient(135deg, ${m.a}, ${m.b} 50%, ${m.c})` }} />
       <div className="absolute inset-[4%]" style={{ clipPath: `url(#${uid}s)` }}>
         <div className="absolute inset-0" style={{ background: `radial-gradient(120% 80% at 50% 10%, ${look.shirt}aa, #0d1b17 75%)` }} />
+      </div>
+      {/* l'arciere: in basso resta dentro lo scudo, in alto e ai lati ne esce (arco, braccia, testa) */}
+      <div className="pointer-events-none absolute inset-[4%]" style={{ clipPath: ESCAPE }}>
         {/* ragazzi e arcieri bassi: la figura si ingrandisce attorno ai piedi, così testa e busto stanno al centro come per gli altri */}
-        <div className="absolute" style={frame(look)}>
-          <ArcherAvatar look={look} pose={big ? "vittoria" : "fiero"} still interactive={false} className="h-auto w-full" />
+        <div className={big ? "aa-podium-cheer absolute" : "aa-podium-sway absolute"} style={{ ...frame(look), animationDelay: `${place * -1.3}s` }}>
+          <ArcherAvatar look={look} pose={big ? "vittoria" : "fiero"} interactive={false} className="h-auto w-full" />
         </div>
+      </div>
+      <div className="absolute inset-[4%]" style={{ clipPath: `url(#${uid}s)` }}>
         <div className="absolute inset-x-0 bottom-0 h-[46%] bg-gradient-to-t from-black/85 via-black/45 to-transparent" />
-        <div className="absolute inset-x-[8%] bottom-[12%] text-center">
+        <div className="absolute inset-x-[8%] bottom-[9%] text-center">
           <p className="truncate font-display text-[1.05rem] uppercase leading-none tracking-wide text-white">{row.name}</p>
-          <p className="mt-0.5 truncate text-[0.62rem] font-semibold text-white/75">{row.mark}</p>
+          {(() => {
+            const { value, unit } = splitMark(row.mark);
+            return (
+              <p className="mt-0.5 leading-none text-white">
+                <b className="block font-display text-[1.05rem] tabular-nums">{value}</b>
+                {unit ? <span className="block text-[0.56rem] font-semibold uppercase tracking-wider text-white/75">{unit}</span> : null}
+              </p>
+            );
+          })()}
         </div>
       </div>
       {big ? (
@@ -226,7 +251,15 @@ function CrestMedal({ row, place }: { row: CrestPodiumRow; place: Place }) {
         </div>
       </div>
       <p className="relative z-10 mt-3 line-clamp-2 w-full font-display text-[0.86rem] uppercase leading-tight tracking-wide text-white">{row.name}</p>
-      <p className="text-[0.64rem] font-semibold text-white/70">{row.mark}</p>
+      {(() => {
+        const { value, unit } = splitMark(row.mark);
+        return (
+          <p className="leading-none text-white">
+            <b className="block font-display text-[1rem] tabular-nums">{value}</b>
+            {unit ? <span className="block text-[0.54rem] font-semibold uppercase tracking-wider text-white/70">{unit}</span> : null}
+          </p>
+        );
+      })()}
     </div>
   );
 }

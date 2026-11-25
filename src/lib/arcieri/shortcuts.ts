@@ -40,6 +40,7 @@ export const SHORTCUTS: Shortcut[] = [
   { id: "confronta", group: "analizza", label: "Confronta", hint: "Tu contro un compagno", icon: "compare", color: "#5568c2", to: "/confronta" },
   { id: "acquisti", group: "prepara", label: "Acquisti", hint: "Lista della spesa", icon: "bag", color: "#946f42", to: "/acquisti" },
   { id: "profilo", group: "squadra", label: "Profilo", hint: "Dati, import, impostazioni", icon: "user", color: "#646c7a", to: "/profilo" },
+  { id: "colori", group: "squadra", label: "Colori dell'app", hint: "La tinta di tutta l'app", icon: "palette", color: "#7652d1", to: "/profilo", search: { tab: "colori" } },
   { id: "schede", group: "allena", label: "Le mie schede", hint: "Esercizi, classi e richieste dell'allenatore", icon: "notebook", color: "#2f6fd1", to: "/schede" },
   { id: "istruttore", group: "squadra", label: "Allenatore", hint: "Allievi, schede e progressi", icon: "team", color: "#2f6fd1", to: "/istruttore" },
   { id: "segreteria", group: "squadra", label: "Segreteria", hint: "Quote, certificati e presenze", icon: "checklist", color: "#3f8a76", to: "/segreteria" },
