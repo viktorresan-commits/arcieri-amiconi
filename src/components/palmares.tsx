@@ -260,10 +260,19 @@ export function CompanyTrophies({ companyId, companyName }: { companyId: number;
         ) : null}
       </div>
       <div className="grid gap-1.5">
+        {/* il campionato in corso (classifica generale squadre dal portale), poi le gare */}
+        {results.some((r) => r.fitastId.startsWith("camp-")) ? (
+          <>
+            <p className="text-sm font-semibold">Campionato</p>
+            <ul className="grid gap-1.5">
+              {results.filter((r) => r.fitastId.startsWith("camp-")).slice(0, 4).map((r) => <TeamResultRow key={r.id} r={r} />)}
+            </ul>
+          </>
+        ) : null}
         <p className="text-sm font-semibold">Classifiche di squadra</p>
-        {results.length ? (
+        {results.some((r) => !r.fitastId.startsWith("camp-")) ? (
           <ul className="grid gap-1.5">
-            {results.slice(0, 12).map((r) => <TeamResultRow key={r.id} r={r} />)}
+            {results.filter((r) => !r.fitastId.startsWith("camp-")).slice(0, 12).map((r) => <TeamResultRow key={r.id} r={r} />)}
           </ul>
         ) : (
           <p className="text-sm text-muted">Arrivano da sole quando un arciere della compagnia cerca il suo nome sul portale FITAST (sezione Gare).</p>

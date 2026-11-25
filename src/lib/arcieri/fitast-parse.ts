@@ -50,6 +50,8 @@ export type FitastPage = {
   redirect?: string;
   /** nomi delle pagine .awp citate (es. pagView-Class-Squadre-Gara.awp), anche dove il numero si aggiunge in JavaScript */
   awp?: string[];
+  /** come è fatta la pagina (per capire perché una tabella resta vuota): conteggi e nomi, mai il contenuto */
+  diag?: string[];
 };
 
 const ENT: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ", agrave: "à", egrave: "è", eacute: "é", igrave: "ì", ograve: "ò", ugrave: "ù", Agrave: "À", Egrave: "È", Eacute: "É", Igrave: "Ì", Ograve: "Ò", Ugrave: "Ù", deg: "°", laquo: "«", raquo: "»", rsquo: "’", lsquo: "‘", ldquo: "“", rdquo: "”", ndash: "–", mdash: "—", euro: "€", ordm: "º", ordf: "ª" };
@@ -401,6 +403,8 @@ export function parseHtml(html: string, url: string): Omit<FitastPage, "fetchedA
     tables.push(...wd);
     if (!wd.length) tables.push(...scriptTables(scripts));
   }
+  // righe XML scritte in un altro modo (attributi, altri escape): si cercano in tutta la pagina
+  if (!tables.some((t) => t.source === "wd")) tables.push(...wdDeepTables(html));
   // tabelle WEBDEV: il campo nascosto ALIAS_DATA dice che ci sono (anche senza righe iniziali), le righe si chiedono dopo
   const wdAliases = Object.keys((form as FitastForm | null)?.fields ?? {})
     .map((k) => /^(.+)_DATA$/.exec(k)?.[1] ?? "")
@@ -412,9 +416,54 @@ export function parseHtml(html: string, url: string): Omit<FitastPage, "fetchedA
   // niente righe ripetute di seguito (menu ripetuti, intestazioni)
   const tidy = lines.filter((l, i) => l !== lines[i - 1]);
   const refs = awpRefs(html, url);
+  const diag = pageDiag(html, (form as FitastForm | null) ?? null, tables);
   const awp = [...new Set([...html.matchAll(/[\w-]+\.awp\b/gi)].map((m) => m[0]))].slice(0, 80);
   const redirect = redirectOf(html, url, tables.length === 0 && tidy.length < 15 && !(form as FitastForm | null)?.buttons.length);
-  return { url, title: clean(title), tables, lines: tidy.slice(0, 2000), links: uniq.slice(0, 400), form, blocks, wdAliases, ...(refs.length ? { refs } : {}), ...(awp.length ? { awp } : {}), ...(redirect ? { redirect } : {}) };
+  return { url, title: clean(title), tables, lines: tidy.slice(0, 2000), links: uniq.slice(0, 400), form, blocks, wdAliases, ...(refs.length ? { refs } : {}), ...(awp.length ? { awp } : {}), ...(redirect ? { redirect } : {}), diag };
+}
+
+/** testo con gli escape più comuni sciolti (\\x3c, \\u003c, \\074, &lt;, %3C): per trovare XML nascosto */
+function unescapeAll(t: string) {
+  return t
+    .replace(/\\x3c/gi, "<").replace(/\\x3e/gi, ">").replace(/\\u003c/gi, "<").replace(/\\u003e/gi, ">")
+    .replace(/\\074/g, "<").replace(/\\076/g, ">").replace(/\\x22/gi, '"').replace(/\\u0022/gi, '"').replace(/\\"/g, '"').replace(/\\\//g, "/")
+    .replace(/%3C/gi, "<").replace(/%3E/gi, ">").replace(/%22/g, '"')
+    .replace(/&lt;/gi, "<").replace(/&gt;/gi, ">").replace(/&quot;/gi, '"');
+}
+
+/** blocchi <LIGNES>…</LIGNES> ovunque nella pagina, con le colonne che li precedono */
+export function wdDeepTables(html: string): FitastTable[] {
+  if (!/ligne/i.test(html)) return [];
+  const src = unescapeAll(html);
+  const out: FitastTable[] = [];
+  const re = /<lignes[\s>]/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(src)) && out.length < 6) {
+    const end = src.toLowerCase().indexOf("</lignes>", m.index);
+    if (end < 0) break;
+    const before = src.slice(Math.max(0, m.index - 20000), m.index);
+    const colAt = before.toLowerCase().lastIndexOf("<colonnes");
+    const start = colAt >= 0 ? m.index - (before.length - colAt) : m.index;
+    const xml = `<WDTABLE>${src.slice(start, end + 9)}</WDTABLE>`;
+    const alias = [...src.slice(Math.max(0, start - 600), start).matchAll(/DeclareChamp\(\s*["']([^"']+)["']|name=["']([^"']+)["']/g)].pop();
+    const t = wdXmlTable(xml, alias?.[1] ?? alias?.[2] ?? "");
+    if (t) out.push(t);
+    re.lastIndex = end + 9;
+  }
+  return out;
+}
+
+/** come è fatta la pagina: script, tabelle WEBDEV, righe XML, campi nascosti (nomi), azione del modulo */
+function pageDiag(html: string, form: FitastForm | null, tables: FitastTable[]): string[] {
+  const n = (re: RegExp) => (html.match(re) ?? []).length;
+  const lig = /(.{0,8})ligne\b/i.exec(html);
+  const hidden = Object.keys(form?.fields ?? {}).filter((k) => /_DATA$|_OCC$|_SEL$|AWP|CONTEXT/i.test(k)).slice(0, 8);
+  const decl = [...html.matchAll(/DeclareChamp\(\s*["']([^"']+)["'][^)]{0,80}?(WD\w+)/g)].map((m) => `${m[1]}:${m[2]}`).slice(0, 8);
+  return [
+    `html ${html.length} · script ${n(/<script\b/gi)} · tabelle html ${n(/<table\b/gi)} · righe lette ${tables.reduce((a, t) => a + Math.max(0, t.rows.length - 1), 0)}`,
+    `WDTable ${n(/WDTable/g)} · DeclareChamp ${decl.join(" ") || "nessuno"} · LIGNE ${n(/ligne/gi)}${lig ? ` (${JSON.stringify(lig[1].replace(/[^\\x%&;<a-z0-9]/gi, "·"))})` : ""}`,
+    `campi ${hidden.join(" ") || "nessuno"} · azione ${form ? (form.action.split("/").pop() ?? "") : "nessun modulo"} · AWPID ${/_AWPID_/.test(html) ? "sì" : "no"}`,
+  ];
 }
 
 /** pagine .awp con parametri citate nella pagina (link, onclick, script): pagView-Class-Arcieri-Gara.awp?P1=2472 */
@@ -727,11 +776,20 @@ export async function fillWdTables(page: FitastPage, post: (action: string, body
       if (lastKey) pairs.push(["WD_TABLE_CLEENREG_POS_", String(got - 1)], ["WD_TABLE_CLEENREG_", lastKey]);
       const body = formBodyPairs(pairs, page.charset);
       let xml = await post(target, body);
-      let more = xml ? wdXmlTable(xml, alias) : null;
+      let more = xml ? wdXmlTable(xml, alias) ?? wdDeepTables(xml)[0] ?? null : null;
       if ((!more || more.rows.length < 2) && round === 0 && targets.length > 1) {
         target = targets[1];
         xml = await post(target, body);
-        more = xml ? wdXmlTable(xml, alias) : null;
+        more = xml ? wdXmlTable(xml, alias) ?? wdDeepTables(xml)[0] ?? null : null;
+      }
+      // tabella da scorrere per chiave (PARCOURTAP), come chiede il browser quando non sa da dove partire
+      if ((!more || more.rows.length < 2) && round === 0) {
+        const ap: [string, string][] = [["WD_ACTION_", "AJAXEXECUTE"], ["PARCOURTAP", alias], ...pairs.slice(3)];
+        for (const tg of targets) {
+          xml = await post(tg, formBodyPairs(ap, page.charset));
+          more = xml ? wdXmlTable(xml, alias) ?? wdDeepTables(xml)[0] ?? null : null;
+          if (more && more.rows.length >= 2) break;
+        }
       }
       if (!more || more.rows.length < 2) break;
       if (!t) {

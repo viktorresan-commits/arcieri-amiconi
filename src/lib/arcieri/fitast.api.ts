@@ -40,17 +40,24 @@ async function fillWd(page: FitastPage, cookie: string, signal: AbortSignal, hea
   let jar = cookie;
   await fillWdTables(page, async (action, body) => {
     try {
-      const res = await fetch(action, { method: "POST", body, headers: { ...headers, cookie: jar, "content-type": "application/x-www-form-urlencoded", referer: page.url }, signal, redirect: "manual" });
+      const res = await fetch(action, { method: "POST", body, headers: { ...headers, cookie: jar, "content-type": "application/x-www-form-urlencoded", referer: page.url, "x-requested-with": "XMLHttpRequest" }, signal, redirect: "manual" });
       jar = mergeCookies(jar, res);
-      if (!res.ok) return null;
       const buf = new Uint8Array(await res.arrayBuffer());
       const cs = (res.headers.get("content-type") ?? "").match(/charset=([\w-]+)/i)?.[1]?.toLowerCase() ?? page.charset ?? "utf-8";
+      let text: string;
       try {
-        return new TextDecoder(cs === "iso-8859-1" || cs === "latin1" ? "windows-1252" : cs).decode(buf);
+        text = new TextDecoder(cs === "iso-8859-1" || cs === "latin1" ? "windows-1252" : cs).decode(buf);
       } catch {
-        return new TextDecoder("utf-8").decode(buf);
+        text = new TextDecoder("utf-8").decode(buf);
       }
-    } catch {
+      // per capire cosa risponde il portale: comando, esito, tipo, lunghezza e primo elemento (non il contenuto)
+      const cmd = /(LIGNESTABLE|PARCOURTAP)=/.exec(body)?.[1] ?? "?";
+      const tag = /<([A-Za-z][\w-]*)/.exec(text)?.[1] ?? "-";
+      (page.diag ??= []).push(`AJAX ${cmd} ${action.split("/").pop()?.slice(0, 40)} → ${res.status} ${(res.headers.get("content-type") ?? "").split(";")[0]} ${buf.length}b <${tag}> LIGNE ${(text.match(/<ligne[\s>/]/gi) ?? []).length}`);
+      if (!res.ok) return null;
+      return text;
+    } catch (e) {
+      (page.diag ??= []).push(`AJAX errore ${e instanceof Error ? e.name : "?"}`);
       return null;
     }
   });
@@ -66,7 +73,12 @@ async function fetchPage(req: Req, depth = 0): Promise<FitastPage & { cookie: st
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 20_000);
   try {
-    const headers: Record<string, string> = { "user-agent": "Mozilla/5.0 (Arcieri Amiconi; lettura calendario)", accept: "text/html,application/pdf,*/*" };
+    // un browser vero (il portale WEBDEV prepara le tabelle solo per i browser che conosce), con il nome dell'app in fondo
+    const headers: Record<string, string> = {
+      "user-agent": "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36 ArcieriAmiconi/1.0",
+      accept: "text/html,application/xhtml+xml,application/pdf,*/*;q=0.8",
+      "accept-language": "it-IT,it;q=0.9",
+    };
     if (req.cookie) headers.cookie = req.cookie;
     if (req.referer) headers.referer = req.referer;
     if (req.body != null) headers["content-type"] = "application/x-www-form-urlencoded";

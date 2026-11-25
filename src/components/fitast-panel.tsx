@@ -194,7 +194,7 @@ const isoDay = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padSt
 const fmtDay = (d: string | null) => (d ? `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}` : "");
 const rowsOf = (p: FitastPage) => p.tables.reduce((n, t) => n + Math.max(0, t.rows.length - 1), 0);
 /** una gara letta durante la ricerca: cosa si è aperto e cosa si è trovato */
-type Step = { id: string; date: string | null; title: string; pages: number; rows: number; found: number; note: string; team: string; combos: number; seen?: string };
+type Step = { id: string; date: string | null; title: string; pages: number; rows: number; found: number; note: string; team: string; combos: number; seen?: string; diag?: string[] };
 
 const reqKey = (r: Req) => `${r.url}|${r.post ? JSON.stringify(r.post.fields) : ""}|${r.label ?? ""}`;
 
@@ -227,6 +227,7 @@ export function FitastPanel({ comps, myName, userId, startCode, onSaved, onClose
   const [steps, setSteps] = useState<Step[]>([]);
   const [teamSaved, setTeamSaved] = useState(0);
   const [skipped, setSkipped] = useState(0);
+  const [champ, setChamp] = useState("");
   const [extra, setExtra] = useState<{ text: string; req: Req; squadre: boolean }[]>([]);
   const stop = useRef(false);
   const cookie = useRef("");
@@ -304,6 +305,7 @@ export function FitastPanel({ comps, myName, userId, startCode, onSaved, onClose
     setSteps([]);
     setTeamSaved(0);
     setSkipped(0);
+    setChamp("");
     setExtra([]);
     const todayIso = isoDay(new Date());
     const from = isoDay(new Date(Date.now() - WINDOW_DAYS * 86_400_000));
@@ -454,6 +456,8 @@ export function FitastPanel({ comps, myName, userId, startCode, onSaved, onClose
       let n = take(opened.p, opened.r, currentTexts(opened.p));
       step.rows += rowsOf(opened.p);
       step.seen = seenOf(opened.p);
+      // classifica senza righe: come è fatta la pagina e cosa ha risposto il portale, per capire il perché
+      if (!rowsOf(opened.p)) step.diag = opened.p.diag;
       // CLASSIFICA a volte risponde con il PDF
       for (const l of opened.p.links.filter((x) => sameSite(x.href) && /\.pdf($|\?)/i.test(x.href)).slice(0, 2)) {
         if (n) break;
@@ -765,6 +769,38 @@ export function FitastPanel({ comps, myName, userId, startCode, onSaved, onClose
       saveDone(done);
       if (skipped) setSkipped(skipped);
     }
+    // il campionato in corso: la classifica GENERALE SQUADRE della stagione di oggi (es. Camp. invernale
+    // 2026/2027), con posizione e punti della compagnia salvati per tutti
+    if (!stop.current && (teamNames.length || tokens.length)) {
+      const gen = (home.form?.buttons ?? []).find((b) => /general/i.test(b.label) && /squadr/i.test(b.label));
+      const now = ss ? ss.options.map((o) => ({ o, range: seasonRange(o.text) ?? seasonRange(o.value) })).find((x) => x.range && x.range.from <= todayIso && x.range.to >= todayIso)?.o ?? ss.options.find((o) => o.selected) ?? ss.options[0] : null;
+      if (gen) {
+        let base: FitastPage | null = home;
+        const choose: Record<string, string> = ss && now ? { [ss.name]: now.value } : {};
+        if (ss && now && ss.press && (ss.options.find((o) => o.selected) ?? ss.options[0]).value !== now.value) base = await get(pressReq(home, ss.press, choose, now.text));
+        const champName = now ? short(now.text) : "Campionato";
+        const r0 = base ? pressReq(base, (base.form?.buttons ?? []).find((b) => b.label === gen.label) ?? gen, choose, `Generale squadre · ${champName}`) : null;
+        const p0 = await get(r0);
+        const rows: { team: string; place: number | null; score: number | null; teams: number; category: string }[] = [];
+        if (p0 && r0) {
+          for (const t of teamRowsOf(p0, teamNames, tokens)) rows.push({ ...t, category: currentTexts(p0).join(" · ") });
+          for (const c of orderCombos(filterCombos(p0, r0), [], [...confirmed, ...hints], []).slice(0, 4)) {
+            if (stop.current) break;
+            const p = await get(c.req);
+            if (p) for (const t of teamRowsOf(p, teamNames, tokens)) if (!rows.some((x) => x.team === t.team && x.category === c.texts.join(" · "))) rows.push({ ...t, category: c.texts.join(" · ") });
+          }
+        }
+        if (rows.length) {
+          const code = (now?.value || champName).replace(/[^0-9A-Za-z_]/g, "").slice(0, 16);
+          await saveCompanyResults({ data: { fitastName: teamNames[0] ?? "", results: rows.map((x) => ({ fitastId: `camp-${code}`, competition: `${champName} · classifica generale`, day: todayIso, team: x.team, category: x.category, place: x.place, score: x.score, teams: x.teams })) } })
+            .then(() => {
+              const best = [...rows].sort((a, b) => (a.place ?? 999) - (b.place ?? 999))[0];
+              setChamp(`${champName}: ${best.team} ${best.place ? `${best.place}ª${best.teams ? ` su ${best.teams}` : ""}` : "in classifica"}${best.score != null ? ` · ${best.score.toLocaleString("it-IT")} punti` : ""}`);
+            })
+            .catch(() => undefined);
+        } else if (p0) setChamp(`${champName}: classifica generale squadre aperta, compagnia non trovata${rowsOf(p0) ? "" : " (nessuna riga letta)"}.`);
+      }
+    }
     setTeamSaved(savedN);
     if (pages >= MAX_PAGES) setErr(`Fermato dopo ${MAX_PAGES} pagine lette: riprova con il cognome o apri la gara qui sotto.`);
     setScan(null);
@@ -791,6 +827,7 @@ export function FitastPanel({ comps, myName, userId, startCode, onSaved, onClose
       ) : null}
       {found ? <Matches found={found} q={q} comps={comps} userId={userId} onSaved={onSaved} onOpen={(r) => go(r)} searching={Boolean(scan)} /> : null}
       {teamSaved > 0 && !scan ? <p className="rounded-2xl bg-[#e0b15a]/10 p-3 text-sm">Risultato della compagnia salvato per tutti in {teamSaved} {teamSaved === 1 ? "gara" : "gare"}: lo vedete in Gare e nella bacheca della Compagnia.</p> : null}
+      {champ && !scan ? <p className="rounded-2xl bg-[#e0b15a]/10 p-3 text-sm">Campionato della compagnia · {champ}</p> : null}
       {steps.length ? <Steps steps={steps} searching={Boolean(scan)} skipped={skipped} /> : null}
       {extra.length ? (
         <div className="grid gap-1.5">
@@ -886,6 +923,12 @@ function PageView({ page, label, q, rowField, onOpen, onGo }: { page: FitastPage
       <Commands key={page.url + page.fetchedAt} page={page} onGo={onGo} />
       <GareList page={page} rowField={rowField} onOpen={onOpen} onGo={onGo} />
       {page.tables.slice(0, 8).map((t, i) => <TableView key={i} t={t} q={q} onOpen={onOpen} onPress={(code) => { const p = JSON.parse(code) as { code: string; set: Record<string, string> }; const r = pressReq(page, p, {}, label ?? ""); if (r) onGo(r); }} />)}
+      {!page.tables.length && page.diag?.length ? (
+        <details className="rounded-2xl bg-white/[0.03] p-3 text-xs text-muted">
+          <summary className="cursor-pointer">Dettagli tecnici (nessuna tabella letta)</summary>
+          <p className="mt-1 break-all font-mono text-[0.62rem] leading-snug">{page.diag.join(" | ")}</p>
+        </details>
+      ) : null}
       {!page.tables.length && page.lines.length && !findGare(page).length ? (
         <div className="grid max-h-80 gap-1 overflow-y-auto rounded-2xl bg-white/[0.03] p-3 text-sm">
           {page.lines.slice(0, 300).map((l, i) => <p key={i} className={cx(hits(l, q) && "rounded bg-[#e0b15a]/25 px-1")}>{l}</p>)}
@@ -984,6 +1027,8 @@ function TableView({ t, q, onOpen, onPress }: { t: FitastTable; q: string; onOpe
 function Steps({ steps: raw, searching, skipped = 0 }: { steps: Step[]; searching: boolean; skipped?: number }) {
   const steps = searching ? raw : [...raw].sort((a, b) => Number(Boolean(b.found)) - Number(Boolean(a.found)) || (b.date ?? "").localeCompare(a.date ?? ""));
   const dates = steps.map((s) => s.date).filter((d): d is string => Boolean(d)).sort();
+  // i dettagli tecnici di una sola gara bastano (le altre pagine sono fatte allo stesso modo)
+  const firstDiag = steps.findIndex((s) => s.diag?.length && !s.found);
   const span = dates.length ? ` dal ${fmtDay(dates[0])} al ${fmtDay(dates[dates.length - 1])}` : "";
   const noRows = !searching && steps.length > 0 && steps.every((s) => !s.rows && !s.found);
   return (
@@ -1003,6 +1048,7 @@ function Steps({ steps: raw, searching, skipped = 0 }: { steps: Step[]; searchin
               {" — "}
               {s.found ? `trovato (${s.found} ${s.found === 1 ? "riga" : "righe"})` : s.note || (searching && i === steps.length - 1 ? "in lettura…" : `non in classifica · ${s.rows} righe in ${s.pages} pagine · ${s.combos} categorie provate`)}
               {s.seen && !s.found ? <span className="block opacity-70">{s.seen}</span> : null}
+              {s.diag?.length && !s.found && i === firstDiag ? <span className="mt-0.5 block break-all font-mono text-[0.6rem] leading-snug opacity-60">{s.diag.slice(0, 8).join(" | ")}</span> : null}
               {s.team ? <span className="block text-[#bfe3c8]">Compagnia · {s.team}</span> : null}
             </span>
           </li>

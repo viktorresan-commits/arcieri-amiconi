@@ -196,7 +196,8 @@ export const saveCompanyResults = createServerFn({ method: "POST" })
           const place = optNum(r.place, 999);
           const teams = optNum(r.teams, 999);
           return {
-            fitastId: clip(r.fitastId, 12).replace(/\D/g, ""),
+            // numero della gara, oppure camp-26_I per la classifica generale del campionato
+            fitastId: clip(r.fitastId, 24).replace(/[^0-9A-Za-z_-]/g, ""),
             competition: clip(r.competition, 160),
             day: /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : null,
             team: clip(r.team, 120),
@@ -219,9 +220,11 @@ export const saveCompanyResults = createServerFn({ method: "POST" })
     for (const r of data.results) {
       // la gara del calendario: quella collegata al portale (fitast:ID) o, se è una sola, quella dello stesso giorno
       let compId: number | null = null;
-      const linked = await sql<{ id: number }>`select id from competitions where notes ~ ${`^fitast:${r.fitastId}(\\D|$)`} limit 1`;
+      // la classifica generale del campionato (camp-…) non è una gara del calendario
+      const isGara = /^\d+$/.test(r.fitastId);
+      const linked = isGara ? await sql<{ id: number }>`select id from competitions where notes ~ ${`^fitast:${r.fitastId}(\\D|$)`} limit 1` : [];
       if (linked[0]) compId = asNum(linked[0].id);
-      else if (r.day) {
+      else if (r.day && isGara) {
         const same = await sql<{ id: number }>`select id from competitions where starts_on = ${r.day}::date limit 2`;
         if (same.length === 1) compId = asNum(same[0].id);
       }
