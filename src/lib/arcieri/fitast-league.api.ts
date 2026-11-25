@@ -165,19 +165,30 @@ const NOT_CLUB_SITE = /duckduckgo|wikipedia|wikimedia|fitarco|fitast|comune\.|re
  */
 async function searchClubPages(name: string, city: string, until: number) {
   const words = distinctiveWords(name);
-  if (!words.length || Date.now() > until - 6000) return { site: "", facebook: "" };
+  if (!words.length) return { site: "", facebook: "", searched: false, reason: "nome troppo comune per cercarlo in rete" };
+  if (Date.now() > until - 6000) return { site: "", facebook: "", searched: false, reason: "tempo finito, si riprova" };
   const q = `${titleName(name)} ${city} tiro con l'arco`.replace(/\s+/g, " ").trim();
-  const r = await grab(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(q)}`, 6000, 1_500_000);
-  if (!r) return { site: "", facebook: "" };
-  const html = new TextDecoder().decode(r.body);
   const links: string[] = [];
-  for (const m of html.matchAll(/<a[^>]+class="[^"]*result__a[^"]*"[^>]+href="([^"]+)"/g)) {
-    let href = m[1].replace(/&amp;/g, "&");
-    const uddg = /[?&]uddg=([^&]+)/.exec(href)?.[1];
-    if (uddg) href = decodeURIComponent(uddg);
-    if (/^\/\//.test(href)) href = `https:${href}`;
-    if (/^https?:\/\//i.test(href)) links.push(href);
+  const r = await grab(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(q)}`, 6000, 1_500_000);
+  if (r) {
+    const html = new TextDecoder().decode(r.body);
+    for (const m of html.matchAll(/<a[^>]+class="[^"]*result__a[^"]*"[^>]+href="([^"]+)"/g)) {
+      let href = m[1].replace(/&amp;/g, "&");
+      const uddg = /[?&]uddg=([^&]+)/.exec(href)?.[1];
+      if (uddg) href = decodeURIComponent(uddg);
+      if (/^\/\//.test(href)) href = `https:${href}`;
+      if (/^https?:\/\//i.test(href)) links.push(href);
+    }
   }
+  // se la prima ricerca non dà nulla (o non risponde), la seconda
+  if (!links.length && Date.now() < until - 6000) {
+    const b = await grab(`https://www.bing.com/search?setlang=it&cc=IT&q=${encodeURIComponent(q)}`, 6000, 2_000_000);
+    if (b) {
+      const html = new TextDecoder().decode(b.body);
+      for (const m of html.matchAll(/<li class="b_algo"[\s\S]*?<h2[^>]*>\s*<a[^>]+href="(https?:\/\/[^"]+)"/g)) links.push(m[1].replace(/&amp;/g, "&"));
+    }
+  }
+  if (!links.length) return { site: "", facebook: "", searched: false, reason: "ricerca in rete senza risposta" };
   const fits = (u: string) => {
     const low = decodeURIComponent(u).toLowerCase().replace(/[^a-z0-9/.]+/g, "");
     return words.some((w) => low.includes(w));
@@ -195,7 +206,7 @@ async function searchClubPages(name: string, city: string, until: number) {
     const p = parts(u);
     return Boolean(p) && !/facebook\.com|fb\.com/i.test(u) && !NOT_CLUB_SITE.test(p!.host) && fits(p!.host + p!.path);
   });
-  return { site: site ? parts(site)?.origin ?? "" : "", facebook };
+  return { site: site ? parts(site)?.origin ?? "" : "", facebook, searched: true, reason: "" };
 }
 
 /** l'immagine del profilo di una pagina Facebook pubblica (lo stemma, per quasi tutte le compagnie) */
@@ -207,32 +218,36 @@ function facebookPicture(url: string) {
 }
 
 /** cerca il logo: immagine del portale, pagina della compagnia sul portale, sito, dominio dell'e-mail, poi in rete */
-async function logoFor(c: { name: string; city: string; website: string; email: string; facebook: string; logo_hint: string }, until: number) {
+type LogoFound = NonNullable<Awaited<ReturnType<typeof logoImage>>> & { via: string; website?: string; facebook?: string };
+
+async function logoFor(c: { name: string; city: string; website: string; email: string; facebook: string; logo_hint: string }, until: number): Promise<{ img: LogoFound | null; note: string }> {
   const hint = hintOf(c.logo_hint);
   if (hint.logo) {
     const img = await logoImage(hint.logo);
-    if (img) return img;
+    if (img) return { img: { ...img, via: "portale FITAST" }, note: "" };
   }
-  const fromPages = await logoFromPages([hint.detail ?? "", c.website, siteFromEmail(c.email)], until);
-  if (fromPages) return fromPages;
+  const own = [hint.detail ?? "", c.website, siteFromEmail(c.email)];
+  const fromPages = await logoFromPages(own, until);
+  if (fromPages) return { img: { ...fromPages, via: c.website ? "sito della compagnia" : "pagina della compagnia" }, note: "" };
   // la pagina Facebook già scritta nella compagnia
   const fbKnown = c.facebook ? facebookPicture(/^https?:/i.test(c.facebook) ? c.facebook : `https://www.facebook.com/${c.facebook.replace(/^@/, "")}`) : "";
   if (fbKnown && Date.now() < until) {
     const img = await logoImage(fbKnown);
-    if (img) return img;
+    if (img) return { img: { ...img, via: "pagina Facebook" }, note: "" };
   }
   // ricerca in rete: il sito della compagnia o la sua pagina Facebook
   const found = await searchClubPages(c.name, c.city, until);
   if (found.site) {
     const img = await logoFromPages([found.site], until);
-    if (img) return { ...img, website: found.site };
+    if (img) return { img: { ...img, via: `sito ${new URL(found.site).hostname}`, website: found.site }, note: "" };
   }
   if (found.facebook && Date.now() < until) {
     const pic = facebookPicture(found.facebook);
     const img = pic ? await logoImage(pic) : null;
-    if (img) return { ...img, facebook: found.facebook };
+    if (img) return { img: { ...img, via: "pagina Facebook", facebook: found.facebook }, note: "" };
   }
-  return null;
+  const note = !found.searched ? found.reason : found.site || found.facebook ? "sito trovato ma senza un logo leggibile" : "nessun sito o pagina con il suo nome";
+  return { img: null, note };
 }
 
 async function logoFromPages(list: string[], until: number): Promise<Awaited<ReturnType<typeof logoImage>>> {
@@ -289,12 +304,18 @@ async function refreshLogoHints(sql: Sql) {
  */
 export const findCompanyLogos = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .handler(async ({ context }) => {
+  .validator((input: unknown) => ({ force: Boolean((input as { force?: unknown } | null)?.force) }))
+  .handler(async ({ context, data }) => {
     const sql = await db();
-    await ensureMember(sql, context.userId);
+    const me = await ensureMember(sql, context.userId);
     const t0 = Date.now();
+    // il fondatore (staff) può rifare subito la ricerca di tutti gli stemmi mancanti
+    if (data.force && staffLevel(me)) {
+      await sql`delete from fitast_sync where key = 'compagnie-loghi'`;
+      await sql`update companies set logo_checked_at = null where source = 'fitast' and (logo_url is null or logo_url = '' or logo_url like 'data:image/svg+xml%')`;
+    }
     await refreshLogoHints(sql);
-    const until = t0 + 18_000;
+    const until = t0 + 20_000;
     // nuova ricerca (anche in rete): le compagnie già guardate senza trovare nulla si riguardano una volta
     const v2 = await sql<{ key: string }>`select key from fitast_sync where key = 'loghi-rete-v2' limit 1`;
     if (!v2[0]) {
@@ -309,15 +330,22 @@ export const findCompanyLogos = createServerFn({ method: "POST" })
       limit 6`;
     let checked = 0;
     let found = 0;
+    const results: { name: string; found: boolean; via: string }[] = [];
     for (const c of todo) {
       if (Date.now() > until - 4000) break;
       await sql`update companies set logo_checked_at = now() where id = ${asNum(c.id)}`;
       checked++;
-      const img = await logoFor({ ...c, name: c.fitast_name || c.name }, until);
-      if (!img) continue;
+      const { img, note } = await logoFor({ ...c, name: c.fitast_name || c.name }, until);
+      if (!img) {
+        // finito il tempo prima di cercare in rete: si riprova al giro dopo
+        if (/tempo finito/.test(note)) await sql`update companies set logo_checked_at = null where id = ${asNum(c.id)}`;
+        results.push({ name: c.name, found: false, via: note });
+        continue;
+      }
+      results.push({ name: c.name, found: true, via: img.via });
       // il sito o la pagina trovati in rete restano nei contatti della compagnia (se non c'erano)
-      const site = "website" in img && typeof img.website === "string" ? clip(img.website, 160) : "";
-      const fb = "facebook" in img && typeof img.facebook === "string" ? clip(img.facebook, 160) : "";
+      const site = img.website ? clip(img.website, 160) : "";
+      const fb = img.facebook ? clip(img.facebook, 160) : "";
       if (site || fb) await sql`update companies set website = case when website = '' then ${site} else website end, facebook = case when facebook = '' then ${fb} else facebook end where id = ${asNum(c.id)}`;
       await sql`
         insert into company_logos (company_id, mime, data, source, found_at)
@@ -330,7 +358,9 @@ export const findCompanyLogos = createServerFn({ method: "POST" })
       select count(*)::int as n from companies
       where source = 'fitast' and (logo_url is null or logo_url = '' or logo_url like 'data:image/svg+xml%')
         and (logo_checked_at is null or logo_checked_at < now() - interval '30 days')`;
-    return { checked, found, remaining: asNum(left[0]?.n) };
+    const total = await sql<{ n: number; real: number }>`
+      select count(*)::int as n, count(*) filter (where logo_url like '/api/logo/%')::int as real from companies where source = 'fitast'`;
+    return { checked, found, remaining: asNum(left[0]?.n), results, total: asNum(total[0]?.n), withLogo: asNum(total[0]?.real) };
   });
 
 export type StandingRow = RankRow;

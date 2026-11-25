@@ -241,7 +241,7 @@ function useLogoSearch(onFound?: () => void) {
     }
     void (async () => {
       for (let round = 0; round < 12 && !off; round += 1) {
-        const r = await findCompanyLogos().catch(() => null);
+        const r = await findCompanyLogos({ data: {} }).catch(() => null);
         if (!r || off) return;
         if (r.found > 0) cb.current?.();
         if (!r.remaining || !r.checked) return;
@@ -291,6 +291,28 @@ export function CompanyLeague({ board, onJoin, busy, onSynced, part, fitastBoard
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // il fondatore scarica subito i loghi di tutte le compagnie senza stemma vero, e vede com'è andata
+  const [logos, setLogos] = useState<{ busy: boolean; text: string; list: { name: string; found: boolean; via: string }[] }>({ busy: false, text: "", list: [] });
+  async function downloadLogos() {
+    setLogos({ busy: true, text: "Cerco i loghi…", list: [] });
+    const list: { name: string; found: boolean; via: string }[] = [];
+    let found = 0;
+    let summary = "";
+    try {
+      for (let round = 0; round < 25; round += 1) {
+        const r = await findCompanyLogos({ data: { force: round === 0 } });
+        found += r.found;
+        list.push(...r.results);
+        summary = `${r.withLogo} compagnie su ${r.total} hanno il logo vero.`;
+        setLogos({ busy: true, text: `Controllate ${list.length}, trovati ${found} loghi… ${summary}`, list: [...list] });
+        if (r.found > 0) onSynced?.();
+        if (!r.remaining || !r.checked) break;
+      }
+      setLogos({ busy: false, text: `Fatto: ${found} ${found === 1 ? "logo nuovo" : "loghi nuovi"}. ${summary}`, list });
+    } catch (e) {
+      setLogos({ busy: false, text: e instanceof Error ? e.message : "Ricerca non riuscita", list });
+    }
+  }
   async function forceSync() {
     setSync({ busy: true, text: "" });
     try {
@@ -364,7 +386,22 @@ export function CompanyLeague({ board, onJoin, busy, onSynced, part, fitastBoard
         {board.isAdmin ? (
           <div className="flex flex-wrap items-center gap-2">
             <button type="button" disabled={sync.busy} onClick={() => void forceSync()} className="aa-chip">{sync.busy ? "Leggo l'elenco FITAST…" : "Aggiorna l'elenco dal portale FITAST"}</button>
+            <button type="button" disabled={logos.busy} onClick={() => void downloadLogos()} className="aa-chip">{logos.busy ? "Scarico i loghi…" : "Scarica e aggiorna i loghi"}</button>
             {sync.text ? <p className="w-full break-words text-xs text-muted">{sync.text}</p> : null}
+            {logos.text ? <p className="w-full break-words text-xs text-muted" aria-live="polite">{logos.text}</p> : null}
+            {logos.list.length ? (
+              <details className="w-full rounded-xl bg-white/[0.03] px-3 py-2 text-xs">
+                <summary className="cursor-pointer font-semibold">Dettaglio per compagnia ({logos.list.filter((x) => x.found).length} trovati, {logos.list.filter((x) => !x.found).length} no)</summary>
+                <ul className="mt-2 grid gap-1">
+                  {logos.list.map((x, i) => (
+                    <li key={`${x.name}-${i}`} className="flex gap-2">
+                      <span className={x.found ? "text-primary" : "text-muted"}>{x.found ? "✓" : "–"}</span>
+                      <span className="min-w-0 flex-1"><b className="font-semibold">{x.name}</b> · {x.via}</span>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            ) : null}
           </div>
         ) : null}
         {(() => {
