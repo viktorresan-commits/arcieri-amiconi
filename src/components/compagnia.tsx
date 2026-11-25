@@ -218,14 +218,28 @@ function DefaultCrest({ color, letter }: { color: string; letter: string }) {
 
 type Metric = "fitast" | "points" | "arrows" | "members" | "gare" | "avg";
 
-export function CompanyLeague({ board, onJoin, busy, onSynced }: { board: Board; onJoin: (id: number) => void; busy: number | null; /** arrivate compagnie nuove dal portale FITAST */ onSynced?: () => void }) {
-  const hasFitast = board.companies.some((co) => co.fitastPoints != null);
-  const [metric, setMetric] = useState<Metric>(hasFitast ? "fitast" : "points");
+export function CompanyLeague({ board, onJoin, busy, onSynced, part, fitastBoard, fitastReady = false }: {
+  board: Board;
+  onJoin: (id: number) => void;
+  busy: number | null;
+  /** arrivate compagnie nuove dal portale FITAST */
+  onSynced?: () => void;
+  /** solo la classifica o solo l'elenco delle compagnie (la scheda Compagnie mette in mezzo il campionato) */
+  part?: "ranking" | "directory";
+  /** la classifica generale compagnie letta dal portale, mostrata alla voce FITAST */
+  fitastBoard?: ReactNode;
+  /** ci sono classifiche FITAST salvate: si parte da quella */
+  fitastReady?: boolean;
+}) {
+  const hasFitast = fitastReady || board.companies.some((co) => co.fitastPoints != null);
+  // nella scheda Compagnie si parte dal campionato FITAST
+  const [metric, setMetric] = useState<Metric>(hasFitast || fitastBoard ? "fitast" : "points");
   const [open, setOpen] = useState<number | null>(null);
   const [find, setFind] = useState("");
   const [sync, setSync] = useState<{ busy: boolean; text: string }>({ busy: false, text: "" });
   // l'elenco delle compagnie FITAST si prepara da solo (una volta alla settimana)
   useEffect(() => {
+    if (part === "ranking") return;
     let off = false;
     syncFitastCompanies({ data: {} })
       .then((r) => {
@@ -263,8 +277,7 @@ export function CompanyLeague({ board, onJoin, busy, onSynced }: { board: Board;
       me: co.id === board.mine,
     };
   });
-  return (
-    <div className="grid gap-4">
+  const ranking = (
       <Card className="grid grid-cols-[minmax(0,1fr)] gap-3">
         <div>
           <h2 className="font-display text-2xl">Classifica compagnie</h2>
@@ -284,8 +297,10 @@ export function CompanyLeague({ board, onJoin, busy, onSynced }: { board: Board;
           ]}
         />
         </div>
-        <RankBars rows={rows} unit={unit[metric]} limit={12} empty={metric === "fitast" ? "Ancora nessun punto FITAST: si leggono dalla scheda Compagnie FITAST (Aggiorna dal portale)." : "Ancora nessun dato per questa classifica."} />
+        {metric === "fitast" && fitastBoard ? fitastBoard : <RankBars rows={rows} unit={unit[metric]} limit={12} empty={metric === "fitast" ? "Ancora nessun punto FITAST: tocca Aggiorna dal portale." : "Ancora nessun dato per questa classifica."} />}
       </Card>
+  );
+  const directory = (
       <Card className="grid grid-cols-[minmax(0,1fr)] gap-2">
         <h2 className="font-display text-2xl">Tutte le compagnie</h2>
         {board.isAdmin ? <p className="text-xs text-muted">Sei il fondatore: tocca una compagnia per vedere contatti e iscritti.</p> : <p className="text-xs text-muted">Tocca una compagnia per vedere i contatti.</p>}
@@ -355,6 +370,13 @@ export function CompanyLeague({ board, onJoin, busy, onSynced }: { board: Board;
           );
         })}
       </Card>
+  );
+  if (part === "ranking") return ranking;
+  if (part === "directory") return directory;
+  return (
+    <div className="grid gap-4">
+      {ranking}
+      {directory}
     </div>
   );
 }

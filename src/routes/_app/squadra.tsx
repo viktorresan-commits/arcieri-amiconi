@@ -6,7 +6,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { listCompanies } from "@/lib/arcieri/compagnie.api";
 import { CompanyForm, CompanyHero, CompanyLeague, joinAndReload } from "@/components/compagnia";
 import { CompanyTrophies } from "@/components/palmares";
-import { FitastLeague } from "@/components/fitast-league";
+import { FitastArchersCard, FitastCompanyBoard, FitastGare, FitastHeader, useFitastLeague } from "@/components/fitast-league";
 import { RankBars } from "@/components/rank-bars";
 import { Heat } from "@/components/shot-lab";
 import { useLocalState } from "@/lib/arcieri/local-store";
@@ -37,19 +37,17 @@ const MEMBER_SKY: Sky = { tod: "pomeriggio", weather: "sereno", clouds: 0.25, se
 
 export const Route = createFileRoute("/_app/squadra")({ component: Page });
 
-type Section = "arcieri" | "classifiche" | "bersaglio" | "bacheca" | "compagnie" | "fitast" | "sfida";
+type Section = "arcieri" | "bersaglio" | "bacheca" | "compagnie" | "sfida";
 /** le schede della Compagnia, una cosa per scheda: chi c'è, chi va meglio, dove tiriamo, cosa abbiamo vinto */
 const SECTIONS: { id: Section; label: string; icon: IconName; lede: string }[] = [
-  { id: "arcieri", label: "Arcieri", icon: "team", lede: "Chi tira con noi: tocca un nome per vedere la scheda, i podi e i premi." },
-  { id: "classifiche", label: "Podi", icon: "podium", lede: "Podi per divisione, chi tira e si allena di più, e il confronto tra arcieri." },
+  { id: "arcieri", label: "Arcieri", icon: "team", lede: "Chi tira con noi e i podi per divisione: tocca un nome per la scheda, confronta fino a tre arcieri." },
   { id: "bersaglio", label: "Bersaglio", icon: "target", lede: "Dove arrivano le frecce della compagnia, sul paglione e sulle sagome 3D." },
   { id: "bacheca", label: "Trofei", icon: "trophy", lede: "Il palmarès della compagnia, i premi e la spesa comune." },
-  { id: "compagnie", label: "Compagnie", icon: "flag", lede: "Le altre compagnie in classifica: puoi entrare in una o fondarne una nuova." },
-  { id: "fitast", label: "FITAST", icon: "medal", lede: "Compagnie FITAST: classifiche del campionato lette dal portale, compagnie e arcieri, gara per gara." },
+  { id: "compagnie", label: "Compagnie", icon: "flag", lede: "Classifica delle compagnie e campionato FITAST letto dal portale: arcieri, gare, squadre. Qui entri in un'altra compagnia o ne fondi una." },
   { id: "sfida", label: "Sfida", icon: "duel", lede: "Sfida gli altri arcieri con il tuo avatar." },
 ];
 /** le schede salvate dalla versione di prima */
-const OLD_SECTION: Record<string, Section> = { compagnia: "arcieri", statistiche: "classifiche", classifica: "compagnie" };
+const OLD_SECTION: Record<string, Section> = { compagnia: "arcieri", statistiche: "arcieri", classifiche: "arcieri", classifica: "compagnie", fitast: "compagnie" };
 
 type Archer = Awaited<ReturnType<typeof squadBoard>>["people"][number] & { name: string; color: string; mark: string; skill: number };
 
@@ -97,6 +95,9 @@ function Page() {
   const [board, setBoard] = useEntryState<"padiglione" | "sagoma">("squadra-board", "padiglione");
   const [look, setLook] = useEntryState<"tre" | "calore" | "mappa">("squadra-look", "tre");
   const [face, setFace] = useState("io");
+  // Arcieri: una divisione per podio, elenco e classifiche ("" = tutti)
+  const [division, setDivision] = useState<"" | (typeof DIVISIONS)[number]>("");
+  const [stat, setStat] = useState<"frecce" | "allenamenti" | "distanze" | "gare">("frecce");
   const [picked, setPicked] = useState<string[]>([]);
   const [pick, setPick] = useState<string[]>([]);
   const people = useMemo(() => {
@@ -117,6 +118,7 @@ function Page() {
 
   const podium = (division: "" | "Madonne" | "Messeri" | "Pueri" | "Juniores") =>
     ranked.filter((row) => row.skill >= 0 && (division === "" || row.division === division)).slice(0, 3);
+  const inDivision = division ? people.filter((row) => row.division === division) : people;
 
   function toggle(userId: string) {
     setPick((current) => {
@@ -183,7 +185,7 @@ function Page() {
         />
       ) : null}
       <nav aria-label="Sezioni della compagnia" className="aa-club-tabs sticky top-[calc(env(safe-area-inset-top)+3.6rem)] z-20 -mx-1 px-1">
-        <div className="grid grid-cols-7 gap-1 rounded-2xl p-1">
+        <div className="grid grid-cols-5 gap-1 rounded-2xl p-1">
           {SECTIONS.map((x) => (
             <button key={x.id} type="button" aria-pressed={section === x.id} onClick={() => setSection(x.id)} className="aa-club-tab grid min-h-14 place-items-center gap-0.5 rounded-xl px-0 py-1 text-[0.62rem] font-semibold leading-tight tracking-tight">
               <Glyph name={x.icon} size={18} />
@@ -196,13 +198,22 @@ function Page() {
 
       {section === "arcieri" ? (
         <>
+          {/* una divisione alla volta: podio, elenco e classifiche seguono la scelta */}
+          <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none]">
+            {(["", ...DIVISIONS.filter((d) => people.some((row) => row.division === d))] as ("" | (typeof DIVISIONS)[number])[]).map((d) => (
+              <button key={d || "tutti"} type="button" aria-pressed={division === d} onClick={() => setDivision(d)} className={`aa-chip shrink-0 ${division === d ? "border-[#e0b15a]/60 bg-[#e0b15a]/15 text-[#f1cf8a]" : ""}`}>
+                {d || "Tutti"}
+              </button>
+            ))}
+          </div>
+          <Podium title={division || "Generale"} rows={podium(division)} looks={looks} />
           <div className="grid gap-2">
             <div className="flex items-baseline justify-between px-1">
               <h2 className="font-display text-2xl">Gli arcieri</h2>
-              <span className="text-xs text-muted">{people.length} {people.length === 1 ? "iscritto" : "iscritti"}</span>
+              <span className="text-xs text-muted">{inDivision.length} {inDivision.length === 1 ? "iscritto" : "iscritti"}{division ? ` · ${division}` : ""}</span>
             </div>
             {me.role === "admin" ? <p className="px-1 text-xs text-muted">Tieni premuto su una persona per toglierla dall'app.</p> : null}
-            {people.filter((row) => !removed.includes(row.id)).map((row, i) => {
+            {inDivision.filter((row) => !removed.includes(row.id)).map((row, i) => {
               const card = (
                 <Link to="/arciere/$id" params={{ id: String(row.id) }}>
                   <Card className="aa-menu-row aa-member relative flex items-center gap-3 overflow-hidden p-3" style={{ animationDelay: `${Math.min(i, 10) * 40}ms` }}>
@@ -236,52 +247,20 @@ function Page() {
               );
             })}
           </div>
-        </>
-      ) : null}
 
-      {section === "bacheca" ? (
-        <>
-          {company ? <CompanyTrophies companyId={company.id} companyName={company.name} /> : <Card><p className="text-sm text-muted">Entra in una compagnia (scheda Compagnie) per vedere il suo palmarès.</p></Card>}
-          <GadgetShelf />
-          <ClubSpend />
-        </>
-      ) : null}
-
-      {section === "sfida" ? <AvatarChallenge looks={looks} /> : null}
-
-      {section === "fitast" ? <FitastLeague companies={companies.data?.companies ?? []} /> : null}
-
-      {section === "compagnie" ? (
-        <>
-          {companies.data ? <CompanyLeague board={companies.data} onJoin={(id) => void join(id)} busy={busy} onSynced={() => setNonce((n) => n + 1)} /> : companies.error ? <ErrorNote text={companies.error} /> : <Loading />}
-          {editing === "none" ? (
-            <Card className="grid gap-2">
-              <h2 className="font-display text-2xl">Una nuova compagnia</h2>
-              <p className="text-sm text-muted">Fondala tu: scegli nome, stemma, colore, contatti e social. Gli altri arcieri potranno entrare da questa pagina.</p>
-              <Button onClick={() => setEditing("new")}>Fonda una compagnia</Button>
-            </Card>
-          ) : null}
-        </>
-      ) : null}
-
-      {section === "classifiche" ? (
-        <>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Podium title="Generale" rows={podium("")} looks={looks} />
-            {DIVISIONS.map((name) => <Podium key={name} title={name} rows={podium(name)} looks={looks} />)}
-          </div>
-          <StatCard title="Chi tira di più" hint="Frecce tirate, tra allenamenti e gare." tint="#e07a2f">
-            <RankBars rows={people.map((row) => rankRow(row, row.arrows, { sub: `${row.trainArrows} in allenamento · ${row.garaArrows} in gara` }))} unit="frecce" tint="#e07a2f" empty="Ancora nessuna freccia." />
-          </StatCard>
-          <StatCard title="Chi si allena di più" hint="Allenamenti registrati." tint="#3d8f5f">
-            <RankBars rows={people.map((row) => ({ ...rankRow(row, row.sessions), color: "#3d8f5f" }))} unit="allenamenti" tint="#3d8f5f" empty="Ancora nessun allenamento." />
-          </StatCard>
-          <StatCard title="Distanze migliori" hint="Il tiro più lungo, tra allenamenti e piazzole di gara." tint="#2a6294">
-            <RankBars rows={people.map((row) => ({ ...rankRow(row, row.bestDistance ?? 0), color: "#4b8fd1" }))} unit="m" tint="#4b8fd1" empty="Ancora nessuna distanza segnata." />
-          </StatCard>
-          <StatCard title="Chi partecipa a più gare" hint="Gare con un punteggio segnato." tint="#c9a227">
-            <RankBars rows={people.map((row) => ({ ...rankRow(row, row.gare, { sub: row.compAvg != null ? `media gara ${fmtAvg(row.compAvg)}` : undefined }), color: "#d6a72a" }))} unit="gare" tint="#d6a72a" empty="Ancora nessuna gara segnata." />
-          </StatCard>
+          <Card className="grid grid-cols-[minmax(0,1fr)] gap-3">
+            <div>
+              <h2 className="font-display text-2xl">Classifiche{division ? ` · ${division}` : ""}</h2>
+              <p className="text-sm text-muted">{stat === "frecce" ? "Frecce tirate, tra allenamenti e gare." : stat === "allenamenti" ? "Allenamenti registrati." : stat === "distanze" ? "Il tiro più lungo, tra allenamenti e piazzole di gara." : "Gare con un punteggio segnato."}</p>
+            </div>
+            <div className="-mx-1 overflow-x-auto px-1 [scrollbar-width:none]">
+              <Segmented value={stat} onChange={setStat} options={[{ id: "frecce", label: "Frecce" }, { id: "allenamenti", label: "Allenamenti" }, { id: "distanze", label: "Distanze" }, { id: "gare", label: "Gare" }]} />
+            </div>
+            {stat === "frecce" ? <RankBars rows={inDivision.map((row) => rankRow(row, row.arrows, { sub: `${row.trainArrows} in allenamento · ${row.garaArrows} in gara` }))} unit="frecce" tint="#e07a2f" empty="Ancora nessuna freccia." /> : null}
+            {stat === "allenamenti" ? <RankBars rows={inDivision.map((row) => ({ ...rankRow(row, row.sessions), color: "#3d8f5f" }))} unit="allenamenti" tint="#3d8f5f" empty="Ancora nessun allenamento." /> : null}
+            {stat === "distanze" ? <RankBars rows={inDivision.map((row) => ({ ...rankRow(row, row.bestDistance ?? 0), color: "#4b8fd1" }))} unit="m" tint="#4b8fd1" empty="Ancora nessuna distanza segnata." /> : null}
+            {stat === "gare" ? <RankBars rows={inDivision.map((row) => ({ ...rankRow(row, row.gare, { sub: row.compAvg != null ? `media gara ${fmtAvg(row.compAvg)}` : undefined }), color: "#d6a72a" }))} unit="gare" tint="#d6a72a" empty="Ancora nessuna gara segnata." /> : null}
+          </Card>
           <GroupBestPosture />
           <Card>
             <h2 className="font-display text-2xl">Confronto</h2>
@@ -333,6 +312,30 @@ function Page() {
               </>
             )}
           </Card>
+        </>
+      ) : null}
+
+      {section === "bacheca" ? (
+        <>
+          {company ? <CompanyTrophies companyId={company.id} companyName={company.name} /> : <Card><p className="text-sm text-muted">Entra in una compagnia (scheda Compagnie) per vedere il suo palmarès.</p></Card>}
+          <GadgetShelf />
+          <ClubSpend />
+        </>
+      ) : null}
+
+      {section === "sfida" ? <AvatarChallenge looks={looks} /> : null}
+
+
+      {section === "compagnie" ? (
+        <>
+          {companies.data ? <CompagnieTab board={companies.data} onJoin={(id) => void join(id)} busy={busy} onSynced={() => setNonce((n) => n + 1)} /> : companies.error ? <ErrorNote text={companies.error} /> : <Loading />}
+          {editing === "none" ? (
+            <Card className="grid gap-2">
+              <h2 className="font-display text-2xl">Una nuova compagnia</h2>
+              <p className="text-sm text-muted">Fondala tu: scegli nome, stemma, colore, contatti e social. Gli altri arcieri potranno entrare da questa pagina.</p>
+              <Button onClick={() => setEditing("new")}>Fonda una compagnia</Button>
+            </Card>
+          ) : null}
         </>
       ) : null}
 
@@ -401,14 +404,20 @@ function Page() {
   );
 }
 
-function StatCard({ title, hint, tint, children }: { title: string; hint: string; tint: string; children: ReactNode }) {
+/**
+ * Compagnie: la classifica (prima il campionato FITAST letto dal portale, poi i numeri dell'app),
+ * i primi arcieri del campionato, le sue gare, e l'elenco delle compagnie in cui entrare.
+ */
+function CompagnieTab({ board, onJoin, busy, onSynced }: { board: Awaited<ReturnType<typeof listCompanies>>; onJoin: (id: number) => void; busy: number | null; onSynced: () => void }) {
+  const league = useFitastLeague(board.companies);
   return (
-    <Card className="relative overflow-hidden">
-      <span aria-hidden className="pointer-events-none absolute -right-10 -top-12 h-36 w-36 rounded-full opacity-25 blur-2xl" style={{ background: tint }} />
-      <h2 className="font-display text-2xl">{title}</h2>
-      <p className="mb-3 text-sm text-muted">{hint}</p>
-      {children}
-    </Card>
+    <>
+      <FitastHeader league={league} />
+      <CompanyLeague part="ranking" board={board} onJoin={onJoin} busy={busy} fitastBoard={<FitastCompanyBoard league={league} />} fitastReady={league.genSq.length > 0} />
+      <FitastArchersCard league={league} />
+      <FitastGare league={league} />
+      <CompanyLeague part="directory" board={board} onJoin={onJoin} busy={busy} onSynced={onSynced} />
+    </>
   );
 }
 

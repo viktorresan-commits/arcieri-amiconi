@@ -112,12 +112,8 @@ function SplitBoard({ items, crestOf, team, limit, empty }: { items: Standing[];
   );
 }
 
-/**
- * Compagnie FITAST: le classifiche del campionato in corso lette dal portale e salvate per tutti.
- * Classifica generale compagnie, primi dieci arcieri per categoria (Messeri, Madonne, Juniores, Pueri)
- * e, per ogni gara del campionato, i primi tre arcieri e le squadre.
- */
-export function FitastLeague({ companies }: { companies: Crest[] }) {
+/** classifiche FITAST salvate e il loro aggiornamento dal portale (uno per scheda) */
+export function useFitastLeague(companies: Crest[]) {
   const [nonce, setNonce] = useState(0);
   const { data, error, loading } = useLoad(`fitast-standings-${nonce}`, () => fitastStandings());
   const crestOf = useCrests(companies);
@@ -159,9 +155,9 @@ export function FitastLeague({ companies }: { companies: Crest[] }) {
     [],
   );
 
-  const items = data?.items ?? [];
-  const genSq = items.filter((x) => x.kind === "generale-squadre");
-  const genAr = items.filter((x) => x.kind === "generale-arcieri");
+  const items = useMemo(() => data?.items ?? [], [data]);
+  const genSq = useMemo(() => items.filter((x) => x.kind === "generale-squadre"), [items]);
+  const genAr = useMemo(() => items.filter((x) => x.kind === "generale-arcieri"), [items]);
   const gare = useMemo(() => {
     const byId = new Map<string, { id: string; title: string; day: string; arcieri: Standing[]; squadre: Standing[] }>();
     for (const x of items) {
@@ -174,79 +170,110 @@ export function FitastLeague({ companies }: { companies: Crest[] }) {
     }
     return [...byId.values()].sort((a, b) => b.day.localeCompare(a.day));
   }, [items]);
+  return { data, error, loading, crestOf, sync, running, refresh, stop: () => { stop.current = true; }, genSq, genAr, gare };
+}
+export type FitastLeagueState = ReturnType<typeof useFitastLeague>;
 
-  if (loading && !data) return <Loading />;
+/** in cima: il campionato, quando è stato letto e il pulsante per rileggerlo dal portale */
+export function FitastHeader({ league }: { league: FitastLeagueState }) {
+  const { data, sync, running, error } = league;
+  return (
+    <Card className="grid gap-3 overflow-hidden">
+      <div className="flex items-start gap-3">
+        <Insignia symbol="laurel" metal="gold" enamel="sapphire" shape="rosette" size={58} />
+        <div className="min-w-0 flex-1">
+          <h2 className="font-display text-2xl leading-tight">Campionato FITAST</h2>
+          <p className="text-sm text-muted">{data?.seasonName || "Campionato in corso"} · classifiche lette dal portale FITAST e salvate per tutti.</p>
+          {data?.updatedAt ? <p className="mt-0.5 text-xs text-muted">Aggiornate il {new Date(data.updatedAt).toLocaleString("it-IT", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}</p> : null}
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        {running ? (
+          <button type="button" className="aa-chip" onClick={league.stop}>Ferma</button>
+        ) : (
+          <button type="button" className="aa-chip border-[#e0b15a]/50 text-[#f1cf8a]" onClick={() => void league.refresh()}>Aggiorna dal portale</button>
+        )}
+        {sync ? <span className="text-xs text-muted">{running ? `${sync.step} · ${sync.pages} pagine lette` : sync.error ? sync.error : `Aggiornate ${sync.saved} classifiche in ${sync.pages} pagine.`}</span> : null}
+      </div>
+      {sync?.done && sync.diag?.length && !sync.saved ? (
+        <details className="rounded-2xl bg-white/[0.03] p-3 text-xs text-muted">
+          <summary className="cursor-pointer">Dettagli tecnici (classifiche senza righe)</summary>
+          <p className="mt-1 break-all font-mono text-[0.62rem] leading-snug">{sync.diag.join(" | ")}</p>
+        </details>
+      ) : null}
+      {error ? <ErrorNote text={error} /> : null}
+    </Card>
+  );
+}
+
+/** classifica generale compagnie del campionato (punti per tipologia, con stemmi e medaglie) */
+export function FitastCompanyBoard({ league }: { league: FitastLeagueState }) {
+  return <SplitBoard items={league.genSq} crestOf={league.crestOf} team limit={40} empty={league.running ? "In lettura dal portale…" : "Ancora non letta: tocca Aggiorna dal portale."} />;
+}
+
+/** primi dieci arcieri del campionato per categoria */
+export function FitastArchersCard({ league }: { league: FitastLeagueState }) {
+  return (
+    <Card className="grid gap-3">
+      <div>
+        <h3 className="font-display text-xl">Classifica generale arcieri</h3>
+        <p className="text-xs text-muted">I primi dieci di ogni categoria del campionato: Messeri, Madonne, Juniores e Pueri.</p>
+      </div>
+      <SplitBoard items={league.genAr} crestOf={league.crestOf} limit={10} empty={league.running ? "In lettura dal portale…" : "Ancora non letta: tocca Aggiorna dal portale."} />
+    </Card>
+  );
+}
+
+/** ogni gara del campionato: primi tre arcieri per categoria e squadre */
+export function FitastGare({ league }: { league: FitastLeagueState }) {
+  const { gare, crestOf, running } = league;
+  return (
+    <div className="grid gap-2">
+      <h3 className="px-1 font-display text-xl">Gare del campionato</h3>
+      {!gare.length ? (
+        <Card>
+          <p className="text-sm text-muted">{running ? "In lettura dal portale…" : "Nessuna gara ancora letta. Le gare si riconoscono dopo una ricerca del proprio nome in Gare (Portale FITAST): poi Aggiorna dal portale."}</p>
+        </Card>
+      ) : null}
+      {gare.map((g) => (
+        <Card key={g.id} className="grid gap-3">
+          <div className="flex items-start gap-3">
+            <Insignia symbol="target" metal="gold" enamel="ruby" shape="shield" size={44} />
+            <div className="min-w-0 flex-1">
+              <p className="font-display text-lg leading-tight">{titleName(g.title) || `Gara ${g.id}`}</p>
+              <p className="text-xs text-muted">{[fmtDay(g.day), `gara ${g.id}`].filter(Boolean).join(" · ")}</p>
+            </div>
+          </div>
+          <div className="grid gap-1.5">
+            <p className="text-sm font-semibold">Primi tre arcieri</p>
+            <SplitBoard items={g.arcieri} crestOf={crestOf} limit={3} empty="Classifica arcieri non ancora letta." />
+          </div>
+          <div className="grid gap-1.5">
+            <p className="text-sm font-semibold">Squadre</p>
+            <SplitBoard items={g.squadre} crestOf={crestOf} team limit={3} empty="Classifica squadre non ancora letta." />
+          </div>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+/** tutta la parte FITAST insieme (campionato, compagnie, arcieri, gare) */
+export function FitastLeague({ companies }: { companies: Crest[] }) {
+  const league = useFitastLeague(companies);
+  if (league.loading && !league.data) return <Loading />;
   return (
     <div className="grid gap-4">
-      <Card className="grid gap-3 overflow-hidden">
-        <div className="flex items-start gap-3">
-          <Insignia symbol="laurel" metal="gold" enamel="sapphire" shape="rosette" size={58} />
-          <div className="min-w-0 flex-1">
-            <h2 className="font-display text-2xl leading-tight">Compagnie FITAST</h2>
-            <p className="text-sm text-muted">{data?.seasonName || "Campionato in corso"} · classifiche lette dal portale FITAST e salvate per tutti.</p>
-            {data?.updatedAt ? <p className="mt-0.5 text-xs text-muted">Aggiornate il {new Date(data.updatedAt).toLocaleString("it-IT", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}</p> : null}
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {running ? (
-            <button type="button" className="aa-chip" onClick={() => { stop.current = true; }}>Ferma</button>
-          ) : (
-            <button type="button" className="aa-chip border-[#e0b15a]/50 text-[#f1cf8a]" onClick={() => void refresh()}>Aggiorna dal portale</button>
-          )}
-          {sync ? <span className="text-xs text-muted">{running ? `${sync.step} · ${sync.pages} pagine lette` : sync.error ? sync.error : `Aggiornate ${sync.saved} classifiche in ${sync.pages} pagine.`}</span> : null}
-        </div>
-        {sync?.done && sync.diag?.length && !sync.saved ? (
-          <details className="rounded-2xl bg-white/[0.03] p-3 text-xs text-muted">
-            <summary className="cursor-pointer">Dettagli tecnici (classifiche senza righe)</summary>
-            <p className="mt-1 break-all font-mono text-[0.62rem] leading-snug">{sync.diag.join(" | ")}</p>
-          </details>
-        ) : null}
-        {error ? <ErrorNote text={error} /> : null}
-      </Card>
-
+      <FitastHeader league={league} />
       <Card className="grid gap-3">
         <div>
           <h3 className="font-display text-xl">Classifica generale compagnie</h3>
           <p className="text-xs text-muted">I punti del campionato di ogni compagnia.</p>
         </div>
-        <SplitBoard items={genSq} crestOf={crestOf} team limit={40} empty={running ? "In lettura…" : "Ancora non letta: tocca Aggiorna dal portale."} />
+        <FitastCompanyBoard league={league} />
       </Card>
-
-      <Card className="grid gap-3">
-        <div>
-          <h3 className="font-display text-xl">Classifica generale arcieri</h3>
-          <p className="text-xs text-muted">I primi dieci di ogni categoria: Messeri, Madonne, Juniores e Pueri.</p>
-        </div>
-        <SplitBoard items={genAr} crestOf={crestOf} limit={10} empty={running ? "In lettura…" : "Ancora non letta: tocca Aggiorna dal portale."} />
-      </Card>
-
-      <div className="grid gap-2">
-        <h3 className="px-1 font-display text-xl">Gare del campionato</h3>
-        {!gare.length ? (
-          <Card>
-            <p className="text-sm text-muted">{running ? "In lettura…" : "Nessuna gara ancora letta. Le gare si riconoscono dopo una ricerca del proprio nome in Gare (Portale FITAST): poi Aggiorna dal portale."}</p>
-          </Card>
-        ) : null}
-        {gare.map((g) => (
-          <Card key={g.id} className="grid gap-3">
-            <div className="flex items-start gap-3">
-              <Insignia symbol="target" metal="gold" enamel="ruby" shape="shield" size={44} />
-              <div className="min-w-0 flex-1">
-                <p className="font-display text-lg leading-tight">{titleName(g.title) || `Gara ${g.id}`}</p>
-                <p className="text-xs text-muted">{[fmtDay(g.day), `gara ${g.id}`].filter(Boolean).join(" · ")}</p>
-              </div>
-            </div>
-            <div className="grid gap-1.5">
-              <p className="text-sm font-semibold">Primi tre arcieri</p>
-              <SplitBoard items={g.arcieri} crestOf={crestOf} limit={3} empty="Classifica arcieri non ancora letta." />
-            </div>
-            <div className="grid gap-1.5">
-              <p className="text-sm font-semibold">Squadre</p>
-              <SplitBoard items={g.squadre} crestOf={crestOf} team limit={3} empty="Classifica squadre non ancora letta." />
-            </div>
-          </Card>
-        ))}
-      </div>
+      <FitastArchersCard league={league} />
+      <FitastGare league={league} />
     </div>
   );
 }
