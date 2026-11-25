@@ -17,7 +17,7 @@ import { memberLabel, DIVISIONS } from "@/lib/arcieri/labels";
 import type { AvatarLook } from "@/lib/arcieri/avatar";
 import { SceneBackdrop } from "@/components/scene-2d";
 import type { Sky } from "@/lib/arcieri/sky3d";
-import { Glyph } from "@/components/icons";
+import { Glyph, type IconName } from "@/components/icons";
 import { fmtAvg } from "@/lib/arcieri/scoring";
 import { useLoad } from "@/lib/arcieri/use-load";
 import { ANIMALS, animalByLabel } from "@/lib/arcieri/sagome";
@@ -36,7 +36,18 @@ const MEMBER_SKY: Sky = { tod: "pomeriggio", weather: "sereno", clouds: 0.25, se
 
 export const Route = createFileRoute("/_app/squadra")({ component: Page });
 
-type Section = "compagnia" | "statistiche" | "classifica" | "sfida";
+type Section = "arcieri" | "classifiche" | "bersaglio" | "bacheca" | "compagnie" | "sfida";
+/** le schede della Compagnia, una cosa per scheda: chi c'è, chi va meglio, dove tiriamo, cosa abbiamo vinto */
+const SECTIONS: { id: Section; label: string; icon: IconName; lede: string }[] = [
+  { id: "arcieri", label: "Arcieri", icon: "team", lede: "Chi tira con noi: tocca un nome per vedere la scheda, i podi e i premi." },
+  { id: "classifiche", label: "Podi", icon: "podium", lede: "Podi per divisione, chi tira e si allena di più, e il confronto tra arcieri." },
+  { id: "bersaglio", label: "Bersaglio", icon: "target", lede: "Dove arrivano le frecce della compagnia, sul paglione e sulle sagome 3D." },
+  { id: "bacheca", label: "Trofei", icon: "trophy", lede: "Il palmarès della compagnia, i premi e la spesa comune." },
+  { id: "compagnie", label: "Compagnie", icon: "flag", lede: "Le altre compagnie in classifica: puoi entrare in una o fondarne una nuova." },
+  { id: "sfida", label: "Sfida", icon: "duel", lede: "Sfida gli altri arcieri con il tuo avatar." },
+];
+/** le schede salvate dalla versione di prima */
+const OLD_SECTION: Record<string, Section> = { compagnia: "arcieri", statistiche: "classifiche", classifica: "compagnie" };
 
 type Archer = Awaited<ReturnType<typeof squadBoard>>["people"][number] & { name: string; color: string; mark: string; skill: number };
 
@@ -75,7 +86,8 @@ function Page() {
   const [nonce, setNonce] = useState(0);
   const { data, error, loading } = useLoad(`squad-board-${nonce}`, () => squadBoard());
   const companies = useLoad(`companies-${nonce}`, () => listCompanies());
-  const [section, setSection] = useLocalState<Section>("aa-compagnia-tab", "compagnia");
+  const [sectionRaw, setSection] = useLocalState<string>("aa-compagnia-tab", "arcieri");
+  const section: Section = SECTIONS.some((x) => x.id === sectionRaw) ? (sectionRaw as Section) : OLD_SECTION[sectionRaw] ?? "arcieri";
   const [editing, setEditing] = useState<"none" | "edit" | "new">("none");
   const [busy, setBusy] = useState<number | null>(null);
   const looks = useTeamAvatars();
@@ -144,7 +156,7 @@ function Page() {
     setBusy(id);
     try {
       await joinAndReload(id, () => setNonce((n) => n + 1));
-      setSection("compagnia");
+      setSection("arcieri");
     } finally {
       setBusy(null);
     }
@@ -164,24 +176,23 @@ function Page() {
           onDone={() => {
             setEditing("none");
             setNonce((n) => n + 1);
-            setSection("compagnia");
+            setSection("arcieri");
           }}
         />
       ) : null}
-      <div className="sticky top-[calc(env(safe-area-inset-top)+3.6rem)] z-20">
-        <Segmented<Section>
-          value={section}
-          onChange={setSection}
-          options={[
-            { id: "compagnia", label: "Arcieri" },
-            { id: "statistiche", label: "Statistiche" },
-            { id: "classifica", label: "Compagnie" },
-            { id: "sfida", label: "Sfida" },
-          ]}
-        />
-      </div>
+      <nav aria-label="Sezioni della compagnia" className="aa-club-tabs sticky top-[calc(env(safe-area-inset-top)+3.6rem)] z-20 -mx-1 px-1">
+        <div className="grid grid-cols-6 gap-1 rounded-2xl p-1">
+          {SECTIONS.map((x) => (
+            <button key={x.id} type="button" aria-pressed={section === x.id} onClick={() => setSection(x.id)} className="aa-club-tab grid min-h-14 place-items-center gap-0.5 rounded-xl px-0 py-1 text-[0.62rem] font-semibold leading-tight tracking-tight">
+              <Glyph name={x.icon} size={18} />
+              <span className="max-w-full truncate">{x.label}</span>
+            </button>
+          ))}
+        </div>
+      </nav>
+      <p className="-mt-2 px-1 text-xs text-muted">{SECTIONS.find((x) => x.id === section)?.lede}</p>
 
-      {section === "compagnia" ? (
+      {section === "arcieri" ? (
         <>
           <div className="grid gap-2">
             <div className="flex items-baseline justify-between px-1">
@@ -223,7 +234,12 @@ function Page() {
               );
             })}
           </div>
-          {company ? <CompanyTrophies companyId={company.id} companyName={company.name} /> : null}
+        </>
+      ) : null}
+
+      {section === "bacheca" ? (
+        <>
+          {company ? <CompanyTrophies companyId={company.id} companyName={company.name} /> : <Card><p className="text-sm text-muted">Entra in una compagnia (scheda Compagnie) per vedere il suo palmarès.</p></Card>}
           <GadgetShelf />
           <ClubSpend />
         </>
@@ -231,7 +247,7 @@ function Page() {
 
       {section === "sfida" ? <AvatarChallenge looks={looks} /> : null}
 
-      {section === "classifica" ? (
+      {section === "compagnie" ? (
         <>
           {companies.data ? <CompanyLeague board={companies.data} onJoin={(id) => void join(id)} busy={busy} /> : companies.error ? <ErrorNote text={companies.error} /> : <Loading />}
           {editing === "none" ? (
@@ -244,15 +260,80 @@ function Page() {
         </>
       ) : null}
 
-      {section === "statistiche" ? (
+      {section === "classifiche" ? (
         <>
           <div className="grid gap-3 sm:grid-cols-2">
             <Podium title="Generale" rows={podium("")} looks={looks} />
             {DIVISIONS.map((name) => <Podium key={name} title={name} rows={podium(name)} looks={looks} />)}
           </div>
-
+          <StatCard title="Chi tira di più" hint="Frecce tirate, tra allenamenti e gare." tint="#e07a2f">
+            <RankBars rows={people.map((row) => rankRow(row, row.arrows, { sub: `${row.trainArrows} in allenamento · ${row.garaArrows} in gara` }))} unit="frecce" tint="#e07a2f" empty="Ancora nessuna freccia." />
+          </StatCard>
+          <StatCard title="Chi si allena di più" hint="Allenamenti registrati." tint="#3d8f5f">
+            <RankBars rows={people.map((row) => ({ ...rankRow(row, row.sessions), color: "#3d8f5f" }))} unit="allenamenti" tint="#3d8f5f" empty="Ancora nessun allenamento." />
+          </StatCard>
+          <StatCard title="Distanze migliori" hint="Il tiro più lungo, tra allenamenti e piazzole di gara." tint="#2a6294">
+            <RankBars rows={people.map((row) => ({ ...rankRow(row, row.bestDistance ?? 0), color: "#4b8fd1" }))} unit="m" tint="#4b8fd1" empty="Ancora nessuna distanza segnata." />
+          </StatCard>
+          <StatCard title="Chi partecipa a più gare" hint="Gare con un punteggio segnato." tint="#c9a227">
+            <RankBars rows={people.map((row) => ({ ...rankRow(row, row.gare, { sub: row.compAvg != null ? `media gara ${fmtAvg(row.compAvg)}` : undefined }), color: "#d6a72a" }))} unit="gare" tint="#d6a72a" empty="Ancora nessuna gara segnata." />
+          </StatCard>
           <GroupBestPosture />
+          <Card>
+            <h2 className="font-display text-2xl">Confronto</h2>
+            <p className="mb-3 text-sm text-muted">Fino a tre alla volta. {chosen.length >= 3 ? "Togli un nome per cambiarlo." : ""}</p>
+            <div className="flex flex-wrap gap-2">
+              {people.map((row) => {
+                const on = chosen.includes(row.userId);
+                return (
+                  <button key={row.userId} type="button" onClick={() => toggle(row.userId)} className={`min-h-11 rounded-full px-3 text-sm font-semibold ${on ? "bg-primary text-primary-fg" : "border border-line"}`}>
+                    {row.name}
+                  </button>
+                );
+              })}
+            </div>
+            {compared.length < 2 ? <p className="mt-3 text-sm text-muted">Scegli almeno due arcieri.</p> : (
+              <>
+                <div className="mt-4 overflow-x-auto">
+                  <table className="w-full min-w-[18rem] text-left text-sm">
+                    <thead>
+                      <tr className="text-muted">
+                        <th className="py-2 pr-2 font-medium"> </th>
+                        {compared.map((row) => <th key={row.userId} className="py-2 pr-2 font-semibold text-fg">{axisName(row.name, compared.map((item) => item.name))}</th>)}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[
+                        ["Allenamenti", (row: Archer) => String(row.sessions)],
+                        ["Frecce", (row: Archer) => String(row.arrows)],
+                        ["di cui allenamento", (row: Archer) => String(row.trainArrows)],
+                        ["di cui gare", (row: Archer) => String(row.garaArrows)],
+                        ["Media tiro", (row: Archer) => row.avg == null ? "—" : fmtAvg(row.avg)],
+                        ["Gare", (row: Archer) => String(row.gare)],
+                        ["Distanza migliore", (row: Archer) => row.bestDistance == null ? "—" : `${row.bestDistance} m`],
+                        ["Punti campionato", (row: Archer) => String(row.champ)],
+                        ["Media gara", (row: Archer) => row.compAvg == null ? "—" : fmtAvg(row.compAvg)],
+                      ].map(([label, read]) => (
+                        <tr key={String(label)} className="border-t border-line">
+                          <th className="py-2 pr-2 text-left font-medium">{label as string}</th>
+                          {compared.map((row) => <td key={row.userId} className="py-2 pr-2 tabular-nums">{(read as (row: Archer) => string)(row)}</td>)}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <h3 className="mb-2 mt-4 font-display text-xl">Allenamenti e gare</h3>
+                <MultiBars data={volume} keys={compareKeys} />
+                <h3 className="mb-2 mt-4 font-display text-xl">Punti campionato</h3>
+                <MultiBars data={points} keys={compareKeys} />
+              </>
+            )}
+          </Card>
+        </>
+      ) : null}
 
+      {section === "bersaglio" ? (
+        <>
           <Card>
             <h2 className="font-display text-2xl">Bersaglio della compagnia</h2>
             <div className="mt-2 grid grid-cols-2 gap-2">
@@ -308,70 +389,8 @@ function Page() {
             </ul>
           </Card>
 
-          <StatCard title="Chi tira di più" hint="Frecce tirate, tra allenamenti e gare." tint="#e07a2f">
-            <RankBars rows={people.map((row) => rankRow(row, row.arrows, { sub: `${row.trainArrows} in allenamento · ${row.garaArrows} in gara` }))} unit="frecce" tint="#e07a2f" empty="Ancora nessuna freccia." />
-          </StatCard>
-          <StatCard title="Chi si allena di più" hint="Allenamenti registrati." tint="#3d8f5f">
-            <RankBars rows={people.map((row) => ({ ...rankRow(row, row.sessions), color: "#3d8f5f" }))} unit="allenamenti" tint="#3d8f5f" empty="Ancora nessun allenamento." />
-          </StatCard>
-          <StatCard title="Distanze migliori" hint="Il tiro più lungo, tra allenamenti e piazzole di gara." tint="#2a6294">
-            <RankBars rows={people.map((row) => ({ ...rankRow(row, row.bestDistance ?? 0), color: "#4b8fd1" }))} unit="m" tint="#4b8fd1" empty="Ancora nessuna distanza segnata." />
-          </StatCard>
-          <StatCard title="Chi partecipa a più gare" hint="Gare con un punteggio segnato." tint="#c9a227">
-            <RankBars rows={people.map((row) => ({ ...rankRow(row, row.gare, { sub: row.compAvg != null ? `media gara ${fmtAvg(row.compAvg)}` : undefined }), color: "#d6a72a" }))} unit="gare" tint="#d6a72a" empty="Ancora nessuna gara segnata." />
-          </StatCard>
           <SquadAnimals peers={people} looks={looks} meId={me.userId ?? ""} />
 
-          <Card>
-            <h2 className="font-display text-2xl">Confronto</h2>
-            <p className="mb-3 text-sm text-muted">Fino a tre alla volta. {chosen.length >= 3 ? "Togli un nome per cambiarlo." : ""}</p>
-            <div className="flex flex-wrap gap-2">
-              {people.map((row) => {
-                const on = chosen.includes(row.userId);
-                return (
-                  <button key={row.userId} type="button" onClick={() => toggle(row.userId)} className={`min-h-11 rounded-full px-3 text-sm font-semibold ${on ? "bg-primary text-primary-fg" : "border border-line"}`}>
-                    {row.name}
-                  </button>
-                );
-              })}
-            </div>
-            {compared.length < 2 ? <p className="mt-3 text-sm text-muted">Scegli almeno due arcieri.</p> : (
-              <>
-                <div className="mt-4 overflow-x-auto">
-                  <table className="w-full min-w-[18rem] text-left text-sm">
-                    <thead>
-                      <tr className="text-muted">
-                        <th className="py-2 pr-2 font-medium"> </th>
-                        {compared.map((row) => <th key={row.userId} className="py-2 pr-2 font-semibold text-fg">{axisName(row.name, compared.map((item) => item.name))}</th>)}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {[
-                        ["Allenamenti", (row: Archer) => String(row.sessions)],
-                        ["Frecce", (row: Archer) => String(row.arrows)],
-                        ["di cui allenamento", (row: Archer) => String(row.trainArrows)],
-                        ["di cui gare", (row: Archer) => String(row.garaArrows)],
-                        ["Media tiro", (row: Archer) => row.avg == null ? "—" : fmtAvg(row.avg)],
-                        ["Gare", (row: Archer) => String(row.gare)],
-                        ["Distanza migliore", (row: Archer) => row.bestDistance == null ? "—" : `${row.bestDistance} m`],
-                        ["Punti campionato", (row: Archer) => String(row.champ)],
-                        ["Media gara", (row: Archer) => row.compAvg == null ? "—" : fmtAvg(row.compAvg)],
-                      ].map(([label, read]) => (
-                        <tr key={String(label)} className="border-t border-line">
-                          <th className="py-2 pr-2 text-left font-medium">{label as string}</th>
-                          {compared.map((row) => <td key={row.userId} className="py-2 pr-2 tabular-nums">{(read as (row: Archer) => string)(row)}</td>)}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <h3 className="mb-2 mt-4 font-display text-xl">Allenamenti e gare</h3>
-                <MultiBars data={volume} keys={compareKeys} />
-                <h3 className="mb-2 mt-4 font-display text-xl">Punti campionato</h3>
-                <MultiBars data={points} keys={compareKeys} />
-              </>
-            )}
-          </Card>
         </>
       ) : null}
     </div>

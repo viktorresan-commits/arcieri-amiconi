@@ -217,7 +217,7 @@ function rot(pt: P, deg: number, origin: P): P {
 }
 
 /** Il disegno dell'arciere in una posa data (calcolata dall'animazione o fissa). */
-function Figure({ look, def, t, flying, blink, uid, wind = -1.4 }: { look: AvatarLook; def: PoseDef; t: number; flying: number | null; blink: boolean; uid: string; wind?: number }) {
+function Figure({ look, def, t, flying, blink, uid, wind = -1.4, cssBlink = false }: { look: AvatarLook; def: PoseDef; t: number; flying: number | null; blink: boolean; uid: string; wind?: number; cssBlink?: boolean }) {
   const woman = look.body === "donna" || look.body === "ragazza";
   const kid = look.body === "ragazzo" || look.body === "ragazza";
   const W = bodyWidth(look);
@@ -885,7 +885,7 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4 }: { look: Avata
       ) : null}
       {/* testa in proporzione con il corpo, come nella vista di fronte (un po' più piccola che nel vecchio stile) */}
       <g transform={`translate(${f(H.x)} ${f(H.y)}) scale(${kid ? 1.06 : 0.92}) translate(${f(-H.x)} ${f(-H.y)})`}>
-        <Head look={look} H={H} face={face} blink={blink} uid={uid} t={t} />
+        <Head look={look} H={H} face={face} blink={blink} uid={uid} t={t} cssBlink={cssBlink} />
       </g>
 
       {bow}
@@ -1281,7 +1281,7 @@ const NOSES: Record<string, number[]> = {
 };
 
 /** Testa di profilo verso il bersaglio, con espressione. */
-function Head({ look, H, face, blink, uid, t }: { look: AvatarLook; H: P; face: string; blink: boolean; uid: string; t: number }) {
+function Head({ look, H, face, blink, uid, t, cssBlink = false }: { look: AvatarLook; H: P; face: string; blink: boolean; uid: string; t: number; cssBlink?: boolean }) {
   const skin = look.skin;
   const skinD = shade(skin, -0.22);
   const hair = look.hairColor;
@@ -1369,6 +1369,14 @@ function Head({ look, H, face, blink, uid, t }: { look: AvatarLook; H: P; face: 
       ) : (
         <path d="M157 82.6 Q162.6 85 168.4 81.8" stroke="#2a1d14" strokeWidth="1.3" fill="none" strokeLinecap="round" />
       )}
+      {cssBlink && !blink ? (
+        // battito delle palpebre a riposo: una palpebra che compare per un attimo (animazione CSS),
+        // così l'arciere fermo non va ridisegnato di continuo
+        <g className="aa-av-blink">
+          <path d="M156.6 83.2 C159.4 78.6 164.8 77.4 168.8 81.2 C165.8 85 160.6 85.6 156.6 83.2 Z" fill={skin} />
+          <path d="M157 82.6 Q162.6 85 168.4 81.8" stroke="#2a1d14" strokeWidth="1.3" fill="none" strokeLinecap="round" />
+        </g>
+      ) : null}
       <path d={browD} stroke={shade(hair, -0.15)} strokeWidth={browW * (0.6 + (tune(look.browSize, 50, 0, 100) / 100) * 0.8)} strokeLinecap="round" fill="none" />
       <BrowHairs d={browD} color={shade(hair, -0.45)} width={browW * (0.6 + (tune(look.browSize, 50, 0, 100) / 100) * 0.8)} />
       {look.mask ? null : face === "felice" || face === "sorriso" || !lips ? mouth : lips}
@@ -1797,6 +1805,14 @@ function Defs({ look, uid }: { look: AvatarLook; uid: string }) {
   );
 }
 
+/** gesti da fermo: ogni quanti secondi, quanto dura, verso quale posa e quanto */
+const IDLE_MOVES: Record<string, [number, number, PoseDef, number]> = {
+  guarda: [7, 1.8, POSES.fiero, 0.7],
+  corda: [6, 1.6, CHECK_STRING, 1],
+  stretching: [8, 2, POSES.vittoria, 0.55],
+  saluta: [9, 1.6, POSES.saluto, 1],
+};
+
 /** Comando esterno (gioco): quanto è tesa la corda (0–1) e alzo in gradi (positivo = più in alto). */
 export type AvatarDrive = { pull: number; aim: number; released?: number | null };
 
@@ -1809,7 +1825,7 @@ export function ArcherAvatar({ look, className = "h-72 w-auto", interactive = tr
   const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
   const mode = drive ? "guidata" : pose ?? look.pose ?? "animata";
   const plan = useMemo(() => routinePlan(look), [look.routine, look.hold, look.volley, look.quiverPlace]);
-  const [t, setT] = useState(0);
+  const [tState, setT] = useState(0);
   const [tapShot, setTapShot] = useState<number | null>(null);
   const shotRef = useRef(onShot);
   shotRef.current = onShot;
@@ -1832,29 +1848,47 @@ export function ArcherAvatar({ look, className = "h-72 w-auto", interactive = tr
     io.observe(el);
     return () => io.disconnect();
   }, []);
+  // posa ferma senza movimenti da fermo: l'arciere si disegna una volta sola, respiro e palpebre
+  // sono animazioni CSS (il telefono non ridisegna di continuo tutto il corpo)
+  const idleCfg = mode !== "animata" && mode !== "guidata" && (mode === "riposo" || !(mode in POSES)) && !still && look.idle && look.idle !== "respiro" && look.idle !== "fermo" ? IDLE_MOVES[look.idle] ?? null : null;
+  const frozen = mode !== "animata" && mode !== "guidata" && tapShot == null;
+  const t0Ref = useRef(typeof performance !== "undefined" ? performance.now() : 0);
   useEffect(() => {
     if (typeof window === "undefined") return;
     const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches || document.documentElement.dataset.motion === "ridotta";
-    if ((reduce || still) && mode !== "guidata") {
-      setT(mode === "animata" ? plan.releases[0] - 0.4 : 0.5);
+    // guidata: la muove il gioco (che ridisegna a ogni suo passo), niente secondo orologio
+    if (mode === "guidata") return;
+    if ((reduce || still) && mode !== "animata" && tapShot == null) {
+      setT(0.5);
       return;
     }
+    if (reduce && mode === "animata") {
+      setT(plan.releases[0] - 0.4);
+      return;
+    }
+    // ferma e senza gesti da fare: nessun orologio
+    if (frozen && !idleCfg) return;
     let raf = 0;
     let last = 0;
-    const t0 = performance.now();
-    // ~50 fotogrammi al secondo mentre tira, ~15 nelle pose ferme: il respiro è lento e ogni
-    // fotogramma ridisegna tutto l'arciere, quindi a riposo ne bastano pochi
-    const step = mode === "animata" || mode === "guidata" ? 19 : 66;
+    const t0 = t0Ref.current;
+    const step = 19;
     const frame = (now: number) => {
-      if (now - last > step && !document.hidden && visible.current) {
+      const tt = (now - t0) / 1000;
+      // gesti da fermo: si ridisegna solo mentre il gesto è in corso
+      const inMove = !frozen || !idleCfg || tt % idleCfg[0] < idleCfg[1] + 0.08;
+      if (inMove && now - last > step && !document.hidden && visible.current) {
         last = now;
-        setT((now - t0) / 1000);
+        setT(tt);
       }
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
-  }, [mode, still, plan]);
+  }, [mode, still, plan, frozen, idleCfg]);
+  // il gioco guida l'arciere: il tempo è quello di adesso, a ogni ridisegno chiesto dal gioco
+  const t = mode === "guidata" && typeof performance !== "undefined" ? (performance.now() - t0Ref.current) / 1000 : tState;
+  // a riposo senza orologio le palpebre sono quelle CSS
+  const cssBlink = frozen && !idleCfg && !still;
 
   let def: PoseDef;
   let flying: number | null = null;
@@ -1897,13 +1931,7 @@ export function ArcherAvatar({ look, className = "h-72 w-auto", interactive = tr
     def = POSES[name];
     // movimenti da fermo: ogni tanto controlla la corda, si sgranchisce, saluta o cambia appoggio
     if (name === "riposo" && tapShot == null && !still && look.idle && look.idle !== "respiro" && look.idle !== "fermo") {
-      const cfg: Record<string, [number, number, PoseDef, number]> = {
-        guarda: [7, 1.8, POSES.fiero, 0.7],
-        corda: [6, 1.6, CHECK_STRING, 1],
-        stretching: [8, 2, POSES.vittoria, 0.55],
-        saluta: [9, 1.6, POSES.saluto, 1],
-      };
-      const c = cfg[look.idle];
+      const c = IDLE_MOVES[look.idle];
       if (c) {
         const ph = t % c[0];
         if (ph < c[1]) def = mix(def, c[2], Math.sin((ph / c[1]) * Math.PI) * c[3]);
@@ -1923,7 +1951,7 @@ export function ArcherAvatar({ look, className = "h-72 w-auto", interactive = tr
     smoothMode.current = mode;
     smoothUntil.current = t + 0.9;
   }
-  if (!still && (mode === "guidata" || t < smoothUntil.current) && smoothDef.current) {
+  if (!still && !cssBlink && (mode === "guidata" || t < smoothUntil.current) && smoothDef.current) {
     def = smoothTo(smoothDef.current, def, mode === "guidata" ? 0.4 : 0.22);
   }
   smoothDef.current = def;
@@ -1931,20 +1959,22 @@ export function ArcherAvatar({ look, className = "h-72 w-auto", interactive = tr
     lastPhase.current = phase;
     queueMicrotask(() => phaseRef.current?.(phase));
   }
-  const blink = t % 3.7 < 0.12;
+  const blink = !cssBlink && !still && t % 3.7 < 0.12;
   const kid = look.body === "ragazzo" || look.body === "ragazza";
   const tap = () => {
     if (!interactive || mode === "animata" || mode === "guidata") return;
-    setTapShot(t);
+    setTapShot((performance.now() - t0Ref.current) / 1000);
     window.setTimeout(() => shotRef.current?.(), 600);
+    // finito il tiro l'arciere torna fermo (e senza orologio)
+    window.setTimeout(() => setTapShot(null), 1450);
   };
   return (
-    <svg ref={host} viewBox="40 0 300 350" className={className} role="img" aria-label="Il tuo arciere" onClick={tap} shapeRendering="geometricPrecision" style={{ cursor: interactive && mode !== "animata" ? "pointer" : undefined, overflow: "visible" }}>
+    <svg ref={host} viewBox="40 0 300 350" className={`${className}${cssBlink ? " aa-av-breathe" : ""}`} role="img" aria-label="Il tuo arciere" onClick={tap} shapeRendering="geometricPrecision" style={{ cursor: interactive && mode !== "animata" ? "pointer" : undefined, overflow: "visible" }}>
       <Defs look={look} uid={uid} />
       <g transform={look.lefty ? "translate(380 0) scale(-1 1)" : undefined} filter={light ? `url(#${light})` : undefined}>
         <ellipse cx="150" cy="340" rx="80" ry="7" fill="#000" opacity="0.28" />
         <g transform={`translate(150 342) scale(${((kid ? 0.8 : 1) * (0.9 + (tune(look.stature, 50, 0, 100) / 100) * 0.2)).toFixed(3)}) translate(-150 -342)`}>
-          <Figure look={look} def={def} t={t} flying={hideFlight ? null : flying} blink={blink} uid={uid} wind={wind} />
+          <Figure look={look} def={def} t={t} flying={hideFlight ? null : flying} blink={blink} uid={uid} wind={wind} cssBlink={cssBlink} />
         </g>
       </g>
     </svg>

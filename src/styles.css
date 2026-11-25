@@ -1799,3 +1799,63 @@ html .aa-cat-page .aa-short.is-here span { color: color-mix(in srgb, var(--cat) 
 @media (prefers-reduced-motion: reduce) {
   .aa-cat-page.is-active .aa-cat-hero, .aa-cat-page.is-active .aa-cat-tile, .aa-cat-page.is-active .aa-cat-tile .aa-short-icon { animation: none; }
 }
+
+/* arciere fermo: respiro e battito delle palpebre senza ridisegnare la figura.
+   Il respiro scala tutto il disegno di un filo (dai piedi), sul compositore della scheda grafica */
+.aa-av-breathe {
+  transform-origin: 50% 97%;
+  animation: aa-av-breathe 3.7s ease-in-out infinite;
+  will-change: transform;
+}
+@keyframes aa-av-breathe {
+  0%, 100% { transform: scale(1, 1); }
+  50% { transform: scale(1.004, 1.009); }
+}
+.aa-av-blink {
+  opacity: 0;
+  animation: aa-av-blink 4.3s step-end infinite;
+}
+@keyframes aa-av-blink {
+  0% { opacity: 0; }
+  96.5% { opacity: 1; }
+  99.4% { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .aa-av-breathe, .aa-av-blink { animation: none; }
+}
+html[data-motion="ridotta"] :is(.aa-av-breathe, .aa-av-blink) { animation: none; }
+
+/* manica a vento: lo sventolio è un'animazione CSS, la scena non si ridisegna per lei */
+.aa-sock-flap {
+  transform-box: view-box;
+  animation: aa-sock-flap 1.05s ease-in-out infinite alternate;
+}
+@keyframes aa-sock-flap {
+  from { transform: rotate(-2.5deg); }
+  to { transform: rotate(2.5deg); }
+}
+html[data-motion="ridotta"] .aa-sock-flap { animation: none; }
+@media (prefers-reduced-motion: reduce) { .aa-sock-flap { animation: none; } }
+
+/* Telefoni: il vetro sfocato (backdrop-filter) sopra una scena che si muove va ricalcolato a ogni
+   fotogramma e sui telefoni Android rallenta la Home. Stesso aspetto con un vetro un po' più pieno. */
+@media (pointer: coarse) {
+  .aa-bar, .aa-bar-bottom { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+  .aa-hud {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--plate-b) 80%, transparent), color-mix(in srgb, var(--plate-b) 90%, transparent));
+  }
+  .aa-game-hud .aa-hud::before {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--plate-b) 92%, transparent) 0%, color-mix(in srgb, var(--plate-b) 78%, transparent) 55%, color-mix(in srgb, var(--plate-b) 42%, transparent) 100%);
+  }
+  .aa-game-pill { -webkit-backdrop-filter: none; backdrop-filter: none; background: rgba(10, 16, 14, 0.74); }
+}
+
+/* Compagnia: le sei schede, una cosa per scheda */
+.aa-club-tabs > div { background: linear-gradient(180deg, var(--bar-a), var(--bar-b)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tone) 26%, transparent), 0 8px 18px -12px rgb(0 0 0 / 0.7); }
+.aa-club-tab { color: color-mix(in srgb, var(--fg) 62%, transparent); transition: background-color 0.2s ease, color 0.2s ease; }
+.aa-club-tab[aria-pressed="true"] { background: color-mix(in srgb, var(--primary) 22%, transparent); color: var(--fg); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 55%, transparent); }
+.aa-club-tab[aria-pressed="true"] svg { color: var(--primary); }

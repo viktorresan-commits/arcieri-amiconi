@@ -332,13 +332,25 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
     io.observe(el);
     return () => io.disconnect();
   }, []);
+  const flying = useRef(false);
+  flying.current = flight != null;
+  // il bersaglio che scorre si sposta direttamente (60 fotogrammi, senza ridisegnare la scena)
+  const targetG = useRef<SVGGElement>(null);
+  const targetAtRef = useRef(targetAt);
+  targetAtRef.current = targetAt;
   useEffect(() => {
     let raf = 0;
     let last = 0;
     const tick = (ms: number) => {
-      // ~30 fotogrammi mentre tende o la freccia vola; a riposo quasi fermo
-      const step = busy ? 32 : moving ? 40 : demoShots.current >= DEMO_SHOTS ? 250 : 80;
-      if (ms - last >= step && !document.hidden && onScreen.current) {
+      const visible = !document.hidden && onScreen.current;
+      if (moving && !busy && visible && targetG.current) {
+        targetG.current.setAttribute("transform", `translate(${(targetAtRef.current(ms / 1000).x - BASE.x).toFixed(2)} 0)`);
+      }
+      // fluido mentre la freccia vola, ~30 fotogrammi mentre tende; a riposo solo un orologio
+      // lento per la dimostrazione, poi nessun ridisegno
+      const step = flying.current ? 15 : busy ? 32 : 250;
+      const idle = !busy && calm;
+      if (!idle && ms - last >= step && visible) {
         last = ms;
         setT(ms / 1000);
       }
@@ -346,7 +358,7 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [busy, moving]);
+  }, [busy, moving, calm]);
 
   const pull = draw ? clamp((t - draw.t0) / DRAW_S, 0, 1) : 0;
   const hold = draw ? Math.max(0, t - draw.t0 - DRAW_S) : 0;
@@ -594,7 +606,7 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
   const pct = (x: number, y: number) => ({ left: `${((lefty ? W - x : x) / W) * 100}%`, top: `${(y / H) * 100}%` });
   const shownHits = playing ? hits : demoHits;
   // la manica pende quando non c'è vento e si alza quando soffia
-  const droop = clamp(75 - Math.abs(wind) * 24, 4, 75) + Math.sin(t * 6) * Math.min(4, Math.abs(wind) * 1.5);
+  const droop = clamp(75 - Math.abs(wind) * 24, 4, 75);
 
   const game = (
     <div
@@ -642,13 +654,15 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
         <g transform="translate(286 300)" opacity={indoor ? 0 : 1}>
           <line x1="0" y1="0" x2="0" y2="-46" stroke="#d9d4c8" strokeWidth="1.6" />
           <g transform={`translate(0 -44) rotate(${wind >= 0 ? droop : 180 - droop})`}>
-            {[0, 1, 2, 3].map((i) => <path key={i} d={`M${i * 5} -3 L${i * 5 + 5} -2.6 L${i * 5 + 5} 2.6 L${i * 5} 3 Z`} fill={i % 2 ? "#f4f1ea" : "#e06a2a"} />)}
+            <g className={Math.abs(wind) > 0.3 ? "aa-sock-flap" : undefined} style={{ transformOrigin: "0px 0px", animationDuration: `${(1.3 - Math.min(0.7, Math.abs(wind) * 0.15)).toFixed(2)}s` }}>
+              {[0, 1, 2, 3].map((i) => <path key={i} d={`M${i * 5} -3 L${i * 5 + 5} -2.6 L${i * 5 + 5} 2.6 L${i * 5} 3 Z`} fill={i % 2 ? "#f4f1ea" : "#e06a2a"} />)}
+            </g>
           </g>
         </g>
         {/* binario del bersaglio mobile */}
         {moving ? <path d={`M${BASE.x - amp - 30} 302 H${BASE.x + amp + 30}`} stroke="#5b3d22" strokeWidth="2.4" strokeLinecap="round" /> : null}
         {/* paglione su cavalletto */}
-        <g transform={`translate(${(T.x - BASE.x + wobble).toFixed(2)} 0)`}>
+        <g ref={targetG} transform={`translate(${(T.x - BASE.x + wobble).toFixed(2)} 0)`}>
           <ellipse cx={BASE.x + 3} cy={302} rx={box ? box.w * 0.45 : R * 1.6} ry="4" fill="#000" opacity="0.3" />
           <circle cx={BASE.x + goalOff.x} cy={BASE.y + goalOff.y} r={R * 1.9} fill="url(#gm-glow)" className="aa-target-glow" />
           {box ? null : <path d={`M${BASE.x - R * 0.8} ${BASE.y + R * 0.8} L${BASE.x - R * 1.05} 302 M${BASE.x + R * 0.8} ${BASE.y + R * 0.8} L${BASE.x + R * 1.05} 302 M${BASE.x} ${BASE.y + R} L${BASE.x + R * 0.3} 300`} stroke="#5b3d22" strokeWidth={Math.max(2, R * 0.09)} strokeLinecap="round" />}
@@ -711,9 +725,10 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
         ) : null}
         {puff && t - puff.t0 < 0.5 ? (
           // sbuffo di paglia: calcolato a ogni fotogramma insieme al resto, senza animazioni CSS dentro l'SVG
-          <g opacity={(1 - (t - puff.t0) / 0.5).toFixed(2)}>
+          // (l'orologio della scena può essere un filo indietro rispetto all'impatto: mai tempi negativi)
+          <g opacity={(1 - Math.max(0, t - puff.t0) / 0.5).toFixed(2)}>
             {[0, 1, 2, 3, 4, 5].map((i) => {
-              const k = 0.6 + ((t - puff.t0) / 0.5) * 1.8;
+              const k = 0.6 + (Math.max(0, t - puff.t0) / 0.5) * 1.8;
               return <circle key={i} cx={puff.x + Math.cos(i) * 4 * k} cy={puff.y + Math.sin(i * 1.7) * 3 * k} r={1.4 * k} fill="#e2c58c" />;
             })}
           </g>
