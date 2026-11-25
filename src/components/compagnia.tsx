@@ -5,7 +5,9 @@ import { createPortal } from "react-dom";
 import { Link } from "@tanstack/react-router";
 import type { listCompanies } from "@/lib/arcieri/compagnie.api";
 import { companyWelcome, createCompany, joinCompany, updateCompany } from "@/lib/arcieri/compagnie.api";
-import { findCompanyLogos, syncFitastCompanies } from "@/lib/arcieri/fitast-league.api";
+import { findCompanyLogos, fitastTeamStats, syncFitastCompanies, type TeamStat } from "@/lib/arcieri/fitast-league.api";
+import { useLoad } from "@/lib/arcieri/use-load";
+import { teamKey } from "@/lib/arcieri/fitast-league";
 import { Avatar, Button, Card, ErrorNote, Field, Segmented, TextInput } from "./kit";
 import { RankBars } from "./rank-bars";
 import { CrestPodium } from "./podium";
@@ -153,6 +155,8 @@ const CONTACT_TINT: Record<ContactKind, string> = {
 /* ---------------- intestazione della compagnia ---------------- */
 
 export function CompanyHero({ co, canEdit, onEdit }: { co: Co; canEdit: boolean; onEdit: () => void }) {
+  // arcieri, gare, punti e media veri del campionato FITAST (se la compagnia c'è), non quelli dell'app
+  const st = useTeamStats()(co);
   const kinds = ["phone", "whatsapp", "email", "website", "instagram", "facebook", "youtube", "tiktok", "address"] as const;
   const links = kinds.map((kind) => ({ kind, href: hrefOf(kind, co[kind]) })).filter((item) => item.href);
   return (
@@ -170,12 +174,20 @@ export function CompanyHero({ co, canEdit, onEdit }: { co: Co; canEdit: boolean;
           </div>
         </div>
         <div className="grid grid-cols-4 gap-1.5">
-          {[
-            ["Arcieri", co.members.toLocaleString("it-IT")],
-            ["Frecce", co.arrows.toLocaleString("it-IT")],
-            ["Punti", co.points.toLocaleString("it-IT")],
-            ["Gare", co.gare.toLocaleString("it-IT")],
-          ].map(([k, v]) => (
+          {(st
+            ? [
+                ["Arcieri", st.archers.toLocaleString("it-IT")],
+                ["Gare", st.gare.toLocaleString("it-IT")],
+                ["Pt camp.", st.points != null ? st.points.toLocaleString("it-IT") : "—"],
+                ["Media", st.avg != null ? st.avg.toFixed(1).replace(".", ",") : "—"],
+              ]
+            : [
+                ["Arcieri", co.members.toLocaleString("it-IT")],
+                ["Frecce", co.arrows.toLocaleString("it-IT")],
+                ["Punti", co.points.toLocaleString("it-IT")],
+                ["Gare", co.gare.toLocaleString("it-IT")],
+              ]
+          ).map(([k, v]) => (
             <div key={k} className="rounded-2xl bg-black/25 px-1 py-2 text-center backdrop-blur-sm">
               <p className="font-display text-lg leading-none text-white tabular-nums">{v}</p>
               <p className="mt-1 text-[0.6rem] font-semibold uppercase tracking-wider text-white/65">{k}</p>
@@ -221,6 +233,14 @@ function DefaultCrest({ color, letter }: { color: string; letter: string }) {
 
 type Metric = "fitast" | "points" | "arrows" | "members" | "gare" | "avg";
 
+/** i numeri veri di ogni compagnia nel campionato FITAST (arcieri, gare, media, punti), per nome */
+function useTeamStats() {
+  const { data } = useLoad("fitast-team-stats", () => fitastTeamStats());
+  const map = new Map<string, TeamStat>();
+  for (const t of data?.teams ?? []) map.set(teamKey(t.team), t);
+  return (co: { name: string; fitastName?: string }) => map.get(teamKey(co.fitastName || "")) ?? map.get(teamKey(co.name)) ?? null;
+}
+
 /** quante compagnie si vedono prima di "Mostra tutte" */
 const FIRST_COMPANIES = 10;
 
@@ -253,7 +273,7 @@ function useLogoSearch(onFound?: () => void) {
   }, []);
 }
 
-export function CompanyLeague({ board, onJoin, busy, onSynced, part, fitastBoard, fitastReady = false }: {
+export function CompanyLeague({ board, onJoin, busy, onSynced, part, fitastBoard, fitastMetric, fitastReady = false }: {
   board: Board;
   onJoin: (id: number) => void;
   busy: number | null;
@@ -265,6 +285,8 @@ export function CompanyLeague({ board, onJoin, busy, onSynced, part, fitastBoard
   fitastBoard?: ReactNode;
   /** ci sono classifiche FITAST salvate: si parte da quella */
   fitastReady?: boolean;
+  /** media, iscritti e gare con i numeri veri del campionato FITAST (al posto di quelli dell'app) */
+  fitastMetric?: (m: "avg" | "members" | "gare") => ReactNode;
 }) {
   const hasFitast = fitastReady || board.companies.some((co) => co.fitastPoints != null);
   // nella scheda Compagnie si parte dal campionato FITAST
@@ -273,6 +295,7 @@ export function CompanyLeague({ board, onJoin, busy, onSynced, part, fitastBoard
   const [find, setFind] = useState("");
   const [showAll, setShowAll] = useState(false);
   const [editCo, setEditCo] = useState<number | null>(null);
+  const statOf = useTeamStats();
   // gli arcieri di una compagnia nella classifica generale FITAST
   const [teamOf, setTeamOf] = useState<{ team: string; crest: { name: string; logoUrl: string | null; color: string; fitastName?: string } } | null>(null);
   const [sync, setSync] = useState<{ busy: boolean; text: string }>({ busy: false, text: "" });
@@ -350,7 +373,7 @@ export function CompanyLeague({ board, onJoin, busy, onSynced, part, fitastBoard
       <Card className="grid grid-cols-[minmax(0,1fr)] gap-3">
         <div>
           <h2 className="font-display text-2xl">Classifica compagnie</h2>
-          <p className="text-sm text-muted">{metric === "fitast" ? `Punti del campionato FITAST${season ? ` (${season})` : ""}, letti dal portale.` : metric === "avg" && fitastAvgOn ? "Media dei punti campionato per arciere: tutti gli arcieri di ogni compagnia nella classifica generale FITAST." : metric === "avg" ? "Media per freccia degli arcieri di ogni compagnia, in allenamento." : "Tutte le frecce e i punti dei loro arcieri, in allenamento e in gara."}</p>
+          <p className="text-sm text-muted">{metric === "fitast" ? `Punti del campionato FITAST${season ? ` (${season})` : ""}, letti dal portale.` : fitastMetric && metric === "avg" ? "Media dei punti campionato per arciere: tutti gli arcieri di ogni compagnia nel campionato FITAST." : fitastMetric && metric === "members" ? "Arcieri di ogni compagnia che hanno tirato nel campionato FITAST." : fitastMetric && metric === "gare" ? "Gare del campionato FITAST disputate da ogni compagnia." : metric === "avg" && fitastAvgOn ? "Media dei punti campionato per arciere: tutti gli arcieri di ogni compagnia nella classifica generale FITAST." : metric === "avg" ? "Media per freccia degli arcieri di ogni compagnia, in allenamento." : "Tutte le frecce e i punti dei loro arcieri, in allenamento e in gara."}</p>
         </div>
         <div className="-mx-1 overflow-x-auto px-1 [scrollbar-width:none]">
         <Segmented<Metric>
@@ -358,15 +381,15 @@ export function CompanyLeague({ board, onJoin, busy, onSynced, part, fitastBoard
           onChange={setMetric}
           options={[
             { id: "fitast", label: "FITAST" },
-            { id: "points", label: "Punti" },
-            { id: "arrows", label: "Frecce" },
-            { id: "members", label: "Iscritti" },
-            { id: "gare", label: "Gare" },
             { id: "avg", label: "Media" },
+            { id: "members", label: fitastMetric ? "Arcieri" : "Iscritti" },
+            { id: "gare", label: "Gare" },
+            ...(fitastMetric ? [] : [{ id: "points" as Metric, label: "Punti" }]),
+            { id: "arrows", label: "Frecce" },
           ]}
         />
         </div>
-        {metric === "fitast" && fitastBoard ? fitastBoard : (
+        {metric === "fitast" && fitastBoard ? fitastBoard : fitastMetric && (metric === "avg" || metric === "members" || metric === "gare") ? fitastMetric(metric) : (
           <>
             {(() => {
               // le prime tre compagnie sul podio, con i loro stemmi
@@ -422,7 +445,10 @@ export function CompanyLeague({ board, onJoin, busy, onSynced, part, fitastBoard
                   {co.logoUrl ? <img src={co.logoUrl} alt="" className="h-12 w-11 shrink-0 object-contain" /> : <span className="h-12 w-11 shrink-0"><DefaultCrest color={co.color} letter={co.name.replace(/^Compagnia (degli |dei |di )?/i, "").slice(0, 1)} /></span>}
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-semibold">{co.name}</span>
-                    <span className="block truncate text-xs text-muted">{[co.city, `${co.members} arcieri`, co.fitastPoints != null ? `FITAST ${co.fitastPlace ? `${co.fitastPlace}ª · ` : ""}${co.fitastPoints.toLocaleString("it-IT")} pt` : `${co.arrows.toLocaleString("it-IT")} frecce`].filter(Boolean).join(" · ")}</span>
+                    <span className="block truncate text-xs text-muted">{(() => {
+                      const st = statOf(co);
+                      return [co.city, st ? `${st.archers} arcieri · ${st.gare} ${st.gare === 1 ? "gara" : "gare"}` : `${co.members} arcieri`, co.fitastPoints != null ? `FITAST ${co.fitastPlace ? `${co.fitastPlace}ª · ` : ""}${co.fitastPoints.toLocaleString("it-IT")} pt` : st ? "" : `${co.arrows.toLocaleString("it-IT")} frecce`].filter(Boolean).join(" · ");
+                    })()}</span>
                   </span>
                 </button>
                 {co.id === board.mine ? (
@@ -438,7 +464,12 @@ export function CompanyLeague({ board, onJoin, busy, onSynced, part, fitastBoard
                   {co.motto ? <p className="font-display text-base italic">«{co.motto}»</p> : null}
                   {co.bio ? <p className="text-sm text-muted">{co.bio}</p> : null}
                   <div className="grid grid-cols-4 gap-1.5 text-center">
-                    {[["Arcieri", co.members], ["Frecce", co.arrows], ["Punti", co.points], ["Gare", co.gare]].map(([k, v]) => (
+                    {(() => {
+                      const st = statOf(co);
+                      return st
+                        ? ([["Arcieri", st.archers], ["Gare", st.gare], ["Pt camp.", st.points ?? 0], ["Media", Math.round((st.avg ?? 0) * 10) / 10]] as [string, number][])
+                        : ([["Arcieri", co.members], ["Frecce", co.arrows], ["Punti", co.points], ["Gare", co.gare]] as [string, number][]);
+                    })().map(([k, v]) => (
                       <div key={String(k)} className="rounded-xl bg-black/20 py-1.5">
                         <p className="font-display text-base tabular-nums">{Number(v).toLocaleString("it-IT")}</p>
                         <p className="text-[0.58rem] font-semibold uppercase tracking-wider text-muted">{k}</p>

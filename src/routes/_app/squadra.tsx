@@ -6,7 +6,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { listCompanies } from "@/lib/arcieri/compagnie.api";
 import { CompanyForm, CompanyHero, CompanyLeague, joinAndReload } from "@/components/compagnia";
 import { CompanyTrophies } from "@/components/palmares";
-import { FitastArchersCard, FitastCompanyBoard, FitastGare, FitastHeader, useFitastLeague } from "@/components/fitast-league";
+import { FitastArchersCard, FitastCompanyBoard, FitastGare, FitastHeader, FitastTeamsBoard, useFitastLeague } from "@/components/fitast-league";
 import { RankBars } from "@/components/rank-bars";
 import { Heat } from "@/components/shot-lab";
 import { useLocalState } from "@/lib/arcieri/local-store";
@@ -477,7 +477,7 @@ function CompagnieTab({ board, onJoin, busy, onSynced }: { board: Awaited<Return
   return (
     <>
       <FitastHeader league={league} />
-      <CompanyLeague part="ranking" board={board} onJoin={onJoin} busy={busy} fitastBoard={<FitastCompanyBoard league={league} />} fitastReady={league.genSq.length > 0} />
+      <CompanyLeague part="ranking" board={board} onJoin={onJoin} busy={busy} fitastBoard={<FitastCompanyBoard league={league} />} fitastMetric={(m) => <FitastTeamsBoard league={league} metric={m} />} fitastReady={league.genSq.length > 0} />
       <FitastArchersCard league={league} />
       <FitastGare league={league} />
       <CompanyLeague part="directory" board={board} onJoin={onJoin} busy={busy} onSynced={onSynced} />

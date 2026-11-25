@@ -138,7 +138,8 @@ export async function syncStandings(opts: { onProgress: (p: SyncProgress) => voi
       if (candidates.length > 1 && titleScore(g.title, title) < 1 && candidates.indexOf(id) < candidates.length - 1) continue;
       seen.add(id);
       const gara = { id, title, day: garaDateOf(p0) ?? g.date ?? "" };
-      await allCombos(p0, r0, "gara-arcieri", 3, 24, gara);
+      // tutti gli arcieri della gara (la pagina ne mostra i primi tre): servono iscritti e gare di ogni compagnia
+      await allCombos(p0, r0, "gara-arcieri", 400, 24, gara);
       // classifica squadre della gara: l'indirizzo che ha funzionato l'ultima volta, poi i nomi simili
       for (const name of [...new Set([sqName, ...(home.awp ?? []).filter((x) => /squadr|compagn|societ/i.test(x) && !/general/i.test(x)), ...SQUADRE_PAGES].filter(Boolean))].slice(0, 5)) {
         if (opts.stop()) break;
@@ -152,7 +153,7 @@ export async function syncStandings(opts: { onProgress: (p: SyncProgress) => voi
         } catch {
           /* niente */
         }
-        await allCombos(p1, r1, "gara-squadre", 5, 4, gara);
+        await allCombos(p1, r1, "gara-squadre", 200, 4, gara);
         break;
       }
       break;

@@ -6,7 +6,7 @@ import { Medal } from "@/components/palmares";
 import { CrestPodium } from "@/components/podium";
 import { Insignia } from "@/components/insignia";
 import { useLoad } from "@/lib/arcieri/use-load";
-import { fitastStandings, fitastTeamArchers, type Standing, type StandingRow, type TeamArcher } from "@/lib/arcieri/fitast-league.api";
+import { fitastStandings, fitastTeamArchers, fitastTeamStats, type Standing, type StandingRow, type TeamArcher, type TeamStat } from "@/lib/arcieri/fitast-league.api";
 import { categoryGroup, crestOf as drawCrest, teamKey, titleName } from "@/lib/arcieri/fitast-league";
 import { syncStandings, type SyncProgress } from "@/lib/arcieri/fitast-sync";
 
@@ -285,6 +285,59 @@ export function FitastHeader({ league }: { league: FitastLeagueState }) {
 /** classifica generale compagnie del campionato (punti per tipologia, con stemmi e medaglie) */
 export function FitastCompanyBoard({ league }: { league: FitastLeagueState }) {
   return <SplitBoard items={league.genSq} crestOf={league.crestOf} team limit={40} empty={league.running ? "In lettura dal portale…" : "Ancora non letta: tocca Aggiorna dal portale."} />;
+}
+
+export type TeamMetric = "avg" | "members" | "gare";
+
+/**
+ * Classifica delle compagnie con i numeri veri del campionato FITAST (non quelli dell'app): media dei punti
+ * per arciere, arcieri in gara, gare disputate. Podio con gli stemmi; tocca una compagnia per i suoi arcieri.
+ */
+export function FitastTeamsBoard({ league, metric }: { league: FitastLeagueState; metric: TeamMetric }) {
+  const { data, error, loading } = useLoad(`fitast-teams-${league.data?.updatedAt ?? ""}`, () => fitastTeamStats());
+  const [shown, setShown] = useState<string | null>(null);
+  if (error) return <ErrorNote text={error} />;
+  if (loading && !data) return <Loading />;
+  const value = (t: TeamStat) => (metric === "avg" ? t.avg ?? 0 : metric === "members" ? t.archers : t.gare);
+  const teams = (data?.teams ?? []).filter((t) => (metric === "avg" ? t.avg != null : value(t) > 0)).sort((a, b) => value(b) - value(a) || a.team.localeCompare(b.team, "it"));
+  if (!teams.length) return <p className="text-sm text-muted">{league.running ? "In lettura dal portale…" : "Ancora nessun dato: tocca «Aggiorna dal portale»."}</p>;
+  const fmt = (t: TeamStat) => (metric === "avg" ? (t.avg ?? 0).toFixed(1).replace(".", ",") : String(value(t)));
+  const unit = metric === "avg" ? "pt per arciere" : metric === "members" ? "arcieri" : "gare";
+  const max = Math.max(...teams.map(value), 1);
+  const top = teams.slice(0, 3).map((t) => {
+    const c = league.crestOf(t.team);
+    const d = c?.logoUrl ? null : drawCrest(t.team);
+    return { key: t.team, name: c?.name ?? titleName(t.team), mark: `${fmt(t)} ${unit}`, logo: c?.logoUrl ?? d?.logo ?? null, color: c?.color ?? d?.color ?? "#1f7a46" };
+  });
+  return (
+    <div className="grid gap-2">
+      {teams.length >= 2 ? <CrestPodium rows={top} onPick={setShown} /> : null}
+      <ol className="grid gap-1.5">
+        {teams.slice(teams.length >= 2 ? 3 : 0, 40).map((t, i) => {
+          const c = league.crestOf(t.team);
+          return (
+            <li key={t.team}>
+              <button type="button" onClick={() => setShown(t.team)} className="aa-press flex w-full items-center gap-2.5 rounded-xl bg-white/[0.035] px-2.5 py-2 text-left active:bg-white/[0.07]">
+                <Place place={(teams.length >= 2 ? 4 : 1) + i} />
+                <CrestMark crest={c} team={t.team} />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-semibold">{c?.name ?? titleName(t.team)}</span>
+                  <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-white/[0.06]"><span className="block h-full rounded-full bg-primary" style={{ width: `${Math.max(4, (value(t) / max) * 100)}%` }} /></span>
+                  <span className="mt-0.5 block truncate text-[0.68rem] text-muted">{[`${t.archers} arcieri`, `${t.gare} ${t.gare === 1 ? "gara" : "gare"}`, t.avg != null ? `media ${t.avg.toFixed(1).replace(".", ",")}` : ""].filter(Boolean).join(" · ")}</span>
+                </span>
+                <span className="shrink-0 text-right">
+                  <b className="block font-display text-lg leading-none tabular-nums">{fmt(t)}</b>
+                  <span className="text-[0.58rem] uppercase tracking-wider text-muted">{metric === "avg" ? "media" : unit}</span>
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ol>
+      <p className="px-1 text-[0.7rem] text-muted">Dati del campionato FITAST{data?.season ? ` (${data.season})` : ""}. Tocca una compagnia per vedere tutti i suoi arcieri.</p>
+      {shown ? <TeamArchersSheet team={shown} crest={league.crestOf(shown)} onClose={() => setShown(null)} /> : null}
+    </div>
+  );
 }
 
 /** primi dieci arcieri del campionato per categoria */

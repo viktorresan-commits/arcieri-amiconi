@@ -386,7 +386,8 @@ export const fitastStandings = createServerFn({ method: "GET" })
       garaTitle: r.gara_title,
       day: r.held_on ?? "",
       category: r.category,
-      rows: Array.isArray(r.rows) ? (r.kind === "generale-arcieri" ? r.rows.slice(0, 10) : r.rows) : [],
+      // la pagina mostra i primi: dieci della generale arcieri, tre per gara, cinque squadre per gara
+      rows: Array.isArray(r.rows) ? r.rows.slice(0, r.kind === "generale-arcieri" ? 10 : r.kind === "gara-arcieri" ? 3 : r.kind === "gara-squadre" ? 5 : 40) : [],
       updatedAt: new Date(r.updated_at).toISOString(),
     }));
     const updatedAt = items.reduce((m, x) => (x.updatedAt > m ? x.updatedAt : m), "");
@@ -410,7 +411,8 @@ export const saveFitastStandings = createServerFn({ method: "POST" })
           const r = (item ?? {}) as Record<string, unknown>;
           const day = String(r.day ?? "").slice(0, 10);
           // la generale arcieri si tiene intera (serve la media di tutti gli arcieri di ogni compagnia); le altre i primi
-          const keep = String(r.kind ?? "") === "generale-arcieri" ? 600 : 40;
+          const kind = String(r.kind ?? "");
+          const keep = kind === "generale-arcieri" || kind === "gara-arcieri" ? 600 : kind === "gara-squadre" ? 200 : 40;
           const rows = (Array.isArray(r.rows) ? r.rows.slice(0, keep) : []).map((x) => {
             const o = (x ?? {}) as Record<string, unknown>;
             const place = optNum(o.place, 9999);
@@ -445,6 +447,67 @@ export const saveFitastStandings = createServerFn({ method: "POST" })
   });
 
 /** punti FITAST delle compagnie nel campionato più recente (classifica generale squadre), per nome */
+export type TeamStat = { team: string; archers: number; avg: number | null; gare: number; points: number | null; place: number | null };
+
+/**
+ * I numeri veri di ogni compagnia nel campionato (dal portale FITAST, non dall'app): arcieri in gara,
+ * media dei punti campionato per arciere, gare disputate, punti e posto nella generale compagnie.
+ */
+export const fitastTeamStats = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    const sql = await db();
+    await ensureMember(sql, context.userId);
+    const latest = await sql<{ season: string; season_name: string }>`select season, season_name from fitast_standings order by updated_at desc limit 1`;
+    if (!latest[0]) return { season: "", teams: [] as TeamStat[] };
+    const rows = await sql<{ kind: string; gara_id: string; rows: StandingRow[] }>`select kind, gara_id, rows from fitast_standings where season = ${latest[0].season}`;
+    type Acc = { team: string; who: Map<string, number | null>; gare: Set<string>; points: number; hasPoints: boolean; place: number | null };
+    const acc = new Map<string, Acc>();
+    const get = (name: string) => {
+      const k = teamKey(name);
+      if (!k) return null;
+      let a = acc.get(k);
+      if (!a) {
+        a = { team: name, who: new Map(), gare: new Set(), points: 0, hasPoints: false, place: null };
+        acc.set(k, a);
+      }
+      return a;
+    };
+    for (const r of rows) {
+      for (const x of Array.isArray(r.rows) ? r.rows : []) {
+        if (r.kind === "generale-squadre") {
+          const a = get(x.name);
+          if (!a) continue;
+          a.team = x.name;
+          const pts = x.camp ?? x.score;
+          if (pts != null) {
+            a.points += pts;
+            a.hasPoints = true;
+          }
+          if (x.place != null && (a.place == null || x.place < a.place)) a.place = x.place;
+        } else if (r.kind === "generale-arcieri" || r.kind === "gara-arcieri") {
+          const a = get(x.team || "");
+          if (!a) continue;
+          const who = teamKey(x.name);
+          if (who) {
+            const pts = r.kind === "generale-arcieri" ? x.camp ?? x.score : null;
+            const prev = a.who.get(who);
+            a.who.set(who, pts != null ? Math.max(prev ?? 0, pts) : prev ?? null);
+          }
+          if (r.kind === "gara-arcieri" && r.gara_id) a.gare.add(r.gara_id);
+        } else if (r.kind === "gara-squadre") {
+          const a = get(x.name);
+          if (a && r.gara_id) a.gare.add(r.gara_id);
+        }
+      }
+    }
+    const teams: TeamStat[] = [...acc.values()].map((a) => {
+      const pts = [...a.who.values()].filter((v): v is number => v != null);
+      return { team: a.team, archers: a.who.size, avg: pts.length ? pts.reduce((x, y) => x + y, 0) / pts.length : null, gare: a.gare.size, points: a.hasPoints ? a.points : null, place: a.place };
+    });
+    return { season: latest[0].season_name, teams };
+  });
+
 export type TeamArcher = { name: string; points: number | null; category: string; place: number | null; categories: { category: string; place: number | null }[] };
 
 /** tutti gli arcieri di una compagnia nella classifica generale arcieri del campionato (dal migliore) */
@@ -455,19 +518,26 @@ export const fitastTeamArchers = createServerFn({ method: "POST" })
     const sql = await db();
     await ensureMember(sql, context.userId);
     const key = teamKey(data.team);
-    const latest = await sql<{ season: string; season_name: string }>`select season, season_name from fitast_standings where kind = 'generale-arcieri' order by updated_at desc limit 1`;
+    const latest = await sql<{ season: string; season_name: string }>`select season, season_name from fitast_standings where kind in ('generale-arcieri', 'gara-arcieri') order by updated_at desc limit 1`;
     if (!key || !latest[0]) return { season: latest[0]?.season_name ?? "", archers: [] as TeamArcher[] };
-    const rows = await sql<{ category: string; rows: StandingRow[] }>`select category, rows from fitast_standings where kind = 'generale-arcieri' and season = ${latest[0].season}`;
+    const rows = await sql<{ kind: string; category: string; rows: StandingRow[] }>`
+      select kind, category, rows from fitast_standings where kind in ('generale-arcieri', 'gara-arcieri') and season = ${latest[0].season}
+      order by kind desc`;
     const byName = new Map<string, { name: string; points: number | null; entries: { category: string; place: number | null }[] }>();
+    // prima la generale (punti e posto in categoria), poi chi ha solo tirato nelle gare
     for (const r of rows) {
       for (const x of Array.isArray(r.rows) ? r.rows : []) {
         if (teamKey(x.team || "") !== key) continue;
         const who = teamKey(x.name);
         if (!who) continue;
         const cur = byName.get(who) ?? { name: x.name, points: null, entries: [] };
-        const pts = x.camp ?? x.score;
-        if (pts != null && (cur.points == null || pts > cur.points)) cur.points = pts;
-        if (!cur.entries.some((e) => e.category === r.category)) cur.entries.push({ category: r.category, place: x.place });
+        if (r.kind === "generale-arcieri") {
+          const pts = x.camp ?? x.score;
+          if (pts != null && (cur.points == null || pts > cur.points)) cur.points = pts;
+          if (!cur.entries.some((e) => e.category === r.category)) cur.entries.push({ category: r.category, place: x.place });
+        } else if (!cur.entries.length && !cur.entries.some((e) => e.category === r.category)) {
+          cur.entries.push({ category: r.category, place: null });
+        }
         byName.set(who, cur);
       }
     }
