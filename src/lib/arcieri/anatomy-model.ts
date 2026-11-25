@@ -474,7 +474,8 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gea
   const drwBase = handBase(S.draw[2]);
   const grip = J[bowBase] ? lerp(lerp(J[bowBase], J[bowBase + 5], 0.5), J[bowBase + 9], 0.5) : lerp(bow.wr, bowIdx, 0.55);
   // dita sulla corda: le seconde falangi di indice e medio
-  const fingers = J[drwBase] ? lerp(J[drwBase + 6], J[drwBase + 10], 0.5) : lerp(drw.wr, drwIdx, 0.6);
+  // la corda sta nella piega della prima falange di indice e medio (la cocca tra le due dita)
+  const fingers = J[drwBase] ? lerp(J[drwBase + 7], J[drwBase + 11], 0.5) : lerp(drw.wr, drwIdx, 0.75);
   // verso il bersaglio: dalla spalla della corda a quella dell'arco, in orizzontale
   let toT = sub(bow.sh, drw.sh);
   toT = norm([toT[0], 0, toT[2]]);
@@ -557,15 +558,20 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gea
   // freccia: incoccata quando le dita sono sulla corda (in trazione o pronte a tirare)
   const nocked = Boolean(arrowSeen) || onString;
   if (nocked) {
-    const gn = len(sub(grip, nock));
+    // la freccia appoggia sul rest: sopra la mano dell'arco e accanto al legno, a sinistra
+    // dell'arco per un destro (a destra per un mancino), non in mezzo alla presa
+    const leftOfBow = norm(cross(n, u));
+    const restPt = add(add(grip, mul(n, 0.035)), mul(leftOfBow, hand === "destro" ? 0.022 : -0.022));
+    const ua = len(sub(restPt, nock)) > 0.1 ? norm(sub(restPt, nock)) : u;
+    const gn = len(sub(restPt, nock));
     // la freccia sporge sempre oltre la presa; se il video la mostra, finisce dove finisce davvero
-    let arrowTip = add(nock, mul(u, Math.max(0.72, gn + 0.06)));
+    let arrowTip = add(nock, mul(ua, Math.max(0.72, gn + 0.06)));
     if (arrowSeen && gear?.arrow?.measured) {
-      const along = dot(sub(arrowSeen.tip, nock), u);
-      if (along > gn * 0.8 && along < gn + 0.45) arrowTip = add(nock, mul(u, along));
+      const along = dot(sub(arrowSeen.tip, nock), ua);
+      if (along > gn * 0.8 && along < gn + 0.45) arrowTip = add(nock, mul(ua, along));
     }
     push("tube", seg(nock, arrowTip, 0.004, 0.004, 1.0), [0.98, 0.82, 0.35], 3, 1, "arco");
-    push("sphere", seg(nock, add(nock, mul(u, 0.09)), 0.012, 0.003, 1.0, n), [0.95, 0.35, 0.3], 3, 0.9, "arco"); // alette
+    push("sphere", seg(nock, add(nock, mul(ua, 0.09)), 0.012, 0.003, 1.0, n), [0.95, 0.35, 0.3], 3, 0.9, "arco"); // alette
   }
 
   // ---------- quote ----------

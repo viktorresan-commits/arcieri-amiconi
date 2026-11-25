@@ -8,7 +8,7 @@
  */
 import { v3, type V3 } from "./anatomy-model";
 import type { Hand } from "./pose-analysis";
-import { FACE0, FACE_IDS, sides } from "./pose-analysis";
+import { sides } from "./pose-analysis";
 
 export type BodyBatch = { layer: "skin" | "bone" | "muscle"; vertices: number; indices: number; vOffset: number; iOffset: number };
 export type BodyMeta = {
@@ -194,27 +194,8 @@ export function bodyMatrices(meta: BodyMeta, J: Record<number, V3>): Float32Arra
   }
   // scala del corpo nel video: dal busto, che è la misura più stabile
   const kT = Math.max(0.5, Math.min(2, Fc.torace.L / Fr.torace.L));
-  // testa: con i punti del viso si gira come nel video (mento -> fronte, linea degli occhi);
-  // dal viso si prende solo la direzione: posizione e grandezza restano quelle del collo,
-  // così un viso letto male non stira la testa fuori dal corpo
-  const fi = (id: number) => FACE0 + FACE_IDS.indexOf(id);
-  const chin = J[fi(152)], brow = J[fi(10)], eyeL = J[fi(263)], eyeR = J[fi(33)];
-  const r0 = rest("mento"), r1 = rest("fronte");
-  if (chin && brow && eyeL && eyeR && r0 && r1) {
-    const def = Fc.testa;
-    const defR = Fr.testa;
-    const dir = norm(sub(brow, chin));
-    // il viso deve essere girato in modo credibile rispetto al collo (meno di 60 gradi)
-    if (len(sub(brow, chin)) > 1e-4 && dot(dir, def.e1) > 0.5) {
-      // mento attuale: il mento di riposo portato con la testa che segue il collo
-      const d = sub(r0, defR.o);
-      const k = def.L / defR.L;
-      const chinNow = add(def.o, add(add(mul(def.e1, dot(d, defR.e1) * k), mul(def.e2, dot(d, defR.e2))), mul(def.e3, dot(d, defR.e3))));
-      const Lr = len(sub(r1, r0));
-      Fr.testa = frame(r0, r1, [1, 0, 0], [0, 0, 1]);
-      Fc.testa = frame(chinNow, add(chinNow, mul(dir, Lr * kT)), sub(eyeL, eyeR), [0, 0, 1]);
-    }
-  }
+  // testa: segue collo, orecchie e naso (stabile). I punti del viso non la girano più: la loro
+  // profondità stimata la piegava in avanti o all'indietro in modo innaturale
   // dita (quattro insieme) e pollice: con i 21 punti della mano si piegano; senza, seguono la mano
   for (const s of ["L", "R"] as const) {
     const base = s === "L" ? 33 : 54;

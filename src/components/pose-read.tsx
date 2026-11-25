@@ -253,6 +253,8 @@ export function PoseRead() {
   const [samples, setSamples] = useState<Sample[]>([]);
   /** riquadro dell'arciere nell'ultimo fotogramma: serve a seguire sempre la stessa persona */
   const lastPerson = useRef<Rect | null>(null);
+  /** ultimo aggiornamento delle letture sullo schermo (si limitano durante la riproduzione) */
+  const lastReadout = useRef(0);
   const samplesRef = useRef<Sample[]>(samples);
   samplesRef.current = samples;
   const [progress, setProgress] = useState<number | null>(null);
@@ -486,7 +488,11 @@ export function PoseRead() {
     smoothRef.current = { lm, t };
     paintOverlay(lm);
     const video = videoRef.current;
-    if (video) setNow(metricsOf(lm, handRef.current, video.videoWidth / Math.max(1, video.videoHeight), video.videoHeight));
+    const nowMs = performance.now();
+    if (video && nowMs - lastReadout.current > 150) {
+      lastReadout.current = nowMs;
+      setNow(metricsOf(lm, handRef.current, video.videoWidth / Math.max(1, video.videoHeight), video.videoHeight));
+    }
     return true;
   }
 
@@ -507,10 +513,14 @@ export function PoseRead() {
       const m = lm ? metricsOf(lm, handRef.current, W / H, H) : null;
       // freccia e arco solo da fermo (costa un po' di calcolo)
       const g = lm && video.paused ? safeGear(video, W, H, lm, handRef.current) : null;
-      setGear(g);
+      if (video.paused || gearRef.current) setGear(g);
       gearRef.current = g;
       paintOverlay(lm);
-      setNow(m);
+      const nowMs = performance.now();
+      if (video.paused || nowMs - lastReadout.current > 150) {
+        lastReadout.current = nowMs;
+        setNow(m);
+      }
     } catch {
       /* il fotogramma dopo riprova */
     } finally {
@@ -539,13 +549,24 @@ export function PoseRead() {
     let stop = false;
     let handle = 0;
     const withFrame = "requestVideoFrameCallback" in video;
+    let lastUi = 0;
     const tick = () => {
       if (stop) return;
-      setTime(video.currentTime);
-      if (!video.paused && !recRef.current && !fromSamples(video.currentTime)) void detectFrame();
-      handle = withFrame
-        ? (video as HTMLVideoElement & { requestVideoFrameCallback: (cb: () => void) => number }).requestVideoFrameCallback(tick)
-        : requestAnimationFrame(tick);
+      const nowMs = performance.now();
+      // la pagina (barra del tempo, letture) si aggiorna 8 volte al secondo mentre il video scorre:
+      // ridisegnarla a ogni fotogramma rallentava tutto e il 3D andava a scatti
+      if (video.paused || nowMs - lastUi > 125) {
+        lastUi = nowMs;
+        setTime(video.currentTime);
+      }
+      const fromSeq = !video.paused && !recRef.current && fromSamples(video.currentTime);
+      if (!video.paused && !recRef.current && !fromSeq) void detectFrame();
+      // con l'analisi fatta si segue il tempo a ogni schermata (punti interpolati, movimento continuo);
+      // senza, a ogni fotogramma nuovo del video
+      handle =
+        withFrame && !fromSeq
+          ? (video as HTMLVideoElement & { requestVideoFrameCallback: (cb: () => void) => number }).requestVideoFrameCallback(tick)
+          : requestAnimationFrame(tick);
     };
     tick();
     const onSeeked = () => {
