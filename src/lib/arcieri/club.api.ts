@@ -137,15 +137,34 @@ export const saveEquipment = createServerFn({ method: "POST" })
     return { id: asNum(rows[0].id) };
   });
 
+/**
+ * Elimina un pezzo dalla borsa. Gli allenamenti non si toccano mai: le configurazioni che lo usavano passano
+ * al pezzo scelto al suo posto (stessa categoria, tuo o del gruppo), oppure restano senza.
+ */
 export const deleteEquipment = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: unknown) => ({ id: asNum((input as { id?: number })?.id) }))
+  .validator((input: unknown) => {
+    const raw = (input ?? {}) as { id?: number; moveTo?: number | null };
+    return { id: asNum(raw.id), moveTo: raw.moveTo == null || (raw.moveTo as unknown) === "" ? null : asNum(raw.moveTo) };
+  })
   .handler(async ({ context, data }) => {
     const sql = await db();
     const me = await ensureMember(sql, context.userId);
-    const rows = await sql`delete from equipment where id = ${data.id} and (user_id = ${context.userId} or (${me.role === "admin"} and visibility = 'group')) returning id`;
-    if (!rows[0]) throw new Error("Pezzo non trovato.");
-    return { ok: true as const };
+    const own = await sql<{ id: number; category: string }>`
+      select id, category from equipment where id = ${data.id} and (user_id = ${context.userId} or (${me.role === "admin"} and visibility = 'group')) limit 1`;
+    if (!own[0]) throw new Error("Pezzo non trovato.");
+    let moveTo: number | null = null;
+    if (data.moveTo && data.moveTo !== data.id) {
+      const to = await sql<{ id: number }>`
+        select id from equipment where id = ${data.moveTo} and category = ${own[0].category}
+          and (user_id = ${context.userId} or visibility = 'group') limit 1`;
+      moveTo = to[0] ? asNum(to[0].id) : null;
+    }
+    // le tue configurazioni passano al pezzo scelto; quelle degli altri (se era un pezzo del gruppo) restano senza
+    await sql`update setups set bow_id = case when user_id = ${context.userId} then ${moveTo}::int else null end where bow_id = ${data.id}`;
+    await sql`update setups set arrow_id = case when user_id = ${context.userId} then ${moveTo}::int else null end where arrow_id = ${data.id}`;
+    await sql`delete from equipment where id = ${data.id}`;
+    return { ok: true as const, moveTo };
   });
 
 export const saveSetup = createServerFn({ method: "POST" })
@@ -194,13 +213,33 @@ export const listSetups = createServerFn({ method: "GET" })
     }));
   });
 
+/** Toglie una configurazione: i suoi allenamenti restano e passano a quella scelta (o restano senza). */
 export const deleteSetup = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: unknown) => ({ id: asNum((input as { id?: number })?.id) }))
+  .validator((input: unknown) => {
+    const raw = (input ?? {}) as { id?: number; moveTo?: number | null };
+    return { id: asNum(raw.id), moveTo: raw.moveTo == null || (raw.moveTo as unknown) === "" ? null : asNum(raw.moveTo) };
+  })
   .handler(async ({ context, data }) => {
     const sql = await db();
+    let moveTo: number | null = null;
+    if (data.moveTo && data.moveTo !== data.id) {
+      const to = await sql<{ id: number }>`select id from setups where id = ${data.moveTo} and user_id = ${context.userId} limit 1`;
+      moveTo = to[0] ? asNum(to[0].id) : null;
+    }
+    await sql`update sessions set setup_id = ${moveTo} where user_id = ${context.userId} and setup_id = ${data.id}`;
     await sql`delete from setups where id = ${data.id} and user_id = ${context.userId}`;
     return { ok: true as const };
+  });
+
+/** Quanti allenamenti usano ogni configurazione (per chiedere dove spostarli prima di toglierla). */
+export const setupUse = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    const sql = await db();
+    const rows = await sql<{ id: number; sessions: number }>`
+      select setup_id as id, count(*)::int as sessions from sessions where user_id = ${context.userId} and setup_id is not null group by setup_id`;
+    return rows.map((r) => ({ id: asNum(r.id), sessions: Number(r.sessions) || 0 }));
   });
 
 function parseRule(raw: Record<string, unknown>): Rule {

@@ -10,6 +10,7 @@ import { fmtClock, fmtWhen } from "@/lib/arcieri/time";
 import { BOWS, DISCIPLINES, DISTANCES, bowLabel, disciplineLabel } from "@/lib/arcieri/labels";
 import { BODIES, PROGRAMS, programById } from "@/lib/arcieri/program";
 import { useLoad } from "@/lib/arcieri/use-load";
+import { listEquipment, listSetups } from "@/lib/arcieri/club.api";
 import { Button, Card, ErrorNote, Field, Loading, PageHead, Select, TextArea, TextInput } from "@/components/kit";
 import { TargetFace } from "@/components/target-face";
 import { ShotLab } from "@/components/shot-lab";
@@ -44,6 +45,7 @@ function Page() {
       {editing ? (
         <Editor
           session={data.session}
+          own={Boolean(data.own)}
           shots={data.shots}
           onClose={() => setEditing(false)}
           onSaved={() => {
@@ -390,7 +392,11 @@ function Volleys({
           {session.feeling ? <p className="mt-2 text-sm">Sensazioni: {session.feeling}</p> : null}
           {session.dispersion ? <p className="mt-2 text-sm">Dispersione: {session.dispersion}</p> : null}
           {session.errors ? <p className="mt-2 text-sm">Errori: {session.errors}</p> : null}
-          {session.gearSnapshot ? <p className="mt-2 text-xs text-muted">{session.gearSnapshot}</p> : null}
+          {session.gearSnapshot ? (
+            <Link to="/attrezzatura" className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-hair bg-white/[0.04] px-2.5 py-1 text-xs text-muted">
+              <Glyph name="bag" size={13} /> {session.gearSnapshot}
+            </Link>
+          ) : null}
         </div>
       </Card>
     </>
@@ -441,11 +447,13 @@ function fitToPlan(shots: Shot[], per: number, ends: number, blocks: number) {
 
 function Editor({
   session,
+  own,
   shots,
   onClose,
   onSaved,
 }: {
   session: Session;
+  own: boolean;
   shots: Shot[];
   onClose: () => void;
   onSaved: () => void;
@@ -476,6 +484,16 @@ function Editor({
   const [errors, setErrors] = useState(session.errors);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  // attrezzatura dell'allenamento: si può passare a un'altra configurazione (anche a quella nuova)
+  const [setupId, setSetupId] = useState<number | null>(session.setupId);
+  const setups = useLoad(own ? "ed-setups" : "ed-setups-none", () => (own ? listSetups() : Promise.resolve([])));
+  const gearList = useLoad(own ? "ed-gear" : "ed-gear-none", () => (own ? listEquipment() : Promise.resolve([])));
+  const snapshotOf = (id: number | null) => {
+    if (id === session.setupId) return session.gearSnapshot;
+    const su = (setups.data ?? []).find((x) => x.id === id);
+    const items = [su?.bowId, su?.arrowId].map((gid) => (gearList.data ?? []).find((g) => g.id === gid)).filter(Boolean);
+    return items.map((g) => `${g?.name} ${g?.brand} ${g?.model}`.trim()).join(" · ");
+  };
 
   async function save() {
     setErr("");
@@ -516,7 +534,7 @@ function Editor({
           bowType: bow,
           bowCustom,
           face,
-          setupId: session.setupId,
+          setupId,
           arrowsPerEnd: countOf(arrowsPerEnd, session.arrowsPerEnd, 24),
           endsPlanned: countOf(endsPlanned, session.endsPlanned, 60),
           blocksPlanned: countOf(blocksPlanned, session.blocksPlanned, 40),
@@ -527,7 +545,7 @@ function Editor({
           durationMs,
           timerLimitMs: session.timerLimitMs,
           endLimitMs: session.endLimitMs,
-          gearSnapshot: session.gearSnapshot,
+          gearSnapshot: snapshotOf(setupId),
           stringNote: session.stringNote,
           program,
           body,
@@ -567,6 +585,16 @@ function Editor({
         <Select value={bow} onChange={(e) => setBow(e.target.value)}>{BOWS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</Select>
       </Field>
       {bow === "altro" ? <Field label="Che arco"><TextInput value={bowCustom} onChange={(e) => setBowCustom(e.target.value)} /></Field> : null}
+      {own ? (
+        <Field label="Attrezzatura (arco e frecce)">
+          <Select value={setupId ?? ""} onChange={(e) => setSetupId(e.target.value ? Number(e.target.value) : null)}>
+            <option value="">Nessuna configurazione</option>
+            {session.setupId != null && !(setups.data ?? []).some((x) => x.id === session.setupId) ? <option value={session.setupId}>{session.gearSnapshot || "Configurazione eliminata"}</option> : null}
+            {(setups.data ?? []).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+          </Select>
+          <Link to="/attrezzatura" className="mt-1.5 inline-flex items-center gap-1 text-xs font-semibold text-primary"><Glyph name="bag" size={13} /> Apri la borsa per aggiungere o cambiare arco e frecce</Link>
+        </Field>
+      ) : null}
       <Field label="Disciplina">
         <Select value={discipline} onChange={(e) => setDiscipline(e.target.value)}>{DISCIPLINES.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</Select>
       </Field>

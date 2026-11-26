@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { ConvertButton } from "@/components/unit-converter";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { deleteEquipment, deleteSetup, gearStats, listEquipment, listSetups, saveEquipment, saveSetup } from "@/lib/arcieri/club.api";
+import { deleteEquipment, deleteSetup, gearStats, listEquipment, listSetups, saveEquipment, saveSetup, setupUse } from "@/lib/arcieri/club.api";
+import { readMainGear, saveMainGear } from "@/lib/arcieri/main-gear";
 import { arrowAdvice, bowAdvice } from "@/lib/arcieri/gear-advice";
 import { AppIcon, Glyph } from "@/components/icons";
 import { CATEGORIES, categoryLabel, euro, parseEuro } from "@/lib/arcieri/labels";
@@ -44,6 +45,54 @@ function Page() {
   const [err, setErr] = useState("");
   const [filter, setFilter] = useState("tutto");
   const reload = () => setNonce((n) => n + 1);
+  const setupUses = useLoad(`su-${nonce}`, () => setupUse());
+  // eliminazione con conferma: gli allenamenti restano e passano al pezzo (o alla configurazione) scelto
+  const [del, setDel] = useState<{ id: number; moveTo: number | null } | null>(null);
+  const [delSetup, setDelSetup] = useState<{ id: number; moveTo: number | null } | null>(null);
+  const altsOf = (item: { id: number; category: string }) => (gear.data ?? []).filter((g) => g.id !== item.id && g.category === item.category && (g.mine || g.visibility === "group"));
+  const askDelete = (item: { id: number; category: string }) => {
+    const alts = altsOf(item);
+    const best = alts.find((g) => g.mine && g.status === "in_use") ?? alts[0] ?? null;
+    setDel({ id: item.id, moveTo: best?.id ?? null });
+  };
+  async function confirmDelete() {
+    if (!del) return;
+    setErr("");
+    try {
+      const res = await deleteEquipment({ data: { id: del.id, moveTo: del.moveTo } });
+      // l'attrezzatura principale (quella con cui parte un allenamento nuovo) passa al pezzo nuovo
+      const main = readMainGear();
+      if (main && (main.bowId === del.id || main.arrowId === del.id)) {
+        const to = (gear.data ?? []).find((g) => g.id === res.moveTo) ?? null;
+        const isBow = main.bowId === del.id;
+        saveMainGear({
+          ...main,
+          ...(isBow
+            ? { bowId: to?.id ?? null, bowName: to?.name ?? "", bowSpecs: (to?.specs as Record<string, string>) ?? {} }
+            : { arrowId: to?.id ?? null, arrowName: to?.name ?? "", arrowSpecs: (to?.specs as Record<string, string>) ?? {} }),
+        });
+      }
+      setDel(null);
+      reload();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Non riesco a eliminarlo.");
+    }
+  }
+  async function confirmDeleteSetup() {
+    if (!delSetup) return;
+    try {
+      await deleteSetup({ data: { id: delSetup.id, moveTo: delSetup.moveTo } });
+      const main = readMainGear();
+      if (main && main.setupId === delSetup.id) {
+        const to = (setups.data ?? []).find((x) => x.id === delSetup.moveTo);
+        saveMainGear({ ...main, setupId: to?.id ?? null, name: to?.name ?? main.name });
+      }
+      setDelSetup(null);
+      reload();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Non riesco a toglierla.");
+    }
+  }
   const spec = (k: string) => form.specs[k] ?? "";
   const setSpec = (k: string, v: string) => setForm((f) => ({ ...f, specs: { ...f.specs, [k]: v } }));
   const items = (gear.data ?? []).filter((g) => filter === "tutto" || g.category === filter);
@@ -294,9 +343,36 @@ function Page() {
               {item.mine ? (
                 <div className="flex gap-3 text-xs">
                   <button type="button" className="font-semibold text-primary" onClick={() => edit(item)}>Modifica</button>
-                  <button type="button" className="text-danger" onClick={() => deleteEquipment({ data: { id: item.id } }).then(reload)}>Elimina</button>
+                  <button type="button" className="text-danger" onClick={() => askDelete(item)}>Elimina</button>
                 </div>
               ) : null}
+              {del?.id === item.id ? (() => {
+                const n = statOf(item.id)?.sessions ?? 0;
+                const inSetups = (setups.data ?? []).filter((x) => x.bowId === item.id || x.arrowId === item.id);
+                const alts = altsOf(item);
+                const what = item.category === "arco" ? "arco" : item.category === "freccia" ? "frecce" : "pezzo";
+                return (
+                  <div className="grid gap-2 rounded-xl border border-danger/40 bg-danger/10 p-2.5 text-sm">
+                    <p>
+                      {n
+                        ? <>Lo usi in <b>{n} {n === 1 ? "allenamento" : "allenamenti"}</b>. Gli allenamenti restano tutti: </>
+                        : <>Eliminare <b>{item.name}</b>? Gli allenamenti non si toccano. </>}
+                      {inSetups.length ? (alts.length ? "da ora contano su:" : `le configurazioni restano senza ${what}.`) : null}
+                    </p>
+                    {inSetups.length && alts.length ? (
+                      <Select value={del.moveTo ?? ""} onChange={(e) => setDel({ id: item.id, moveTo: e.target.value ? Number(e.target.value) : null })}>
+                        {alts.map((g) => <option key={g.id} value={g.id}>{g.name}{g.status !== "in_use" ? " (fermo)" : ""}</option>)}
+                        <option value="">Nessuno: restano senza {what}</option>
+                      </Select>
+                    ) : null}
+                    {err ? <ErrorNote text={err} /> : null}
+                    <div className="flex justify-end gap-2">
+                      <button type="button" className="aa-chip" onClick={() => setDel(null)}>Annulla</button>
+                      <button type="button" className="aa-chip !border-transparent !bg-danger !text-danger-fg" onClick={() => void confirmDelete()}>Elimina</button>
+                    </div>
+                  </div>
+                );
+              })() : null}
             </Card>
           );
         })}
@@ -314,7 +390,36 @@ function Page() {
         </Select>
         <TextInput value={setup.stringNote} onChange={(e) => setSetup({ ...setup, stringNote: e.target.value })} placeholder="Corda: marca, fili, lunghezza" />
         <Button variant="primary" onClick={() => saveSetup({ data: { name: setup.name, bowId: setup.bowId || null, arrowId: setup.arrowId || null, stringNote: setup.stringNote, notes: "" } }).then(reload)}>Salva configurazione</Button>
-        <ul className="text-sm">{(setups.data ?? []).map((s) => <li key={s.id} className="flex justify-between py-1">{s.name} <button type="button" className="text-danger" onClick={() => deleteSetup({ data: { id: s.id } }).then(reload)}>togli</button></li>)}</ul>
+        <ul className="grid gap-1 text-sm">
+          {(setups.data ?? []).map((s) => {
+            const n = (setupUses.data ?? []).find((u) => u.id === s.id)?.sessions ?? 0;
+            const others = (setups.data ?? []).filter((x) => x.id !== s.id);
+            return (
+              <li key={s.id} className="grid gap-1.5 py-1">
+                <span className="flex items-center justify-between gap-2">
+                  <span className="min-w-0 truncate">{s.name}{n ? <span className="text-xs text-muted"> · {n} {n === 1 ? "allenamento" : "allenamenti"}</span> : null}</span>
+                  <button type="button" className="text-danger" onClick={() => setDelSetup({ id: s.id, moveTo: others[0]?.id ?? null })}>togli</button>
+                </span>
+                {delSetup?.id === s.id ? (
+                  <div className="grid gap-2 rounded-xl border border-danger/40 bg-danger/10 p-2.5">
+                    <p>{n ? <>Gli allenamenti con <b>{s.name}</b> restano tutti{others.length ? ", e passano a:" : "."}</> : <>Togliere <b>{s.name}</b>? Gli allenamenti non si toccano.</>}</p>
+                    {n && others.length ? (
+                      <Select value={delSetup.moveTo ?? ""} onChange={(e) => setDelSetup({ id: s.id, moveTo: e.target.value ? Number(e.target.value) : null })}>
+                        {others.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+                        <option value="">Nessuna configurazione</option>
+                      </Select>
+                    ) : null}
+                    {err ? <ErrorNote text={err} /> : null}
+                    <div className="flex justify-end gap-2">
+                      <button type="button" className="aa-chip" onClick={() => setDelSetup(null)}>Annulla</button>
+                      <button type="button" className="aa-chip !border-transparent !bg-danger !text-danger-fg" onClick={() => void confirmDeleteSetup()}>Togli</button>
+                    </div>
+                  </div>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
       </Card>
       <Link to="/balistica" className="aa-press flex items-center gap-3 rounded-[var(--radius-card)] border border-hair bg-white/[0.04] p-3">
         <AppIcon name="ballistics" color="#cc4f3b" size={44} />

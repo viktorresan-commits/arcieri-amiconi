@@ -41,6 +41,17 @@ const PAINTED: Partial<Record<SceneId, Painted>> = {
 /** la scena ha un'illustrazione dipinta? (la luce di quelle viene da sinistra) */
 export const isPainted = (id: string | undefined) => Boolean(PAINTED[sceneById(id).id]);
 
+// le illustrazioni già viste restano decodificate in memoria: tornando in Casa il campo c'è subito,
+// invece di lasciare per un attimo il vuoto (si vedeva lo sfondo della pagina di prima)
+const decoded = new Map<string, HTMLImageElement>();
+function keepDecoded(src: string) {
+  if (typeof window === "undefined" || decoded.has(src)) return;
+  const img = new Image();
+  img.src = src;
+  img.decode?.().catch(() => undefined);
+  decoded.set(src, img);
+}
+
 function PaintedBackdrop({ sky, id, art, wind = 0 }: { sky: Sky; id: string; art: Painted; wind?: number }) {
   const night = sky.tod === "notte";
   const rain = sky.weather === "pioggia";
@@ -50,6 +61,7 @@ function PaintedBackdrop({ sky, id, art, wind = 0 }: { sky: Sky; id: string; art
   // con il cielo coperto (pioggia o nuvoloso) c'è la sua illustrazione; di notte vince sempre la notte
   const grey = cloudy && Boolean(art.rain) && !night;
   const src = night ? art.night : grey ? art.rain! : dusk && art.dusk ? art.dusk : dawn && art.dawn ? art.dawn : art.day;
+  keepDecoded(src);
   const { w, h } = art;
   const drift = wind < 0 ? -1 : 1;
   // la scena è 400×300 ma sul gioco (3:4) se ne vede la fascia centrale 87.5–312.5:
@@ -66,6 +78,8 @@ function PaintedBackdrop({ sky, id, art, wind = 0 }: { sky: Sky; id: string; art
       <defs>
         <filter id={`${id}wide`} x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="9" /></filter>
       </defs>
+      {/* base scura sotto l'illustrazione: finché l'immagine non è pronta non si vede attraverso */}
+      <rect x="-10" y="-400" width="420" height="720" fill={night ? "#0b1220" : "#1b2419"} />
       <image href={src} x="-10" y={300 - 420 * 1.5} width="420" height={420 * 1.5} preserveAspectRatio="xMidYMax slice" filter={`url(#${id}wide)`} opacity="0.9" />
       <g transform={`translate(${tx} ${ty}) scale(${k})`}>
       <defs>

@@ -419,6 +419,8 @@ export const getSession = createServerFn({ method: "POST" })
     const arrowSets = setRows.map((r) => ({ id: asNum(r.id), name: r.name, specs: typeof r.specs === "string" ? r.specs : r.specs ? JSON.stringify(r.specs) : "" }));
     return {
       session: card(row, true),
+      /** l'allenamento è tuo: puoi cambiarne l'attrezzatura (le configurazioni sono le tue) */
+      own,
       prior,
       arrowSpecs,
       arrowSets,

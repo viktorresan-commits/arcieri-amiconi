@@ -838,13 +838,17 @@ html[data-motion="ridotta"]::view-transition-old(root), html[data-motion="ridott
 @keyframes aa-hit-ring { from { opacity: 0.9; transform: scale(0.3); } to { opacity: 0; transform: scale(1.4); } }
 
 /* ── Movimento moderno ────────────────────────────────────────────── */
-/* pagina: i blocchi entrano uno dopo l'altro */
-.aa-page > * > * { animation: aa-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
-.aa-page > * > *:nth-child(2) { animation-delay: 50ms; }
-.aa-page > * > *:nth-child(3) { animation-delay: 100ms; }
-.aa-page > * > *:nth-child(4) { animation-delay: 150ms; }
-.aa-page > * > *:nth-child(5) { animation-delay: 200ms; }
-.aa-page > * > *:nth-child(n + 6) { animation-delay: 250ms; }
+/* pagina: i blocchi salgono appena, uno dopo l'altro, ma sono visibili fin dal primo fotogramma
+   (partivano trasparenti: per qualche istante si vedeva solo lo sfondo, i "lampi" tornando in Casa) */
+.aa-page > * > * { animation: aa-page-in 0.38s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.aa-page > * > *:nth-child(2) { animation-delay: 30ms; }
+.aa-page > * > *:nth-child(3) { animation-delay: 60ms; }
+.aa-page > * > *:nth-child(4) { animation-delay: 90ms; }
+.aa-page > * > *:nth-child(5) { animation-delay: 120ms; }
+.aa-page > * > *:nth-child(n + 6) { animation-delay: 150ms; }
+@keyframes aa-page-in { from { opacity: 0.55; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+/* in Casa il gioco in cima non si muove: c'è già, fermo, appena si torna */
+.aa-page > .aa-home > *:first-child { animation: none; }
 
 /* barra in basso: pillola che si accende sotto l'icona */
 .aa-tab { -webkit-tap-highlight-color: transparent; }
@@ -894,8 +898,9 @@ main.aa-page > .aa-loading:first-child { min-height: 72vh; }
 /* la Home mentre carica: la stessa sagoma della scena, così all'arrivo dei dati non si sposta nulla */
 .aa-home-skel { background: radial-gradient(120% 70% at 50% 35%, color-mix(in srgb, var(--fg) 7%, transparent), transparent 70%), linear-gradient(180deg, color-mix(in srgb, var(--fg) 5%, transparent), color-mix(in srgb, var(--fg) 2%, transparent)); }
 /* contenuto appena arrivato: compare con una dissolvenza breve invece di apparire di colpo */
-.aa-arrive { animation: aa-arrive 0.28s ease-out both; }
-@keyframes aa-arrive { from { opacity: 0; } to { opacity: 1; } }
+/* Casa compare subito: partiva da trasparente e per un attimo si vedeva solo lo sfondo */
+.aa-arrive { animation: aa-arrive 0.22s ease-out both; }
+@keyframes aa-arrive { from { opacity: 0.7; } to { opacity: 1; } }
 
 /* tocco: tutto ciò che si preme risponde */
 .aa-chip, .aa-check, a.aa-glow-panel, button.aa-glow-panel { transition: transform 0.16s cubic-bezier(0.22, 1, 0.36, 1), background-color 0.2s, border-color 0.2s; }
