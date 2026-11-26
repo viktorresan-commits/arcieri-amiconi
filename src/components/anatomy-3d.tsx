@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { boneCal, buildModel, v3, type BoneCal, type Model, type V3 } from "@/lib/arcieri/anatomy-model";
+import { boneCal, buildModel, depthMemo, v3, type BoneCal, type Model, type V3 } from "@/lib/arcieri/anatomy-model";
 import { createAnatomyRenderer, lookAt, mul4, perspective } from "@/lib/arcieri/anatomy-render";
 import { BODY_CREDIT, loadBody } from "@/lib/arcieri/anatomy-body";
 import { mixLm, sideEvidence, type Gear, type Hand, type Landmark } from "@/lib/arcieri/pose-analysis";
@@ -81,12 +81,13 @@ export async function sagomaPainter(W: number, H: number) {
   const dpr = Math.min(W, H) / 400;
   let camSm: { c: V3; h: number } | null = null;
   let lastT = 0;
+  const memo = depthMemo();
   return {
     canvas: out,
     /** disegna la posa; smooth: inquadratura che segue piano (video), altrimenti esatta (foto) */
-    paint(o: { lm: Landmark[]; aspect: number; hand: Hand; gear: Gear | null; cal: BoneCal | null; time: number; smooth?: boolean; view?: typeof sagomaView }) {
+    paint(o: { lm: Landmark[]; aspect: number; hand: Hand; gear: Gear | null; cal: BoneCal | null; time: number; smooth?: boolean; view?: typeof sagomaView; /** centro dell'inquadratura scelto dal modello (es. una mano), per i dettagli */ at?: (m: Model) => V3 }) {
       const view = o.view ?? sagomaView;
-      const model = buildModel(o.lm, o.aspect, o.hand, o.gear, o.cal);
+      const model = buildModel(o.lm, o.aspect, o.hand, o.gear, o.cal, o.smooth ? memo : null, o.time);
       const g = ctx.createRadialGradient(W * 0.45, H * 0.35, 0, W * 0.45, H * 0.35, Math.max(W, H) * 0.8);
       for (const [k, c] of BG_STOPS) g.addColorStop(k, c);
       ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -99,7 +100,7 @@ export async function sagomaPainter(W: number, H: number) {
       camSm = camSm && o.smooth
         ? { c: [camSm.c[0] + (model.center[0] - camSm.c[0]) * kc, camSm.c[1] + (model.height * 0.5 - camSm.c[1]) * kc, camSm.c[2] + (model.center[2] - camSm.c[2]) * kc], h: camSm.h + (model.height - camSm.h) * kc }
         : { c: [model.center[0], model.height * 0.5, model.center[2]], h: model.height };
-      const { VP, eye } = sceneCamera(camSm, view, W, H);
+      const { VP, eye } = sceneCamera(o.at ? { c: o.at(model), h: camSm.h } : camSm, view, W, H);
       R.clear(W, H);
       R.draw(model, VP, eye, o.time, view.layers, null, false);
       ctx.drawImage(gl, 0, 0);
@@ -242,6 +243,8 @@ export function Anatomy3D({
     });
     let smooth: Landmark[] | null = null;
     let model: Model | null = null;
+    // profondità che insegue piano: niente braccia che scattano avanti e indietro
+    const memo = depthMemo();
     let last = performance.now();
     const t0 = last;
 
@@ -321,7 +324,7 @@ export function Anatomy3D({
             return mixLm(p, t[i], a, t[i].visibility);
           });
         if (far < 0.0006 && !playing) moving = false;
-        model = buildModel(smooth, asp, hd, gr?.current ?? null, fc ?? live.current.cal) ?? model;
+        model = buildModel(smooth, asp, hd, gr?.current ?? null, fc ?? live.current.cal, memo, time) ?? model;
       }
       if (emptyRef.current !== !model) {
         emptyRef.current = !model;

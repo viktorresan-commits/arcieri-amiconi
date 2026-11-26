@@ -234,8 +234,9 @@ export function PoseRead() {
   const [info, setInfo] = useState("");
   const [now, setNow] = useState<Metrics | null>(null);
   const [gear, setGear] = useState<Gear | null>(null);
+  // arco e freccia del fotogramma mostrato: lo aggiornano lettura, analisi e riproduzione (non il render,
+  // che riporterebbe l'arco dell'ultima pausa e lo farebbe saltare mentre il video scorre)
   const gearRef = useRef<Gear | null>(null);
-  gearRef.current = gear;
   const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -490,7 +491,8 @@ export function PoseRead() {
       });
     } else lm = (k < 0.5 ? a.lm : b.lm) ?? a.lm ?? b.lm;
     if (!lm) return false;
-    const g = (k < 0.5 ? a.g : b.g) ?? null;
+    // l'arco del fotogramma più vicino; se lì non è stato letto, quello dell'altro (niente arco che lampeggia)
+    const g = (k < 0.5 ? (a.g ?? b.g) : (b.g ?? a.g)) ?? null;
     lastLm.current = lm;
     gearRef.current = g;
     smoothRef.current = { lm, t };
@@ -620,6 +622,7 @@ export function PoseRead() {
     setSamples([]);
     setNow(null);
     setGear(null);
+    gearRef.current = null;
     setCropState(null);
     cropRef.current = null;
     setCropMode(false);
@@ -739,6 +742,7 @@ export function PoseRead() {
         const g = lm ? safeGear(video, W, H, lm, handRef.current) : null;
         out.push({ t: video.currentTime, lm, m: lm ? metricsOf(lm, handRef.current, W / H, H) : null, g });
         lastLm.current = lm;
+        gearRef.current = g;
         paintOverlay(lm);
         setTime(video.currentTime);
         setProgress(Math.min(1, (t - from) / Math.max(0.01, to - from)));

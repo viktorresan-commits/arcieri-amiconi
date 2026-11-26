@@ -72,6 +72,7 @@ export function loadBody(level: BodyLevel = "pieno"): Promise<BodyData | null> {
         const meta = (await m.json()) as BodyMeta;
         const buf = await fetchBody(FILES[level], level === "hd");
         if (buf.byteLength < meta.bytes) return null;
+        rigFingers(meta, buf);
         loaded[level] = { meta, buf };
         return loaded[level] ?? null;
       } catch {
@@ -82,6 +83,60 @@ export function loadBody(level: BodyLevel = "pieno"): Promise<BodyData | null> {
   }
   return loading[level] ?? Promise.resolve(null);
 }
+/**
+ * Tendini delle dita. Nel file i tendini che corrono sul dorso e sul palmo delle dita (estensori e
+ * flessori) seguono solo la mano: con le dita piegate restavano dritti e uscivano come fili. Qui,
+ * una volta sola all'apertura, i vertici dei muscoli che stanno sulle dita passano piano piano alle
+ * dita (e al pollice), dalle nocche in avanti.
+ */
+export function rigFingers(meta: BodyMeta, buf: ArrayBuffer) {
+  const st = meta.stride;
+  const lo = meta.lo;
+  const hi = meta.hi;
+  const segs = meta.segments;
+  const parts: { seg: number; hand: number; a: V3; ax: V3; L: number; lat: number }[] = [];
+  for (const s of ["L", "R"] as const) {
+    const hand = segs.indexOf(`mano_${s}`);
+    for (const [name, p0, p1, lat] of [[`dita_${s}`, `dita0_${s}`, `dita1_${s}`, 0.05], [`pollice_${s}`, `pol0_${s}`, `pol1_${s}`, 0.025]] as const) {
+      const seg = segs.indexOf(name);
+      const a = meta.rest[p0];
+      const b = meta.rest[p1];
+      if (seg < 0 || hand < 0 || !a || !b) continue;
+      const d = sub(b, a);
+      const L = len(d);
+      if (L < 1e-3) continue;
+      parts.push({ seg, hand, a, ax: mul(d, 1 / L), L, lat });
+    }
+  }
+  if (!parts.length) return;
+  const u8 = new Uint8Array(buf);
+  const dv = new DataView(buf);
+  for (const b of meta.batches) {
+    if (b.layer !== "muscle") continue;
+    for (let i = 0; i < b.vertices; i++) {
+      const o = b.vOffset + i * st;
+      const ja = u8[o + 9];
+      const jb = u8[o + 10];
+      const w = u8[o + 11];
+      for (const f of parts) {
+        // solo i vertici che seguono soltanto la mano
+        const onlyHand = (ja === f.hand && (w === 255 || jb === f.hand)) || (jb === f.hand && w === 0 && ja !== f.seg);
+        if (!onlyHand) continue;
+        const p: V3 = [0, 1, 2].map((k) => lo[k] + (dv.getUint16(o + k * 2, true) / 65535) * (hi[k] - lo[k])) as V3;
+        const rel = sub(p, f.a);
+        const t = dot(rel, f.ax) / f.L;
+        if (t <= 0 || t > 1.3) continue;
+        if (len(sub(rel, mul(f.ax, dot(rel, f.ax)))) > f.lat) continue;
+        const k = Math.max(0, Math.min(1, t / 0.3));
+        u8[o + 9] = f.seg;
+        u8[o + 10] = f.hand;
+        u8[o + 11] = Math.round(k * 255);
+        break;
+      }
+    }
+  }
+}
+
 export function bodyIfLoaded(level: BodyLevel = "pieno") {
   return loaded[level] ?? null;
 }
@@ -130,7 +185,7 @@ function segMatrix(r: Frame, c: Frame, thick: number, out: Float32Array, at: num
 type Pts = (i: number | string) => V3 | undefined;
 
 /** i 17 segmenti (stesso ordine del file) costruiti con gli stessi gesti per riposo e video */
-function frames(P: Pts, hands: { L: [number, number, number] | null; R: [number, number, number] | null }) {
+function frames(P: Pts, hands: { L: [number, number, number] | null; R: [number, number, number] | null }, look?: V3) {
   const get = (i: number | string) => P(i) ?? [0, 0, 0];
   const shL = get(11), shR = get(12), hipL = get(23), hipR = get(24);
   const shM = lerp(shL, shR, 0.5), hipM = lerp(hipL, hipR, 0.5);
@@ -142,7 +197,7 @@ function frames(P: Pts, hands: { L: [number, number, number] | null; R: [number,
   const F: Record<string, Frame> = {};
   F.bacino = frame(hipM, shM, lrH, lrS);
   F.torace = frame(hipM, shM, lrS, lrH);
-  F.testa = frame(shM, earM, sub(get(0), earM), fwd);
+  F.testa = frame(shM, earM, look ?? sub(get(0), earM), fwd);
   const notch = P("notch") ?? add(shM, mul(fwd, 0.04));
   for (const s of ["L", "R"] as const) {
     const [sh, el, wr, pk, ix, hip, kn, an, he, to] = s === "L" ? [11, 13, 15, 17, 19, 23, 25, 27, 29, 31] : [12, 14, 16, 18, 20, 24, 26, 28, 30, 32];
@@ -174,13 +229,40 @@ function frames(P: Pts, hands: { L: [number, number, number] | null; R: [number,
  * Matrici dei 17 segmenti per la posa attuale. J: punti in metri come in anatomy-model
  * (indici della posa, mani da 33 e 54 se rilevate).
  */
-export function bodyMatrices(meta: BodyMeta, J: Record<number, V3>): Float32Array {
+/** presa delle dita: «hook» la mano della corda aggancia la corda, «wrap» quella dell'arco stringe l'impugnatura */
+export type Grips = {
+  /** lato (sinistro/destro della persona) e quanto è in presa, 0..1 */
+  hook?: { side: "L" | "R"; k: number; toward: V3 };
+  wrap?: { side: "L" | "R"; k: number; toward: V3 };
+};
+
+export function bodyMatrices(meta: BodyMeta, J: Record<number, V3>, look?: V3, grips?: Grips): Float32Array {
   const rest = (i: number | string) => meta.rest[String(i)];
   const hasHand = (base: number) => Boolean(J[base] && J[base + 5] && J[base + 17]);
   // le mani da 21 punti hanno nocche vere: con quelle si usano le teste dei metacarpi del modello
   const handsCur = { L: hasHand(33) ? ([33, 38, 50] as [number, number, number]) : null, R: hasHand(54) ? ([54, 59, 71] as [number, number, number]) : null };
   const Fr = frames(rest, { L: null, R: null });
-  const Fc = frames((i) => (typeof i === "number" ? J[i] : undefined), handsCur);
+  const Fc = frames((i) => (typeof i === "number" ? J[i] : undefined), handsCur, look);
+  // vita: il bacino gira con le anche e il busto con le spalle; oltre 25° di torsione tra i due
+  // la pelle e i muscoli della vita si strozzavano (due segmenti che girano in versi diversi).
+  // Il bacino segue il busto per la parte che avanza
+  {
+    const b = Fc.bacino;
+    const t = Fc.torace;
+    const ax = b.e1;
+    const flat = (v: V3) => norm(sub(v, mul(ax, dot(v, ax))));
+    const pb = flat(b.e2);
+    const pt = flat(t.e2);
+    const ang = Math.atan2(dot(cross(pb, pt), ax), dot(pb, pt));
+    const lim = (25 * Math.PI) / 180;
+    if (Math.abs(ang) > lim) {
+      const turn = ang - Math.sign(ang) * lim;
+      const c = Math.cos(turn);
+      const sn = Math.sin(turn);
+      const rot = (v: V3): V3 => add(add(mul(v, c), mul(cross(ax, v), sn)), mul(ax, dot(ax, v) * (1 - c)));
+      Fc.bacino = { ...b, e2: rot(b.e2), e3: rot(b.e3) };
+    }
+  }
   // il punto di attacco delle clavicole segue il busto
   const tor = Fr.torace;
   const torC = Fc.torace;
@@ -220,6 +302,51 @@ export function bodyMatrices(meta: BodyMeta, J: Record<number, V3>): Float32Arra
     Fc[`dita_${s}`] = fingers(avg([5, 9, 13, 17]), avg([8, 12, 16, 20]), Fr[`dita_${s}`]);
     Fc[`pollice_${s}`] = fingers(J[base + 2], J[base + 4], Fr[`pollice_${s}`]);
   }
+  // dita in presa. All'ancoraggio la mano della corda è contro il viso e i suoi punti sono poco
+  // affidabili: le dita, diritte e lunghe, uscivano a ventaglio. Ora quelle della mano della corda
+  // vanno dalle nocche alla cocca (la corda sta nella piega delle dita, le punte oltre), corte come
+  // dita piegate; quelle della mano dell'arco si chiudono a pugno attorno all'impugnatura.
+  for (const [g, wrap] of [[grips?.hook, false], [grips?.wrap, true]] as const) {
+    if (!g || g.k <= 0.05) continue;
+    const s = g.side;
+    const base = s === "L" ? 33 : 54;
+    const hasH = hasHand(base) && J[base + 9] && J[base + 13];
+    const W = hasH ? J[base] : J[s === "L" ? 15 : 16];
+    const IX = hasH ? J[base + 5] : J[s === "L" ? 19 : 20];
+    const PK = hasH ? J[base + 17] : J[s === "L" ? 17 : 18];
+    const d0 = rest(`dita0_${s}`);
+    const d1 = rest(`dita1_${s}`);
+    if (!W || !IX || !PK || !d0 || !d1) continue;
+    const r = Fr[`dita_${s}`] ?? frame(d0, d1, [0, 0, 1], [1, 0, 0]);
+    Fr[`dita_${s}`] = r;
+    const knuck = hasH ? mul(add(add(J[base + 5], J[base + 9]), add(J[base + 13], J[base + 17])), 0.25) : lerp(IX, PK, 0.5);
+    const e1 = norm(sub(knuck, W));
+    const nC = norm(cross(sub(IX, W), sub(PK, W)));
+    const restL = r.L * kT;
+    const k = Math.min(1, g.k);
+    let dir: V3;
+    let L: number;
+    if (!wrap) {
+      // verso la cocca, appena oltre
+      const to = sub(g.toward, knuck);
+      const d = len(to);
+      dir = d > 0.01 ? norm(to) : e1;
+      L = Math.max(0.4 * restL, Math.min(0.75 * restL, d + 0.02));
+    } else {
+      // pugno: piegate oltre l'angolo retto verso il palmo (che guarda l'impugnatura)
+      const sg = dot(nC, sub(g.toward, knuck)) >= 0 ? 1 : -1;
+      const ph = (100 * Math.PI) / 180;
+      dir = norm(add(mul(e1, Math.cos(ph)), mul(nC, sg * Math.sin(ph))));
+      L = 0.45 * restL;
+    }
+    dir = norm(add(mul(e1, 1 - k), mul(dir, k)));
+    L = restL + (L - restL) * k;
+    // il dorso delle dita resta dalla parte del dorso della mano
+    const side = norm(cross(e1, nC));
+    let nRot = norm(cross(side, dir));
+    if (dot(nRot, nC) < 0 && dot(dir, e1) > 0.3) nRot = mul(nRot, -1);
+    Fc[`dita_${s}`] = frame(knuck, add(knuck, mul(dir, L)), nRot, [0, 0, 1]);
+  }
   const out = new Float32Array(meta.segments.length * 16);
   const idx = (name: string) => meta.segments.indexOf(name);
   meta.segments.forEach((name, i) => {
@@ -231,7 +358,8 @@ export function bodyMatrices(meta: BodyMeta, J: Record<number, V3>): Float32Arra
     }
     // nessun pezzo si allunga o si accorcia oltre il credibile rispetto al busto:
     // gli errori di profondità del video non stirano più braccia, gambe e testa
-    const lo = name === "torace" || name === "bacino" ? 0 : kT * 0.8;
+    // le dita in presa si accorciano (piegate), le altre parti no
+    const lo = name === "torace" || name === "bacino" ? 0 : name.startsWith("dita") ? kT * 0.35 : kT * 0.8;
     const hi = name === "torace" || name === "bacino" ? 99 : kT * 1.22;
     segMatrix(r, c, 1, out, i * 16, lo, hi);
   });

@@ -18,7 +18,7 @@ export type Hud = {
   feet: V3;
 };
 /** J e hand servono al corpo anatomico vero (anatomy-body): ogni segmento segue questi punti */
-export type Model = { parts: Part[]; hud: Hud; center: V3; height: number; J?: Record<number, V3>; hand?: Hand };
+export type Model = { parts: Part[]; hud: Hud; center: V3; height: number; J?: Record<number, V3>; hand?: Hand; /** dove guarda il viso (orizzontale): segue il bersaglio durante il tiro */ headF?: V3; /** quanto la mano della corda è in presa sulla corda (0..1) e quanto quella dell'arco stringe l'impugnatura */ grip?: { draw: number; bow: number } };
 
 const add = (a: V3, b: V3): V3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
 const sub = (a: V3, b: V3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
@@ -146,7 +146,37 @@ export function boneCal(frames: (Landmark[] | null | undefined)[], aspect: numbe
  * con l'arciere). La profondità viene dalle ossa: un osso che nel video sembra più corto del vero
  * va verso la camera o si allontana, di quanto basta a ridargli la sua lunghezza.
  */
-export function bodyPoints(lm: Landmark[], aspect: number, cal: BoneCal | null = null): Record<number, V3> | null {
+/**
+ * Memoria della profondità tra un fotogramma e l'altro: la profondità stimata da un video è la
+ * parte più incerta e, lasciata libera, faceva scattare braccia e mani avanti e indietro.
+ * Larghezza e altezza restano quelle del video (esatte); la profondità le insegue in un decimo di secondo.
+ */
+export type DepthMemo = { z: Map<number, number>; t: number };
+export const depthMemo = (): DepthMemo => ({ z: new Map(), t: -1 });
+
+export function bodyPoints(lm: Landmark[], aspect: number, cal: BoneCal | null = null, memo?: DepthMemo | null, time?: number): Record<number, V3> | null {
+  const out = bodyPointsRaw(lm, aspect, cal);
+  if (!out || !memo || time == null) return out;
+  const dt = memo.t < 0 ? -1 : time - memo.t;
+  memo.t = time;
+  // salto indietro nel tempo o pausa lunga: si riparte dal fotogramma com'è
+  if (dt < 0 || dt > 0.5) {
+    memo.z.clear();
+    for (const k of Object.keys(out)) memo.z.set(Number(k), out[Number(k)][2]);
+    return out;
+  }
+  const a = 1 - Math.exp(-dt / 0.1);
+  for (const k of Object.keys(out)) {
+    const i = Number(k);
+    const prev = memo.z.get(i);
+    const z = prev == null ? out[i][2] : prev + (out[i][2] - prev) * a;
+    memo.z.set(i, z);
+    out[i] = [out[i][0], out[i][1], z];
+  }
+  return out;
+}
+
+function bodyPointsRaw(lm: Landmark[], aspect: number, cal: BoneCal | null = null): Record<number, V3> | null {
   const pl = planar(lm, aspect);
   if (!pl) return null;
   const { P, s, XY, hipsOk, anklesOk } = pl;
@@ -188,7 +218,12 @@ export function bodyPoints(lm: Landmark[], aspect: number, cal: BoneCal | null =
     const dzw = -((pb.zw as number) - (pa.zw as number)); // verso la camera = positivo
     const slope = Math.max(-4, Math.min(4, dzw / Math.max(0.02, dxy)));
     // un osso che punta alla camera si vede corto: la sporgenza arriva dalla sua lunghezza vera
-    const dz = Math.abs(slope) > 1 ? Math.max(l * Math.abs(slope) * 0.85, Math.sqrt(Math.max(0, len_ * len_ - l * l)) * 0.9) : l * Math.abs(slope);
+    // passaggio graduale (non a gradino) quando l'osso comincia a puntare alla camera: la mano
+    // saltava di 20 cm avanti e indietro da un fotogramma all'altro
+    const flatDz = l * Math.abs(slope);
+    const steepDz = Math.max(l * Math.abs(slope) * 0.85, Math.sqrt(Math.max(0, len_ * len_ - l * l)) * 0.9);
+    const tSteep = Math.max(0, Math.min(1, (Math.abs(slope) - 0.7) / 0.6));
+    const dz = flatDz + (steepDz - flatDz) * tSteep;
     return Math.sign(slope) * Math.min(len_ * 1.1, dz);
   };
   // spalle e anche: il busto girato rispetto alla camera
@@ -249,14 +284,15 @@ export function bodyPoints(lm: Landmark[], aspect: number, cal: BoneCal | null =
       [neckC, out[sh], 0.06, 0.13],
       [neckC, sternum, 0.1, 0.13],
     ];
-    let best: { d: number; z: number } | null = null;
+    let best: { d: number; z: number; w: number } | null = null;
     for (const [p, q, dz, lim] of segs) {
       const ax = q[0] - p[0];
       const ay = q[1] - p[1];
       const t = Math.max(0, Math.min(1, ((out[wr][0] - p[0]) * ax + (out[wr][1] - p[1]) * ay) / (ax * ax + ay * ay || 1)));
       const c = lerp(p, q, t);
       const d = d2v(out[wr], c);
-      if (d <= lim && (!best || d < best.d)) best = { d, z: c[2] + fwdZ * dz };
+      // vicino al corpo la mano lo tocca; avvicinandosi ci arriva piano (prima saltava di colpo)
+      if (d <= lim && (!best || d < best.d)) best = { d, z: c[2] + fwdZ * dz, w: Math.max(0, Math.min(1, (lim - d) / (lim * 0.4))) };
     }
     if (!best) continue;
     const drawing = d2v(out[wr], mouth) < 0.16 && d2v(out[owr], out[osh]) > 0.4 && Math.abs(out[owr][1] - out[osh][1]) < 0.25 && Math.abs(out[el][1] - out[sh][1]) < 0.22;
@@ -273,9 +309,10 @@ export function bodyPoints(lm: Landmark[], aspect: number, cal: BoneCal | null =
       const lineZ = Math.abs(dx) > 0.05 ? wz + ((wz - bow[2]) / dx) * (out[el][0] - out[wr][0]) : wz;
       ez = (pick(lineZ) + lineZ) / 2;
     } else ez = pick(out[el][2]);
-    const dWr = wz - out[wr][2];
-    out[wr][2] = wz;
-    out[el][2] = ez;
+    const wNew = out[wr][2] + (wz - out[wr][2]) * best.w;
+    const dWr = wNew - out[wr][2];
+    out[el][2] = out[el][2] + (ez - out[el][2]) * best.w;
+    out[wr][2] = wNew;
     for (const f of wr === 15 ? [17, 19, 21] : [18, 20, 22]) if (out[f]) out[f][2] += dWr;
   }
   // (i punti in metri del modello di posa non danno più la forma del corpo: con l'arciere di fronte
@@ -341,8 +378,8 @@ const muscleCol = (a: number): V3 => {
   return [0.72 + 0.28 * t, 0.27 + 0.55 * t, 0.22 + 0.06 * t];
 };
 
-export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gear | null = null, cal: BoneCal | null = null): Model | null {
-  const J = bodyPoints(lm, aspect, cal);
+export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gear | null = null, cal: BoneCal | null = null, memo?: DepthMemo | null, time?: number): Model | null {
+  const J = bodyPoints(lm, aspect, cal, memo, time);
   if (!J) return null;
   const S = sides(hand);
   const parts: Part[] = [];
@@ -371,14 +408,15 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gea
     return place(c, ax, ay, az, rx, ry, rz);
   };
 
-  // testa: centro tra le orecchie, orientata col naso
-  const earM = lerp(J[7], J[8], 0.5);
-  const headC = add(earM, mul(up, 0.025));
-  const headF = perp(up, sub(J[0], earM));
-  const headR = norm(cross(up, headF));
-  const neckTop = add(headC, mul(up, -0.085));
   const bow = { sh: J[S.bow[0]], el: J[S.bow[1]], wr: J[S.bow[2]] };
   const drw = { sh: J[S.draw[0]], el: J[S.draw[1]], wr: J[S.draw[2]] };
+  // testa: centro tra le orecchie, orientata col naso; durante il tiro guarda il bersaglio
+  const earM = lerp(J[7], J[8], 0.5);
+  const headC = add(earM, mul(up, 0.025));
+  const aimed = headAim(J, bow, drw, up, fwd);
+  const headF = aimed.f;
+  const headR = norm(cross(up, headF));
+  const neckTop = add(headC, mul(up, -0.085));
   const bowIdx = J[hand === "destro" ? 19 : 20] ?? bow.wr;
   const drwIdx = J[S.drawFinger] ?? drw.wr;
 
@@ -766,5 +804,48 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gea
     height: top,
     J,
     hand,
+    headF,
+    grip: { draw: aimed.drawing, bow: aimed.raised },
   };
+}
+
+/**
+ * Dove guarda la testa. Il naso rispetto alle orecchie dice quanto è girata, ma di scorcio (arciere
+ * di fronte alla camera, bersaglio di lato) la girata si vede sempre più piccola del vero: la sagoma
+ * guardava la camera invece del bersaglio. Durante il tiro l'arciere guarda il bersaglio lungo la
+ * freccia, quindi con il braccio dell'arco alzato la testa si gira verso la mano dell'arco
+ * (del tutto all'ancoraggio), al massimo di 85° rispetto al petto.
+ */
+function headAim(J: Record<number, V3>, bow: { sh: V3; el: V3; wr: V3 }, drw: { sh: V3; el: V3; wr: V3 }, up: V3, fwd: V3) {
+  const earM = lerp(J[7], J[8], 0.5);
+  const look = perp(up, sub(J[0], earM));
+  const mouth: V3 = J[9] && J[10] ? lerp(J[9], J[10], 0.5) : J[0];
+  const flat = (v: V3) => {
+    const h = sub(v, mul(up, dot(v, up)));
+    return len(h) > 1e-4 ? norm(h) : null;
+  };
+  // braccio dell'arco alzato e disteso verso il bersaglio
+  const armLen = len(sub(bow.wr, bow.sh));
+  const level = 1 - Math.min(1, Math.abs(bow.wr[1] - bow.sh[1]) / 0.3);
+  const raised = Math.max(0, Math.min(1, level * Math.min(1, Math.max(0, (armLen - 0.3) / 0.15))));
+  // mano della corda al viso: si guarda lungo la freccia
+  const toFace = len(sub(drw.wr, mouth));
+  const drawing = raised * Math.max(0, Math.min(1, (0.24 - toFace) / 0.1));
+  const aim = flat(sub(bow.wr, drawing > 0.2 ? drw.wr : bow.sh));
+  if (!aim || raised < 0.05) return { f: look, raised, drawing };
+  const w = Math.min(0.92, 0.55 * raised + 0.37 * drawing);
+  let f = add(mul(look, 1 - w), mul(aim, w));
+  if (len(f) < 1e-3) f = aim;
+  f = perp(up, f);
+  // collo: al massimo 85° dal petto
+  const fw = flat(fwd);
+  if (fw) {
+    const c = dot(f, fw);
+    const lim = Math.cos((85 * Math.PI) / 180);
+    if (c < lim) {
+      const side = norm(sub(f, mul(fw, c)));
+      f = norm(add(mul(fw, lim), mul(side, Math.sqrt(1 - lim * lim))));
+    }
+  }
+  return { f, raised, drawing };
 }

@@ -5,6 +5,7 @@
 import { v3, type Model, type Part, type V3 } from "./anatomy-model";
 import { bodyMatrices, groupValues, type BodyBatch, type BodyData, type BodyLevel, type BodyMeta } from "./anatomy-body";
 import { flexInfo, flexValues, skinWithMuscles, type FlexInfo } from "./anatomy-flex";
+import { sides } from "./pose-analysis";
 
 export type Layers = { pelle: boolean; muscolo: boolean; osso: boolean };
 
@@ -116,22 +117,37 @@ void main(){
     if (vTend > 0.5) boneCol = vec3(0.24, 0.36, 0.48);
     col = boneCol * (0.32 + 0.12 * hemi + dif * 0.55) + vec3(0.55, 0.8, 1.0) * rim * 0.35;
   } else {
-    // muscoli: rosso bruno con le fibre lungo il muscolo, tendini chiari, lucidi
-    // fibre: fasci separati da solchi sottili, come nelle tavole; si attenuano dove sullo schermo
-    // sarebbero più fitti di un paio di pixel (niente puntinato)
-    float fy = vF.y * 34.0 + 0.18 * sin(vF.x * 9.0);
+    // muscoli: rosso bruno con le fibre lungo il muscolo, tendini chiari, lucidi.
+    // Le fibre sono fasci (circa 4-5 mm, il passo è già in millimetri veri nel modello) separati da solchi,
+    // ognuno con il suo tono e il suo spessore; dentro ogni fascio le fibrille fini, visibili solo da vicino.
+    // Tutto si attenua dove sullo schermo sarebbe più fitto di un paio di pixel (niente puntinato).
+    float fy = vF.y * 34.0 + 0.18 * sin(vF.x * 9.0) + 0.22 * sin(vF.x * 2.7 + vF.y * 4.1);
+    float id = floor(fy);
+    float h = fract(id * 0.618034 + 0.27);
+    float h2 = fract(h * h * 7.13 + h * 3.71);
 #ifdef HAS_DERIV
     float fw = fwidth(fy);
     float amp = 1.0 - smoothstep(0.16, 0.45, fw);
+    float ampF = 1.0 - smoothstep(0.03, 0.09, fw);
 #else
     float fw = 0.08;
     float amp = 0.5;
+    float ampF = 0.0;
 #endif
     float fr = fract(fy);
-    float dl = min(fr, 1.0 - fr);
-    float groove = 1.0 - smoothstep(0.02, 0.09 + fw * 1.2, dl);
-    float bundle = 0.5 + 0.5 * sin(fy * 6.2832 * 0.5 + 1.3);
-    float fib = 1.0 - amp * (0.24 * groove - 0.05 * bundle) - amp * 0.03 * sin(fy * 6.2832 * 3.0);
+    // il solco non sta sempre a metà: fasci un po' più larghi o più stretti
+    float dl = min(fr, 1.0 - fr) * (0.8 + 0.4 * h2);
+    // lungo il muscolo ogni fascio cambia piano tono e i solchi a tratti si chiudono (fasci che si uniscono):
+    // niente righe tutte uguali da un capo all'altro
+    float x5 = vF.x * 5.0 + h * 7.0;
+    float fx = floor(x5); float tx = fract(x5); tx = tx * tx * (3.0 - 2.0 * tx);
+    float n = mix(fract(sin(id * 12.9898 + fx * 78.233) * 43758.5453), fract(sin(id * 12.9898 + (fx + 1.0) * 78.233) * 43758.5453), tx);
+    float groove = (1.0 - smoothstep(0.02, 0.09 + fw * 1.2, dl)) * (0.4 + 0.6 * n) * (0.7 + 0.3 * h);
+    // ventre del fascio un po' in rilievo (luce sopra, ombra nel solco)
+    float crown = sin(fr * 3.14159);
+    float fibril = 0.5 + 0.5 * cos(fy * 6.2832 * 6.0 + h * 6.0);
+    float tone = (n - 0.5) * 0.16 + (h2 - 0.5) * 0.08;
+    float fib = 1.0 - amp * (0.3 * groove - 0.06 * crown) - amp * tone - ampF * 0.06 * fibril;
     vec3 rest = vec3(0.74, 0.35, 0.31);
     vec3 work = vec3(1.0, 0.36, 0.2);
     float act = clamp(vAct, 0.0, 1.0);
@@ -141,6 +157,19 @@ void main(){
     else if (vFoc < -0.5) { base = mix(rest, vec3(0.5, 0.42, 0.42), 0.35); on = 0.0; }
     base = mix(base, vec3(0.93, 0.9, 0.86), vTend * 0.85);
     float spec = pow(max(dot(R, V), 0.0), 40.0) * (0.1 + 0.18 * on);
+    // lucido lungo le fibre (come la seta): la riga di luce corre di traverso al fascio
+    float silk = 0.0;
+#ifdef HAS_DERIV
+    // scalati: sui telefoni con poca precisione numeri così piccoli diventerebbero zero
+    vec3 dp1 = dFdx(vW) * 1000.0; vec3 dp2 = dFdy(vW) * 1000.0;
+    vec3 T = cross(dp2, N) * (dFdx(vF.x) * 100.0) + cross(N, dp1) * (dFdy(vF.x) * 100.0);
+    float tl = length(T);
+    if (tl > 1e-4) {
+      T /= tl;
+      float th = dot(T, normalize(L + V));
+      silk = pow(sqrt(max(0.0, 1.0 - th * th)), 24.0) * 0.14 * amp * (1.0 - groove) * (0.6 + 0.4 * crown);
+    }
+#endif
     float edge = mix(1.0, 0.62, pow(1.0 - ndv, 2.4));
     // il muscolo che lavora si accende dall'interno (arancio che va verso il giallo al centro del ventre)
     // e pulsa piano, come nelle animazioni anatomiche
@@ -148,7 +177,8 @@ void main(){
     vec3 glow = mix(vec3(1.0, 0.42, 0.16), vec3(1.0, 0.78, 0.32), pow(ndv, 3.0) * on);
     col = base * (0.3 + 0.16 * hemi + dif * 0.72) * mix(fib, 1.0, vTend) * edge
         + glow * on * (0.3 + 0.55 * rim) * (1.0 - vTend) * pulse
-        + vec3(1.0, 0.92, 0.85) * spec;
+        + vec3(1.0, 0.92, 0.85) * spec
+        + vec3(1.0, 0.86, 0.8) * silk * (1.0 - vTend);
   }
   gl_FragColor = vec4(col, a);
 }`;
@@ -395,7 +425,14 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
   const drawBody = (model: Model, VP: Float32Array, eye: V3, L: Layers, focus: Set<string> | null | undefined, time: number) => {
     if (!body || !model.J || !model.hand) return;
     const meta = body.meta;
-    const mats = bodyMatrices(meta, model.J);
+    const sd = sides(model.hand);
+    const side = (i: number): "L" | "R" => (i === 15 ? "L" : "R");
+    const pts = model.hud.pts;
+    const aim = v3.sub(pts.bowWr, pts.drawWr);
+    const mats = bodyMatrices(meta, model.J, model.headF, model.grip ? {
+      hook: { side: side(sd.draw[2]), k: model.grip.draw, toward: pts.nock },
+      wrap: { side: side(sd.bow[2]), k: model.grip.bow, toward: v3.add(pts.grip, v3.mul(v3.norm(aim), 0.05)) },
+    } : undefined);
     const acts = new Map<string, number>();
     for (const p of model.parts) if (p.layer === "muscolo" && p.id) acts.set(p.id, Math.max(acts.get(p.id) ?? 0, p.act));
     const g = groupValues(meta, model.hand, acts, focus);

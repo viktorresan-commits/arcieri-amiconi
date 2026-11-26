@@ -242,13 +242,51 @@ export function analyzeShots(samples: Sample[], hand: Hand): Analysis {
     kept.push(r);
   }
 
+  /**
+   * Rilascio morbido (arco storico, longbow, rilascio con le dita): la mano della corda, ferma
+   * all'ancoraggio, scivola indietro di qualche centimetro e poi resta lì nell'accompagnamento.
+   * Non è uno scatto veloce e la mano resta al viso, quindi la tenuta sembrava continuare fino a
+   * quando l'arciere abbassava le braccia (rilascio segnato un secondo dopo, o mai).
+   * Si cerca dentro la tenuta: mano ferma per almeno 0,2 s, poi in 0,3 s si allontana dall'arco
+   * (mani più distanti di almeno 7 centesimi di spalla, velocità di picco sopra 0,45 spalle al
+   * secondo) e non torna avanti.
+   */
+  const softRelease = (a: number, b: number): number | null => {
+    const sp = (i: number) => valid[i].m.spread;
+    for (let i = a + 2; i <= Math.min(n - 2, b + 2); i += 1) {
+      if (valid[i].t - valid[a].t < 0.25 || !valid[i].m.bowUp) continue;
+      let j = i - 1;
+      while (j > a && speed[j] < 0.4 && valid[i].t - valid[j].t <= 0.6) j -= 1;
+      if (valid[i - 1].t - valid[j + 1].t < 0.2) continue;
+      let k = i;
+      let vmax = speed[i];
+      while (k + 1 < n && valid[k + 1].t - valid[i].t <= 0.3) {
+        k += 1;
+        vmax = Math.max(vmax, speed[k]);
+      }
+      if (sp(k) - sp(i - 1) < 0.07 || vmax < 0.45) continue;
+      // non torna avanti nel mezzo secondo dopo: era un rilascio, non un aggiustamento
+      let after = k;
+      while (after + 1 < n && valid[after + 1].t - valid[k].t <= 0.3) after += 1;
+      if (sp(after) < sp(i - 1) + 0.05) continue;
+      // il momento in cui la mano parte davvero
+      let at = i;
+      while (at < k && speed[at] < 0.4) at += 1;
+      return at;
+    }
+    return null;
+  };
+
   const shots: Shot[] = [];
   let floor = 0; // le fasi di un tiro non tornano dentro il tiro precedente
-  for (const [a, b] of kept) {
+  for (const [a, b0] of kept) {
+    // rilascio morbido dentro la tenuta: la tenuta finisce lì
+    const soft = softRelease(a, b0);
+    const b = soft != null ? Math.max(a, soft - 1) : b0;
     const endT = valid[b].t;
-    // rilascio: primo scatto veloce entro mezzo secondo, con la mano che si allontana dall'arco
-    let rel: number | null = null;
-    for (let i = b; i < n && valid[i].t <= endT + 0.6; i += 1) {
+    // rilascio: il morbido, oppure il primo scatto veloce entro mezzo secondo, con la mano che si allontana dall'arco
+    let rel: number | null = soft;
+    for (let i = b; rel == null && i < n && valid[i].t <= endT + 0.6; i += 1) {
       if (speed[i] > 1.6 && i > 0 && valid[i].m.spread >= valid[i - 1].m.spread - 0.05) {
         rel = i;
         break;
