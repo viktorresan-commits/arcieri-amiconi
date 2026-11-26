@@ -8,7 +8,7 @@ import { FITAST_HOME, fitastRead } from "./fitast.api";
 import type { FitastPage } from "./fitast-parse";
 import { classificaUrl, cleanTitle, titleScore, findGare, garaDateOf, garaIdOf, garaTitleOf, rowFields, seasonRange, seasonSelect, type Gara } from "./fitast-gare";
 import { currentTexts, FILTER_BUTTON, filterCombos, pressReq, type Req } from "./fitast-nav";
-import { namesOnly, piazzoleRows, rankingRows, SQUADRE_PAGES, type RankRow } from "./fitast-league";
+import { namesOnly, piazzoleRows, pzName as cleanPz, smartPiazzoleRows, rankingRows, SQUADRE_PAGES, type RankRow } from "./fitast-league";
 import { saveFitastStandings, type StandingKind } from "./fitast-league.api";
 
 export type SyncProgress = { step: string; pages: number; saved: number; diag?: string[]; done?: boolean; error?: string; /** a fine giro: cosa si è letto delle piazzole */ note?: string };
@@ -208,15 +208,64 @@ export async function syncStandings(opts: { onProgress: (p: SyncProgress) => voi
     // già tutte (più piazzole nella stessa pagina): basta
     if (places() >= 2) return [...got.values()];
     const btn = c.btn;
-    const press = async (choose: Record<string, string>, label: string, pzNum: number | null = null) => {
-      if (opts.stop()) return 0;
-      const q = await read(pressReq(p0, btn, { ...c.now, ...choose }, label));
-      if (!q || (pzGaraOf(q) && pzGaraOf(q) !== id)) return 0;
+    // il numero della gara deve restare nell'invio: senza P1 il portale riapre la sua gara predefinita
+    const withP1 = (u: string) => (/[?&]P1=/i.test(u) ? u : `${u}${u.includes("?") ? "&" : "?"}P1=${id}`);
+    const targets = [...new Set([withP1(p0.url), withP1(p0.form?.action || p0.url)])];
+    let how = -1;
+    // la tabella dei nomi (WEBDEV), per chiederne le righe come fa il browser
+    const tAlias = p0.wdAliases?.[0] || /DeclareChamp (\w+):WDTable/.exec((p0.diag ?? []).join(" "))?.[1] || "";
+    const baseLines = new Set(p0.lines.map((l) => l.trim()));
+    const tried: string[] = [];
+    /** i nomi comparsi dopo CERCA (righe di testo che la pagina vuota non aveva), se nessuna tabella li dà */
+    const newNames = (q: FitastPage, pzNum: number) => {
+      const fresh = q.lines.map((l) => l.trim()).filter((l) => l && !baseLines.has(l));
+      const out: RankRow[] = [];
+      fresh.forEach((l, i) => {
+        const nm = cleanPz(l);
+        if (!/^[\p{L}'’.\- ]{5,60}$/u.test(nm) || nm.split(/\s+/).length < 2 || /arcier|compagn|societ|gruppo|club|piazzol|categor|tipolog|turno|cerca|indietro|elenco/i.test(nm)) return;
+        const next = fresh[i + 1] ?? "";
+        out.push({ place: pzNum, name: nm, team: /arcier|compagn|a\.?s\.?d|societ|club|sagittar|frecc|tiro/i.test(next) ? next : "", score: null, camp: null });
+      });
+      return out.length >= 2 ? out.slice(0, 40) : [];
+    };
+    const rowsOf = (q: FitastPage, pzNum: number | null) => {
       let rows = piazzoleRows(q);
+      if (!rows.length) rows = smartPiazzoleRows(q, pzNum);
       // la pagina di una sola piazzola a volte non ripete il numero: si prende quello scelto
       if (!rows.length && pzNum != null) rows = namesOnly(q).map((r) => ({ ...r, place: pzNum }));
-      add(rows);
-      return rows.length;
+      if (!rows.length && pzNum != null) rows = newNames(q, pzNum);
+      return rows;
+    };
+    const press = async (choose: Record<string, string>, label: string, pzNum: number | null = null) => {
+      if (opts.stop()) return 0;
+      // la prima volta si provano i modi di inviare (indirizzo con P1, azione del modulo con P1): poi si tiene quello buono
+      const ways = how >= 0 ? [how] : [...targets.map((_, k) => k), ...(tAlias ? [targets.length] : [])];
+      for (const k of ways) {
+        let r = pressReq(p0, btn, { ...c.now, ...choose, P1: id }, label);
+        if (!r) return 0;
+        if (k < targets.length) r.url = targets[k];
+        else {
+          // come la tabella AJAX del browser: le righe chieste alla pagina con i filtri scelti (pagine AWP senza sessione)
+          const fields: Record<string, string> = { ...(p0.form?.fields ?? {}), ...c.now, ...choose, P1: id, WD_ACTION_: "AJAXEXECUTE", LIGNESTABLE: tAlias, "0": "100" };
+          delete fields.WD_BUTTON_CLICK_;
+          r = { url: targets[0], post: { fields, charset: p0.charset }, referer: p0.url, label };
+        }
+        const q = await read(r);
+        if (!q) continue;
+        const shown = pzGaraOf(q);
+        const rows = shown && shown !== id ? [] : rowsOf(q, pzNum);
+        if (tried.length < 2 && how < 0) {
+          const tabs = q.tables.slice(0, 3).map((t) => `${t.rows.length}r:${t.rows[0]?.map((x) => x.text.slice(0, 10)).join("/") ?? ""}|${t.rows[1]?.map((x) => x.text.slice(0, 12)).join("/") ?? ""}`).join(" ; ");
+          const fresh = q.lines.map((l) => l.trim()).filter((l) => l && !baseLines.has(l)).slice(0, 5).map((l) => l.slice(0, 30)).join(" / ");
+          tried.push(`${k < targets.length ? `CERCA ${k + 1} (${targets[k].split("/").pop()?.slice(0, 34)})` : `AJAX ${tAlias}`} → gara ${shown || "?"} · ${rows.length} nomi · tabelle ${tabs || "nessuna"} · testo nuovo: ${fresh || "nessuno"} · ${(q.diag ?? []).join(" · ").slice(0, 400)}`);
+        }
+        if (rows.length) {
+          how = k;
+          add(rows);
+          return rows.length;
+        }
+      }
+      return 0;
     };
     // turni: «tutti» se c'è, altrimenti ognuno (di solito 1 o 2)
     const tAll = c.turn?.options.find((o) => isAll(o.text));
@@ -251,7 +300,7 @@ export async function syncStandings(opts: { onProgress: (p: SyncProgress) => voi
         if (ti > 0 && !found && empty >= 3) break;
       }
     }
-    if (!got.size && pzStats.seen.length < 3) pzStats.seen.push(`${PZ_PAGE}?P1=${id} → ${spent} piazzole provate con CERCA, nessun nome · ${(p0.diag ?? []).slice(0, 2).join(" · ")}`);
+    if (!got.size && pzStats.seen.length < 4) pzStats.seen.push(`${PZ_PAGE}?P1=${id} → ${spent} piazzole provate con CERCA, nessun nome · tendine ${c.sels.map((x) => `${x.label || x.name}=${x.name}(${x.options.length})`).join(", ")} · CERCA=${btn.code} · ${tried.join(" | ")} · pagina: ${(p0.diag ?? []).join(" · ").slice(0, 500)}`);
     return [...got.values()];
   };
   const piazzole = async (id: string, gara: { id: string; title: string; day: string }, referer: string, g?: Gara, page?: FitastPage | null) => {

@@ -476,6 +476,40 @@ export function namesOnly(page: FitastPage, limit = 60): Omit<RankRow, "place">[
   return [];
 }
 
+/**
+ * Nomi di una piazzola da una tabella qualsiasi, anche senza titoli delle colonne (le righe che il portale
+ * manda dopo CERCA spesso arrivano senza intestazione): la colonna dei nomi è quella con più nomi di persona,
+ * la compagnia quella con più nomi di società, la piazzola un numero (o quella scelta).
+ */
+export function smartPiazzoleRows(page: FitastPage, pzNum: number | null, limit = 80): RankRow[] {
+  for (const t of [...page.tables].sort((a, b) => b.rows.length - a.rows.length)) {
+    if (t.rows.length < 2) continue;
+    const width = Math.max(...t.rows.map((r) => r.length));
+    if (width < 1) continue;
+    const body = t.rows.filter((r) => r.some((c) => clean(c.text)));
+    const score = (k: number, test: (x: string) => boolean) => body.filter((r) => test(pzName(r[k]?.text ?? ""))).length;
+    const cols = Array.from({ length: width }, (_, k) => k);
+    const nameCol = cols.map((k) => [k, score(k, NAME_LIKE)] as const).sort((a, b) => b[1] - a[1])[0];
+    if (!nameCol || nameCol[1] < 2 || nameCol[1] < body.length * 0.4) continue;
+    const teamCol = cols.filter((k) => k !== nameCol[0]).map((k) => [k, score(k, (x) => LOOKS_COMPANY.test(x) && x.length > 4)] as const).sort((a, b) => b[1] - a[1])[0];
+    const pzCol = cols.filter((k) => k !== nameCol[0]).map((k) => [k, score(k, (x) => /^\d{1,3}$/.test(x.trim()) && (pzNum == null || Number(x) === pzNum))] as const).sort((a, b) => b[1] - a[1])[0];
+    const rows: RankRow[] = [];
+    let last: number | null = pzNum;
+    for (const r of body) {
+      const name = pzName(r[nameCol[0]]?.text ?? "");
+      // nella colonna giusta basta che sembri un nome (MARCO contiene «arco», ma è un nome)
+      if (!/^[\p{L}'’.\- ]{4,60}$/u.test(name) || name.split(/\s+/).length < 2) continue;
+      const pz = pzCol && pzCol[1] > 0 ? numIt(r[pzCol[0]]?.text ?? "") : null;
+      if (pz != null && Number.isFinite(pz)) last = Math.round(pz);
+      if (last == null) continue;
+      rows.push({ place: last, name, team: teamCol && teamCol[1] > 0 ? clean(r[teamCol[0]]?.text ?? "") : "", score: null, camp: null });
+      if (rows.length >= limit) break;
+    }
+    if (rows.length >= 1) return rows;
+  }
+  return [];
+}
+
 export function piazzoleRows(page: FitastPage, limit = 600): RankRow[] {
   const tables = [...page.tables].sort((a, b) => b.rows.length - a.rows.length);
   for (const t of tables) {
