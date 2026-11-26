@@ -9,6 +9,7 @@ import { CategoryIcon } from "@/components/gear-icons";
 import { Glyph } from "@/components/icons";
 import { ReceiptsCard } from "@/components/receipt-import";
 import { ClubSpend } from "@/components/club-spend";
+import { GearSpecSheet, type GearItem } from "@/components/gear-spec-sheet";
 
 export const Route = createFileRoute("/_app/acquisti")({ component: Page });
 
@@ -40,7 +41,9 @@ function Page() {
   const setup = useArcherSetup();
   const [form, setForm] = useState(EMPTY);
   const [err, setErr] = useState("");
-  const [moved, setMoved] = useState<number[]>([]);
+  // voci passate in attrezzatura: voce della lista → pezzo creato (per cercarne le specifiche)
+  const [moved, setMoved] = useState<Record<number, GearItem>>({});
+  const [specOf, setSpecOf] = useState<GearItem | null>(null);
   const all = data ?? [];
   const reload = () => setNonce((n) => n + 1);
   const rows = all.filter((r) => (view === "tutti" || r.status === view) && (cat === "tutte" || r.category === cat));
@@ -157,7 +160,7 @@ function Page() {
 
       {rows.map((item) => {
         const pr = PRIORITY.find((p) => p.id === item.priority) ?? PRIORITY[1];
-        const isMoved = moved.includes(item.id);
+        const isMoved = Boolean(moved[item.id]);
         return (
           <Card key={item.id} className="grid gap-2.5 p-3">
             <div className="flex items-start gap-3">
@@ -183,20 +186,28 @@ function Page() {
                 <button
                   type="button"
                   className="inline-flex min-h-9 items-center gap-1 rounded-full bg-primary/20 px-3 text-xs font-semibold"
-                  onClick={() =>
-                    saveEquipment({ data: { id: null, category: item.category, name: item.name, status: "in_use", visibility: "personal", priceCents: item.priceCents, notes: item.notes ?? "", purchasedOn: new Date().toISOString().slice(0, 10), specs: item.category === "freccia" ? { qty: String(Math.max(1, item.qty || 1)) } : {} } })
-                      .then(() => setMoved((m) => [...m, item.id]))
-                      .catch((e: unknown) => setErr(e instanceof Error ? e.message : "Errore"))
-                  }
+                  onClick={() => {
+                    const entry = { id: null, category: item.category, name: item.name, status: "in_use", visibility: "personal", priceCents: item.priceCents, notes: item.notes ?? "", shop: "", purchasedOn: new Date().toISOString().slice(0, 10), specs: (item.category === "freccia" || ["aste", "punte", "alette", "cocche"].includes(item.category) ? { qty: String(Math.max(1, item.qty || 1)) } : {}) as Record<string, string> };
+                    saveEquipment({ data: entry })
+                      .then((res) => setMoved((m) => ({ ...m, [item.id]: { ...entry, id: res.id, mine: true, owner: "", brand: "", model: "", photoUrl: null, status: "in_use", visibility: "personal" } })))
+                      .catch((e: unknown) => setErr(e instanceof Error ? e.message : "Errore"));
+                  }}
                 >
                   <Glyph name="save" size={14} /> Metti in attrezzatura
                 </button>
               ) : null}
-              {isMoved ? <span className="text-xs font-semibold text-accent">Aggiunto all'attrezzatura</span> : null}
+              {isMoved ? (
+                <>
+                  <span className="inline-flex min-h-9 items-center text-xs font-semibold text-accent">In attrezzatura</span>
+                  <button type="button" onClick={() => setSpecOf(moved[item.id])} className="inline-flex min-h-9 items-center gap-1 rounded-full bg-primary/20 px-3 text-xs font-semibold"><Glyph name="search" size={13} /> Cerca le specifiche</button>
+                </>
+              ) : null}
             </div>
           </Card>
         );
       })}
+
+      {specOf ? <GearSpecSheet item={(gear.data ?? []).find((g) => g.id === specOf.id) ?? specOf} gear={gear.data ?? []} onClose={() => setSpecOf(null)} onSaved={reload} /> : null}
 
       {/* quello che si compra insieme in compagnia */}
       <ClubSpend />

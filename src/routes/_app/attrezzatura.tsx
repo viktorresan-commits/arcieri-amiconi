@@ -11,6 +11,7 @@ import { Button, Card, Empty, ErrorNote, Field, Loading, PageHead, Select, TextA
 import { ARROW_USE, BOW_LENGTHS, BOW_TYPES, FLETCH_TYPES, LIMB_COLORS, POINT_TYPES, RISER_COLORS, SHAFT_MATERIALS, SWATCHES, ArrowIcon, BowIcon, CategoryIcon } from "@/components/gear-icons";
 import { ARROW_MODELS, FLETCH_STYLES } from "@/components/arrow-art";
 import { BOW_MODELS, BOW_WOODS } from "@/components/bow-art";
+import { GearSpecSheet, type GearItem } from "@/components/gear-spec-sheet";
 import { MainGearCard } from "@/components/main-gear";
 import { ArrowWeights, SpineField } from "@/components/arrow-weights";
 import { GRAINS_PER_G, spineLb, spineUnitOf, spineLabel, weightInfo, weightLabel } from "@/lib/arcieri/arrow-spec";
@@ -103,6 +104,8 @@ function Page() {
   // le mie attrezzature; i pezzi che i compagni mettono nell'inventario del gruppo stanno a parte
   const items = shown.filter((g) => g.mine);
   const [sharedOpen, setSharedOpen] = useState(false);
+  // scheda delle specifiche aperta su un pezzo
+  const [specOf, setSpecOf] = useState<GearItem | null>(null);
   const shared = shown.filter((g) => !g.mine);
 
   function edit(item: NonNullable<typeof gear.data>[number]) {
@@ -379,6 +382,7 @@ function Page() {
               {item.mine ? (
                 <div className="flex gap-3 text-xs">
                   <button type="button" className="font-semibold text-primary" onClick={() => edit(item)}>Modifica</button>
+                  <button type="button" className="font-semibold text-primary" onClick={() => setSpecOf(item)}>Specifiche</button>
                   <button type="button" className="text-danger" onClick={() => askDelete(item)}>Elimina</button>
                 </div>
               ) : null}
@@ -464,6 +468,7 @@ function Page() {
           })}
         </ul>
       </Card>
+      {specOf ? <GearSpecSheet item={specOf} gear={gear.data ?? []} onClose={() => setSpecOf(null)} onSaved={reload} /> : null}
       <Link to="/balistica" className="aa-press flex items-center gap-3 rounded-[var(--radius-card)] border border-hair bg-white/[0.04] p-3">
         <AppIcon name="ballistics" color="#cc4f3b" size={44} />
         <span className="min-w-0 flex-1">

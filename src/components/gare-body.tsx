@@ -19,6 +19,8 @@ import type { TeamResult } from "@/lib/arcieri/palmares.api";
 import { CrestMark, FitastLogo, GaraBoard, type Crest, type FitastLeagueState, type OurArcher } from "@/components/fitast-league";
 import { FitastLinkCard } from "@/components/fitast-link";
 import { ScorecardImport } from "@/components/scorecard-import";
+import { PiazzolaPicker } from "@/components/piazzola-picker";
+import { removePiazzolaMate } from "@/lib/arcieri/scorecard.api";
 import { categoryGroup, titleName } from "@/lib/arcieri/fitast-league";
 
 
@@ -307,7 +309,22 @@ export function GareBody({ embedded = false, league }: { embedded?: boolean; /**
                   {...fold("piazzole", true)}
                 >
                   <Fold icon="team" title={past ? "Con te in piazzola" : "Tirerai con"} sub={mates.length ? mates.map((m) => m.name.split(" ")[0]).slice(0, 4).join(", ") + (mates.length > 4 ? "…" : "") : "dal portale o dal cartellino"} inner {...fold("mates", true)}>
-                    {mates.length ? <PiazzolaMates group={comp.group as { piazzola: number; mates: Mate[] }} past={past} /> : <p className="text-xs text-muted">{pzWhy(comp)}</p>}
+                    {mates.length ? (
+                      <PiazzolaMates group={comp.group as { piazzola: number; mates: Mate[] }} past={past} compId={comp.id} onChanged={() => setNonce((n) => n + 1)} />
+                    ) : (
+                      <p className="text-xs text-muted">{pzWhy(comp)}</p>
+                    )}
+                    {past && ask && me.role !== "viewer" ? (
+                      mates.length && !folds[`${comp.id}:pick`] ? (
+                        <button type="button" className="aa-chip mt-2 justify-self-start" onClick={() => setFolds((cur) => ({ ...cur, [`${comp.id}:pick`]: true }))}>
+                          <Glyph name="plus" size={13} /> Aggiungi un compagno
+                        </button>
+                      ) : (
+                        <div className="mt-2">
+                          <PiazzolaPicker compId={comp.id} garaId={f?.garaId ?? ""} piazzola={comp.group?.piazzola || null} onSaved={() => { setFolds((cur) => ({ ...cur, [`${comp.id}:pick`]: false })); setNonce((n) => n + 1); }} />
+                        </div>
+                      )
+                    ) : null}
                   </Fold>
                   {past && ask ? (
                     <Fold icon="scorecard" title={ownScore ? "Punti piazzola per piazzola" : mine?.portal === "solo" ? "Aggiungi le piazzole" : "Metti il punteggio"} sub={lanesSet ? `${lanesSet} piazzole · tocca per modificare` : "a mano, freccia per freccia"} inner {...fold("lanes", false)}>
@@ -517,7 +534,7 @@ function pzWhy(comp: Comp) {
   return `Elenco delle piazzole letto (${pz.people} arcieri, ${pz.lanes} piazzole): nella piazzola ${pz.mine ?? mine} non risulta nessun altro.${pz.mine != null && mine && pz.mine !== mine ? ` Sul cartellino hai la ${mine}, sul portale la ${pz.mine}.` : ""}`;
 }
 
-function PiazzolaMates({ group, past }: { group: { piazzola: number; mates: Mate[] }; past: boolean }) {
+function PiazzolaMates({ group, past, compId, onChanged }: { group: { piazzola: number; mates: Mate[] }; past: boolean; compId: number; onChanged: () => void }) {
   const [open, setOpen] = useState<string | null>(null);
   return (
     <div className="grid gap-1.5">
@@ -543,6 +560,12 @@ function PiazzolaMates({ group, past }: { group: { piazzola: number; mates: Mate
                 ) : null}
                 {lanes.length ? <Glyph name="chevron" size={14} className={`shrink-0 text-muted ${open === m.name ? "-rotate-90" : "rotate-90"}`} /> : null}
               </button>
+              {/* messo a mano (niente piazzole segnate): si può togliere */}
+              {Array.isArray(m.lanes) && !m.lanes.length && past ? (
+                <button type="button" className="justify-self-start text-[0.68rem] text-muted underline" onClick={() => void removePiazzolaMate({ data: { competitionId: compId, name: m.name } }).then(onChanged)}>
+                  Non era con me
+                </button>
+              ) : null}
               {open === m.name && lanes.length ? (
                 <div className="grid grid-cols-10 gap-1">
                   {lanes.map((l) => {

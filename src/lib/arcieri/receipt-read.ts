@@ -20,7 +20,7 @@ export type ReceiptItem = {
   /** riga segnata a mano come tua */
   hand?: boolean;
 };
-export type ReceiptRead = { store: string; day: string | null; totalCents: number | null; items: ReceiptItem[]; text: string; /** cosa si è capito, in una riga: righe trovate, sconto, righe segnate a mano */ note: string };
+export type ReceiptRead = { store: string; day: string | null; totalCents: number | null; items: ReceiptItem[]; text: string; /** sconto su tutto il foglio letto dalla stampa (le righe restano a prezzo pieno) */ discountCents: number | null; /** cosa si è capito, in una riga: righe trovate, sconto, righe segnate a mano */ note: string };
 
 const TESS = "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1";
 
@@ -541,7 +541,7 @@ function allocate(items: ReceiptItem[], hands: Hand[], handLines: number, total:
 /** più letture dello stesso foglio (blocco, righe ricostruite, parole sparse) diventano una sola */
 export function combineReads(texts: string[]): Omit<ReceiptRead, "text"> & { complete: boolean } {
   const bases = texts.filter((t) => t.trim()).map(readBase);
-  if (!bases.length) return { store: "", day: null, totalCents: null, items: [], note: "", complete: false };
+  if (!bases.length) return { store: "", day: null, totalCents: null, items: [], note: "", discountCents: null, complete: false };
   const main = [...bases].sort((a, b) => scoreOf(b) - scoreOf(a) || b.items.length - a.items.length)[0];
   const items = main.items.map((it) => ({ ...it }));
   const store = main.store || bases.find((b) => b.store)?.store || "";
@@ -583,18 +583,19 @@ export function combineReads(texts: string[]): Omit<ReceiptRead, "text"> & { com
     if (discount) notes.push(`sconto di ${(discount / 100).toFixed(2).replace(".", ",")} € sul foglio intero`);
   } else {
     if (discount) {
-      // sconto su tutto il foglio: si spalma sulle righe, così la somma torna con il totale
-      const gross = items.reduce((t, it) => t + it.priceCents * it.qty, 0);
-      if (gross > discount) for (const it of items) it.priceCents = Math.max(0, Math.round(it.priceCents * (1 - discount / gross)));
-      notes.push(`sconto di ${(discount / 100).toFixed(2).replace(".", ",")} € diviso sulle righe`);
+      // sconto su tutto il foglio: va nel campo «Sconto»; le righe restano a prezzo pieno e
+      // al salvataggio lo sconto si divide sulle righe in proporzione
+      notes.push(`sconto di ${(discount / 100).toFixed(2).replace(".", ",")} € sul foglio: è nel campo Sconto`);
     }
     if (handLines && items.length) notes.push("righe a mano non lette: togli tu la spunta a quello che non è tuo");
     // niente totale stampato: la somma delle righe
-    if (totalCents == null && items.length) totalCents = items.reduce((t, it) => t + it.priceCents * it.qty, 0);
+    if (totalCents == null && items.length) totalCents = Math.max(0, items.reduce((t, it) => t + it.priceCents * it.qty, 0) - discount);
   }
   const checked = items.filter((it) => it.checked).length;
   const complete = items.length >= 1 && checked === items.length && (!handLines || pick.length >= handLines);
-  return { store, day, totalCents, items: items.slice(0, 40), note: notes.join(" · "), complete };
+  // con le righe segnate a mano lo sconto stampato è del foglio intero, non solo delle tue righe
+  const discountCents = discount && !pick.length ? discount : null;
+  return { store, day, totalCents, items: items.slice(0, 40), note: notes.join(" · "), discountCents, complete };
 }
 
 /**

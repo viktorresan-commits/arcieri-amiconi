@@ -11,13 +11,13 @@ export const listReceipts = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const sql = await db();
     await ensureMember(sql, context.userId);
-    const rows = await sql<{ id: number; store: string; day: string | null; total_cents: number | null; photo: string; items: number }>`
-      select r.id, r.store, r.day::text as day, r.total_cents, r.photo,
+    const rows = await sql<{ id: number; store: string; day: string | null; total_cents: number | null; discount_cents: number | null; photo: string; items: number }>`
+      select r.id, r.store, r.day::text as day, r.total_cents, r.discount_cents, r.photo,
         (select count(*)::int from shopping_items s where s.receipt_id = r.id) as items
       from receipts r where r.user_id = ${context.userId}
       order by coalesce(r.day, r.created_at::date) desc, r.id desc
       limit 60`.catch(() => []);
-    return rows.map((r) => ({ id: asNum(r.id), store: r.store, day: r.day ? String(r.day).slice(0, 10) : null, totalCents: asNumOrNull(r.total_cents), photo: r.photo, items: asNum(r.items) }));
+    return rows.map((r) => ({ id: asNum(r.id), store: r.store, day: r.day ? String(r.day).slice(0, 10) : null, totalCents: asNumOrNull(r.total_cents), discountCents: asNumOrNull(r.discount_cents), photo: r.photo, items: asNum(r.items) }));
   });
 
 export const saveReceipt = createServerFn({ method: "POST" })
@@ -42,15 +42,16 @@ export const saveReceipt = createServerFn({ method: "POST" })
       .filter((x) => x.name.length >= 2);
     const total = raw.totalCents == null || raw.totalCents === "" ? null : Math.max(0, Math.min(100_000_000, asNum(raw.totalCents)));
     if (!items.length && total == null) throw new Error("Scrivi almeno il totale o una riga.");
-    return { store: clip(raw.store, 80), day: day || null, totalCents: total, photo, items };
+    const discount = raw.discountCents == null || raw.discountCents === "" ? null : Math.max(0, Math.min(100_000_000, asNum(raw.discountCents)));
+    return { store: clip(raw.store, 80), day: day || null, totalCents: total, discountCents: discount || null, photo, items };
   })
   .handler(async ({ context, data }) => {
     const sql = await db();
     const me = await ensureMember(sql, context.userId);
     if (!canScore(me.role)) throw new Error("Profilo in sola lettura.");
     const rows = await sql<{ id: number }>`
-      insert into receipts (user_id, store, day, total_cents, photo)
-      values (${context.userId}, ${data.store}, ${data.day}::date, ${data.totalCents}, ${data.photo})
+      insert into receipts (user_id, store, day, total_cents, discount_cents, photo)
+      values (${context.userId}, ${data.store}, ${data.day}::date, ${data.totalCents}, ${data.discountCents}, ${data.photo})
       returning id`;
     const id = asNum(rows[0].id);
     // senza righe lette: una voce sola con il totale

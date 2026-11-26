@@ -578,7 +578,8 @@ export const listCompetitions = createServerFn({ method: "GET" })
       const mates = new Map<string, { name: string; team: string; lanes: { p: number; arrows: number[] }[] | null; total: number | null; spots: number | null; place: number | null; category: string; camp: number | null; size: number }>();
       if (myCard) {
         for (const c of here) {
-          if (c === myCard || c.piazzola !== myCard.piazzola) continue;
+          // io non sono un mio compagno (anche con due righe: il cartellino e quella messa a mano)
+          if (c === myCard || c.user_id === context.userId || mineKeys.has(c.name_key) || c.piazzola !== myCard.piazzola) continue;
           const r = resultFor(c.name_key, "");
           mates.set(c.name_key, { name: titleName(c.name), team: r?.team ? titleName(r.team) : "", lanes: Array.isArray(c.lanes) ? c.lanes : null, total: c.total ?? r?.score ?? null, spots: c.spots ?? null, place: r?.place ?? null, category: r?.category ?? "", camp: r?.camp ?? null, size: r?.size ?? 0 });
         }

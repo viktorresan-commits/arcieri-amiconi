@@ -199,7 +199,13 @@ export async function syncStandings(opts: { onProgress: (p: SyncProgress) => voi
       if (!rows.length) {
         // com'è fatta la pagina (solo titoli delle colonne e conteggi), per capire cosa manca
         const heads = p.tables.slice(0, 3).map((t) => `${t.rows.length}r:${t.rows[0]?.map((c) => c.text.slice(0, 14)).join("/") ?? ""}`).join(" ; ");
-        if (pzStats.seen.length < 4) pzStats.seen.push(`${p.url.split("/").pop()?.slice(0, 40)} → ${heads || "nessuna tabella"}`);
+        const file = p.url.split("/").pop()?.slice(0, 40) ?? "";
+        // una volta sola per pagina: titolo, prime righe di testo, pulsanti e struttura, per capire dove sono i nomi
+        if (pzStats.seen.length < 3 && !pzStats.seen.some((x) => x.startsWith(`${file} `))) {
+          const sample = p.lines.filter((l) => l.trim().length > 2).slice(0, 6).map((l) => l.slice(0, 34)).join(" / ");
+          const btns = (p.form?.buttons ?? []).map((b) => b.label).filter(Boolean).slice(0, 6).join("/");
+          pzStats.seen.push(`${file} ${r.post ? "(premuto) " : ""}→ ${heads || "nessuna tabella"} · titolo «${(p.title || "").slice(0, 30)}» · testo: ${sample || "vuoto"}${btns ? ` · pulsanti: ${btns}` : ""}${p.redirect ? ` · rimanda a ${p.redirect.split("/").pop()?.slice(0, 40)}` : ""} · ${(p.diag ?? []).slice(0, 2).join(" · ")}`);
+        }
         continue;
       }
       const name = /\/([\w-]+\.awp)/i.exec(r.url)?.[1] ?? "";
