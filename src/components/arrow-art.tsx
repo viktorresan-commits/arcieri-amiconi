@@ -111,7 +111,10 @@ export function ArrowArt({
   fletchStyle = "pieno",
   fletch2 = "",
   stretch = false,
+  ground = true,
 }: {
+  /** ombra a terra sotto la freccia (da togliere quando la freccia è disegnata dentro una scena) */
+  ground?: boolean;
   /** riempie il riquadro anche in altezza (freccia più grossa nelle liste) */
   stretch?: boolean;
   /** decorazione delle penne (FLETCH_STYLES) e secondo colore */
@@ -292,7 +295,7 @@ export function ArrowArt({
         </pattern>
       </defs>
       {/* ombra a terra */}
-      <ellipse cx="160" cy="32" rx="138" ry="1.3" fill="#000" opacity="0.14" />
+      {ground ? <ellipse cx="160" cy="32" rx="138" ry="1.3" fill="#000" opacity="0.14" /> : null}
 
       {/* asta */}
       <rect x={x0} y={y - r} width={x1 - x0} height={r * 2} rx={r} fill={`url(#sh-${id})`} />

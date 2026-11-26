@@ -127,21 +127,22 @@ export function ReceiptsCard({ onSaved }: { onSaved: () => void }) {
             status: "in_use",
             visibility: "personal",
             priceCents: cents(r.price) != null ? paid(r) * (r.qty || 1) : null,
-            notes: [
-              store.trim() ? `Comprato da ${store.trim()}` : "",
-              (r.qty || 1) > 1 && cents(r.price) != null ? `${r.qty} pezzi da ${euro(paid(r))}` : "",
-              disc && cents(r.price) != null ? `listino ${euro((cents(r.price) ?? 0) * (r.qty || 1))}, sconto ${Math.round((1 - factor) * 100)}%` : "",
-            ].filter(Boolean).join(" · "),
+            // i dati dell'acquisto restano sul pezzo (specs.purchase), non tra le note da ricordare
+            notes: "",
             shop: store.trim(),
             purchasedOn: day,
             // frecce: i pezzi scritti nel nome («6 pz», «12 frecce») contano più della quantità della riga
-            specs:
-              r.category === "freccia"
-                ? { qty: String(Math.max(1, Math.min(200, (Number(/(\d{1,3})\s*(?:pz|pezzi|pcs|frecce)\b/i.exec(r.name)?.[1]) || 1) * (r.qty || 1)))) }
-                : PIECES.has(r.category)
-                  ? { qty: String(Math.max(1, Math.min(999, r.qty || 1))) }
-                  : {},
+            specs: (r.category === "freccia"
+              ? { qty: String(Math.max(1, Math.min(200, (Number(/(\d{1,3})\s*(?:pz|pezzi|pcs|frecce)\b/i.exec(r.name)?.[1]) || 1) * (r.qty || 1)))) }
+              : PIECES.has(r.category)
+                ? { qty: String(Math.max(1, Math.min(999, r.qty || 1))) }
+                : {}) as Record<string, string>,
         };
+        const purchase = [
+          (r.qty || 1) > 1 && cents(r.price) != null ? `${r.qty} pezzi da ${euro(paid(r))}` : "",
+          disc && cents(r.price) != null ? `listino ${euro((cents(r.price) ?? 0) * (r.qty || 1))}, sconto ${Math.round((1 - factor) * 100)}%` : "",
+        ].filter(Boolean).join(" · ");
+        if (purchase) entry.specs = { ...entry.specs, purchase };
         const res = await saveEquipment({ data: entry });
         made.push({ ...entry, id: res.id, mine: true, owner: "", brand: "", model: "", photoUrl: null, status: "in_use", visibility: "personal", specs: entry.specs as Record<string, string> });
       }

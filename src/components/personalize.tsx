@@ -74,7 +74,6 @@ export function PersonalizePanel() {
       </Row>
       <Row title="Cosa vedere in Home">
         <div className="grid">
-          <Toggle label="Scorciatoie «In un tocco»" on={prefs.home.shortcuts} onChange={(v) => home("shortcuts", v)} />
           <Toggle label="Il tuo percorso (livello, serie, settimana)" on={prefs.home.journey} onChange={(v) => home("journey", v)} />
           <Toggle label="Curiosità «Lo sapevi?» in fondo alle pagine" on={prefs.home.tips} onChange={(v) => home("tips", v)} />
           <Toggle label="I numeri del mese" on={prefs.home.numbers} onChange={(v) => home("numbers", v)} />

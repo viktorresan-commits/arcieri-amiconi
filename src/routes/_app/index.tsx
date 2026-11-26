@@ -10,7 +10,6 @@ import { GameGuard, HomeGame } from "@/components/home-game";
 import { CoachCard } from "@/components/avatar-challenge";
 import { avatarChallenge } from "@/lib/arcieri/challenge.api";
 import { MainGearCard } from "@/components/main-gear";
-import { ShortcutRow } from "@/components/shortcuts";
 import { JourneyCard } from "@/components/journey";
 import { TodayCard } from "@/components/today-card";
 import { usePrefs } from "@/lib/arcieri/prefs";
@@ -21,7 +20,6 @@ import { Card, ErrorNote, HoldDelete, cx } from "@/components/kit";
 export const Route = createFileRoute("/_app/")({ component: Home });
 
 /** già sul gioco (Tiro rapido, Da foto, Segnapunti, Statistiche) o nella barra in basso (Compagnia e gare): la fila non li ripete */
-const HOME_HIDE = ["rapido", "foto", "segnapunti", "statistiche", "squadra"];
 
 /** Pulsante a tema sul prolungamento del gioco: placca di cuoio bordata d'oro, medaglione con l'icona. */
 /** un numero dell'attività con la sua icona, per la barra delle statistiche */
@@ -205,22 +203,23 @@ function Home() {
               <Card className="aa-tile flex items-center gap-3 p-3">
                 <CountdownBadge day={data.nextComp.startsOn} />
                 <div className="min-w-0 flex-1">
-                  <p className="aa-home-label">Prossima gara</p>
+                  <p className="aa-home-label">Prossima gara · {countdownText(data.nextComp.startsOn)}</p>
                   <p className="truncate font-display text-[1.45rem] leading-tight">{data.nextComp.name}</p>
                   <p className="truncate text-xs text-muted">{fmtDay(data.nextComp.startsOn)}{data.nextComp.place ? ` · ${data.nextComp.place}` : ""}{data.nextComp.signupDeadline ? ` · iscrizioni entro ${fmtDay(data.nextComp.signupDeadline)}` : ""}</p>
                 </div>
                 <Glyph name="chevron" size={16} className="shrink-0 text-muted" />
               </Card>
             </Link>
+          ) : (data as { upcomingComps?: number }).upcomingComps ? (
+            <Link to="/gare" className="aa-press flex items-center gap-3 rounded-2xl border border-dashed border-line px-3 py-2.5 text-sm">
+              <Glyph name="flag" size={18} className="shrink-0 text-muted" />
+              <span className="min-w-0 flex-1">Ci sono gare in calendario: tocca «Ci vado» su quella a cui vai e qui conto i giorni.</span>
+              <Glyph name="chevron" size={14} className="shrink-0 text-muted" />
+            </Link>
           ) : null}
           <TodayCard />
         </section>
       </Rise>
-      {prefs.home.shortcuts ? (
-        <Rise i={2}>
-          <ShortcutRow hide={HOME_HIDE} />
-        </Rise>
-      ) : null}
       <Rise i={3}>
         <section className="aa-home-group">
           <header>
@@ -277,6 +276,30 @@ function Home() {
               <LastArrows shots={data.lastShots} />
             </Card>
           ) : null}
+          {/* note tue (piazzole, allenamenti, attrezzatura): restano nel tuo tiro, non nella compagnia */}
+          {notes.data?.items.length ? (
+            <Card>
+              <p className="aa-home-label">Note del quaderno</p>
+              <ul className="mt-2 grid gap-2">
+                {notes.data.items.map((item) => (
+                  <li key={`${item.source}-${item.id}`} className="flex items-start gap-2">
+                    <button
+                      type="button"
+                      aria-label="Segna come fatto"
+                      className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-line"
+                      onClick={() => dismissNote({ data: { source: item.source, id: item.id } }).then(() => setNonce((n) => n + 1))}
+                    >
+                      <Glyph name="check" size={14} />
+                    </button>
+                    <div className="min-w-0">
+                      <p className="text-sm">{item.text}</p>
+                      <p className="text-xs text-muted">{item.where}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          ) : null}
         </section>
       </Rise>
       {prefs.home.journey || data.rank ? (
@@ -302,7 +325,7 @@ function Home() {
           </section>
         </Rise>
       ) : null}
-      {data.challenges.length || data.goals.length || notes.data?.items.length ? (
+      {data.challenges.length || data.goals.length ? (
         <Rise i={5}>
           <section className="aa-home-group">
             <header><h2>Con la compagnia</h2></header>
@@ -330,29 +353,6 @@ function Home() {
                   </ul>
                 </Card>
               </Link>
-            ) : null}
-            {notes.data?.items.length ? (
-              <Card>
-                <p className="aa-home-label">Note del quaderno</p>
-                <ul className="mt-2 grid gap-2">
-                  {notes.data.items.map((item) => (
-                    <li key={`${item.source}-${item.id}`} className="flex items-start gap-2">
-                      <button
-                        type="button"
-                        aria-label="Segna come fatto"
-                        className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-line"
-                        onClick={() => dismissNote({ data: { source: item.source, id: item.id } }).then(() => setNonce((n) => n + 1))}
-                      >
-                        <Glyph name="check" size={14} />
-                      </button>
-                      <div className="min-w-0">
-                        <p className="text-sm">{item.text}</p>
-                        <p className="text-xs text-muted">{item.where}</p>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </Card>
             ) : null}
           </section>
         </Rise>
@@ -390,15 +390,22 @@ function fmtDay(day: string) {
   return new Date(Date.UTC(y, m - 1, d, 12)).toLocaleDateString("it-IT", { weekday: "short", day: "numeric", month: "long", timeZone: "UTC" });
 }
 
-/** Il conto alla rovescia della prossima gara: quanti giorni mancano. */
+/** «mancano 3 giorni», «domani», «oggi» */
+function countdownText(day: string) {
+  const n = daysTo(day);
+  if (n == null) return "";
+  return n <= 0 ? "oggi" : n === 1 ? "domani" : `mancano ${n} giorni`;
+}
+
+/** Il conto alla rovescia della prossima gara: −3 vuol dire tre giorni alla gara. */
 function CountdownBadge({ day }: { day: string }) {
   const n = daysTo(day);
-  const label = n == null ? "—" : n <= 0 ? "Oggi" : n === 1 ? "Domani" : String(n);
+  const label = n == null ? "—" : n <= 0 ? "Oggi" : `−${n}`;
   const urgent = n != null && n <= 3;
   return (
-    <div className={`grid h-16 w-16 shrink-0 place-items-center rounded-2xl text-center leading-none ${urgent ? "bg-[#ffd27a] text-[#2a1d0c]" : "bg-white/[0.07]"}`}>
-      <span className={`font-display ${label.length > 3 ? "text-lg" : "text-3xl"}`}>{label}</span>
-      {n != null && n > 1 ? <span className="-mt-2 text-[0.6rem] font-semibold uppercase tracking-wider opacity-75">giorni</span> : null}
+    <div className={`grid h-16 w-16 shrink-0 content-center justify-items-center rounded-2xl text-center leading-none ${urgent ? "bg-[#ffd27a] text-[#2a1d0c]" : "bg-white/[0.07]"}`}>
+      <span className={`font-display tabular-nums ${label.length > 3 ? "text-lg" : "text-3xl"}`}>{label}</span>
+      {n != null && n > 0 ? <span className="mt-0.5 text-[0.56rem] font-semibold uppercase tracking-wider opacity-75">{n === 1 ? "giorno" : "giorni"}</span> : null}
     </div>
   );
 }

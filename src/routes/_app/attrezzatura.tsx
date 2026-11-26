@@ -302,7 +302,7 @@ function Page() {
           <option value="replace">Da sostituire</option>
           <option value="unused">Non usato</option>
         </Select>
-        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.visibility === "group"} onChange={(e) => setForm({ ...form, visibility: e.target.checked ? "group" : "personal" })} /> Inventario del gruppo (lo vedono i compagni della tua compagnia)</label>
+        <p className="text-xs text-muted">L'inventario è solo tuo: gli altri non lo vedono. Per vendere un pezzo usa il Mercatino dall'inventario in Manutenzione.</p>
         {form.category === "arco" || form.category === "freccia" ? (
           <Advice lines={form.category === "arco" ? bowAdvice(form.specs) : arrowAdvice(form.specs, mainBow?.specs)} />
         ) : null}

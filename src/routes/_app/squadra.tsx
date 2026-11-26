@@ -7,6 +7,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { listCompanies } from "@/lib/arcieri/compagnie.api";
 import { CompanyForm, CompanyHero, CompanyLeague, joinAndReload } from "@/components/compagnia";
 import { CompanyTrophies } from "@/components/palmares";
+import { MarketTab } from "@/components/market";
 import { FitastArchersCard, FitastCompanyBoard, FitastHeader, FitastTeamsBoard, JoinLinkSheet, useFitastLeague } from "@/components/fitast-league";
 import { RankBars } from "@/components/rank-bars";
 import { Heat } from "@/components/shot-lab";
@@ -41,17 +42,17 @@ const MEMBER_SKY: Sky = { tod: "pomeriggio", weather: "sereno", clouds: 0.25, se
 
 export const Route = createFileRoute("/_app/squadra")({ component: Page });
 
-type Section = "arcieri" | "gare" | "bersaglio" | "bacheca" | "compagnie";
+type Section = "arcieri" | "gare" | "bersaglio" | "mercatino" | "compagnie";
 /** le schede della Compagnia, una cosa per scheda: chi c'è, chi va meglio, dove tiriamo, cosa abbiamo vinto */
 const SECTIONS: { id: Section; label: string; icon: IconName; lede: string }[] = [
   { id: "arcieri", label: "Arcieri", icon: "team", lede: "Chi tira con noi, i podi per divisione e il confronto fra arcieri." },
   { id: "gare", label: "Gare", icon: "flag", lede: "Le gare della stagione: segni le tue, quelle degli altri si vedono." },
   { id: "bersaglio", label: "Bersaglio", icon: "target", lede: "Dove arrivano le frecce, tue o della compagnia." },
-  { id: "bacheca", label: "Trofei", icon: "trophy", lede: "Podi, piazzamenti di squadra e trofei." },
+  { id: "mercatino", label: "Mercatino", icon: "bag", lede: "Usato in vendita: della tua compagnia o di tutte." },
   { id: "compagnie", label: "Compagnie", icon: "shield", lede: "Tutte le compagnie e il campionato FITAST." },
 ];
 /** le schede salvate dalla versione di prima */
-const OLD_SECTION: Record<string, Section> = { compagnia: "arcieri", statistiche: "arcieri", classifiche: "arcieri", classifica: "compagnie", fitast: "compagnie", sfida: "arcieri" };
+const OLD_SECTION: Record<string, Section> = { bacheca: "mercatino", compagnia: "arcieri", statistiche: "arcieri", classifiche: "arcieri", classifica: "compagnie", fitast: "compagnie", sfida: "arcieri" };
 
 type Archer = Awaited<ReturnType<typeof squadBoard>>["people"][number] & { name: string; color: string; mark: string; skill: number };
 
@@ -175,6 +176,7 @@ export function CompagniaPage({ initial }: { initial?: Section } = {}) {
   const [editing, setEditing] = useState<"none" | "edit" | "new">("none");
   const [busy, setBusy] = useState<number | null>(null);
   const [linkFor, setLinkFor] = useState<{ team: string; name: string } | null>(null);
+  const [showTrophies, setShowTrophies] = useState(false);
   const looks = useTeamAvatars();
   const [removed, setRemoved] = useState<number[]>([]);
   const [board, setBoard] = useEntryState<"padiglione" | "sagoma">("squadra-board", "padiglione");
@@ -263,7 +265,24 @@ export function CompagniaPage({ initial }: { initial?: Section } = {}) {
     <div className="grid gap-4">
       {linkFor ? <JoinLinkSheet team={linkFor.team} companyName={linkFor.name} onClose={() => { setLinkFor(null); setNonce((n) => n + 1); }} /> : null}
       {company ? (
-        <CompanyHero co={company} canEdit={Boolean(companies.data?.canEdit)} onEdit={() => setEditing("edit")} />
+        <>
+          <CompanyHero co={company} canEdit={Boolean(companies.data?.canEdit)} onEdit={() => setEditing("edit")} />
+          {/* il palmarès sta nel profilo della compagnia: podi, piazzamenti di squadra e premi dell'app */}
+          <button type="button" onClick={() => setShowTrophies((v) => !v)} aria-expanded={showTrophies} className="aa-press -mt-2 flex min-h-12 items-center gap-3 rounded-2xl border border-line bg-white/[0.03] px-3 text-left">
+            <Glyph name="trophy" size={20} className="shrink-0 text-[#e0b15a]" />
+            <span className="min-w-0 flex-1">
+              <b className="block text-sm">Podi e premi della compagnia</b>
+              <span className="block text-[0.7rem] text-muted">Bacheca, piazzamenti di squadra e premi dell'app</span>
+            </span>
+            <Glyph name="chevron" size={15} className={`shrink-0 text-muted transition-transform ${showTrophies ? "rotate-90" : ""}`} />
+          </button>
+          {showTrophies ? (
+            <>
+              <CompanyTrophies companyId={company.id} companyName={company.name} />
+              <GadgetShelf />
+            </>
+          ) : null}
+        </>
       ) : (
         <PageHead title="Compagnia" />
       )}
@@ -399,12 +418,7 @@ export function CompagniaPage({ initial }: { initial?: Section } = {}) {
         </>
       ) : null}
 
-      {section === "bacheca" ? (
-        <>
-          {company ? <CompanyTrophies companyId={company.id} companyName={company.name} /> : <Card><p className="text-sm text-muted">Entra in una compagnia (scheda Compagnie) per vedere il suo palmarès.</p></Card>}
-          <GadgetShelf />
-        </>
-      ) : null}
+      {section === "mercatino" ? <MarketTab /> : null}
 
 
       {section === "gare" ? (

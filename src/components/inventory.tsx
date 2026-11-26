@@ -8,6 +8,7 @@ import { Card, Empty, ErrorNote, Loading, TextInput } from "@/components/kit";
 import { CategoryIcon } from "@/components/gear-icons";
 import { Glyph } from "@/components/icons";
 import { GearSpecSheet, type GearItem } from "@/components/gear-spec-sheet";
+import { MarketForm, emptyDraft, type MarketDraft } from "@/components/market";
 
 type Status = "tutti" | "in_use" | "replace" | "unused";
 const STATUS_LABEL: Record<string, string> = { in_use: "In uso", replace: "Da sostituire", unused: "Fermo" };
@@ -56,6 +57,30 @@ export function Inventory() {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState<string | null>(null);
   const [specOf, setSpecOf] = useState<GearItem | null>(null);
+  // mettere in vendita un pezzo (e quanti) nel Mercatino della compagnia
+  const [sell, setSell] = useState<MarketDraft | null>(null);
+  const [sold, setSold] = useState("");
+  const sellOf = (g: GearItem): MarketDraft => {
+    const specs = fieldsOf(g.category)
+      .filter((f) => g.specs[f.key])
+      .map((f) => `${f.label}: ${f.options?.find((o) => o.id === g.specs[f.key])?.label ?? g.specs[f.key]}${f.unit && !f.options ? ` ${f.unit}` : ""}`);
+    const words = new Set<string>();
+    const title = [g.brand, g.model, g.name]
+      .filter(Boolean)
+      .join(" ")
+      .split(/\s+/)
+      .filter((w) => (words.has(w.toLowerCase()) ? false : (words.add(w.toLowerCase()), true)))
+      .join(" ");
+    return {
+      ...emptyDraft(),
+      equipmentId: g.id,
+      maxQty: qtyOf(g),
+      category: g.category,
+      title,
+      description: [specs.join("\n"), g.purchasedOn ? `Comprato a ${new Date(`${g.purchasedOn}T12:00:00`).toLocaleDateString("it-IT", { month: "long", year: "numeric" })}.` : ""].filter(Boolean).join("\n"),
+      photos: g.photoUrl && g.photoUrl.startsWith("data:image/") ? [{ src: g.photoUrl }] : [],
+    };
+  };
   const [err, setErr] = useState("");
   const reload = () => setNonce((n) => n + 1);
 
@@ -78,7 +103,7 @@ export function Inventory() {
       .catch((e: unknown) => setErr(e instanceof Error ? e.message : "Errore"));
 
   const toGear = (s: (typeof loose)[number]) =>
-    saveEquipment({ data: { id: null, category: s.category, name: s.name, status: "in_use", visibility: "personal", priceCents: s.priceCents != null ? s.priceCents * (s.qty || 1) : null, notes: s.notes ?? "", shop: "", purchasedOn: null, specs: ["freccia", "aste", "punte", "alette", "cocche"].includes(s.category) ? { qty: String(Math.max(1, s.qty || 1)) } : {} } })
+    saveEquipment({ data: { id: null, category: s.category, name: s.name, status: "in_use", visibility: "personal", priceCents: s.priceCents != null ? s.priceCents * (s.qty || 1) : null, notes: "", shop: "", purchasedOn: null, specs: { ...(["freccia", "aste", "punte", "alette", "cocche"].includes(s.category) ? { qty: String(Math.max(1, s.qty || 1)) } : {}), ...(s.notes ? { purchase: s.notes } : {}) } } })
       .then(reload)
       .catch((e: unknown) => setErr(e instanceof Error ? e.message : "Errore"));
 
@@ -176,7 +201,10 @@ export function Inventory() {
                             {STATUS_LABEL[s]}
                           </button>
                         ))}
-                        <button type="button" onClick={() => setSpecOf(g)} className="ml-auto inline-flex min-h-8 items-center gap-1 rounded-full bg-primary/20 px-3 text-[0.7rem] font-semibold">
+                        <button type="button" onClick={() => setSell(sellOf(g))} className="ml-auto inline-flex min-h-8 items-center gap-1 rounded-full border border-line px-3 text-[0.7rem] font-semibold">
+                          <Glyph name="bag" size={12} /> Vendi
+                        </button>
+                        <button type="button" onClick={() => setSpecOf(g)} className="inline-flex min-h-8 items-center gap-1 rounded-full bg-primary/20 px-3 text-[0.7rem] font-semibold">
                           <Glyph name="search" size={12} /> Specifiche
                         </button>
                       </div>
@@ -206,6 +234,8 @@ export function Inventory() {
         </Card>
       ) : null}
 
+      {sold ? <p className="text-sm font-semibold text-accent">{sold}</p> : null}
+      {sell ? <MarketForm start={sell} onClose={() => setSell(null)} onSaved={() => { setSell(null); setSold("Annuncio pubblicato nel Mercatino della compagnia (Compagnia → Mercatino)."); }} /> : null}
       {specOf ? <GearSpecSheet item={mine.find((g) => g.id === specOf.id) ?? specOf} gear={gear.data ?? []} onClose={() => setSpecOf(null)} onSaved={reload} /> : null}
     </div>
   );

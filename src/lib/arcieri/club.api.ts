@@ -50,8 +50,7 @@ export const listEquipment = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const sql = await db();
     await ensureMember(sql, context.userId);
-    // i pezzi dell'inventario del gruppo: solo quelli dei compagni della propria compagnia
-    const peers = new Set(await companyPeers(sql, context.userId));
+    // l'inventario è personale: solo i propri pezzi (per mostrarli agli altri c'è il Mercatino)
     const rows = await sql<{
       id: number; user_id: string; visibility: string; category: string; name: string; brand: string; model: string;
       photo_url: string | null; purchased_on: string | null; price_cents: number | null; shop: string; notes: string;
@@ -60,9 +59,9 @@ export const listEquipment = createServerFn({ method: "GET" })
       select e.id, e.user_id, e.visibility, e.category, e.name, e.brand, e.model, e.photo_url, e.purchased_on::text as purchased_on,
         e.price_cents, e.shop, e.notes, e.status, e.specs, m.given_name, m.family_name, m.nickname
       from equipment e left join members m on m.user_id = e.user_id
-      where e.user_id = ${context.userId} or e.visibility = 'group'
+      where e.user_id = ${context.userId}
       order by e.category, e.name`;
-    return rows.filter((r) => r.user_id === context.userId || peers.has(r.user_id)).map((r) => ({
+    return rows.map((r) => ({
       id: asNum(r.id),
       mine: r.user_id === context.userId,
       /** di chi è il pezzo (per l'inventario del gruppo) */
@@ -106,7 +105,8 @@ export const saveEquipment = createServerFn({ method: "POST" })
     }
     return {
       id: raw.id == null ? null : asNum(raw.id),
-      visibility: raw.visibility === "group" ? "group" : "personal",
+      // l'inventario è personale: nessun pezzo è più condiviso con la compagnia
+      visibility: "personal" as const,
       category: clip(raw.category, 40) || "altro",
       name,
       brand: clip(raw.brand, 60),
@@ -1594,6 +1594,7 @@ export const openNotes = createServerFn({ method: "GET" })
     const gear = await sql<{ id: number; notes: string; name: string }>`
       select id, notes, name from equipment
       where user_id = ${context.userId} and notes <> '' and note_done = false
+        and notes !~* '^(comprato da|scontrino)' 
       order by id desc`;
     const sessions = await sql<{ id: number; notes: string; started_at: string }>`
       select id, notes, started_at::text as started_at from sessions

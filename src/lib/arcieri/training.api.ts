@@ -715,6 +715,13 @@ export const dashboard = createServerFn({ method: "GET" })
           on conflict (dedupe) do nothing`;
       }
     }
+    // la prossima gara a cui hai detto «Ci vado» (non solo la prima in calendario)
+    const chosen = await sql<{ id: number; name: string; starts_on: string; place: string; signup_deadline: string | null }>`
+      select c.id, c.name, c.starts_on::text as starts_on, c.place, c.signup_deadline::text as signup_deadline
+      from competitions c
+      join competition_presence p on p.competition_id = c.id and p.user_id = ${context.userId} and p.attended = true
+      where c.starts_on >= ${today}::date
+      order by c.starts_on limit 1`.catch(() => [] as typeof comps);
     const challenges = await sql<{ id: number; title: string; ends_on: string; state: string | null }>`
       select c.id, c.title, c.ends_on::text as ends_on, cm.state
       from challenges c
@@ -929,7 +936,7 @@ export const dashboard = createServerFn({ method: "GET" })
     const trend = ordered.slice(-60).map((row) => row.score);
     const fallbackSpecs = homeArrow[0]?.specs ?? "";
     // le ultime frecce tirate, con numero, distanza e l'aspetto della freccia (specs come testo JSON)
-    const lastShots = ordered.slice(-8).reverse().map((row) => ({
+    const lastShots = ordered.slice(-3).reverse().map((row) => ({
       score: row.score,
       n: row.n,
       distance: row.distance,
@@ -993,7 +1000,9 @@ export const dashboard = createServerFn({ method: "GET" })
         program: s.program,
       })),
       rank,
-      nextComp: comps[0] ? { id: asNum(comps[0].id), name: comps[0].name, startsOn: String(comps[0].starts_on).slice(0, 10), place: comps[0].place, signupDeadline: comps[0].signup_deadline } : null,
+      nextComp: chosen[0] ? { id: asNum(chosen[0].id), name: chosen[0].name, startsOn: String(chosen[0].starts_on).slice(0, 10), place: chosen[0].place, signupDeadline: chosen[0].signup_deadline } : null,
+      /** gare in calendario a cui non hai ancora risposto */
+      upcomingComps: comps.length,
       challenges: challenges.map((c) => ({ id: asNum(c.id), title: c.title, endsOn: String(c.ends_on).slice(0, 10), state: c.state })),
       goals: goals.map((g) => ({ id: asNum(g.id), title: g.title, metric: g.metric, target: asNum(g.target), collective: !g.user_id })),
       unread: asNum(unread[0]?.n),

@@ -30,7 +30,7 @@ function Page() {
   const [tab, setTab] = useLocalState<"controlli" | "inventario">("aa-manut-tab", "inventario");
   return (
     <div className="grid gap-3">
-      <PageHead kicker="Attrezzatura" title="Manutenzione" lede={tab === "inventario" ? "Tutto quello che hai inserito o comprato, con prezzi, età, stato e specifiche." : "Tocca «Fatto» quando sistemi una parte: conto io giorni e frecce da allora."} />
+      <PageHead kicker="Attrezzatura" title="Manutenzione" lede={tab === "inventario" ? "Tutto quello che hai inserito o comprato: è solo tuo, gli altri non lo vedono." : "Tocca «Fatto» quando sistemi una parte: conto io giorni e frecce da allora."} />
       <Segmented
         value={tab}
         onChange={setTab}

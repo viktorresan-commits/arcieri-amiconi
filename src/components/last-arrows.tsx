@@ -19,7 +19,8 @@ function specsOf(raw: string): Record<string, string> {
 
 /** Le ultime frecce, disegnate come sono davvero (colori, penne, punta) con numero e distanza. */
 /** Riassunto delle ultime frecce: media, X e colpi nel giallo. */
-export function LastSummary({ shots }: { shots: LastShot[] }) {
+export function LastSummary({ shots: all }: { shots: LastShot[] }) {
+  const shots = all.slice(0, 3);
   const pts = shots.map((s) => (s.miss ? 0 : s.isX ? (s.max && s.max > 0 ? s.max : 10) : s.score));
   const avg = pts.reduce((a, b) => a + b, 0) / Math.max(1, pts.length);
   const xs = shots.filter((s) => s.isX).length;
@@ -45,7 +46,23 @@ function ringOf(score: number, max: number) {
   return { bg: "radial-gradient(circle at 35% 30%,#ff8a7e,#c4302a)", fg: "#fff", trail: "#ff5a4c" };
 }
 
-export function LastArrows({ shots }: { shots: LastShot[] }) {
+/** anelli del bersaglio dall'esterno: bianco, nero, azzurro, rosso, oro (due zone per colore) */
+const RINGS = ["#f4f1ea", "#f4f1ea", "#1d2024", "#1d2024", "#2b8fd6", "#2b8fd6", "#e2413a", "#e2413a", "#f2cf3b", "#f2cf3b"];
+const LINE = ["#9a958c", "#9a958c", "#5a5f66", "#5a5f66", "#1d5f96", "#1d5f96", "#9c2620", "#9c2620", "#b0901c", "#b0901c"];
+
+/** dove si pianta la freccia: più vicino al centro quanto più alto è il punto, in una direzione diversa per ogni freccia */
+function impactOf(shot: LastShot, i: number, cx: number, cy: number, R: number) {
+  const max = shot.max && shot.max > 0 ? shot.max : 10;
+  const s10 = shot.miss ? 0 : shot.isX ? 10.6 : (shot.score / max) * 10;
+  const ang = ((shot.n * 97 + i * 61) % 360) * (Math.PI / 180);
+  if (shot.miss) return { x: cx - R - 9, y: cy + (i % 2 ? 14 : -15), inFace: false };
+  const r = Math.max(0.6, ((10.8 - s10) / 10) * R);
+  // in orizzontale la freccia arriva da sinistra: il colpo resta nella metà alta o bassa, non dietro il bersaglio
+  return { x: cx + Math.cos(ang) * r * 0.55, y: cy + Math.sin(ang) * r, inFace: true };
+}
+
+export function LastArrows({ shots: all }: { shots: LastShot[] }) {
+  const shots = all.slice(0, 3);
   const navigate = useNavigate();
   const hold = useRef<number | null>(null);
   const [pressed, setPressed] = useState<number | null>(null);
@@ -88,24 +105,34 @@ export function LastArrows({ shots }: { shots: LastShot[] }) {
     io.observe(el);
     return () => io.disconnect();
   }, []);
+  const W = 300;
+  const H = 64;
+  const cx = 262;
+  const cy = 32;
+  const R = 27;
   return (
-    <ul ref={ref} className={`grid gap-1.5 ${seen ? "is-in" : "is-wait"}`}>
+    <ul ref={ref} className={`grid gap-2 ${seen ? "is-in" : "is-wait"}`}>
       {shots.map((shot, i) => {
         const sp = specsOf(shot.specs);
         const from = Number(sp.numFrom) || 1;
         const num = shot.tag != null ? shot.tag : shot.n + from - 1;
         const max = shot.max && shot.max > 0 ? shot.max : 10;
         const ratio = shot.miss ? 0 : (shot.isX ? max : shot.score) / max;
-        // alone: verde se il colpo è buono, rosso se è debole o fuori, nessuno a metà strada
         const mood = shot.miss || ratio < 0.55 ? "neg" : ratio >= 0.8 ? "pos" : "mid";
-        const delay = 150 + i * 220;
-        // sfalsate come frecce piantate a profondità diverse
-        const stagger = [0, 9, 4, 13, 2, 11, 6, 15][i % 8];
+        const ring = ringOf(shot.miss ? 0 : shot.isX ? max : shot.score, max);
+        const delay = 150 + i * 260;
+        const hit = impactOf(shot, i, cx, cy, R);
+        // la freccia (320×36 nel suo disegno, punta a 313) con la punta un po' dentro il bersaglio
+        const aw = 214;
+        const ah = (aw * 36) / 320;
+        const ax = hit.x + 3 - aw * (313 / 320);
+        const ay = hit.y - ah / 2;
+        const day = shot.day ? new Date(`${shot.day.slice(0, 10)}T12:00:00`).toLocaleDateString("it-IT", { day: "numeric", month: "short" }) : "";
         return (
           <li
             key={`${shot.day}-${i}`}
-            className={`aa-shot aa-shot-${mood} flex select-none items-center gap-1 ${pressed === i ? "aa-shot-press" : ""}`}
-            style={{ ["--d" as string]: `${delay}ms`, WebkitTouchCallout: "none" }}
+            className={`aa-shot2 aa-shot-${mood} flex select-none items-center gap-2 rounded-2xl p-1.5 pr-2.5 ${pressed === i ? "aa-shot-press" : ""}`}
+            style={{ ["--d" as string]: `${delay}ms`, ["--trail" as string]: ring.trail, WebkitTouchCallout: "none" }}
             onPointerDown={() => start(i, shot)}
             onPointerUp={stop}
             onPointerLeave={stop}
@@ -113,33 +140,66 @@ export function LastArrows({ shots }: { shots: LastShot[] }) {
             onContextMenu={(e) => e.preventDefault()}
             title={shot.link ? (shot.link.kind === "allenamento" ? "Tieni premuto per aprire l'allenamento" : "Tieni premuto per aprire la gara") : undefined}
           >
-            <div className="aa-shot-track relative h-[4.5rem] min-w-0 flex-1 overflow-hidden" style={{ ["--trail" as string]: ringOf(shot.miss ? 0 : shot.isX ? max : shot.score, max).trail }}>
-              <div className={`aa-launch aa-launch-far absolute inset-y-0 ${shot.miss ? "right-[18%] top-[7px] bottom-[-7px] opacity-60" : "right-1"}`} style={{ width: `${88 + stagger * 0.5}%` }}>
-                {/* la scia sfumata sta sotto la freccia e vola con lei */}
-                <span aria-hidden className="aa-shot-trail" />
-                <ArrowArt
-                  material={sp.material || "carbonio"}
-                  shaft={sp.shaft}
-                  fletch={sp.fletch || "#d63a2f"}
-                  cock={sp.cock || "#e6b325"}
-                  nock={sp.nock || "#f4f1ea"}
-                  wrap={sp.wrap}
-                  fletchType={sp.fletchType || "alette"}
-                  fletchStyle={sp.fletchStyle}
-                  fletch2={sp.fletch2}
-                  point={sp.pointType || "ogiva"}
-                  number={num}
-                  stretch
-                  className="relative top-1/2 h-[2.6rem] w-full -translate-y-1/2"
-                />
-              </div>
-            </div>
-            <span className="aa-shot-label ml-2 grid w-8 shrink-0 justify-items-center gap-0.5 text-center leading-none">
-              <span className="aa-shot-badge grid h-6 w-6 place-items-center rounded-full font-display text-[0.72rem] tabular-nums" style={{ background: ringOf(shot.miss ? 0 : shot.isX ? max : shot.score, max).bg, color: ringOf(shot.miss ? 0 : shot.isX ? max : shot.score, max).fg }}>
+            <svg viewBox={`0 0 ${W} ${H}`} className="h-[4.4rem] min-w-0 flex-1" aria-hidden overflow="visible">
+              <defs>
+                <linearGradient id={`trail-${i}`} x1="0" x2="1">
+                  <stop offset="0" stopColor={ring.trail} stopOpacity="0" />
+                  <stop offset="0.75" stopColor={ring.trail} stopOpacity="0.55" />
+                  <stop offset="1" stopColor={ring.trail} stopOpacity="0.9" />
+                </linearGradient>
+                <radialGradient id={`face-${i}`} cx="0.38" cy="0.32" r="0.8">
+                  <stop offset="0" stopColor="#fff" stopOpacity="0.28" />
+                  <stop offset="0.6" stopColor="#fff" stopOpacity="0" />
+                  <stop offset="1" stopColor="#000" stopOpacity="0.28" />
+                </radialGradient>
+                <pattern id={`straw-${i}`} width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(-25)">
+                  <rect width="4" height="0.8" fill="#7a5a24" opacity="0.5" />
+                  <rect y="2.2" width="2.6" height="0.6" fill="#f2dc9a" opacity="0.45" />
+                </pattern>
+              </defs>
+              {/* paglione e visuale a dieci zone */}
+              <rect x={cx - R - 14} y="1" width={2 * R + 28} height={H - 2} rx="7" fill="#b89452" />
+              <rect x={cx - R - 14} y="1" width={2 * R + 28} height={H - 2} rx="7" fill={`url(#straw-${i})`} />
+              <rect x={cx - R - 14} y="1" width={2 * R + 28} height={H - 2} rx="7" fill="none" stroke="#000" strokeOpacity="0.35" />
+              {RINGS.map((c, k) => (
+                <circle key={k} cx={cx} cy={cy} r={R * (1 - k / 10)} fill={c} stroke={LINE[k]} strokeWidth="0.45" />
+              ))}
+              <circle cx={cx} cy={cy} r={R * 0.05} fill="none" stroke="#b0901c" strokeWidth="0.4" />
+              <circle cx={cx} cy={cy} r={R} fill={`url(#face-${i})`} />
+              {/* scia del colore del colpo */}
+              <rect className="aa-shot2-trail" x="0" y={hit.y - 1.4} width={Math.max(12, ax + 26)} height="2.8" rx="1.4" fill={`url(#trail-${i})`} />
+              {/* la freccia vola e si pianta */}
+              <g className="aa-shot2-fly">
+                <ellipse cx={hit.x - 4} cy={hit.y + 4} rx="10" ry="1.8" fill="#000" opacity="0.16" />
+                <svg x={ax} y={ay} width={aw} height={ah} viewBox="0 0 320 36" overflow="visible">
+                  <ArrowArt
+                    material={sp.material || "carbonio"}
+                    shaft={sp.shaft}
+                    fletch={sp.fletch || "#d63a2f"}
+                    cock={sp.cock || "#e6b325"}
+                    nock={sp.nock || "#f4f1ea"}
+                    wrap={sp.wrap}
+                    fletchType={sp.fletchType || "alette"}
+                    fletchStyle={sp.fletchStyle}
+                    fletch2={sp.fletch2}
+                    point={sp.pointType || "ogiva"}
+                    number={num}
+                    ground={false}
+                    className=""
+                  />
+                </svg>
+              </g>
+              {/* foro e onda dell'impatto */}
+              <circle cx={hit.x} cy={hit.y} r="1.6" fill="#0b0b0b" opacity="0.8" />
+              <circle className="aa-shot2-ping" cx={hit.x} cy={hit.y} r="7" fill="none" stroke={ring.trail} strokeWidth="1.6" />
+            </svg>
+            <span className="aa-shot-label grid w-14 shrink-0 justify-items-center gap-0.5 text-center leading-none">
+              <span className="aa-shot-badge grid h-9 w-9 place-items-center rounded-full font-display text-base tabular-nums" style={{ background: ring.bg, color: ring.fg }}>
                 {shot.miss ? "M" : shot.isX ? "X" : shot.score}
               </span>
-              <span className="text-[0.5rem] font-semibold text-white/70">n.{num}</span>
-              <span className="text-[0.5rem] text-muted">{shot.distance ? `${shot.distance} m` : "—"}</span>
+              <span className="mt-0.5 text-[0.6rem] font-semibold text-white/80">freccia {num}</span>
+              <span className="whitespace-nowrap text-[0.56rem] text-muted">{shot.distance ? `${shot.distance} m` : "—"}</span>
+              {day ? <span className="whitespace-nowrap text-[0.56rem] text-muted">{day}</span> : null}
             </span>
           </li>
         );
