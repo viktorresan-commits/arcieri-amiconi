@@ -20,7 +20,8 @@ import { AvatarEditor } from "./avatar";
 import { Migrazione } from "@/components/migrazione";
 import { PersonalizePanel } from "@/components/personalize";
 import { Glyph, IconTitle } from "@/components/icons";
-import { LevelCrest } from "@/components/level-crest";
+import { LevelCrest, haloOfXp } from "@/components/level-crest";
+import { AvatarTurntable } from "@/components/avatar-turntable";
 import { useXp } from "@/lib/arcieri/xp";
 import { unlockAdmin } from "@/lib/arcieri/account.api";
 import { ClaimCard, DeleteAccountCard, InviteCard, PrivacyCard, ResetCard, TeamAdmin } from "@/components/profile-tools";
@@ -202,25 +203,38 @@ function Page() {
   ] as const;
 
   const xpNow = useXp();
+  const tabsRef = useRef<HTMLDivElement>(null);
   return (
     <div className="grid gap-3">
-      <section className="aa-hero grid gap-3 p-4">
-        <div className="flex items-center gap-3">
-          <label className="relative shrink-0 cursor-pointer">
-            {me.photoUrl ? <img src={me.photoUrl} alt="" className="h-20 w-20 rounded-full object-cover ring-2 ring-white/20" /> : <span className="grid h-20 w-20 place-items-center rounded-full bg-white/10 font-display text-3xl">{(me.givenName || "?").slice(0, 1)}</span>}
-            <span className="absolute -bottom-1 -right-1 grid h-7 w-7 place-items-center rounded-full bg-primary text-primary-fg"><Glyph name="camera" size={14} /></span>
+      {/* il tuo arciere, subito in alto e su tutta la larghezza: si gira trascinando, un tocco apre l'editor */}
+      <AvatarTurntable
+        look={avatar.shown}
+        glow={haloOfXp(xpNow.xp).a}
+        onOpen={() => {
+          pickTab("aspetto");
+          window.setTimeout(() => tabsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
+        }}
+      >
+        <div className="absolute inset-x-0 top-0 flex items-center gap-3 bg-gradient-to-b from-black/70 to-transparent p-3 pb-10">
+          <label className="relative shrink-0 cursor-pointer" aria-label="Cambia la foto">
+            {me.photoUrl ? <img src={me.photoUrl} alt="" className="h-14 w-14 rounded-full object-cover ring-2 ring-white/25" /> : <span className="grid h-14 w-14 place-items-center rounded-full bg-white/10 font-display text-2xl">{(me.givenName || "?").slice(0, 1)}</span>}
+            <span className="absolute -bottom-1 -right-1 grid h-6 w-6 place-items-center rounded-full bg-primary text-primary-fg"><Glyph name="camera" size={12} /></span>
             <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void photo(f).catch((err: unknown) => setMsg(err instanceof Error ? err.message : "Foto non salvata")); }} />
           </label>
-          <div className="min-w-0">
-            <p className="truncate font-display text-3xl leading-none">{[me.givenName, me.familyName].filter(Boolean).join(" ") || me.nickname || "Arciere"}</p>
+          <div className="min-w-0 flex-1">
+            <p className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+              <span className="truncate font-display text-[2rem] leading-none text-white">{[me.givenName, me.familyName].filter(Boolean).join(" ") || me.nickname || "Arciere"}</span>
+              <span className={`inline-flex rounded-full px-2 py-0.5 text-[0.65rem] font-semibold ${me.role === "admin" ? "bg-amber-400 text-black" : "bg-white/15 text-white"}`}>{me.role === "admin" ? "Fondatore" : me.role === "archer" ? "Arciere" : "Ospite"}</span>
+            </p>
             <p className="mt-1 truncate text-xs text-white/70">{me.email ?? ""}</p>
-            <span className={`mt-1.5 inline-flex rounded-full px-2 py-0.5 text-[0.65rem] font-semibold ${me.role === "admin" ? "bg-amber-400 text-black" : "bg-white/10"}`}>{me.role === "admin" ? "Fondatore" : me.role === "archer" ? "Arciere" : "Ospite"}</span>
           </div>
-          {/* il proprio livello, lo stesso stemma che gli altri vedono sul profilo */}
-          <Link to="/obiettivi" className="ml-auto shrink-0" aria-label="Livello e punti">
-            <LevelCrest xp={xpNow.xp} className="scale-[0.85]" />
-          </Link>
         </div>
+        {/* il proprio livello, lo stesso stemma che gli altri vedono sul profilo */}
+        <Link to="/obiettivi" className="aa-prize-float absolute bottom-12 right-2 w-[22%]" aria-label="Livello e punti">
+          <LevelCrest xp={xpNow.xp} />
+        </Link>
+      </AvatarTurntable>
+      <section className="aa-hero grid gap-3 p-4">
         <AvatarPhotoButton look={avatar.shown} onDone={reload} />
         <div className="grid grid-cols-2 gap-2">
           <span className="rounded-xl bg-black/25 px-3 py-2">
@@ -234,7 +248,7 @@ function Page() {
         </div>
       </section>
 
-      <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 [scrollbar-width:none]">
+      <div ref={tabsRef} className="-mx-1 flex scroll-mt-20 gap-1.5 overflow-x-auto px-1 [scrollbar-width:none]">
         {TABS.map((t) => (
           <button key={t.id} type="button" aria-pressed={tab === t.id} onClick={() => pickTab(t.id)} className="aa-chip shrink-0">{t.label}</button>
         ))}
