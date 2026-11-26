@@ -32,6 +32,7 @@ import { Route as AppArciereIdRouteImport } from './routes/_app/arciere.$id'
 import { Route as AppGestisciIdRouteImport } from './routes/_app/gestisci.$id'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiLogoIdRouteImport } from './routes/api/logo/$id'
+import { Route as ApiAnnuncioTokenRouteImport } from './routes/api/annuncio/$token'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -147,6 +148,11 @@ const ApiLogoIdRoute = ApiLogoIdRouteImport.update({
   path: '/api/logo/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAnnuncioTokenRoute = ApiAnnuncioTokenRouteImport.update({
+  id: '/api/annuncio/$token',
+  path: '/api/annuncio/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
@@ -170,6 +176,7 @@ export interface FileRoutesByFullPath {
   '/gestisci/$id': typeof AppGestisciIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/logo/$id': typeof ApiLogoIdRoute
+  '/api/annuncio/$token': typeof ApiAnnuncioTokenRoute
   '/allenamento/': typeof AppAllenamentoIndexRoute
 }
 export interface FileRoutesByTo {
@@ -193,6 +200,7 @@ export interface FileRoutesByTo {
   '/gestisci/$id': typeof AppGestisciIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/logo/$id': typeof ApiLogoIdRoute
+  '/api/annuncio/$token': typeof ApiAnnuncioTokenRoute
   '/allenamento': typeof AppAllenamentoIndexRoute
 }
 export interface FileRoutesById {
@@ -219,6 +227,7 @@ export interface FileRoutesById {
   '/_app/gestisci/$id': typeof AppGestisciIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/logo/$id': typeof ApiLogoIdRoute
+  '/api/annuncio/$token': typeof ApiAnnuncioTokenRoute
   '/_app/allenamento/': typeof AppAllenamentoIndexRoute
 }
 export interface FileRouteTypes {
@@ -245,6 +254,7 @@ export interface FileRouteTypes {
     | '/gestisci/$id'
     | '/api/auth/$'
     | '/api/logo/$id'
+    | '/api/annuncio/$token'
     | '/allenamento/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -268,6 +278,7 @@ export interface FileRouteTypes {
     | '/gestisci/$id'
     | '/api/auth/$'
     | '/api/logo/$id'
+    | '/api/annuncio/$token'
     | '/allenamento'
   id:
     | '__root__'
@@ -293,6 +304,7 @@ export interface FileRouteTypes {
     | '/_app/gestisci/$id'
     | '/api/auth/$'
     | '/api/logo/$id'
+    | '/api/annuncio/$token'
     | '/_app/allenamento/'
   fileRoutesById: FileRoutesById
 }
@@ -301,6 +313,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiLogoIdRoute: typeof ApiLogoIdRoute
+  ApiAnnuncioTokenRoute: typeof ApiAnnuncioTokenRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -466,6 +479,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiLogoIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/annuncio/$token': {
+      id: '/api/annuncio/$token'
+      path: '/api/annuncio/$token'
+      fullPath: '/api/annuncio/$token'
+      preLoaderRoute: typeof ApiAnnuncioTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -530,6 +550,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiLogoIdRoute: ApiLogoIdRoute,
+  ApiAnnuncioTokenRoute: ApiAnnuncioTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

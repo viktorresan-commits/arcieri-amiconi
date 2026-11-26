@@ -110,6 +110,38 @@ export const getMarketItem = createServerFn({ method: "POST" })
     return { item: itemOf(rows[0], context.userId, mine.companyId), photos: media.map((m) => ({ id: asNum(m.id), src: m.data })) };
   });
 
+/** un codice a caso per il link pubblico dell'annuncio (lettere minuscole e cifre, senza quelle che si confondono) */
+function shareCode() {
+  const abc = "abcdefghjkmnpqrstuvwxyz23456789";
+  const bytes = crypto.getRandomValues(new Uint8Array(10));
+  return Array.from(bytes, (b) => abc[b % abc.length]).join("");
+}
+
+/**
+ * Il link pubblico per condividere l'annuncio fuori dall'app (WhatsApp, Facebook, Instagram, e-mail):
+ * chi lo apre vede l'anteprima (foto, prezzo, stato, luogo) ma non chi vende né i contatti.
+ */
+export const marketShareLink = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: unknown) => ({ id: asNum((input as { id?: unknown } | null)?.id) }))
+  .handler(async ({ context, data }) => {
+    const sql = await db();
+    await ensureMember(sql, context.userId);
+    const mine = await myMembership(sql, context.userId);
+    await visible(sql, data.id, context.userId, mine.companyId);
+    const got = await sql<{ share_token: string | null }>`select share_token from market_items where id = ${data.id}`;
+    if (got[0]?.share_token) return { token: got[0].share_token };
+    for (let i = 0; i < 3; i++) {
+      try {
+        const upd = await sql<{ share_token: string }>`update market_items set share_token = coalesce(share_token, ${shareCode()}) where id = ${data.id} returning share_token`;
+        if (upd[0]?.share_token) return { token: upd[0].share_token };
+      } catch {
+        /* codice già usato da un altro annuncio: se ne prova un altro */
+      }
+    }
+    throw new Error("Link non pronto, riprova.");
+  });
+
 export const getMarketVideo = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((input: unknown) => ({ id: asNum((input as { id?: unknown } | null)?.id) }))

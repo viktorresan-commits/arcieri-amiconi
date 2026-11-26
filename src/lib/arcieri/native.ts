@@ -77,6 +77,46 @@ export async function saveFile(blob: Blob, name: string) {
   window.setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
 }
 
+/**
+ * Condivide testo e (se c'è) un'immagine con il foglio «Condividi» del telefono:
+ * WhatsApp (una persona o un gruppo), Instagram, Facebook, Telegram, e-mail…
+ * «ok» condiviso, «cancel» chiuso dall'utente, «none» il dispositivo non sa condividere (si usa un'altra strada).
+ */
+export async function shareRich(o: { title: string; text?: string; file?: Blob; name?: string }): Promise<"ok" | "cancel" | "none"> {
+  const name = o.name ?? "annuncio.jpg";
+  if (isNativeApp()) {
+    const share = plugin("Share") as unknown as { share: (x: { title?: string; text?: string; files?: string[]; dialogTitle?: string }) => Promise<unknown> } | undefined;
+    const fs = plugin("Filesystem") as unknown as { writeFile: (x: { path: string; data: string; directory: string }) => Promise<{ uri: string }> } | undefined;
+    if (share) {
+      let files: string[] | undefined;
+      if (o.file && fs) {
+        try {
+          files = [(await fs.writeFile({ path: name, data: await toBase64(o.file), directory: "CACHE" })).uri];
+        } catch {
+          files = undefined;
+        }
+      }
+      try {
+        await share.share({ title: o.title, text: o.text, files, dialogTitle: o.title });
+        return "ok";
+      } catch {
+        return "cancel";
+      }
+    }
+  }
+  if (typeof navigator === "undefined" || typeof navigator.share !== "function") return "none";
+  const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean };
+  const file = o.file ? new File([o.file], name, { type: o.file.type || "image/jpeg" }) : null;
+  const withFile = file && nav.canShare?.({ files: [file] }) ? { files: [file], title: o.title, ...(o.text ? { text: o.text } : {}) } : null;
+  if (o.file && !withFile && !o.text) return "none";
+  try {
+    await nav.share(withFile ?? { title: o.title, text: o.text });
+    return "ok";
+  } catch (e) {
+    return e instanceof DOMException && e.name === "AbortError" ? "cancel" : "none";
+  }
+}
+
 let started = false;
 
 /** Login con Google dall'app: si apre il browser del telefono sulla pagina di passaggio. */

@@ -167,7 +167,7 @@ export function CompagniaPage({ initial }: { initial?: Section } = {}) {
   const [sectionRaw, setStored] = useLocalState<string>("aa-compagnia-tab", "arcieri");
   // aperta da /gare si parte da Gare; un tocco sulle schede sceglie e ricorda
   // da un avviso del mercatino in Bacheca (#mercatino-12) si apre il Mercatino con l'annuncio
-  const [opened, setOpened] = useState<Section | undefined>(() => (typeof window !== "undefined" && /^#mercatino-\d+$/.test(window.location.hash) ? "mercatino" : initial));
+  const [opened, setOpened] = useState<Section | undefined>(() => (typeof window !== "undefined" && /^#mercatino(-\d+)?$/.test(window.location.hash) ? "mercatino" : initial));
   const setSection = (x: Section) => {
     setOpened(undefined);
     setStored(x);

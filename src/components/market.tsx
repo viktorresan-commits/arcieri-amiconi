@@ -7,6 +7,7 @@ import { useLoad } from "@/lib/arcieri/use-load";
 import { useLocalState } from "@/lib/arcieri/local-store";
 import { Button, Card, Empty, ErrorNote, Field, Loading, Select, TextArea, TextInput } from "@/components/kit";
 import { CategoryIcon } from "@/components/gear-icons";
+import { ShareAd } from "@/components/market-share";
 import { Glyph } from "@/components/icons";
 import { useMemberMaybe } from "@/components/shell";
 
@@ -357,6 +358,7 @@ function MarketDetail({ id, onClose, onChanged, onEdit }: { id: number; onClose:
               <span className="block truncate text-xs text-muted">{it.company || "Compagnia"}{it.everyone ? " · visibile a tutte le compagnie" : ""}</span>
             </span>
           </div>
+          <ShareAd item={it} photos={photos} />
           {!it.mine ? (
             <SellerContact item={it} />
           ) : (
