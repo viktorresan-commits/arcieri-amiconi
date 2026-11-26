@@ -2181,3 +2181,12 @@ html[data-motion="ridotta"] .aa-turn-in { animation: none; }
   overflow: visible;
   filter: drop-shadow(0 0 0.6px rgb(255 255 255 / 0.32)) drop-shadow(0 2px 2px rgb(0 0 0 / 0.5));
 }
+
+/* il fondatore dispone i menu: tieni premuto (niente menu del telefono), le icone tremano, si trascinano */
+.aa-arrangeable { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; -webkit-user-drag: none; }
+.aa-tray-item.is-arrange { touch-action: none; animation: aa-jiggle 0.32s ease-in-out infinite alternate; }
+.aa-tray-item.is-dragging { opacity: 0.3; animation: none; }
+.aa-tray-item.is-drop { box-shadow: 0 0 0 2px rgb(255 255 255 / 0.75), 0 0 18px rgb(255 255 255 / 0.35); background: rgb(255 255 255 / 0.08); }
+.aa-secbar-item.is-drop { box-shadow: inset 0 0 0 2px rgb(255 255 255 / 0.8); border-radius: 1rem; background: rgb(255 255 255 / 0.1); }
+@keyframes aa-jiggle { from { transform: rotate(-1.6deg); } to { transform: rotate(1.6deg); } }
+@media (prefers-reduced-motion: reduce) { .aa-tray-item.is-arrange { animation: none; } }

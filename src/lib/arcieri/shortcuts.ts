@@ -80,6 +80,97 @@ export const STATIONS: { id: StationId; title: string; /** nome corto, come nell
   { id: "squadra", title: "Compagnia", short: "Compagnia", sub: "Arcieri, news, profilo e progressi", icon: "team", color: "#a988f0", enamel: "amethyst" },
 ];
 
+/* ---------- disposizione dei menu scelta dal fondatore, uguale per tutti ---------- */
+
+/** voce → sezione e ordine originali, per tornare indietro */
+const ORIGINAL = SHORTCUTS.map((s, i) => ({ id: s.id, group: s.group, i }));
+const LAYOUT_KEY = "aa-menu-layout";
+const LAYOUT_EVENT = "aa-menu-layout";
+export type MenuLayout = Partial<Record<StationId, string[]>>;
+let currentLayout: MenuLayout | null = null;
+/** l'ultima disposizione salvata (quella del server): «Annulla» torna qui */
+let savedLayout: MenuLayout | null = null;
+
+/**
+ * Applica una disposizione (o quella originale con null): sposta le voci nelle sezioni scelte e le mette
+ * nell'ordine scelto. Cambia l'elenco condiviso in posto, così Casa, Menu, barra e ricerca la vedono uguale.
+ */
+export function applyMenuLayout(layout: MenuLayout | null, persist = true, draft = false) {
+  currentLayout = layout && Object.keys(layout).length ? layout : null;
+  if (!draft) savedLayout = currentLayout;
+  const group = new Map<string, StationId>(ORIGINAL.map((o) => [o.id, o.group]));
+  const pos = new Map<string, number>();
+  if (currentLayout) {
+    for (const st of STATIONS) {
+      (currentLayout[st.id] ?? []).forEach((id, k) => {
+        if (!group.has(id)) return;
+        group.set(id, st.id);
+        pos.set(id, k);
+      });
+    }
+  }
+  for (const s of SHORTCUTS) s.group = group.get(s.id) ?? s.group;
+  // ordine dentro ogni sezione: prima le voci disposte, poi le altre nell'ordine di sempre
+  const orig = new Map(ORIGINAL.map((o) => [o.id, o.i]));
+  const key = (s: Shortcut) => STATIONS.findIndex((x) => x.id === s.group) * 1000 + (pos.has(s.id) ? (pos.get(s.id) ?? 0) : 900 + (orig.get(s.id) ?? 0) / 1000);
+  SHORTCUTS.sort((a, b) => key(a) - key(b));
+  if (persist && typeof localStorage !== "undefined") {
+    try {
+      if (currentLayout) localStorage.setItem(LAYOUT_KEY, JSON.stringify(currentLayout));
+      else localStorage.removeItem(LAYOUT_KEY);
+    } catch {
+      /* memoria non disponibile */
+    }
+  }
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(LAYOUT_EVENT));
+}
+
+/** la disposizione che si vede adesso, sezione per sezione (da salvare) */
+export function menuLayoutNow(): MenuLayout {
+  return Object.fromEntries(STATIONS.map((st) => [st.id, SHORTCUTS.filter((s) => s.group === st.id).map((s) => s.id)])) as MenuLayout;
+}
+
+export function savedMenuLayout() {
+  return savedLayout;
+}
+
+/** sposta una voce: prima o dopo un'altra voce, oppure in fondo a un'altra sezione */
+export function moveShortcut(id: string, to: { before?: string; after?: string; station?: StationId }) {
+  const layout = menuLayoutNow();
+  const from = SHORTCUTS.find((s) => s.id === id)?.group;
+  if (!from) return layout;
+  const target = to.station ?? SHORTCUTS.find((s) => s.id === (to.before ?? to.after))?.group ?? from;
+  layout[from] = (layout[from] ?? []).filter((x) => x !== id);
+  const list = [...(layout[target] ?? [])].filter((x) => x !== id);
+  const ref = to.before ?? to.after;
+  const at = ref ? list.indexOf(ref) : -1;
+  if (at < 0) list.push(id);
+  else list.splice(to.after ? at + 1 : at, 0, id);
+  layout[target] = list;
+  return layout;
+}
+
+/** ridisegna chi mostra i menu quando la disposizione cambia */
+export function useMenuLayout() {
+  const [, setN] = useState(0);
+  useEffect(() => {
+    const on = () => setN((n) => n + 1);
+    window.addEventListener(LAYOUT_EVENT, on);
+    return () => window.removeEventListener(LAYOUT_EVENT, on);
+  }, []);
+}
+
+/** l'ultima disposizione conosciuta su questo telefono (si applica dopo il primo disegno, poi arriva quella del server) */
+export function cachedMenuLayout(): MenuLayout | null {
+  if (typeof localStorage === "undefined") return null;
+  try {
+    const raw = JSON.parse(localStorage.getItem(LAYOUT_KEY) || "null") as MenuLayout | null;
+    return raw && typeof raw === "object" ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
 export const DEFAULT_PINNED = ["rapido", "foto", "gesto", "statistiche", "balistica", "gare", "attrezzatura", "squadra"];
 export const QUICK_ACTIONS = ["rapido", "foto", "timer", "gesto", "fatto", "gare"];
 

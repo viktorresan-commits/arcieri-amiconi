@@ -7,7 +7,8 @@ import { getMe } from "@/lib/arcieri/members.api";
 import type { PublicMember } from "@/lib/arcieri/access";
 import { memberLabel, initials } from "@/lib/arcieri/labels";
 import { Avatar, LevelHalo, Loading, Mark, cx } from "./kit";
-import { SHORTCUTS, STATIONS, currentShortcut, sectionOf, stationOf } from "@/lib/arcieri/shortcuts";
+import { SHORTCUTS, STATIONS, applyMenuLayout, cachedMenuLayout, currentShortcut, sectionOf, stationOf, useMenuLayout } from "@/lib/arcieri/shortcuts";
+import { getMenuLayout } from "@/lib/arcieri/menu.api";
 import { NextCard, PathMap, ShortcutEditor, TipCard, rememberPage } from "./shortcuts";
 import { LevelCrest } from "./level-crest";
 import { SectionBar } from "./section-bar";
@@ -145,6 +146,27 @@ export function Shell({ children }: { children: ReactNode }) {
     window.addEventListener("aa-unread", read);
     return () => window.removeEventListener("aa-unread", read);
   }, []);
+  // menu disposti dal fondatore, uguali per tutti: subito quelli già noti su questo telefono, poi quelli del server
+  useMenuLayout();
+  useEffect(() => {
+    const cached = cachedMenuLayout();
+    if (cached) applyMenuLayout(cached, false);
+  }, []);
+  const signedIn = Boolean(me);
+  useEffect(() => {
+    if (!signedIn) return;
+    let alive = true;
+    getMenuLayout()
+      .then((r) => {
+        if (alive) applyMenuLayout(r.layout);
+      })
+      .catch(() => {
+        /* senza rete resta quella già nota */
+      });
+    return () => {
+      alive = false;
+    };
+  }, [signedIn]);
   const path = useRouterState({ select: (s) => s.location.pathname });
   const href = useRouterState({ select: (s) => s.location.href });
   const search = useRouterState({ select: (s) => s.location.search });
@@ -425,7 +447,7 @@ export function Shell({ children }: { children: ReactNode }) {
           </main>
           {/* barra in basso: solo voci che in Home non ci sono già (Tiro rapido, Da foto, Segnapunti e Statistiche stanno sul gioco) */}
           {/* barra in basso: Casa e le sette sezioni; un tocco apre le voci della sezione sopra la barra */}
-          <SectionBar path={path} search={search} hide={hide} onSearch={() => { setMenuSearch(true); setMenu(true); }} />
+          <SectionBar path={path} search={search} hide={hide} canArrange={Boolean(me.isSuper && me.role === "admin")} onSearch={() => { setMenuSearch(true); setMenu(true); }} />
           {menu ? (
             <div ref={menuBox} data-menu-scroll className="aa-sheet fixed inset-0 z-40 overflow-y-auto bg-bg pb-[calc(env(safe-area-inset-bottom)+1.5rem)] md:hidden">
               {/* niente intestazione: Cerca e Chiudi stanno sul margine destro, sotto le sezioni */}
