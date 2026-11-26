@@ -1,44 +1,79 @@
 /**
  * Scansione dello storico FITAST dal 2019: per ogni stagione finita la classifica generale delle compagnie e
- * degli arcieri (tutte le categorie) e, per ogni gara, la classifica intera degli arcieri per categoria e
- * quella delle compagnie. Si legge dal portale come l'aggiornamento del campionato (dall'app di chi preme, le
- * pagine passano dal server dell'app) e si salva per tutte le compagnie.
+ * degli arcieri (tutte le categorie) e, per ogni gara, la classifica degli arcieri per categoria e quella delle
+ * compagnie. Si legge dal portale come l'aggiornamento del campionato (dall'app di chi preme, le pagine passano
+ * dal server dell'app) e si salva per tutte le compagnie.
  *
- * Va avanti finché non ha finito (anche un'ora): si può fermare e riprende da dove era. Una classifica letta
- * a metà (fermata, pagina persa) si salva lo stesso ma resta da rileggere; una stagione è finita solo quando
- * tutte le sue gare sono state lette per intero.
+ * Le stagioni passate il portale le apre in modi diversi: con il comando della tendina della stagione, con la
+ * tendina mandata insieme al modulo, oppure non le apre affatto. Si provano tutti, controllando ogni volta che
+ * la pagina sia davvero di quella stagione. Le gare che così non si trovano si cercano per numero (ogni gara ha
+ * la sua classifica a pagView-Class-Arcieri-Gara.awp?P1=numero), dalla più vecchia della stagione in corso
+ * all'indietro, fino a prima del 2019.
+ *
+ * Va avanti finché non ha finito (anche un'ora o più): si può fermare e riprende da dove era. Alla fine lascia
+ * un riassunto tecnico di cosa ha trovato, per capire cosa non va se qualcosa manca.
  */
 import { FITAST_HOME, fitastRead } from "./fitast.api";
 import type { FitastPage } from "./fitast-parse";
 import { classificaUrl, cleanTitle, findGare, garaDateOf, garaIdOf, garaTitleOf, seasonRange, seasonSelect } from "./fitast-gare";
-import { currentTexts, filterCombos, pressReq, type Req } from "./fitast-nav";
+import { currentTexts, filterCombos, FILTER_BUTTON, pressReq, type Req } from "./fitast-nav";
 import { rankingRows, SQUADRE_PAGES, type RankRow } from "./fitast-league";
-import { ALL_DONE, fitastHistoryIndex, markHistorySeason, saveFitastHistory } from "./fitast-history.api";
+import { ALL_DONE, fitastHistoryIndex, markHistorySeason, saveFitastHistory, setHistoryCursor } from "./fitast-history.api";
 import type { SyncProgress } from "./fitast-sync";
+import { fitastStandings } from "./fitast-league.api";
 
 type Kind = "generale-squadre" | "generale-arcieri" | "gara-arcieri" | "gara-squadre";
 type Item = { kind: Kind; season: string; seasonName: string; garaId: string; garaTitle: string; day: string; category: string; rows: RankRow[]; complete: boolean };
-type Gara = { id: string; title: string; day: string };
+type GaraRef = { id: string; title: string; day: string };
+type Season = { key: string; name: string; value: string; text: string; from: string; to: string };
 
 /** avanzamento della scansione: stagioni e gare, per la barra */
 export type HistoryProgress = SyncProgress & { pct: number; seasons: number; seasonsDone: number; gare: number; startedAt: number };
 
-/** limite di sicurezza: una scansione intera ne legge qualche migliaio */
-const SAFETY_PAGES = 15000;
+/** limite di sicurezza per un giro: poi si riprende da dove si era */
+const SAFETY_PAGES = 30000;
 /** pagine perse di fila prima di fermarsi (portale giù o connessione assente) */
 const MAX_FAILS = 8;
 /** categorie al massimo per classifica (Categoria × Tipologia) */
-const MAX_COMBOS = 48;
+const MAX_COMBOS = 40;
 /** righe al massimo per ogni salvataggio: le richieste restano piccole */
 const ROWS_PER_SAVE = 2500;
+/** ricerca per numero: si smette dopo tante gare di fila più vecchie del 2019 o tanti numeri vuoti di fila */
+const OLD_RUN = 30;
+const EMPTY_RUN = 400;
+/** pausa tra una pagina e l'altra: il portale non va sommerso */
+const GAP_MS = 120;
 
 const isoDay = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const short = (t: string) => t.split(" - ").pop()?.trim() ?? t;
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const plain = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+
+/** la pagina parla di questa stagione: la tendina la ha scelta, oppure le sue gare cadono nelle sue date */
+function isSeasonPage(p: FitastPage | null, s: Season) {
+  if (!p) return false;
+  const sel = seasonSelect(p);
+  const chosen = sel?.options.find((o) => o.selected);
+  if (chosen && chosen.value === s.value) return true;
+  return findGare(p).some((g) => g.date && g.date >= s.from && g.date <= s.to);
+}
+
+/** una classifica generale è di questa stagione se ne cita gli anni (o almeno non cita quelli di un'altra) */
+function mentionsSeason(p: FitastPage, s: Season, other: Season | null) {
+  const text = plain([p.title, ...p.lines.slice(0, 60)].join(" "));
+  const y1 = s.from.slice(0, 4);
+  const y2 = s.to.slice(0, 4);
+  const mine = text.includes(`${y1}/${y2}`) || text.includes(`${y1}-${y2}`) || (y1 === y2 && text.includes(y1)) || text.includes(plain(short(s.text)));
+  if (mine) return "si";
+  if (other && (text.includes(plain(short(other.text))) || text.includes(`${other.from.slice(0, 4)}/${other.to.slice(0, 4)}`))) return "no";
+  return "forse";
+}
 
 export async function syncHistory(opts: { onProgress: (p: HistoryProgress) => void; stop: () => boolean; fromYear?: number }) {
   const fromYear = opts.fromYear ?? 2019;
+  const fromDay = `${fromYear}-01-01`;
   const startedAt = Date.now();
+  const diag: string[] = [];
   let cookie = "";
   let pages = 0;
   let saved = 0;
@@ -49,10 +84,8 @@ export async function syncHistory(opts: { onProgress: (p: HistoryProgress) => vo
   let seasonsTotal = 0;
   let seasonsDone = 0;
   let gareRead = 0;
-  /** dentro la stagione: quante gare e a che punto */
-  let inSeason = { at: 0, of: 0 };
-  const pct = () => (seasonsTotal ? Math.min(0.999, (seasonsDone + (inSeason.of ? inSeason.at / inSeason.of : 0)) / seasonsTotal) : 0);
-  const report = (extra: Partial<HistoryProgress> = {}) => opts.onProgress({ step, pages, saved, pct: pct(), seasons: seasonsTotal, seasonsDone, gare: gareRead, startedAt, ...extra });
+  let pctNow = 0;
+  const report = (extra: Partial<HistoryProgress> = {}) => opts.onProgress({ step, pages, saved, pct: pctNow, seasons: seasonsTotal, seasonsDone, gare: gareRead, startedAt, diag: diag.slice(-40), ...extra });
   const halted = () => opts.stop() || broken || pages >= SAFETY_PAGES;
 
   /** una pagina del portale; se non arriva si riprova una volta, e dopo troppe perse di fila ci si ferma */
@@ -66,6 +99,7 @@ export async function syncHistory(opts: { onProgress: (p: HistoryProgress) => vo
         const p = await fitastRead({ data: { url: r.url, post: r.post, referer: r.referer, cookie } });
         if (p.cookie) cookie = p.cookie;
         fails = 0;
+        await wait(GAP_MS);
         return p;
       } catch {
         fails++;
@@ -79,7 +113,7 @@ export async function syncHistory(opts: { onProgress: (p: HistoryProgress) => vo
     return null;
   };
 
-  /** salva a pezzi; se il server non risponde la stagione resta da rifare */
+  /** salva a pezzi; se il server non risponde si segna (e la stagione resta da rifare) */
   const save = async (items: Item[]) => {
     let batch: Item[] = [];
     let rows = 0;
@@ -108,17 +142,14 @@ export async function syncHistory(opts: { onProgress: (p: HistoryProgress) => vo
     report();
   };
 
-  /**
-   * Una classifica con tutte le sue categorie (Categoria × Tipologia): la pagina aperta e poi ogni combinazione.
-   * Torna true se l'ha letta per intero.
-   */
-  const board = async (p0: FitastPage | null, r0: Req | null, kind: Kind, season: string, seasonName: string, gara: Gara = { id: "", title: "", day: "" }) => {
-    if (!p0 || !r0) return false;
+  /** una classifica con tutte le sue categorie: la pagina aperta e poi ogni combinazione. Torna le righe lette e se è intera */
+  const board = async (p0: FitastPage | null, r0: Req | null, kind: Kind, season: Season, gara: GaraRef = { id: "", title: "", day: "" }) => {
+    if (!p0 || !r0) return { rows: 0, complete: false };
     const list: Item[] = [];
     let complete = true;
     const add = (p: FitastPage, texts: string[]) => {
       const rows = rankingRows(p, kind.endsWith("squadre") ? "squadre" : "arcieri", 800);
-      if (rows.length) list.push({ kind, season, seasonName, garaId: gara.id, garaTitle: gara.title, day: gara.day, category: texts.join(" · "), rows, complete: true });
+      if (rows.length) list.push({ kind, season: season.key, seasonName: season.name, garaId: gara.id, garaTitle: gara.title, day: gara.day, category: texts.join(" · "), rows, complete: true });
     };
     add(p0, currentTexts(p0));
     const combos = filterCombos(p0, r0);
@@ -137,9 +168,10 @@ export async function syncHistory(opts: { onProgress: (p: HistoryProgress) => vo
     }
     if (!complete) for (const it of list) it.complete = false;
     if (list.length) await save(list);
-    return complete;
+    return { rows: list.reduce((t, x) => t + x.rows.length, 0), complete };
   };
 
+  // ——— il portale e le sue stagioni ———
   const home = await read({ url: FITAST_HOME });
   if (!home) {
     report({ done: true, error: "Il portale FITAST non risponde. Riprova più tardi: la scansione riparte da dove era." });
@@ -151,26 +183,30 @@ export async function syncHistory(opts: { onProgress: (p: HistoryProgress) => vo
     return;
   }
   const today = isoDay(new Date());
-  // solo le stagioni finite, dalla più recente
-  const seasons = ss.options
+  const all: Season[] = ss.options
     .map((o) => ({ o, range: seasonRange(o.text) ?? seasonRange(o.value) }))
-    .filter((x): x is { o: (typeof ss.options)[number]; range: { from: string; to: string } } => Boolean(x.range) && (x.range?.from ?? "") >= `${fromYear}-01-01` && (x.range?.to ?? "9999") < today)
-    .sort((a, b) => b.range.from.localeCompare(a.range.from));
+    .filter((x): x is { o: (typeof ss.options)[number]; range: { from: string; to: string } } => Boolean(x.range))
+    .map(({ o, range }) => ({ key: (o.value || o.text).replace(/[^\w-]/g, "").slice(0, 20), name: short(o.text), value: o.value, text: o.text, from: range.from, to: range.to }));
+  const current = all.find((s) => s.from <= today && s.to >= today) ?? null;
+  // solo le stagioni finite dal 2019, dalla più recente
+  const seasons = all.filter((s) => s.from >= fromDay && s.to < today && s.key).sort((a, b) => b.from.localeCompare(a.from));
   if (!seasons.length) {
     report({ done: true, error: `Sul portale non trovo stagioni finite dal ${fromYear}.` });
     return;
   }
-  let index: Awaited<ReturnType<typeof fitastHistoryIndex>> = { items: [], seasonsDone: [] };
+  diag.push(`Stagioni sul portale: ${all.length}, finite dal ${fromYear}: ${seasons.length}. Tendina: ${ss.name}${ss.press ? " (con comando)" : " (senza comando)"}. Pulsanti: ${(home.form?.buttons ?? []).map((b) => b.label || b.code).slice(0, 12).join(", ") || "nessuno"}.`);
+  let index: Awaited<ReturnType<typeof fitastHistoryIndex>> = { items: [], seasonsDone: [], cursor: null };
   try {
     index = await fitastHistoryIndex();
   } catch {
-    /* senza indice si legge tutto */
+    diag.push("Indice dell'archivio non letto: si rilegge tutto.");
   }
   const doneSeasons = new Set(index.seasonsDone);
   const have = new Set(index.items.map((i) => `${i.kind}|${i.season}|${i.garaId}`));
-  const seasonKey = (o: { value: string; text: string }) => (o.value || o.text).replace(/[^\w-]/g, "").slice(0, 20);
+  /** gare già salvate per intero, qualunque stagione */
+  const haveGara = new Set(index.items.filter((i) => i.kind === "gara-arcieri").map((i) => i.garaId));
   seasonsTotal = seasons.length;
-  seasonsDone = seasons.filter(({ o }) => doneSeasons.has(seasonKey(o))).length;
+  seasonsDone = seasons.filter((s) => doneSeasons.has(s.key)).length;
   report();
 
   let sqName = "";
@@ -179,101 +215,233 @@ export async function syncHistory(opts: { onProgress: (p: HistoryProgress) => vo
   } catch {
     sqName = "";
   }
-  for (const { o, range } of seasons) {
-    const season = seasonKey(o);
-    if (!season || doneSeasons.has(season)) continue;
-    if (halted()) break;
-    const seasonName = short(o.text);
-    const choose: Record<string, string> = { [ss.name]: o.value };
-    inSeason = { at: 0, of: 0 };
-    step = `${seasonName} · apro la stagione`;
-    const base = ss.press ? await read(pressReq(home, ss.press, choose, o.text)) : null;
-    if (!base) continue;
+
+  /** una gara: tutti gli arcieri per categoria e la classifica delle compagnie */
+  const readGara = async (p0: FitastPage, r0: Req, gara: GaraRef, season: Season) => {
     let complete = true;
+    const day = gara.day.split("-").reverse().join("/");
+    if (!have.has(`gara-arcieri|${season.key}|${gara.id}`)) {
+      step = `${season.name} · ${gara.title || "Gara"} · ${day} · arcieri`;
+      if (!(await board(p0, r0, "gara-arcieri", season, gara)).complete) complete = false;
+    }
+    if (!have.has(`gara-squadre|${season.key}|${gara.id}`) && !halted()) {
+      step = `${season.name} · ${gara.title || "Gara"} · ${day} · compagnie`;
+      for (const name of [...new Set([sqName, ...SQUADRE_PAGES].filter(Boolean))].slice(0, 4)) {
+        if (halted()) break;
+        const r1: Req = { url: new URL(`${name}?P1=${gara.id}`, FITAST_HOME).toString(), referer: p0.url, label: step };
+        const p1 = await read(r1);
+        if (!p1 || (garaIdOf(p1) && garaIdOf(p1) !== gara.id)) continue;
+        if (!rankingRows(p1, "squadre", 1).length) continue;
+        sqName = name;
+        if (!(await board(p1, r1, "gara-squadre", season, gara)).complete) complete = false;
+        break;
+      }
+    }
+    gareRead++;
+    haveGara.add(gara.id);
+    report();
+    return complete;
+  };
+
+  /** la pagina della stagione: si provano i modi in cui il portale la può aprire, e si controlla */
+  const seasonPage = async (s: Season): Promise<{ page: FitastPage; how: string } | null> => {
+    const choose: Record<string, string> = { [ss.name]: s.value };
+    const tries: { how: string; r: Req | null }[] = [];
+    if (ss.press) tries.push({ how: "comando della tendina", r: pressReq(home, ss.press, choose, s.text) });
+    tries.push({ how: "tendina come comando", r: pressReq(home, { code: ss.name, set: {} }, choose, s.text) });
+    tries.push({ how: "modulo con la tendina", r: pressReq(home, { code: "", set: {} }, choose, s.text) });
+    for (const b of (home.form?.buttons ?? []).filter((x) => FILTER_BUTTON.test(x.label.trim())).slice(0, 2)) tries.push({ how: `pulsante ${b.label}`, r: pressReq(home, b, choose, s.text) });
+    for (const t of tries) {
+      if (halted()) return null;
+      const p = await read(t.r);
+      if (isSeasonPage(p, s)) return { page: p as FitastPage, how: t.how };
+    }
+    return null;
+  };
+
+  // ——— 1. stagione per stagione: generali e gare dell'elenco ———
+  /** stagioni di cui il portale non ha dato l'elenco delle gare: le si cerca per numero */
+  const missing: Season[] = [];
+  for (const s of seasons) {
+    if (doneSeasons.has(s.key)) continue;
+    if (halted()) break;
+    pctNow = ((seasonsDone + 0.05) / Math.max(1, seasonsTotal)) * 0.5;
+    step = `${s.name} · apro la stagione`;
+    const opened = await seasonPage(s);
+    const base = opened?.page ?? home;
+    const choose: Record<string, string> = { [ss.name]: s.value };
     const btns = base.form?.buttons ?? [];
-    // classifiche generali della stagione: compagnie e arcieri, tutte le categorie
     const genSq = btns.find((b) => /general/i.test(b.label) && /squadr|compagn|societ/i.test(b.label));
     const genAr = btns.find((b) => /general/i.test(b.label) && /arcier/i.test(b.label));
-    if (genSq && !have.has(`generale-squadre|${season}|`)) {
-      step = `${seasonName} · classifica generale compagnie`;
-      const r0 = pressReq(base, genSq, choose, step);
-      if (!(await board(await read(r0), r0, "generale-squadre", season, seasonName))) complete = false;
+    const notes: string[] = [opened ? `aperta (${opened.how})` : "non si apre"];
+    for (const [kind, btn, label] of [["generale-squadre", genSq, "compagnie"], ["generale-arcieri", genAr, "arcieri"]] as const) {
+      if (!btn) {
+        notes.push(`generale ${label}: pulsante assente`);
+        continue;
+      }
+      if (have.has(`${kind}|${s.key}|`) || halted()) continue;
+      step = `${s.name} · classifica generale ${label}`;
+      const r0 = pressReq(base, btn, choose, step);
+      const p0 = await read(r0);
+      if (!p0) {
+        notes.push(`generale ${label}: pagina persa`);
+        continue;
+      }
+      // senza la pagina della stagione la generale potrebbe essere quella di oggi: si controlla che sia la sua
+      const ok = opened ? "si" : mentionsSeason(p0, s, current);
+      if (ok === "no") {
+        notes.push(`generale ${label}: il portale dà un'altra stagione`);
+        continue;
+      }
+      const got = await board(p0, r0, kind, s);
+      notes.push(`generale ${label}: ${got.rows} righe${ok === "forse" ? " (stagione non verificata)" : ""}`);
     }
-    if (genAr && !have.has(`generale-arcieri|${season}|`)) {
-      step = `${seasonName} · classifica generale arcieri`;
-      const r0 = pressReq(base, genAr, choose, step);
-      if (!(await board(await read(r0), r0, "generale-arcieri", season, seasonName))) complete = false;
-    }
-    // le gare della stagione: tutti gli arcieri per categoria e la classifica delle compagnie
-    const gare = findGare(base)
-      .filter((g) => g.date && g.date >= range.from && g.date <= range.to)
-      .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
-    inSeason = { at: 0, of: gare.length };
+    const gare = opened
+      ? findGare(opened.page)
+          .filter((g) => g.date && g.date >= s.from && g.date <= s.to)
+          .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""))
+      : [];
+    notes.push(`gare nell'elenco: ${gare.length}`);
+    if (!gare.length) missing.push(s);
+    let complete = true;
+    let at = 0;
     for (const g of gare) {
       if (halted()) {
         complete = false;
         break;
       }
-      inSeason.at++;
+      at++;
+      pctNow = ((seasonsDone + at / gare.length) / Math.max(1, seasonsTotal)) * 0.5;
       const ids = [g.id, g.key ?? ""].filter((x, i, a) => /^\d{3,6}$/.test(x) && a.indexOf(x) === i);
-      const known = ids.find((id) => have.has(`gara-arcieri|${season}|${id}`));
-      if (known && have.has(`gara-squadre|${season}|${known}`)) continue;
-      let hit: { id: string; p0: FitastPage; r0: Req; gara: Gara } | null = null;
-      const day = g.date?.split("-").reverse().join("/") ?? "";
+      if (ids.some((id) => haveGara.has(id))) continue;
+      let hit: { p0: FitastPage; r0: Req; gara: GaraRef } | null = null;
       for (const id of ids.slice(0, 3)) {
-        step = `${seasonName} · ${g.title || "Gara"} · ${day}`;
+        step = `${s.name} · ${g.title || "Gara"}`;
         const r0: Req = { url: classificaUrl(id, FITAST_HOME), referer: FITAST_HOME, label: step };
         const p0 = await read(r0);
         if (!p0 || garaIdOf(p0) !== id) continue;
-        hit = { id, p0, r0, gara: { id, title: cleanTitle(garaTitleOf(p0) || g.title) || g.title, day: garaDateOf(p0) ?? g.date ?? "" } };
+        hit = { p0, r0, gara: { id, title: cleanTitle(garaTitleOf(p0) || g.title) || g.title, day: garaDateOf(p0) ?? g.date ?? "" } };
         break;
       }
       if (!hit) {
-        // pagina persa: da rifare; gara senza classifica sul portale: si va avanti
         if (halted() || fails > 0) complete = false;
         continue;
       }
-      gareRead++;
-      if (!have.has(`gara-arcieri|${season}|${hit.id}`)) {
-        step = `${seasonName} · ${hit.gara.title || "Gara"} · ${day} · arcieri`;
-        if (!(await board(hit.p0, hit.r0, "gara-arcieri", season, seasonName, hit.gara))) complete = false;
-      }
-      if (!have.has(`gara-squadre|${season}|${hit.id}`) && !halted()) {
-        step = `${seasonName} · ${hit.gara.title || "Gara"} · ${day} · compagnie`;
-        for (const name of [...new Set([sqName, ...SQUADRE_PAGES].filter(Boolean))].slice(0, 4)) {
-          if (halted()) break;
-          const r1: Req = { url: new URL(`${name}?P1=${hit.id}`, FITAST_HOME).toString(), referer: hit.p0.url, label: step };
-          const p1 = await read(r1);
-          if (!p1 || (garaIdOf(p1) && garaIdOf(p1) !== hit.id)) continue;
-          if (!rankingRows(p1, "squadre", 1).length) continue;
-          sqName = name;
-          if (!(await board(p1, r1, "gara-squadre", season, seasonName, hit.gara))) complete = false;
-          break;
-        }
-      }
-      report();
+      if (!(await readGara(hit.p0, hit.r0, hit.gara, s))) complete = false;
     }
-    if (complete && !halted() && !saveFailed) {
+    diag.push(`${s.name}: ${notes.join("; ")}.`);
+    // con l'elenco delle gare letto per intero la stagione è chiusa; senza, aspetta la ricerca per numero
+    if (gare.length && complete && !halted() && !saveFailed) {
       try {
-        await markHistorySeason({ data: { season } });
+        await markHistorySeason({ data: { season: s.key } });
+        doneSeasons.add(s.key);
         seasonsDone++;
-        inSeason = { at: 0, of: 0 };
       } catch {
         /* si rifà al prossimo giro */
       }
     }
     report();
   }
-  const left = seasonsTotal - seasonsDone;
-  if (!left) {
+
+  // ——— 2. gare cercate per numero, per le stagioni senza elenco ———
+  if (missing.length && !halted()) {
+    const oldest = missing.reduce((m, s) => (s.from < m ? s.from : m), missing[0].from);
+    const ofDay = (d: string) => missing.find((s) => d >= s.from && d <= s.to) ?? null;
+    // si parte dalla gara con il numero più basso della stagione in corso (o da dove si era rimasti)
+    let nowIds = findGare(home).flatMap((g) => [g.id, g.key ?? ""]).filter((x) => /^\d{3,6}$/.test(x)).map(Number);
+    // l'elenco del portale non dà i numeri: quelli delle gare del campionato in corso già salvate
+    if (!nowIds.length) {
+      try {
+        const st = await fitastStandings();
+        nowIds = st.items.map((x) => x.garaId).filter((x) => /^\d{3,6}$/.test(x)).map(Number);
+      } catch {
+        nowIds = [];
+      }
+    }
+    const start = index.cursor && !index.cursor.done ? index.cursor.id : nowIds.length ? Math.min(...nowIds) - 1 : 0;
+    if (index.cursor?.done) diag.push("Ricerca per numero già finita in un giro precedente.");
+    else if (!start) diag.push("Ricerca per numero: nessuna gara della stagione in corso da cui partire.");
+    else {
+      diag.push(`Ricerca per numero: dalla gara ${start} all'indietro, fino a prima del ${oldest.slice(0, 4)}.`);
+      let id = start;
+      let oldRun = 0;
+      let emptyRun = 0;
+      let found = 0;
+      let kept = 0;
+      let lastSaved = start;
+      let finished = false;
+      const todayMs = Date.parse(today);
+      const span = Math.max(1, todayMs - Date.parse(oldest));
+      while (id > 0 && !halted()) {
+        const key = String(id);
+        if (!haveGara.has(key)) {
+          step = `Cerco le gare per numero · ${key}`;
+          const r0: Req = { url: classificaUrl(key, FITAST_HOME), referer: FITAST_HOME, label: step };
+          const p0 = await read(r0);
+          if (halted()) break;
+          if (!p0 || garaIdOf(p0) !== key) emptyRun++;
+          else {
+            emptyRun = 0;
+            found++;
+            const day = garaDateOf(p0) ?? "";
+            if (day && day < oldest) oldRun++;
+            else if (day) {
+              oldRun = 0;
+              pctNow = 0.5 + 0.5 * Math.min(1, Math.max(0, (todayMs - Date.parse(day)) / span));
+              const s = ofDay(day);
+              if (s) {
+                kept++;
+                const gara: GaraRef = { id: key, title: cleanTitle(garaTitleOf(p0)) || `Gara ${key}`, day };
+                step = `${s.name} · ${gara.title}`;
+                await readGara(p0, r0, gara, s);
+              }
+            }
+          }
+        }
+        if (oldRun >= OLD_RUN || emptyRun >= EMPTY_RUN) {
+          finished = true;
+          break;
+        }
+        id--;
+        if (lastSaved - id >= 20) {
+          lastSaved = id;
+          try {
+            await setHistoryCursor({ data: { id, done: false } });
+          } catch {
+            /* si riprende un po' più su */
+          }
+        }
+      }
+      if (id <= 0) finished = true;
+      try {
+        await setHistoryCursor({ data: { id: Math.max(0, id), done: finished } });
+      } catch {
+        /* niente */
+      }
+      diag.push(`Ricerca per numero: arrivata alla gara ${id}, ${found} gare trovate, ${kept} delle stagioni passate${finished ? ", finita" : ", da riprendere"}.`);
+      if (finished && !saveFailed) {
+        for (const s of missing) {
+          try {
+            await markHistorySeason({ data: { season: s.key } });
+            if (!doneSeasons.has(s.key)) seasonsDone++;
+            doneSeasons.add(s.key);
+          } catch {
+            /* al prossimo giro */
+          }
+        }
+      }
+    }
+  }
+
+  const left = seasons.filter((s) => !doneSeasons.has(s.key)).length;
+  if (!left && !halted()) {
     try {
       await markHistorySeason({ data: { season: ALL_DONE } });
     } catch {
-      /* resta il pulsante per riprendere: non legge niente di nuovo */
+      /* resta il pulsante per riprendere */
     }
   }
   step = "Fatto";
-  inSeason = { at: 0, of: 0 };
   const why = broken
     ? "Il portale ha smesso di rispondere."
     : saveFailed
@@ -285,9 +453,9 @@ export async function syncHistory(opts: { onProgress: (p: HistoryProgress) => vo
           : "";
   report({
     done: true,
-    pct: left ? pct() : 1,
+    pct: left ? pctNow : 1,
     note: left
-      ? `${why ? `${why} ` : ""}Stagioni salvate: ${seasonsDone} su ${seasonsTotal}. Tocca «Riprendi la scansione» per continuare da dove si è fermata.`
+      ? `${why ? `${why} ` : ""}Stagioni complete: ${seasonsDone} su ${seasonsTotal}, ${gareRead} gare lette in questo giro, ${saved} classifiche salvate. Tocca «Riprendi la scansione» per continuare da dove si è fermata.`
       : `Albo d'oro completo: ${seasonsTotal} ${seasonsTotal === 1 ? "stagione" : "stagioni"} dal ${fromYear}${gareRead ? `, ${gareRead} gare lette in questo giro` : ""}.`,
   });
 }

@@ -18,6 +18,8 @@ const KEEP: Record<Kind, number> = { "generale-squadre": 120, "generale-arcieri"
 const DONE_KEY = "storico2-";
 /** segno che la scansione ha letto tutte le stagioni finite del portale */
 export const ALL_DONE = "_tutto";
+/** la scansione delle gare per numero (quando il portale non apre le stagioni passate) */
+const CURSOR = "_cursore";
 
 export const saveFitastHistory = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
@@ -77,10 +79,16 @@ export const fitastHistoryIndex = createServerFn({ method: "POST" })
     await ensureMember(sql, context.userId);
     try {
       const rows = await sql<{ kind: string; season: string; gara_id: string }>`select distinct kind, season, gara_id from fitast_history where v >= 2`;
-      const done = await sql<{ key: string }>`select key from fitast_sync where key like ${`${DONE_KEY}%`}`;
-      return { items: rows.map((r) => ({ kind: r.kind, season: r.season, garaId: r.gara_id })), seasonsDone: done.map((d) => d.key.slice(DONE_KEY.length)) };
+      const done = await sql<{ key: string; info: { id?: number; done?: boolean } | null }>`select key, info from fitast_sync where key like ${`${DONE_KEY}%`}`;
+      const cur = done.find((d) => d.key === `${DONE_KEY}${CURSOR}`)?.info ?? null;
+      return {
+        items: rows.map((r) => ({ kind: r.kind, season: r.season, garaId: r.gara_id })),
+        seasonsDone: done.map((d) => d.key.slice(DONE_KEY.length)).filter((k) => k !== CURSOR),
+        /** scansione delle gare per numero: fin dove è arrivata */
+        cursor: cur && Number.isFinite(Number(cur.id)) ? { id: Number(cur.id), done: Boolean(cur.done) } : null,
+      };
     } catch {
-      return { items: [] as { kind: string; season: string; garaId: string }[], seasonsDone: [] as string[] };
+      return { items: [] as { kind: string; season: string; garaId: string }[], seasonsDone: [] as string[], cursor: null as { id: number; done: boolean } | null };
     }
   });
 
@@ -93,6 +101,21 @@ export const markHistorySeason = createServerFn({ method: "POST" })
     await ensureMember(sql, context.userId);
     if (!data.season) return { ok: false };
     await sql`insert into fitast_sync (key, at, info) values (${`${DONE_KEY}${data.season}`}, now(), '{}'::jsonb) on conflict (key) do update set at = now()`;
+    return { ok: true };
+  });
+
+/** fin dove è arrivata la scansione delle gare per numero, per riprendere da lì */
+export const setHistoryCursor = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: unknown) => {
+    const r = (input ?? {}) as { id?: unknown; done?: unknown };
+    return { id: Math.max(0, Math.min(1_000_000, Math.round(Number(r.id) || 0))), done: r.done === true };
+  })
+  .handler(async ({ context, data }) => {
+    const sql = await db();
+    await ensureMember(sql, context.userId);
+    await sql`insert into fitast_sync (key, at, info) values (${`${DONE_KEY}${CURSOR}`}, now(), ${JSON.stringify(data)}::jsonb)
+      on conflict (key) do update set at = now(), info = excluded.info`;
     return { ok: true };
   });
 
@@ -115,7 +138,7 @@ export const fitastArchive = createServerFn({ method: "POST" })
           coalesce(sum(jsonb_array_length(rows)) filter (where kind in ('gara-arcieri', 'generale-arcieri')), 0)::int as arcieri
         from fitast_history group by season`;
       const done = await sql<{ key: string; at: string }>`select key, at::text as at from fitast_sync where key like ${`${DONE_KEY}%`}`;
-      const doneSet = new Set(done.map((d) => d.key.slice(DONE_KEY.length)));
+      const doneSet = new Set(done.map((d) => d.key.slice(DONE_KEY.length)).filter((k) => k !== CURSOR));
       const seasons: ArchiveSeasonInfo[] = rows
         .map((r) => ({ season: r.season, seasonName: r.season_name, from: r.first ?? "", to: r.last ?? "", gare: asNum(r.gare), done: doneSet.has(r.season) }))
         .sort((a, b) => (b.to || b.season).localeCompare(a.to || a.season));

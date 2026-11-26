@@ -153,7 +153,7 @@ function ScanPanel({ p, busy, complete, started }: { p: HistoryProgress | null; 
         </div>
         <p className="truncate text-xs">{p.step}</p>
         <p className="text-xs text-muted">
-          {p.seasons ? `Stagioni salvate ${p.seasonsDone} su ${p.seasons}` : "Cerco le stagioni"} · {num(p.pages)} pagine lette · {num(p.saved)} classifiche salvate{left ? ` · ${left}` : ""}
+          {p.seasons ? `Stagioni complete ${p.seasonsDone} su ${p.seasons}` : "Cerco le stagioni"} · {num(p.gare)} gare · {num(p.pages)} pagine lette · {num(p.saved)} classifiche salvate{left ? ` · ${left}` : ""}
         </p>
         <p className="text-[0.7rem] leading-snug text-muted">Lo schermo resta acceso. Puoi usare il resto dell'app: la scansione continua. Se chiudi l'app si ferma e la riprendi da qui, da dove era.</p>
         <button type="button" className="aa-chip justify-self-start" onClick={() => { stopFlag = true; }}>Ferma</button>
@@ -163,6 +163,12 @@ function ScanPanel({ p, busy, complete, started }: { p: HistoryProgress | null; 
   return (
     <div className="grid gap-2">
       {p?.done && (p.error || p.note) ? <p className={cx("text-xs", p.error ? "text-[#f0a08a]" : "text-muted")}>{p.error || p.note}</p> : null}
+      {p?.done && p.diag?.length ? (
+        <details className="rounded-2xl bg-white/[0.03] p-3 text-xs text-muted">
+          <summary className="cursor-pointer">Dettagli tecnici della scansione</summary>
+          <ul className="mt-1.5 grid gap-1 break-words text-[0.7rem] leading-snug">{p.diag.map((d, i) => <li key={i}>{d}</li>)}</ul>
+        </details>
+      ) : null}
       {complete ? (
         <button type="button" className="justify-self-start text-xs text-muted underline underline-offset-2" onClick={() => void startScan()}>Cerca stagioni nuove sul portale</button>
       ) : (
