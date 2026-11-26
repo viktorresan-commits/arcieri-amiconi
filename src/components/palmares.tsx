@@ -154,7 +154,8 @@ export function CompanyTrophies({ companyId, companyName }: { companyId: number;
   const awards = data.awards;
   const pods = data.podiums;
   const results = data.results ?? [];
-  const teamRows = [...results.filter((r) => r.fitastId.startsWith("camp-")).slice(0, 4), ...results.filter((r) => !r.fitastId.startsWith("camp-"))];
+  // un solo elenco dal più recente: le classifiche generali (anche delle stagioni passate) e le gare
+  const teamRows = results;
   const counts = countOf([...awards, ...pods, ...results]);
   const save = async () => {
     if (!draft) return;
@@ -215,7 +216,8 @@ export function CompanyTrophies({ companyId, companyName }: { companyId: number;
                 <Cup place={a.place} size={30} />
                 <button
                   type="button"
-                  disabled={!data.canEdit}
+                  // i trofei letti dal portale FITAST (id negativi) non si modificano
+                  disabled={!data.canEdit || a.id < 0}
                   onClick={() => setDraft({ id: a.id, title: a.title, place: a.place ? String(a.place) : "", competition: a.competition, day: a.day, category: a.category, notes: a.notes })}
                   className="min-w-0 flex-1 text-left disabled:cursor-default"
                   aria-label={data.canEdit ? `Modifica ${a.title}` : undefined}
@@ -224,7 +226,7 @@ export function CompanyTrophies({ companyId, companyName }: { companyId: number;
                   <p className="text-xs text-muted">{[a.place ? `${a.place}° posto` : "", a.competition, fmtDay(a.day), a.category].filter(Boolean).join(" · ")}</p>
                   {a.notes ? <p className="text-xs text-muted">{a.notes}</p> : null}
                 </button>
-                {data.canEdit ? (
+                {data.canEdit && a.id > 0 ? (
                   <button type="button" className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/[0.06] text-lg leading-none" disabled={busy} onClick={() => void remove(a)} aria-label={`Togli ${a.title}`}>
                     ×
                   </button>
@@ -285,7 +287,7 @@ export function CompanyTrophies({ companyId, companyName }: { companyId: number;
             ) : null}
           </ul>
         ) : (
-          <p className="text-sm text-muted">Arrivano da sole quando qualcuno della compagnia cerca il suo nome sul portale FITAST (scheda Gare).</p>
+          <p className="text-sm text-muted">Arrivano dal portale FITAST: dal campionato in corso e, con «Storico dal 2019» nelle classifiche FITAST, dalle stagioni passate.</p>
         )
       ) : null}
       {view === "podi" ? (

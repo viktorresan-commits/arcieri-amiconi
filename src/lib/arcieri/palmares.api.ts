@@ -7,6 +7,7 @@ import { authMiddleware } from "@/lib/auth/middleware";
 import type { Sql } from "@/lib/db";
 import { asNum, canScore, clip, db, ensureMember, staffLevel } from "./access";
 import { homeId, myMembership } from "./compagnie.api";
+import { cleanCategory, teamKey, titleName } from "./fitast-league";
 
 export type Podium = { competition: string; day: string; place: number; score: number | null; category: string; userId: string; memberId: number; name: string };
 export type Award = { id: number; title: string; place: number | null; competition: string; day: string; category: string; notes: string };
@@ -80,6 +81,78 @@ export const archerPodiums = createServerFn({ method: "POST" })
     return { podiums: await podiumsOf(sql, [userId]), gare: asNum(gare[0]?.n) };
   });
 
+type StRow = { kind: string; season: string; season_name: string; gara_id: string; gara_title: string; held_on: string | null; category: string; rows: { place: number | null; name: string; team: string; score: number | null }[] };
+
+/**
+ * Dal portale FITAST (campionato in corso e storico dal 2019): i podi degli arcieri della compagnia in ogni
+ * gara, i suoi piazzamenti nelle classifiche delle compagnie (per gara e generali) e, delle stagioni finite,
+ * i podi nella classifica generale delle compagnie come trofei.
+ */
+async function fitastPalmares(sql: Sql, companyId: number) {
+  const co = await sql<{ name: string; fitast_name: string | null }>`select name, fitast_name from companies where id = ${companyId} limit 1`;
+  const keys = [co[0]?.fitast_name ?? "", co[0]?.name ?? ""].map((x) => teamKey(x)).filter((x) => x.length >= 3);
+  if (!keys.length) return { podiums: [] as Podium[], results: [] as TeamResult[], trophies: [] as Award[] };
+  const ours = (team: string) => {
+    const k = teamKey(team);
+    return Boolean(k) && keys.includes(k);
+  };
+  const load = async (table: "fitast_standings" | "fitast_history") => {
+    try {
+      return table === "fitast_history"
+        ? await sql<StRow>`select kind, season, season_name, gara_id, gara_title, held_on::text as held_on, category, rows from fitast_history where kind in ('generale-squadre', 'gara-arcieri', 'gara-squadre')`
+        : await sql<StRow>`select kind, season, season_name, gara_id, gara_title, held_on::text as held_on, category, rows from fitast_standings where kind in ('generale-squadre', 'gara-arcieri', 'gara-squadre')`;
+    } catch {
+      return [] as StRow[];
+    }
+  };
+  const current = await load("fitast_standings");
+  const past = await load("fitast_history");
+  const seen = new Set<string>();
+  const all = [...current, ...past].filter((r) => {
+    const k = `${r.kind}|${r.season}|${r.gara_id}|${r.category}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+  const currentSeasons = new Set(current.map((r) => r.season));
+  const podiums: Podium[] = [];
+  const results: TeamResult[] = [];
+  const trophies: Award[] = [];
+  let fake = -1;
+  for (const r of all) {
+    const rows = Array.isArray(r.rows) ? r.rows : [];
+    const day = r.held_on ? String(r.held_on).slice(0, 10) : "";
+    const cat = cleanCategory(r.category || "") || r.category || "";
+    if (r.kind === "gara-arcieri") {
+      for (const x of rows) {
+        if (x.place == null || x.place < 1 || x.place > 3 || !ours(x.team)) continue;
+        podiums.push({ competition: titleName(r.gara_title || "Gara FITAST"), day, place: x.place, score: x.score == null ? null : Number(x.score), category: cat, userId: "", memberId: 0, name: titleName(x.name) });
+      }
+      continue;
+    }
+    const mine = rows.find((x) => ours(x.team || x.name));
+    if (!mine || mine.place == null) continue;
+    const general = r.kind === "generale-squadre";
+    const competition = general ? `${r.season_name || "Campionato FITAST"} · classifica generale` : titleName(r.gara_title || "Gara FITAST");
+    results.push({ id: fake--, fitastId: general ? `camp-${r.season}` : r.gara_id, competitionId: null, competition, day: day || seasonDay(r.season_name), team: titleName(mine.team || mine.name), category: cat, place: mine.place, score: mine.score == null ? null : Number(mine.score), teams: rows.length || null });
+    // stagione finita: il podio nella generale delle compagnie è un trofeo
+    if (general && !currentSeasons.has(r.season) && mine.place <= 3) {
+      trophies.push({ id: fake--, title: `${r.season_name || "Campionato FITAST"} · classifica compagnie`, place: mine.place, competition: "Campionato FITAST", day: seasonDay(r.season_name), category: cat, notes: "Dal portale FITAST" });
+    }
+  }
+  return { podiums, results, trophies };
+}
+
+/** una data per ordinare le stagioni: la fine del campionato (aprile per l'invernale, ottobre per l'estivo) */
+function seasonDay(name: string) {
+  const w = /(20\d{2})\s*\/\s*(20\d{2})/.exec(name);
+  if (w) return `${w[2]}-04-30`;
+  const y = /(20\d{2})/.exec(name);
+  return y ? `${y[1]}-10-31` : "";
+}
+
+const wordsOf = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().split(/[^a-z]+/).filter((w) => w.length > 1).sort().join(" ");
+
 async function companyAccess(sql: Sql, userId: string, companyId: number) {
   const me = await ensureMember(sql, userId);
   const mine = await myMembership(sql, userId);
@@ -111,15 +184,27 @@ export const companyPalmares = createServerFn({ method: "POST" })
       sql,
       crew.map((c) => c.user_id),
     );
+    // dal portale FITAST: podi, piazzamenti di squadra e trofei delle stagioni (anche dal 2019), senza doppioni
+    const fp = await fitastPalmares(sql, companyId);
+    const podKey = (p: Podium) => `${p.day}|${p.place}|${wordsOf(p.name)}`;
+    const havePods = new Set(pods.map(podKey));
+    const allPods = [...pods, ...fp.podiums.filter((p) => !havePods.has(podKey(p)) && (havePods.add(podKey(p)), true))].sort((a, b) => b.day.localeCompare(a.day) || a.place - b.place);
+    const saved = await teamResultsOf(sql, companyId);
+    const resKey = (r: TeamResult) => `${r.fitastId}|${teamKey(r.category)}`;
+    const haveRes = new Set(saved.map(resKey));
+    const allResults = [...saved, ...fp.results.filter((r) => !haveRes.has(resKey(r)) && (haveRes.add(resKey(r)), true))].sort((a, b) => b.day.localeCompare(a.day) || (a.place ?? 99) - (b.place ?? 99));
     return {
       companyId,
       seeNames,
-      results: await teamResultsOf(sql, companyId),
+      results: allResults,
       canEdit: await companyAccess(sql, context.userId, companyId),
-      awards: awards.map(
-        (a): Award => ({ id: asNum(a.id), title: a.title, place: a.place == null ? null : asNum(a.place), competition: a.competition, day: a.held_on ? String(a.held_on).slice(0, 10) : "", category: a.category, notes: a.notes }),
-      ),
-      podiums: seeNames ? pods : pods.map((p) => ({ ...p, name: "", memberId: 0, userId: "" })),
+      awards: [
+        ...awards.map(
+          (a): Award => ({ id: asNum(a.id), title: a.title, place: a.place == null ? null : asNum(a.place), competition: a.competition, day: a.held_on ? String(a.held_on).slice(0, 10) : "", category: a.category, notes: a.notes }),
+        ),
+        ...fp.trophies,
+      ].sort((a, b) => b.day.localeCompare(a.day)),
+      podiums: seeNames ? allPods : allPods.map((p) => ({ ...p, name: "", memberId: 0, userId: "" })),
     };
   });
 

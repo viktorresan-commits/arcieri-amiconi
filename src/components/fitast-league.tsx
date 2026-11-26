@@ -10,6 +10,8 @@ import { fitastGaraBoard, fitastStandingRows, fitastStandings, fitastTeamArchers
 import { categoryGroup, cleanCategory, crestOf as drawCrest, teamKey, titleName } from "@/lib/arcieri/fitast-league";
 import { realCrest, withRealCrest } from "@/lib/arcieri/stemmi-veri";
 import { syncStandings, type SyncProgress } from "@/lib/arcieri/fitast-sync";
+import { syncHistory } from "@/lib/arcieri/fitast-history";
+import { useMemberMaybe } from "@/components/shell";
 import { nameKey } from "@/lib/arcieri/fitast-rank";
 import { setFitastLink } from "@/lib/arcieri/fitast-link.api";
 
@@ -266,6 +268,16 @@ export function useFitastLeague(companies: Crest[]) {
     }
     setNonce((n) => n + 1);
   }
+  /** storico dal 2019: le stagioni finite, per la bacheca di tutte le compagnie (riprende da dove si era fermato) */
+  async function history() {
+    stop.current = false;
+    setSync({ step: "Apro il portale · storico dal 2019", pages: 0, saved: 0 });
+    try {
+      await syncHistory({ onProgress: (p) => setSync({ ...p }), stop: () => stop.current });
+    } catch (e) {
+      setSync((s) => ({ ...(s ?? { step: "", pages: 0, saved: 0 }), done: true, error: e instanceof Error ? e.message : "Storico non letto." }));
+    }
+  }
   // si aggiorna da solo quando le classifiche salvate sono vecchie (una volta per apertura dell'app)
   useEffect(() => {
     if (!data) return;
@@ -302,13 +314,16 @@ export function useFitastLeague(companies: Crest[]) {
     }
     return [...byId.values()].sort((a, b) => b.day.localeCompare(a.day));
   }, [items]);
-  return { data, error, loading, crestOf, sync, running, refresh, stop: () => { stop.current = true; }, genSq, genAr, gare };
+  return { data, error, loading, crestOf, sync, running, refresh, history, stop: () => { stop.current = true; }, genSq, genAr, gare };
 }
 export type FitastLeagueState = ReturnType<typeof useFitastLeague>;
 
 /** in cima: il campionato, quando è stato letto e il pulsante per rileggerlo dal portale */
 export function FitastHeader({ league }: { league: FitastLeagueState }) {
   const { data, sync, running, error } = league;
+  // lo storico legge tante pagine: lo avvia lo staff (fondatore, presidenti, allenatori)
+  const who = useMemberMaybe()?.me;
+  const staff = Boolean(who && (who.canStaff || who.isSuper));
   return (
     <Card className="grid gap-3 overflow-hidden">
       <div className="flex items-start gap-3">
@@ -326,6 +341,7 @@ export function FitastHeader({ league }: { league: FitastLeagueState }) {
           <>
             <button type="button" className="aa-chip border-[#e0b15a]/50 text-[#f1cf8a]" onClick={() => void league.refresh()}>Aggiorna dal portale</button>
             <button type="button" className="text-xs text-muted underline underline-offset-2" onClick={() => void league.refresh(true)}>Rileggi tutto</button>
+            {staff ? <button type="button" className="text-xs text-muted underline underline-offset-2" onClick={() => void league.history()}>Storico dal 2019</button> : null}
           </>
         )}
         {sync ? <span className="text-xs text-muted">{running ? `${sync.step} · ${sync.pages} pagine lette` : sync.error ? sync.error : sync.saved ? `Aggiornate ${sync.saved} classifiche in ${sync.pages} pagine.` : `Nessuna novità sul portale (${sync.pages} pagine controllate).`}</span> : null}
