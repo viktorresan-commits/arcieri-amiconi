@@ -6,7 +6,8 @@ import { cloneElement, isValidElement, useEffect, useId, useMemo, useRef, useSta
 import { tune, type AvatarLook, type Pose } from "@/lib/arcieri/avatar";
 import { zigQ, BowDeco, Buckle, ChestEmblem, Clasp, ClothPattern, Earring, FaceFrame, FacePaintFront, FacePaintProfile, Fletching, HairOrnament, PaintStroke, Pouch, QuiverBody } from "./avatar-extras";
 import { sceneById } from "@/lib/arcieri/scenes";
-import { seamOf, ClothButton, BeardTexture, BeltDetail, BootDetail, BrowHairs, ClothDetail, DetailDefs, EyeDetail, FaceShade, HairFineStrands, HandDetail, LeatherBand, LipDetail, SleeveDetail } from "./avatar-detail";
+import { SideShoe } from "./avatar-shoes";
+import { seamOf, ClothButton, BeardTexture, BeltDetail, BrowHairs, ClothDetail, DetailDefs, EyeDetail, FaceShade, HairFineStrands, HandDetail, LeatherBand, LipDetail, SleeveDetail } from "./avatar-detail";
 
 /**
  * L'arciere disegnato, in stile gioco: busto rivolto a chi guarda, testa girata verso il bersaglio
@@ -349,74 +350,7 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4, cssBlink = fals
     </g>
   );
 
-  const shoe = (ankle: P) => {
-    const sc = look.shoes;
-    if (look.footwear === "scarponi") {
-      return (
-        <g>
-          <path d={`M${f(ankle.x - 11)} ${f(ankle.y - 24)} L${f(ankle.x + 10)} ${f(ankle.y - 24)} L${f(ankle.x + 10)} ${f(ankle.y - 2)} C${f(ankle.x + 16)} ${f(ankle.y)} ${f(ankle.x + 24)} ${f(ankle.y + 2)} ${f(ankle.x + 25)} ${f(ankle.y + 8)} L${f(ankle.x - 12)} ${f(ankle.y + 8)} Z`} fill={`url(#${uid}boot)`} stroke={OUT} strokeOpacity="0.85" strokeWidth="1.5" />
-          <path d={`M${f(ankle.x - 13)} ${f(ankle.y + 7)} h39 v5 h-39 z`} fill="#2a2622" />
-          {[0, 1, 2, 3, 4, 5].map((i) => <path key={i} d={`M${f(ankle.x - 11 + i * 6.4)} ${f(ankle.y + 12)} v-3`} stroke="#14110e" strokeWidth="2" />)}
-          {[0, 1, 2, 3].map((i) => <path key={`l${i}`} d={`M${f(ankle.x + 2)} ${f(ankle.y - 20 + i * 5)} l6 2`} stroke="#e8d9b0" strokeWidth="1.1" />)}
-          <path d={`M${f(ankle.x - 12)} ${f(ankle.y - 25)} h23 v4 h-23 z`} fill={shade(sc, -0.3)} />
-        </g>
-      );
-    }
-    if (look.footwear === "mocassini") {
-      return (
-        <g>
-          <path d={`M${f(ankle.x - 9)} ${f(ankle.y - 8)} C${f(ankle.x + 4)} ${f(ankle.y - 10)} ${f(ankle.x + 18)} ${f(ankle.y - 1)} ${f(ankle.x + 22)} ${f(ankle.y + 6)} C${f(ankle.x + 20)} ${f(ankle.y + 10)} ${f(ankle.x - 8)} ${f(ankle.y + 10)} ${f(ankle.x - 11)} ${f(ankle.y + 7)} Z`} fill={`url(#${uid}boot)`} stroke={OUT} strokeOpacity="0.8" strokeWidth="1.3" />
-          <path d={`M${f(ankle.x + 4)} ${f(ankle.y - 3)} q5 -2 10 4`} stroke={shade(sc, 0.35)} strokeWidth="0.9" fill="none" strokeDasharray="1.6 1.4" />
-          <path d={`M${f(ankle.x - 8)} ${f(ankle.y - 18)} L${f(ankle.x + 6)} ${f(ankle.y - 8)} M${f(ankle.x + 6)} ${f(ankle.y - 18)} L${f(ankle.x - 8)} ${f(ankle.y - 8)}`} stroke={shade(sc, -0.2)} strokeWidth="1.6" strokeLinecap="round" />
-        </g>
-      );
-    }
-    if (look.footwear === "stivali" || look.footwear === "stivali-risvolto" || look.footwear === "stivali-alti" || look.footwear === "stivali-pelliccia") {
-      const top = look.footwear === "stivali-risvolto" ? 54 : look.footwear === "stivali-alti" ? 64 : look.footwear === "stivali-pelliccia" ? 50 : 46;
-      return (
-        <g>
-          <path d={`M${f(ankle.x - 10)} ${f(ankle.y - top)} L${f(ankle.x + 10)} ${f(ankle.y - top)} L${f(ankle.x + 9)} ${f(ankle.y + 2)} C${f(ankle.x + 14)} ${f(ankle.y + 4)} ${f(ankle.x + 22)} ${f(ankle.y + 5)} ${f(ankle.x + 23)} ${f(ankle.y + 10)} L${f(ankle.x - 11)} ${f(ankle.y + 10)} Z`} fill={`url(#${uid}boot)`} stroke={OUT} strokeOpacity="0.85" strokeWidth="1.6" />
-          <path d={`M${f(ankle.x - 6)} ${f(ankle.y - top + 8)} L${f(ankle.x - 5)} ${f(ankle.y - 4)}`} stroke="#fff" strokeOpacity="0.18" strokeWidth="2.4" strokeLinecap="round" />
-          <path d={`M${f(ankle.x - 11)} ${f(ankle.y + 8)} h34`} stroke="#000" strokeOpacity="0.45" strokeWidth="2.6" />
-          <BootDetail ankle={ankle} top={top} />
-          {look.footwear === "stivali-risvolto" ? (
-            <g>
-              <path d={`M${f(ankle.x - 13)} ${f(ankle.y - top - 2)} ${[0, 1, 2, 3, 4, 5].map((i) => `q2 ${i % 2 ? 4 : -3} 4.6 0`).join(" ")} l0 9 ${[0, 1, 2, 3, 4, 5].map((i) => `q-2 ${i % 2 ? 3 : -2} -4.6 0`).join(" ")} Z`} fill="#eee2c8" stroke={OUT} strokeOpacity="0.7" strokeWidth="1" />
-              <path d={`M${f(ankle.x - 10)} ${f(ankle.y - top + 4)} l3 -2 M${f(ankle.x - 3)} ${f(ankle.y - top + 5)} l3 -2 M${f(ankle.x + 4)} ${f(ankle.y - top + 4)} l3 -2`} stroke="#c9b894" strokeWidth="0.9" />
-            </g>
-          ) : look.footwear === "stivali-pelliccia" ? (
-            <g>
-              {[-11, -6, -1, 4, 9].map((dx, i) => <circle key={dx} cx={f(ankle.x + dx)} cy={f(ankle.y - top + (i % 2) * 2)} r="4.6" fill={i % 2 ? "#e8dcc6" : "#d8c9ae"} stroke={OUT} strokeOpacity="0.55" strokeWidth="0.6" />)}
-            </g>
-          ) : look.footwear === "stivali-alti" ? (
-            <g>
-              <path d={`M${f(ankle.x - 12)} ${f(ankle.y - top - 3)} L${f(ankle.x + 12)} ${f(ankle.y - top - 5)} L${f(ankle.x + 11)} ${f(ankle.y - top + 7)} L${f(ankle.x - 11)} ${f(ankle.y - top + 8)} Z`} fill={shade(sc, -0.15)} stroke={OUT} strokeOpacity="0.75" strokeWidth="1.2" />
-              <path d={`M${f(ankle.x - 10)} ${f(ankle.y - top + 22)} h20 M${f(ankle.x - 10)} ${f(ankle.y - top + 26)} h20`} stroke={shade(sc, -0.45)} strokeWidth="1" />
-              <rect x={f(ankle.x + 4)} y={f(ankle.y - top + 20)} width="5" height="8" rx="1" fill="none" stroke="#c9a46a" strokeWidth="1" />
-            </g>
-          ) : <path d={`M${f(ankle.x - 10)} ${f(ankle.y - top)} h20 v6 h-20 z`} fill={shade(sc, -0.3)} />}
-          <path d={`M${f(ankle.x - 9)} ${f(ankle.y - 12)} h18`} stroke={shade(sc, -0.4)} strokeWidth="1.2" />
-        </g>
-      );
-    }
-    if (look.footwear === "sandali") {
-      return (
-        <g>
-          <path d={`M${f(ankle.x - 8)} ${f(ankle.y - 4)} C${f(ankle.x + 6)} ${f(ankle.y - 4)} ${f(ankle.x + 18)} ${f(ankle.y + 2)} ${f(ankle.x + 21)} ${f(ankle.y + 7)} L${f(ankle.x - 10)} ${f(ankle.y + 7)} Z`} fill={skin} stroke={OUT} strokeOpacity="0.7" strokeWidth="1.2" />
-          <path d={`M${f(ankle.x - 11)} ${f(ankle.y + 7)} h33 v3 h-33 z`} fill={shade(sc, -0.2)} />
-          <path d={`M${f(ankle.x - 8)} ${f(ankle.y - 14)} L${f(ankle.x + 4)} ${f(ankle.y - 2)} M${f(ankle.x + 6)} ${f(ankle.y - 14)} L${f(ankle.x - 6)} ${f(ankle.y - 2)} M${f(ankle.x + 4)} ${f(ankle.y + 1)} L${f(ankle.x + 14)} ${f(ankle.y + 4)}`} stroke={sc} strokeWidth="2.2" strokeLinecap="round" />
-        </g>
-      );
-    }
-    const high = look.footwear === "stivaletti" ? 12 : 4;
-    return (
-      <g>
-        <path d={`M${f(ankle.x - 9)} ${f(ankle.y - high)} L${f(ankle.x + 8)} ${f(ankle.y - high)} C${f(ankle.x + 10)} ${f(ankle.y - 1)} ${f(ankle.x + 20)} ${f(ankle.y + 1)} ${f(ankle.x + 22)} ${f(ankle.y + 7)} L${f(ankle.x + 22)} ${f(ankle.y + 10)} L${f(ankle.x - 11)} ${f(ankle.y + 10)} Z`} fill={`url(#${uid}boot)`} stroke={OUT} strokeOpacity="0.85" strokeWidth="1.4" />
-        {look.footwear === "sportive" ? <path d={`M${f(ankle.x - 11)} ${f(ankle.y + 7)} h33 v3.5 h-33 z`} fill="#f2efe8" /> : <path d={`M${f(ankle.x - 11)} ${f(ankle.y + 8)} h33`} stroke="#000" strokeOpacity="0.35" strokeWidth="2.5" />}
-        {look.footwear === "sportive" ? <path d={`M${f(ankle.x - 2)} ${f(ankle.y - 2)} l8 4 M${f(ankle.x + 1)} ${f(ankle.y - 3)} l8 4`} stroke={shade(sc, 0.5)} strokeWidth="1" /> : null}
-      </g>
-    );
-  };
+  const shoe = (ankle: P) => <SideShoe look={look} a={ankle} uid={uid} skin={skin} />;
 
   const leg = (L: typeof legs.back, key: string) => {
     const tight = look.bottom === "calzamaglia";

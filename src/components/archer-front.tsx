@@ -4,6 +4,7 @@ import { AvatarFace, bodyWidth, CAPE_CLOTH, shade } from "./archer-avatar";
 import { PATTERN2_IDS } from "@/lib/arcieri/avatar-more";
 import { Pendant } from "./avatar-more";
 import { SpecialFrontLeg, SpecialFrontTorso } from "./special-details";
+import { FrontShoe, frontBootTop } from "./avatar-shoes";
 import { Buckle, ChestEmblem, Clasp, ClothPattern, Fletching, Pouch, QuiverBody, zigQ } from "./avatar-extras";
 import { seamOf, BeltDetail, ClothButton, ClothDetail, DetailDefs, LeatherBand, SleeveDetail } from "./avatar-detail";
 import { BUTTON_TOPS } from "./archer-avatar";
@@ -43,7 +44,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
   const shorts = look.bottom === "pantaloncini" || look.bottom === "gonna";
   const legW = (tight ? 15 : wide ? 22 : 18) * W;
   const legX = [cx - 14 * W, cx + 14 * W];
-  const bootTop = look.footwear === "stivali-alti" ? 262 : look.footwear === "stivali" || look.footwear === "stivali-risvolto" || look.footwear === "stivali-pelliccia" ? 280 : look.footwear === "stivaletti" || look.footwear === "scarponi" ? 306 : look.footwear === "mocassini" ? 326 : 318;
+  const bootTop = frontBootTop(look.footwear);
   // l'arco sta nella mano dell'arco: la sinistra (a destra per chi guarda), o l'altra se mancino
   const bowSide: 1 | -1 = look.lefty ? -1 : 1;
   const grip = { x: cx + bowSide * (sh.r - cx + 12), y: 206 };
@@ -269,35 +270,9 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
               {look.bottom === "jeans" ? <path d={`M${L(214, i ? -3 : 3)} 214 L${L(326, i ? -3 : 3)} 326`} stroke={shade(look.pants, 0.3)} strokeWidth="0.8" strokeDasharray="3 2" /> : null}
               {look.wraps ? [0, 1, 2, 3, 4].map((k) => <path key={k} d={`M${L(246 + k * 12, -legW / 2)} ${246 + k * 12} L${L(240 + k * 12, legW / 2)} ${240 + k * 12}`} stroke={look.wrapsColor} strokeWidth="4" />) : null}
               {/* calzatura */}
-              <path d={`M${L(bootTop, -legW / 2 - 1)} ${bootTop} L${L(bootTop, legW / 2 + 1)} ${bootTop} L${L(340, legW / 2 + 2)} 340 C${L(346, legW / 2 + 4)} 346 ${L(352, legW / 2 + 2)} 352 ${L(352, 0)} 352 C${L(352, -legW / 2 - 2)} 352 ${L(346, -legW / 2 - 4)} 346 ${L(340, -legW / 2 - 2)} 340 Z`} fill={look.footwear === "sandali" ? skin : `url(#${uid}bo)`} stroke={OUT} strokeOpacity="0.85" strokeWidth="1.4" />
-              {look.footwear === "sandali" ? null : (
-                <g fill="none" strokeLinecap="round">
-                  <path d={`M${L(351, -legW / 2 - 2)} 350.5 Q${L(355, 0)} 355 ${L(351, legW / 2 + 2)} 350.5`} stroke="#14110e" strokeWidth="2.4" />
-                  <path d={`M${L(348, -legW / 2)} 347.4 Q${L(351, 0)} 351 ${L(348, legW / 2)} 347.4`} stroke="#e8d9b0" strokeOpacity="0.35" strokeWidth="0.55" strokeDasharray="1.3 1.1" />
-                  <ellipse cx={L(346, -2)} cy="345" rx={f(legW * 0.22)} ry="2" fill="#fff" opacity="0.16" />
-                  <path d={`M${L(336, -legW * 0.3)} 334 q${f(legW * 0.3)} 2 ${f(legW * 0.6)} 0 M${L(330, -legW * 0.3)} 328 q${f(legW * 0.3)} 2 ${f(legW * 0.6)} 0`} stroke="#000" strokeOpacity="0.3" strokeWidth="0.8" />
-                  {bootTop < 300 ? <path d={`M${L(bootTop + 6, -legW * 0.25)} ${bootTop + 6} L${L(336, -legW * 0.25)} 336`} stroke="#fff" strokeOpacity="0.14" strokeWidth="2.2" /> : null}
-                </g>
-              )}
-              {look.footwear === "stivali-alti" ? (
-                <g>
-                  <path d={`M${L(bootTop - 3, -legW / 2 - 3)} ${bootTop - 3} L${L(bootTop - 4, legW / 2 + 3)} ${bootTop - 4} L${L(bootTop + 9, legW / 2 + 2)} ${bootTop + 9} L${L(bootTop + 10, -legW / 2 - 2)} ${bootTop + 10} Z`} fill={shade(look.shoes, -0.18)} stroke={OUT} strokeOpacity="0.75" strokeWidth="1" />
-                  {[24, 30].map((d) => <path key={d} d={`M${L(bootTop + d, -legW / 2 - 1)} ${bootTop + d} L${L(bootTop + d, legW / 2 + 1)} ${bootTop + d}`} stroke={shade(look.shoes, -0.5)} strokeWidth="1.6" />)}
-                  <rect x={L(bootTop + 23, legW * 0.15)} y={bootTop + 22.6} width="5" height="8.4" rx="1" fill="none" stroke="#c9a46a" strokeWidth="1" />
-                </g>
-              ) : null}
-              {look.footwear === "stivali-pelliccia" ? [-1, 0, 1].map((k) => <circle key={k} cx={L(bootTop, k * legW * 0.4)} cy={bootTop} r="5.4" fill="#e3d6be" stroke={OUT} strokeOpacity="0.55" strokeWidth="0.6" />) : null}
-              {look.footwear === "scarponi" ? (
-                <g>
-                  <path d={`M${L(348, -legW / 2 - 3)} 348 h${legW + 6} v4 h${-legW - 6} Z`} fill="#2a2622" />
-                  {[0, 1, 2, 3].map((k) => <path key={k} d={`M${L(312 + k * 7, -3)} ${312 + k * 7} l6 2`} stroke="#e8d9b0" strokeWidth="1" />)}
-                </g>
-              ) : null}
+              <FrontShoe look={look} L={L} legW={legW} i={i} uid={uid} skin={skin} />
               {look.special && !shorts ? <SpecialFrontLeg look={look} L={L} legW={legW} i={i} bootTop={bootTop} /> : null}
               {look.bottom === "cargo" ? <rect x={L(244, i ? 2 : -legW / 2 - 2)} y="244" width={legW / 2 + 1} height="16" rx="2" fill={shade(look.pants, -0.15)} stroke={shade(look.pants, -0.45)} strokeWidth="0.8" /> : null}
-              {look.footwear === "stivali-risvolto" ? <path d={`M${L(bootTop, -legW / 2 - 3)} ${bootTop - 4} h${legW + 6} v9 h${-legW - 6} Z`} fill="#eee2c8" stroke={OUT} strokeOpacity="0.65" strokeWidth="1" /> : null}
-              {look.footwear === "sportive" ? <path d={`M${L(346, -legW / 2 - 2)} 346 h${legW + 4} v4 h${-legW - 4} Z`} fill="#f2efe8" /> : null}
-              {look.footwear === "sandali" ? <path d={`M${L(330, -legW / 2)} 330 L${L(340, legW / 2)} 340 M${L(330, legW / 2)} 330 L${L(340, -legW / 2)} 340`} stroke={look.shoes} strokeWidth="2.4" /> : null}
             </g>
           );
         })}
