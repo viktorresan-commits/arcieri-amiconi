@@ -3,6 +3,7 @@
  * lacci, fibbie di ottone, risvolti e pellicce. Ogni modello ha il suo carattere (stivale da ranger, scarponcino
  * da montagna, mocassino legato alla gamba, sandalo da gladiatore).
  */
+import { Soft } from "./avatar-gear";
 import { BOOTS_TALL, tune, type AvatarLook } from "@/lib/arcieri/avatar";
 
 type P = { x: number; y: number };
@@ -331,6 +332,15 @@ export function FrontShoe({ look, L, legW, i, uid, skin }: { look: AvatarLook; L
   return (
     <g>
       <path d={shape} fill={`url(#${uid}bo)`} stroke={OUT} strokeOpacity="0.63" strokeWidth="0.36" strokeLinejoin="round" />
+      {/* cuoio: grana, riflesso morbido lungo il gambale (luce da sinistra), lato in ombra e pieghe morbide alla caviglia */}
+      <clipPath id={`${uid}bt${i}`}><path d={shape} /></clipPath>
+      <g clipPath={`url(#${uid}bt${i})`} pointerEvents="none">
+        <path d={shape} fill={`url(#${uid}grain)`} opacity="0.4" />
+        {top < 330 ? <Soft d={`M${Pt(top + 3, -h * 0.42)} L${Pt(333, -h * 0.4)}`} color="#fff" w={h * 0.32} o={0.11} /> : null}
+        {top < 330 ? <Soft d={`M${Pt(top + 3, h * 0.72)} L${Pt(336, h * 0.7)}`} w={h * 0.42} o={0.2} /> : null}
+        {top < 322 ? <Soft d={`M${Pt(324, -h * 0.8)} q${f(h * 0.8)} 2 ${f(h * 1.6)} 0`} w={0.9} o={0.22} /> : null}
+        <ellipse cx={L(345, o - h * 0.1)} cy="345" rx={f(h * 0.9)} ry="2.6" fill="#fff" opacity="0.08" />
+      </g>
       {/* luce sul lato sinistro, ombra sul destro, ombra sotto il collo del piede */}
       {top < 330 ? <path d={`M${Pt(top + 5, -h * 0.52)} L${Pt(334, -h * 0.52)}`} stroke="#fff" strokeOpacity="0.24" strokeWidth="0.35" strokeLinecap="round" /> : null}
       <path d={`M${Pt(339, -h - 1 + o)} Q${Pt(336.6, o)} ${Pt(339, h + 1 + o)}`} stroke="#000" strokeOpacity="0.3" strokeWidth="0.75" fill="none" />

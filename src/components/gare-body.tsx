@@ -426,16 +426,8 @@ export function GareBody({ embedded = false, league }: { embedded?: boolean; /**
               window.setTimeout(() => document.getElementById(`gara-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 120);
             }}
           />
-        ) : (
-          <button type="button" onClick={() => setPortal({ code: "" })} className="aa-press flex w-full items-center gap-3 rounded-[var(--radius-card)] border border-[#e0b15a]/30 bg-[#e0b15a]/[0.07] p-3 text-left">
-            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#e0b15a]/25"><Glyph name="trophy" size={22} /></span>
-            <span className="min-w-0 flex-1">
-              <b className="block">Portale FITAST</b>
-              <span className="block text-xs text-muted">Cerca il tuo nome: punteggi, punti campionato, compagni di piazzola, classifiche di arcieri e squadre</span>
-            </span>
-            <Glyph name="chevron" size={16} className="text-muted" />
-          </button>
-        )}
+        ) : null}
+        {/* il Portale FITAST da solo sta in Compagnie: qui si apre solo dal punteggio di una gara */}
       </div>
       {me.role === "viewer" ? null : adding ? (
         <AddGara onDone={() => { setAdding(false); setNonce((n) => n + 1); }} onClose={() => setAdding(false)} />

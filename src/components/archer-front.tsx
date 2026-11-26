@@ -113,7 +113,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
           </g>
         ) : null}
         {/* mano (con le braccia aperte, tutte e due) */}
-        {bowArm ? null : <FrontFist x={hand.x} y={hand.y + 1} r={handR} skin={skin} gloves={Boolean(look.gloves)} flip={side < 0 ? -1 : 1} />}
+        {bowArm ? null : <FrontFist x={hand.x} y={hand.y + 1} r={handR} skin={skin} gloves={Boolean(look.gloves)} flip={side < 0 ? 1 : -1} />}
       </g>
     );
   };
@@ -404,7 +404,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
               </g>
             )}
             {/* pugno chiuso sull'impugnatura: nocche, dita che avvolgono, pollice */}
-            <FrontFist x={2} y={1} r={handR} skin={skin} gloves={Boolean(look.gloves)} />
+            <FrontFist x={2} y={1} r={handR} skin={skin} gloves={Boolean(look.gloves)} flip={-1} />
           </g>
         </g>
         )}
