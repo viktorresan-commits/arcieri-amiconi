@@ -25,7 +25,27 @@ function divisionName(raw: string) {
   return titleName(raw);
 }
 
-export function RankBanner({ r, className = "" }: { r: FitastRank; className?: string }) {
+/** mescola un colore #rrggbb verso il bianco (k > 0) o il nero (k < 0) */
+function tint(hex: string, k: number) {
+  const n = parseInt(hex.replace("#", "").slice(0, 6), 16);
+  if (Number.isNaN(n)) return hex;
+  const t = k < 0 ? 0 : 255;
+  const a = Math.abs(k);
+  const ch = (sh: number) => Math.round(((n >> sh) & 255) * (1 - a) + t * a);
+  return `#${((ch(16) << 16) | (ch(8) << 8) | ch(0)).toString(16).padStart(6, "0")}`;
+}
+
+/** il drappo nel colore scelto, abbastanza scuro perché le scritte chiare si leggano sempre */
+function clothOf(color: string | undefined) {
+  if (!color || !/^#[0-9a-fA-F]{6}$/.test(color)) return { top: "#9c1e31", mid: "#72121f", low: "#420912" };
+  const n = parseInt(color.slice(1), 16);
+  const lum = (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
+  const base = lum > 0.5 ? tint(color, -(lum - 0.32)) : lum < 0.12 ? tint(color, 0.12) : color;
+  return { top: tint(base, 0.12), mid: base, low: tint(base, -0.45) };
+}
+
+export function RankBanner({ r, className = "", color }: { r: FitastRank; className?: string; /** colore dello sfondo del profilo scelto dall'arciere: il drappo lo prende */ color?: string }) {
+  const cloth = clothOf(color);
   const id = `rb${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
   const trim = TRIMS[r.place === 1 ? "gold" : r.place === 2 ? "silver" : r.place === 3 ? "bronze" : "steel"];
   const metalText = { backgroundImage: `linear-gradient(180deg, ${trim.light} 10%, ${trim.mid} 55%, ${trim.dark} 100%)` };
@@ -57,9 +77,9 @@ export function RankBanner({ r, className = "" }: { r: FitastRank; className?: s
         <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full drop-shadow-[0_10px_14px_rgba(0,0,0,0.5)]" aria-hidden>
           <defs>
             <linearGradient id={`${id}c`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stopColor="#9c1e31" />
-              <stop offset="0.55" stopColor="#72121f" />
-              <stop offset="1" stopColor="#420912" />
+              <stop offset="0" stopColor={cloth.top} />
+              <stop offset="0.55" stopColor={cloth.mid} />
+              <stop offset="1" stopColor={cloth.low} />
             </linearGradient>
             {/* pieghe del drappo */}
             <linearGradient id={`${id}f`} x1="0" y1="0" x2="1" y2="0">

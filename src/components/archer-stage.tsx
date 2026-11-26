@@ -87,7 +87,7 @@ export function ArcherStage({ data, look: lookIn, avatar, onArcherTap, corner }:
         )}
       </div>
       {/* il posto vero nel campionato FITAST, come uno stendardo appeso a sinistra */}
-      {rank ? <RankBanner r={rank} className="absolute left-[6%] top-[8rem] w-[23%]" /> : null}
+      {rank ? <RankBanner r={rank} color={look.faceBg || look.shirt} className="absolute left-[6%] top-[8rem] w-[23%]" /> : null}
       {/* il livello dell'arciere, come uno stemma in basso a sinistra */}
       <div className="aa-prize-float absolute bottom-[5%] left-4 w-[23%]" style={{ animationDelay: "0.1s" }}>
         <LevelCrest xp={data.xp} />
