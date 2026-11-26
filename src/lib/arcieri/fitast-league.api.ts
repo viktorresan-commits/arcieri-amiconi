@@ -395,19 +395,28 @@ export const fitastStandings = createServerFn({ method: "GET" })
     return { season: latest[0].season, seasonName: latest[0].season_name, updatedAt, items };
   });
 
-/** tutta una classifica generale arcieri (oltre i primi dieci), quando la si apre */
+/**
+ * Tutta una classifica arcieri quando la si apre (oltre i primi della pagina): la generale del
+ * campionato oppure quella di una gara (con i punti campionato di quella gara, non i totali).
+ */
 export const fitastStandingRows = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((input: unknown) => {
     const r = (input ?? {}) as Record<string, unknown>;
-    return { season: clip(r.season, 24).replace(/[^\w-]/g, ""), category: clip(r.category, 90) };
+    const kind = String(r.kind ?? "generale-arcieri");
+    return {
+      kind: (kind === "gara-arcieri" ? "gara-arcieri" : "generale-arcieri") as StandingKind,
+      season: clip(r.season, 24).replace(/[^\w-]/g, ""),
+      garaId: clip(r.garaId, 10).replace(/\D/g, ""),
+      category: clip(r.category, 90),
+    };
   })
   .handler(async ({ context, data }) => {
     const sql = await db();
     await ensureMember(sql, context.userId);
     const found = await sql<{ rows: StandingRow[] }>`
       select rows from fitast_standings
-      where kind = 'generale-arcieri' and season = ${data.season} and category = ${data.category}
+      where kind = ${data.kind} and season = ${data.season} and gara_id = ${data.garaId} and category = ${data.category}
       order by updated_at desc limit 1`;
     return { rows: Array.isArray(found[0]?.rows) ? found[0].rows : [] };
   });

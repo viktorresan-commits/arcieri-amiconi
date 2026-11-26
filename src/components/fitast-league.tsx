@@ -116,7 +116,7 @@ function FullRanking({ it, crestOf, limit, onTeam }: { it: Standing; crestOf: (t
     setBusy(true);
     setErr("");
     try {
-      const r = await fitastStandingRows({ data: { season: it.season, category: it.category } });
+      const r = await fitastStandingRows({ data: { kind: it.kind, season: it.season, garaId: it.garaId, category: it.category } });
       setAll(r.rows.length ? r.rows : it.rows);
       setOpen(true);
     } catch {
@@ -169,7 +169,7 @@ function SplitBoard({ items, crestOf, team, limit, empty }: { items: Standing[];
           <TeamPodium rows={it.rows} crestOf={crestOf} onTeam={setShown} />
           <RankList rows={it.rows.slice(3)} crestOf={crestOf} team={team} limit={limit - 3} onTeam={setShown} />
         </>
-      ) : it && !team ? <FullRanking key={`${it.season}|${it.category}`} it={it} crestOf={crestOf} limit={limit} onTeam={setShown} /> : it ? <RankList rows={it.rows} crestOf={crestOf} team={team} limit={limit} onTeam={setShown} /> : null}
+      ) : it && !team ? <FullRanking key={`${it.kind}|${it.garaId}|${it.season}|${it.category}`} it={it} crestOf={crestOf} limit={limit} onTeam={setShown} /> : it ? <RankList rows={it.rows} crestOf={crestOf} team={team} limit={limit} onTeam={setShown} /> : null}
       {team ? <p className="px-1 text-[0.7rem] text-muted">Tocca una compagnia per vedere tutti i suoi arcieri.</p> : null}
       {shown ? <TeamArchersSheet team={shown} crest={crestOf(shown)} onClose={() => setShown(null)} /> : null}
     </div>

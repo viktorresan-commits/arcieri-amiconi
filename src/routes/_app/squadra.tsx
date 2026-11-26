@@ -406,7 +406,12 @@ export function CompagniaPage({ initial }: { initial?: Section } = {}) {
 
       {section === "sfida" ? <AvatarChallenge looks={looks} /> : null}
 
-      {section === "gare" ? <GareBody embedded /> : null}
+      {section === "gare" ? (
+        <>
+          <GareBody embedded />
+          {companies.data ? <FitastGareTab companies={companies.data.companies} /> : null}
+        </>
+      ) : null}
 
 
       {section === "compagnie" ? (
@@ -489,7 +494,8 @@ export function CompagniaPage({ initial }: { initial?: Section } = {}) {
 
 /**
  * Compagnie: la classifica (prima il campionato FITAST letto dal portale, poi i numeri dell'app),
- * i primi arcieri del campionato, le sue gare, e l'elenco delle compagnie in cui entrare.
+ * i primi arcieri del campionato e l'elenco delle compagnie in cui entrare. Le gare del campionato
+ * stanno nella scheda Gare.
  */
 function CompagnieTab({ board, onJoin, busy, onSynced }: { board: Awaited<ReturnType<typeof listCompanies>>; onJoin: (id: number) => void; busy: number | null; onSynced: () => void }) {
   const league = useFitastLeague(board.companies);
@@ -498,10 +504,15 @@ function CompagnieTab({ board, onJoin, busy, onSynced }: { board: Awaited<Return
       <FitastHeader league={league} />
       <CompanyLeague part="ranking" board={board} onJoin={onJoin} busy={busy} fitastBoard={<FitastCompanyBoard league={league} />} fitastMetric={(m) => <FitastTeamsBoard league={league} metric={m} />} fitastReady={league.genSq.length > 0} />
       <FitastArchersCard league={league} />
-      <FitastGare league={league} />
       <CompanyLeague part="directory" board={board} onJoin={onJoin} busy={busy} onSynced={onSynced} />
     </>
   );
+}
+
+/** le gare del campionato FITAST già fatte, ognuna con i punti campionato presi in quella gara */
+function FitastGareTab({ companies }: { companies: Awaited<ReturnType<typeof listCompanies>>["companies"] }) {
+  const league = useFitastLeague(companies);
+  return <FitastGare league={league} />;
 }
 
 const ORDER_LABEL: Record<string, string> = {
