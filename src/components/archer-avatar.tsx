@@ -1238,7 +1238,7 @@ const hashP = (n: number) => {
   const v = Math.sin(n * 127.1 + 311.7) * 43758.5453;
   return v - Math.floor(v);
 };
-type ProfileWeave = "down" | "sweep" | "curl" | "braid";
+type ProfileWeave = "down" | "sweep" | "curl" | "braid" | "beard" | "stubble" | "stache";
 function profileStrands(kind: ProfileWeave, box: [number, number, number, number], seed: number) {
   const key = `${kind}|${box.join(",")}|${seed}`;
   const hit = strandCache.get(key);
@@ -1251,7 +1251,24 @@ function profileStrands(kind: ProfileWeave, box: [number, number, number, number
     if (i % 3 === 0) lt += seg;
     else dk += seg;
   };
-  if (kind === "curl") {
+  if (kind === "beard" || kind === "stubble") {
+    // peli corti che scendono verso il mento (in avanti, verso il viso); l'accenno è solo puntini
+    const n = Math.round((bw * bh) / (kind === "stubble" ? 1.5 : 3.2));
+    for (let i = 0; i < n; i++) {
+      const x = bx + R(i) * bw;
+      const y = by + R(i + 500) * bh;
+      const len = kind === "stubble" ? 0.4 : 1.6 + R(i + 900) * 1.4;
+      push(`M${f(x)} ${f(y)} l${f(len * 0.35)} ${f(len)}`, kind === "stubble" ? 1 : i);
+    }
+  } else if (kind === "stache") {
+    const n = Math.round((bw * bh) / 1.4);
+    for (let i = 0; i < n; i++) {
+      const x = bx + R(i) * bw;
+      const y = by + R(i + 500) * bh;
+      const len = 1.2 + R(i + 900) * 1;
+      push(`M${f(x)} ${f(y)} l${f(len * 0.6)} ${f(len * 0.8)}`, i);
+    }
+  } else if (kind === "curl") {
     const n = Math.round((bw * bh) / 9);
     for (let i = 0; i < n; i++) {
       const x = bx + R(i) * bw;
@@ -1309,7 +1326,7 @@ function ProfileHairPaint({ uid, id, clip, kind, box, color, seed = 1 }: { uid: 
       </defs>
       <g clipPath={`url(#${uid}${id})`} fill="none" strokeLinecap="round">
         <rect x={box[0]} y={box[1]} width={box[2]} height={box[3]} fill={`url(#${uid}${id}g)`} />
-        <path d={dk} stroke={shade(color, -0.52)} strokeOpacity="0.55" strokeWidth={kind === "braid" ? 0.8 : 0.62} />
+        <path d={dk} stroke={shade(color, -0.52)} strokeOpacity={kind === "stubble" ? 0.7 : 0.55} strokeWidth={kind === "braid" ? 0.8 : kind === "stubble" ? 0.38 : 0.62} />
         <path d={lt} stroke={shade(color, 0.48)} strokeOpacity="0.45" strokeWidth={kind === "braid" ? 0.6 : 0.52} />
       </g>
     </g>
@@ -1714,9 +1731,18 @@ function Beard({ look, uid }: { look: AvatarLook; uid: string }) {
     ) : null;
   return (
     <g>
-      {body ? <g transform={look.beard === "basette" || look.beard === "barbetta" ? undefined : grow}>{body}{bd && look.beard !== "accenno" ? <BeardTexture uid={uid} d={bd} color={c} light={shade(c, 0.35)} dark={lo} /> : null}</g> : null}
+      {body ? (
+        <g transform={look.beard === "basette" || look.beard === "barbetta" ? undefined : grow}>
+          {look.beard === "accenno" ? null : body}
+          {bd && look.beard !== "accenno" ? <BeardTexture uid={uid} d={bd} color={c} light={shade(c, 0.35)} dark={lo} /> : null}
+          {/* peli dipinti ritagliati sulla barba; per l'accenno un velo leggero e i puntini */}
+          {look.beard === "accenno" ? <path d={bd} fill={c} opacity="0.16" /> : null}
+          {look.beard !== "barbetta" ? <ProfileHairPaint uid={uid} id="bdp" clip={hairClipOf(body, c) ?? <path d={bd} />} kind={look.beard === "accenno" ? "stubble" : "beard"} box={[136, 78, 40, 64]} color={c} seed={13} /> : <path d="M145 86 C144.6 96 147.6 106 155.6 110.4 C161.6 112.8 167.6 110.8 170.6 103.8" stroke={shade(c, 0.4)} strokeOpacity="0.45" strokeWidth="1" fill="none" strokeLinecap="round" />}
+        </g>
+      ) : null}
       {body && look.beard !== "accenno" && look.beard !== "basette" && look.beard !== "mosca" ? <path d="M150 104 q3 3 6 3.4 M157 108 q3 1.6 6 0.4" stroke={lo} strokeWidth="0.7" fill="none" opacity="0.55" /> : null}
       <g stroke={lo} strokeOpacity="0.6" strokeWidth="0.45">{stache}</g>
+      {stache ? <ProfileHairPaint uid={uid} id="stp" clip={hairClipOf(stache, c)} kind="stache" box={[158, 90, 22, 12]} color={c} seed={17} /> : null}
     </g>
   );
 }
@@ -2503,8 +2529,9 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false, part }
     look.beard === "barbetta" ? <path d={`M${50 - rx} ${fy - 4} C${50 - rx} ${fy + 14} 42 ${chin} 50 ${chin} C58 ${chin} ${50 + rx} ${fy + 14} ${50 + rx} ${fy - 4}`} stroke={beardC} strokeWidth="3.2" fill="none" strokeLinecap="round" /> :
     look.beard === "basette" ? <g fill={beardC}><path d={`M${50 - rx - 0.5} ${fy - 10} h4 l1 ${16} h-4 Z`} /><path d={`M${50 + rx + 0.5} ${fy - 10} h-4 l-1 ${16} h4 Z`} /></g> :
     look.beard === "mosca" ? <path d={`M48.4 ${fy + 16.4} C48.6 ${fy + 19.6} 51.4 ${fy + 19.6} 51.6 ${fy + 16.4} Z`} fill={beardC} /> : null;
-  const beardD = look.beard !== "accenno" && beardShape && (beardShape as { props?: { d?: string } }).props?.d;
-  const beardAll = beardShape && (beardShape as { props?: { d?: string } }).props?.d;
+  // la barbetta è un tratto (non una forma piena): niente trama a riempimento, che coprirebbe tutto il viso
+  const beardD = look.beard !== "accenno" && look.beard !== "barbetta" && beardShape && (beardShape as { props?: { d?: string } }).props?.d;
+  const beardAll = look.beard !== "barbetta" && look.beard !== "basette" && beardShape && (beardShape as { props?: { d?: string } }).props?.d;
   // peli dipinti: tanti tratti brevi che scendono verso il mento, scuri e chiari; per l'accenno solo puntini
   // sparsi a caso ma sempre uguali (niente righe regolari)
   const hash = (n: number) => {
@@ -2592,7 +2619,7 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false, part }
   // profondità (più scuro in basso), un lume morbido e la trama giusta per il tipo di capelli ----
   const hairLt = shade(hair, 0.45);
   const hairDk = shade(hair, -0.52);
-  type Weave = "down" | "curl" | "stubble" | "braid";
+  type Weave = "down" | "curl" | "stubble" | "braid" | "beard" | "stache";
   const weave = (kind: Weave, box: [number, number, number, number], seed: number) => {
     const [bx, by, bw, bh] = box;
     const R = (k: number) => hash(seed * 1000 + k);
@@ -2612,6 +2639,27 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false, part }
         <>
           <path d={dk} stroke={hairDk} strokeOpacity="0.55" strokeWidth="0.45" />
           <path d={lt} stroke={hairLt} strokeOpacity="0.45" strokeWidth="0.38" />
+        </>
+      );
+    }
+    if (kind === "beard" || kind === "stache") {
+      // peli corti: la barba scende verso il mento, i baffi si aprono dal centro verso gli angoli
+      const n = Math.round((bw * bh) / (kind === "stache" ? 0.9 : 1.6));
+      let dk = "";
+      let lt = "";
+      for (let i = 0; i < n; i++) {
+        const x = bx + R(i) * bw;
+        const y = by + R(i + 500) * bh;
+        const out = x < 50 ? -1 : 1;
+        const len = kind === "stache" ? 1 + R(i + 900) * 0.8 : 1.3 + R(i + 900) * 1.2;
+        const seg = kind === "stache" ? `M${x.toFixed(1)} ${y.toFixed(1)} l${(out * len * 0.7).toFixed(2)} ${(len * 0.6).toFixed(2)}` : `M${x.toFixed(1)} ${y.toFixed(1)} l${((50 - x) * 0.05).toFixed(2)} ${len.toFixed(2)}`;
+        if (i % 3 === 0) lt += seg;
+        else dk += seg;
+      }
+      return (
+        <>
+          <path d={dk} stroke={shade(beardC, -0.5)} strokeOpacity="0.6" strokeWidth="0.32" />
+          <path d={lt} stroke={shade(beardC, 0.4)} strokeOpacity="0.42" strokeWidth="0.28" />
         </>
       );
     }
@@ -2890,6 +2938,8 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false, part }
         {noseNode}
         {look.mask ? null : beard}
         {look.mask ? null : <g stroke={shade(beardC, -0.4)} strokeOpacity="0.6" strokeWidth="0.4">{stache}</g>}
+        {look.mask || !stache ? null : paintOver(stache, "stx", "stache", [36, fy + 4, 28, 20], 21, false)}
+        {look.mask || !(look.beard === "barbetta" || look.beard === "basette") || !beardShape ? null : paintOver(beardShape, "bbx", "beard", [50 - rx - 3, fy - 12, rx * 2 + 6, ry + 18], 23, false)}
         {look.mask ? null : realLips}
         {look.mark === "sopracciglio" ? <path d={`M57 ${eyeY - 10.6} l1.6 2.4`} stroke={skin} strokeWidth="1.6" /> : null}
         <g transform={`translate(50 ${fy - ry + 4}) scale(${hv.toFixed(3)}) translate(-50 ${-(fy - ry + 4)})`}>
