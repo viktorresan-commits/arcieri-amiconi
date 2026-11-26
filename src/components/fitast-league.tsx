@@ -8,6 +8,7 @@ import { Insignia } from "@/components/insignia";
 import { useLoad } from "@/lib/arcieri/use-load";
 import { fitastGaraBoard, fitastStandingRows, fitastStandings, fitastTeamArchers, fitastTeamStats, type Standing, type StandingRow, type TeamArcher, type TeamStat } from "@/lib/arcieri/fitast-league.api";
 import { categoryGroup, cleanCategory, crestOf as drawCrest, teamKey, titleName } from "@/lib/arcieri/fitast-league";
+import { realCrest, withRealCrest } from "@/lib/arcieri/stemmi-veri";
 import { syncStandings, type SyncProgress } from "@/lib/arcieri/fitast-sync";
 import { nameKey } from "@/lib/arcieri/fitast-rank";
 
@@ -26,14 +27,23 @@ export function useCrests(companies: Crest[]) {
     for (const c of companies) {
       for (const k of [teamKey(c.fitastName ?? ""), teamKey(c.name)]) if (k && !map.has(k)) map.set(k, c);
     }
-    return (team: string) => map.get(teamKey(team)) ?? null;
+    return (team: string): Crest | null => {
+      const c = map.get(teamKey(team));
+      if (c) {
+        const logo = withRealCrest(c.logoUrl, team, c.fitastName, c.name);
+        return logo === c.logoUrl ? c : { ...c, logoUrl: logo };
+      }
+      // compagnia del portale che non è (ancora) nell'app: il suo logo vero, se lo abbiamo
+      const real = team ? realCrest(team) : null;
+      return real ? { name: titleName(team), logoUrl: real, color: drawCrest(team).color, fitastName: team } : null;
+    };
   }, [companies]);
 }
 
 const drawn = new Map<string, string>();
 /** stemma della compagnia; se non è nell'app, quello disegnato dal suo nome (sempre lo stesso) */
 export function CrestMark({ crest, team, size = 30 }: { crest: Crest | null; team: string; size?: number }) {
-  let src = crest?.logoUrl ?? "";
+  let src = withRealCrest(crest?.logoUrl, team, crest?.fitastName, crest?.name) ?? "";
   if (!src && team) {
     src = drawn.get(team) ?? drawCrest(team).logo;
     drawn.set(team, src);

@@ -9,6 +9,7 @@ import type { Sql } from "@/lib/db";
 import { asNum, cleanPhoto, clip, db, ensureMember, staffLevel } from "./access";
 import { fitastAvgBy, fitastPointsBy } from "./fitast-league.api";
 import { teamKey } from "./fitast-league";
+import { withRealCrest } from "./stemmi-veri";
 
 export const HOME_SLUG = "fabriano";
 
@@ -29,7 +30,7 @@ function toCompany(row: CompanyRow) {
     motto: row.motto,
     city: row.city,
     bio: row.bio,
-    logoUrl: row.logo_url,
+    logoUrl: withRealCrest(row.logo_url, row.fitast_name, row.name),
     color: row.color,
     phone: row.phone,
     whatsapp: row.whatsapp,
@@ -323,11 +324,11 @@ export const companyWelcome = createServerFn({ method: "GET" })
     const mine = await myMembership(sql, context.userId);
     if (mine.chosen) return { chosen: true as const, companies: [] as { id: number; name: string; city: string; logoUrl: string | null; color: string; members: number }[], homeId: mine.companyId };
     const home = await homeId(sql);
-    const rows = await sql<{ id: number; name: string; city: string; logo_url: string | null; color: string; members: number }>`
-      select c.id, c.name, c.city, c.logo_url, c.color, count(cm.user_id)::int as members
+    const rows = await sql<{ id: number; name: string; city: string; logo_url: string | null; fitast_name: string | null; color: string; members: number }>`
+      select c.id, c.name, c.city, c.logo_url, c.fitast_name, c.color, count(cm.user_id)::int as members
       from companies c left join company_members cm on cm.company_id = c.id
       group by c.id order by (c.id = ${home}) desc, count(cm.user_id) desc, c.name`;
-    return { chosen: false as const, companies: rows.map((r) => ({ id: asNum(r.id), name: r.name, city: r.city, logoUrl: r.logo_url, color: r.color, members: asNum(r.members) })), homeId: home };
+    return { chosen: false as const, companies: rows.map((r) => ({ id: asNum(r.id), name: r.name, city: r.city, logoUrl: withRealCrest(r.logo_url, r.fitast_name, r.name), color: r.color, members: asNum(r.members) })), homeId: home };
   });
 
 /**
@@ -340,7 +341,7 @@ export const companyCrests = createServerFn({ method: "GET" })
     const sql = await db();
     await ensureMember(sql, context.userId);
     const mine = await myMembership(sql, context.userId);
-    const rows = await sql<{ id: number; name: string; logo_url: string | null; color: string }>`
-      select id, name, logo_url, color from companies order by id`;
-    return { mine: mine.companyId, crests: rows.map((r) => ({ id: asNum(r.id), name: r.name, logoUrl: r.logo_url, color: r.color })) };
+    const rows = await sql<{ id: number; name: string; logo_url: string | null; fitast_name: string | null; color: string }>`
+      select id, name, logo_url, fitast_name, color from companies order by id`;
+    return { mine: mine.companyId, crests: rows.map((r) => ({ id: asNum(r.id), name: r.name, logoUrl: withRealCrest(r.logo_url, r.fitast_name, r.name), color: r.color })) };
   });

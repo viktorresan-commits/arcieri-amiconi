@@ -8,6 +8,7 @@ import { authMiddleware } from "@/lib/auth/middleware";
 import type { Sql } from "@/lib/db";
 import { asNum, clip, db, ensureMember, staffLevel } from "./access";
 import { readFitastPage } from "./fitast.api";
+import { realCrest } from "./stemmi-veri";
 import { COMPAGNIE_URL, crestOf, parseCompanies, teamKey, titleName, type PortalCompany, type RankRow } from "./fitast-league";
 import { imageInfo, logoCandidates, siteFromEmail, usableLogo } from "./company-logo";
 
@@ -335,6 +336,11 @@ export const findCompanyLogos = createServerFn({ method: "POST" })
       if (Date.now() > until - 4000) break;
       await sql`update companies set logo_checked_at = now() where id = ${asNum(c.id)}`;
       checked++;
+      // il logo vero è già nell'app: niente ricerca in rete
+      if (realCrest(c.fitast_name, c.name)) {
+        results.push({ name: c.name, found: true, via: "logo della compagnia" });
+        continue;
+      }
       const { img, note } = await logoFor({ ...c, name: c.fitast_name || c.name }, until);
       if (!img) {
         // finito il tempo prima di cercare in rete: si riprova al giro dopo
