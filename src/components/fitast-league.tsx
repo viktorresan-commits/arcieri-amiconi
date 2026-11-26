@@ -10,8 +10,6 @@ import { fitastGaraBoard, fitastStandingRows, fitastStandings, fitastTeamArchers
 import { categoryGroup, cleanCategory, crestOf as drawCrest, teamKey, titleName } from "@/lib/arcieri/fitast-league";
 import { realCrest, withRealCrest } from "@/lib/arcieri/stemmi-veri";
 import { syncStandings, type SyncProgress } from "@/lib/arcieri/fitast-sync";
-import { syncHistory } from "@/lib/arcieri/fitast-history";
-import { useMemberMaybe } from "@/components/shell";
 import { nameKey } from "@/lib/arcieri/fitast-rank";
 import { setFitastLink } from "@/lib/arcieri/fitast-link.api";
 
@@ -61,7 +59,7 @@ function Place({ place, size = 30 }: { place: number | null; size?: number }) {
 }
 
 /** scelta a pastiglie (categorie, tipologie) */
-function Chips({ value, options, onChange }: { value: string; options: string[]; onChange: (v: string) => void }) {
+export function Chips({ value, options, onChange }: { value: string; options: string[]; onChange: (v: string) => void }) {
   if (options.length < 2) return null;
   return (
     <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none]">
@@ -75,7 +73,7 @@ function Chips({ value, options, onChange }: { value: string; options: string[];
 }
 
 /** le categorie di un gruppo di classifiche, divise in gruppo (Messeri…) e tipologia d'arco */
-function useSplit(items: Standing[]) {
+export function useSplit(items: Standing[]) {
   return useMemo(() => {
     const groups = new Map<string, Map<string, Standing>>();
     for (const it of items) {
@@ -92,7 +90,7 @@ function useSplit(items: Standing[]) {
   }, [items]);
 }
 
-function RankList({ rows, crestOf, team, limit, onTeam, mark }: { rows: StandingRow[]; crestOf: (t: string) => Crest | null; team?: boolean; limit: number; /** tocca una compagnia: i suoi arcieri */ onTeam?: (name: string) => void; /** i nostri arcieri (o la nostra compagnia), evidenziati */ mark?: (r: StandingRow) => "tu" | "nostro" | null }) {
+export function RankList({ rows, crestOf, team, limit, onTeam, mark }: { rows: StandingRow[]; crestOf: (t: string) => Crest | null; team?: boolean; limit: number; /** tocca una compagnia: i suoi arcieri */ onTeam?: (name: string) => void; /** i nostri arcieri (o la nostra compagnia), evidenziati */ mark?: (r: StandingRow) => "tu" | "nostro" | null }) {
   return (
     <ol className="grid gap-1.5">
       {rows.slice(0, limit).map((r, i) => {
@@ -268,16 +266,6 @@ export function useFitastLeague(companies: Crest[]) {
     }
     setNonce((n) => n + 1);
   }
-  /** storico dal 2019: le stagioni finite, per la bacheca di tutte le compagnie (riprende da dove si era fermato) */
-  async function history() {
-    stop.current = false;
-    setSync({ step: "Apro il portale · storico dal 2019", pages: 0, saved: 0 });
-    try {
-      await syncHistory({ onProgress: (p) => setSync({ ...p }), stop: () => stop.current });
-    } catch (e) {
-      setSync((s) => ({ ...(s ?? { step: "", pages: 0, saved: 0 }), done: true, error: e instanceof Error ? e.message : "Storico non letto." }));
-    }
-  }
   // si aggiorna da solo quando le classifiche salvate sono vecchie (una volta per apertura dell'app)
   useEffect(() => {
     if (!data) return;
@@ -314,16 +302,13 @@ export function useFitastLeague(companies: Crest[]) {
     }
     return [...byId.values()].sort((a, b) => b.day.localeCompare(a.day));
   }, [items]);
-  return { data, error, loading, crestOf, sync, running, refresh, history, stop: () => { stop.current = true; }, genSq, genAr, gare };
+  return { data, error, loading, crestOf, sync, running, refresh, stop: () => { stop.current = true; }, genSq, genAr, gare };
 }
 export type FitastLeagueState = ReturnType<typeof useFitastLeague>;
 
 /** in cima: il campionato, quando è stato letto e il pulsante per rileggerlo dal portale */
 export function FitastHeader({ league }: { league: FitastLeagueState }) {
   const { data, sync, running, error } = league;
-  // lo storico legge tante pagine: lo avvia lo staff (fondatore, presidenti, allenatori)
-  const who = useMemberMaybe()?.me;
-  const staff = Boolean(who && (who.canStaff || who.isSuper));
   return (
     <Card className="grid gap-3 overflow-hidden">
       <div className="flex items-start gap-3">
@@ -341,7 +326,8 @@ export function FitastHeader({ league }: { league: FitastLeagueState }) {
           <>
             <button type="button" className="aa-chip border-[#e0b15a]/50 text-[#f1cf8a]" onClick={() => void league.refresh()}>Aggiorna dal portale</button>
             <button type="button" className="text-xs text-muted underline underline-offset-2" onClick={() => void league.refresh(true)}>Rileggi tutto</button>
-            {staff ? <button type="button" className="text-xs text-muted underline underline-offset-2" onClick={() => void league.history()}>Storico dal 2019</button> : null}
+            {/* lo storico delle stagioni passate (podi dal 2019) sta nell'Albo d'oro, più sotto */}
+            <a href="#albo" className="text-xs text-muted underline underline-offset-2" onClick={(e) => { e.preventDefault(); document.getElementById("albo")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>Albo d'oro dal 2019</a>
           </>
         )}
         {sync ? <span className="text-xs text-muted">{running ? `${sync.step} · ${sync.pages} pagine lette` : sync.error ? sync.error : sync.saved ? `Aggiornate ${sync.saved} classifiche in ${sync.pages} pagine.` : `Nessuna novità sul portale (${sync.pages} pagine controllate).`}</span> : null}

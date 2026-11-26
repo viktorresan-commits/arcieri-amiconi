@@ -1307,12 +1307,23 @@ function profileStrands(kind: ProfileWeave, box: [number, number, number, number
   strandCache.set(key, out);
   return out;
 }
+/** le forme di un ritaglio in fila, ognuna con la sua chiave (arrivano da gruppi e liste annidate) */
+function keyedShapes(node: ReactNode): ReactNode {
+  const flat: ReactElement[] = [];
+  const walk = (n: ReactNode) => {
+    if (Array.isArray(n)) n.forEach(walk);
+    else if (isValidElement(n)) flat.push(n);
+  };
+  walk(node);
+  return flat.map((el, i) => cloneElement(el, { key: `${String(el.key ?? "s")}-${i}` }));
+}
+
 function ProfileHairPaint({ uid, id, clip, kind, box, color, seed = 1 }: { uid: string; id: string; clip: ReactNode; kind: ProfileWeave; box: [number, number, number, number]; color: string; seed?: number }) {
   const { dk, lt } = profileStrands(kind, box, seed);
   return (
     <g pointerEvents="none">
       <defs>
-        <clipPath id={`${uid}${id}`}>{clip}</clipPath>
+        <clipPath id={`${uid}${id}`}>{keyedShapes(clip)}</clipPath>
         <linearGradient id={`${uid}${id}g`} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="#fff" stopOpacity="0.1" />
           <stop offset="0.45" stopColor="#000" stopOpacity="0" />

@@ -287,7 +287,7 @@ export function CompanyTrophies({ companyId, companyName }: { companyId: number;
             ) : null}
           </ul>
         ) : (
-          <p className="text-sm text-muted">Arrivano dal portale FITAST: dal campionato in corso e, con «Storico dal 2019» nelle classifiche FITAST, dalle stagioni passate.</p>
+          <p className="text-sm text-muted">Arrivano dal portale FITAST: dal campionato in corso e, con la scansione dell'Albo d'oro dal 2019 (in Compagnie), dalle stagioni passate.</p>
         )
       ) : null}
       {view === "podi" ? (
@@ -303,7 +303,7 @@ export function CompanyTrophies({ companyId, companyName }: { companyId: number;
             ) : null}
           </>
         ) : (
-          <p className="text-sm text-muted">Nessun podio ancora: i piazzamenti arrivano dalle gare.</p>
+          <p className="text-sm text-muted">Nessun podio ancora. Arrivano dalle gare del campionato in corso e, per le stagioni passate, dalla scansione dell'Albo d'oro dal 2019 (in Compagnie, in fondo alle classifiche FITAST).</p>
         )
       ) : null}
     </Card>

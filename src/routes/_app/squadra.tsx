@@ -3,12 +3,14 @@ import { haloOfXp } from "@/components/level-crest";
 import { GareBody } from "@/components/gare-body";
 import { removeTeamMember } from "@/lib/arcieri/account.api";
 import { TargetGL } from "@/components/target-gl";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { listCompanies } from "@/lib/arcieri/compagnie.api";
 import { CompanyForm, CompanyHero, CompanyLeague, joinAndReload } from "@/components/compagnia";
 import { CompanyTrophies } from "@/components/palmares";
 import { MarketTab } from "@/components/market";
 import { FitastArchersCard, FitastCompanyBoard, FitastHeader, FitastTeamsBoard, JoinLinkSheet, useFitastLeague } from "@/components/fitast-league";
+import { FitastArchiveCard } from "@/components/fitast-archive";
+import { teamKey } from "@/lib/arcieri/fitast-league";
 import { RankBars } from "@/components/rank-bars";
 import { Heat } from "@/components/shot-lab";
 import { useLocalState } from "@/lib/arcieri/local-store";
@@ -536,11 +538,16 @@ export function CompagniaPage({ initial }: { initial?: Section } = {}) {
  */
 function CompagnieTab({ board, onJoin, busy, onSynced }: { board: Awaited<ReturnType<typeof listCompanies>>; onJoin: (id: number) => void; busy: number | null; onSynced: () => void }) {
   const league = useFitastLeague(board.companies);
+  // la nostra compagnia come la scrive il portale (anche negli anni passati): per i nostri podi nell'albo
+  const mine = board.companies.find((c) => c.id === board.mine);
+  const ourKeys = useMemo(() => new Set([mine?.fitastTeam, mine?.fitastName, mine?.name].map((x) => teamKey(x ?? "")).filter((k) => k.length >= 3)), [mine]);
+  const isOurs = useCallback((team: string) => ourKeys.has(teamKey(team)), [ourKeys]);
   return (
     <>
       <FitastHeader league={league} />
       <CompanyLeague part="ranking" board={board} onJoin={onJoin} busy={busy} fitastBoard={<FitastCompanyBoard league={league} />} fitastMetric={(m) => <FitastTeamsBoard league={league} metric={m} />} fitastReady={league.genSq.length > 0} />
       <FitastArchersCard league={league} />
+      <FitastArchiveCard crestOf={league.crestOf} isOurs={isOurs} ourName={mine?.name ?? ""} />
       <CompanyLeague part="directory" board={board} onJoin={onJoin} busy={busy} onSynced={onSynced} />
     </>
   );

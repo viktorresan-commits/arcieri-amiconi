@@ -7,7 +7,7 @@ import { authMiddleware } from "@/lib/auth/middleware";
 import type { Sql } from "@/lib/db";
 import { asNum, canScore, clip, db, ensureMember, staffLevel } from "./access";
 import { homeId, myMembership } from "./compagnie.api";
-import { cleanCategory, teamKey, titleName } from "./fitast-league";
+import { cleanCategory, matchTeam, teamKey, titleName } from "./fitast-league";
 
 export type Podium = { competition: string; day: string; place: number; score: number | null; category: string; userId: string; memberId: number; name: string };
 export type Award = { id: number; title: string; place: number | null; competition: string; day: string; category: string; notes: string };
@@ -81,7 +81,7 @@ export const archerPodiums = createServerFn({ method: "POST" })
     return { podiums: await podiumsOf(sql, [userId]), gare: asNum(gare[0]?.n) };
   });
 
-type StRow = { kind: string; season: string; season_name: string; gara_id: string; gara_title: string; held_on: string | null; category: string; rows: { place: number | null; name: string; team: string; score: number | null }[] };
+type StRow = { kind: string; season: string; season_name: string; gara_id: string; gara_title: string; held_on: string | null; category: string; rows: { place: number | null; name: string; team: string; score: number | null; camp?: number | null }[] };
 
 /**
  * Dal portale FITAST (campionato in corso e storico dal 2019): i podi degli arcieri della compagnia in ogni
@@ -96,11 +96,16 @@ async function fitastPalmares(sql: Sql, companyId: number) {
     const k = teamKey(team);
     return Boolean(k) && keys.includes(k);
   };
+  // degli arcieri bastano i podi (posto 1-3): le classifiche intere restano nel database
   const load = async (table: "fitast_standings" | "fitast_history") => {
     try {
       return table === "fitast_history"
-        ? await sql<StRow>`select kind, season, season_name, gara_id, gara_title, held_on::text as held_on, category, rows from fitast_history where kind in ('generale-squadre', 'gara-arcieri', 'gara-squadre')`
-        : await sql<StRow>`select kind, season, season_name, gara_id, gara_title, held_on::text as held_on, category, rows from fitast_standings where kind in ('generale-squadre', 'gara-arcieri', 'gara-squadre')`;
+        ? await sql<StRow>`select kind, season, season_name, gara_id, gara_title, held_on::text as held_on, category,
+            case when kind in ('gara-arcieri', 'generale-arcieri') then jsonb_path_query_array(rows, '$[*] ? (@.place <= 3)') else rows end as rows
+            from fitast_history where kind in ('generale-squadre', 'generale-arcieri', 'gara-arcieri', 'gara-squadre')`
+        : await sql<StRow>`select kind, season, season_name, gara_id, gara_title, held_on::text as held_on, category,
+            case when kind = 'gara-arcieri' then jsonb_path_query_array(rows, '$[*] ? (@.place <= 3)') else rows end as rows
+            from fitast_standings where kind in ('generale-squadre', 'gara-arcieri', 'gara-squadre')`;
     } catch {
       return [] as StRow[];
     }
@@ -114,6 +119,14 @@ async function fitastPalmares(sql: Sql, companyId: number) {
     seen.add(k);
     return true;
   });
+  // il portale può scrivere il nome della compagnia un po' diverso dall'app (e negli anni è cambiato):
+  // senza nome del portale salvato, si cerca quello che le somiglia di più fra le compagnie delle classifiche
+  if (!co[0]?.fitast_name && co[0]?.name) {
+    const teams = new Set<string>();
+    for (const r of all) for (const x of Array.isArray(r.rows) ? r.rows : []) teams.add(r.kind.endsWith("squadre") ? x.name : x.team);
+    const hit = matchTeam(co[0].name, [...teams].filter(Boolean));
+    if (hit && teamKey(hit).length >= 3) keys.push(teamKey(hit));
+  }
   const currentSeasons = new Set(current.map((r) => r.season));
   const podiums: Podium[] = [];
   const results: TeamResult[] = [];
@@ -127,6 +140,16 @@ async function fitastPalmares(sql: Sql, companyId: number) {
       for (const x of rows) {
         if (x.place == null || x.place < 1 || x.place > 3 || !ours(x.team)) continue;
         podiums.push({ competition: titleName(r.gara_title || "Gara FITAST"), day, place: x.place, score: x.score == null ? null : Number(x.score), category: cat, userId: "", memberId: 0, name: titleName(x.name) });
+      }
+      continue;
+    }
+    if (r.kind === "generale-arcieri") {
+      // stagione finita: il podio nella classifica generale del campionato
+      if (currentSeasons.has(r.season)) continue;
+      for (const x of rows) {
+        if (x.place == null || x.place < 1 || x.place > 3 || !ours(x.team)) continue;
+        const pts = x.camp ?? x.score;
+        podiums.push({ competition: `${r.season_name || "Campionato FITAST"} · classifica generale`, day: seasonDay(r.season_name), place: x.place, score: pts == null ? null : Number(pts), category: cat, userId: "", memberId: 0, name: titleName(x.name) });
       }
       continue;
     }
