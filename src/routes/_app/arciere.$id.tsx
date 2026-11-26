@@ -87,14 +87,18 @@ function Page() {
             <Avatar size="lg" label={name} color={data.avatarColor} photo={data.photoUrl} look={looks[data.userId]} admin={data.admin} xp={data.xp} />
           </span>
           <div className="min-w-0">
-            <h1 className="truncate font-display text-3xl leading-none text-white">{name}</h1>
+            {/* nome e incarichi sulla stessa riga */}
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <h1 className="min-w-0 truncate font-display text-3xl leading-none text-white">{name}</h1>
+              {badges.map((b) => <span key={b.label} className="shrink-0 rounded-full px-2 py-0.5 text-[0.62rem] font-bold text-[#1a1408] shadow" style={{ background: b.color }}>{b.label}</span>)}
+            </div>
             {nick ? <p className="text-xs italic text-white/75">«{nick}»</p> : null}
-            <p className="mt-1 text-xs text-white/75">{data.bowType ? bowLabel(data.bowType) : "Arco non indicato"} · {data.roles.companyName || "nel gruppo"} dal {data.joinedOn || "—"}</p>
-            {badges.length ? (
-              <div className="mt-1.5 flex flex-wrap gap-1">
-                {badges.map((b) => <span key={b.label} className="rounded-full px-2 py-0.5 text-[0.62rem] font-bold text-[#1a1408] shadow" style={{ background: b.color }}>{b.label}</span>)}
-              </div>
-            ) : null}
+            {/* arco, compagnia e da quando tira con noi */}
+            <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[0.72rem] text-white/85">
+              <span className="inline-flex items-center gap-1"><Glyph name="bow" size={13} className="shrink-0 text-[#f2c14e]" />{data.bowType ? bowLabel(data.bowType) : "Arco da scegliere"}</span>
+              {data.roles.companyName ? <span className="inline-flex min-w-0 items-center gap-1"><Glyph name="team" size={13} className="shrink-0 text-[#f2c14e]" /><span className="truncate">{data.roles.companyName}</span></span> : null}
+              {data.joinedOn ? <span className="inline-flex items-center gap-1"><Glyph name="calendar" size={13} className="shrink-0 text-[#f2c14e]" />Con noi da {sinceLabel(data.joinedOn)}</span> : null}
+            </div>
           </div>
         </div>
         <div className="absolute bottom-4 right-2 top-24 flex w-[24%] flex-col items-center justify-center gap-3">
@@ -155,6 +159,13 @@ function Page() {
 }
 
 type Stats = Board["stats"];
+
+/** «marzo 2025» da una data AAAA-MM-GG */
+function sinceLabel(day: string) {
+  const [y, m] = day.split("-").map(Number);
+  if (!y || !m) return day;
+  return new Date(Date.UTC(y, m - 1, 15)).toLocaleDateString("it-IT", { month: "long", year: "numeric", timeZone: "UTC" });
+}
 
 const fmtNum = (v: number | null | undefined) => (v == null ? "—" : Math.round(v).toLocaleString("it-IT"));
 

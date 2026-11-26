@@ -42,8 +42,11 @@ export const DISTANCES = [18, 20, 25, 30, 40, 50, 60, 70, 90];
 
 export function bowLabel(id: string, custom = "") {
   if (id === "altro" && custom.trim()) return custom.trim();
-  return BOWS.find((b) => b.id === id)?.label ?? id;
+  return BOWS.find((b) => b.id === id)?.label ?? BOW_ALIASES[id] ?? (id ? id.charAt(0).toUpperCase() + id.slice(1) : id);
 }
+
+/** archi scelti nell'avatar o scritti a mano, detti per bene */
+const BOW_ALIASES: Record<string, string> = { longbow: "Arco lungo", ricurvo: "Arco ricurvo", flatbow: "Flatbow", storico: "Arco storico", asiatico: "Arco asiatico", barebow: "Arco nudo" };
 
 export function disciplineLabel(id: string) {
   return DISCIPLINES.find((d) => d.id === id)?.label ?? id;

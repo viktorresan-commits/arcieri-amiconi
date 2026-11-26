@@ -1934,9 +1934,16 @@ html[data-motion="ridotta"] :is(.aa-life *, .aa-life-fallwater, .aa-life-spray, 
 @keyframes aa-cup-bob { 0%, 100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-4px) rotate(2deg); } }
 @media (prefers-reduced-motion: reduce) { .aa-glory, .aa-cup, .aa-podium-sway, .aa-podium-cheer { animation: none; } }
 /* lo stendardo del campionato accanto all'arciere: appeso all'asta, ondeggia piano */
-.aa-banner-sway { transform-origin: 50% 0; animation: aa-banner-sway 6.5s ease-in-out infinite; }
-@keyframes aa-banner-sway { 0%, 100% { transform: rotate(-1.3deg); } 50% { transform: rotate(1.3deg); } }
-@media (prefers-reduced-motion: reduce) { .aa-banner-sway { animation: none; } }
+.aa-banner-sway { transform-origin: 50% 0; animation: aa-banner-sway 5.4s ease-in-out infinite; }
+@keyframes aa-banner-sway { 0%, 100% { transform: rotate(-2.4deg); } 50% { transform: rotate(2.4deg); } }
+/* il drappo ondeggia sotto l'asta, un po' sfasato rispetto all'oscillazione */
+.aa-banner-cloth { transform-origin: 50% 0; animation: aa-banner-wave 3.6s ease-in-out infinite; }
+@keyframes aa-banner-wave { 0%, 100% { transform: skewX(0deg) scaleY(1); } 25% { transform: skewX(2.2deg) scaleY(0.99); } 50% { transform: skewX(0deg) scaleY(1.01); } 75% { transform: skewX(-2.2deg) scaleY(0.99); } }
+svg .aa-banner-shine { animation: aa-banner-shine 5.5s ease-in-out infinite; }
+@keyframes aa-banner-shine { 0%, 55% { transform: translateX(0) skewX(-18deg); } 100% { transform: translateX(200px) skewX(-18deg); } }
+.aa-tassel { transform-origin: 50% 0; animation: aa-tassel 2.4s ease-in-out infinite; }
+@keyframes aa-tassel { 0%, 100% { transform: rotate(-10deg); } 50% { transform: rotate(10deg); } }
+@media (prefers-reduced-motion: reduce) { .aa-banner-sway, .aa-banner-cloth, svg .aa-banner-shine, .aa-tassel { animation: none; } }
 /* nel Menu: l'ultima voce toccata di ogni sezione, raggi che girano e un alone che pulsa */
 .aa-appicon-hot { isolation: isolate; }
 .aa-appicon-hot .aa-ins-rays { animation-duration: 12s; }

@@ -53,7 +53,7 @@ export function RankBanner({ r, className = "" }: { r: FitastRank; className?: s
           <circle cx="20" cy="2.4" r="2" fill={trim.light} />
         </svg>
       </div>
-      <div className="relative -mt-0.5">
+      <div className="aa-banner-cloth relative -mt-0.5">
         <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full drop-shadow-[0_10px_14px_rgba(0,0,0,0.5)]" aria-hidden>
           <defs>
             <linearGradient id={`${id}c`} x1="0" y1="0" x2="0" y2="1">
@@ -70,10 +70,20 @@ export function RankBanner({ r, className = "" }: { r: FitastRank; className?: s
               <stop offset="0.7" stopColor="#000" stopOpacity="0.16" />
               <stop offset="0.85" stopColor="#fff" stopOpacity="0.05" />
               <stop offset="1" stopColor="#000" stopOpacity="0.36" />
+              {/* le pieghe scorrono come col vento */}
+              <animateTransform attributeName="gradientTransform" type="translate" values="-0.12 0; 0.12 0; -0.12 0" dur="4.2s" repeatCount="indefinite" />
             </linearGradient>
+            <linearGradient id={`${id}sh`} x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0" stopColor="#fff" stopOpacity="0" />
+              <stop offset="0.5" stopColor="#fff" stopOpacity="0.22" />
+              <stop offset="1" stopColor="#fff" stopOpacity="0" />
+            </linearGradient>
+            <clipPath id={`${id}clip`}><path d="M2 0 H98 V100 L50 87 L2 100 Z" /></clipPath>
           </defs>
           <path d="M2 0 H98 V100 L50 87 L2 100 Z" fill={`url(#${id}c)`} />
           <path d="M2 0 H98 V100 L50 87 L2 100 Z" fill={`url(#${id}f)`} />
+          {/* riflesso che attraversa il drappo */}
+          <g clipPath={`url(#${id}clip)`}><rect className="aa-banner-shine" x="-60" y="-10" width="40" height="120" fill={`url(#${id}sh)`} transform="skewX(-18)" /></g>
           <path d="M2 0 H98 V100 L50 87 L2 100 Z" fill="none" stroke={trim.mid} strokeWidth="3" vectorEffect="non-scaling-stroke" />
           <path d="M8 2.5 H92 V91 L50 79.5 L8 91 Z" fill="none" stroke={trim.light} strokeOpacity="0.75" strokeWidth="1.2" strokeDasharray="1.5 3" vectorEffect="non-scaling-stroke" />
         </svg>
@@ -109,6 +119,14 @@ export function RankBanner({ r, className = "" }: { r: FitastRank; className?: s
             </span>
           ) : null}
         </figcaption>
+        {/* nappe d'oro alle due punte */}
+        {[["left-[1%]", "0s"], ["right-[1%]", "-1.1s"]].map(([pos, delay]) => (
+          <span key={pos} aria-hidden className={`aa-tassel absolute -bottom-[1.05rem] ${pos} grid w-2.5 justify-items-center`} style={{ animationDelay: delay }}>
+            <span className="h-1.5 w-px" style={{ background: trim.mid }} />
+            <span className="h-1.5 w-1.5 rounded-full" style={{ background: trim.light }} />
+            <span className="h-2.5 w-2 rounded-b-[3px]" style={{ background: `repeating-linear-gradient(90deg, ${trim.mid} 0 1px, ${trim.dark} 1px 2px)` }} />
+          </span>
+        ))}
       </div>
     </figure>
   );
