@@ -6,7 +6,7 @@
  */
 import { FITAST_HOME, fitastRead } from "./fitast.api";
 import type { FitastPage } from "./fitast-parse";
-import { classificaUrl, cleanTitle, titleScore, findGare, garaDateOf, garaIdOf, garaTitleOf, seasonRange, seasonSelect } from "./fitast-gare";
+import { classificaUrl, cleanTitle, titleScore, findGare, garaDateOf, garaIdOf, garaTitleOf, seasonRange, seasonSelect, type Gara } from "./fitast-gare";
 import { currentTexts, filterCombos, pressReq, type Req } from "./fitast-nav";
 import { piazzoleRows, rankingRows, SQUADRE_PAGES, type RankRow } from "./fitast-league";
 import { saveFitastStandings, type StandingKind } from "./fitast-league.api";
@@ -96,15 +96,36 @@ export async function syncStandings(opts: { onProgress: (p: SyncProgress) => voi
     await flush();
   };
 
-  /** l'elenco delle piazzole di una gara (con chi si tira): una riga per arciere, la piazzola nel posto */
+  /**
+   * l'elenco delle piazzole di una gara (con chi si tira): una riga per arciere, la piazzola nel posto.
+   * Dalla pagina delle piazzole per numero, se il portale la nomina; altrimenti scegliendo la gara
+   * nell'elenco e premendo PIAZZOLE, come si fa a mano.
+   */
   const pzName = (home.awp ?? []).find((x) => /piazz/i.test(x)) ?? "";
-  const piazzole = async (id: string, gara: { id: string; title: string; day: string }, referer: string) => {
-    if (!pzName || opts.stop()) return;
+  const pzBtn = (base.form?.buttons ?? []).find((b) => /piazzol/i.test(b.label)) ?? null;
+  const piazzole = async (id: string, gara: { id: string; title: string; day: string }, referer: string, g?: Gara) => {
+    if (opts.stop()) return;
     step = `${gara.title || "Gara"} · piazzole`;
-    const p = await read({ url: new URL(`${pzName}?P1=${id}`, FITAST_HOME).toString(), referer, label: step });
-    if (!p || (garaIdOf(p) && garaIdOf(p) !== id)) return;
-    const rows = piazzoleRows(p);
-    if (rows.length) pending.push({ kind: "gara-piazzole", season, seasonName, garaId: gara.id, garaTitle: gara.title, day: gara.day, category: "Piazzole", rows });
+    const reqs: Req[] = [];
+    if (pzName) reqs.push({ url: new URL(`${pzName}?P1=${id}`, FITAST_HOME).toString(), referer, label: step });
+    if (pzBtn && g) {
+      const how = g.alts.find((a) => a.kind === "option" || a.kind === "input");
+      if (how) {
+        const field = how.kind === "option" ? how.select : how.kind === "input" ? how.input : "";
+        const value = how.kind === "option" ? how.value : id;
+        const r = field ? pressReq(base, pzBtn, { ...choose, [field]: value }, step) : null;
+        if (r) reqs.push(r);
+      }
+    }
+    for (const r of reqs) {
+      if (opts.stop()) return;
+      const p = await read(r);
+      if (!p || (garaIdOf(p) && garaIdOf(p) !== id)) continue;
+      const rows = piazzoleRows(p);
+      if (!rows.length) continue;
+      pending.push({ kind: "gara-piazzole", season, seasonName, garaId: gara.id, garaTitle: gara.title, day: gara.day, category: "Piazzole", rows });
+      return;
+    }
   };
 
   // classifiche generali del campionato: compagnie e arcieri
@@ -167,7 +188,7 @@ export async function syncStandings(opts: { onProgress: (p: SyncProgress) => voi
         await allCombos(p1, r1, "gara-squadre", 200, 4, gara);
         break;
       }
-      await piazzole(id, gara, p0.url);
+      await piazzole(id, gara, p0.url, g);
       break;
     }
   }
@@ -179,7 +200,7 @@ export async function syncStandings(opts: { onProgress: (p: SyncProgress) => voi
     if (!id || seen.has(id)) continue;
     seen.add(id);
     step = `${g.title || "Gara"} · ${g.date?.split("-").reverse().join("/") ?? ""} · piazzole`;
-    await piazzole(id, { id, title: cleanTitle(g.title) || g.title, day: g.date ?? "" }, FITAST_HOME);
+    await piazzole(id, { id, title: cleanTitle(g.title) || g.title, day: g.date ?? "" }, FITAST_HOME, g);
   }
   await flush();
   step = "Fatto";

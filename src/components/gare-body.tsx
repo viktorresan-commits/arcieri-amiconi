@@ -79,6 +79,23 @@ export function GareBody({ embedded = false, league }: { embedded?: boolean; /**
   const crestOf = league?.crestOf ?? noCrest;
   const [board, setBoard] = useState<number | null>(null);
   const [photoFor, setPhotoFor] = useState<number | null>(null);
+  const [openGare, setOpenGare] = useState<Record<number, boolean>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem("aa-gare-aperte") ?? "{}") as Record<number, boolean>;
+    } catch {
+      return {};
+    }
+  });
+  const toggleOpen = (id: number, was: boolean) =>
+    setOpenGare((cur) => {
+      const next = { ...cur, [id]: !was };
+      try {
+        localStorage.setItem("aa-gare-aperte", JSON.stringify(next));
+      } catch {
+        /* niente */
+      }
+      return next;
+    });
   const today = romeDayKey(new Date().toISOString());
   const [nonce, setNonce] = useState(0);
   const [tab, setTab] = useEntryState<"past" | "next">("gare-tab", "past");
@@ -175,7 +192,9 @@ export function GareBody({ embedded = false, league }: { embedded?: boolean; /**
       {error ? <ErrorNote text={error} /> : null}
       {!loading && !shown.length ? <Empty title={scope === "mine" ? "Nessuna tua gara" : "Nessuna altra gara"} text={scope === "mine" ? "Segna quelle a cui hai partecipato. Le altre restano nel calendario, senza chiedere il punteggio." : "Qui ci sono le gare che non hai segnato."} /> : null}
       <div className="grid gap-3">
-        {shown.map((comp) => {
+        {shown.map((comp, index) => {
+          // le prime due gare aperte, le altre chiuse; ognuna si apre e si chiude con un tocco (e resta così)
+          const isOpen = openGare[comp.id] ?? index < 2;
           const mine = comp.entries.find((entry) => entry.userId === me.userId) ?? null;
           const ownScore = mine ? hasResult(mine) && mine.portal !== "solo" : false;
           const ask = scope === "mine" && comp.attended !== false && !comp.virtual;
@@ -187,7 +206,14 @@ export function GareBody({ embedded = false, league }: { embedded?: boolean; /**
           return (
             <div key={comp.id} id={`gara-${comp.id}`} className="scroll-mt-4">
             <Card className="grid min-w-0 gap-3">
-              <GaraHead comp={comp} crestOf={crestOf} tab={tab} />
+              <button type="button" onClick={() => toggleOpen(comp.id, isOpen)} aria-expanded={isOpen} className="flex w-full min-w-0 items-start gap-2 text-left">
+                <span className="min-w-0 flex-1"><GaraHead comp={comp} crestOf={crestOf} tab={tab} /></span>
+                <span className="mt-1 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/[0.06]" aria-hidden>
+                  <Glyph name="chevron" size={14} className={`text-muted transition-transform ${isOpen ? "-rotate-90" : "rotate-90"}`} />
+                </span>
+              </button>
+              {isOpen ? (
+                <>
               {scored.length ? (
                 <div className="grid min-w-0 gap-1.5">
                   <p className="flex items-baseline justify-between gap-2 text-sm font-semibold">
@@ -294,6 +320,10 @@ export function GareBody({ embedded = false, league }: { embedded?: boolean; /**
                   ) : null}
                 </div>
               ) : null}
+                </>
+              ) : (
+                <p className="-mt-1 text-xs text-muted">{closedLine(comp, mine, scored.length)}</p>
+              )}
             </Card>
             </div>
           );
@@ -475,6 +505,16 @@ function longDay(day: string) {
  * Testata della gara. Per le gare del campionato FITAST il nome è la compagnia che la organizza, con sotto
  * la tappa del campionato: sul portale si chiamano tutte uguali («Gara di Campionato Invernale 3D»).
  */
+/** la gara chiusa in una riga: il proprio risultato, quanti dei nostri, chi era in piazzola */
+function closedLine(comp: Comp, mine: Entry | null, ours: number) {
+  const parts = [
+    mine && mine.score != null ? `Tu: ${mine.score} punti${mine.rank ? ` · ${mine.rank}°` : ""}${mine.championshipPoints != null ? ` · ${mine.championshipPoints} pt camp.` : ""}` : "",
+    ours ? `${ours} dei nostri` : "",
+    comp.group?.mates.length ? `${comp.group.mates.length} in piazzola con te` : "",
+  ].filter(Boolean);
+  return parts.length ? parts.join(" · ") : "Tocca per aprire";
+}
+
 function GaraHead({ comp, crestOf, tab }: { comp: Comp; crestOf: (t: string) => Crest | null; tab: "past" | "next" }) {
   const f = comp.fitast ?? null;
   const host = comp.organizer.trim();
