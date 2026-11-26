@@ -11,7 +11,9 @@ import { divisionOf } from "./labels";
 import { accountWriter, writerFor } from "./acting.api";
 import { activityXp } from "./xp.api";
 import { fitastRankOf, loadGenerale, type GenTable } from "./fitast-rank";
-import { archersIn, championshipName, oursInGara, stepsOf, type GaraTable, type PortalResult, type Who } from "./fitast-ours";
+import { archersIn, championshipName, matchPerson, oursInGara, peopleOf, resultOf, stepsOf, type GaraTable, type PortalResult, type Who } from "./fitast-ours";
+import { nameKey } from "./fitast-rank";
+import { categoryGroup, teamKey as teamKeyOf, titleName } from "./fitast-league";
 import type { TallyShot } from "./scoring";
 import { aimSpot, faceById, ringPoint, scoreAtRadius } from "./scoring";
 
@@ -539,6 +541,46 @@ export const listCompetitions = createServerFn({ method: "GET" })
     for (const [id, list] of byGara) {
       portal.set(id, { ours: oursInGara(list, who), total: archersIn(list), title: list.find((t) => t.gara_title)?.gara_title ?? "", day: String(list.find((t) => t.held_on)?.held_on ?? "").slice(0, 10) });
     }
+    // con chi si era in piazzola: i cartellini letti dalla foto e gli elenchi delle piazzole del portale
+    type CardRow = { competition_id: number; piazzola: number; name: string; name_key: string; user_id: string | null; lanes: { p: number; arrows: number[] }[]; total: number | null; spots: number | null };
+    const cards = await sql<CardRow>`select competition_id, piazzola, name, name_key, user_id, lanes, total, spots from gara_cartellini`.catch(() => [] as CardRow[]);
+    const pzTables = await sql<GaraTable>`
+      select gara_id, gara_title, held_on::text as held_on, season, category, rows from fitast_standings
+      where kind = 'gara-piazzole' and gara_id <> ''`.catch(() => [] as GaraTable[]);
+    const meWho = who.find((x) => x.userId === context.userId) ?? null;
+    const groupOf = (compId: number, garaId: string) => {
+      const mineKeys = new Set([nameKey(meWho?.fitastName ?? ""), nameKey(meWho?.fullName ?? "")].filter(Boolean));
+      const here = cards.filter((c) => asNum(c.competition_id) === compId);
+      const myCard = here.find((c) => c.user_id === context.userId) ?? here.find((c) => mineKeys.has(c.name_key)) ?? null;
+      const pz = garaId ? pzTables.filter((t) => t.gara_id === garaId) : [];
+      const pzPeople = pz.length ? peopleOf(pz) : [];
+      const meOnPortal = meWho && pzPeople.length ? matchPerson(pzPeople, meWho) : null;
+      const portalPz = meOnPortal ? meOnPortal.p.entries[0]?.place ?? null : null;
+      const piazzola = myCard?.piazzola || portalPz || 0;
+      if (!myCard && !meOnPortal) return null;
+      const results = garaId ? peopleOf(byGara.get(garaId) ?? []) : [];
+      const resultFor = (key: string, team: string) => {
+        const p = results.find((x) => x.key === key && (!team || x.teamK === teamKeyOf(team))) ?? results.find((x) => x.key === key);
+        return p ? resultOf(p, false) : null;
+      };
+      const mates = new Map<string, { name: string; team: string; lanes: { p: number; arrows: number[] }[] | null; total: number | null; spots: number | null; place: number | null; category: string; camp: number | null; size: number }>();
+      if (myCard) {
+        for (const c of here) {
+          if (c === myCard || c.piazzola !== myCard.piazzola) continue;
+          const r = resultFor(c.name_key, "");
+          mates.set(c.name_key, { name: titleName(c.name), team: r?.team ? titleName(r.team) : "", lanes: Array.isArray(c.lanes) ? c.lanes : null, total: c.total ?? r?.score ?? null, spots: c.spots ?? null, place: r?.place ?? null, category: r?.category ?? "", camp: r?.camp ?? null, size: r?.size ?? 0 });
+        }
+      }
+      if (meOnPortal) {
+        for (const p of pzPeople) {
+          if (p === meOnPortal.p || (p.entries[0]?.place ?? null) !== portalPz || mates.has(p.key) || mineKeys.has(p.key)) continue;
+          const card = here.find((c) => c.name_key === p.key);
+          const r = resultFor(p.key, p.team);
+          mates.set(p.key, { name: titleName(p.name), team: titleName(p.team), lanes: card && Array.isArray(card.lanes) ? card.lanes : null, total: card?.total ?? r?.score ?? null, spots: card?.spots ?? null, place: r?.place ?? null, category: r?.category ?? "", camp: r?.camp ?? null, size: r?.size ?? 0 });
+        }
+      }
+      return { piazzola, mates: [...mates.values()].sort((a, b) => (b.total ?? -1) - (a.total ?? -1) || a.name.localeCompare(b.name, "it")) };
+    };
     const memberOf = (userId: string) => members.find((m) => m.user_id === userId);
     const face = (userId: string) => {
       const m = memberOf(userId);
@@ -662,6 +704,8 @@ export const listCompetitions = createServerFn({ method: "GET" })
         roster: rosterOf(asNum(c.id), garaId),
         entries: entriesOf(asNum(c.id), garaId),
         fitast: fitastOf(garaId),
+        /** con chi si era in piazzola (cartellini e portale) */
+        group: groupOf(asNum(c.id), garaId),
         /** solo dal portale: nessuna gara nell'app (niente presenza né punteggio da segnare) */
         virtual: false,
       };
@@ -688,6 +732,7 @@ export const listCompetitions = createServerFn({ method: "GET" })
         roster: rosterOf(id, garaId),
         entries: entriesOf(id, garaId),
         fitast: fitastOf(garaId),
+        group: groupOf(id, garaId),
         virtual: true,
       });
     }
@@ -747,7 +792,8 @@ export const saveEntry = createServerFn({ method: "POST" })
       competitionId: asNum(raw.competitionId),
       score: raw.score == null || raw.score === "" ? null : asNum(raw.score),
       rank: raw.rank == null || raw.rank === "" ? null : asNum(raw.rank),
-      category: divisionOf(clip(raw.category, 20)),
+      // anche la categoria del portale («Messeri · Tradizionale») vale: conta la divisione
+      category: divisionOf(categoryGroup(clip(raw.category, 90)).group) || divisionOf(clip(raw.category, 20)),
       notes: clip(raw.notes, 300),
       fitastName: clip(raw.fitastName, 120),
       laneCount: optionalInt(raw.laneCount, 0, 40, "Numero piazzole non valido."),
@@ -1277,9 +1323,9 @@ export const squadBoard = createServerFn({ method: "GET" })
 
     const everyone = await sql<{
       id: number; user_id: string; given_name: string; family_name: string; nickname: string; slug: string;
-      avatar_color: string; photo_url: string | null; bow_type: string; user_image: string | null; role: string; xp: number | null;
+      avatar_color: string; photo_url: string | null; bow_type: string; user_image: string | null; role: string; xp: number | null; fitast_name: string | null; fitast_team: string | null;
     }>`
-      select m.id, m.user_id, m.given_name, m.family_name, m.nickname, m.slug, m.avatar_color, m.photo_url, m.bow_type, u.image as user_image, m.role, m.xp
+      select m.id, m.user_id, m.given_name, m.family_name, m.nickname, m.slug, m.avatar_color, m.photo_url, m.bow_type, u.image as user_image, m.role, m.xp, m.fitast_name, m.fitast_team
       from members m
       join "user" u on u.id = m.user_id
       where m.user_id is not null
@@ -1287,6 +1333,18 @@ export const squadBoard = createServerFn({ method: "GET" })
     // si vedono solo gli arcieri della propria compagnia
     const peers = await companyPeers(sql, context.userId);
     const people = everyone.filter((row) => peers.has(row.user_id));
+    // l'arco con cui tira nel campionato: quello della sua categoria FITAST (es. «Madonne · Tradizionale»),
+    // altrimenti quello scritto nel profilo. Così i podi per arco seguono le classifiche del portale
+    const gen = await loadGenerale(sql);
+    const homeRows = await sql<{ user_id: string; name: string; fitast_name: string }>`
+      select cm.user_id, c.name, c.fitast_name from company_members cm join companies c on c.id = cm.company_id`.catch(() => []);
+    const homeName = new Map(homeRows.map((h) => [h.user_id, h.fitast_name || h.name]));
+    const bowOf = new Map<string, string>();
+    for (const row of people) {
+      const r = gen.length ? fitastRankOf(gen, { fitastName: row.fitast_name ?? "", fullName: [row.given_name, row.family_name].filter(Boolean).join(" "), givenName: row.given_name, nickname: row.nickname, team: (row.fitast_team || homeName.get(row.user_id)) ?? "" }) : null;
+      const tip = r ? categoryGroup(r.category).tipologia : "";
+      bowOf.set(row.user_id, bowIdOf(tip) || row.bow_type);
+    }
     // livello di ognuno: punti del telefono più allenamenti e gare registrati
     const xpOf = new Map<string, number>();
     await Promise.all(people.map(async (row) => xpOf.set(row.user_id, asNum(row.xp) + (await activityXp(sql, row.user_id)))));
@@ -1443,7 +1501,7 @@ export const squadBoard = createServerFn({ method: "GET" })
           avatarColor: row.avatar_color,
           admin: row.role === "admin",
           photoUrl: row.photo_url || remote,
-          bowType: row.bow_type,
+          bowType: bowOf.get(row.user_id) ?? row.bow_type,
           xp: xpOf.get(row.user_id) ?? 0,
           sessions: asNum(shot?.sessions),
           arrows: arrows + garaArrows,
@@ -1461,6 +1519,20 @@ export const squadBoard = createServerFn({ method: "GET" })
       }),
     };
   });
+
+/** la tipologia d'arco della categoria FITAST come arco dell'app («Tradizionale» → tradizionale) */
+function bowIdOf(tip: string) {
+  const t = tip.trim();
+  if (!t || /^tutt/i.test(t)) return "";
+  if (/tradiz/i.test(t)) return "tradizionale";
+  if (/foggia/i.test(t)) return "foggia storica";
+  if (/storic|medieval|rinasc/i.test(t)) return "storico";
+  if (/long|lungo/i.test(t)) return "lungo";
+  if (/nud|bare/i.test(t)) return "nudo";
+  if (/compound/i.test(t)) return "compound";
+  if (/olimp|ricurv/i.test(t)) return "olimpico";
+  return t.toLowerCase();
+}
 
 function arrowMarks(raw: unknown) {
   return String(raw ?? "")

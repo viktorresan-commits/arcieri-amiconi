@@ -12,7 +12,7 @@ import { COMPAGNIE_URL, crestOf, parseCompanies, teamKey, titleName, type Portal
 import { imageInfo, logoCandidates, siteFromEmail, usableLogo } from "./company-logo";
 
 const DAY = 86_400_000;
-export const STANDING_KINDS = ["generale-squadre", "generale-arcieri", "gara-arcieri", "gara-squadre"] as const;
+export const STANDING_KINDS = ["generale-squadre", "generale-arcieri", "gara-arcieri", "gara-squadre", "gara-piazzole"] as const;
 export type StandingKind = (typeof STANDING_KINDS)[number];
 
 function slugOf(name: string) {
@@ -466,7 +466,7 @@ export const saveFitastStandings = createServerFn({ method: "POST" })
           const day = String(r.day ?? "").slice(0, 10);
           // la generale arcieri si tiene intera (serve la media di tutti gli arcieri di ogni compagnia); le altre i primi
           const kind = String(r.kind ?? "");
-          const keep = kind === "generale-arcieri" || kind === "gara-arcieri" ? 600 : kind === "gara-squadre" ? 200 : 40;
+          const keep = kind === "generale-arcieri" || kind === "gara-arcieri" || kind === "gara-piazzole" ? 600 : kind === "gara-squadre" ? 200 : 40;
           const rows = (Array.isArray(r.rows) ? r.rows.slice(0, keep) : []).map((x) => {
             const o = (x ?? {}) as Record<string, unknown>;
             const place = optNum(o.place, 9999);

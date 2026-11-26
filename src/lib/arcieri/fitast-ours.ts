@@ -36,7 +36,7 @@ export type PortalResult = {
   linked: boolean;
 };
 
-type Person = { name: string; team: string; teamK: string; key: string; words: Set<string>; entries: { category: string; place: number | null; size: number; score: number | null; camp: number | null }[] };
+export type Person = { name: string; team: string; teamK: string; key: string; words: Set<string>; entries: { category: string; place: number | null; size: number; score: number | null; camp: number | null }[] };
 
 /** tutte le persone di una gara (un arciere compare in più tabelle: categoria intera e per tipologia) */
 export function peopleOf(tables: GaraTable[]): Person[] {

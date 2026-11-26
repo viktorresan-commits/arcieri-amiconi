@@ -8,7 +8,7 @@ import { FITAST_HOME, fitastRead } from "./fitast.api";
 import type { FitastPage } from "./fitast-parse";
 import { classificaUrl, cleanTitle, titleScore, findGare, garaDateOf, garaIdOf, garaTitleOf, seasonRange, seasonSelect } from "./fitast-gare";
 import { currentTexts, filterCombos, pressReq, type Req } from "./fitast-nav";
-import { rankingRows, SQUADRE_PAGES, type RankRow } from "./fitast-league";
+import { piazzoleRows, rankingRows, SQUADRE_PAGES, type RankRow } from "./fitast-league";
 import { saveFitastStandings, type StandingKind } from "./fitast-league.api";
 
 export type SyncProgress = { step: string; pages: number; saved: number; diag?: string[]; done?: boolean; error?: string };
@@ -96,6 +96,17 @@ export async function syncStandings(opts: { onProgress: (p: SyncProgress) => voi
     await flush();
   };
 
+  /** l'elenco delle piazzole di una gara (con chi si tira): una riga per arciere, la piazzola nel posto */
+  const pzName = (home.awp ?? []).find((x) => /piazz/i.test(x)) ?? "";
+  const piazzole = async (id: string, gara: { id: string; title: string; day: string }, referer: string) => {
+    if (!pzName || opts.stop()) return;
+    step = `${gara.title || "Gara"} · piazzole`;
+    const p = await read({ url: new URL(`${pzName}?P1=${id}`, FITAST_HOME).toString(), referer, label: step });
+    if (!p || (garaIdOf(p) && garaIdOf(p) !== id)) return;
+    const rows = piazzoleRows(p);
+    if (rows.length) pending.push({ kind: "gara-piazzole", season, seasonName, garaId: gara.id, garaTitle: gara.title, day: gara.day, category: "Piazzole", rows });
+  };
+
   // classifiche generali del campionato: compagnie e arcieri
   const btns = base.form?.buttons ?? [];
   const genSq = btns.find((b) => /general/i.test(b.label) && /squadr|compagn|societ/i.test(b.label));
@@ -156,8 +167,19 @@ export async function syncStandings(opts: { onProgress: (p: SyncProgress) => voi
         await allCombos(p1, r1, "gara-squadre", 200, 4, gara);
         break;
       }
+      await piazzole(id, gara, p0.url);
       break;
     }
+  }
+  // gare delle prossime tre settimane: chi tira con chi (elenco delle piazzole)
+  const soon = isoDay(new Date(Date.now() + 21 * 86_400_000));
+  for (const g of findGare(base).filter((x) => x.date && x.date > today && x.date <= soon)) {
+    if (opts.stop() || pages >= MAX_PAGES) break;
+    const id = [g.id, g.key ?? ""].find((x) => /^\d{3,6}$/.test(x));
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    step = `${g.title || "Gara"} · ${g.date?.split("-").reverse().join("/") ?? ""} · piazzole`;
+    await piazzole(id, { id, title: cleanTitle(g.title) || g.title, day: g.date ?? "" }, FITAST_HOME);
   }
   await flush();
   step = "Fatto";

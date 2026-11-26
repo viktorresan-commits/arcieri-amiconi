@@ -174,6 +174,35 @@ export function rankingRows(page: FitastPage, kind: "arcieri" | "squadre", limit
   return [];
 }
 
+/**
+ * L'elenco delle piazzole di una gara (chi tira insieme): per ogni arciere la piazzola (o il gruppo) di
+ * partenza, il nome e la compagnia. La piazzola va nel posto («place») della riga.
+ */
+export function piazzoleRows(page: FitastPage, limit = 600): RankRow[] {
+  for (const t of [...page.tables].sort((a, b) => b.rows.length - a.rows.length)) {
+    if (t.rows.length < 3) continue;
+    const head = t.rows[0].map((c) => clean(c.text));
+    const col = (re: RegExp) => head.findIndex((h) => re.test(h));
+    const pzCol = col(/piazz|grupp|paglion|bersagl|turn|linea/i);
+    const nameCol = col(/arcier|atleta|cognome|nominativ|^nome/i);
+    const teamCol = col(/compagn|societ|squadr/i);
+    if (pzCol < 0 || nameCol < 0) continue;
+    const rows: RankRow[] = [];
+    let last: number | null = null;
+    for (const r of t.rows.slice(1)) {
+      const name = clean(r[nameCol]?.text ?? "");
+      // la piazzola a volte è scritta solo sulla prima riga del gruppo
+      const pz = numIt(r[pzCol]?.text ?? "");
+      if (pz != null && Number.isFinite(pz)) last = Math.round(pz);
+      if (!name || /^\d+$/.test(name) || last == null) continue;
+      rows.push({ place: last, name, team: teamCol >= 0 ? clean(r[teamCol]?.text ?? "") : "", score: null, camp: null });
+      if (rows.length >= limit) break;
+    }
+    if (rows.length >= 2) return rows;
+  }
+  return [];
+}
+
 /** le classi del campionato, dalla più specifica: Juvenis prima di Messeri/Madonne */
 const CLASSES: [RegExp, string][] = [
   [/juven\p{L}*/iu, "Juvenis"],

@@ -46,7 +46,7 @@ export function bowLabel(id: string, custom = "") {
 }
 
 /** archi scelti nell'avatar o scritti a mano, detti per bene */
-const BOW_ALIASES: Record<string, string> = { longbow: "Arco lungo", ricurvo: "Arco ricurvo", flatbow: "Flatbow", storico: "Arco storico", asiatico: "Arco asiatico", barebow: "Arco nudo" };
+const BOW_ALIASES: Record<string, string> = { longbow: "Arco lungo", ricurvo: "Arco ricurvo", flatbow: "Flatbow", storico: "Arco storico", "foggia storica": "Foggia storica", asiatico: "Arco asiatico", barebow: "Arco nudo" };
 
 export function disciplineLabel(id: string) {
   return DISCIPLINES.find((d) => d.id === id)?.label ?? id;
