@@ -7,6 +7,7 @@ import { useArcherSetup } from "@/lib/arcieri/setup";
 import { Button, Card, Empty, ErrorNote, Field, Loading, PageHead, TextInput } from "@/components/kit";
 import { CategoryIcon } from "@/components/gear-icons";
 import { Glyph } from "@/components/icons";
+import { ReceiptsCard } from "@/components/receipt-import";
 
 export const Route = createFileRoute("/_app/acquisti")({ component: Page });
 
@@ -65,13 +66,16 @@ function Page() {
 
   return (
     <div className="grid gap-3">
-      <PageHead title="Acquisti" lede="La tua lista: gli altri non la vedono." />
+      <PageHead title="Acquisti" lede="La tua lista e gli scontrini: gli altri non li vedono." />
 
       <div className="grid grid-cols-3 gap-2">
         <Kpi k="Da spendere" v={euro(toSpend) || "0 €"} tone="#e6b325" />
         <Kpi k="Aperti" v={String(open.length)} tone="#5aa6e8" />
         <Kpi k="Già spesi" v={euro(spent) || "0 €"} tone="#3d9b74" />
       </div>
+
+      {/* scontrini e fatture: dalla foto alla spesa fatta, e i pezzi in attrezzatura */}
+      <ReceiptsCard onSaved={reload} />
 
       <div className="grid grid-cols-4 gap-1 rounded-2xl bg-white/[0.05] p-1">
         {[...STATUS.map((s) => ({ id: s.id, label: s.label })), { id: "tutti" as const, label: "Tutti" }].map((s) => (
