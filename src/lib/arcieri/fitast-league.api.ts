@@ -10,54 +10,81 @@ import { asNum, clip, db, ensureMember, staffLevel } from "./access";
 import { readFitastPage } from "./fitast.api";
 import { realCrest } from "./stemmi-veri";
 import { nameKey } from "./fitast-rank";
-import { COMPAGNIE_URL, crestOf, goodCompanyName, parseCompanies, parseCompanyText, teamKey, titleName, type PortalCompany, type RankRow } from "./fitast-league";
+import { COMPAGNIE_URL, crestOf, GARBLED_NAME, goodCompanyName, parseCompanies, parseCompanyText, teamKey, titleName, type PortalCompany, type RankRow } from "./fitast-league";
 import { imageInfo, logoCandidates, siteFromEmail, usableLogo } from "./company-logo";
 
 const DAY = 86_400_000;
 /** versione della lettura dell'elenco: quando cambia, l'elenco si rilegge subito (nomi e stemmi corretti) */
 const COMPANIES_V = 3;
 /** nome salvato con pezzi della scheda dentro («Idimm Regione: Tel e Fax:», «06/024 A.s.d. …») */
-const GARBLED = /\bID\s*_?IMM|\bRegione\b|\bTel\s*e\s*Fax\b|\bE-?mail\b|^\s*\d{2}\s?\/\s?\d{3}\s/i;
+const GARBLED = GARBLED_NAME;
+
+/** sito scritto in un modo qualsiasi («Fb @nome», «www.x.it», «http:\\x.it») → indirizzo vero */
+function siteUrl(raw: string) {
+  const w = raw.trim();
+  if (!w) return "";
+  if (/^fb\s*@/i.test(w)) return clip(`https://www.facebook.com/${w.replace(/^fb\s*@\s*/i, "")}`, 160);
+  if (/^https?:\/\//i.test(w)) return clip(w.replace(/^http:/i, "https:"), 160);
+  return clip(`https://${w.replace(/^\/+/, "")}`, 160);
+}
 
 /**
  * Compagnie dell'elenco salvate con il nome rotto (letture vecchie): si rileggono dal testo salvato e si
- * correggono; se la stessa compagnia c'è già con il nome giusto e quella rotta è vuota, quella rotta sparisce.
+ * correggono tutte insieme; se la stessa compagnia c'è già con il nome giusto e quella rotta è vuota, quella
+ * rotta sparisce. Poche query in tutto (una per le correzioni, una per le cancellazioni).
  */
-async function repairGarbled(sql: Sql) {
-  const rows = await sql<{ id: number; name: string; fitast_name: string; address: string; phone: string; email: string; website: string; fitast_code: string }>`
-    select id, name, fitast_name, address, phone, email, website, fitast_code from companies where source = 'fitast'`;
+export async function repairGarbled(sql: Sql) {
+  const rows = await sql<{ id: number; name: string; fitast_name: string | null }>`select id, name, fitast_name from companies where source = 'fitast'`;
+  const bad = rows.filter((r) => GARBLED.test(r.fitast_name || r.name));
+  if (!bad.length) return { fixed: 0, removed: 0 };
+  const counts = await sql<{ company_id: number; n: number }>`select company_id, count(*)::int as n from company_members group by company_id`;
+  const members = new Map(counts.map((c) => [asNum(c.company_id), asNum(c.n)]));
   const keyOf = new Map<string, number>();
-  for (const r of rows) if (!GARBLED.test(r.fitast_name || r.name)) for (const k of [teamKey(r.fitast_name), teamKey(r.name)]) if (k && !keyOf.has(k)) keyOf.set(k, asNum(r.id));
-  let fixed = 0;
-  let removed = 0;
-  for (const r of rows) {
-    const raw = r.fitast_name || r.name;
-    if (!GARBLED.test(raw)) continue;
-    const p = parseCompanyText(raw);
-    const members = await sql<{ n: number }>`select count(*)::int as n from company_members where company_id = ${asNum(r.id)}`;
-    const empty = asNum(members[0]?.n) === 0;
+  for (const r of rows) if (!GARBLED.test(r.fitast_name || r.name)) for (const k of [teamKey(r.fitast_name ?? ""), teamKey(r.name)]) if (k && !keyOf.has(k)) keyOf.set(k, asNum(r.id));
+  const fixes: { id: number; name: string; fname: string; address: string; phone: string; email: string; website: string; code: string }[] = [];
+  const drop: number[] = [];
+  for (const r of bad) {
+    const id = asNum(r.id);
+    const p = parseCompanyText(r.fitast_name || r.name);
     const key = goodCompanyName(p.name) ? teamKey(p.name) : "";
     const twin = key ? keyOf.get(key) : undefined;
-    if ((!key || (twin != null && twin !== asNum(r.id))) && empty) {
-      await sql`delete from companies where id = ${asNum(r.id)}`;
-      removed++;
+    const empty = !members.get(id);
+    if ((!key || (twin != null && twin !== id)) && empty) {
+      drop.push(id);
       continue;
     }
     if (!key) continue;
-    const name = clip(titleName(p.name), 70);
-    await sql`
-      update companies set
-        name = ${name}, fitast_name = ${p.name},
-        address = case when address = '' or address ~* '(regione|tel e fax|idimm)' then ${clip(p.address, 160)} else address end,
-        phone = case when phone = '' then ${p.phone.slice(0, 20)} else phone end,
-        email = case when email = '' then ${/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p.email) ? p.email.slice(0, 120) : ""} else email end,
-        website = case when website = '' then ${p.website ? clip(/^https?:\/\//i.test(p.website) ? p.website : /^fb\s*@/i.test(p.website) ? `https://www.facebook.com/${p.website.replace(/^fb\s*@\s*/i, "")}` : `https://${p.website}`, 160) : ""} else website end,
-        fitast_code = case when fitast_code = '' then ${clip(p.code, 20)} else fitast_code end
-      where id = ${asNum(r.id)}`;
-    keyOf.set(key, asNum(r.id));
-    fixed++;
+    keyOf.set(key, id);
+    fixes.push({
+      id,
+      name: clip(titleName(p.name), 70),
+      fname: p.name,
+      address: clip(p.address, 160),
+      phone: p.phone.slice(0, 20),
+      email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p.email) ? p.email.toLowerCase().slice(0, 120) : "",
+      website: siteUrl(p.website),
+      code: clip(p.code, 20),
+    });
   }
-  return { fixed, removed };
+  if (fixes.length) {
+    await sql`
+      update companies c set
+        name = x.name, fitast_name = x.fname,
+        address = case when c.address = '' or c.address ~* '(regione|tel e fax|idimm)' then x.address else c.address end,
+        phone = case when c.phone = '' then x.phone else c.phone end,
+        email = case when c.email = '' then x.email else c.email end,
+        website = case when c.website = '' then x.website else c.website end,
+        fitast_code = case when c.fitast_code = '' then x.code else c.fitast_code end
+      from json_to_recordset(${JSON.stringify(fixes)}::json) as x(id int, name text, fname text, address text, phone text, email text, website text, code text)
+      where c.id = x.id`;
+  }
+  if (drop.length) {
+    await sql`
+      delete from companies c
+      where c.id in (select (jsonb_array_elements_text(${JSON.stringify(drop)}::jsonb))::int)
+        and not exists (select 1 from company_members m where m.company_id = c.id)`;
+  }
+  return { fixed: fixes.length, removed: drop.length };
 }
 export const STANDING_KINDS = ["generale-squadre", "generale-arcieri", "gara-arcieri", "gara-squadre", "gara-piazzole"] as const;
 export type StandingKind = (typeof STANDING_KINDS)[number];
@@ -74,16 +101,6 @@ function slugOf(name: string) {
   );
 }
 
-async function freeSlug(sql: Sql, name: string) {
-  const base = slugOf(name);
-  let slug = base;
-  for (let i = 2; i < 60; i += 1) {
-    const clash = await sql<{ id: number }>`select id from companies where slug = ${slug} limit 1`;
-    if (!clash[0]) break;
-    slug = `${base}-${i}`;
-  }
-  return slug;
-}
 
 /**
  * Prepara le compagnie dell'elenco FITAST (tranne Fabriano, che c'è già): una volta alla settimana, da chiunque
@@ -95,15 +112,16 @@ export const syncFitastCompanies = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const sql = await db();
     const me = await ensureMember(sql, context.userId);
-    const last = await sql<{ at: string; info: { total?: number; ok?: boolean; v?: number } }>`select at, info from fitast_sync where key = 'compagnie' limit 1`;
+    // i nomi rotti si correggono sempre per primi (bastano due query): l'elenco si vede giusto anche se il portale non risponde
+    const repaired = await repairGarbled(sql).catch(() => ({ fixed: 0, removed: 0 }));
+    const last = await sql<{ at: string; info: { total?: number; ok?: boolean; v?: number; running?: boolean } }>`select at, info from fitast_sync where key = 'compagnie' limit 1`;
     const age = last[0] ? Date.now() - new Date(last[0].at).getTime() : Infinity;
     const ok = Boolean(last[0]?.info?.ok);
-    // lettura nuova dell'elenco: si rilegge subito, una volta
-    const stale = asNum(last[0]?.info?.v) !== COMPANIES_V;
+    // lettura nuova dell'elenco: si rilegge subito (se non la sta già facendo qualcun altro da meno di 3 minuti)
+    const stale = asNum(last[0]?.info?.v) !== COMPANIES_V && !(last[0]?.info?.running && age < 3 * 60_000);
     // riuscita: si rilegge dopo una settimana; non riuscita: dopo un'ora
-    if (!(data.force && staffLevel(me)) && !stale && age < (ok ? 7 * DAY : DAY / 24)) return { added: 0, linked: 0, total: asNum(last[0]?.info?.total), skipped: true, diag: [] as string[] };
-    await sql`insert into fitast_sync (key, at, info) values ('compagnie', now(), ${JSON.stringify({ ok: false, v: COMPANIES_V })}::jsonb) on conflict (key) do update set at = now(), info = excluded.info`;
-    const repaired = await repairGarbled(sql);
+    if (!(data.force && staffLevel(me)) && !stale && age < (ok ? 7 * DAY : DAY / 24)) return { added: 0, linked: 0, total: asNum(last[0]?.info?.total), skipped: true, diag: [] as string[], ...repaired };
+    await sql`insert into fitast_sync (key, at, info) values ('compagnie', now(), ${JSON.stringify({ ...(last[0]?.info ?? {}), running: true })}::jsonb) on conflict (key) do update set at = now(), info = excluded.info`;
     let list: ReturnType<typeof parseCompanies> = [];
     let diag: string[] = [];
     try {
@@ -118,55 +136,66 @@ export const syncFitastCompanies = createServerFn({ method: "POST" })
     for (const c of existing) {
       for (const k of [teamKey(c.fitast_name), teamKey(c.name)]) if (k && !byKey.has(k)) byKey.set(k, asNum(c.id));
     }
-    let added = 0;
-    let linked = 0;
+    const slugs = new Set(existing.map((c) => c.slug));
+    const links: { id: number; fname: string; code: string; hint: string; address: string; phone: string; logo: boolean }[] = [];
+    const fresh: { slug: string; name: string; city: string; bio: string; logo: string; color: string; phone: string; email: string; website: string; address: string; fname: string; code: string; hint: string }[] = [];
     for (const c of list) {
       const key = teamKey(c.name);
       // Fabriano c'è già: si collega soltanto
       const found = byKey.get(key) ?? (/\bFABRIANO\b/.test(key) ? existing.find((x) => x.slug === "fabriano")?.id : undefined);
       const hint = c.logo || c.detail ? JSON.stringify({ logo: c.logo || undefined, detail: c.detail || undefined }) : "";
       if (found != null) {
-        await sql`
-          update companies set
-            fitast_name = case when fitast_name = '' then ${c.name} else fitast_name end,
-            fitast_code = case when fitast_code = '' then ${clip(c.code, 20)} else fitast_code end,
-            logo_hint = case when ${hint} <> '' then ${hint} else logo_hint end,
-            address = case when address = '' and source = 'fitast' then ${clip(c.address, 160)} else address end,
-            phone = case when phone = '' and source = 'fitast' then ${c.phone.replace(/[^\d+]/g, "").slice(0, 20)} else phone end
-          where id = ${asNum(found)}`;
-        // stemma del portale appena trovato: la ricerca del logo riparte per questa compagnia
-        if (c.logo) await sql`update companies set logo_checked_at = null where id = ${asNum(found)} and source = 'fitast' and (logo_url is null or logo_url = '' or logo_url like 'data:image/svg+xml%')`;
-        linked++;
+        links.push({ id: asNum(found), fname: c.name, code: clip(c.code, 20), hint, address: clip(c.address, 160), phone: c.phone.replace(/[^\d+]/g, "").slice(0, 20), logo: Boolean(c.logo) });
         continue;
       }
       const name = clip(titleName(c.name), 70);
       if (name.length < 3) continue;
       const crest = crestOf(c.name);
-      const city = clip(titleName(c.city || c.province), 50);
       const bio = clip(
         [`Compagnia iscritta alla FITAST${c.region ? ` (${titleName(c.region)})` : ""}.`, c.president ? `Presidente: ${titleName(c.president)}.` : "", c.code ? `Codice FITAST ${c.code}.` : ""].filter(Boolean).join(" "),
         500,
       );
-      const email = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c.email) ? c.email.toLowerCase().slice(0, 120) : "";
-      const phone = c.phone.replace(/[^\d+]/g, "").slice(0, 20);
-      const website = c.website ? clip(/^https?:\/\//i.test(c.website) ? c.website.replace(/^http:/i, "https:") : /^fb\s*@/i.test(c.website) ? `https://www.facebook.com/${c.website.replace(/^fb\s*@\s*/i, "")}` : `https://${c.website.replace(/^\/+/, "")}`, 160) : "";
-      const slug = await freeSlug(sql, name);
+      const base = slugOf(name);
+      let slug = base;
+      for (let i = 2; slugs.has(slug) && i < 200; i += 1) slug = `${base}-${i}`;
+      slugs.add(slug);
+      byKey.set(key, -1);
+      fresh.push({
+        slug, name, city: clip(titleName(c.city || c.province), 50), bio, logo: crest.logo, color: crest.color,
+        phone: c.phone.replace(/[^\d+]/g, "").slice(0, 20),
+        email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c.email) ? c.email.toLowerCase().slice(0, 120) : "",
+        website: siteUrl(c.website), address: clip(c.address, 160), fname: c.name, code: clip(c.code, 20), hint,
+      });
+    }
+    if (links.length) {
+      await sql`
+        update companies c set
+          fitast_name = case when c.fitast_name = '' then x.fname else c.fitast_name end,
+          fitast_code = case when c.fitast_code = '' then x.code else c.fitast_code end,
+          logo_hint = case when x.hint <> '' then x.hint else c.logo_hint end,
+          address = case when c.address = '' and c.source = 'fitast' then x.address else c.address end,
+          phone = case when c.phone = '' and c.source = 'fitast' then x.phone else c.phone end,
+          -- stemma del portale appena trovato: la ricerca del logo riparte per questa compagnia
+          logo_checked_at = case when x.logo and c.source = 'fitast' and (c.logo_url is null or c.logo_url = '' or c.logo_url like 'data:image/svg+xml%') then null else c.logo_checked_at end
+        from json_to_recordset(${JSON.stringify(links)}::json) as x(id int, fname text, code text, hint text, address text, phone text, logo boolean)
+        where c.id = x.id`;
+    }
+    let added = 0;
+    if (fresh.length) {
       const made = await sql<{ id: number }>`
         insert into companies (slug, name, city, bio, logo_url, color, phone, email, website, address, source, fitast_name, fitast_code, logo_hint)
-        values (${slug}, ${name}, ${city}, ${bio}, ${crest.logo}, ${crest.color}, ${phone}, ${email}, ${website}, ${clip(c.address, 160)}, 'fitast', ${c.name}, ${clip(c.code, 20)}, ${hint})
+        select x.slug, x.name, x.city, x.bio, x.logo, x.color, x.phone, x.email, x.website, x.address, 'fitast', x.fname, x.code, x.hint
+        from json_to_recordset(${JSON.stringify(fresh)}::json) as x(slug text, name text, city text, bio text, logo text, color text, phone text, email text, website text, address text, fname text, code text, hint text)
         on conflict (slug) do nothing
         returning id`;
-      if (made[0]) {
-        byKey.set(key, asNum(made[0].id));
-        added++;
-      }
+      added = made.length;
     }
     const good = list.length >= 3;
     const logos = list.filter((c) => c.logo).length;
-    await sql`update fitast_sync set info = ${JSON.stringify({ ok: good, total: list.length, added, linked, logos, ...repaired, v: COMPANIES_V })}::jsonb where key = 'compagnie'`;
+    await sql`update fitast_sync set info = ${JSON.stringify({ ok: good, total: list.length, added, linked: links.length, logos, ...repaired, v: good ? COMPANIES_V : asNum(last[0]?.info?.v) })}::jsonb where key = 'compagnie'`;
     // stemmi del portale: la ricerca dei loghi li prende per primi
     if (logos) await sql`delete from fitast_sync where key = 'compagnie-loghi'`;
-    return { added, linked, total: list.length, skipped: false, diag: good ? [] : diag };
+    return { added, linked: links.length, total: list.length, skipped: false, diag: good ? [] : diag, ...repaired };
   });
 
 /* ---------- loghi veri delle compagnie ---------- */

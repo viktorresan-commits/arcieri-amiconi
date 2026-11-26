@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { manageDelete, manageProfile, type ManageItem, type ManageKind } from "@/lib/arcieri/gestione.api";
+import { manageDelete, manageFields, manageProfile, manageUpdate, type ManageField, type ManageItem, type ManageKind } from "@/lib/arcieri/gestione.api";
 import { useLoad } from "@/lib/arcieri/use-load";
 import { Button, Card, Empty, ErrorNote, Loading } from "@/components/kit";
 
@@ -43,7 +43,7 @@ function Page() {
         <p className="text-xs font-semibold text-muted">Gestione profilo · solo fondatore</p>
         <h1 className="font-display text-3xl leading-tight">{member.name}</h1>
         <p className="mt-1 text-sm text-muted">
-          Qui elimini i dati inseriti da {member.name.split(" ")[0]}. La persona non riceve avvisi. Messaggi privati e accesso non si gestiscono da qui.
+          Qui modifichi o elimini i dati inseriti da {member.name.split(" ")[0]}. La persona non riceve avvisi. Messaggi privati e accesso non si gestiscono da qui.
         </p>
         <Link to="/arciere/$id" params={{ id: String(member.id) }} className="mt-2 inline-block text-sm font-semibold text-accent underline-offset-2 hover:underline">
           Torna al profilo
@@ -62,7 +62,7 @@ function Page() {
             </button>
             {isOpen ? (
               <div className="grid gap-1 px-2 pb-2">
-                {list.length ? list.map((it) => <Row key={`${it.kind}:${it.id}`} item={it} memberId={member.id} onGone={() => setGone((s) => new Set(s).add(`${it.kind}:${it.id}`))} />) : <Empty title="Niente da gestire" />}
+                {list.length ? list.map((it) => <Row key={`${it.kind}:${it.id}`} item={it} memberId={member.id} onGone={() => setGone((s) => new Set(s).add(`${it.kind}:${it.id}`))} onSaved={() => setNonce((n) => n + 1)} />) : <Empty title="Niente da gestire" />}
               </div>
             ) : null}
           </Card>
@@ -73,10 +73,35 @@ function Page() {
   );
 }
 
-function Row({ item, memberId, onGone }: { item: ManageItem; memberId: number; onGone: () => void }) {
+function Row({ item, memberId, onGone, onSaved }: { item: ManageItem; memberId: number; onGone: () => void; onSaved: () => void }) {
   const [ask, setAsk] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [fields, setFields] = useState<ManageField[] | null>(null);
+  const [saving, setSaving] = useState(false);
+  async function edit() {
+    setErr("");
+    try {
+      const r = await manageFields({ data: { memberId, kind: item.kind, id: item.id } });
+      setFields(r.fields);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Non riesco ad aprirla.");
+    }
+  }
+  async function save() {
+    if (!fields) return;
+    setSaving(true);
+    setErr("");
+    try {
+      await manageUpdate({ data: { memberId, kind: item.kind, id: item.id, values: Object.fromEntries(fields.map((f) => [f.key, f.value])) } });
+      setFields(null);
+      onSaved();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Non riesco a salvare.");
+    } finally {
+      setSaving(false);
+    }
+  }
   async function remove() {
     setBusy(true);
     setErr("");
@@ -101,9 +126,40 @@ function Row({ item, memberId, onGone }: { item: ManageItem; memberId: number; o
             <Button variant="danger" className="min-h-10 px-3" disabled={busy} onClick={remove}>{busy ? "…" : "Elimina"}</Button>
           </span>
         ) : (
-          <Button variant="ghost" className="min-h-10 shrink-0 px-3" onClick={() => setAsk(true)}>Elimina</Button>
+          <span className="flex shrink-0 gap-1.5">
+            <Button variant="ghost" className="min-h-10 px-3" onClick={() => (fields ? setFields(null) : void edit())}>{fields ? "Chiudi" : "Modifica"}</Button>
+            <Button variant="ghost" className="min-h-10 px-3" onClick={() => setAsk(true)}>Elimina</Button>
+          </span>
         )}
       </div>
+      {fields ? (
+        <div className="grid gap-2 border-t border-line pt-2">
+          <div className="grid grid-cols-2 gap-2">
+            {fields.map((f, k) => (
+              <label key={f.key} className={`grid gap-1 text-xs font-semibold text-muted ${f.type === "text" && /note|nome|cosa|obiettivo|titolo/i.test(f.label) ? "col-span-2" : ""}`}>
+                {f.label}
+                {f.type === "select" ? (
+                  <select value={f.value} onChange={(e) => setFields((all) => all?.map((x, i) => (i === k ? { ...x, value: e.target.value } : x)) ?? null)} className="min-h-10 rounded-xl border border-line bg-bg px-2 text-sm font-normal text-fg">
+                    {(f.options ?? []).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                ) : (
+                  <input
+                    type={f.type === "date" ? "date" : "text"}
+                    inputMode={f.type === "number" || f.type === "euro" ? "decimal" : undefined}
+                    value={f.value}
+                    onChange={(e) => setFields((all) => all?.map((x, i) => (i === k ? { ...x, value: e.target.value } : x)) ?? null)}
+                    className="min-h-10 rounded-xl border border-line bg-white/[0.04] px-3 text-sm font-normal text-fg"
+                  />
+                )}
+              </label>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <Button variant="ghost" className="min-h-10 flex-1" onClick={() => setFields(null)}>Annulla</Button>
+            <Button className="min-h-10 flex-1" disabled={saving} onClick={() => void save()}>{saving ? "Salvo…" : "Salva"}</Button>
+          </div>
+        </div>
+      ) : null}
       {err ? <p className="text-xs text-danger">{err}</p> : null}
     </div>
   );

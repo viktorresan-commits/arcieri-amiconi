@@ -8,7 +8,7 @@ import { authMiddleware } from "@/lib/auth/middleware";
 import type { Sql } from "@/lib/db";
 import { asNum, cleanPhoto, clip, db, ensureMember, staffLevel } from "./access";
 import { fitastAvgBy, fitastPointsBy } from "./fitast-league.api";
-import { teamKey } from "./fitast-league";
+import { cleanCompanyNames, GARBLED_NAME, teamKey } from "./fitast-league";
 import { withRealCrest } from "./stemmi-veri";
 import { garaLoads, sumLoads, type GaraLoad } from "./gara-volume";
 
@@ -27,7 +27,7 @@ function toCompany(row: CompanyRow) {
   return {
     id: asNum(row.id),
     slug: row.slug,
-    name: row.name,
+    name: cleanCompanyNames(row.name, row.fitast_name).name,
     motto: row.motto,
     city: row.city,
     bio: row.bio,
@@ -44,7 +44,7 @@ function toCompany(row: CompanyRow) {
     address: row.address,
     /** preparata dall'elenco del portale FITAST */
     fitast: row.source === "fitast",
-    fitastName: row.fitast_name ?? "",
+    fitastName: cleanCompanyNames(row.name, row.fitast_name).fitastName,
   };
 }
 
@@ -139,7 +139,8 @@ export const listCompanies = createServerFn({ method: "GET" })
     const me = await ensureMember(sql, context.userId);
     const mine = await myMembership(sql, context.userId);
     const home = await homeId(sql);
-    const companies = await sql<CompanyRow>`select * from companies order by id`;
+    // schede vuote del portale (solo etichette, nessun nome): non sono compagnie
+    const companies = (await sql<CompanyRow>`select * from companies order by id`).filter((row) => row.source !== "fitast" || !GARBLED_NAME.test(cleanCompanyNames(row.name, row.fitast_name).name));
     const people = await sql<{ user_id: string; company_id: number; role: string | null; given_name: string; family_name: string; nickname: string; avatar_color: string; photo_url: string | null; member_id: number }>`
       select m.user_id, coalesce(cm.company_id, ${home}) as company_id, cm.role, m.given_name, m.family_name, m.nickname, m.avatar_color, m.photo_url, m.id as member_id
       from members m
@@ -187,8 +188,9 @@ export const listCompanies = createServerFn({ method: "GET" })
         gare += asNum(c?.gare);
         gareRaw += asNum(c?.points);
       }
-      const fp = fitastPts.get(teamKey(row.fitast_name || "")) ?? fitastPts.get(teamKey(row.name));
-      const fa = fitastAvg.get(teamKey(row.fitast_name || "")) ?? fitastAvg.get(teamKey(row.name));
+      const clean = cleanCompanyNames(row.name, row.fitast_name);
+      const fp = fitastPts.get(teamKey(clean.fitastName || "")) ?? fitastPts.get(teamKey(clean.name));
+      const fa = fitastAvg.get(teamKey(clean.fitastName || "")) ?? fitastAvg.get(teamKey(clean.name));
       return {
         ...toCompany(row),
         fitastPoints: fp ? fp.points : null,
@@ -337,7 +339,8 @@ export const companyWelcome = createServerFn({ method: "GET" })
       select c.id, c.name, c.city, c.logo_url, c.fitast_name, c.color, count(cm.user_id)::int as members
       from companies c left join company_members cm on cm.company_id = c.id
       group by c.id order by (c.id = ${home}) desc, count(cm.user_id) desc, c.name`;
-    return { chosen: false as const, companies: rows.map((r) => ({ id: asNum(r.id), name: r.name, city: r.city, logoUrl: withRealCrest(r.logo_url, r.fitast_name, r.name), color: r.color, members: asNum(r.members), fitastName: r.fitast_name ?? "" })), homeId: home };
+    const list = rows.map((r) => ({ id: asNum(r.id), ...cleanCompanyNames(r.name, r.fitast_name), city: r.city, logoUrl: withRealCrest(r.logo_url, r.fitast_name, r.name), color: r.color, members: asNum(r.members) }));
+    return { chosen: false as const, companies: list.filter((c) => c.members > 0 || !GARBLED_NAME.test(c.name)), homeId: home };
   });
 
 /**
@@ -352,5 +355,5 @@ export const companyCrests = createServerFn({ method: "GET" })
     const mine = await myMembership(sql, context.userId);
     const rows = await sql<{ id: number; name: string; logo_url: string | null; fitast_name: string | null; color: string }>`
       select id, name, logo_url, fitast_name, color from companies order by id`;
-    return { mine: mine.companyId, crests: rows.map((r) => ({ id: asNum(r.id), name: r.name, logoUrl: withRealCrest(r.logo_url, r.fitast_name, r.name), color: r.color })) };
+    return { mine: mine.companyId, crests: rows.map((r) => ({ id: asNum(r.id), name: cleanCompanyNames(r.name, r.fitast_name).name, logoUrl: withRealCrest(r.logo_url, r.fitast_name, r.name), color: r.color })) };
   });

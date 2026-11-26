@@ -142,7 +142,9 @@ export async function syncStandings(opts: { onProgress: (p: SyncProgress) => voi
       if (done.has(k)) continue;
       done.add(k);
       const p = await read(r);
-      if (!p || (garaIdOf(p) && garaIdOf(p) !== id)) continue;
+      if (!p) continue;
+      // un'altra gara: solo se la pagina dice un altro numero e non è stata chiesta con il nostro
+      if (garaIdOf(p) && garaIdOf(p) !== id && !r.url.includes(`=${id}`) && !p.url.includes(`=${id}`)) continue;
       const rows = piazzoleRows(p);
       if (!rows.length) {
         // com'è fatta la pagina (solo titoli delle colonne e conteggi), per capire cosa manca

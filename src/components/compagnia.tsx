@@ -306,7 +306,8 @@ export function CompanyLeague({ board, onJoin, busy, onSynced, part, fitastBoard
     let off = false;
     syncFitastCompanies({ data: {} })
       .then((r) => {
-        if (!off && r.added > 0) onSynced?.();
+        // compagnie nuove o nomi corretti: si rilegge l'elenco
+        if (!off && (r.added > 0 || (r.fixed ?? 0) > 0 || (r.removed ?? 0) > 0)) onSynced?.();
       })
       .catch(() => undefined);
     return () => {
@@ -340,8 +341,9 @@ export function CompanyLeague({ board, onJoin, busy, onSynced, part, fitastBoard
     setSync({ busy: true, text: "" });
     try {
       const r = await syncFitastCompanies({ data: { force: true } });
-      setSync({ busy: false, text: r.total ? `Elenco FITAST letto: ${r.total} compagnie, ${r.added} nuove, ${r.linked} già nell'app.` : `Elenco FITAST non letto.${r.diag.length ? ` Dettagli: ${r.diag.join(" | ")}` : ""}` });
-      if (r.added > 0) onSynced?.();
+      const fix = (r.fixed ?? 0) || (r.removed ?? 0) ? ` Nomi corretti: ${r.fixed ?? 0}, doppioni tolti: ${r.removed ?? 0}.` : "";
+      setSync({ busy: false, text: r.total ? `Elenco FITAST letto: ${r.total} compagnie, ${r.added} nuove, ${r.linked} già nell'app.${fix}` : `Elenco FITAST non letto.${fix}${r.diag.length ? ` Dettagli: ${r.diag.join(" | ")}` : ""}` });
+      if (r.added > 0 || (r.fixed ?? 0) > 0 || (r.removed ?? 0) > 0) onSynced?.();
     } catch (e) {
       setSync({ busy: false, text: e instanceof Error ? e.message : "Non riuscito" });
     }
@@ -740,7 +742,7 @@ export function CompanyWelcome() {
           setW(res);
           // le compagnie del portale FITAST: se l'elenco è da preparare o da rinfrescare, arrivano subito dopo
           syncFitastCompanies({ data: {} })
-            .then((sync) => (sync.added > 0 && !off ? companyWelcome().then((again) => !off && !again.chosen && setW(again)) : undefined))
+            .then((sync) => ((sync.added > 0 || (sync.fixed ?? 0) > 0 || (sync.removed ?? 0) > 0) && !off ? companyWelcome().then((again) => !off && !again.chosen && setW(again)) : undefined))
             .catch(() => undefined);
         }
       })

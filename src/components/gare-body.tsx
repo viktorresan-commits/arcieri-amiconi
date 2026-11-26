@@ -67,6 +67,8 @@ type Comp = {
   virtual?: boolean;
   /** con chi si era in piazzola: dai cartellini letti dalla foto e dall'elenco delle piazzole del portale */
   group?: { piazzola: number; mates: Mate[] } | null;
+  /** l'elenco delle piazzole del portale per questa gara */
+  pzInfo?: { read: boolean; people: number; mine: number | null; lanes: number } | null;
 };
 type Mate = { name: string; team: string; lanes: { p: number; arrows: number[] }[] | null; total: number | null; spots: number | null; place: number | null; category: string; camp: number | null; size: number };
 
@@ -305,7 +307,7 @@ export function GareBody({ embedded = false, league }: { embedded?: boolean; /**
                   {...fold("piazzole", true)}
                 >
                   <Fold icon="team" title={past ? "Con te in piazzola" : "Tirerai con"} sub={mates.length ? mates.map((m) => m.name.split(" ")[0]).slice(0, 4).join(", ") + (mates.length > 4 ? "…" : "") : "dal portale o dal cartellino"} inner {...fold("mates", true)}>
-                    {mates.length ? <PiazzolaMates group={comp.group as { piazzola: number; mates: Mate[] }} past={past} /> : <p className="text-xs text-muted">Ancora nessuno: in Campionato premi «Aggiorna dal portale» (legge l'elenco delle piazzole della FITAST) oppure fotografa il cartellino qui sotto.</p>}
+                    {mates.length ? <PiazzolaMates group={comp.group as { piazzola: number; mates: Mate[] }} past={past} /> : <p className="text-xs text-muted">{pzWhy(comp)}</p>}
                   </Fold>
                   {past && ask ? (
                     <Fold icon="scorecard" title={ownScore ? "Punti piazzola per piazzola" : mine?.portal === "solo" ? "Aggiungi le piazzole" : "Metti il punteggio"} sub={lanesSet ? `${lanesSet} piazzole · tocca per modificare` : "a mano, freccia per freccia"} inner {...fold("lanes", false)}>
@@ -495,6 +497,16 @@ function Roster({ tab, people, also = false }: { tab: "past" | "next"; people: C
 const noCrest = (): Crest | null => null;
 
 /** con chi si era in piazzola: il loro risultato e, se c'è il cartellino, le piazzole una per una */
+/** perché «Con te in piazzola» è vuoto: cosa sa l'app dell'elenco delle piazzole del portale */
+function pzWhy(comp: Comp) {
+  const pz = comp.pzInfo;
+  const mine = comp.group?.piazzola || null;
+  if (!comp.fitast?.garaId && !pz) return "Questa gara non è collegata a una gara del portale FITAST: fotografa il cartellino qui sotto, oppure collegala dalla gara.";
+  if (!pz?.read) return "L'elenco delle piazzole di questa gara non è ancora arrivato dal portale. In Campionato premi «Aggiorna dal portale»: alla fine una riga dice per quante gare le ha trovate. Intanto puoi fotografare il cartellino qui sotto.";
+  if (pz.mine == null && !mine) return `Elenco delle piazzole letto (${pz.people} arcieri, ${pz.lanes} piazzole), ma non trovo il tuo nome: collega il tuo nome FITAST nel Profilo.`;
+  return `Elenco delle piazzole letto (${pz.people} arcieri, ${pz.lanes} piazzole): nella piazzola ${pz.mine ?? mine} non risulta nessun altro.${pz.mine != null && mine && pz.mine !== mine ? ` Sul cartellino hai la ${mine}, sul portale la ${pz.mine}.` : ""}`;
+}
+
 function PiazzolaMates({ group, past }: { group: { piazzola: number; mates: Mate[] }; past: boolean }) {
   const [open, setOpen] = useState<string | null>(null);
   return (

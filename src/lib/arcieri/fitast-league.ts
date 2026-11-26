@@ -164,12 +164,32 @@ export function parseCompanyText(raw: string, lines?: Set<string>): CompanyText 
       }
       out.name = name;
       out.address = addr;
-    } else out.name = head;
+    } else {
+      // nome tutto maiuscolo e indirizzo scritto normale («ARCIERI STORICI Monte Santo n.6»): si divide dove cambia
+      const words = head.split(" ");
+      const at = words.findIndex((w) => /\p{Ll}/u.test(w) && !/^(d|l|dell|dall|nell|sull)['’]/i.test(w));
+      const upper = at >= 2 ? words.slice(0, at).join(" ") : "";
+      if (upper && upper === upper.toUpperCase() && goodCompanyName(upper) && /\d|\bsnc\b/i.test(words.slice(at).join(" "))) {
+        out.name = upper;
+        out.address = words.slice(at).join(" ");
+      } else out.name = head;
+    }
   }
   if (!out.address) out.address = parts.slice(1).find((x) => ADDRESS_RE.test(x) || /\d/.test(x)) ?? "";
   out.name = out.name.replace(/[\s.,;:-]+$/, "").replace(/\s+/g, " ").trim().slice(0, 90);
   out.address = out.address.replace(/\s+/g, " ").trim().slice(0, 160);
   return out;
+}
+
+/** nome salvato con pezzi della scheda dentro («Idimm Regione: Tel e Fax:», «06/024 A.s.d. …») */
+export const GARBLED_NAME = /\bID\s*_?IMM|\bRegione\b|\bTel\s*e\s*Fax\b|\bE-?mail\b|^\s*\d{2}\s?\/\s?\d{3}\s/i;
+
+/** il nome da mostrare e quello FITAST, puliti anche se nel database c'è ancora il nome rotto */
+export function cleanCompanyNames(name: string, fitastName: string | null | undefined) {
+  if (!GARBLED_NAME.test(name) && !GARBLED_NAME.test(fitastName ?? "")) return { name, fitastName: fitastName ?? "" };
+  const p = parseCompanyText(fitastName || name);
+  if (!goodCompanyName(p.name)) return { name, fitastName: fitastName ?? "" };
+  return { name: titleName(p.name).slice(0, 70), fitastName: p.name };
 }
 
 /** un nome di compagnia vero: lettere, non un'etichetta, un indirizzo o un contatto */

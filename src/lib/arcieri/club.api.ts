@@ -593,6 +593,13 @@ export const listCompetitions = createServerFn({ method: "GET" })
       }
       return { piazzola, mates: [...mates.values()].sort((a, b) => (b.total ?? -1) - (a.total ?? -1) || a.name.localeCompare(b.name, "it")) };
     };
+    /** l'elenco delle piazzole del portale per questa gara: letto o no, quanti arcieri, la mia piazzola lì */
+    const pzInfoOf = (garaId: string) => {
+      if (!garaId) return null;
+      const people = peopleOf(pzTables.filter((t) => t.gara_id === garaId));
+      const me = meWho && people.length ? matchPerson(people, meWho) : null;
+      return { read: people.length > 0, people: people.length, mine: me ? me.p.entries[0]?.place ?? null : null, lanes: new Set(people.map((p) => p.entries[0]?.place).filter((x) => x != null)).size };
+    };
     const memberOf = (userId: string) => members.find((m) => m.user_id === userId);
     const face = (userId: string) => {
       const m = memberOf(userId);
@@ -719,6 +726,7 @@ export const listCompetitions = createServerFn({ method: "GET" })
         fitast: fitastOf(garaId),
         /** con chi si era in piazzola (cartellini e portale) */
         group: groupOf(asNum(c.id), garaId),
+        pzInfo: pzInfoOf(garaId),
         /** solo dal portale: nessuna gara nell'app (niente presenza né punteggio da segnare) */
         virtual: false,
       };
@@ -747,6 +755,7 @@ export const listCompetitions = createServerFn({ method: "GET" })
         entries: entriesOf(id, garaId),
         fitast: fitastOf(garaId),
         group: groupOf(id, garaId),
+        pzInfo: pzInfoOf(garaId),
         virtual: true,
       });
     }
@@ -970,22 +979,18 @@ export function champSeasonOf(day: string) {
 
 /** i numeri di un arciere che si vedono sul profilo e nel confronto: gare, campionato, allenamenti, avatar */
 async function archerStats(sql: Awaited<ReturnType<typeof db>>, userId: string, who: { fullName: string; givenName: string; nickname: string; fitastName: string; team: string }, xp: number, gen: GenTable[]) {
-  const entries = await sql<{ name: string; starts_on: string; score: number | null; rank: number | null; category: string; championship_points: number | null; spot: number | null }>`
-    select c.name, c.starts_on::text as starts_on, e.score, e.rank, e.category, e.championship_points, e.spot
-    from competition_entries e
-    join competitions c on c.id = e.competition_id
-    where e.user_id = ${userId} and (e.score is not null or e.rank is not null or e.championship_points is not null)
-    order by c.starts_on`;
+  // le gare fatte: risultati segnati nell'app, classifiche del portale FITAST e gare con «Ho partecipato»
+  const loads = ((await garaLoads(sql, userId)).get(userId) ?? []).sort((a, b) => a.day.localeCompare(b.day));
   const today = new Date().toISOString().slice(0, 10);
   const season = champSeasonOf(today);
-  const gare = entries.map((e) => ({
-    name: e.name,
-    day: String(e.starts_on).slice(0, 10),
-    score: asNumOrNull(e.score),
-    rank: asNumOrNull(e.rank),
-    category: divisionOf(e.category ?? "") || "",
-    champ: asNumOrNull(e.championship_points),
-    spot: asNumOrNull(e.spot),
+  const gare = loads.map((g) => ({
+    name: g.name,
+    day: g.day,
+    score: g.points,
+    rank: g.rank,
+    category: divisionOf(g.category ?? "") || "",
+    champ: g.champ,
+    spot: g.spot,
   }));
   const done = gare.filter((g) => g.day <= today);
   const inSeason = done.filter((g) => g.day >= season.from && g.day <= season.to);
@@ -999,7 +1004,7 @@ async function archerStats(sql: Awaited<ReturnType<typeof db>>, userId: string, 
   const trainArrows = real.reduce((sum, x) => sum + asNum(x.arrows), 0);
   const trainPoints = real.reduce((sum, x) => sum + asNum(x.points), 0);
   // le gare contano sempre: piazzole e frecce dal cartellino, dalle piazzole inserite o stimate (20 piazzole × 3 frecce)
-  const vol = sumLoads((await garaLoads(sql, userId)).get(userId));
+  const vol = sumLoads(loads);
   const arrows = trainArrows + vol.arrows;
   const avgArrows = trainArrows + vol.pointArrows;
   const game = await sql<{ rounds: number; best: number; max_points: number }>`
