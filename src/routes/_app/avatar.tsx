@@ -280,23 +280,30 @@ function hslToHex(h: number, s: number, l: number) {
 /** colore libero con tre barre (tinta, intensità, luce) e qualche colore pronto sotto */
 function Tint({ value, onPick, quick }: { value: string; onPick: (c: string) => void; quick?: string[] }) {
   const { h, s, l } = hexToHsl(value || "#777777");
+  // tre barre ben distanziate, ognuna col suo nome: si prendono col dito senza toccare quella vicina
+  const bars: { label: string; input: ReactNode }[] = [
+    { label: "Tinta", input: <input aria-label="Tinta" type="range" min={0} max={359} value={h} onChange={(e) => onPick(hslToHex(Number(e.target.value), Math.max(s, 18), l))} className="aa-range aa-range-hue" /> },
+    { label: "Intensità", input: <input aria-label="Intensità" type="range" min={0} max={100} value={s} onChange={(e) => onPick(hslToHex(h, Number(e.target.value), l))} className="aa-range" style={{ ["--track" as string]: `linear-gradient(90deg, ${hslToHex(h, 0, l)}, ${hslToHex(h, 100, l)})` }} /> },
+    { label: "Chiaro o scuro", input: <input aria-label="Chiaro o scuro" type="range" min={4} max={96} value={l} onChange={(e) => onPick(hslToHex(h, s, Number(e.target.value)))} className="aa-range" style={{ ["--track" as string]: `linear-gradient(90deg, #000, ${hslToHex(h, s, 50)}, #fff)` }} /> },
+  ];
   return (
-    <div className="grid gap-2 rounded-2xl bg-white/[0.03] p-2.5">
-      <div className="flex items-center gap-2.5">
-        <span className="h-9 w-9 shrink-0 rounded-full border-2 border-white/70 shadow-[0_0_0_2px_rgba(0,0,0,.35)]" style={{ background: value }} />
-        <div className="grid flex-1 gap-1.5">
-          <input aria-label="Tinta" type="range" min={0} max={359} value={h} onChange={(e) => onPick(hslToHex(Number(e.target.value), Math.max(s, 18), l))} className="aa-range aa-range-hue" />
-          <input aria-label="Intensità" type="range" min={0} max={100} value={s} onChange={(e) => onPick(hslToHex(h, Number(e.target.value), l))} className="aa-range" style={{ background: `linear-gradient(90deg, ${hslToHex(h, 0, l)}, ${hslToHex(h, 100, l)})` }} />
-          <input aria-label="Chiaro o scuro" type="range" min={4} max={96} value={l} onChange={(e) => onPick(hslToHex(h, s, Number(e.target.value)))} className="aa-range" style={{ background: `linear-gradient(90deg, #000, ${hslToHex(h, s, 50)}, #fff)` }} />
-        </div>
+    <div className="grid gap-2 rounded-2xl bg-white/[0.03] p-3">
+      <div className="flex items-center gap-3">
+        <span className="h-10 w-10 shrink-0 rounded-full border-2 border-white/70 shadow-[0_0_0_2px_rgba(0,0,0,.35)]" style={{ background: value }} />
+        {quick ? (
+          <div className="-my-1 flex flex-1 gap-2 overflow-x-auto py-1 [scrollbar-width:none]">
+            {quick.filter(Boolean).map((c) => (
+              <button key={c} type="button" aria-label={c} onClick={() => onPick(c)} className={`h-8 w-8 shrink-0 rounded-full border-2 ${value === c ? "border-white" : "border-transparent"}`} style={{ background: c }} />
+            ))}
+          </div>
+        ) : <span className="text-xs text-muted">Scegli il colore con le barre</span>}
       </div>
-      {quick ? (
-        <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none]">
-          {quick.filter(Boolean).map((c) => (
-            <button key={c} type="button" aria-label={c} onClick={() => onPick(c)} className={`h-7 w-7 shrink-0 rounded-full border-2 ${value === c ? "border-white" : "border-transparent"}`} style={{ background: c }} />
-          ))}
-        </div>
-      ) : null}
+      {bars.map((b) => (
+        <label key={b.label} className="grid">
+          <span className="text-[0.68rem] font-semibold uppercase tracking-wide text-muted">{b.label}</span>
+          {b.input}
+        </label>
+      ))}
     </div>
   );
 }
