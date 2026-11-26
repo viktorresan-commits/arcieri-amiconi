@@ -447,13 +447,43 @@ const NAME_LIKE = (t: string) => /^[\p{L}'’.\- ]{5,60}$/u.test(t) && t.trim().
  * (Piazzola · Arciere · Compagnia, anche Cognome e Nome separati) e l'elenco a gruppi («PIAZZOLA 11»
  * e sotto gli arcieri), in tabella o in righe di testo.
  */
+/** il nome dell'arciere senza i ruoli scritti accanto («STEFANO PIOLI - CAPOGRUPPO -», «… ISTRUTTORE CAPOGRUPPO») */
+export function pzName(s: string) {
+  return clean(
+    s
+      .replace(/\b(capo\s*-?\s*gruppo|capogr\.?|istruttore|istr\.)/gi, " ")
+      .replace(/[\s\-–(]+\)?\s*$/, "")
+      .replace(/^[\s\-–]+/, "")
+      .replace(/\s+[-–]\s+(?=[-–]|$)/g, " "),
+  );
+}
+
+/** solo i nomi (e la compagnia) di una tabella di arcieri, senza il numero della piazzola */
+export function namesOnly(page: FitastPage, limit = 60): Omit<RankRow, "place">[] {
+  for (const t of [...page.tables].sort((a, b) => b.rows.length - a.rows.length)) {
+    if (t.rows.length < 2) continue;
+    const head = t.rows[0].map((c) => clean(c.text));
+    const nameCol = head.findIndex((h) => /arcier|atleta|nominativ|cognome/i.test(h));
+    const teamCol = head.findIndex((h) => /compagn|societ|squadr/i.test(h));
+    if (nameCol < 0) continue;
+    const out = t.rows
+      .slice(1)
+      .map((r) => ({ name: pzName(r[nameCol]?.text ?? ""), team: teamCol >= 0 ? clean(r[teamCol]?.text ?? "") : "", score: null, camp: null }))
+      .filter((r) => r.name && !/^\d+$/.test(r.name))
+      .slice(0, limit);
+    if (out.length) return out;
+  }
+  return [];
+}
+
 export function piazzoleRows(page: FitastPage, limit = 600): RankRow[] {
   const tables = [...page.tables].sort((a, b) => b.rows.length - a.rows.length);
   for (const t of tables) {
     if (t.rows.length < 3) continue;
     const head = t.rows[0].map((c) => clean(c.text));
     const col = (re: RegExp) => head.findIndex((h) => re.test(h));
-    const pzCol = col(/piazz|grupp|paglion|bersagl|turn|linea/i);
+    // «Piazzola» prima di tutto: «Capogruppo» contiene «gruppo» ma è un'altra cosa
+    const pzCol = [col(/piazz/i), col(/paglion|bersagl|linea/i), col(/^(gruppo|grp|turno)\b/i)].find((k) => k >= 0) ?? -1;
     const surCol = col(/^cognome$/i);
     const firstCol = col(/^nome$/i);
     const nameCol = col(/arcier|atleta|cognome|nominativ|^nome/i);
@@ -463,7 +493,7 @@ export function piazzoleRows(page: FitastPage, limit = 600): RankRow[] {
     let last: number | null = null;
     for (const r of t.rows.slice(1)) {
       // cognome e nome in due colonne: si rimettono insieme
-      const name = surCol >= 0 && firstCol >= 0 && surCol !== firstCol ? clean(`${r[surCol]?.text ?? ""} ${r[firstCol]?.text ?? ""}`) : clean(r[nameCol]?.text ?? "");
+      const name = pzName(surCol >= 0 && firstCol >= 0 && surCol !== firstCol ? `${r[surCol]?.text ?? ""} ${r[firstCol]?.text ?? ""}` : r[nameCol]?.text ?? "");
       // la piazzola a volte è scritta solo sulla prima riga del gruppo
       const pz = numIt(r[pzCol]?.text ?? "");
       if (pz != null && Number.isFinite(pz)) last = Math.round(pz);

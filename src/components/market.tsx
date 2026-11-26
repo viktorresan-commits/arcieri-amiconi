@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { addMarketMedia, deleteMarketItem, getMarketItem, getMarketVideo, listMarket, removeMarketMedia, saveMarketItem, setMarketStatus, type MarketItem, type MarketScope, type MarketStatus } from "@/lib/arcieri/market.api";
 import { compressPhoto, compressVideo, thumbOf } from "@/lib/arcieri/media-compress";
 import { CATEGORIES, categoryLabel, euro, parseEuro } from "@/lib/arcieri/labels";
@@ -142,17 +143,27 @@ function MarketCard({ item, onOpen }: { item: MarketItem; onOpen: () => void }) 
 }
 
 function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
-  return (
-    <div className="fixed inset-0 z-50 grid items-end bg-black/60 sm:place-items-center" role="dialog" aria-modal="true" aria-label={title}>
+  // sul corpo della pagina: dentro la sezione animata il foglio finirebbe sotto la barra delle sezioni
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div className="fixed inset-0 z-[70] grid items-end bg-black/60 backdrop-blur-[2px] sm:place-items-center" role="dialog" aria-modal="true" aria-label={title}>
       <button type="button" className="absolute inset-0" aria-label="Chiudi" onClick={onClose} />
-      <div className="relative grid max-h-[92vh] w-full gap-3 overflow-y-auto rounded-t-3xl border border-line bg-bg p-4 pb-8 sm:max-w-lg sm:rounded-3xl">
+      <div className="relative grid max-h-[92dvh] w-full gap-3 overflow-y-auto overscroll-contain rounded-t-3xl border border-line bg-bg p-4 pb-[calc(env(safe-area-inset-bottom)+2rem)] sm:max-w-lg sm:rounded-3xl">
         <div className="flex items-center justify-between gap-2">
           <p className="min-w-0 truncate font-display text-xl">{title}</p>
           <button type="button" onClick={onClose} aria-label="Chiudi" className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-line"><Glyph name="close" size={16} /></button>
         </div>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

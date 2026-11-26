@@ -7,8 +7,8 @@
 import { FITAST_HOME, fitastRead } from "./fitast.api";
 import type { FitastPage } from "./fitast-parse";
 import { classificaUrl, cleanTitle, titleScore, findGare, garaDateOf, garaIdOf, garaTitleOf, rowFields, seasonRange, seasonSelect, type Gara } from "./fitast-gare";
-import { currentTexts, filterCombos, pressReq, type Req } from "./fitast-nav";
-import { piazzoleRows, rankingRows, SQUADRE_PAGES, type RankRow } from "./fitast-league";
+import { currentTexts, FILTER_BUTTON, filterCombos, pressReq, type Req } from "./fitast-nav";
+import { namesOnly, piazzoleRows, rankingRows, SQUADRE_PAGES, type RankRow } from "./fitast-league";
 import { saveFitastStandings, type StandingKind } from "./fitast-league.api";
 
 export type SyncProgress = { step: string; pages: number; saved: number; diag?: string[]; done?: boolean; error?: string; /** a fine giro: cosa si è letto delle piazzole */ note?: string };
@@ -17,6 +17,28 @@ type Item = { kind: StandingKind; season: string; seasonName: string; garaId: st
 const isoDay = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const short = (t: string) => t.split(" - ").pop()?.trim() ?? t;
 const MAX_PAGES = 360;
+/** la pagina del portale con l'elenco delle piazzole di una gara (P1 = numero della gara) */
+const PZ_PAGE = "pagView-Piazzole.awp";
+/** pagine al massimo per le piazzole di una gara (una per piazzola, il portale ne mostra una alla volta) */
+const PZ_MAX = 50;
+
+/** il numero della gara di una pagina delle piazzole: dall'indirizzo (P1=…) o dal titolo («… 3D2472», «Gara_da_configurare2489») */
+function pzGaraOf(p: FitastPage): string {
+  const u = /[?&]P1=(\d{3,6})\b/i.exec(p.url)?.[1];
+  if (u) return u;
+  const id = garaIdOf(p);
+  if (id) return id;
+  for (const l of p.lines.slice(0, 14)) {
+    const t = l.trim();
+    if (!/gara/i.test(t) || /\d{1,2}\/\d{1,2}\/\d{2,4}/.test(t)) continue;
+    const m = /(\d{3,6})\s*$/.exec(t);
+    if (m && !(Number(m[1]) >= 1990 && Number(m[1]) <= 2100)) return m[1];
+  }
+  return "";
+}
+
+const isNum = (t: string) => /^\s*(?:piazzola|pz\.?|n\.?|nr\.?|turno)?\s*\d{1,3}\s*$/i.test(t);
+const isAll = (t: string) => /^\s*$|^\s*[-–*]+\s*$|tutt|qualsias|^all$|seleziona|scegli/i.test(t);
 
 function learnedIds(): Record<string, string> {
   try {
@@ -146,14 +168,100 @@ export async function syncStandings(opts: { onProgress: (p: SyncProgress) => voi
     }
     return null;
   };
+  /** le tendine della pagina delle piazzole: Piazzola (una alla volta), Turno, e il pulsante CERCA */
+  const pzControls = (p: FitastPage) => {
+    const form = p.form;
+    if (!form) return null;
+    const sels = form.selects;
+    const numeric = (x: (typeof sels)[number]) => x.options.filter((o) => isNum(o.text)).length;
+    const turn = sels.find((x) => /turn/i.test(x.label)) ?? null;
+    const pz =
+      sels.find((x) => /piazz|paglion|bersagl/i.test(x.label)) ??
+      sels.filter((x) => x !== turn && !/categ|tipolog|classe|divisi|arco|sesso/i.test(x.label) && numeric(x) >= 3 && numeric(x) >= x.options.length * 0.6).sort((a, b) => numeric(b) - numeric(a))[0] ??
+      null;
+    const input = pz ? null : (form.inputs ?? []).find((x) => /piazz/i.test(x.label)) ?? null;
+    const btn = form.buttons.find((b) => FILTER_BUTTON.test(b.label.trim())) ?? null;
+    const now: Record<string, string> = Object.fromEntries(sels.map((x) => [x.name, (x.options.find((o) => o.selected) ?? x.options[0])?.value ?? ""]));
+    return { pz, turn, input, btn, now, sels };
+  };
+  // una piazzola alla volta solo per le gare più vicine: le due appena fatte e le prossime tre
+  const pzDeep = { past: 0, next: 0 };
+  /**
+   * Tutte le piazzole di una gara dalla sua pagina: quelle già mostrate, poi «tutte» se il portale lo permette,
+   * altrimenti una piazzola alla volta con CERCA (come si fa a mano), e per ogni turno.
+   */
+  const pzHarvest = async (id: string, p0: FitastPage, day: string): Promise<RankRow[]> => {
+    const got = new Map<string, RankRow>();
+    const add = (rows: RankRow[]) => {
+      for (const r of rows) got.set(`${r.place}|${r.name}`, r);
+    };
+    const places = () => new Set([...got.values()].map((r) => r.place)).size;
+    add(piazzoleRows(p0));
+    const c = pzControls(p0);
+    if (!c || !c.btn || (!c.pz && !c.input)) {
+      if (!got.size && pzStats.seen.length < 3) {
+        const sels = (p0.form?.selects ?? []).map((x) => `${x.label || x.name} (${x.options.length})`).join(", ");
+        pzStats.seen.push(`${PZ_PAGE}?P1=${id} → tendine: ${sels || "nessuna"} · CERCA ${c?.btn ? "sì" : "no"}`);
+      }
+      return [...got.values()];
+    }
+    // già tutte (più piazzole nella stessa pagina): basta
+    if (places() >= 2) return [...got.values()];
+    const btn = c.btn;
+    const press = async (choose: Record<string, string>, label: string, pzNum: number | null = null) => {
+      if (opts.stop()) return 0;
+      const q = await read(pressReq(p0, btn, { ...c.now, ...choose }, label));
+      if (!q || (pzGaraOf(q) && pzGaraOf(q) !== id)) return 0;
+      let rows = piazzoleRows(q);
+      // la pagina di una sola piazzola a volte non ripete il numero: si prende quello scelto
+      if (!rows.length && pzNum != null) rows = namesOnly(q).map((r) => ({ ...r, place: pzNum }));
+      add(rows);
+      return rows.length;
+    };
+    // turni: «tutti» se c'è, altrimenti ognuno (di solito 1 o 2)
+    const tAll = c.turn?.options.find((o) => isAll(o.text));
+    const tNums = c.turn ? c.turn.options.filter((o) => isNum(o.text)).slice(0, 3).map((o) => o.value) : [];
+    const turns = tAll ? [tAll.value] : tNums.length ? tNums : [""];
+    const turnSet = (v: string) => (c.turn && v !== "" ? { [c.turn.name]: v } : c.turn ? { [c.turn.name]: c.now[c.turn.name] ?? "" } : {});
+    // prima «tutte le piazzole», se la tendina lo offre
+    const all = c.pz?.options.find((o) => isAll(o.text));
+    if (c.pz && all) {
+      for (const t of turns) await press({ [c.pz.name]: all.value, ...turnSet(t) }, `${step} · tutte`);
+      if (places() >= 2) return [...got.values()];
+    }
+    // poi una alla volta: solo per poche gare (le più vicine), le pagine lette hanno un limite
+    const future = Boolean(day) && day > today;
+    if (future ? pzDeep.next >= 3 : pzDeep.past >= 2) return [...got.values()];
+    if (future) pzDeep.next++;
+    else pzDeep.past++;
+    let spent = 0;
+    const values = c.pz ? c.pz.options.filter((o) => isNum(o.text)).map((o) => ({ v: o.value, t: o.text.trim() })) : Array.from({ length: 40 }, (_, k) => ({ v: String(k + 1), t: String(k + 1) }));
+    for (const [ti, t] of turns.entries()) {
+      let empty = 0;
+      let found = 0;
+      for (const o of values) {
+        if (opts.stop() || spent >= PZ_MAX || pages >= MAX_PAGES) break;
+        spent++;
+        const field = c.pz ? c.pz.name : c.input!.name;
+        const n = await press({ [field]: o.v, ...turnSet(t) }, `${step} · piazzola ${o.t}${turns.length > 1 ? ` · turno ${ti + 1}` : ""}`, Number(/\d+/.exec(o.t)?.[0] ?? NaN) || null);
+        found += n;
+        empty = n ? 0 : empty + 1;
+        // a mano (campo di testo) ci si ferma dopo tre piazzole vuote di fila; un secondo turno vuoto non si gira tutto
+        if (!c.pz && empty >= 3 && got.size) break;
+        if (ti > 0 && !found && empty >= 3) break;
+      }
+    }
+    if (!got.size && pzStats.seen.length < 3) pzStats.seen.push(`${PZ_PAGE}?P1=${id} → ${spent} piazzole provate con CERCA, nessun nome · ${(p0.diag ?? []).slice(0, 2).join(" · ")}`);
+    return [...got.values()];
+  };
   const piazzole = async (id: string, gara: { id: string; title: string; day: string }, referer: string, g?: Gara, page?: FitastPage | null) => {
     if (opts.stop()) return;
     step = `${gara.title || "Gara"} · piazzole`;
     pzStats.tried++;
     const reqs: Req[] = [];
-    // la pagina delle piazzole: quella che ha funzionato l'ultima volta, poi quelle nominate dal portale
-    // (pagina iniziale, campionato, pagina della gara) e i link della gara con il numero dentro
-    const names = [...new Set([pzName, ...(home.awp ?? []), ...(base.awp ?? []), ...(page?.awp ?? [])].filter((x) => x && /piazz/i.test(x)))];
+    // la pagina delle piazzole della gara, per numero: quella del portale, poi quella che ha funzionato l'ultima
+    // volta e quelle nominate dal portale (pagina iniziale, campionato, pagina della gara)
+    const names = [...new Set([PZ_PAGE, pzName, ...(home.awp ?? []), ...(base.awp ?? []), ...(page?.awp ?? [])].filter((x) => x && /piazz/i.test(x)))];
     for (const name of names.slice(0, 4)) reqs.push({ url: new URL(`${name}?P1=${id}`, FITAST_HOME).toString(), referer, label: step });
     for (const ref of (page?.refs ?? []).filter((x) => /piazz/i.test(x)).slice(0, 2)) reqs.push({ url: ref, referer, label: step });
     for (const l of (page?.links ?? []).filter((x) => /piazz/i.test(`${x.text} ${x.href}`) && x.href).slice(0, 2)) reqs.push({ url: l.href, referer, label: step });
@@ -168,7 +276,7 @@ export async function syncStandings(opts: { onProgress: (p: SyncProgress) => voi
       const sel = await probeRow();
       if (sel) {
         const r = pressReq(base, pzBtn, { ...choose, [sel.field]: String(rowIdx(g) + sel.shift), ...selOf(base, sel.field) }, step);
-        if (r) reqs.unshift(r);
+        if (r) reqs.push(r);
       }
       const row = g.alts.find((a) => a.kind === "row" && a.alias);
       if (row && row.kind === "row" && row.alias && row.alias !== sel?.field) {
@@ -186,6 +294,7 @@ export async function syncStandings(opts: { onProgress: (p: SyncProgress) => voi
       }
     }
     const done = new Set<string>();
+    const other = new Set<string>();
     for (const r of reqs) {
       if (opts.stop()) return;
       const k = `${r.url}|${JSON.stringify(r.post ?? "")}`;
@@ -193,9 +302,13 @@ export async function syncStandings(opts: { onProgress: (p: SyncProgress) => voi
       done.add(k);
       const p = await read(r);
       if (!p) continue;
-      // un'altra gara: solo se la pagina dice un altro numero e non è stata chiesta con il nostro
-      if (garaIdOf(p) && garaIdOf(p) !== id && !r.url.includes(`=${id}`) && !p.url.includes(`=${id}`)) continue;
-      const rows = piazzoleRows(p);
+      // la pagina di un'altra gara (es. premendo PIAZZOLE sull'elenco si apre la gara sbagliata): si scarta
+      const shown = pzGaraOf(p);
+      if (shown && shown !== id) {
+        other.add(shown);
+        continue;
+      }
+      const rows = /piazz/i.test(`${p.url} ${p.title}`) ? await pzHarvest(id, p, gara.day) : piazzoleRows(p);
       if (!rows.length) {
         // com'è fatta la pagina (solo titoli delle colonne e conteggi), per capire cosa manca
         const heads = p.tables.slice(0, 3).map((t) => `${t.rows.length}r:${t.rows[0]?.map((c) => c.text.slice(0, 14)).join("/") ?? ""}`).join(" ; ");
@@ -219,8 +332,10 @@ export async function syncStandings(opts: { onProgress: (p: SyncProgress) => voi
       pzStats.read++;
       pzStats.people += rows.length;
       pending.push({ kind: "gara-piazzole", season, seasonName, garaId: gara.id, garaTitle: gara.title, day: gara.day, category: "Piazzole", rows });
+      await flush();
       return;
     }
+    if (other.size && pzStats.seen.length < 3) pzStats.seen.push(`gara ${id}: il portale ha aperto ${[...other].join(", ")} (scartata)`);
   };
 
   // classifiche generali del campionato: compagnie e arcieri

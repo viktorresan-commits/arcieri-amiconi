@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link } from "@tanstack/react-router";
 import { saveEquipment, type listEquipment } from "@/lib/arcieri/club.api";
 import { readProductPage, type ProductPage } from "@/lib/arcieri/gear-specs.api";
@@ -120,10 +121,12 @@ export function GearSpecSheet({ item, gear, onClose, onSaved }: { item: GearItem
     setMsg(item.category === "arco" ? "Ora è il tuo arco principale: FOC, balistica, spine e consigli partono da questo." : "Ora sono le tue frecce principali: FOC, balistica e consigli partono da queste.");
   }
 
-  return (
-    <div className="fixed inset-0 z-50 grid items-end bg-black/60 sm:place-items-center" role="dialog" aria-modal="true" aria-label={`Specifiche di ${item.name}`}>
+  if (typeof document === "undefined") return null;
+  // sul corpo della pagina: dentro una sezione animata il foglio finirebbe sotto le barre
+  return createPortal(
+    <div className="fixed inset-0 z-[70] grid items-end bg-black/60 backdrop-blur-[2px] sm:place-items-center" role="dialog" aria-modal="true" aria-label={`Specifiche di ${item.name}`}>
       <button type="button" className="absolute inset-0" aria-label="Chiudi" onClick={onClose} />
-      <div className="relative grid max-h-[92vh] w-full gap-3 overflow-y-auto rounded-t-3xl border border-line bg-bg p-4 pb-8 sm:max-w-lg sm:rounded-3xl">
+      <div className="relative grid max-h-[92dvh] w-full gap-3 overflow-y-auto overscroll-contain rounded-t-3xl border border-line bg-bg p-4 pb-[calc(env(safe-area-inset-bottom)+2rem)] sm:max-w-lg sm:rounded-3xl">
         <div className="flex items-start gap-3">
           <CategoryIcon category={item.category} className="h-12 w-12 shrink-0" />
           <div className="min-w-0 flex-1">
@@ -272,6 +275,7 @@ export function GearSpecSheet({ item, gear, onClose, onSaved }: { item: GearItem
         {msg ? <p className="text-sm font-semibold text-accent">{msg}</p> : null}
         {err ? <ErrorNote text={err} /> : null}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
