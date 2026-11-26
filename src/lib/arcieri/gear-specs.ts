@@ -126,10 +126,27 @@ export function guessSpecs(text: string, category: string): Record<string, strin
   if (strands) out.strands = strands[1];
   const grams = /(\d{2,4})\s*(?:g|gr?ammi)\b(?!\s*\/)/i.exec(t);
   if (grams && category === "stabilizzatore") out.weightG = grams[1];
+  // custodie, faretre, protezioni, abbigliamento: prima i tessuti (la «carbon» di una custodia è delle frecce che porta)
+  const cloth = !["aste", "freccia", "punte", "corda", "stabilizzatore", "mirino", "rest", "arco"].includes(category) ? clothOf(t) : "";
   const mat =
-    /\b(8125g?|8190|bcy[\s-]?x|452x|d97|dacron|fast\s*flight|dyneema)\b/i.exec(t)?.[1] ??
-    (/\bcarbo[\s-]?allu|carbon[\s-]?alu|x10|ace\b/i.test(t) ? "carbo-alluminio" : /\bcarbon(?:io|e)?\b/i.test(t) ? "carbonio" : /\ballumini|aluminum|\balu\b/i.test(t) ? "alluminio" : /\b(legno|cedro|pino|wood|cedar)\b/i.test(t) ? "legno" : /\bbamb[uù]\b/i.test(t) ? "bambu" : "");
+    cloth ||
+    (/\b(8125g?|8190|bcy[\s-]?x|452x|d97|dacron|fast\s*flight|dyneema)\b/i.exec(t)?.[1] ??
+      (/\bcarbo[\s-]?allu|carbon[\s-]?alu|x10|ace\b/i.test(t) ? "carbo-alluminio" : /\bcarbon(?:io|e)?\b/i.test(t) ? "carbonio" : /\ballumini|aluminum|\balu\b/i.test(t) ? "alluminio" : /\b(legno|cedro|pino|wood|cedar)\b/i.test(t) ? "legno" : /\bbamb[uù]\b/i.test(t) ? "bambu" : ""));
   if (mat) out.material = category === "corda" ? mat.toUpperCase().replace(/\s+/g, " ") : mat.toLowerCase();
+  // pezzi senza unità fissa (custodie, borse, faretre): misure intere «183 × 15 cm» e lunghezza con la sua unità
+  const lenField = fieldsOf(category).find((f) => f.key === "length");
+  if (lenField && !lenField.unit) {
+    const d = /(\d{2,3}(?:[.,]\d)?)\s*(cm|″|"|''|in)?\s*[x×*]\s*(\d{1,3}(?:[.,]\d)?)\s*(cm|″|"|''|in)(?:\s*[x×*]\s*(\d{1,3}(?:[.,]\d)?)\s*(?:cm|″|"|''|in))?/i.exec(t);
+    const unitOf = (u: string | undefined) => (!u || /cm/i.test(u) ? "cm" : "″");
+    const lenCm = /(?:lunghezza|length|lungo|long|lang)\s*[:=]?\s*(?:circa|approx\.?|ca\.?)?\s*(\d{2,3}(?:[.,]\d)?)\s*cm\b/i.exec(t) ?? /\b(\d{2,3}(?:[.,]\d)?)\s*cm\s*(?:lang|long|di lunghezza)\b/i.exec(t);
+    if (d) {
+      const u = unitOf(d[4] ?? d[2]);
+      const tail = u === "cm" ? " cm" : "″";
+      out.size = `${num(d[1])} × ${num(d[3])}${d[5] ? ` × ${num(d[5])}` : ""}${tail}`;
+      out.length = `${num(d[1])}${tail}`;
+    } else if (lenCm) out.length = `${num(lenCm[1])} cm`;
+    else if (out.length) out.length = `${out.length}″`;
+  }
   if (category === "punte") {
     const shape = /\b(ogiva|bullet)\b/i.test(t) ? "ogiva" : /\bfield\b/i.test(t) ? "field" : /\b3\s?d\b/i.test(t) ? "3d" : /\b(blunt|gommino)\b/i.test(t) ? "gommino" : "";
     if (shape) out.pointType = shape;
@@ -145,6 +162,29 @@ export function guessSpecs(text: string, category: string): Record<string, strin
   const size = /\btaglia\s*[:=]?\s*([a-z0-9]{1,4})\b/i.exec(t) ?? /\b(XXS|XS|XXL|XL|S|M|L)\b/.exec(t);
   if (size && ["parabraccio", "guantino", "pettorina", "abbigliamento", "scarpe", "cocche"].includes(category)) out.size = size[1].toUpperCase();
   return out;
+}
+
+/** il tessuto o il materiale di una custodia, di una faretra o di un capo («lana e pelle», «cordura») */
+function clothOf(t: string): string {
+  const found: string[] = [];
+  const add = (re: RegExp, name: string) => {
+    if (re.test(t) && !found.includes(name)) found.push(name);
+  };
+  add(/\b(eco[\s-]?pelle|similpelle|finta pelle|faux leather|pu leather|synthetic leather)\b/i, "ecopelle");
+  if (!found.length) add(/\b(pelle|cuoio|leather|camoscio|suede)\b/i, "pelle");
+  add(/\b(lana|wool|loden)\b/i, "lana");
+  add(/\bcordura\b/i, "cordura");
+  add(/\b(poliestere|polyester)\b/i, "poliestere");
+  add(/\bnylon\b/i, "nylon");
+  add(/\b(tela|canvas|canapa)\b/i, "tela");
+  add(/\b(cotone|cotton)\b/i, "cotone");
+  add(/\b(feltro|felt)\b/i, "feltro");
+  add(/\b(pile|fleece)\b/i, "pile");
+  add(/\bneoprene\b/i, "neoprene");
+  add(/\b(abs|polipropilene|polypropylene|plastica|plastic)\b/i, "plastica");
+  // l'imbottitura dice poco del materiale: solo se non c'è altro
+  if (!found.length) add(/\b(eva|schiuma|foam|espanso)\b/i, "imbottitura in espanso");
+  return found.slice(0, 3).join(" e ").replace(/ e (?=.* e )/, ", ");
 }
 
 const norm = (s: string) =>
@@ -168,7 +208,7 @@ export function keyOfLabel(label: string, category: string): string | null {
   if (/lunghezza|length/.test(l)) return category === "alette" ? "fletchLen" : "length";
   if (/peso|weight|grani|grains?/.test(l)) return category === "punte" ? "point" : category === "stabilizzatore" ? "weightG" : "weight";
   if (/materiale|material|composizione/.test(l)) return "material";
-  if (/taglia|size|misura|numero/.test(l)) return "size";
+  if (/taglia|size|misura|numero|dimension|ingombro|formato/.test(l)) return "size";
   if (/forma|tipo|type|modello di punta/.test(l)) return category === "punte" ? "pointType" : category === "cocche" ? "nockType" : category === "alette" ? "fletchType" : "kind";
   return null;
 }
@@ -177,6 +217,13 @@ export function keyOfLabel(label: string, category: string): string | null {
 export function cleanValue(key: string, value: string, category: string): string {
   const v = value.replace(/\s+/g, " ").trim();
   const numeric = ["spine", "gpi", "diameter", "brace", "length", "fletchLen", "point", "weight", "weightG", "strands", "drawLen"];
+  // lunghezza senza unità fissa (custodie, borse): si tiene l'unità del negozio
+  if (key === "length" && !fieldsOf(category).find((f) => f.key === "length")?.unit) {
+    const g = guessSpecs(v, category);
+    if (g.length) return g.length;
+    const m = /(\d{1,4}(?:[.,]\d{1,3})?)\s*(cm|mm|m\b|″|"|in\b)?/i.exec(v);
+    return m ? `${num(m[1])}${m[2] ? ` ${m[2] === '"' || m[2] === "in" ? "″" : m[2]}` : ""}` : "";
+  }
   if (key === "draw") return /(\d{2}(?:\s*-\s*\d{2})?)/.exec(v)?.[1]?.replace(/\s/g, "") ?? "";
   if (numeric.includes(key)) {
     const m = /(\d{1,4}(?:[.,]\d{1,3})?)/.exec(v);

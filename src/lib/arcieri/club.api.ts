@@ -32,7 +32,10 @@ function specsOf(raw: unknown) {
   const out: Record<string, string> = {};
   // "flight" tiene le impostazioni del simulatore di volo (JSON): serve più spazio
   for (const [k, v] of Object.entries(src)) out[clip(k, 40)] = clip(v, k === "flight" ? 2400 : 200);
-  return JSON.stringify(out).slice(0, 4000);
+  // troppo lungo: si tolgono prima le voci accessorie (scheda del negozio), poi le ultime, mai un JSON tagliato a metà
+  const drop = ["scheda", "purchase", ...Object.keys(out).reverse()];
+  while (JSON.stringify(out).length > 4000 && drop.length) delete out[drop.shift() as string];
+  return JSON.stringify(out);
 }
 
 function readSpecs(raw: string) {

@@ -170,6 +170,7 @@ export function Inventory() {
                   return (
                     <div key={g.id} className="grid gap-1.5 rounded-2xl bg-white/[0.04] p-2.5">
                       <div className="flex items-start gap-2">
+                        {g.photoUrl?.startsWith("data:image/") ? <img src={g.photoUrl} alt="" className="h-11 w-11 shrink-0 rounded-lg bg-white object-contain" /> : null}
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-semibold">
                             {g.name}

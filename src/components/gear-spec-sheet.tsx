@@ -1,9 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "@tanstack/react-router";
 import { saveEquipment, type listEquipment } from "@/lib/arcieri/club.api";
-import { readProductPage, type ProductPage } from "@/lib/arcieri/gear-specs.api";
-import { fieldsOf, guessSpecs, mountPatch, partAdvice, searchUrl, searchWords, withEstimatedWeight, type SpecField } from "@/lib/arcieri/gear-specs";
+import { findProductSpecs, type ProductPage } from "@/lib/arcieri/gear-specs.api";
+import { fieldsOf, guessSpecs, mountPatch, partAdvice, searchWords, withEstimatedWeight, type SpecField } from "@/lib/arcieri/gear-specs";
+import { gearPhoto } from "@/lib/arcieri/media-compress";
 import { readMainGear, saveMainGear } from "@/lib/arcieri/main-gear";
 import { categoryLabel, euro } from "@/lib/arcieri/labels";
 import { Button, ErrorNote, Field, Select, TextInput } from "@/components/kit";
@@ -13,6 +14,13 @@ import { Glyph } from "@/components/icons";
 export type GearItem = Awaited<ReturnType<typeof listEquipment>>[number];
 
 const PARTS = new Set(["aste", "punte", "alette", "cocche"]);
+const hostOf = (u: string) => {
+  try {
+    return new URL(u).hostname.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+};
 const labelOf = (fields: SpecField[], key: string) => fields.find((f) => f.key === key)?.label ?? key;
 const show = (f: SpecField | undefined, v: string) => {
   const opt = f?.options?.find((o) => o.id === v)?.label;
@@ -20,9 +28,9 @@ const show = (f: SpecField | undefined, v: string) => {
 };
 
 /**
- * Scheda delle specifiche di un pezzo: si cercano in rete o si leggono dal link del negozio,
- * si controllano, si salvano sul pezzo e si usano: montate su una serie di frecce, come
- * attrezzatura principale (FOC, balistica, spine, tuning) e nei consigli.
+ * Scheda delle specifiche di un pezzo: l'app le cerca da sola nei negozi in rete (o dal link del negozio),
+ * riempie i campi vuoti, prende la foto del prodotto e salva sul pezzo, senza uscire dall'app. Poi si usano:
+ * montate su una serie di frecce, come attrezzatura principale (FOC, balistica, spine, tuning) e nei consigli.
  */
 export function GearSpecSheet({ item, gear, onClose, onSaved }: { item: GearItem; gear: GearItem[]; onClose: () => void; onSaved: () => void }) {
   const fields = fieldsOf(item.category);
@@ -30,6 +38,14 @@ export function GearSpecSheet({ item, gear, onClose, onSaved }: { item: GearItem
   const [url, setUrl] = useState(item.specs.url ?? "");
   const [page, setPage] = useState<ProductPage | null>(null);
   const [reading, setReading] = useState(false);
+  const [photo, setPhoto] = useState<string | null>(item.photoUrl);
+  const [others, setOthers] = useState<{ url: string; title: string }[]>([]);
+  const [note, setNote] = useState("");
+  const [linkOpen, setLinkOpen] = useState(false);
+  const specsRef = useRef(specs);
+  specsRef.current = specs;
+  const photoRef = useRef(photo);
+  photoRef.current = photo;
   const [err, setErr] = useState("");
   const [msg, setMsg] = useState("");
   const [allPairs, setAllPairs] = useState(false);
@@ -46,22 +62,101 @@ export function GearSpecSheet({ item, gear, onClose, onSaved }: { item: GearItem
   }, [item, specs, fields]);
   const fromPage = page ? Object.entries(page.specs).filter(([k, v]) => fields.some((f) => f.key === k) && v && specs[k] !== v) : [];
   const advice = partAdvice(item.category, specs, bow, arrowSpecs);
-  const set = (k: string, v: string) => setSpecs((s) => ({ ...s, [k]: v }));
+  // un dato scritto a mano non si cambia più in automatico
+  const set = (k: string, v: string) => setSpecs((s) => ({ ...s, [k]: v, autoKeys: (s.autoKeys ?? "").split(",").filter((x) => x && x !== k).join(",") }));
   const apply = (list: [string, string][]) => setSpecs((s) => ({ ...s, ...Object.fromEntries(list) }));
 
-  async function read() {
+  /**
+   * Cerca e compila da sola: il link del negozio se c'è, altrimenti il nome in rete. Riempie i campi vuoti
+   * (o tutti, se si sceglie un'altra pagina), mette la foto del prodotto se il pezzo non ne ha una sua e salva.
+   */
+  async function run(opts: { url?: string; replace?: boolean; skip?: string[] } = {}) {
     setErr("");
     setMsg("");
+    setNote("");
     setReading(true);
     try {
-      const p = await readProductPage({ data: { url, category: item.category } });
-      setPage(p);
-      if (!Object.keys(p.specs).length && !p.pairs.length) setMsg("Nella pagina non ho trovato una tabella di caratteristiche: scrivi tu i dati qui sotto.");
+      const cur = specsRef.current;
+      const r = await findProductSpecs({ data: { name: item.name, brand: item.brand, model: item.model, category: item.category, shop: item.shop, url: opts.url ?? "", skip: opts.skip ?? [] } });
+      if (!r.page) {
+        setNote(r.note || "Non ho trovato la pagina del prodotto.");
+        setLinkOpen(true);
+        return;
+      }
+      setPage(r.page);
+      setUrl(r.page.url);
+      setOthers(r.others);
+      const found = Object.entries(r.page.specs as Record<string, string>).filter(([k, v]) => fields.some((f) => f.key === k) && v);
+      // i dati scritti a mano restano; quelli messi in automatico si aggiornano con la pagina nuova
+      const autoKeys = (cur.autoKeys ?? "").split(",").filter(Boolean);
+      const fill = found.filter(([k, v]) => cur[k] !== v && (opts.replace || !cur[k] || autoKeys.includes(k)));
+      const next: Record<string, string> = { ...cur, ...Object.fromEntries(fill), url: r.page.url };
+      if (r.page.scheda) next.scheda = r.page.scheda;
+      next.autoKeys = [...new Set([...autoKeys, ...fill.map(([k]) => k)])].join(",");
+      // la foto del negozio solo se il pezzo non ne ha una sua (una presa in automatico si cambia)
+      let pic = photoRef.current;
+      if (r.photo && (!pic || cur.photoAuto === "1" || opts.replace)) {
+        try {
+          pic = await gearPhoto(r.photo);
+          next.photoAuto = "1";
+        } catch {
+          /* foto che il telefono non apre: si va avanti senza */
+        }
+      }
+      await persist(next, pic);
+      setSpecs(next);
+      setPhoto(pic);
+      const what = fill.map(([k, v]) => `${labelOf(fields, k).toLowerCase()} ${show(fields.find((f) => f.key === k), v)}`);
+      const newPic = pic !== photoRef.current;
+      setMsg(
+        what.length || newPic
+          ? `Da ${hostOf(r.page.url)}: ${[...what, ...(newPic ? ["foto del prodotto"] : [])].join(", ")}. Salvato sul pezzo.`
+          : `Letta la pagina di ${hostOf(r.page.url)}: nessun dato nuovo per i campi di questo pezzo${r.page.scheda ? ", ho salvato la scheda del negozio" : ""}.`,
+      );
+      onSaved();
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Non riesco a leggere la pagina.");
+      setErr(e instanceof Error ? e.message : "Non riesco a cercare ora: riprova tra poco.");
     } finally {
       setReading(false);
     }
+  }
+
+  // appena si apre: se mancano dati o foto, cerca da sola (una volta per pezzo in questa sessione)
+  useEffect(() => {
+    const filled = fields.some((f) => item.specs[f.key]);
+    if (filled && item.photoUrl) return;
+    const k = `aa-spec-auto-${item.id}`;
+    try {
+      if (sessionStorage.getItem(k)) return;
+      sessionStorage.setItem(k, "1");
+    } catch {
+      /* niente */
+    }
+    void run({ url: item.specs.url || "" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.id]);
+
+  async function persist(out: Record<string, string>, pic: string | null) {
+    await saveEquipment({
+      data: {
+        id: item.id,
+        category: item.category,
+        name: item.name,
+        brand: item.brand,
+        model: item.model,
+        status: item.status,
+        visibility: item.visibility,
+        priceCents: item.priceCents,
+        shop: item.shop,
+        notes: item.notes,
+        purchasedOn: item.purchasedOn,
+        photoUrl: pic,
+        specs: out,
+      },
+    });
+    const m = readMainGear();
+    if (m && m.bowId === item.id) saveMainGear({ ...m, bowSpecs: out });
+    if (m && m.arrowId === item.id) saveMainGear({ ...m, arrowSpecs: out });
   }
 
   async function save(extra: Record<string, string> = {}) {
@@ -80,7 +175,7 @@ export function GearSpecSheet({ item, gear, onClose, onSaved }: { item: GearItem
         shop: item.shop,
         notes: item.notes,
         purchasedOn: item.purchasedOn,
-        photoUrl: item.photoUrl,
+        photoUrl: photo,
         specs: out,
       },
     });
@@ -128,7 +223,7 @@ export function GearSpecSheet({ item, gear, onClose, onSaved }: { item: GearItem
       <button type="button" className="absolute inset-0" aria-label="Chiudi" onClick={onClose} />
       <div className="relative grid max-h-[92dvh] w-full gap-3 overflow-y-auto overscroll-contain rounded-t-3xl border border-line bg-bg p-4 pb-[calc(env(safe-area-inset-bottom)+2rem)] sm:max-w-lg sm:rounded-3xl">
         <div className="flex items-start gap-3">
-          <CategoryIcon category={item.category} className="h-12 w-12 shrink-0" />
+          {photo ? <img src={photo} alt="" className="h-14 w-14 shrink-0 rounded-xl bg-white object-contain" /> : <CategoryIcon category={item.category} className="h-12 w-12 shrink-0" />}
           <div className="min-w-0 flex-1">
             <p className="truncate font-display text-xl leading-tight">{item.name}</p>
             <p className="truncate text-xs text-muted">{categoryLabel(item.category)}{item.brand || item.model ? ` · ${item.brand} ${item.model}`.trimEnd() : ""}</p>
@@ -137,21 +232,25 @@ export function GearSpecSheet({ item, gear, onClose, onSaved }: { item: GearItem
         </div>
 
         <section className="grid gap-2 rounded-2xl bg-white/[0.04] p-3">
-          <p className="aa-section-title">Cerca le specifiche</p>
-          <a href={searchUrl(item)} target="_blank" rel="noreferrer" className="aa-press inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-line text-sm font-semibold">
-            <Glyph name="search" size={16} /> <span className="truncate">Cerca in rete «{searchWords(item).slice(0, 40)}»</span>
-          </a>
-          <p className="text-xs text-muted">Trovata la pagina del prodotto? Copia il link e incollalo qui: leggo io la tabella delle caratteristiche.</p>
-          <div className="flex gap-2">
-            <TextInput value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://negozio.it/prodotto…" inputMode="url" aria-label="Link della pagina del prodotto" />
-            <Button onClick={() => void read()} disabled={reading || url.trim().length < 8}>{reading ? "Leggo…" : "Leggi"}</Button>
-          </div>
+          <p className="aa-section-title">Specifiche dal negozio</p>
+          {reading ? (
+            <p className="flex items-center gap-2 text-sm" role="status">
+              <span className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-white/20 border-t-white" />
+              Cerco «{searchWords(item).slice(0, 40)}» nei negozi e leggo la scheda…
+            </p>
+          ) : (
+            <Button variant={page ? "ghost" : undefined} onClick={() => void run({ url: page ? "" : item.specs.url || "", skip: page ? [page.url] : [] })}>
+              <Glyph name="search" size={16} /> {page ? "Cerca un'altra pagina" : "Cerca e compila da solo"}
+            </Button>
+          )}
+          {note ? <p className="text-xs text-muted">{note}</p> : null}
           {page ? (
             <div className="grid gap-2 rounded-xl border border-line p-2">
               <div className="flex items-center gap-2">
                 {page.image ? <img src={page.image} alt="" className="h-12 w-12 shrink-0 rounded-lg bg-white object-contain" referrerPolicy="no-referrer" /> : null}
                 <div className="min-w-0">
                   <p className="line-clamp-2 text-sm font-semibold">{page.title || "Pagina del prodotto"}</p>
+                  <p className="truncate text-[0.68rem] text-muted">{hostOf(page.url)}</p>
                   {page.priceCents != null ? (
                     <p className="text-xs text-muted">
                       Prezzo sul sito {euro(page.priceCents)}
@@ -173,7 +272,7 @@ export function GearSpecSheet({ item, gear, onClose, onSaved }: { item: GearItem
                   <Button variant="ghost" onClick={() => apply(fromPage)}>Usa tutti i dati trovati</Button>
                 </>
               ) : (
-                <p className="text-xs text-muted">Nessun dato nuovo per questa categoria.</p>
+                <p className="text-xs text-muted">I dati di questa pagina sono già nei campi.</p>
               )}
               {page.pairs.length ? (
                 <button type="button" className="text-left text-xs font-semibold text-primary" onClick={() => setAllPairs((v) => !v)}>
@@ -192,6 +291,25 @@ export function GearSpecSheet({ item, gear, onClose, onSaved }: { item: GearItem
               ) : null}
             </div>
           ) : null}
+          {others.length ? (
+            <div className="grid gap-1">
+              <p className="text-xs text-muted">Non è questo prodotto? Altre pagine trovate:</p>
+              {others.map((o) => (
+                <button key={o.url} type="button" disabled={reading} onClick={() => void run({ url: o.url, replace: true })} className="aa-press flex min-h-10 items-center justify-between gap-2 rounded-xl border border-line px-3 text-left text-xs">
+                  <span className="min-w-0 truncate">{o.title || o.url}</span>
+                  <span className="shrink-0 text-muted">{hostOf(o.url)}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {linkOpen ? (
+            <div className="flex gap-2">
+              <TextInput value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://negozio.it/prodotto…" inputMode="url" aria-label="Link della pagina del prodotto" />
+              <Button onClick={() => void run({ url: url.trim(), replace: true })} disabled={reading || url.trim().length < 8}>Leggi</Button>
+            </div>
+          ) : (
+            <button type="button" className="text-left text-xs font-semibold text-primary" onClick={() => setLinkOpen(true)}>Hai il link del negozio? Incollalo qui</button>
+          )}
           {fromName.length ? (
             <div className="flex flex-wrap items-center gap-1.5 text-xs">
               <span className="text-muted">Dal nome:</span>
@@ -222,6 +340,7 @@ export function GearSpecSheet({ item, gear, onClose, onSaved }: { item: GearItem
               ),
             )}
           </div>
+          {specs.scheda ? <p className="rounded-xl bg-white/[0.04] px-3 py-2 text-xs leading-relaxed"><span className="text-muted">Dalla scheda del negozio: </span>{specs.scheda}</p> : null}
           <Button onClick={() => void save().then(() => setMsg("Specifiche salvate sul pezzo.")).catch((e: unknown) => setErr(e instanceof Error ? e.message : "Errore"))}>Salva le specifiche</Button>
         </section>
 

@@ -332,8 +332,8 @@ function Page() {
           return (
             <Card key={item.id} className="grid gap-2 p-3">
               <div className="flex items-start gap-3">
-                <span className="grid h-14 w-14 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-                  {item.category === "arco" ? <BowIcon type={sp.bowType || "olimpico"} riser={sp.riser} limbs={sp.limbs} wood={sp.wood} className="h-12 w-12" /> : <CategoryIcon category={item.category} className="h-8 w-8" />}
+                <span className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-xl bg-primary/10 text-primary">
+                  {item.photoUrl?.startsWith("data:image/") ? <img src={item.photoUrl} alt="" className="h-full w-full bg-white object-contain" /> : item.category === "arco" ? <BowIcon type={sp.bowType || "olimpico"} riser={sp.riser} limbs={sp.limbs} wood={sp.wood} className="h-12 w-12" /> : <CategoryIcon category={item.category} className="h-8 w-8" />}
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-semibold">{item.name}</p>

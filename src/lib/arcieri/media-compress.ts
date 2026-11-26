@@ -56,6 +56,21 @@ export async function compressPhoto(file: Blob | string): Promise<string> {
   }
 }
 
+/** foto di riferimento di un pezzo (dal negozio): lato lungo fino a 640 px, sotto i 170 kB salvati sul pezzo */
+export async function gearPhoto(src: string): Promise<string> {
+  const img = await loadImage(src);
+  for (const [max, q] of [
+    [640, 0.8],
+    [560, 0.72],
+    [460, 0.66],
+    [360, 0.6],
+  ] as const) {
+    const out = draw(img, max, q);
+    if (out.length <= 170_000) return out;
+  }
+  return draw(img, 280, 0.55);
+}
+
 /** miniatura per l'elenco: 360 px */
 export async function thumbOf(src: string): Promise<string> {
   const img = await loadImage(src);

@@ -187,9 +187,14 @@ function Page() {
                   type="button"
                   className="inline-flex min-h-9 items-center gap-1 rounded-full bg-primary/20 px-3 text-xs font-semibold"
                   onClick={() => {
-                    const entry = { id: null, category: item.category, name: item.name, status: "in_use", visibility: "personal", priceCents: item.priceCents, notes: "", shop: "", purchasedOn: new Date().toISOString().slice(0, 10), specs: { ...(item.category === "freccia" || ["aste", "punte", "alette", "cocche"].includes(item.category) ? { qty: String(Math.max(1, item.qty || 1)) } : {}), ...(item.notes ? { purchase: item.notes } : {}) } as Record<string, string> };
+                    const entry = { id: null, category: item.category, name: item.name, status: "in_use", visibility: "personal", priceCents: item.priceCents, notes: "", shop: "", purchasedOn: new Date().toISOString().slice(0, 10), specs: { ...(item.category === "freccia" || ["aste", "punte", "alette", "cocche"].includes(item.category) ? { qty: String(Math.max(1, item.qty || 1)) } : {}), ...(item.notes ? { purchase: item.notes } : {}), ...(item.url ? { url: item.url } : {}) } as Record<string, string> };
                     saveEquipment({ data: entry })
-                      .then((res) => setMoved((m) => ({ ...m, [item.id]: { ...entry, id: res.id, mine: true, owner: "", brand: "", model: "", photoUrl: null, status: "in_use", visibility: "personal" } })))
+                      .then((res) => {
+                        const done = { ...entry, id: res.id, mine: true, owner: "", brand: "", model: "", photoUrl: null, status: "in_use", visibility: "personal" };
+                        setMoved((m) => ({ ...m, [item.id]: done }));
+                        // subito la scheda: cerca da sola specifiche e foto del prodotto
+                        setSpecOf(done);
+                      })
                       .catch((e: unknown) => setErr(e instanceof Error ? e.message : "Errore"));
                   }}
                 >
