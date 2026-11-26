@@ -13,8 +13,8 @@ export type SagomaVolume = { geo: Geo; depthAt: (x: number, y: number) => number
 
 export function buildSagomaVolume(img: HTMLImageElement | HTMLCanvasElement, hw: number, hh: number, thickness = 0.62): SagomaVolume | null {
   if (typeof document === "undefined") return null;
-  const nx = 84;
-  const ny = Math.max(24, Math.min(140, Math.round((nx * hh) / hw)));
+  const nx = 128;
+  const ny = Math.max(32, Math.min(150, Math.round((nx * hh) / hw)));
   const cols = nx + 1;
   const rows = ny + 1;
   // maschera a bassa risoluzione
@@ -84,6 +84,28 @@ export function buildSagomaVolume(img: HTMLImageElement | HTMLCanvasElement, hw:
     const di = Math.max(0, d[i] - 0.7);
     const wi = Math.max(1, w[i] - 0.7);
     h[i] = cell * thickness * Math.sqrt(Math.max(0, 2 * wi * di - di * di));
+  }
+  // una passata di media sui vicini: niente gradini della distanza a scacchi sul dorso
+  {
+    const src = Float32Array.from(h);
+    for (let y = 1; y < rows - 1; y += 1)
+      for (let x = 1; x < cols - 1; x += 1) {
+        const i = y * cols + x;
+        if (!inside[i]) continue;
+        let sum = src[i] * 4;
+        let wsum = 4;
+        for (const j of [i - 1, i + 1, i - cols, i + cols]) {
+          if (!inside[j]) continue;
+          sum += src[j] * 2;
+          wsum += 2;
+        }
+        for (const j of [i - cols - 1, i - cols + 1, i + cols - 1, i + cols + 1]) {
+          if (!inside[j]) continue;
+          sum += src[j];
+          wsum += 1;
+        }
+        h[i] = sum / wsum;
+      }
   }
   // bordo chiuso: dove manca un vicino lo spessore è zero
   for (let y = 0; y < rows; y += 1)
@@ -202,5 +224,86 @@ export function bleed(img: HTMLImageElement | HTMLCanvasElement) {
   if (!x) return c;
   for (const r of [6, 3]) for (const [dx, dy] of [[r, 0], [-r, 0], [0, r], [0, -r], [r, r], [-r, -r], [r, -r], [-r, r]]) x.drawImage(img, dx, dy, c.width, c.height);
   x.drawImage(img, 0, 0, c.width, c.height);
+  return c;
+}
+
+type Ellipse = { cx: number; cy: number; rx: number; ry: number };
+
+/** rumore a valori con interpolazione morbida (deterministico): la grana della schiuma */
+function noise2(seed: number) {
+  const hash = (x: number, y: number) => {
+    let n = (x * 374761393 + y * 668265263 + seed * 1442695041) | 0;
+    n = Math.imul(n ^ (n >>> 13), 1274126177);
+    return ((n ^ (n >>> 16)) >>> 0) / 4294967295;
+  };
+  return (x: number, y: number) => {
+    const x0 = Math.floor(x);
+    const y0 = Math.floor(y);
+    const fx = x - x0;
+    const fy = y - y0;
+    const sx = fx * fx * (3 - 2 * fx);
+    const sy = fy * fy * (3 - 2 * fy);
+    const a = hash(x0, y0) + (hash(x0 + 1, y0) - hash(x0, y0)) * sx;
+    const b = hash(x0, y0 + 1) + (hash(x0 + 1, y0 + 1) - hash(x0, y0 + 1)) * sx;
+    return a + (b - a) * sy;
+  };
+}
+
+/**
+ * La pelle della sagoma come una vera in schiuma dipinta: colore dell'animale con grana e pelo,
+ * i tratti chiari del disegno diventano solchi scuri, ventre in ombra, e le zone di punteggio
+ * appena incise (come sulle sagome da gara).
+ */
+export function foamSkin(img: HTMLImageElement | HTMLCanvasElement, tone: string, zones: Ellipse[] = [], width = 1024): HTMLCanvasElement {
+  const iw = (img as HTMLImageElement).naturalWidth || img.width;
+  const ih = (img as HTMLImageElement).naturalHeight || img.height;
+  const W = width;
+  const H = Math.max(1, Math.round((W * ih) / Math.max(1, iw)));
+  const c = document.createElement("canvas");
+  c.width = W;
+  c.height = H;
+  const x = c.getContext("2d", { willReadFrequently: true });
+  if (!x) return c;
+  x.drawImage(img, 0, 0, W, H);
+  const data = x.getImageData(0, 0, W, H);
+  const px = data.data;
+  const base = [parseInt(tone.slice(1, 3), 16), parseInt(tone.slice(3, 5), 16), parseInt(tone.slice(5, 7), 16)];
+  const n1 = noise2(7);
+  const n2 = noise2(19);
+  for (let y = 0; y < H; y += 1) {
+    const belly = 1.08 - 0.3 * (y / H);
+    for (let xx = 0; xx < W; xx += 1) {
+      const i = (y * W + xx) * 4;
+      if (px[i + 3] < 8) continue;
+      // le zone colorate del disegno (blu, giallo, rosso) non sono solchi: diventano pelle, le zone le incido dopo
+      const sat = Math.max(px[i], px[i + 1], px[i + 2]) - Math.min(px[i], px[i + 1], px[i + 2]);
+      const lum = sat > 60 ? 0 : (px[i] * 0.3 + px[i + 1] * 0.59 + px[i + 2] * 0.11) / 255;
+      // grana: macchie larghe e puntinato fine
+      const grain = 0.86 + 0.2 * n1(xx / 38, y / 38) + 0.1 * n2(xx / 3.2, y / 3.2);
+      // pelo: striature orizzontali leggere
+      const fur = 0.94 + 0.12 * n2(xx / 14, y / 2.2);
+      const k = grain * fur * belly;
+      const groove = Math.min(1, Math.max(0, (lum - 0.25) / 0.5));
+      const shade = k * (1 - groove * 0.62);
+      px[i] = Math.min(255, base[0] * shade);
+      px[i + 1] = Math.min(255, base[1] * shade);
+      px[i + 2] = Math.min(255, base[2] * shade);
+    }
+  }
+  x.putImageData(data, 0, 0);
+  // zone di punteggio incise appena
+  x.globalCompositeOperation = "source-atop";
+  x.lineWidth = Math.max(1.5, W / 420);
+  for (const z of zones) {
+    x.strokeStyle = "rgba(18,12,8,0.42)";
+    x.beginPath();
+    x.ellipse(z.cx * W, z.cy * H, z.rx * W, z.ry * H, 0, 0, Math.PI * 2);
+    x.stroke();
+    x.strokeStyle = "rgba(255,240,220,0.12)";
+    x.beginPath();
+    x.ellipse(z.cx * W + 1, z.cy * H + 1.5, z.rx * W, z.ry * H, 0, 0, Math.PI * 2);
+    x.stroke();
+  }
+  x.globalCompositeOperation = "source-over";
   return c;
 }

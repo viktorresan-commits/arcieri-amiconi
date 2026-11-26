@@ -47,7 +47,7 @@ const hash = (n: number) => {
  * dell'ora scelta, frecce dettagliate dell'arciere che arrivano una dopo l'altra e restano piantate;
  * quelle fuori passano oltre e finiscono nel prato dietro. Se WebGL manca, resta la versione 2D.
  */
-export function TargetGL({ face, shots, picture, look, bare }: { face: Face; shots: Shot[]; picture?: Picture | null; look?: ArrowLook; /** senza ora e meteo: cielo sereno di giorno, niente comandi del cielo */ bare?: boolean }) {
+export function TargetGL({ face, shots, picture, look, bare, faceCanvas }: { face: Face; shots: Shot[]; picture?: Picture | null; look?: ArrowLook; /** senza ora e meteo: cielo sereno di giorno, niente comandi del cielo */ bare?: boolean; /** visuale disegnata a parte (es. con la mappa termica) al posto degli anelli */ faceCanvas?: { canvas: HTMLCanvasElement; key: string } | null }) {
   const { sky: chosenSky } = useSky();
   const sky = bare ? CLEAR_DAY : chosenSky;
   const avatar = useAvatar();
@@ -106,7 +106,8 @@ export function TargetGL({ face, shots, picture, look, bare }: { face: Face; sho
         g.shadow([0.2, 0, 0.3], hw * 1.1, 0.35 * k, 0.35);
       }
     } else {
-      drawBoss(g, 0, gH, 0, R, Math.max(0.6, R * 1.6), 10, ringsTexture(g, face.id, face.rings));
+      const faceTex = faceCanvas ? g.once(`face-${faceCanvas.key}`, () => g.textureFrom(faceCanvas.canvas, true, false)) : ringsTexture(g, face.id, face.rings);
+      drawBoss(g, 0, gH, 0, R, Math.max(0.6, R * 1.6), 10, faceTex);
     }
     // frecce
     const n = shown.length;
