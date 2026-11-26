@@ -24,7 +24,7 @@ const fold = (s: string) =>
 export function PiazzolaPicker({ compId, garaId, piazzola, onSaved }: { compId: number; garaId: string; piazzola: number | null; onSaved: () => void }) {
   const board = useLoad(`pz-pick-${garaId}`, () => (garaId ? fitastGaraBoard({ data: { garaId } }) : Promise.resolve({ arcieri: [], squadre: [] })));
   const lanesQ = useLoad(`pz-lanes-${compId}`, () => garaPiazzole({ data: { competitionId: compId } }));
-  const laneOf = useMemo(() => new Map((lanesQ.data?.lanes ?? []).map((p) => [p.key, p.piazzola])), [lanesQ.data]);
+  const laneOf = useMemo(() => new Map<string, number>((lanesQ.data?.lanes ?? []).map((p: { key: string; piazzola: number }) => [p.key, p.piazzola])), [lanesQ.data]);
   const [q, setQ] = useState("");
   const [lane, setLane] = useState(piazzola ? String(piazzola) : "");
   const [picked, setPicked] = useState<string[]>([]);
