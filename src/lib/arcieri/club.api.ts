@@ -1505,6 +1505,10 @@ export const squadBoard = createServerFn({ method: "GET" })
       from piazzole p
       left join competition_entries e on e.competition_id = p.competition_id and e.user_id = p.user_id`;
 
+    // le gare di ognuno come sul suo profilo: app, classifiche del portale e archivio FITAST dal 2019
+    const loadsOf = await garaLoads(sql).catch(() => new Map<string, GaraLoad[]>());
+    const today = new Date().toISOString().slice(0, 10);
+    const season = champSeasonOf(today);
     const trainOf = new Map(train.map((row) => [row.user_id, row]));
     const gareOf = new Map<string, Set<number>>();
     const champOf = new Map<string, number>();
@@ -1608,9 +1612,16 @@ export const squadBoard = createServerFn({ method: "GET" })
       people: people.map((row) => {
         const shot = trainOf.get(row.user_id);
         const arrows = asNum(shot?.arrows);
-        const garaArrows = garaArrowsOf.get(row.user_id) ?? 0;
         const points = asNum(shot?.points);
-        const comp = compOf.get(row.user_id);
+        // gare, frecce di gara, media gara e punti campionato della stagione: gli stessi numeri del profilo
+        const done = (loadsOf.get(row.user_id) ?? []).filter((l) => l.day <= today);
+        const vol = sumLoads(done);
+        const garaArrows = done.length ? vol.arrows : garaArrowsOf.get(row.user_id) ?? 0;
+        const scored = done.map((l) => l.points).filter((v): v is number => v != null);
+        const comp = scored.length ? { points: scored.reduce((a, b) => a + b, 0), n: scored.length } : compOf.get(row.user_id);
+        const inSeason = done.filter((l) => l.day >= season.from && l.day <= season.to);
+        const champ = done.length ? inSeason.reduce((sum, l) => sum + (l.champ ?? 0), 0) : champOf.get(row.user_id) ?? 0;
+        const lastDivision = [...done].reverse().map((l) => portalDivision(l.category ?? "")).find(Boolean) ?? "";
         const remote = row.user_image && /^https:\/\//.test(row.user_image) ? row.user_image : null;
         const bestDistance = bestDistanceOf.get(row.user_id) ?? null;
         return {
@@ -1630,17 +1641,27 @@ export const squadBoard = createServerFn({ method: "GET" })
           trainArrows: arrows,
           garaArrows,
           avg: arrows > 0 ? points / arrows : null,
-          gare: gareOf.get(row.user_id)?.size ?? 0,
-          champ: champOf.get(row.user_id) ?? 0,
+          gare: Math.max(done.length, gareOf.get(row.user_id)?.size ?? 0),
+          champ,
           compAvg: comp && comp.n > 0 ? comp.points / comp.n : null,
           bestDistance,
-          division: divisionOfEntry.get(row.user_id)?.name ?? "",
+          division: divisionOfEntry.get(row.user_id)?.name ?? lastDivision,
           shots: shotsOf.get(row.user_id) ?? [],
           sagoma: sagomaOf.get(row.user_id) ?? [],
         };
       }),
     };
   });
+
+/** la divisione dalla categoria di gara, anche come la scrive il portale («Madonna · Tradizionale» → Madonne) */
+function portalDivision(category: string) {
+  const head = category.split("·")[0]?.trim() ?? "";
+  if (/^mad/i.test(head)) return divisionOf("Madonne");
+  if (/^messer/i.test(head)) return divisionOf("Messeri");
+  if (/^puer/i.test(head)) return divisionOf("Pueri");
+  if (/^junior/i.test(head)) return divisionOf("Juniores");
+  return divisionOf(head);
+}
 
 /** la tipologia d'arco della categoria FITAST come arco dell'app («Tradizionale» → tradizionale) */
 function bowIdOf(tip: string) {

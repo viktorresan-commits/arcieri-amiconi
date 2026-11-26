@@ -186,8 +186,9 @@ export const listCompanies = createServerFn({ method: "GET" })
         avgPoints += asNum(t?.points) + v.points;
         trainPoints += asNum(t?.points);
         sessions += asNum(t?.sessions);
-        gare += asNum(c?.gare);
-        gareRaw += asNum(c?.points);
+        // gare come sul profilo (app, portale e archivio FITAST), se ci sono; altrimenti quelle segnate nell'app
+        gare += Math.max(v.gare, asNum(c?.gare));
+        gareRaw += v.gare ? v.points : asNum(c?.points);
       }
       const clean = cleanCompanyNames(row.name, row.fitast_name);
       // la compagnia nelle classifiche del portale (il nome può essere scritto un po' diverso)
