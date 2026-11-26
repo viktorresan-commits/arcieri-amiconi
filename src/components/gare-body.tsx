@@ -53,6 +53,8 @@ type Comp = {
   place: string;
   organizer: string;
   signupDeadline: string | null;
+  /** piazzole della gara, se si sanno (scritte nella gara o lette da un cartellino); nel 3D di solito 20 */
+  lanes?: number | null;
   notes?: string;
   canDelete?: boolean;
   attended: boolean | null;
@@ -154,9 +156,10 @@ export function GareBody({ embedded = false, league }: { embedded?: boolean; /**
           <span className="absolute right-3 top-3"><KindEmblem kind="campionato" size={54} glow /></span>
           <p className="text-xs uppercase tracking-wide text-muted">Tutte le gare</p>
           <p className="font-display text-4xl tabular-nums leading-none">{totals.points}</p>
-          <p className="mt-1 text-sm text-muted">punti in {totals.gare} gare{totals.avg != null ? ` · media ${totals.avg.toFixed(1)}` : ""}</p>
-          <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+          <p className="mt-1 text-sm text-muted">punti in {totals.gare} gare{totals.avg != null ? ` · media ${totals.avg.toFixed(1).replace(".", ",")}` : ""}{totals.perArrow != null ? ` · ${totals.perArrow.toFixed(2).replace(".", ",")} a freccia` : ""}</p>
+          <div className="mt-3 grid grid-cols-4 gap-2 text-center">
             <MiniStat k="Piazzole" v={String(totals.lanes)} />
+            <MiniStat k="Frecce" v={String(totals.arrows)} />
             <MiniStat k="Spot" v={String(totals.spots)} />
             <MiniStat k="Campionato" v={String(totals.champ)} />
           </div>
@@ -392,15 +395,39 @@ function TeamLine({ results }: { results: TeamResult[] }) {
   );
 }
 
+/** nel 3D FITAST: 3 frecce a piazzola, di solito 20 piazzole a gara */
+const ARROWS_PER_LANE = 3;
+const LANES_DEFAULT = 20;
+
+/**
+ * Piazzole e frecce di una gara per un arciere: quelle inserite (a mano o dal cartellino) se coprono la gara,
+ * altrimenti le piazzole della gara (o 20) × 3 frecce. Lo stesso conto del profilo.
+ */
+function loadOf(entry: Entry, comp: Comp) {
+  const garaLanes = entry.laneCount ?? comp.lanes ?? LANES_DEFAULT;
+  const rows = entry.piazzole;
+  const rowArrows = rows.reduce((sum, lane) => sum + (lane.arrows.length || ARROWS_PER_LANE), 0);
+  const rowPts = rows.reduce((sum, lane) => sum + lane.score, 0);
+  if (!rows.length) return { lanes: garaLanes, arrows: garaLanes * ARROWS_PER_LANE };
+  const complete = entry.score == null || rowPts >= entry.score || rows.length >= garaLanes;
+  const lanes = complete ? rows.length : Math.max(rows.length, garaLanes);
+  return { lanes, arrows: rowArrows + (lanes - rows.length) * ARROWS_PER_LANE };
+}
+
 function totalsOf(comps: Comp[], userId: string) {
-  const rows = comps.flatMap((comp) => comp.entries.filter((entry) => entry.userId === userId && hasResult(entry)));
+  const pairs = comps.flatMap((comp) => comp.entries.filter((entry) => entry.userId === userId && hasResult(entry)).map((entry) => ({ entry, comp })));
+  const rows = pairs.map((p) => p.entry);
   const scored = rows.filter((entry) => entry.score != null);
   const points = scored.reduce((sum, entry) => sum + (entry.score ?? 0), 0);
+  const loads = pairs.map(({ entry, comp }) => ({ entry, ...loadOf(entry, comp) }));
+  const scoredArrows = loads.filter((l) => l.entry.score != null).reduce((sum, l) => sum + l.arrows, 0);
   return {
     gare: rows.length,
     points,
     avg: scored.length ? points / scored.length : null,
-    lanes: rows.reduce((sum, entry) => sum + (entry.laneCount ?? entry.piazzole.length), 0),
+    lanes: loads.reduce((sum, l) => sum + l.lanes, 0),
+    arrows: loads.reduce((sum, l) => sum + l.arrows, 0),
+    perArrow: scoredArrows ? points / scoredArrows : null,
     spots: rows.reduce((sum, entry) => sum + (entry.spot ?? 0), 0),
     champ: rows.reduce((sum, entry) => sum + (entry.championshipPoints ?? 0), 0),
     ...distanceOf(rows),

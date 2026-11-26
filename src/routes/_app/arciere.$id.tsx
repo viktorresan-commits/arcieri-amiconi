@@ -166,31 +166,39 @@ function LastGara({ g }: { g: NonNullable<Stats["last"]> }) {
   );
 }
 
-/** Le statistiche che vedono tutti: allenamenti, gare, punti dell'avatar */
+/** Le statistiche che vedono tutti: frecce e piazzole (allenamenti e gare), gare, punti dell'avatar */
 function StatsGrid({ st }: { st: Stats }) {
   const lv = levelOf(Math.max(0, st.xp));
   const items: { kind: "allenamento" | "campionato" | "minigioco"; label: string; value: string }[] = [
     { kind: "allenamento", label: "Allenamenti", value: fmtNum(st.trainings) },
+    { kind: "allenamento", label: "Piazzole", value: fmtNum(st.piazzole) },
     { kind: "allenamento", label: "Frecce", value: fmtNum(st.arrows) },
-    { kind: "allenamento", label: "Media", value: st.avg == null ? "—" : fmtAvg(st.avg) },
+    { kind: "allenamento", label: "Media a freccia", value: st.avg == null ? "—" : fmtAvg(st.avg) },
     { kind: "campionato", label: "Gare", value: fmtNum(st.gare) },
+    { kind: "campionato", label: "Podi", value: fmtNum(st.podiums) },
     { kind: "campionato", label: "Miglior gara", value: fmtNum(st.bestScore) },
     { kind: "campionato", label: "Media gare", value: fmtNum(st.avgScore) },
     { kind: "minigioco", label: "Punti avatar", value: fmtNum(st.xp) },
     { kind: "minigioco", label: "Livello", value: String(lv.level) },
     { kind: "minigioco", label: "Giri al minigioco", value: fmtNum(st.gameRounds) },
+    { kind: "minigioco", label: "Record minigioco", value: fmtNum(st.gameBest || null) },
   ];
   return (
     <Card className="grid gap-2.5">
       <h2 className="font-display text-2xl">Statistiche</h2>
-      <div className="grid grid-cols-3 gap-2 text-center">
+      <div className="grid grid-cols-4 gap-1.5 text-center">
         {items.map((it) => (
-          <div key={it.label} className="grid justify-items-center gap-0.5 rounded-2xl bg-white/[0.04] p-2" style={{ boxShadow: `inset 0 -2px 0 ${KINDS[it.kind].color}55` }}>
-            <p className="font-display text-2xl leading-none tabular-nums">{it.value}</p>
-            <p className="text-[0.66rem] leading-tight text-muted">{it.label}</p>
+          <div key={it.label} className="grid content-start justify-items-center gap-1 rounded-2xl bg-white/[0.04] px-1 py-2" style={{ boxShadow: `inset 0 -2px 0 ${KINDS[it.kind].color}55` }}>
+            <p className="font-display text-xl leading-none tabular-nums">{it.value}</p>
+            <p className="text-[0.62rem] leading-tight text-muted">{it.label}</p>
           </div>
         ))}
       </div>
+      {st.estimatedGare > 0 ? (
+        <p className="text-xs leading-snug text-muted">
+          {st.estimatedGare === 1 ? "Per una gara" : `Per ${st.estimatedGare} gare`} manca il cartellino: piazzole e frecce sono contate sulle piazzole della gara (di solito 20, 3 frecce a piazzola). Si correggono da Gare, con la foto del cartellino o a mano.
+        </p>
+      ) : null}
     </Card>
   );
 }
@@ -205,8 +213,9 @@ function CompareWithMe({ them, me, name }: { them: Stats; me: Stats; name: strin
     { label: "Gare", a: me.gare, b: them.gare },
     { label: "Miglior gara", a: me.bestScore, b: them.bestScore },
     { label: "Allenamenti", a: me.trainings, b: them.trainings },
+    { label: "Piazzole", a: me.piazzole, b: them.piazzole },
     { label: "Frecce", a: me.arrows, b: them.arrows },
-    { label: "Media allenamento", a: me.avg, b: them.avg, fmt: (v) => fmtAvg(v) },
+    { label: "Media a freccia", a: me.avg, b: them.avg, fmt: (v) => fmtAvg(v) },
     { label: "Punti avatar", a: me.xp, b: them.xp },
     { label: "Giri al minigioco", a: me.gameRounds, b: them.gameRounds },
   ];

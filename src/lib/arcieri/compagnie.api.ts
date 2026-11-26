@@ -10,6 +10,7 @@ import { asNum, cleanPhoto, clip, db, ensureMember, staffLevel } from "./access"
 import { fitastAvgBy, fitastPointsBy } from "./fitast-league.api";
 import { teamKey } from "./fitast-league";
 import { withRealCrest } from "./stemmi-veri";
+import { garaLoads, sumLoads, type GaraLoad } from "./gara-volume";
 
 export const HOME_SLUG = "fabriano";
 
@@ -161,10 +162,15 @@ export const listCompanies = createServerFn({ method: "GET" })
     const fitastAvg = await fitastAvgBy(sql).catch(() => new Map<string, { avg: number; archers: number }>());
     const trainOf = new Map(train.map((row) => [row.user_id, row]));
     const compOf = new Map(comps.map((row) => [row.user_id, row]));
+    // frecce delle gare: dal cartellino o dalle piazzole inserite, altrimenti piazzole della gara × 3
+    const loads = await garaLoads(sql).catch(() => new Map<string, GaraLoad[]>());
+    const volOf = (userId: string) => sumLoads(loads.get(userId));
     const board = companies.map((row) => {
       const id = asNum(row.id);
       const crew = people.filter((p) => asNum(p.company_id) === id);
       let arrows = 0;
+      let avgArrows = 0;
+      let avgPoints = 0;
       let trainPoints = 0;
       let sessions = 0;
       let gare = 0;
@@ -172,7 +178,10 @@ export const listCompanies = createServerFn({ method: "GET" })
       for (const p of crew) {
         const t = trainOf.get(p.user_id);
         const c = compOf.get(p.user_id);
-        arrows += asNum(t?.arrows);
+        const v = volOf(p.user_id);
+        arrows += asNum(t?.arrows) + v.arrows;
+        avgArrows += asNum(t?.arrows) + v.pointArrows;
+        avgPoints += asNum(t?.points) + v.points;
         trainPoints += asNum(t?.points);
         sessions += asNum(t?.sessions);
         gare += asNum(c?.gare);
@@ -192,7 +201,7 @@ export const listCompanies = createServerFn({ method: "GET" })
         sessions,
         gare,
         points: trainPoints + gareRaw,
-        avg: arrows > 0 ? trainPoints / arrows : null,
+        avg: avgArrows > 0 ? avgPoints / avgArrows : null,
         owner: crew.find((p) => p.role === "owner")?.user_id ?? null,
         // gli iscritti delle altre compagnie li vede solo lo staff (amministratori ed editor)
         crew: (id === mine.companyId || staffLevel(me) ? crew : []).map((p) => ({
@@ -204,7 +213,7 @@ export const listCompanies = createServerFn({ method: "GET" })
           avatarColor: p.avatar_color,
           photoUrl: p.photo_url,
           owner: p.role === "owner",
-          arrows: asNum(trainOf.get(p.user_id)?.arrows),
+          arrows: asNum(trainOf.get(p.user_id)?.arrows) + volOf(p.user_id).arrows,
         })),
       };
     });

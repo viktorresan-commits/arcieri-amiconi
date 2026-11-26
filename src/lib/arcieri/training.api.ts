@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { garaLoads } from "./gara-volume";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { asBool, asIso, asNum, asNumOrNull, canScore, cleanPhoto, clip, db, ensureMember, type MemberRow } from "./access";
 import { syncBadges } from "./badges";
@@ -809,6 +810,7 @@ export const dashboard = createServerFn({ method: "GET" })
       shotMarks.push({ day, at, seq: asNum(shot.shot_id), score, n: asNum(shot.arrow_index) + 1, tag: shot.arrow_tag != null ? asNum(shot.arrow_tag) : null, max: asNum(shot.max_arrow, 10), distance: asNum(shot.distance_m), miss, isX: asBool(shot.is_x), specs: shot.arrow_specs ?? "", link: { kind: "allenamento", id: asNum(shot.session_id) } });
     }
     const compsWithArrows = new Set<number>();
+    const laneShots = new Map<number, { arrows: number; points: number }>();
     for (const row of laneRows) {
       const day = String(row.starts_on).slice(0, 10);
       const laneDistance = row.distance_m == null ? 0 : asNum(row.distance_m);
@@ -819,6 +821,10 @@ export const dashboard = createServerFn({ method: "GET" })
       if (!parts.length) continue;
       const id = asNum(row.competition_id);
       compsWithArrows.add(id);
+      const seen = laneShots.get(id) ?? { arrows: 0, points: 0 };
+      seen.arrows += parts.length;
+      seen.points += parts.reduce((a, b) => a + b, 0);
+      laneShots.set(id, seen);
       const padiglione = row.target_kind === "padiglione";
       for (const score of parts) {
         addShot(day, score, null);
@@ -826,6 +832,20 @@ export const dashboard = createServerFn({ method: "GET" })
       }
       const at = new Date(`${day}T12:00:00`).getTime() || 0;
       parts.forEach((score, index) => shotMarks.push({ day, at, seq: 1_000_000 + asNum(row.n) * 20 + index, score, n: index + 1, max: padiglione ? 10 : Math.max(11, ...parts), distance: laneDistance || compDistance, miss: score <= 0, isX: false, specs: "", link: { kind: "gara", id } }));
+    }
+    // le gare senza frecce inserite contano lo stesso: piazzole della gara × 3 frecce e il punteggio di gara
+    for (const load of (await garaLoads(sql, context.userId)).get(context.userId) ?? []) {
+      const seen = laneShots.get(load.competitionId) ?? { arrows: 0, points: 0 };
+      const extra = load.arrows - seen.arrows;
+      if (extra <= 0) continue;
+      const extraPoints = load.points == null ? 0 : Math.max(0, load.points - seen.points);
+      if (load.points == null) continue;
+      bag.arrows += extra;
+      bag.points += extraPoints;
+      if (inMonth(load.day)) {
+        monthBag.arrows += extra;
+        monthBag.points += extraPoints;
+      }
     }
     let monthEvents = monthCards.filter((session) => session.arrows > 0).length;
     const seenMonth = new Set<number>();

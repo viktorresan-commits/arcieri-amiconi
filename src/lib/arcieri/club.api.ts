@@ -11,6 +11,7 @@ import { divisionOf } from "./labels";
 import { accountWriter, writerFor } from "./acting.api";
 import { activityXp } from "./xp.api";
 import { fitastRankOf, loadGenerale, type GenTable } from "./fitast-rank";
+import { garaLoads, sumLoads } from "./gara-volume";
 import { archersIn, championshipName, matchPerson, oursInGara, peopleOf, resultOf, stepsOf, type GaraTable, type PortalResult, type Who } from "./fitast-ours";
 import { nameKey } from "./fitast-rank";
 import { categoryGroup, teamKey as teamKeyOf, titleName } from "./fitast-league";
@@ -498,10 +499,10 @@ export const listCompetitions = createServerFn({ method: "GET" })
     await ensureMember(sql, context.userId);
     const comps = await sql<{
       id: number; name: string; starts_on: string; place: string; organizer: string; kind: string; distance_m: number | null;
-      category: string; signup_deadline: string | null; external_url: string; notes: string; created_by: string;
+      category: string; signup_deadline: string | null; external_url: string; notes: string; created_by: string; lanes: number | null;
     }>`
       select id, name, starts_on::text as starts_on, place, organizer, kind, distance_m, category,
-        signup_deadline::text as signup_deadline, external_url, notes, created_by
+        signup_deadline::text as signup_deadline, external_url, notes, created_by, lanes
       from competitions order by starts_on`;
     const viewer = await sql<MemberRow>`select * from members where user_id = ${context.userId} limit 1`;
     const staffHere = viewer[0] ? staffLevel(viewer[0]) != null : false;
@@ -547,6 +548,13 @@ export const listCompetitions = createServerFn({ method: "GET" })
     const pzTables = await sql<GaraTable>`
       select gara_id, gara_title, held_on::text as held_on, season, category, rows from fitast_standings
       where kind = 'gara-piazzole' and gara_id <> ''`.catch(() => [] as GaraTable[]);
+    // piazzole di ogni gara: quelle scritte nella gara, altrimenti la più alta letta su un cartellino
+    const cardTop = new Map<number, number>();
+    for (const card of cards) {
+      const lanes = Array.isArray(card.lanes) ? card.lanes : [];
+      const top = Math.max(0, ...lanes.map((lane) => asNum(lane?.p)));
+      if (top > (cardTop.get(asNum(card.competition_id)) ?? 0)) cardTop.set(asNum(card.competition_id), top);
+    }
     const meWho = who.find((x) => x.userId === context.userId) ?? null;
     const groupOf = (compId: number, garaId: string) => {
       const mineKeys = new Set([nameKey(meWho?.fitastName ?? ""), nameKey(meWho?.fullName ?? "")].filter(Boolean));
@@ -693,6 +701,7 @@ export const listCompetitions = createServerFn({ method: "GET" })
         organizer: c.organizer,
         kind: c.kind,
         distanceM: asNumOrNull(c.distance_m),
+        lanes: asNumOrNull(c.lanes) ?? cardTop.get(asNum(c.id)) ?? null,
         category: c.category,
         signupDeadline: c.signup_deadline ? String(c.signup_deadline).slice(0, 10) : null,
         externalUrl: c.external_url,
@@ -722,6 +731,7 @@ export const listCompetitions = createServerFn({ method: "GET" })
         organizer: "",
         kind: "campionato",
         distanceM: null,
+        lanes: null as number | null,
         category: "",
         signupDeadline: null,
         externalUrl: "",
@@ -982,8 +992,12 @@ async function archerStats(sql: Awaited<ReturnType<typeof db>>, userId: string, 
     where s.user_id = ${userId}
     group by s.id`;
   const real = sessions.filter((x) => asNum(x.arrows) > 0);
-  const arrows = real.reduce((sum, x) => sum + asNum(x.arrows), 0);
-  const points = real.reduce((sum, x) => sum + asNum(x.points), 0);
+  const trainArrows = real.reduce((sum, x) => sum + asNum(x.arrows), 0);
+  const trainPoints = real.reduce((sum, x) => sum + asNum(x.points), 0);
+  // le gare contano sempre: piazzole e frecce dal cartellino, dalle piazzole inserite o stimate (20 piazzole × 3 frecce)
+  const vol = sumLoads((await garaLoads(sql, userId)).get(userId));
+  const arrows = trainArrows + vol.arrows;
+  const avgArrows = trainArrows + vol.pointArrows;
   const game = await sql<{ rounds: number; best: number; max_points: number }>`
     select coalesce(sum(rounds), 0)::int as rounds, coalesce(max(best), 0)::int as best, coalesce(max(max_points), 0)::int as max_points from game_records where user_id = ${userId}`.catch(() => []);
   // il posto vero nel campionato FITAST: in categoria, assoluto, nella divisione e in compagnia
@@ -1001,7 +1015,11 @@ async function archerStats(sql: Awaited<ReturnType<typeof db>>, userId: string, 
     last,
     trainings: real.length,
     arrows,
-    avg: arrows ? points / arrows : null,
+    trainArrows,
+    garaArrows: vol.arrows,
+    piazzole: vol.piazzole,
+    estimatedGare: vol.estimated,
+    avg: avgArrows ? (trainPoints + vol.points) / avgArrows : null,
     gameRounds: asNum(game[0]?.rounds),
     gameBest: asNum(game[0]?.best),
     xp,
