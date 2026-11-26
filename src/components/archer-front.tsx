@@ -1,5 +1,5 @@
 import { useId } from "react";
-import { tune, type AvatarLook } from "@/lib/arcieri/avatar";
+import { tune, type AvatarLook, nearSide, sideOf } from "@/lib/arcieri/avatar";
 import { AvatarFace, bodyWidth, CAPE_CLOTH, shade } from "./archer-avatar";
 import { PATTERN2_IDS } from "@/lib/arcieri/avatar-more";
 import { Pendant } from "./avatar-more";
@@ -46,7 +46,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
   const shorts = look.bottom === "pantaloncini" || look.bottom === "gonna";
   const legW = (tight ? 15 : wide ? 22 : 18) * W;
   const legX = [cx - 14 * W, cx + 14 * W];
-  const bootTop = frontBootTop(look.footwear);
+  const bootTop = frontBootTop(look.footwear, look.bootHeight);
   // l'arco sta nella mano dell'arco: la sinistra (a destra per chi guarda), o l'altra se mancino
   const bowSide: 1 | -1 = look.lefty ? -1 : 1;
   const grip = { x: cx + bowSide * (sh.r - cx + 12), y: 206 };
@@ -322,19 +322,11 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
             {look.buckle && look.buckle !== "semplice" ? <Buckle kind={look.buckle} x={cx} y={190} /> : <rect x={cx - 5} y={look.belt === "larga" ? 183 : 186} width="10" height={look.belt === "larga" ? 12 : 9} rx="1.5" fill="none" stroke="#d9b45a" strokeWidth="1.8" />}
           </g>
         ) : null}
-        {look.pouch ? <Pouch kind={look.pouchType} x={cx - bowSide * 24} y={192} /> : null}
+        {/* borsello sul fianco scelto (destro dell'arciere = a sinistra di chi guarda) */}
+        {look.pouch ? <Pouch kind={look.pouchType} x={cx + (sideOf(look.pouchSide, nearSide(look)) === "destra" ? -24 : 24)} y={192} /> : null}
         <ChestEmblem kind={look.emblem} crest={look.crest} x={look.emblem === "compagnia" ? cx : cx - bowSide * 14} y={look.emblem === "compagnia" ? 150 : 134} s={look.emblem === "compagnia" ? 1.25 : 0.85} base={shirt} trim={look.trim} />
         {/* bottoni come di profilo: sul petto se non c'è lo stemma, sulla falda sotto la cintura se la veste è lunga */}
         {BUTTON_TOPS[look.top] && !(look.special === "simone-inverno" && look.top === "giacca") ? (look.emblem !== "nessuno" ? (longTop ? [205, 217] : []) : [118, 132, 146, 160, 174, ...(longTop ? [205, 217] : [])]).map((y) => <ClothButton key={y} x={cx} y={y} r={2.2} color={BUTTON_TOPS[look.top]} metal={look.top === "giubbetto" || look.top === "divisa" || look.top === "cappotto-lungo"} />) : null}
-        {look.cape && look.clasp !== "nessuno" ? (
-          // due fermagli sul davanti, uniti da una catenella che pende sul petto
-          <g>
-            <path d={`M${cx - 16} 102 Q${cx} 112 ${cx + 16} 102`} stroke="#5d5040" strokeWidth="2" fill="none" />
-            <path d={`M${cx - 16} 102 Q${cx} 112 ${cx + 16} 102`} stroke={look.clasp === "argento" ? "#d7dbe1" : "#d9b45a"} strokeWidth="1.4" strokeDasharray="1.6 1" fill="none" />
-            <Clasp kind={look.clasp} x={cx - 16} y={102} s={0.85} />
-            <Clasp kind={look.clasp} x={cx + 16} y={102} s={0.85} />
-          </g>
-        ) : null}
         {!quiverBack ? (
           <g transform={`translate(${cx - bowSide * (hip.r - cx + 10)} ${222 + tune(look.quiverY, 0, -40, 40)}) rotate(${-bowSide * 8 + spin})`}>
             {[-4, 0, 4].map((dx, i) => <path key={dx} d={`M${dx} -42 l-3.4 -9 l3.4 2.6 l3.4 -2.6 z`} fill={i === 1 ? look.cock : look.fletch} />)}
@@ -353,6 +345,16 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
             <path d={`M${cx - 18} 99 Q${cx} 134 ${cx + 18} 99`} stroke="#d7dbe1" strokeWidth="2" strokeDasharray="1.8 1.2" fill="none" />
           </g>
         ) : look.necklace ? <path d={`M${cx - 10} 100 Q${cx} 114 ${cx + 10} 100`} stroke="#d9b45a" strokeWidth="1.4" fill="none" /> : null}
+        {/* i fermagli del mantello sopra collane e ciondoli */}
+        {look.cape && look.clasp !== "nessuno" ? (
+          // due fermagli sul davanti, uniti da una catenella che pende sul petto
+          <g>
+            <path d={`M${cx - 16} 102 Q${cx} 112 ${cx + 16} 102`} stroke="#5d5040" strokeWidth="2" fill="none" />
+            <path d={`M${cx - 16} 102 Q${cx} 112 ${cx + 16} 102`} stroke={look.clasp === "argento" ? "#d7dbe1" : "#d9b45a"} strokeWidth="1.4" strokeDasharray="1.6 1" fill="none" />
+            <Clasp kind={look.clasp} x={cx - 16} y={102} s={0.85} />
+            <Clasp kind={look.clasp} x={cx + 16} y={102} s={0.85} />
+          </g>
+        ) : null}
 
         {/* faretra al fianco sopra la veste, sotto il braccio */}
         {armsOut != null ? null : heldArrow}

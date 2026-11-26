@@ -160,15 +160,14 @@ export function SleeveDetail({ s, e, h, w, color, long }: { s: P; e: P; h: P; w:
 /** Cuoio di un bracciale o di una cinghia stesa tra due punti: grana, cuciture ai bordi, luce. */
 export function LeatherBand({ uid, a, b, w, color }: { uid: string; a: P; b: P; w: number; color: string }) {
   const d = dirN(a, b);
-  const off = w / 2 - 1.1;
+  const off = w / 2 - 1.6;
   const edge = (sgn: number) => `M${f(a.x + d.nx * off * sgn + d.ux * 1.5)} ${f(a.y + d.ny * off * sgn + d.uy * 1.5)} L${f(b.x + d.nx * off * sgn - d.ux * 1.5)} ${f(b.y + d.ny * off * sgn - d.uy * 1.5)}`;
   return (
     <g pointerEvents="none" strokeLinecap="round">
       <line x1={f(a.x)} y1={f(a.y)} x2={f(b.x)} y2={f(b.y)} stroke={`url(#${uid}grain)`} strokeWidth={f(w)} />
-      <path d={edge(1)} stroke={color} strokeOpacity="0.65" strokeWidth="0.28" strokeDasharray="0.8 0.7" fill="none" />
-      <path d={edge(-1)} stroke={color} strokeOpacity="0.65" strokeWidth="0.28" strokeDasharray="0.8 0.7" fill="none" />
+      <path d={edge(1)} stroke={color} strokeOpacity="0.35" strokeWidth="0.25" strokeDasharray="0.8 0.7" fill="none" />
+      <path d={edge(-1)} stroke={color} strokeOpacity="0.35" strokeWidth="0.25" strokeDasharray="0.8 0.7" fill="none" />
       <line x1={f(a.x + d.nx * w * 0.3)} y1={f(a.y + d.ny * w * 0.3)} x2={f(b.x + d.nx * w * 0.3)} y2={f(b.y + d.ny * w * 0.3)} stroke="#000" strokeOpacity="0.13" strokeWidth={f(w * 0.26)} />
-      <line x1={f(a.x - d.nx * w * 0.22)} y1={f(a.y - d.ny * w * 0.22)} x2={f(b.x - d.nx * w * 0.22)} y2={f(b.y - d.ny * w * 0.22)} stroke="#fff" strokeOpacity="0.2" strokeWidth="0.35" />
     </g>
   );
 }
@@ -341,7 +340,7 @@ export function HairFineStrands({ color, light, dark, curly }: { color: string; 
         {Array.from({ length: 16 }, (_, i) => {
           const x = 132 + (i % 6) * 6.4 + (i > 5 ? 3 : 0);
           const y = 60 + Math.floor(i / 6) * 7 + (i % 2) * 2;
-          return <path key={i} d={`M${x} ${y} q2.4 -2.4 4.8 0 q-1.2 2.4 -3.6 1.2`} stroke={i % 3 ? dark : light} strokeOpacity={i % 3 ? 0.45 : 0.35} strokeWidth="0.7" />;
+          return <path key={i} d={`M${x} ${y} q2.4 -2.4 4.8 0 q-1.2 2.4 -3.6 1.2`} stroke={i % 3 ? dark : light} strokeOpacity={i % 3 ? 0.45 : 0.35} strokeWidth="0.4" />;
         })}
       </g>
     );
@@ -358,9 +357,9 @@ export function HairFineStrands({ color, light, dark, curly }: { color: string; 
         const y1 = 58 + k * 2 + (i % 3);
         const cx = 136 + k * 10;
         const cy = 60 - k * 2;
-        return <path key={i} d={`M${f(x0)} ${f(y0)} Q${f(cx)} ${f(cy)} ${f(x1)} ${f(y1)}`} stroke={i % 2 ? dark : light} strokeOpacity={i % 2 ? 0.28 : 0.13} strokeWidth={i % 4 === 0 ? 0.8 : 0.45} />;
+        return <path key={i} d={`M${f(x0)} ${f(y0)} Q${f(cx)} ${f(cy)} ${f(x1)} ${f(y1)}`} stroke={i % 2 ? dark : light} strokeOpacity={i % 2 ? 0.28 : 0.13} strokeWidth={i % 4 === 0 ? 0.42 : 0.28} />;
       })}
-      <path d="M131 84 Q130 78 133 72" stroke={color} strokeOpacity="0.5" strokeWidth="0.6" />
+      <path d="M131 84 Q130 78 133 72" stroke={color} strokeOpacity="0.5" strokeWidth="0.4" />
     </g>
   );
 }
@@ -388,12 +387,12 @@ export function BeardTexture({ uid, d, color, light, dark, box = [138, 92, 36, 4
           <path d={d} />
         </clipPath>
       </defs>
-      <g clipPath={`url(#${uid}${id})`} strokeWidth={0.45 * k} strokeLinecap="round" fill="none">
+      <g clipPath={`url(#${uid}${id})`} strokeWidth={0.3 * k} strokeLinecap="round" fill="none">
         <path d={dk} stroke={dark} strokeOpacity="0.45" />
         <path d={lt} stroke={light} strokeOpacity="0.4" />
         {band ? <path d={band} stroke={color} strokeOpacity="0.3" strokeWidth={3 * k} /> : null}
       </g>
-      <path d={d} fill="none" stroke={dark} strokeOpacity="0.6" strokeWidth={0.5 * k} />
+      <path d={d} fill="none" stroke={dark} strokeOpacity="0.6" strokeWidth={0.35 * k} />
     </g>
   );
 }

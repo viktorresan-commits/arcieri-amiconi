@@ -32,9 +32,13 @@ import {
   outfitIdea,
   presetLook,
   tune,
+  BOOTS_TALL,
+  nearSide,
+  sideOf,
   type AvatarLook,
   type ExtraKey,
 } from "@/lib/arcieri/avatar";
+import { bootHeightOf } from "@/components/avatar-shoes";
 
 export const Route = createFileRoute("/_app/avatar")({
   component: Page,
@@ -89,7 +93,7 @@ function Strip({ title, items, current, onPick, hint }: { title: string; items: 
 
 /** come si vede una scelta in più: volto, figura di fronte, arco o solo il nome */
 const EXTRA_PREVIEW: Record<ExtraKey, "volto" | "fronte" | "arco" | "testo"> = {
-  pattern: "fronte", emblem: "fronte", paint: "volto", tattoo: "testo", earringType: "volto", hairAcc: "volto",
+  pattern: "fronte", emblem: "fronte", paint: "volto", paint2: "volto", tattoo: "testo", earringType: "volto", hairAcc: "volto",
   bowDeco: "arco", fletchStyle: "arco", quiverStyle: "fronte", eyeShape: "volto", mouth: "volto", ears: "volto",
   blush: "volto", age: "volto", mark: "volto", buckle: "fronte", pouchType: "fronte", clasp: "fronte",
   capePattern: "fronte", frame: "volto", idle: "testo",
@@ -695,6 +699,12 @@ export function AvatarEditor() {
             <Row label="Ai piedi">
               <BodyGrid look={shown} current={look.footwear} feet items={FOOT_OPTS.map(([id, label]) => ({ id, label, patch: { footwear: id } }))} onPick={(id) => set("footwear", id as AvatarLook["footwear"])} />
             </Row>
+            {BOOTS_TALL.includes(look.footwear) ? (
+              <div className="grid gap-1">
+                <Slider label="Altezza delle calzature" value={bootHeightOf(look)} min={0} max={100} onChange={(v) => set("bootHeight", String(Math.round(v)))} format={(v) => (v < 15 ? "Alla caviglia" : v < 45 ? "A metà polpaccio" : v < 80 ? "Sotto il ginocchio" : "Al ginocchio")} ends={["Bassi", "Alti"]} />
+                {look.bootHeight !== "" ? <button type="button" className="aa-chip justify-self-start" onClick={() => set("bootHeight", "")}>Come il modello</button> : null}
+              </div>
+            ) : null}
             <Row label="Colore delle calzature"><Tint value={look.shoes} onPick={(c) => set("shoes", c)} quick={["#3a2a1e", "#14181c", "#e9e4d8", "#8a2f2f", "#2a5d8a", "#5e3b22"]} /></Row>
             <Row label="Cintura"><Chips value={look.belt} onChange={(v) => set("belt", v)} options={[{ id: "sottile", label: "Sottile" }, { id: "larga", label: "Larga con fibbia" }, { id: "nessuna", label: "Nessuna" }]} /></Row>
             {look.belt !== "nessuna" ? <Row label="Colore della cintura"><Colors value={look.beltColor} colors={["#5b3a1e", "#4a2c16", "#14181c", "#8a2f2f", "#7a4a26", "#c9a46a"]} onPick={(c) => set("beltColor", c)} /></Row> : null}
@@ -704,6 +714,15 @@ export function AvatarEditor() {
           <>
             <AccessoryStrip title="Sul viso e in testa" items={ACCS_FACE} look={look} shown={shown} onToggle={(k, v) => setLook((l) => ({ ...l, [k]: v }))} />
             <AccessoryStrip title="Al collo, sul corpo e alle gambe" items={ACCS_BODY} look={look} shown={shown} onToggle={(k, v) => setLook((l) => ({ ...l, [k]: v }))} />
+            {/* da che parte: gli accessori che stanno da un lato solo */}
+            {look.pouch ? <Row label="Borsello"><Chips value={sideOf(look.pouchSide, nearSide(look))} onChange={(v) => set("pouchSide", v)} options={[{ id: "destra", label: "Fianco destro" }, { id: "sinistra", label: "Fianco sinistro" }]} /></Row> : null}
+            {look.earring ? (
+              <Row label="Orecchini">
+                <Chips value={look.earrings === "1" ? "1" : "2"} onChange={(v) => set("earrings", v)} options={[{ id: "2", label: "Due" }, { id: "1", label: "Uno solo" }]} />
+                {look.earrings === "1" ? <Chips value={sideOf(look.earringSide, nearSide(look))} onChange={(v) => set("earringSide", v)} options={[{ id: "destra", label: "Orecchio destro" }, { id: "sinistra", label: "Orecchio sinistro" }]} /> : null}
+              </Row>
+            ) : null}
+            {look.hairFeather ? <Row label="Piuma tra i capelli"><Chips value={sideOf(look.featherSide, "sinistra")} onChange={(v) => set("featherSide", v)} options={[{ id: "destra", label: "A destra" }, { id: "sinistra", label: "A sinistra" }]} /></Row> : null}
             <Row label="Bracciali di cuoio"><Colors value={look.bracers} colors={["", "#6b4224", "#4a2c16", "#14181c", "#8a2f2f", "#c9a46a"]} onPick={(c) => set("bracers", c)} /></Row>
             {look.cape ? <Row label="Mantello"><Chips value={look.capeStyle} onChange={(v) => set("capeStyle", v)} options={[{ id: "liscio", label: "Lungo" }, { id: "frastagliato", label: "Frastagliato" }, { id: "corto", label: "Corto" }]} /></Row> : null}
             {look.cape ? <Row label="Colore del mantello"><Tint value={look.capeColor} onPick={(c) => set("capeColor", c)} quick={CLOTH_COLORS} /></Row> : null}

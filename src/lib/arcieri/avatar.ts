@@ -153,6 +153,16 @@ export type AvatarLook = {
   palette: string;
   /** abito su misura (vedi special-looks): dettagli disegnati solo per lui */
   special: string;
+  /** lato degli accessori da un lato solo ("destra"/"sinistra" dell'arciere; "" = quello di sempre) */
+  pouchSide: string;
+  featherSide: string;
+  /** orecchini: "1" o "2", e da che parte quando è uno */
+  earrings: string;
+  earringSide: string;
+  /** seconda pittura sul viso: la metà sinistra ("nessuna" = una sola pittura su tutto il viso) */
+  paint2: string;
+  /** altezza degli stivali (0-100; "" = quella del modello) */
+  bootHeight: string;
 };
 
 /** legge una regolazione numerica salvata come testo */
@@ -327,7 +337,26 @@ export const AVATAR_DEFAULT: AvatarLook = {
   browShape: "naturali",
   palette: "",
   special: "",
+  pouchSide: "",
+  featherSide: "",
+  earrings: "2",
+  earringSide: "",
+  paint2: "nessuna",
+  bootHeight: "",
 };
+
+/** di profilo si vede il fianco della mano che tende la corda: il destro, il sinistro per i mancini */
+export function nearSide(look: Pick<AvatarLook, "lefty">): "destra" | "sinistra" {
+  return look.lefty ? "sinistra" : "destra";
+}
+
+/** il lato di un accessorio: quello scelto, altrimenti `def` */
+export function sideOf(v: string | undefined, def: "destra" | "sinistra"): "destra" | "sinistra" {
+  return v === "destra" || v === "sinistra" ? v : def;
+}
+
+/** calzature che si possono alzare o abbassare sulla gamba */
+export const BOOTS_TALL = ["stivali", "stivali-risvolto", "stivali-alti", "stivali-pelliccia", "stivaletti", "scarponi"];
 
 /**
  * Le scelte in più dell'avatar: ogni voce è una novità disegnata. Si mostrano come
@@ -337,6 +366,7 @@ export const EXTRA_OPTIONS = {
   pattern: { label: "Fantasia della veste", tab: "abiti", items: [["nessuno", "Tinta unita"], ["righe", "A righe"], ["righe-verticali", "Righe verticali"], ["quadri", "A quadri"], ["scozzese", "Scozzese"], ["pois", "A pois"], ["rombi", "A rombi"], ["chevron", "A spina"], ["mimetico", "Mimetico"], ["ricamo", "Ricamata"], ["bordure", "Con bordure"], ["fasce", "A fasce"], ["sfumata", "Sfumata"], ["zigzag", "A zig-zag"], ["stelline", "Stelline"], ["foglie", "Foglie"], ["onde", "Onde"], ["diagonali", "Righe oblique"], ["nido", "Nido d'ape"], ["gigli", "Gigli"], ["croci", "Crocette"], ["losanghe", "A losanghe"], ["puntini", "A puntini"], ["tartan", "Tartan"], ["fiamme", "Fiamme in fondo"], ["scaglie", "Scaglie di drago"], ...PATTERNS2.map((q) => [q[0], q[1]] as const)] },
   emblem: { label: "Stemma sul petto", tab: "abiti", items: [["nessuno", "Nessuno"], ["compagnia", "Stemma della compagnia"], ["cervo", "Cervo"], ["lupo", "Lupo"], ["drago", "Drago"], ["freccia", "Freccia"], ["bersaglio", "Bersaglio"], ["giglio", "Giglio"], ["stella", "Stella"], ["scudo", "Scudo"], ["quercia", "Quercia"], ["aquila", "Aquila"], ["falco", "Falco"], ["leone", "Leone"], ["croce", "Croce"], ["sole", "Sole"], ["luna", "Luna"], ["corona", "Corona"], ["orso", "Orso"], ["cinghiale", "Cinghiale"], ["volpe", "Volpe"], ["civetta", "Civetta"], ["spade", "Spade incrociate"], ["torre", "Torre"], ["chiave", "Chiave"], ["ancora", "Ancora"], ["fiore", "Fiore"], ["trifoglio", "Trifoglio"], ["fiamma", "Fiamma"], ["cuore", "Cuore"], ["spiga", "Spiga"], ["ascia", "Ascia"], ["cavallo", "Cavallo"], ["pesce", "Pesce"], ["gatto", "Gatto"], ["albero", "Albero"], ...EMBLEMS2.map((q) => [q[0], q[1]] as const)] },
   paint: { label: "Pittura sul viso", tab: "viso", items: [["nessuna", "Nessuna"], ["strisce", "Strisce"], ["maschera", "Maschera sugli occhi"], ["punti", "Punti"], ["tribale", "Tribale"], ["fulmine", "Fulmine"], ["mezza", "Mezzo viso"], ["naso", "Riga sul naso"], ["guance", "Guance"], ["volpe", "Volpe"], ["lupo", "Lupo"], ["occhi", "Occhi scuri"], ["zigzag", "Zig-zag"], ["croce", "Croce in fronte"], ["spirale", "Spirali"], ...PAINTS2.map((q) => [q.id, q.label] as const)] },
+  paint2: { label: "Seconda pittura: metà sinistra del viso", tab: "viso", items: [["nessuna", "Una sola pittura"], ["strisce", "Strisce"], ["maschera", "Maschera sugli occhi"], ["punti", "Punti"], ["tribale", "Tribale"], ["fulmine", "Fulmine"], ["mezza", "Mezzo viso"], ["naso", "Riga sul naso"], ["guance", "Guance"], ["volpe", "Volpe"], ["lupo", "Lupo"], ["occhi", "Occhi scuri"], ["zigzag", "Zig-zag"], ["croce", "Croce in fronte"], ["spirale", "Spirali"], ...PAINTS2.map((q) => [q.id, q.label] as const)] },
   tattoo: { label: "Tatuaggio", tab: "viso", items: [["nessuno", "Nessuno"], ["rune", "Rune sul braccio"], ["onde", "Onde sul braccio"], ["freccia", "Freccia sul braccio"], ["stelle", "Stelle sul collo"], ["lacrima", "Lacrima sul viso"], ["punti", "Punti sulla mano"], ["drago", "Drago sul braccio"], ["sole", "Sole sulla spalla"], ["luna", "Luna sul braccio"], ["foglia", "Foglia sul braccio"], ["bersaglio", "Bersaglio sul braccio"], ["spine", "Rami sul braccio"], ...TATTOO2.map((q) => [q.id, q.label] as const)] },
   earringType: { label: "Tipo di orecchino", tab: "accessori", items: [["cerchio", "Cerchio"], ["perla", "Perla"], ["pendente", "Pendente"], ["piuma", "Piuma"], ["doppio", "Doppio"], ["croce", "Croce"], ["zanna", "Zanna"], ["stella", "Stella"], ["freccia", "Freccia"], ["luna", "Luna"], ["goccia", "Goccia"], ["triplo", "Tre anellini"], ...EARRINGS2.map((q) => [q[0], q[1]] as const)] },
   hairAcc: { label: "Nei capelli", tab: "capelli", items: [["nessuno", "Niente"], ["perline", "Perline"], ["fermaglio", "Fermaglio"], ["nastro", "Nastro"], ["fiori", "Fiori"], ["piume", "Due piume"], ["anelli", "Anelli"], ["filo", "Filo dorato"], ["pettine", "Pettine"], ["corona-fiori", "Corona di fiori"], ["gemma", "Gemma"], ["osso", "Osso"], ["farfalla", "Farfalla"], ["corona", "Coroncina"], ["spilloni", "Spilloni"], ...HAIRACC2] },

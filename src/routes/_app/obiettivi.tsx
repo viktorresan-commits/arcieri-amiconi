@@ -12,6 +12,8 @@ import { Insignia, type InsSymbol } from "@/components/insignia";
 import { KindChip } from "@/components/kind-emblem";
 import { Confetti, Sparkle } from "@/components/celebrate";
 import { Glyph } from "@/components/icons";
+import { LevelCrest, levelHalo } from "@/components/level-crest";
+import { levelOf, useXp } from "@/lib/arcieri/xp";
 
 export const Route = createFileRoute("/_app/obiettivi")({ component: Page });
 
@@ -27,7 +29,8 @@ function Page() {
   const [err, setErr] = useState("");
   return (
     <div className="grid gap-3">
-      <PageHead title="Obiettivi" lede="Le medaglie premiano anche il salto di media e i giorni diversi, non solo il mucchio di frecce." />
+      <PageHead title="Livelli e obiettivi" lede="Il tuo livello sale con i punti di ogni tiro; le medaglie premiano anche il salto di media e i giorni diversi." />
+      <Levels />
       <Card className="grid gap-2">
         <Field label="Obiettivo"><TextInput value={title} onChange={(e) => setTitle(e.target.value)} /></Field>
         <Select value={metric} onChange={(e) => setMetric(e.target.value)}>
@@ -120,6 +123,70 @@ function Page() {
         ))}
         {!(data?.albo ?? []).length ? <p className="text-sm text-muted">Ancora vuoto.</p> : null}
       </Card>
+    </div>
+  );
+}
+
+/** punti in tutto per arrivare a un livello (1 → 100 punti, poi ogni livello ne chiede 25 in più) */
+function xpAt(level: number) {
+  let sum = 0;
+  for (let k = 1; k < level; k++) sum += 100 + 25 * (k - 1);
+  return sum;
+}
+
+/** I livelli: il tuo stemma, quanto manca al prossimo, i quattro metalli e come si guadagnano i punti. */
+function Levels() {
+  const xp = useXp();
+  const lv = levelOf(Math.max(0, xp.xp));
+  const tiers = [
+    { from: 1, to: 4, name: "Bronzo" },
+    { from: 5, to: 9, name: "Argento" },
+    { from: 10, to: 19, name: "Oro" },
+    { from: 20, to: null as number | null, name: "Oro reale" },
+  ];
+  const ways: [string, string][] = [
+    ["Allenamento salvato (almeno 6 frecce)", "8 punti, più 1 ogni 10 frecce (fino a 12)"],
+    ["Gara con il punteggio", "25 punti; +10 se è FITAST"],
+    ["Podio in gara", "+30 primo, +20 secondo, +10 terzo"],
+    ["Lezioni, quiz, sfida del giorno, esercizi", "da 3 a 15 punti l'uno"],
+  ];
+  return (
+    <div id="livelli" className="scroll-mt-20">
+    <Card className="grid gap-3">
+      <div className="flex items-center gap-3">
+        <div className="h-24 w-20 shrink-0"><LevelCrest xp={xp.xp} className="h-full w-full" /></div>
+        <div className="min-w-0 flex-1">
+          <p className="font-display text-2xl leading-none">Livello {lv.level}</p>
+          <p className="mt-1 text-xs text-muted">{levelHalo(lv.level).name} · {xp.xp.toLocaleString("it-IT")} punti in tutto</p>
+          <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
+            <div className="aa-xp h-full rounded-full" style={{ width: `${Math.round((lv.into / Math.max(1, lv.need)) * 100)}%` }} />
+          </div>
+          <p className="mt-1 text-xs text-muted">{lv.into.toLocaleString("it-IT")} / {lv.need.toLocaleString("it-IT")} · mancano {(lv.need - lv.into).toLocaleString("it-IT")} punti al livello {lv.level + 1}</p>
+        </div>
+      </div>
+      <ul className="grid grid-cols-2 gap-1.5">
+        {tiers.map((t) => {
+          const here = lv.level >= t.from && (t.to == null || lv.level <= t.to);
+          const done = t.to != null && lv.level > t.to;
+          const halo = levelHalo(t.from);
+          return (
+            <li key={t.name} className={`flex items-center gap-2 rounded-xl border px-2 py-1.5 ${here ? "border-[#e8c870]/60 bg-[#e8c870]/10" : "border-line"}`}>
+              <span className="h-7 w-7 shrink-0 rounded-full" style={{ background: `radial-gradient(circle at 35% 30%, ${halo.c}, ${halo.a} 55%, ${halo.b})` }} />
+              <span className="min-w-0">
+                <b className="block text-sm leading-tight">{t.name}</b>
+                <span className="block text-[0.68rem] text-muted">{t.to == null ? `dal livello ${t.from}` : `livelli ${t.from}–${t.to}`} · da {xpAt(t.from).toLocaleString("it-IT")} punti{done ? " · fatto" : ""}</span>
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+      <div className="grid gap-1">
+        <p className="text-xs font-semibold">Come si guadagnano i punti</p>
+        {ways.map(([k, v]) => (
+          <p key={k} className="flex justify-between gap-2 text-xs"><span className="text-muted">{k}</span><span className="shrink-0 text-right">{v}</span></p>
+        ))}
+      </div>
+    </Card>
     </div>
   );
 }

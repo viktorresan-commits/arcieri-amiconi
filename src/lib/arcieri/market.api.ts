@@ -16,6 +16,7 @@ const CONDITIONS = ["nuovo", "come-nuovo", "buono", "usato"] as const;
 type Row = {
   id: number; user_id: string; company_id: number | null; equipment_id: number | null; category: string; title: string; description: string;
   qty: number; price_cents: number | null; condition: string; place: string; lat: number | null; lng: number | null; contact: string;
+  phone: string | null; whatsapp: string | null; email: string | null;
   everyone: boolean; status: string; thumb: string; video_url: string; created_at: string; updated_at: string;
   given_name: string | null; family_name: string | null; nickname: string | null; company_name: string | null; company_logo: string | null; company_color: string | null;
   photos: number; videos: number;
@@ -39,6 +40,9 @@ function itemOf(r: Row, me: string, myCompany: number) {
     lat: r.lat == null ? null : Number(r.lat),
     lng: r.lng == null ? null : Number(r.lng),
     contact: r.contact,
+    phone: r.phone ?? "",
+    whatsapp: r.whatsapp ?? "",
+    email: r.email ?? "",
     everyone: Boolean(r.everyone),
     status: (["open", "reserved", "sold"].includes(r.status) ? r.status : "open") as MarketStatus,
     thumb: r.thumb,
@@ -145,7 +149,10 @@ export const saveMarketItem = createServerFn({ method: "POST" })
       lat: lat != null && Math.abs(lat) <= 90 ? Math.round(lat * 1000) / 1000 : null,
       lng: lng != null && Math.abs(lng) <= 180 ? Math.round(lng * 1000) / 1000 : null,
       contact: clip(raw.contact, 120),
-      everyone: Boolean(raw.everyone),
+      phone: clip(raw.phone, 30).replace(/[^\d+ ]/g, "").trim(),
+      whatsapp: clip(raw.whatsapp, 30).replace(/[^\d+ ]/g, "").trim(),
+      email: /^[\w.+-]+@[\w-]+\.[\w.-]+$/.test(clip(raw.email, 120).trim()) ? clip(raw.email, 120).trim() : "",
+      everyone: raw.everyone == null ? true : Boolean(raw.everyone),
       thumb,
       videoUrl: video,
     };
@@ -163,7 +170,8 @@ export const saveMarketItem = createServerFn({ method: "POST" })
       const rows = await sql<{ id: number }>`
         update market_items set category = ${data.category}, title = ${data.title}, description = ${data.description}, qty = ${data.qty},
           price_cents = ${data.priceCents}, condition = ${data.condition}, place = ${data.place}, lat = ${data.lat}, lng = ${data.lng},
-          contact = ${data.contact}, everyone = ${data.everyone}, thumb = case when ${data.thumb} = '' then thumb else ${data.thumb} end,
+          contact = ${data.contact}, phone = ${data.phone}, whatsapp = ${data.whatsapp}, email = ${data.email},
+          everyone = ${data.everyone}, thumb = case when ${data.thumb} = '' then thumb else ${data.thumb} end,
           video_url = ${data.videoUrl}, updated_at = now()
         where id = ${data.id} and user_id = ${context.userId}
         returning id`;
@@ -171,11 +179,37 @@ export const saveMarketItem = createServerFn({ method: "POST" })
       return { id: asNum(rows[0].id) };
     }
     const rows = await sql<{ id: number }>`
-      insert into market_items (user_id, company_id, equipment_id, category, title, description, qty, price_cents, condition, place, lat, lng, contact, everyone, thumb, video_url)
+      insert into market_items (user_id, company_id, equipment_id, category, title, description, qty, price_cents, condition, place, lat, lng, contact, phone, whatsapp, email, everyone, thumb, video_url)
       values (${context.userId}, ${mine.companyId}, ${data.equipmentId}, ${data.category}, ${data.title}, ${data.description}, ${data.qty}, ${data.priceCents},
-        ${data.condition}, ${data.place}, ${data.lat}, ${data.lng}, ${data.contact}, ${data.everyone}, ${data.thumb}, ${data.videoUrl})
+        ${data.condition}, ${data.place}, ${data.lat}, ${data.lng}, ${data.contact}, ${data.phone}, ${data.whatsapp}, ${data.email}, ${data.everyone}, ${data.thumb}, ${data.videoUrl})
       returning id`;
-    return { id: asNum(rows[0].id) };
+    const id = asNum(rows[0].id);
+    // un avviso in Bacheca a chi può vedere l'annuncio: a tutti gli arcieri dell'app se è per tutte le compagnie,
+    // altrimenti alla propria compagnia (mai a chi lo mette in vendita)
+    try {
+      const seller = me.nickname || [me.given_name, me.family_name].filter(Boolean).join(" ") || "Un arciere";
+      const companyName = (await sql<{ name: string }>`select name from companies where id = ${mine.companyId}`)[0]?.name ?? "";
+      const price = data.priceCents != null ? ` · ${(data.priceCents / 100).toLocaleString("it-IT", { style: "currency", currency: "EUR" })}` : "";
+      const title = `Nuovo nel mercatino: ${data.title}`;
+      const body = `${seller}${companyName ? ` (${companyName})` : ""} l'ha messo in vendita${price}.`;
+      const href = `/squadra#mercatino-${id}`;
+      if (data.everyone) {
+        await sql`
+          insert into notifications (user_id, title, body, href, dedupe)
+          select m.user_id, ${title}, ${body}, ${href}, ${`market-new-${id}-`} || m.user_id
+          from members m where m.user_id is not null and m.status = 'active' and m.user_id <> ${context.userId}
+          on conflict (dedupe) do nothing`;
+      } else if (mine.companyId) {
+        await sql`
+          insert into notifications (user_id, title, body, href, dedupe)
+          select cm.user_id, ${title}, ${body}, ${href}, ${`market-new-${id}-`} || cm.user_id
+          from company_members cm where cm.company_id = ${mine.companyId} and cm.user_id <> ${context.userId}
+          on conflict (dedupe) do nothing`;
+      }
+    } catch {
+      /* l'annuncio è salvato anche se l'avviso non parte */
+    }
+    return { id };
   });
 
 /** una foto (fino a 6) o un video breve per annuncio, già compressi sul telefono */
@@ -267,5 +301,36 @@ export const deleteMarketItem = createServerFn({ method: "POST" })
     if (!own[0]) throw new Error("Annuncio non trovato.");
     await sql`delete from market_media where item_id = ${data.id}`;
     await sql`delete from market_items where id = ${data.id}`;
+    return { ok: true as const };
+  });
+
+/**
+ * Scrivi al venditore: un avviso nella sua Bacheca con il tuo messaggio e come risponderti.
+ * Al massimo un messaggio ogni dieci minuti per annuncio.
+ */
+export const contactSeller = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: unknown) => {
+    const raw = (input ?? {}) as Record<string, unknown>;
+    const text = String(raw.text ?? "").trim().slice(0, 600);
+    if (text.length < 2) throw new Error("Scrivi il messaggio.");
+    return { id: asNum(raw.id), text, reply: clip(raw.reply, 120).trim() };
+  })
+  .handler(async ({ context, data }) => {
+    const sql = await db();
+    const me = await ensureMember(sql, context.userId);
+    const mine = await myMembership(sql, context.userId);
+    const item = await visible(sql, data.id, context.userId, mine.companyId);
+    if (item.user_id === context.userId) throw new Error("È un tuo annuncio.");
+    const t = (await sql<{ title: string }>`select title from market_items where id = ${data.id}`)[0]?.title ?? "il tuo annuncio";
+    const who = me.nickname || [me.given_name, me.family_name].filter(Boolean).join(" ") || "Un arciere";
+    const companyName = (await sql<{ name: string }>`select name from companies where id = ${mine.companyId}`)[0]?.name ?? "";
+    const slot = Math.floor(Date.now() / 600_000);
+    const rows = await sql<{ id: number }>`
+      insert into notifications (user_id, title, body, href, dedupe)
+      values (${item.user_id}, ${`${who} ti scrive per «${t}»`}, ${`${data.text}${data.reply ? ` · Rispondi a: ${data.reply}` : ""}${companyName ? ` · ${companyName}` : ""}`}, ${`/squadra#mercatino-${data.id}`}, ${`market-msg-${data.id}-${context.userId}-${slot}`})
+      on conflict (dedupe) do nothing
+      returning id`;
+    if (!rows[0]) throw new Error("Hai già scritto da poco: aspetta qualche minuto.");
     return { ok: true as const };
   });

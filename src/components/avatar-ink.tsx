@@ -1,6 +1,6 @@
 /**
  * Tratto definito dell'avatar, come nelle tavole di riferimento: contorno scuro "a china" del colore
- * dell'oggetto, punte di barba e baffi sul bordo e ciocche spesse leggibili anche in piccolo.
+ * dell'oggetto, punte di barba e baffi sul bordo e ciocche a tratto sottile.
  */
 import type { ReactNode } from "react";
 
@@ -40,7 +40,7 @@ const f = (n: number) => n.toFixed(2);
  * Punte di peli sul bordo: tra due punti della curva una punta verso l'esterno (lontano dal centro),
  * lunghezze alterne. Riempite del colore della barba e contornate a china.
  */
-export function Tufts({ pts, c, len, fill, stroke, w = 0.7, seed = 1 }: { pts: XY[]; c: XY; len: number; fill: string; stroke: string; w?: number; seed?: number }) {
+export function Tufts({ pts, c, len, fill, stroke, w = 0.4, seed = 1 }: { pts: XY[]; c: XY; len: number; fill: string; stroke: string; w?: number; seed?: number }) {
   if (pts.length < 2) return null;
   let d = "";
   for (let i = 0; i < pts.length - 1; i++) {
@@ -69,7 +69,7 @@ export function Tufts({ pts, c, len, fill, stroke, w = 0.7, seed = 1 }: { pts: X
 }
 
 /** ciocche spesse dentro una forma (ritagliate): scure e chiare, leggibili anche nella foto profilo */
-export function Clumps({ id, clip, strokes, dark, light, w = 0.75 }: { id: string; clip: ReactNode; strokes: string[]; dark: string; light: string; w?: number }) {
+export function Clumps({ id, clip, strokes, dark, light, w = 0.42 }: { id: string; clip: ReactNode; strokes: string[]; dark: string; light: string; w?: number }) {
   const dk = strokes.filter((_, i) => i % 3 !== 2).join("");
   const lt = strokes.filter((_, i) => i % 3 === 2).join("");
   return (

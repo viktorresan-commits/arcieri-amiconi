@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { addMarketMedia, deleteMarketItem, getMarketItem, getMarketVideo, listMarket, removeMarketMedia, saveMarketItem, setMarketStatus, type MarketItem, type MarketScope, type MarketStatus } from "@/lib/arcieri/market.api";
+import { addMarketMedia, contactSeller, deleteMarketItem, getMarketItem, getMarketVideo, listMarket, removeMarketMedia, saveMarketItem, setMarketStatus, type MarketItem, type MarketScope, type MarketStatus } from "@/lib/arcieri/market.api";
 import { compressPhoto, compressVideo, thumbOf } from "@/lib/arcieri/media-compress";
 import { CATEGORIES, categoryLabel, euro, parseEuro } from "@/lib/arcieri/labels";
 import { useLoad } from "@/lib/arcieri/use-load";
@@ -8,6 +8,7 @@ import { useLocalState } from "@/lib/arcieri/local-store";
 import { Button, Card, Empty, ErrorNote, Field, Loading, Select, TextArea, TextInput } from "@/components/kit";
 import { CategoryIcon } from "@/components/gear-icons";
 import { Glyph } from "@/components/icons";
+import { useMemberMaybe } from "@/components/shell";
 
 const CONDITION: { id: string; label: string }[] = [
   { id: "nuovo", label: "Nuovo" },
@@ -37,13 +38,17 @@ export type MarketDraft = {
   lat: number | null;
   lng: number | null;
   contact: string;
+  /** contatti separati: telefono, WhatsApp, e-mail */
+  phone?: string;
+  whatsapp?: string;
+  email?: string;
   everyone: boolean;
   videoUrl: string;
   photos: { id?: number; src: string }[];
   hasVideo?: boolean;
 };
 
-export const emptyDraft = (): MarketDraft => ({ category: "accessorio", title: "", description: "", qty: 1, price: "", condition: "buono", place: "", lat: null, lng: null, contact: "", everyone: false, videoUrl: "", photos: [] });
+export const emptyDraft = (): MarketDraft => ({ category: "accessorio", title: "", description: "", qty: 1, price: "", condition: "buono", place: "", lat: null, lng: null, contact: "", phone: "", whatsapp: "", email: "", everyone: true, videoUrl: "", photos: [] });
 
 /** contatti scritti nell'annuncio: telefono (con WhatsApp) o e-mail */
 function contactLinks(raw: string) {
@@ -59,6 +64,81 @@ function contactLinks(raw: string) {
   return out;
 }
 
+/** numero per WhatsApp: con il prefisso internazionale (+39 se manca) */
+const waOf = (raw: string) => {
+  const digits = raw.replace(/[^\d+]/g, "");
+  if (digits.replace(/\D/g, "").length < 6) return "";
+  return (digits.startsWith("+") ? digits.slice(1) : digits.startsWith("00") ? digits.slice(2) : `39${digits}`).replace(/\D/g, "");
+};
+
+/**
+ * Contattare chi vende: telefono, WhatsApp ed e-mail scritti nell'annuncio (visibili e da toccare),
+ * oppure un messaggio nella sua Bacheca dall'app.
+ */
+function SellerContact({ item }: { item: MarketItem }) {
+  const member = useMemberMaybe();
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState(`Ciao, mi interessa «${item.title}». È ancora disponibile?`);
+  const [saved] = useLocalState<{ phone: string; whatsapp: string; email: string }>("aa-market-contacts", { phone: "", whatsapp: "", email: "" });
+  const [reply, setReply] = useState(saved.whatsapp || saved.phone || member?.me.email || "");
+  const [state, setState] = useState<"" | "busy" | "sent">("");
+  const [err, setErr] = useState("");
+  const old = item.phone || item.whatsapp || item.email ? [] : contactLinks(item.contact);
+  const wa = waOf(item.whatsapp || item.phone);
+  const rows: { label: string; value: string; href: string; ext?: boolean }[] = [
+    ...(item.phone ? [{ label: "Telefono", value: item.phone, href: `tel:${item.phone.replace(/[^\d+]/g, "")}` }] : []),
+    ...(wa ? [{ label: "WhatsApp", value: item.whatsapp || item.phone, href: `https://wa.me/${wa}?text=${encodeURIComponent(text)}`, ext: true }] : []),
+    ...(item.email ? [{ label: "E-mail", value: item.email, href: `mailto:${item.email}?subject=${encodeURIComponent(`Mercatino: ${item.title}`)}&body=${encodeURIComponent(text)}` }] : []),
+  ];
+  async function send() {
+    setErr("");
+    setState("busy");
+    try {
+      await contactSeller({ data: { id: item.id, text, reply } });
+      setState("sent");
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Messaggio non inviato.");
+      setState("");
+    }
+  }
+  return (
+    <div className="grid gap-2 rounded-2xl bg-white/[0.04] p-2.5">
+      <p className="text-xs font-semibold text-muted">Contatta {item.seller}</p>
+      {rows.length ? (
+        <ul className="grid gap-1.5">
+          {rows.map((r) => (
+            <li key={r.label}>
+              <a href={r.href} target={r.ext ? "_blank" : undefined} rel={r.ext ? "noreferrer" : undefined} className="aa-press flex min-h-11 items-center gap-2 rounded-xl bg-primary/15 px-3 text-sm">
+                <span className="w-20 shrink-0 font-semibold">{r.label}</span>
+                <span className="min-w-0 flex-1 truncate text-muted">{r.value}</span>
+                <Glyph name="chevron" size={14} className="shrink-0 text-muted" />
+              </a>
+            </li>
+          ))}
+        </ul>
+      ) : old.length ? (
+        <div className="grid grid-cols-3 gap-1.5">
+          {old.map((l) => (
+            <a key={l.href} href={l.href} target="_blank" rel="noreferrer" className="aa-press inline-flex min-h-11 items-center justify-center rounded-xl bg-primary/20 text-sm font-semibold">{l.label}</a>
+          ))}
+        </div>
+      ) : item.contact ? <p className="text-sm">Contatto: {item.contact}</p> : <p className="text-xs text-muted">Nell'annuncio non ci sono telefono né e-mail: scrivigli in Bacheca.</p>}
+      {state === "sent" ? (
+        <p className="rounded-xl bg-[#2fbf71]/15 px-3 py-2 text-sm">Messaggio arrivato nella Bacheca di {item.seller}.</p>
+      ) : open ? (
+        <div className="grid gap-2">
+          <TextArea value={text} onChange={(e) => setText(e.target.value)} rows={3} />
+          <Field label="Come ti risponde (telefono, WhatsApp o e-mail)"><TextInput value={reply} onChange={(e) => setReply(e.target.value)} /></Field>
+          {err ? <ErrorNote text={err} /> : null}
+          <Button onClick={() => void send()} disabled={state === "busy" || text.trim().length < 2}>{state === "busy" ? "Invio…" : "Manda nella sua Bacheca"}</Button>
+        </div>
+      ) : (
+        <Button variant="ghost" onClick={() => setOpen(true)}><Glyph name="megaphone" size={16} /> Scrivigli in Bacheca</Button>
+      )}
+    </div>
+  );
+}
+
 const mapUrl = (lat: number, lng: number) => `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=15/${lat}/${lng}`;
 
 /** La scheda Mercatino della Compagnia: annunci della compagnia, di tutte, i tuoi. */
@@ -69,6 +149,16 @@ export function MarketTab() {
   const [open, setOpen] = useState<number | null>(null);
   const [draft, setDraft] = useState<MarketDraft | null>(null);
   const items = list.data?.items ?? [];
+  // aperto da un avviso in Bacheca (#mercatino-12): l'annuncio si apre subito, anche se è di un'altra compagnia
+  useEffect(() => {
+    const m = /^#mercatino-(\d+)$/.exec(window.location.hash);
+    if (!m) return;
+    setOpen(Number(m[1]));
+    if (scope === "compagnia") setScope("tutte");
+    history.replaceState(null, "", window.location.pathname + window.location.search);
+    // solo all'apertura
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const reload = () => setNonce((n) => n + 1);
   return (
     <div className="grid gap-3">
@@ -258,13 +348,7 @@ function MarketDetail({ id, onClose, onChanged, onEdit }: { id: number; onClose:
             </span>
           </div>
           {!it.mine ? (
-            contactLinks(it.contact).length ? (
-              <div className="grid grid-cols-3 gap-1.5">
-                {contactLinks(it.contact).map((l) => (
-                  <a key={l.href} href={l.href} target="_blank" rel="noreferrer" className="aa-press inline-flex min-h-11 items-center justify-center rounded-xl bg-primary/20 text-sm font-semibold">{l.label}</a>
-                ))}
-              </div>
-            ) : it.contact ? <p className="text-sm">Contatto: {it.contact}</p> : <p className="text-xs text-muted">Nessun contatto nell'annuncio: chiedi in compagnia.</p>
+            <SellerContact item={it} />
           ) : (
             <div className="grid gap-2 rounded-2xl bg-white/[0.04] p-2.5">
               <p className="text-xs font-semibold text-muted">Il tuo annuncio</p>
@@ -277,7 +361,7 @@ function MarketDetail({ id, onClose, onChanged, onEdit }: { id: number; onClose:
               </div>
               {it.equipmentId ? <p className="text-[0.68rem] text-muted">Venduto: tolgo i pezzi dall'inventario.</p> : null}
               <div className="grid grid-cols-2 gap-2">
-                <Button variant="ghost" onClick={() => onEdit({ id: it.id, equipmentId: it.equipmentId, category: it.category, title: it.title, description: it.description, qty: it.qty, price: it.priceCents != null ? (it.priceCents / 100).toFixed(2).replace(".", ",") : "", condition: it.condition, place: it.place, lat: it.lat, lng: it.lng, contact: it.contact, everyone: it.everyone, videoUrl: it.videoUrl, photos, hasVideo: it.hasVideo })}>
+                <Button variant="ghost" onClick={() => onEdit({ id: it.id, equipmentId: it.equipmentId, category: it.category, title: it.title, description: it.description, qty: it.qty, price: it.priceCents != null ? (it.priceCents / 100).toFixed(2).replace(".", ",") : "", condition: it.condition, place: it.place, lat: it.lat, lng: it.lng, contact: it.contact, phone: it.phone, whatsapp: it.whatsapp, email: it.email, everyone: it.everyone, videoUrl: it.videoUrl, photos, hasVideo: it.hasVideo })}>
                   Modifica
                 </Button>
                 {sure ? <Button variant="ghost" className="!text-danger" onClick={() => void remove()}>Conferma</Button> : <Button variant="ghost" onClick={() => setSure(true)}>Elimina</Button>}
@@ -298,12 +382,24 @@ export function MarketForm({ start, onClose, onSaved }: { start: MarketDraft; on
   const [video, setVideo] = useState<string | null>(null);
   const [busy, setBusy] = useState<{ what: string; p: number } | null>(null);
   const [err, setErr] = useState("");
-  const [savedContact, setSavedContact] = useLocalState("aa-market-contact", "");
+  const [savedContact] = useLocalState("aa-market-contact", "");
+  const [saved, setSaved] = useLocalState<{ phone: string; whatsapp: string; email: string }>("aa-market-contacts", { phone: "", whatsapp: "", email: "" });
+  const member = useMemberMaybe();
   const photoIn = useRef<HTMLInputElement>(null);
   const videoIn = useRef<HTMLInputElement>(null);
   const set = (patch: Partial<MarketDraft>) => setD((x) => ({ ...x, ...patch }));
   useEffect(() => {
-    if (!start.contact && savedContact) setD((x) => ({ ...x, contact: savedContact }));
+    // un annuncio nuovo parte dai contatti dell'ultima volta (e dall'e-mail del tuo account)
+    if (!start.id) {
+      const oldDigits = savedContact.replace(/[^\d+]/g, "").replace(/\D/g, "").length >= 8 ? savedContact.replace(/[^\d+ ]/g, "").trim() : "";
+      const oldMail = /[\w.+-]+@[\w-]+\.[\w.-]+/.exec(savedContact)?.[0] ?? "";
+      setD((x) => ({
+        ...x,
+        phone: x.phone || saved.phone || oldDigits,
+        whatsapp: x.whatsapp || saved.whatsapp || saved.phone || oldDigits,
+        email: x.email || saved.email || oldMail || member?.me.email || "",
+      }));
+    }
     // solo all'apertura
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -361,7 +457,7 @@ export function MarketForm({ start, onClose, onSaved }: { start: MarketDraft; on
       const first = d.photos[0]?.src ?? "";
       const thumb = first ? await thumbOf(first) : "";
       const res = await saveMarketItem({
-        data: { id: d.id ?? null, equipmentId: d.equipmentId ?? null, category: d.category, title: d.title.trim(), description: d.description.trim(), qty: Math.min(max, Math.max(1, d.qty)), priceCents: d.price.trim() ? parseEuro(d.price) : null, condition: d.condition, place: d.place.trim(), lat: d.lat, lng: d.lng, contact: d.contact.trim(), everyone: d.everyone, thumb, videoUrl: d.videoUrl.trim() },
+        data: { id: d.id ?? null, equipmentId: d.equipmentId ?? null, category: d.category, title: d.title.trim(), description: d.description.trim(), qty: Math.min(max, Math.max(1, d.qty)), priceCents: d.price.trim() ? parseEuro(d.price) : null, condition: d.condition, place: d.place.trim(), lat: d.lat, lng: d.lng, contact: d.contact.trim(), phone: (d.phone ?? "").trim(), whatsapp: (d.whatsapp ?? "").trim(), email: (d.email ?? "").trim(), everyone: d.everyone, thumb, videoUrl: d.videoUrl.trim() },
       });
       for (const id of removed) await removeMarketMedia({ data: { id } });
       const fresh = d.photos.filter((p) => p.id == null);
@@ -373,7 +469,7 @@ export function MarketForm({ start, onClose, onSaved }: { start: MarketDraft; on
         setBusy({ what: "Carico il video", p: 0.85 });
         await addMarketMedia({ data: { itemId: res.id, kind: "video", data: video } });
       }
-      if (d.contact.trim()) setSavedContact(d.contact.trim());
+      setSaved({ phone: (d.phone ?? "").trim(), whatsapp: (d.whatsapp ?? "").trim(), email: (d.email ?? "").trim() });
       setBusy(null);
       onSaved();
     } catch (e) {
@@ -459,12 +555,21 @@ export function MarketForm({ start, onClose, onSaved }: { start: MarketDraft; on
           ) : null}
         </div>
       </div>
-      <Field label="Contatto (telefono o e-mail)"><TextInput value={d.contact} onChange={(e) => set({ contact: e.target.value })} placeholder="Es. 333 1234567" /></Field>
+      <div className="grid gap-2 rounded-xl bg-white/[0.04] p-2.5">
+        <p className="text-sm font-semibold">Come contattarti</p>
+        <p className="text-[0.7rem] text-muted">Li vede chi apre l'annuncio. Ti possono anche scrivere in Bacheca dall'app.</p>
+        <div className="grid grid-cols-2 gap-2">
+          <Field label="Telefono"><TextInput inputMode="tel" value={d.phone ?? ""} onChange={(e) => set({ phone: e.target.value })} placeholder="333 1234567" /></Field>
+          <Field label="WhatsApp"><TextInput inputMode="tel" value={d.whatsapp ?? ""} onChange={(e) => set({ whatsapp: e.target.value })} placeholder="come il telefono" /></Field>
+        </div>
+        <Field label="E-mail"><TextInput inputMode="email" value={d.email ?? ""} onChange={(e) => set({ email: e.target.value })} placeholder="nome@esempio.it" /></Field>
+        {d.contact && !d.phone && !d.whatsapp && !d.email ? <Field label="Altro contatto"><TextInput value={d.contact} onChange={(e) => set({ contact: e.target.value })} /></Field> : null}
+      </div>
       <label className="flex items-start gap-2 rounded-xl bg-white/[0.04] p-2.5 text-sm">
         <input type="checkbox" checked={d.everyone} onChange={(e) => set({ everyone: e.target.checked })} className="mt-0.5 h-4 w-4 accent-[var(--accent)]" />
         <span>
           <b>Visibile a tutte le compagnie</b>
-          <span className="block text-xs text-muted">Senza spunta lo vede solo la tua compagnia.</span>
+          <span className="block text-xs text-muted">Con la spunta lo vedono gli arcieri di tutte le compagnie e arriva un avviso in Bacheca a tutti; senza, solo alla tua compagnia.</span>
         </span>
       </label>
       {busy ? (

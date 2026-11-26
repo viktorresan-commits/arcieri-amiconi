@@ -741,9 +741,10 @@ export function QuiverBody({ kind, color, w = 20, h = 82, top = -42 }: { kind: s
       return (
         <g>
           <rect x={x} y={top} width={w} height={h} rx="6" fill={color} />
-          <rect x={x} y={top} width={w} height={h} rx="6" fill="none" stroke={dark} strokeWidth="1.2" />
+          <rect x={x} y={top} width={w} height={h} rx="6" fill="none" stroke={dark} strokeWidth="0.6" />
           <rect x={x - 1} y={top - 2} width={w + 2} height="7" rx="2.5" fill={shadeHex(color, -0.3)} />
-          <path d={`M${x + 4} ${top + 12} v${h - 24} M${x + w - 4} ${top + 12} v${h - 24}`} stroke={light} strokeWidth="0.8" strokeDasharray="3 3" />
+          {/* cuciture fini, non un bordo chiaro */}
+          <path d={`M${x + 4} ${top + 12} v${h - 24} M${x + w - 4} ${top + 12} v${h - 24}`} stroke={light} strokeOpacity="0.5" strokeWidth="0.35" strokeDasharray="1.2 1" />
           {kind === "decorata" ? (
             <g>
               {[0.28, 0.62].map((u) => <rect key={u} x={x - 0.5} y={top + h * u} width={w + 1} height="3.2" fill="#d9b45a" />)}

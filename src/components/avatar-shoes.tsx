@@ -3,7 +3,7 @@
  * lacci, fibbie di ottone, risvolti e pellicce. Ogni modello ha il suo carattere (stivale da ranger, scarponcino
  * da montagna, mocassino legato alla gamba, sandalo da gladiatore).
  */
-import type { AvatarLook } from "@/lib/arcieri/avatar";
+import { BOOTS_TALL, tune, type AvatarLook } from "@/lib/arcieri/avatar";
 
 type P = { x: number; y: number };
 const f = (n: number) => n.toFixed(1);
@@ -84,7 +84,7 @@ export function SideShoe({ look, a, uid, skin }: { look: AvatarLook; a: P; uid: 
   const line = shade(sc, -0.62);
   const X = (d: number) => f(a.x + d);
   const Y = (d: number) => f(a.y + d);
-  const top = SIDE_TOP[fw] ?? 6;
+  const top = sideBootTop(look);
   const low = top < 12;
   const sandal = fw === "sandali";
   const hiker = fw === "scarponi";
@@ -222,7 +222,7 @@ export function SideShoe({ look, a, uid, skin }: { look: AvatarLook; a: P; uid: 
           <path d={`M${X(-10.4)} ${Y(-top)} L${X(7)} ${Y(-top - 7.6)} Q${X(10)} ${Y(-top - 8)} ${X(9.6)} ${Y(-top - 3.4)}`} stroke={STITCH} strokeOpacity="0.4" strokeWidth="0.28" strokeDasharray="0.8 0.65" fill="none" />
           <path d={`M${X(-9)} ${Y(-top + 1)} L${X(6.6)} ${Y(-top - 5.8)}`} stroke="#fff" strokeOpacity="0.2" strokeWidth="0.6" strokeLinecap="round" />
           {[0, 1, 2].map((k) => <circle key={k} cx={X(-6 + k * 6)} cy={Y(-top + 1.6 - k * 2.6)} r="0.6" fill={BRASS} stroke="#5c4316" strokeWidth="0.2" />)}
-          {[22, 34].map((d) => (
+          {[22, 34].filter((d) => d < top - 9).map((d) => (
             <g key={d}>
               <path d={`M${X(-11)} ${Y(-top + d)} L${X(10)} ${Y(-top + d - 1.6)} L${X(10)} ${Y(-top + d + 2.2)} L${X(-11)} ${Y(-top + d + 3.8)} Z`} fill={dk} stroke={OUT} strokeOpacity="0.6" strokeWidth="0.32" />
               <Buckle x={a.x + 2.8} y={a.y - top + d - 1.8} w={3.6} h={4.8} />
@@ -235,9 +235,19 @@ export function SideShoe({ look, a, uid, skin }: { look: AvatarLook; a: P; uid: 
       {fw === "stivali-pelliccia" ? (
         <g>
           {/* laccio di cuoio incrociato davanti e risvolto di pelliccia */}
-          <path d={`M${X(8.4)} ${Y(-top + 12)} L${X(5.4)} ${Y(-top + 17)} L${X(8.5)} ${Y(-top + 22)} L${X(5.4)} ${Y(-top + 27)} L${X(8.5)} ${Y(-top + 32)}`} stroke={OUT} strokeOpacity="0.45" strokeWidth="0.55" fill="none" strokeLinejoin="round" />
-          <path d={`M${X(8.4)} ${Y(-top + 12)} L${X(5.4)} ${Y(-top + 17)} L${X(8.5)} ${Y(-top + 22)} L${X(5.4)} ${Y(-top + 27)} L${X(8.5)} ${Y(-top + 32)}`} stroke="#dcc8a0" strokeWidth="0.3" fill="none" strokeLinejoin="round" />
-          {[12, 17, 22, 27, 32].map((d, k) => <circle key={d} cx={X(k % 2 ? 5.4 : 8.45)} cy={Y(-top + d)} r="0.42" fill="#1a120c" stroke={BRASS} strokeWidth="0.18" />)}
+          {(() => {
+            // il laccio scende fin dove c'è gambale (sopra la caviglia)
+            const ds = [12, 17, 22, 27, 32].filter((d) => d <= top - 5);
+            if (ds.length < 2) return null;
+            const d = ds.map((v, k) => `${k ? "L" : "M"}${X(k % 2 ? 5.4 : 8.4)} ${Y(-top + v)}`).join(" ");
+            return (
+              <g>
+                <path d={d} stroke={OUT} strokeOpacity="0.45" strokeWidth="0.55" fill="none" strokeLinejoin="round" />
+                <path d={d} stroke="#dcc8a0" strokeWidth="0.3" fill="none" strokeLinejoin="round" />
+                {ds.map((v, k) => <circle key={v} cx={X(k % 2 ? 5.4 : 8.45)} cy={Y(-top + v)} r="0.42" fill="#1a120c" stroke={BRASS} strokeWidth="0.18" />)}
+              </g>
+            );
+          })()}
           <FurBand x0={a.x - 12.6} x1={a.x + 11.8} y={a.y - top - 2.6} h={8.4} uid={uid} />
         </g>
       ) : null}
@@ -245,8 +255,29 @@ export function SideShoe({ look, a, uid, skin }: { look: AvatarLook; a: P; uid: 
   );
 }
 
-/** quanto sale la calzatura sulla gamba, di fronte (y del bordo) */
-export function frontBootTop(fw: string) {
+/** altezza scelta degli stivali (0-100), o null se vale quella del modello */
+function chosenHeight(look: Pick<AvatarLook, "footwear" | "bootHeight">) {
+  if (!BOOTS_TALL.includes(look.footwear) || look.bootHeight === "" || look.bootHeight == null) return null;
+  return tune(look.bootHeight, 50, 0, 100);
+}
+
+/** l'altezza degli stivali sulla barra (0-100): quella scelta o quella del modello */
+export function bootHeightOf(look: Pick<AvatarLook, "footwear" | "bootHeight">) {
+  const h = chosenHeight(look);
+  if (h != null) return h;
+  return Math.max(0, Math.min(100, Math.round(((SIDE_TOP[look.footwear] ?? 13) - 13) / 0.53)));
+}
+
+/** quanto sale la calzatura sulla gamba, di lato (dalla caviglia): quella del modello o quella scelta */
+export function sideBootTop(look: Pick<AvatarLook, "footwear" | "bootHeight">) {
+  const h = chosenHeight(look);
+  return h == null ? SIDE_TOP[look.footwear] ?? 6 : 13 + h * 0.53;
+}
+
+/** quanto sale la calzatura sulla gamba, di fronte (y del bordo): la stessa altezza vista davanti */
+export function frontBootTop(fw: string, bootHeight = "") {
+  const h = chosenHeight({ footwear: fw as AvatarLook["footwear"], bootHeight });
+  if (h != null) return Math.round(330 - (13 + h * 0.53) * 1.06);
   return fw === "stivali-alti" ? 262 : fw === "stivali" || fw === "stivali-risvolto" || fw === "stivali-pelliccia" ? 280 : fw === "stivaletti" || fw === "scarponi" ? 306 : fw === "mocassini" ? 326 : 318;
 }
 
@@ -257,7 +288,7 @@ export function frontBootTop(fw: string) {
 export function FrontShoe({ look, L, legW, i, uid, skin }: { look: AvatarLook; L: (y: number, d: number) => string; legW: number; i: number; uid: string; skin: string }) {
   const sc = look.shoes;
   const fw = look.footwear;
-  const top = frontBootTop(fw);
+  const top = frontBootTop(fw, look.bootHeight);
   const h = legW / 2 + 1;
   const o = i === 0 ? -1.3 : 1.3; // la punta un poco in fuori
   const dk = shade(sc, -0.45);
@@ -385,7 +416,7 @@ export function FrontShoe({ look, L, legW, i, uid, skin }: { look: AvatarLook; L
           <path d={`M${Pt(top + 6, -h - 1)} L${Pt(top + 1.6, -h - 0.8)} L${Pt(top - 2.6, -h * 0.3)} Q${Pt(top - 6.6, 0)} ${Pt(top - 2.6, h * 0.3)} L${Pt(top + 1.6, h + 0.8)} L${Pt(top + 6, h + 1)}`} stroke={STITCH} strokeOpacity="0.4" strokeWidth="0.26" strokeDasharray="0.8 0.65" fill="none" />
           <path d={`M${Pt(top - 2.4, -h * 0.25)} Q${Pt(top - 5.4, -h * 0.05)} ${Pt(top - 4.6, h * 0.1)}`} stroke="#fff" strokeOpacity="0.3" strokeWidth="0.5" fill="none" strokeLinecap="round" />
           {[-0.5, 0, 0.5].map((k) => <circle key={k} cx={L(top + 3, k * h)} cy={top + 3 - Math.abs(k) * 0} r="0.62" fill={BRASS} stroke="#5c4316" strokeWidth="0.2" />)}
-          {[290, 306].map((y) => (
+          {[290, 306].filter((y) => y > top + 7).map((y) => (
             <g key={y}>
               <path d={`M${Pt(y, -h - 1)} L${Pt(y, h + 1)} L${Pt(y + 4, h + 1)} L${Pt(y + 4, -h - 1)} Z`} fill={dk} stroke={OUT} strokeOpacity="0.6" strokeWidth="0.32" />
               <g transform={`translate(${i === 0 ? -h * 0.7 : h * 0.2} 0)`}>
@@ -399,15 +430,15 @@ export function FrontShoe({ look, L, legW, i, uid, skin }: { look: AvatarLook; L
       {fw === "stivali-pelliccia" ? (
         <g>
           {/* allacciatura incrociata davanti: occhielli sui due lembi e un laccio sottile */}
-          <path d={`M${Pt(top + 9, -h * 0.06)} L${Pt(top + 38, -h * 0.06)} M${Pt(top + 9, h * 0.06)} L${Pt(top + 38, h * 0.06)}`} stroke={OUT} strokeOpacity="0.4" strokeWidth="0.3" />
-          {[0, 1, 2, 3].map((k) => {
+          <path d={`M${Pt(top + 9, -h * 0.06)} L${Pt(Math.min(top + 38, 336), -h * 0.06)} M${Pt(top + 9, h * 0.06)} L${Pt(Math.min(top + 38, 336), h * 0.06)}`} stroke={OUT} strokeOpacity="0.4" strokeWidth="0.3" />
+          {[0, 1, 2, 3].filter((k) => top + 18 + k * 7 <= 336).map((k) => {
             const y0 = top + 11 + k * 7;
             return <g key={k}>
               <path d={`M${Pt(y0, -h * 0.34)} L${Pt(y0 + 7, h * 0.34)} M${Pt(y0, h * 0.34)} L${Pt(y0 + 7, -h * 0.34)}`} stroke={OUT} strokeOpacity="0.45" strokeWidth="0.55" />
               <path d={`M${Pt(y0, -h * 0.34)} L${Pt(y0 + 7, h * 0.34)} M${Pt(y0, h * 0.34)} L${Pt(y0 + 7, -h * 0.34)}`} stroke="#dcc8a0" strokeWidth="0.3" />
             </g>;
           })}
-          {[0, 1, 2, 3, 4].map((k) => <g key={k}><circle cx={L(top + 11 + k * 7, -h * 0.34)} cy={top + 11 + k * 7} r="0.45" fill="#1a120c" stroke={BRASS} strokeWidth="0.18" /><circle cx={L(top + 11 + k * 7, h * 0.34)} cy={top + 11 + k * 7} r="0.45" fill="#1a120c" stroke={BRASS} strokeWidth="0.18" /></g>)}
+          {[0, 1, 2, 3, 4].filter((k) => top + 11 + k * 7 <= 336).map((k) => <g key={k}><circle cx={L(top + 11 + k * 7, -h * 0.34)} cy={top + 11 + k * 7} r="0.45" fill="#1a120c" stroke={BRASS} strokeWidth="0.18" /><circle cx={L(top + 11 + k * 7, h * 0.34)} cy={top + 11 + k * 7} r="0.45" fill="#1a120c" stroke={BRASS} strokeWidth="0.18" /></g>)}
           <FurBand x0={Number(L(top, -h - 3))} x1={Number(L(top, h + 3))} y={top - 2.6} h={9} uid={uid} />
         </g>
       ) : null}

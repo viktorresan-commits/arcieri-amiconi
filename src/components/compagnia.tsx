@@ -216,7 +216,6 @@ export function CompanyHero({ co, canEdit, onEdit }: { co: Co; canEdit: boolean;
         {/* contatti: una fila di bottoni tondi (il nome compare tenendo premuto), poi il campo */}
         <div className="grid grid-cols-[repeat(auto-fill,minmax(2.25rem,1fr))] justify-items-center gap-1">
           {links.map((item) => <ContactButton key={item.kind} kind={item.kind} href={item.href} tint={CONTACT_TINT[item.kind]} compact />)}
-          <ContactButton kind="board" href="" tint={CONTACT_TINT.board} compact />
         </div>
         {co.address ? <a className="truncate text-xs text-white/80 underline-offset-2 hover:underline" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(co.address)}`} target="_blank" rel="noreferrer">Campo: {co.address}</a> : null}
         {links.length === 0 ? <p className="text-xs text-white/70">{canEdit ? "Aggiungi telefono, WhatsApp e social con la matita: compariranno qui per tutti." : "Telefono e social non sono ancora stati inseriti."}</p> : null}

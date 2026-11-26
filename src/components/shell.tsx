@@ -26,7 +26,7 @@ import { onBack } from "@/lib/arcieri/native";
 import { redeemCode } from "@/lib/arcieri/staff.api";
 import { stopActing } from "@/lib/arcieri/acting.api";
 import { clearLoadCache } from "@/lib/arcieri/use-load";
-import { refreshCrests } from "@/lib/arcieri/crest";
+import { refreshCrests, useCrest } from "@/lib/arcieri/crest";
 import { applyPrefs, readPrefs, usePrefs } from "@/lib/arcieri/prefs";
 
 type Ctx = { me: PublicMember; reload: () => void };
@@ -358,7 +358,7 @@ export function Shell({ children }: { children: ReactNode }) {
                 </span>
               </Link>
               </LevelHalo>
-              <Link to="/obiettivi" className="min-w-0 flex-1" aria-label={`${label}, livello ${lvl.level}`}>
+              <Link to="/obiettivi" hash="livelli" className="min-w-0 flex-1" aria-label={`${label}, livello ${lvl.level}: i livelli`}>
                 <p className="flex min-w-0 items-baseline gap-2">
                   <b className="truncate font-display text-[1.15rem] leading-none">{label}</b>
                   <span className="aa-tone shrink-0 text-[0.7rem] font-semibold">{me.category ? `${me.category} · ` : ""}Livello {lvl.level}</span>
@@ -370,8 +370,9 @@ export function Shell({ children }: { children: ReactNode }) {
                   <span className="shrink-0 text-[0.62rem] tabular-nums text-white/70">{lvl.into.toLocaleString("it-IT")}/{lvl.need.toLocaleString("it-IT")} XP</span>
                 </span>
               </Link>
-              {/* lo stemma del livello, lo stesso del Profilo: un tocco apre obiettivi e punti */}
-              <Link to="/obiettivi" aria-label={`Livello ${lvl.level}`} className="aa-press relative h-12 w-[2.7rem] shrink-0 drop-shadow-[0_4px_8px_rgba(0,0,0,0.5)]">
+              {/* lo stemma della tua compagnia (apre la compagnia) e quello del livello (apre i livelli) */}
+              <CompanyBadge />
+              <Link to="/obiettivi" hash="livelli" aria-label={`Livello ${lvl.level}: i livelli`} className="aa-press relative h-12 w-[2.7rem] shrink-0 drop-shadow-[0_4px_8px_rgba(0,0,0,0.5)]">
                 <LevelCrest xp={xp.xp} compact className="h-full w-full" />
               </Link>
               <Link to="/bacheca" aria-label={unread > 0 ? `Avvisi, ${unread} da leggere` : "Avvisi"} className="aa-bell relative grid h-10 w-10 shrink-0 place-items-center rounded-full">
@@ -389,7 +390,7 @@ export function Shell({ children }: { children: ReactNode }) {
                 <p className="truncate font-display text-xl leading-none">{here?.label ?? "Arcieri Amiconi"}</p>
               </div>
             <div className="flex shrink-0 items-center gap-1.5">
-              <Link to="/obiettivi" className="flex h-9 items-center gap-1.5 rounded-full bg-white/[0.06] px-2.5 text-[0.72rem] font-semibold" aria-label={`Livello ${lvl.level}`}>
+              <Link to="/obiettivi" hash="livelli" className="flex h-9 items-center gap-1.5 rounded-full bg-white/[0.06] px-2.5 text-[0.72rem] font-semibold" aria-label={`Livello ${lvl.level}: i livelli`}>
                 <LevelCrest xp={xp.xp} compact className="h-7 w-6" />
                 <span className="h-1.5 w-9 overflow-hidden rounded-full bg-white/15"><span className="block h-full rounded-full bg-[#ffd27a]" style={{ width: `${Math.round((lvl.into / Math.max(1, lvl.need)) * 100)}%` }} /></span>
               </Link>
@@ -474,5 +475,25 @@ function XpToasts() {
         </div>
       ))}
     </div>
+  );
+}
+
+/** Lo stemma della propria compagnia nella testata della Home: un tocco apre la compagnia. */
+function CompanyBadge() {
+  const crest = useCrest();
+  if (!crest) return null;
+  const letter = crest.name.replace(/^Compagnia (degli |delle |dei |di |del )?/i, "").slice(0, 1).toUpperCase();
+  return (
+    <Link to="/squadra" aria-label={`La tua compagnia: ${crest.name}`} title={crest.name} className="aa-press grid h-12 w-[2.6rem] shrink-0 place-items-center drop-shadow-[0_4px_8px_rgba(0,0,0,0.5)]">
+      {crest.logo ? (
+        <img src={crest.logo} alt="" className="h-full w-full object-contain" />
+      ) : (
+        <svg viewBox="0 0 96 112" className="h-full w-full" aria-hidden>
+          <path d="M6 6h84v44c0 30-20 48-42 56C26 98 6 80 6 50Z" fill={crest.color || "#1f7a46"} stroke="#e8c870" strokeWidth="4" />
+          <path d="M6 6h84v22H6Z" fill="rgba(255,255,255,.14)" />
+          <text x="48" y="74" textAnchor="middle" fontSize="44" fontWeight="700" fill="#f4e7c2" fontFamily="var(--font-display)">{letter}</text>
+        </svg>
+      )}
+    </Link>
   );
 }
