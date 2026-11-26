@@ -10,6 +10,7 @@ import { SideShoe } from "./avatar-shoes";
 import { SideHand } from "./avatar-hands";
 import { FaceHat, MailCoif, SideHat } from "./avatar-hats";
 import { RimLightDefs } from "./avatar-light";
+import { ArmGuard, ChestGuard, LegDetail, LimbGloss, PlainBuckle, RiserGrain } from "./avatar-gear";
 import { seamOf, BracerLacing, ClothButton, BeardTexture, BeltDetail, BrowHairs, ClothDetail, DetailDefs, EyeDetail, FaceShade, HairFineStrands, LeatherBand, LipDetail, SleeveDetail } from "./avatar-detail";
 
 /**
@@ -368,6 +369,7 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4, cssBlink = fals
             {limb(L.knee, L.ankle, w * 0.72, skin)}
             {limb(lerpP(L.hip, L.knee, 0.6), L.knee, w * 0.78, skin)}
             {limb(L.hip, lerpP(L.hip, L.knee, 0.72), w, `url(#${uid}pants)`)}
+            <LegDetail uid={uid} a={L.hip} b={lerpP(L.hip, L.knee, 0.66)} w={w} />
           </>
         ) : (
           <>
@@ -379,6 +381,8 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4, cssBlink = fals
                 <path d={`M${f(L.knee.x - 8)} ${f(L.knee.y + 6)} q6 7 15 1 M${f(L.knee.x - 7)} ${f(L.knee.y + 24)} q6 6 14 0 M${f(L.hip.x - 6)} ${f(L.hip.y + 20)} q6 7 13 1 M${f(L.ankle.x - 7)} ${f(L.ankle.y - 16)} q6 4 13 0`} stroke={shade(look.pants, -0.38)} strokeWidth="1.1" fill="none" />
               </>
             ) : limb(L.knee, L.ankle, w * 0.86, `url(#${uid}pants)`)}
+            <LegDetail uid={uid} a={L.hip} b={L.knee} w={w} knee />
+            <LegDetail uid={uid} a={L.knee} b={larghi ? lerpP(L.knee, L.ankle, 0.82) : L.ankle} w={w * (larghi ? 0.95 : 0.86)} shin />
             {brache ? <path d={`M${f(L.knee.x - 6)} ${f(L.knee.y + 8)} q5 5 12 0 M${f(L.hip.x - 4)} ${f(L.hip.y + 22)} q4 6 10 1`} stroke={shade(look.pants, -0.35)} strokeWidth="1" fill="none" /> : null}
             {look.special === "simone-inverno" && look.bottom === "cargo" && !shorts ? (
               <g>
@@ -467,9 +471,7 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4, cssBlink = fals
         {which === "bow" && look.tattoo === "punti" ? <g fill="#24324a" opacity="0.75">{[-2.4, 0, 2.4].map((d) => <circle key={d} cx={f(h.x - 2 + d)} cy={f(h.y - 3)} r="0.8" />)}</g> : null}
         {which === "bow" ? (
           <>
-            <line x1={f(lerp(e.x, h.x, 0.18))} y1={f(lerp(e.y, h.y, 0.18))} x2={f(lerp(e.x, h.x, 0.78))} y2={f(lerp(e.y, h.y, 0.78))} stroke={look.armguard} strokeWidth={foreW + 3} strokeLinecap="round" />
-            <line x1={f(lerp(e.x, h.x, 0.3))} y1={f(lerp(e.y, h.y, 0.3) - 6)} x2={f(lerp(e.x, h.x, 0.3))} y2={f(lerp(e.y, h.y, 0.3) + 6)} stroke={shade(look.armguard, 0.45)} strokeWidth="1" />
-            <line x1={f(lerp(e.x, h.x, 0.6))} y1={f(lerp(e.y, h.y, 0.6) - 6)} x2={f(lerp(e.x, h.x, 0.6))} y2={f(lerp(e.y, h.y, 0.6) + 6)} stroke={shade(look.armguard, 0.45)} strokeWidth="1" />
+            <ArmGuard uid={uid} a={lerpP(e, h, 0.18)} b={lerpP(e, h, 0.78)} w={foreW + 3} color={look.armguard} out={OUT} />
           </>
         ) : null}
         {look.bracers ? (
@@ -524,6 +526,7 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4, cssBlink = fals
           <path d={limbPath(s as 1 | -1)} stroke={g.wood ? shade(limbBase, 0.35) : shade(limbBase, 0.5)} strokeOpacity={g.wood ? 0.4 : 0.12} strokeWidth={Math.max(0.6, g.width * 0.18)} strokeLinecap="round" fill="none" />
           {/* riflesso al centro del flettente, sottile: nessun filo chiaro sui bordi */}
           <path d={limbPath(s as 1 | -1)} stroke="#fff" strokeOpacity="0.08" strokeWidth={0.35} strokeLinecap="round" fill="none" />
+          <LimbGloss d={limbPath(s as 1 | -1)} width={g.width} wood={Boolean(g.wood && !look.limbs)} />
           {!g.cams ? (() => {
             const tp = tipAt(s as 1 | -1);
             return (
@@ -571,6 +574,7 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4, cssBlink = fals
       {g.riser > 0 ? (
         <g>
           <path d={`M-4 ${f(-g.riser)} L6 ${f(-g.riser)} C7 ${f(-g.riser * 0.5)} 7.5 -12 6 -7 L6 ${f(g.riser)} L-4 ${f(g.riser)} C-5 ${f(g.riser * 0.6)} -5 16 -8 9 C-9 4 -8 -6 -5 -11 C-4 ${f(-g.riser * 0.5)} -4 ${f(-g.riser * 0.8)} -4 ${f(-g.riser)} Z`} fill={riserFill} stroke={OUTLINE} strokeOpacity="0.61" strokeWidth="0.6" />
+          {g.wood ? <RiserGrain id={`${uid}rsg`} d={`M-4 ${f(-g.riser)} L6 ${f(-g.riser)} C7 ${f(-g.riser * 0.5)} 7.5 -12 6 -7 L6 ${f(g.riser)} L-4 ${f(g.riser)} C-5 ${f(g.riser * 0.6)} -5 16 -8 9 C-9 4 -8 -6 -5 -11 C-4 ${f(-g.riser * 0.5)} -4 ${f(-g.riser * 0.8)} -4 ${f(-g.riser)} Z`} top={-g.riser} bottom={g.riser} x0={-8} x1={7} /> : null}
           {metal || g.cams ? <path d={`M1 ${f(-g.riser + 6)} L5 ${f(-g.riser + 6)} L5 -9 L1.5 -9 Z`} fill="#000" opacity="0.32" /> : null}
           {metal || g.cams ? <path d={`M-1 ${f(g.riser - 6)} L4 ${f(g.riser - 6)} L4 14 Z`} fill="#000" opacity="0.25" /> : null}
           <path d="M-7.6 -6 C-8.6 0 -8 8 -5 12 L1 12 L1 -6 Z" fill={g.wood ? "#3a2414" : "#1d2126"} opacity="0.85" />
@@ -775,7 +779,7 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4, cssBlink = fals
       {look.pouch && sideOf(look.pouchSide, nearSide(look)) !== nearSide(look) ? <g opacity="0.9"><Pouch kind={look.pouchType} x={hipR - 1} y={205} /></g> : null}
       <path d={torso} fill={`url(#${uid}shirt)`} stroke={OUT} strokeOpacity="0.58" strokeWidth="1.32" />
       <ClothPattern kind={look.pattern} shapes={longTunic ? [torso, tunicD] : [torso]} base={look.shirt} trim={look.trim} uid={uid} box={[shoulderL - 16, 112, shoulderR + 16, (longTunic ? tunicLen : 210) + 6]} />
-      <ClothDetail uid={uid} shapes={longTunic ? [torso, tunicD] : [torso]} cx={cx} shoulderL={shoulderL} shoulderR={shoulderR} hipL={hipL} hipR={hipR} tunicLen={tunicLen} longTunic={longTunic} seam={seamOf(look.shirt)} />
+      <ClothDetail uid={uid} shapes={longTunic ? [torso, tunicD] : [torso]} cx={cx} shoulderL={shoulderL} shoulderR={shoulderR} hipL={hipL} hipR={hipR} tunicLen={tunicLen} longTunic={longTunic} seam={seamOf(look.shirt)} belt={look.belt === "larga" ? 196 : 200} />
       <Outfit look={look} cx={cx} shoulderL={shoulderL} shoulderR={shoulderR} hipL={hipL} hipR={hipR} tunicLen={tunicLen} W={W} woman={woman} uid={uid} />
       {/* volume dipinto della veste: luce sul petto verso il bersaglio, schiena in ombra, ombra sotto la cintura */}
       <g pointerEvents="none">
@@ -863,8 +867,10 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4, cssBlink = fals
       )}
       {look.chestguard ? (
         <g>
-          <path d={`M${f(cx + 2)} 128 C${f(cx + 14)} 124 ${f(shoulderR - 2)} 128 ${f(shoulderR - 1)} 136 L${f(shoulderR - 4)} 162 C${f(cx + 16)} 166 ${f(cx + 6)} 164 ${f(cx + 1)} 158 Z`} fill={look.chestColor} />
+          <path d={`M${f(cx + 2)} 140 L${f(shoulderL + 4)} 132 M${f(cx + 2)} 156 L${f(shoulderL + 2)} 164`} stroke={OUT} strokeOpacity="0.5" strokeWidth="3.4" strokeLinecap="round" />
           <path d={`M${f(cx + 2)} 140 L${f(shoulderL + 4)} 132 M${f(cx + 2)} 156 L${f(shoulderL + 2)} 164`} stroke={shade(look.chestColor, -0.3)} strokeWidth="2.4" strokeLinecap="round" />
+          <path d={`M${f(cx + 2)} 140 L${f(shoulderL + 4)} 132 M${f(cx + 2)} 156 L${f(shoulderL + 2)} 164`} stroke="#fff" strokeOpacity="0.12" strokeWidth="0.5" transform="translate(0 -0.6)" />
+          <ChestGuard uid={uid} d={`M${f(cx + 2)} 128 C${f(cx + 14)} 124 ${f(shoulderR - 2)} 128 ${f(shoulderR - 1)} 136 L${f(shoulderR - 4)} 162 C${f(cx + 16)} 166 ${f(cx + 6)} 164 ${f(cx + 1)} 158 Z`} c={p((cx + shoulderR) / 2, 145)} color={look.chestColor} out={OUT} />
         </g>
       ) : null}
       {look.necklace ? (
@@ -971,7 +977,7 @@ function Outfit({ look, cx, shoulderL, shoulderR, hipL, hipR, tunicLen, W, woman
       <BeltDetail uid={uid} x={hipL - 2} y={wide ? 196 : 200} w={hipR - hipL + 4} h={wide ? 13 : 8} cx={cx} />
       <rect x={f(hipL - 2)} y={wide ? 197 : 200.6} width={f(hipR - hipL + 4)} height="1.6" fill="#fff" opacity="0.15" />
       {wide ? [hipL + 6, hipR - 6].map((x) => <circle key={x} cx={f(x)} cy="202.5" r="1.3" fill="#d9b45a" />) : null}
-      {look.buckle && look.buckle !== "semplice" ? <Buckle kind={look.buckle} x={cx} y={wide ? 202.5 : 204} s={wide ? 1 : 0.75} /> : <rect x={f(cx - (wide ? 6 : 3.5))} y={wide ? 196.5 : 200.5} width={wide ? 12 : 7} height={wide ? 12 : 7} rx="1.6" fill="none" stroke="#d9b45a" strokeWidth={wide ? 2 : 1.2} />}
+      {look.buckle && look.buckle !== "semplice" ? <Buckle kind={look.buckle} x={cx} y={wide ? 202.5 : 204} s={wide ? 1 : 0.75} /> : <PlainBuckle x={cx} y={wide ? 202.5 : 204} w={wide ? 12 : 7} h={wide ? 12 : 7} sw={wide ? 2 : 1.3} />}
       {wide ? <path d={`M${f(cx + 2)} 209 l4 10 l3 -1 l-4 -9 z`} fill={bc} /> : null}
       {pouchNear ? <Pouch kind={look.pouchType} x={hipR - 8} y={206} /> : null}
     </g>

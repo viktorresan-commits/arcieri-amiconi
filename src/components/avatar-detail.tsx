@@ -6,6 +6,8 @@
  * Tutto è disegnato sopra le forme che già ci sono, con trasparenze: i colori scelti restano quelli.
  */
 
+import { Soft } from "./avatar-gear";
+
 type P = { x: number; y: number };
 const f = (n: number) => n.toFixed(1);
 /** mescola due colori #rrggbb (t = quanto del secondo) */
@@ -77,17 +79,32 @@ export function DetailDefs({ uid }: { uid: string }) {
   );
 }
 
-/** Volume, pieghe, cuciture e trama di busto e veste. */
-export function ClothDetail({ uid, shapes, cx, shoulderL, shoulderR, hipL, hipR, tunicLen, longTunic, seam }: { uid: string; shapes: string[]; cx: number; shoulderL: number; shoulderR: number; hipL: number; hipR: number; tunicLen: number; longTunic: boolean; seam: string }) {
-  const bottom = longTunic ? tunicLen + 6 : 212;
+/** Volume, pieghe, cuciture e trama di busto e veste. `dy` sposta le quote del profilo (spalle a 116,
+ * cintura a 200) su un'altra figura: di fronte le spalle stanno più in alto. */
+export function ClothDetail({ uid, shapes, cx, shoulderL, shoulderR, hipL, hipR, tunicLen, longTunic, seam, dy = 0, belt = 200 }: { uid: string; shapes: string[]; cx: number; shoulderL: number; shoulderR: number; hipL: number; hipR: number; tunicLen: number; longTunic: boolean; seam: string; dy?: number; /** quota della cintura (dopo lo spostamento) */ belt?: number }) {
+  const Y = (y: number) => y + dy;
+  const bottom = longTunic ? tunicLen + 6 : Y(212);
   const folds = longTunic
     ? [-0.82, -0.5, -0.18, 0.16, 0.48, 0.8].map((k, i) => {
         const x1 = cx + k * (hipR - hipL) * 0.5;
         const x2 = cx + k * (hipR - hipL) * 0.5 * 1.45 + (i % 2 ? 2 : -1);
-        const y1 = 214 + (i % 3) * 3;
+        const y1 = belt + 14 + (i % 3) * 3;
         return { x1, x2, y1 };
       })
     : [];
+  const bw = shoulderR - shoulderL;
+  // pieghe di tensione: dall'ascella scendono in diagonale verso il centro della vita
+  const tension = [
+    `M${f(shoulderL + 7)} ${f(Y(140))} Q${f(cx - 8)} ${f(Y(158))} ${f(cx)} ${f(Y(178))}`,
+    `M${f(shoulderR - 6)} ${f(Y(143))} Q${f(cx + 10)} ${f(Y(160))} ${f(cx + 5)} ${f(Y(180))}`,
+  ];
+  // pieghe che tirano verso la cintura
+  const pull = [[-14, 176, -6, 194], [-4, 180, -1, 195], [10, 178, 6, 194], [18, 174, 12, 192]].map(([a, y1, b, y2]) => `M${f(cx + a)} ${f(Y(y1))} Q${f(cx + (a + b) / 2 + 2)} ${f(Y((y1 + y2) / 2))} ${f(cx + b)} ${f(Y(y2))}`);
+  // la stoffa si gonfia un poco sopra la cintura: increspature corte
+  const gather = [-0.6, -0.16, 0.3, 0.7].map((k, i) => {
+    const x = cx + k * (hipR - hipL) * 0.5;
+    return `M${f(x + (i % 2 ? 1 : -1))} ${f(belt - 9 - (i % 3) * 1.5)} Q${f(x + 1.5)} ${f(belt - 5)} ${f(x)} ${f(belt - 1)}`;
+  });
   return (
     <g pointerEvents="none">
       <defs>
@@ -96,35 +113,49 @@ export function ClothDetail({ uid, shapes, cx, shoulderL, shoulderR, hipL, hipR,
         </clipPath>
       </defs>
       <g clipPath={`url(#${uid}cl)`}>
-        <rect x={f(shoulderL - 30)} y="108" width={f(shoulderR - shoulderL + 60)} height={f(bottom - 100)} fill={`url(#${uid}weave)`} />
+        <rect x={f(shoulderL - 30)} y={f(Y(108))} width={f(bw + 60)} height={f(bottom - Y(100))} fill={`url(#${uid}weave)`} opacity="0.6" />
         {/* ombra sul fianco lontano e luce di taglio su quello vicino */}
-        <rect x={f(shoulderL - 14)} y="110" width="22" height={f(bottom - 104)} fill={`url(#${uid}lsh)`} />
-        <rect x={f(shoulderR - 12)} y="110" width="16" height={f(bottom - 104)} fill={`url(#${uid}rli)`} />
-        {/* petto: luce in alto, ombra sotto; ascelle in ombra */}
-        <ellipse cx={f(cx + 8)} cy="138" rx="20" ry="12" fill={`url(#${uid}sl)`} opacity="0.32" />
-        <ellipse cx={f(cx + 4)} cy="162" rx="24" ry="6" fill={`url(#${uid}sd)`} opacity="0.4" />
-        <ellipse cx={f(shoulderL + 6)} cy="134" rx="8" ry="12" fill={`url(#${uid}sd)`} opacity="0.55" />
-        <ellipse cx={f(shoulderR - 5)} cy="134" rx="6" ry="10" fill={`url(#${uid}sd)`} opacity="0.35" />
-        {/* pieghe che tirano verso la cintura */}
-        <g fill="none" strokeLinecap="round">
-          {[[-14, 176, -6, 194], [-4, 180, -1, 195], [10, 178, 6, 194], [18, 174, 12, 192]].map(([a, y1, b, y2], i) => (
-            <g key={i}>
-              <path d={`M${f(cx + a)} ${y1} Q${f(cx + (a + b) / 2 + 2)} ${(y1 + y2) / 2} ${f(cx + b)} ${y2}`} stroke="#000" strokeOpacity="0.2" strokeWidth="1.3" />
-              <path d={`M${f(cx + a + 1.4)} ${y1 + 1} Q${f(cx + (a + b) / 2 + 3.4)} ${(y1 + y2) / 2 + 1} ${f(cx + b + 1.4)} ${y2}`} stroke="#fff" strokeOpacity="0.08" strokeWidth="0.9" />
-            </g>
-          ))}
-          {/* pieghe della veste sotto la cintura, larghe verso l'orlo */}
-          {folds.map(({ x1, x2, y1 }, i) => (
+        <rect x={f(shoulderL - 14)} y={f(Y(110))} width="22" height={f(bottom - Y(104))} fill={`url(#${uid}lsh)`} />
+        <rect x={f(shoulderR - 12)} y={f(Y(110))} width="16" height={f(bottom - Y(104))} fill={`url(#${uid}rli)`} />
+        {/* spalle prese dalla luce, petto: luce in alto, ombra sotto; ascelle in ombra */}
+        <ellipse cx={f(cx + 2)} cy={f(Y(123))} rx={f(bw * 0.4)} ry="4.5" fill={`url(#${uid}sl)`} opacity="0.28" />
+        <ellipse cx={f(cx + 8)} cy={f(Y(138))} rx="20" ry="12" fill={`url(#${uid}sl)`} opacity="0.32" />
+        <ellipse cx={f(cx + 4)} cy={f(Y(160))} rx="26" ry="7" fill={`url(#${uid}sd)`} opacity="0.42" />
+        <ellipse cx={f(shoulderL + 6)} cy={f(Y(134))} rx="8" ry="13" fill={`url(#${uid}sd)`} opacity="0.55" />
+        <ellipse cx={f(shoulderR - 5)} cy={f(Y(134))} rx="6" ry="11" fill={`url(#${uid}sd)`} opacity="0.38" />
+        {/* pieghe dipinte: solco morbido in ombra e il suo bordo in luce subito accanto */}
+        {tension.map((d, i) => (
+          <g key={`t${i}`}>
+            <Soft d={d} w={2.6} o={0.075} />
+            <Soft d={d} color="#fff" w={1.3} o={0.05} transform="translate(2.2 -0.6)" />
+          </g>
+        ))}
+        {pull.map((d, i) => (
+          <g key={`p${i}`}>
+            <Soft d={d} w={2.1} o={0.1} />
+            <Soft d={d} color="#fff" w={1.1} o={0.05} transform="translate(1.8 1)" />
+          </g>
+        ))}
+        {gather.map((d, i) => <Soft key={`g${i}`} d={d} w={1.4} o={0.08} />)}
+        {/* sbuffo sopra la cintura: un filo di luce e l'ombra appena sopra il cuoio */}
+        <Soft d={`M${f(hipL + 2)} ${f(belt - 7)} Q${f(cx)} ${f(belt - 4)} ${f(hipR - 2)} ${f(belt - 7)}`} color="#fff" w={1.4} o={0.08} />
+        <Soft d={`M${f(hipL)} ${f(belt - 1.4)} Q${f(cx)} ${f(belt + 1)} ${f(hipR)} ${f(belt - 1.4)}`} w={2} o={0.24} />
+        {/* pieghe della veste sotto la cintura, larghe verso l'orlo */}
+        {folds.map(({ x1, x2, y1 }, i) => {
+          const d = `M${f(x1)} ${f(y1)} Q${f((x1 + x2) / 2 + 2)} ${f((y1 + tunicLen) / 2)} ${f(x2)} ${f(tunicLen + 2)}`;
+          return (
             <g key={`fo${i}`}>
-              <path d={`M${f(x1)} ${y1} Q${f((x1 + x2) / 2 + 2)} ${f((y1 + tunicLen) / 2)} ${f(x2)} ${tunicLen + 2}`} stroke="#000" strokeOpacity="0.22" strokeWidth="2.2" />
-              <path d={`M${f(x1 + 2.2)} ${y1 + 2} Q${f((x1 + x2) / 2 + 4.2)} ${f((y1 + tunicLen) / 2)} ${f(x2 + 2.6)} ${tunicLen + 2}`} stroke="#fff" strokeOpacity="0.1" strokeWidth="1.4" />
+              <Soft d={d} w={2.8} o={0.13} />
+              <Soft d={d} color="#fff" w={1.4} o={0.06} transform="translate(2.6 0)" />
             </g>
-          ))}
-          {longTunic ? <rect x={f(hipL - 20)} y={tunicLen - 6} width={f(hipR - hipL + 40)} height="12" fill="#000" opacity="0.14" /> : null}
-          {/* cuciture laterali */}
-          <path d={`M${f(shoulderR - 3)} 130 C${f(shoulderR - 2)} 152 ${f(hipR - 2)} 174 ${f(hipR - 2)} 198`} stroke={seam} strokeOpacity="0.45" strokeWidth="0.55" strokeDasharray="1.4 1.2" />
-          <path d={`M${f(shoulderL + 3)} 130 C${f(shoulderL + 2)} 152 ${f(hipL + 2)} 174 ${f(hipL + 2)} 198`} stroke={seam} strokeOpacity="0.3" strokeWidth="0.55" strokeDasharray="1.4 1.2" />
-          <path d={`M${f(shoulderL + 4)} 124 C${f(shoulderL + 10)} 119 ${f(shoulderR - 10)} 119 ${f(shoulderR - 4)} 124`} stroke={seam} strokeOpacity="0.35" strokeWidth="0.55" strokeDasharray="1.4 1.2" />
+          );
+        })}
+        {longTunic ? <rect x={f(hipL - 20)} y={tunicLen - 6} width={f(hipR - hipL + 40)} height="12" fill="#000" opacity="0.14" /> : null}
+        <g fill="none" strokeLinecap="round">
+          {/* cuciture laterali e delle spalle */}
+          <path d={`M${f(shoulderR - 3)} ${f(Y(130))} C${f(shoulderR - 2)} ${f(Y(152))} ${f(hipR - 2)} ${f(Y(174))} ${f(hipR - 2)} ${f(Y(198))}`} stroke={seam} strokeOpacity="0.45" strokeWidth="0.55" strokeDasharray="1.4 1.2" />
+          <path d={`M${f(shoulderL + 3)} ${f(Y(130))} C${f(shoulderL + 2)} ${f(Y(152))} ${f(hipL + 2)} ${f(Y(174))} ${f(hipL + 2)} ${f(Y(198))}`} stroke={seam} strokeOpacity="0.3" strokeWidth="0.55" strokeDasharray="1.4 1.2" />
+          <path d={`M${f(shoulderL + 4)} ${f(Y(124))} C${f(shoulderL + 10)} ${f(Y(119))} ${f(shoulderR - 10)} ${f(Y(119))} ${f(shoulderR - 4)} ${f(Y(124))}`} stroke={seam} strokeOpacity="0.35" strokeWidth="0.55" strokeDasharray="1.4 1.2" />
         </g>
       </g>
     </g>
@@ -147,11 +178,13 @@ export function SleeveDetail({ s, e, h, w, color, long }: { s: P; e: P; h: P; w:
       {/* ombra sul lato opposto alla luce */}
       <line x1={f(s.x + up.nx * w * 0.26)} y1={f(s.y + up.ny * w * 0.26)} x2={f(e.x + up.nx * w * 0.26)} y2={f(e.y + up.ny * w * 0.26)} stroke="#000" strokeOpacity="0.16" strokeWidth={f(w * 0.36)} />
       {long ? <line x1={f(e.x + fo.nx * w * 0.2)} y1={f(e.y + fo.ny * w * 0.2)} x2={f(at(e, h, 0.82).x + fo.nx * w * 0.2)} y2={f(at(e, h, 0.82).y + fo.ny * w * 0.2)} stroke="#000" strokeOpacity="0.14" strokeWidth={f(w * 0.28)} /> : null}
-      {/* pieghe al gomito */}
-      <g stroke="#000" strokeOpacity="0.26" strokeWidth="1">
-        {[0.78, 0.88].map((k, i) => crease(at(s, e, k), up, 2.4, i))}
-        {long ? [0.1, 0.2].map((k, i) => crease(at(e, h, k), fo, -2, i + 4)) : null}
-      </g>
+      {/* pieghe al gomito, sfumate: una passata larga e trasparente sotto quella netta */}
+      {[[2.8, 0.07], [1.7, 0.1], [0.9, 0.22]].map(([sw, so], j) => (
+        <g key={`c${j}`} stroke="#000" strokeOpacity={so} strokeWidth={sw}>
+          {[0.78, 0.88].map((k, i) => crease(at(s, e, k), up, 2.4, i))}
+          {long ? [0.1, 0.2].map((k, i) => crease(at(e, h, k), fo, -2, i + 4)) : null}
+        </g>
+      ))}
       <g stroke="#fff" strokeOpacity="0.1" strokeWidth="0.8">
         {[0.82].map((k, i) => crease(at(s, e, k), up, 2.4, i))}
       </g>

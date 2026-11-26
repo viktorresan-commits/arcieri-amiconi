@@ -741,10 +741,32 @@ export function QuiverBody({ kind, color, w = 20, h = 82, top = -42 }: { kind: s
       return (
         <g>
           <rect x={x} y={top} width={w} height={h} rx="6" fill={color} />
+          {/* cuoio a tubo: lato in ombra, riflesso morbido verso la luce, grana e qualche graffio */}
+          <g fill="none" strokeLinecap="round">
+            <path d={`M${x + w * 0.12} ${top + 5} V${top + h - 5}`} stroke="#000" strokeOpacity="0.12" strokeWidth={w * 0.36} />
+            <path d={`M${x + w * 0.1} ${top + 5} V${top + h - 5}`} stroke="#000" strokeOpacity="0.16" strokeWidth={w * 0.18} />
+            <path d={`M${x + w * 0.9} ${top + 5} V${top + h - 5}`} stroke="#000" strokeOpacity="0.14" strokeWidth={w * 0.16} />
+            <path d={`M${x + w * 0.62} ${top + 9} V${top + h - 10}`} stroke="#fff" strokeOpacity="0.07" strokeWidth={w * 0.26} />
+            <path d={`M${x + w * 0.63} ${top + 10} V${top + h * 0.62}`} stroke="#fff" strokeOpacity="0.16" strokeWidth={Math.max(0.6, w * 0.06)} />
+          </g>
+          <g fill="#000" opacity="0.2">
+            {Array.from({ length: Math.round(h / 3) }, (_, i) => <circle key={i} cx={x + 2 + ((i * 37) % 97) / 97 * (w - 4)} cy={top + 8 + ((i * 53) % 89) / 89 * (h - 16)} r={i % 3 ? 0.28 : 0.4} />)}
+          </g>
+          <path d={`M${x + w * 0.3} ${top + h * 0.36} l${w * 0.16} 2.4 M${x + w * 0.52} ${top + h * 0.7} l${w * 0.12} -1.6`} stroke={light} strokeOpacity="0.35" strokeWidth="0.3" />
           <rect x={x} y={top} width={w} height={h} rx="6" fill="none" stroke={dark} strokeWidth="0.6" />
+          {/* fondo rinforzato e bordo della bocca rivoltato, con le loro impunture */}
+          <path d={`M${x} ${top + h - 9} H${x + w} V${top + h - 6} Q${x + w} ${top + h} ${x + w - 6} ${top + h} H${x + 6} Q${x} ${top + h} ${x} ${top + h - 6} Z`} fill={shadeHex(color, -0.32)} />
+          <path d={`M${x + 2} ${top + h - 7.4} H${x + w - 2}`} stroke={light} strokeOpacity="0.5" strokeWidth="0.35" strokeDasharray="1.1 0.9" />
           <rect x={x - 1} y={top - 2} width={w + 2} height="7" rx="2.5" fill={shadeHex(color, -0.3)} />
+          <path d={`M${x} ${top + 4.6} H${x + w}`} stroke="#000" strokeOpacity="0.3" strokeWidth="1.2" />
+          <path d={`M${x + 1} ${top - 0.6} H${x + w - 1}`} stroke="#fff" strokeOpacity="0.16" strokeWidth="0.6" />
+          <path d={`M${x + 1.4} ${top + 2.6} H${x + w - 1.4}`} stroke={light} strokeOpacity="0.55" strokeWidth="0.35" strokeDasharray="1.1 0.9" />
           {/* cuciture fini, non un bordo chiaro */}
           <path d={`M${x + 4} ${top + 12} v${h - 24} M${x + w - 4} ${top + 12} v${h - 24}`} stroke={light} strokeOpacity="0.5" strokeWidth="0.35" strokeDasharray="1.2 1" />
+          {/* anello d'ottone della tracolla */}
+          <circle cx={x + w} cy={top + h * 0.24} r="2.2" fill="none" stroke="#5a4214" strokeWidth="1.3" />
+          <circle cx={x + w} cy={top + h * 0.24} r="2.2" fill="none" stroke="#e3c06a" strokeWidth="0.7" />
+          <rect x={x + w - 3} y={top + h * 0.24 + 1.4} width="3.4" height="4" rx="0.8" fill={shadeHex(color, -0.35)} />
           {kind === "decorata" ? (
             <g>
               {[0.28, 0.62].map((u) => <rect key={u} x={x - 0.5} y={top + h * u} width={w + 1} height="3.2" fill="#d9b45a" />)}

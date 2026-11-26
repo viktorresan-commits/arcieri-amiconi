@@ -10,6 +10,7 @@ import { RimLightDefs } from "./avatar-light";
 import { Buckle, ChestEmblem, Clasp, ClothPattern, Fletching, Pouch, QuiverBody, zigQ } from "./avatar-extras";
 import { seamOf, BeltDetail, BracerLacing, ClothButton, ClothDetail, DetailDefs, LeatherBand, SleeveDetail } from "./avatar-detail";
 import { BUTTON_TOPS } from "./archer-avatar";
+import { ArmGuard, ChestGuard, FrontLegDetail, LimbGloss, PlainBuckle, RiserGrain } from "./avatar-gear";
 
 // contorno dipinto: bruno scuro morbido, non più nero a china
 const OUT = "#2a1d14";
@@ -102,7 +103,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
         {medievalTop ? <circle cx={f(cuff.x)} cy={f(cuff.y)} r={6.8 * W} fill={look.trim} stroke={OUT} strokeOpacity="0.43" strokeWidth="0.48" /> : null}
         {look.armband && !bowArm ? <path d={`M${f(lerp(s0.x, elbow.x, 0.42))} ${f(lerp(s0.y, elbow.y, 0.42))} L${f(lerp(s0.x, elbow.x, 0.58))} ${f(lerp(s0.y, elbow.y, 0.58))}`} stroke={look.trim} strokeWidth={upW + 1.4} /> : null}
         {look.watch && !bowArm ? <g><circle cx={f(lerp(elbow.x, hand.x, 0.8))} cy={f(lerp(elbow.y, hand.y, 0.8))} r="5.4" fill="#1d2126" /><circle cx={f(lerp(elbow.x, hand.x, 0.8))} cy={f(lerp(elbow.y, hand.y, 0.8))} r="3" fill="#dfe6ee" /></g> : null}
-        {bowArm && look.armguard ? <path d={`M${f(lerp(elbow.x, hand.x, 0.2))} ${f(lerp(elbow.y, hand.y, 0.2))} L${f(lerp(elbow.x, hand.x, 0.76))} ${f(lerp(elbow.y, hand.y, 0.76))}`} stroke={look.armguard} strokeWidth={foreW + 3} strokeLinecap="round" opacity="0.95" /> : null}
+        {bowArm && look.armguard ? <ArmGuard uid={uid} a={lerpP(elbow, hand, 0.2)} b={lerpP(elbow, hand, 0.76)} w={foreW + 3} color={look.armguard} out={OUT} /> : null}
         {look.bracers ? (
           <g>
             <path d={`M${f(brA.x)} ${f(brA.y)} L${f(brB.x)} ${f(brB.y)}`} stroke={OUT} strokeOpacity="0.58" strokeWidth={foreW + 2.5} strokeLinecap="round" />
@@ -256,8 +257,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
           return (
             <g key={x}>
               <path d={`M${L(206, -legW / 2)} 206 L${L(206, legW / 2)} 206 L${L(330, legW / 2 - (tight ? 2 : 0))} 330 L${L(330, -legW / 2 + (tight ? 2 : 0))} 330 Z`} fill={shorts ? skin : `url(#${uid}pa)`} stroke={OUT} strokeOpacity="0.54" strokeWidth="0.84" />
-              {shorts ? null : <path d={`M${L(268, -legW * 0.3)} 266 q${f(legW * 0.3)} 4 ${f(legW * 0.6)} 0 M${L(274, -legW * 0.25)} 273 q${f(legW * 0.25)} 3 ${f(legW * 0.5)} 0`} stroke="#000" strokeOpacity="0.25" strokeWidth="0.9" fill="none" />}
-              {shorts ? null : <path d={`M${L(212, -legW * 0.22)} 212 L${L(326, -legW * 0.22)} 326`} stroke="#fff" strokeOpacity="0.1" strokeWidth={f(legW * 0.18)} strokeLinecap="round" />}
+              {shorts ? null : <FrontLegDetail uid={uid} L={L} legW={legW} kneeY={268} bottom={Math.min(326, bootTop)} />}
               {/* volume della gamba e ombra sotto la veste */}
               <path d={`M${L(206, -legW / 2)} 206 L${L(206, legW / 2)} 206 L${L(330, legW / 2 - (tight ? 2 : 0))} 330 L${L(330, -legW / 2 + (tight ? 2 : 0))} 330 Z`} fill={`url(#${uid}vol)`} pointerEvents="none" />
               <path d={`M${L(206, -legW / 2)} 206 L${L(206, legW / 2)} 206 L${L(226, legW / 2)} 226 L${L(226, -legW / 2)} 226 Z`} fill={`url(#${uid}ao)`} opacity="0.7" pointerEvents="none" />
@@ -296,7 +296,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
         {longTop ? <path d={tunicD} fill={`url(#${uid}sh)`} stroke={OUT} strokeOpacity="0.54" strokeWidth="0.84" /> : null}
         <path d={torsoD} fill={`url(#${uid}sh)`} stroke={OUT} strokeOpacity="0.54" strokeWidth="0.84" />
         <ClothPattern kind={look.pattern} shapes={longTop ? [torsoD, tunicD] : [torsoD]} base={shirt} trim={look.trim} uid={`${uid}f`} box={[sh.l - 16, 94, sh.r + 16, (longTop ? hem : 208) + 6]} />
-        <ClothDetail uid={`${uid}cd`} shapes={longTop ? [torsoD, tunicD] : [torsoD]} cx={cx} shoulderL={sh.l} shoulderR={sh.r} hipL={hip.l} hipR={hip.r} tunicLen={longTop ? hem : 206} longTunic={longTop} seam={seamOf(shirt)} />
+        <ClothDetail uid={`${uid}cd`} shapes={longTop ? [torsoD, tunicD] : [torsoD]} cx={cx} shoulderL={sh.l} shoulderR={sh.r} hipL={hip.l} hipR={hip.r} tunicLen={longTop ? hem : 206} longTunic={longTop} seam={seamOf(shirt)} dy={-14} belt={look.belt === "larga" ? 184 : 187} />
         <FrontTop look={look} cx={cx} sh={sh} waist={waist} hip={hip} hem={hem} sideLen={sideLen} longTop={longTop} skin={skin} shirt={shirt} sleeve={sleeve} uid={uid} tw={tw} />
         <g pointerEvents="none">
           <clipPath id={`${uid}vc`}>
@@ -311,7 +311,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
             <ellipse cx={cx - 8} cy="118" rx={(sh.r - sh.l) * 0.26} ry="9" fill="#fff" opacity="0.07" />
           </g>
         </g>
-        {look.chestguard ? <path d={`M${cx + bowSide * 6} 118 C${cx + bowSide * 30} 116 ${cx + bowSide * 34} 150 ${cx + bowSide * 26} 168 L${cx + bowSide * 6} 164 Z`} fill={look.chestColor} opacity="0.92" stroke={OUT} strokeOpacity="0.5" strokeWidth="0.6" /> : null}
+        {look.chestguard ? <ChestGuard uid={uid} d={`M${cx + bowSide * 6} 118 C${cx + bowSide * 30} 116 ${cx + bowSide * 34} 150 ${cx + bowSide * 26} 168 L${cx + bowSide * 6} 164 Z`} c={{ x: cx + bowSide * 20, y: 142 }} color={look.chestColor} out={OUT} /> : null}
         {look.straps ? <path d={`M${sh.l + 8} 106 L${hip.r - 6} 196 M${sh.r - 8} 106 L${hip.l + 6} 196`} stroke="#3a2414" strokeWidth="4.4" /> : null}
         {look.special ? <SpecialFrontTorso look={look} cx={cx} sh={sh} hip={hip} uid={uid} /> : null}
         {look.sash ? <path d={`M${waist.l - 2} 182 Q${cx} 192 ${waist.r + 2} 182 L${waist.r + 2} 194 Q${cx} 204 ${waist.l - 2} 194 Z M${waist.l + 6} 192 l-6 34 l10 -4 Z`} fill={look.sashColor} /> : null}
@@ -319,7 +319,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
           <g>
             <path d={`M${waist.l - 1} ${look.belt === "larga" ? 184 : 187} L${waist.r + 1} ${look.belt === "larga" ? 184 : 187} L${waist.r + 1} 194 L${waist.l - 1} 194 Z`} fill={look.beltColor} stroke={OUT} strokeOpacity="0.5" strokeWidth="0.6" />
             <BeltDetail uid={uid} x={waist.l - 1} y={look.belt === "larga" ? 184 : 187} w={waist.r - waist.l + 2} h={look.belt === "larga" ? 10 : 7} cx={cx} />
-            {look.buckle && look.buckle !== "semplice" ? <Buckle kind={look.buckle} x={cx} y={190} /> : <rect x={cx - 5} y={look.belt === "larga" ? 183 : 186} width="10" height={look.belt === "larga" ? 12 : 9} rx="1.5" fill="none" stroke="#d9b45a" strokeWidth="1.8" />}
+            {look.buckle && look.buckle !== "semplice" ? <Buckle kind={look.buckle} x={cx} y={190} /> : <PlainBuckle x={cx} y={look.belt === "larga" ? 189 : 190.5} w={10} h={look.belt === "larga" ? 12 : 9} sw={1.8} />}
           </g>
         ) : null}
         {/* borsello sul fianco scelto (destro dell'arciere = a sinistra di chi guarda) */}
@@ -371,6 +371,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
                 <path d={limbD(sg)} stroke={limbs} strokeWidth={longbow ? 5.8 : 4.8} strokeLinecap="round" fill="none" />
                 <path d={limbD(sg)} stroke={shade(limbs, wood ? 0.35 : 0.55)} strokeOpacity={wood ? 0.6 : 0.4} strokeWidth="1.4" strokeLinecap="round" fill="none" transform="translate(1.2 0)" />
                 <path d={limbD(sg)} stroke="#000" strokeOpacity="0.25" strokeWidth="1.2" strokeLinecap="round" fill="none" transform="translate(-1.4 0)" />
+                <LimbGloss d={limbD(sg)} width={longbow ? 5.8 : 4.8} wood={wood && !look.limbs} />
                 <circle cx={tip(sg).x} cy={tip(sg).y} r={longbow ? 2.6 : 2.1} fill={wood ? "#efe3c4" : "#2a2f35"} stroke={OUT} strokeOpacity="0.58" strokeWidth="0.42" />
                 {compound ? <g transform={`translate(${tipX} ${-half * sg})`}><ellipse rx="7" ry="8" fill="#b7c0c8" stroke="#2a2f35" strokeWidth="1.2" /><ellipse rx="3.6" ry="4.2" fill="#8a939c" /><circle r="1.2" fill="#e3a21a" /></g> : null}
               </g>
@@ -387,6 +388,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
             ) : (
               <g>
                 <path d={`M-1 ${-rs} L8 ${-rs} C9 ${-rs * 0.5} 10 -12 9 -8 L9 ${rs} L-1 ${rs} C-2 ${rs * 0.6} -2 14 -4 9 C-5 4 -5 -6 -2 -11 Z`} fill={`url(#${uid}ri)`} stroke={OUT} strokeOpacity="0.61" strokeWidth="0.54" />
+                {wood ? <RiserGrain id={`${uid}frg`} d={`M-1 ${-rs} L8 ${-rs} C9 ${-rs * 0.5} 10 -12 9 -8 L9 ${rs} L-1 ${rs} C-2 ${rs * 0.6} -2 14 -4 9 C-5 4 -5 -6 -2 -11 Z`} top={-rs} bottom={rs} x0={-5} x1={10} /> : null}
                 {wood ? null : <path d={`M3 ${-rs + 6} L7 ${-rs + 6} L7 -10 L3.4 -10 Z`} fill="#000" opacity="0.3" />}
                 <path d="M9 -6 l4 0 l0 2.4" stroke="#c9d0d8" strokeWidth="1.1" fill="none" />
                 {look.bowType === "olimpico" ? (
