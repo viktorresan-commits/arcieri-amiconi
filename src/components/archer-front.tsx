@@ -3,6 +3,7 @@ import { tune, type AvatarLook } from "@/lib/arcieri/avatar";
 import { AvatarFace, bodyWidth, CAPE_CLOTH, shade } from "./archer-avatar";
 import { PATTERN2_IDS } from "@/lib/arcieri/avatar-more";
 import { Pendant } from "./avatar-more";
+import { SpecialFrontLeg, SpecialFrontTorso } from "./special-details";
 import { Buckle, ChestEmblem, Clasp, ClothPattern, Fletching, Pouch, QuiverBody, zigQ } from "./avatar-extras";
 import { seamOf, BeltDetail, ClothButton, ClothDetail, DetailDefs, LeatherBand, SleeveDetail } from "./avatar-detail";
 import { BUTTON_TOPS } from "./archer-avatar";
@@ -292,6 +293,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
                   {[0, 1, 2, 3].map((k) => <path key={k} d={`M${L(312 + k * 7, -3)} ${312 + k * 7} l6 2`} stroke="#e8d9b0" strokeWidth="1" />)}
                 </g>
               ) : null}
+              {look.special && !shorts ? <SpecialFrontLeg look={look} L={L} legW={legW} i={i} bootTop={bootTop} /> : null}
               {look.bottom === "cargo" ? <rect x={L(244, i ? 2 : -legW / 2 - 2)} y="244" width={legW / 2 + 1} height="16" rx="2" fill={shade(look.pants, -0.15)} stroke={shade(look.pants, -0.45)} strokeWidth="0.8" /> : null}
               {look.footwear === "stivali-risvolto" ? <path d={`M${L(bootTop, -legW / 2 - 3)} ${bootTop - 4} h${legW + 6} v9 h${-legW - 6} Z`} fill="#eee2c8" stroke={OUT} strokeOpacity="0.65" strokeWidth="1" /> : null}
               {look.footwear === "sportive" ? <path d={`M${L(346, -legW / 2 - 2)} 346 h${legW + 4} v4 h${-legW - 4} Z`} fill="#f2efe8" /> : null}
@@ -341,6 +343,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
         </g>
         {look.chestguard ? <path d={`M${cx + bowSide * 6} 118 C${cx + bowSide * 30} 116 ${cx + bowSide * 34} 150 ${cx + bowSide * 26} 168 L${cx + bowSide * 6} 164 Z`} fill={look.chestColor} opacity="0.92" stroke={OUT} strokeOpacity="0.7" strokeWidth="1" /> : null}
         {look.straps ? <path d={`M${sh.l + 8} 106 L${hip.r - 6} 196 M${sh.r - 8} 106 L${hip.l + 6} 196`} stroke="#3a2414" strokeWidth="4.4" /> : null}
+        {look.special ? <SpecialFrontTorso look={look} cx={cx} sh={sh} hip={hip} uid={uid} /> : null}
         {look.sash ? <path d={`M${waist.l - 2} 182 Q${cx} 192 ${waist.r + 2} 182 L${waist.r + 2} 194 Q${cx} 204 ${waist.l - 2} 194 Z M${waist.l + 6} 192 l-6 34 l10 -4 Z`} fill={look.sashColor} /> : null}
         {look.belt !== "nessuna" ? (
           <g>
@@ -352,7 +355,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
         {look.pouch ? <Pouch kind={look.pouchType} x={cx - bowSide * 24} y={192} /> : null}
         <ChestEmblem kind={look.emblem} crest={look.crest} x={look.emblem === "compagnia" ? cx : cx - bowSide * 14} y={look.emblem === "compagnia" ? 150 : 134} s={look.emblem === "compagnia" ? 1.25 : 0.85} base={shirt} trim={look.trim} />
         {/* bottoni come di profilo: sul petto se non c'è lo stemma, sulla falda sotto la cintura se la veste è lunga */}
-        {BUTTON_TOPS[look.top] ? (look.emblem !== "nessuno" ? (longTop ? [205, 217] : []) : [118, 132, 146, 160, 174, ...(longTop ? [205, 217] : [])]).map((y) => <ClothButton key={y} x={cx} y={y} r={2.2} color={BUTTON_TOPS[look.top]} metal={look.top === "giubbetto" || look.top === "divisa" || look.top === "cappotto-lungo"} />) : null}
+        {BUTTON_TOPS[look.top] && !(look.special === "simone-inverno" && look.top === "giacca") ? (look.emblem !== "nessuno" ? (longTop ? [205, 217] : []) : [118, 132, 146, 160, 174, ...(longTop ? [205, 217] : [])]).map((y) => <ClothButton key={y} x={cx} y={y} r={2.2} color={BUTTON_TOPS[look.top]} metal={look.top === "giubbetto" || look.top === "divisa" || look.top === "cappotto-lungo"} />) : null}
         {look.cape && look.clasp !== "nessuno" ? (
           // due fermagli sul davanti, uniti da una catenella che pende sul petto
           <g>
@@ -371,7 +374,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
         ) : null}
         {look.fur ? <g fill={look.furColor} stroke={shade(look.furColor, -0.4)} strokeWidth="0.8">{[-34, -24, -14, 14, 24, 34].map((dx, i) => <circle key={dx} cx={cx + dx * tw} cy={102 + (i % 2) * 3} r="9" />)}</g> : null}
         {look.scarf ? <path d={`M${cx - 18} 96 Q${cx} 108 ${cx + 18} 96 L${cx + 16} 104 Q${cx} 116 ${cx - 16} 104 Z M${cx + 8} 106 l4 30 l8 -2 l-6 -28 Z`} fill={look.scarfColor} /> : null}
-        {look.cowl ? <path d={`M${sh.l + 4} 104 C${cx - 20} 92 ${cx + 20} 92 ${sh.r - 4} 104 C${cx + 22} 124 ${cx - 22} 124 ${sh.l + 4} 104 Z`} fill={look.cowlColor} stroke={shade(look.cowlColor, -0.35)} strokeWidth="1" /> : null}
+        {look.cowl && !(look.special === "simone-medievale" && look.style === "medievale") ? <path d={`M${sh.l + 4} 104 C${cx - 20} 92 ${cx + 20} 92 ${sh.r - 4} 104 C${cx + 22} 124 ${cx - 22} 124 ${sh.l + 4} 104 Z`} fill={look.cowlColor} stroke={shade(look.cowlColor, -0.35)} strokeWidth="1" /> : null}
         {look.pendant && look.pendant !== "nessuno" ? <Pendant kind={look.pendant} x={cx} y={look.amulet ? 112 : 118} w={look.amulet ? 8 : 10} y0={100} s={1.05} /> : null}
         {look.amulet ? <g><path d={`M${cx - 11} 100 Q${cx} 126 ${cx + 11} 100`} stroke="#c9a46a" strokeWidth="1" fill="none" /><path d={`M${cx} 122 l5 7 l-5 7 l-5 -7 Z`} fill="#d9b45a" stroke="#7a5a1a" strokeWidth="0.8" /><circle cx={cx} cy="129" r="2" fill="#2f9e7a" /></g> : null}
         {look.necklace && look.top === "giubbetto" ? (
@@ -385,6 +388,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
         {armsOut != null ? null : heldArrow}
         {arm(bowSide === 1 ? -1 : 1)}
         {arm(bowSide)}
+        {look.special && armsOut == null ? <SpecialFrontTorso look={look} cx={cx} sh={sh} hip={hip} layer="over" uid={uid} /> : null}
         {/* arco nella mano: flettenti, riser con impugnatura, corda con serving e punto d'incocco, pugno chiuso */}
         {armsOut != null ? null : (
         <g transform={`translate(${f(grip.x)} ${f(grip.y)}) scale(${bowSide} 1) rotate(5)`}>

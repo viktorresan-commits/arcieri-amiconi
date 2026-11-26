@@ -151,6 +151,8 @@ export type AvatarLook = {
   pendant: string;
   browShape: string;
   palette: string;
+  /** abito su misura (vedi special-looks): dettagli disegnati solo per lui */
+  special: string;
 };
 
 /** legge una regolazione numerica salvata come testo */
@@ -324,6 +326,7 @@ export const AVATAR_DEFAULT: AvatarLook = {
   pendant: "nessuno",
   browShape: "naturali",
   palette: "",
+  special: "",
 };
 
 /**

@@ -15,6 +15,7 @@ import { ArcherFront } from "@/components/archer-front";
 import { FACE_BGS, SCENES, sceneById } from "@/lib/arcieri/scenes";
 import { useSky } from "@/lib/arcieri/sky3d";
 import { PALETTES } from "@/lib/arcieri/avatar-more";
+import { specialLooksFor, type SpecialLook } from "@/lib/arcieri/special-looks";
 import {
   AVATAR_DEFAULT,
   AVATAR_PRESETS,
@@ -447,6 +448,17 @@ export function AvatarEditor() {
   // i completi del Fondatore (e i loro pezzi: corona, scaglie, piume di fenice) li vede e li sceglie solo lui
   const founder = Boolean(member?.me.isSuper) && member?.me.role === "admin";
   const hats: [AvatarLook["hat"], string][] = founder ? [...HAT_OPTS, ["corona", "Corona"]] : HAT_OPTS;
+  // abiti su misura: li vede solo il loro titolare
+  const mine: SpecialLook[] = member ? specialLooksFor(member.me.givenName ?? "", member.me.familyName ?? "") : [];
+  const mineStrip = mine.length ? (
+    <Strip
+      title="I tuoi abiti su misura"
+      current={look.special}
+      hint="solo tuoi, nessun altro li può avere"
+      onPick={(id) => { const sp = mine.find((x) => x.id === id); if (sp) setLook((l) => presetLook(l, sp.look)); }}
+      items={mine.map((sp) => ({ id: sp.id, label: sp.label.replace(/^[^·]*·\s*/, ""), preview: <ArcherFront look={{ ...presetLook(shown, sp.look), lefty: false }} crop="10 0 180 360" className="absolute inset-0 h-full w-full" /> }))}
+    />
+  ) : null;
   const set = <K extends keyof AvatarLook>(k: K, v: AvatarLook[K]) => setLook((l) => ({ ...l, [k]: v }));
   const opts = <T extends string>(list: readonly T[]) => list.map((id) => ({ id, label: id.charAt(0).toUpperCase() + id.slice(1) }));
 
@@ -489,6 +501,9 @@ export function AvatarEditor() {
         </div>
       </div>
       <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 [scrollbar-width:none]">
+        {mine.map((sp) => (
+          <button key={sp.id} type="button" className="aa-chip shrink-0 border-[#7cf0a8]/60 bg-[#7cf0a8]/15 text-[#bff7d6]" onClick={() => setLook((l) => presetLook(l, sp.look))}><Glyph name="sparkle" size={14} /> {sp.label.replace(/^[^·]*·\s*/, "")}</button>
+        ))}
         {founder ? FOUNDER_LOOKS.map((c) => (
           <button key={c.id} type="button" className="aa-chip shrink-0 border-[#e8b93e]/60 bg-[#e8b93e]/15 text-[#f5d36b]" onClick={() => setLook((l) => presetLook(l, c.look))}><Glyph name="medal" size={14} /> {c.label}</button>
         )) : null}
@@ -509,6 +524,7 @@ export function AvatarEditor() {
       </div>
       {mode === "semplice" ? (
         <Card className="grid gap-5">
+          {mineStrip}
           {founder ? (
             <Strip
               title="Completi del Fondatore"
@@ -653,6 +669,7 @@ export function AvatarEditor() {
         ) : null}
         {tab === "abiti" ? (
           <>
+            {mineStrip}
             <Row label="Stile">
               <Chips value={look.style} onChange={(v) => setLook((l) => ({ ...l, style: v, top: TOPS[v][0].id, bottom: v === "medievale" ? "calzamaglia" : "pantaloni", footwear: v === "medievale" ? "stivali" : "sportive" }))} options={[{ id: "moderno", label: "Moderno" }, { id: "medievale", label: "Medievale" }]} />
             </Row>

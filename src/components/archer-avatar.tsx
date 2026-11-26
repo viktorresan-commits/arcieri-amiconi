@@ -1,6 +1,7 @@
 import { ink, cubicPts, Tufts, Clumps, fanStrokes, MetalDefs } from "./avatar-ink";
 import { PATTERN2_IDS } from "@/lib/arcieri/avatar-more";
 import { EyepatchFront, EyepatchProfile, Marks2Front, Marks2Profile, Pendant, browShape } from "./avatar-more";
+import { SpecialSideTorso } from "./special-details";
 import { cloneElement, isValidElement, useEffect, useId, useMemo, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { tune, type AvatarLook, type Pose } from "@/lib/arcieri/avatar";
 import { zigQ, BowDeco, Buckle, ChestEmblem, Clasp, ClothPattern, Earring, FaceFrame, FacePaintFront, FacePaintProfile, Fletching, HairOrnament, PaintStroke, Pouch, QuiverBody } from "./avatar-extras";
@@ -442,6 +443,12 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4, cssBlink = fals
               </>
             ) : limb(L.knee, L.ankle, w * 0.86, `url(#${uid}pants)`)}
             {brache ? <path d={`M${f(L.knee.x - 6)} ${f(L.knee.y + 8)} q5 5 12 0 M${f(L.hip.x - 4)} ${f(L.hip.y + 22)} q4 6 10 1`} stroke={shade(look.pants, -0.35)} strokeWidth="1" fill="none" /> : null}
+            {look.special === "simone-inverno" && look.bottom === "cargo" && !shorts ? (
+              <g>
+                {limb(lerpP(L.hip, L.knee, 0.22), L.knee, w * 0.4, "#3a3d42")}
+                {limb(L.knee, lerpP(L.knee, L.ankle, 0.8), w * 0.36, "#3a3d42")}
+              </g>
+            ) : null}
             {look.bottom === "cargo" ? (() => {
               const c = lerpP(L.hip, L.knee, 0.58);
               return (
@@ -864,7 +871,7 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4, cssBlink = fals
       </g>
       <ChestEmblem kind={look.emblem} crest={look.crest} x={cx + 9} y={look.top === "giubbetto" ? 160 : 150} s={look.emblem === "compagnia" ? 0.95 : 0.72} base={look.shirt} trim={look.trim} />
       {/* bottoni sulla chiusura davanti: metallo sul giubbetto, legno sulle giubbe, osso sulle camicie */}
-      {BUTTON_TOPS[look.top] ? (look.emblem !== "nessuno" ? (tunicLen > 222 ? [217, 227] : []) : [136, 148, 160, 172, 184, ...(tunicLen > 222 ? [217, 227] : [])]).map((y) => <ClothButton key={y} x={cx + 1} y={y} r={1.9} color={BUTTON_TOPS[look.top]} metal={look.top === "giubbetto" || look.top === "divisa" || look.top === "cappotto-lungo"} />) : null}
+      {BUTTON_TOPS[look.top] && !(look.special === "simone-inverno" && look.top === "giacca") ? (look.emblem !== "nessuno" ? (tunicLen > 222 ? [217, 227] : []) : [136, 148, 160, 172, 184, ...(tunicLen > 222 ? [217, 227] : [])]).map((y) => <ClothButton key={y} x={cx + 1} y={y} r={1.9} color={BUTTON_TOPS[look.top]} metal={look.top === "giubbetto" || look.top === "divisa" || look.top === "cappotto-lungo"} />) : null}
       {look.tattoo === "sole" && look.top === "canotta" ? <g transform={`translate(${f(shoulderR - 7)} 130) scale(0.4)`} opacity="0.8"><circle r="5" fill="none" stroke="#24324a" strokeWidth="2" />{[0, 1, 2, 3, 4, 5, 6, 7].map((k) => <path key={k} d={`M${f(Math.cos(k * 0.785) * 7)} ${f(Math.sin(k * 0.785) * 7)} L${f(Math.cos(k * 0.785) * 10)} ${f(Math.sin(k * 0.785) * 10)}`} stroke="#24324a" strokeWidth="2" />)}</g> : null}
       {look.cape ? (() => {
         // il mantello si vede anche sopra le spalle: un lembo di stoffa che parte dal fermaglio sul davanti,
@@ -886,6 +893,7 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4, cssBlink = fals
           </g>
         );
       })() : null}
+      {look.special ? <SpecialSideTorso look={look} cx={cx} shoulderL={shoulderL} shoulderR={shoulderR} hipL={hipL} hipR={hipR} /> : null}
       {look.pendant && look.pendant !== "nessuno" ? <Pendant kind={look.pendant} x={cx + 3} y={look.amulet ? 126 : 132} w={10} y0={116} s={1.05} /> : null}
       {look.amulet ? (
         <g>
@@ -1971,7 +1979,7 @@ function HairFrontShape({ look, uid, t }: { look: AvatarLook; uid: string; t: nu
 function Hat({ look, uid }: { look: AvatarLook; uid: string }) {
   const node = HatShape({ look });
   if (!node) return null;
-  const kind: ProfileWeave = look.hat === "cuffia" ? "knit" : look.hat === "elmo" || look.hat === "corona" || look.hat === "cerchietto" ? "metal" : "felt";
+  const kind: ProfileWeave = look.hat === "cuffia" && look.special !== "simone-inverno" ? "knit" : look.hat === "elmo" || look.hat === "corona" || look.hat === "cerchietto" ? "metal" : "felt";
   return (
     <g>
       {node}
@@ -2001,13 +2009,22 @@ function HatShape({ look }: { look: AvatarLook }): ReactNode {
           <path d="M136 62 C126 46 114 38 100 36 C112 44 120 54 132 64 Z" fill="#f4f1ea" stroke="#c9c0ae" strokeWidth="0.6" />
         </g>
       );
-    case "cappuccio":
+    case "cappuccio": {
+      // di profilo: il bordo passa sulla fronte sopra il sopracciglio, davanti all'orecchio e lungo la mascella;
+      // copre capelli e orecchio, con la fodera rivoltata sul bordo
+      const lining = look.special === "simone-medievale" ? "#b8892e" : shade(c, 0.22);
+      const edge = "M174 79.5 C172 71 164 67.4 156.4 67.6 C149 68 144.6 75 145.4 86 C146 96 149.6 104.4 156 111";
       return (
         <g>
-          <path d="M124 92 C120 64 136 50 154 52 C170 54 178 66 176 82 L172 80 C170 70 162 64 152 64 C142 64 136 72 136 86 C136 96 140 104 146 110 L132 114 C126 108 124 100 124 92 Z" fill={c} />
-          <path d="M172 80 C170 70 162 64 152 64 C142 64 136 72 136 86" stroke={shade(c, -0.35)} strokeWidth="2" fill="none" />
+          <path d={`M174 79.5 C178.4 71 176 57 164 51 C151 45 131 49 124.6 66 C119 81 121 99 128 111 L134 121 L157 117 L156 111 C149.6 104.4 146 96 145.4 86 C144.6 75 149 68 156.4 67.6 C164 67.4 172 71 174 79.5 Z`} fill={shade(c, -0.06)} stroke={ink(c)} strokeWidth="1.1" strokeLinejoin="round" />
+          <path d="M131 70 Q127 88 132 108 M138 60 Q134 84 140 112" stroke={shade(c, -0.4)} strokeOpacity="0.55" strokeWidth="1.2" fill="none" strokeLinecap="round" />
+          <path d="M134 56 Q150 47 166 53" stroke={shade(c, 0.28)} strokeOpacity="0.5" strokeWidth="2" fill="none" strokeLinecap="round" />
+          <path d={edge} stroke={ink(lining)} strokeWidth="4.4" fill="none" strokeLinecap="round" />
+          <path d={edge} stroke={lining} strokeWidth="3" fill="none" strokeLinecap="round" />
+          <path d={edge} stroke="#fff" strokeOpacity="0.2" strokeWidth="0.7" fill="none" transform="translate(-0.8 -0.6)" />
         </g>
       );
+    }
     case "bandana":
       return (
         <g>
@@ -2063,6 +2080,17 @@ function HatShape({ look }: { look: AvatarLook }): ReactNode {
       );
     }
     case "cuffia":
+      if (look.special === "simone-inverno")
+        return (
+          <g>
+            {/* berretto di pile liscio col risvolto e la toppa del marchio */}
+            <path d="M127 82 C125 60 138 50 152 50 C166 50 175 59 174 76 Z" fill={c} stroke="#1b130d" strokeOpacity="0.8" strokeWidth="1.2" />
+            <path d="M136 60 C142 54 152 52 160 54" stroke={shade(c, 0.3)} strokeWidth="1.4" fill="none" strokeLinecap="round" opacity="0.6" />
+            <path d="M126 79 C140 73 160 71 175 74 L175 82 C160 79 140 81 127 87 Z" fill={shade(c, -0.12)} stroke="#1b130d" strokeOpacity="0.7" strokeWidth="1" />
+            <rect x="160" y="74.6" width="5" height="4.4" rx="0.8" fill="#1b2f4a" stroke="#0e1722" strokeWidth="0.4" />
+            <path d="M161.2 75.8 l2.6 2 M163.8 75.8 l-2.6 2" stroke="#e8e8e8" strokeWidth="0.6" />
+          </g>
+        );
       return (
         <g>
           <path d="M127 82 C125 60 138 49 152 49 C166 49 175 59 174 76 Z" fill={c} stroke="#1b130d" strokeOpacity="0.75" strokeWidth="1.2" />
@@ -2886,7 +2914,8 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false, part }
       </radialGradient>
     </>
   );
-  const hoodNode = capOn ? <path d={look.hat === "elmo" ? "M18 100 C16 60 26 22 50 20 C74 22 84 60 82 100 Z" : `M14 100 C10 58 22 ${fy - ry - 14} 50 ${fy - ry - 16} C78 ${fy - ry - 14} 90 58 86 100 Z`} fill={look.hat === "elmo" ? "#9aa3ad" : shade(look.hatColor, -0.35)} /> : null;
+  // nella figura intera il cappuccio di stoffa sta tutto davanti (capNode): dietro non serve una seconda sagoma
+  const hoodNode = capOn && !(bare && look.hat === "cappuccio") ? <path d={look.hat === "elmo" ? "M18 100 C16 60 26 22 50 20 C74 22 84 60 82 100 Z" : `M14 100 C10 58 22 ${fy - ry - 14} 50 ${fy - ry - 16} C78 ${fy - ry - 14} 90 58 86 100 Z`} fill={look.hat === "elmo" ? "#9aa3ad" : shade(look.hatColor, -0.35)} /> : null;
   const backNode = !capOn && hairBack[look.hair] ? (
     <g transform={`translate(0 ${fy - 6}) scale(1 ${(0.5 + tune(look.hairLength, 50, 0, 100) / 100).toFixed(3)}) translate(0 ${-(fy - 6)})`}>
       {hairBack[look.hair]}
@@ -2914,14 +2943,41 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false, part }
     );
   }
   // copricapi: si disegnano qui una volta e si usano anche come forma per la trama del materiale e per l'ombra sulla fronte
-  const capNode = look.hat === "cappuccio" ? (
-          <g>
-            {/* il cappuccio avvolge tutta la testa: sopra e ai lati non si vede più il cranio */}
-            <path d={`M${50 - rx - 9} ${fy + 26} C${50 - rx - 13} ${fy - ry - 30} ${50 + rx + 13} ${fy - ry - 30} ${50 + rx + 9} ${fy + 26} C${50 + rx + 3} ${fy + 2} ${50 + rx + 2} ${fy - ry + 2} 50 ${fy - ry + 1} C${50 - rx - 2} ${fy - ry + 2} ${50 - rx - 3} ${fy + 2} ${50 - rx - 9} ${fy + 26} Z`} fill={shade(look.hatColor, -0.1)} stroke="#1b130d" strokeOpacity="0.65" strokeWidth="1" />
-            <path d={`M${50 + rx + 3} ${fy + 6} C${50 + rx + 2} ${fy - ry + 2} ${50 - rx - 2} ${fy - ry + 2} ${50 - rx - 3} ${fy + 6}`} stroke={shade(look.hatColor, -0.5)} strokeWidth="3" fill="none" opacity="0.55" />
-            <path d={`M50 ${fy - ry - 16} C54 ${fy - ry - 6} 54 ${fy - ry - 2} 52 ${fy - ry + 1}`} stroke={shade(look.hatColor, 0.25)} strokeWidth="1" fill="none" opacity="0.6" />
-          </g>
-        ) : null;
+  // cappuccio di stoffa: incornicia il viso dalla fronte (sopra le sopracciglia) al mento e copre orecchie e capelli;
+  // il bordo dell'apertura è la fodera rivoltata, una fascia unica con il contorno a china
+  const capNode = look.hat === "cappuccio" ? (() => {
+    const hc = look.hatColor;
+    const lining = look.special === "simone-medievale" ? "#b8892e" : shade(hc, 0.22);
+    // apertura aperta in basso: i due lembi scendono ai lati della barba fino alle spalle
+    const w = rx + 0.8;
+    const T = eyeY - 13.5;
+    const side = (k: number) => `M${50 - w - k} 118 L${50 - w - k} ${fy + 3} C${50 - w - k} ${T - k + (fy - T) * 0.45} ${50 - (w + k) * 0.82} ${T - k} 50 ${T - k} C${50 + (w + k) * 0.82} ${T - k} ${50 + w + k} ${T - k + (fy - T) * 0.45} ${50 + w + k} ${fy + 3} L${50 + w + k} 118`;
+    // nella figura intera il cappuccio si posa sulla pellegrina (orlo morbido sotto il mento); nel ritratto scende fino in fondo
+    const outer = bare
+      ? `M${50 - rx - 13} ${fy + ry + 12} C${50 - rx - 17} ${fy - ry - 26} ${50 + rx + 17} ${fy - ry - 26} ${50 + rx + 13} ${fy + ry + 12} Q50 ${fy + ry + 22} ${50 - rx - 13} ${fy + ry + 12} Z`
+      : `M14 101 C10 58 22 ${fy - ry - 14} 50 ${fy - ry - 16} C78 ${fy - ry - 14} 90 58 86 101 Z`;
+    const rim = `M${50 - w - 1.6} ${fy + ry + 14} L${50 - w - 1.6} ${fy + 3} C${50 - w - 1.6} ${T - 1.6 + (fy - T) * 0.45} ${50 - (w + 1.6) * 0.82} ${T - 1.6} 50 ${T - 1.6} C${50 + (w + 1.6) * 0.82} ${T - 1.6} ${50 + w + 1.6} ${T - 1.6 + (fy - T) * 0.45} ${50 + w + 1.6} ${fy + 3} L${50 + w + 1.6} ${fy + ry + 14}`;
+    return (
+      <g>
+        <clipPath id={`${uid}hoodc`}><path d={outer} /></clipPath>
+        <path d={`${outer} ${side(3.2)} Z`} fill={shade(hc, -0.06)} fillRule="evenodd" clipPath={`url(#${uid}hoodc)`} />
+        <path d={outer} fill="none" stroke={ink(hc)} strokeWidth="1" strokeLinejoin="round" />
+        {/* pieghe della stoffa ai lati e cucitura in cima (dentro la sagoma del cappuccio) */}
+        <g clipPath={`url(#${uid}hoodc)`}>
+        <path d={`M${50 - w - 9} ${fy + 26} Q${50 - w - 11} ${fy} ${50 - w - 5} ${fy - ry - 6} M${50 + w + 9} ${fy + 26} Q${50 + w + 11} ${fy} ${50 + w + 5} ${fy - ry - 6} M${50 - w - 6} 100 Q${50 - w - 7} ${fy + 30} ${50 - w - 3} ${fy + ry} M${50 + w + 6} 100 Q${50 + w + 7} ${fy + 30} ${50 + w + 3} ${fy + ry}`} stroke={shade(hc, -0.4)} strokeOpacity="0.55" strokeWidth="1.2" fill="none" strokeLinecap="round" />
+        <path d={`M50 ${fy - ry - 15} Q51.5 ${T - 8} 50 ${T - 3.4}`} stroke={shade(hc, -0.35)} strokeWidth="0.8" fill="none" strokeDasharray="1.4 1" />
+        </g>
+        {/* fodera rivoltata lungo tutto il bordo, fino sul petto */}
+        <g clipPath={`url(#${uid}hoodc)`}>
+          <path d={rim} stroke={ink(lining)} strokeWidth="4.8" fill="none" strokeLinejoin="round" />
+          <path d={rim} stroke={lining} strokeWidth="3.4" fill="none" strokeLinejoin="round" />
+          <path d={rim} stroke="#fff" strokeOpacity="0.2" strokeWidth="0.7" fill="none" transform="translate(-0.5 -0.6)" />
+        </g>
+        {/* ombra del cappuccio sulla fronte e sulle tempie */}
+        <path d={`M${50 - w + 0.6} ${fy + 2} C${50 - w + 0.6} ${T + 4} ${50 + w - 0.6} ${T + 4} ${50 + w - 0.6} ${fy + 2}`} stroke="#000" strokeOpacity="0.22" strokeWidth="2.4" fill="none" />
+      </g>
+    );
+  })() : null;
   const hatGroup = (
 <g transform={turnHat(look, 50)}>
         {look.hat === "berretto" ? <g><path d={`M${50 - rx - 3} ${fy - 8} C${50 - rx - 3} ${fy - ry - 14} ${50 + rx + 3} ${fy - ry - 14} ${50 + rx + 3} ${fy - 8} Z`} fill={look.hatColor} /><path d={`M30 ${fy - 8} Q50 ${fy - 2} 74 ${fy - 8} L76 ${fy - 4} Q50 ${fy + 2} 28 ${fy - 4} Z`} fill={shade(look.hatColor, -0.3)} /></g> : null}
@@ -2931,7 +2987,16 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false, part }
         {look.hat === "bandana" ? <g><path d={`M${50 - rx - 2} ${fy - 8} C${50 - rx - 3} ${fy - ry - 12} ${50 + rx + 3} ${fy - ry - 12} ${50 + rx + 2} ${fy - 8} Q50 ${fy - 14} ${50 - rx - 2} ${fy - 8} Z`} fill={look.hatColor} />{[38, 50, 62].map((x) => <circle key={x} cx={x} cy={fy - ry - 2} r="1.4" fill="#f4f1ea" opacity="0.7" />)}</g> : null}
         {look.hat === "robin" ? <g><path d={`M${50 - rx - 6} ${fy - 8} C${50 - rx} ${fy - ry - 10} 60 ${fy - ry - 22} 86 ${fy - ry - 26} C74 ${fy - ry - 10} ${50 + rx + 4} ${fy - ry - 2} ${50 + rx + 6} ${fy - 8} Z`} fill={look.hatColor} /><path d={`M60 ${fy - ry - 6} C70 ${fy - ry - 22} 80 ${fy - ry - 30} 90 ${fy - ry - 34} C82 ${fy - ry - 22} 72 ${fy - ry - 12} 64 ${fy - ry - 2} Z`} fill="#c4473d" /></g> : null}
         {look.hat === "tesa" ? <g><ellipse cx="50" cy={fy - 10} rx="44" ry="8" fill={shade(look.hatColor, -0.15)} /><path d={`M${50 - rx} ${fy - 10} C${50 - rx} ${fy - ry - 16} ${50 + rx} ${fy - ry - 16} ${50 + rx} ${fy - 10} Z`} fill={look.hatColor} /><path d={`M${50 - rx} ${fy - 15} H${50 + rx}`} stroke={shade(look.hatColor, -0.45)} strokeWidth="3" /></g> : null}
-        {look.hat === "cuffia" ? <g><path d={`M${50 - rx - 3} ${fy - 6} C${50 - rx - 3} ${fy - ry - 18} ${50 + rx + 3} ${fy - ry - 18} ${50 + rx + 3} ${fy - 6} Z`} fill={look.hatColor} />{[-12, -6, 0, 6, 12].map((dx) => <path key={dx} d={`M${50 + dx} ${fy - ry - 8} L${50 + dx * 1.2} ${fy - 8}`} stroke={shade(look.hatColor, -0.3)} strokeWidth="0.8" />)}<rect x={50 - rx - 4} y={fy - 12} width={rx * 2 + 8} height="7" rx="2.5" fill={shade(look.hatColor, -0.18)} /><circle cx="50" cy={fy - ry - 16} r="5.5" fill={look.trim} /></g> : null}
+        {look.hat === "cuffia" && look.special === "simone-inverno" ? (
+          <g>
+            <path d={`M${50 - rx - 3} ${fy - 6} C${50 - rx - 3} ${fy - ry - 16} ${50 + rx + 3} ${fy - ry - 16} ${50 + rx + 3} ${fy - 6} Z`} fill={look.hatColor} stroke="#1b130d" strokeOpacity="0.8" strokeWidth="0.9" />
+            <path d={`M${50 - rx + 2} ${fy - ry - 2} Q50 ${fy - ry - 10} ${50 + rx - 4} ${fy - ry - 3}`} stroke={shade(look.hatColor, 0.3)} strokeWidth="1.6" fill="none" strokeLinecap="round" opacity="0.55" />
+            <rect x={50 - rx - 4} y={fy - 12} width={rx * 2 + 8} height="7" rx="2.5" fill={shade(look.hatColor, -0.14)} stroke="#1b130d" strokeOpacity="0.7" strokeWidth="0.8" />
+            <rect x={50 + 5} y={fy - 11.2} width="5.4" height="5" rx="0.9" fill="#1b2f4a" />
+            <path d={`M${56.2} ${fy - 10} l3 2.6 M${59.2} ${fy - 10} l-3 2.6`} stroke="#e8e8e8" strokeWidth="0.6" />
+          </g>
+        ) : null}
+        {look.hat === "cuffia" && look.special !== "simone-inverno" ? <g><path d={`M${50 - rx - 3} ${fy - 6} C${50 - rx - 3} ${fy - ry - 18} ${50 + rx + 3} ${fy - ry - 18} ${50 + rx + 3} ${fy - 6} Z`} fill={look.hatColor} />{[-12, -6, 0, 6, 12].map((dx) => <path key={dx} d={`M${50 + dx} ${fy - ry - 8} L${50 + dx * 1.2} ${fy - 8}`} stroke={shade(look.hatColor, -0.3)} strokeWidth="0.8" />)}<rect x={50 - rx - 4} y={fy - 12} width={rx * 2 + 8} height="7" rx="2.5" fill={shade(look.hatColor, -0.18)} /><circle cx="50" cy={fy - ry - 16} r="5.5" fill={look.trim} /></g> : null}
         {look.hat === "alloro" ? <g>{Array.from({ length: 10 }, (_, i) => { const a = Math.PI * (0.15 + (i / 9) * 0.7); const x = 50 - Math.cos(a) * (rx + 1); const y = fy - 10 - Math.sin(a) * 9; return <ellipse key={i} cx={x} cy={y} rx="1.8" ry="3.6" fill={i % 2 ? "#6f9a3a" : "#4f7a2a"} transform={`rotate(${(i - 4.5) * 14} ${x} ${y})`} />; })}</g> : null}
         {look.hat === "corona" ? (() => {
           // corona d'oro sopra i capelli: cinque punte con le perle, fascia con le gemme
@@ -2956,7 +3021,7 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false, part }
         {look.hat === "cerchietto" ? <g><path d={`M${50 - rx} ${fy - 14} Q50 ${fy - 20} ${50 + rx} ${fy - 14}`} stroke={look.hatColor} strokeWidth="2.2" fill="none" /><path d={`M50 ${fy - 22} l3 3 l-3 3 l-3 -3 z`} fill="#3fae6a" stroke={look.hatColor} strokeWidth="0.8" /></g> : null}
         </g>
   );
-  const hatMat = look.hat === "cuffia" ? "knit" : look.hat === "elmo" || look.hat === "corona" || look.hat === "cerchietto" ? "metal" : "felt";
+  const hatMat = look.hat === "cuffia" && look.special !== "simone-inverno" ? "knit" : look.hat === "elmo" || look.hat === "corona" || look.hat === "cerchietto" ? "metal" : "felt";
   return (
     <svg viewBox="0 0 100 100" className={className} role="img" aria-label="Volto dell'arciere" overflow={bare ? "visible" : undefined}>
       <defs>
@@ -3182,7 +3247,7 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false, part }
         </g>
         {look.hairFeather && !capOn ? <g transform={`translate(${50 + rx + 2} ${fy - 4}) rotate(18)`}><path d="M0 0 C3 -5 4 -14 1 -22 C-2 -15 -3 -6 0 0 Z" fill="#f4f1ea" stroke="#b9ae98" strokeWidth="0.5" /><path d="M1 -22 l1 -3" stroke="#c4473d" strokeWidth="1.4" strokeLinecap="round" /></g> : null}
         {capNode}
-        {capNode ? paintOver(capNode, "capx", "felt", [50 - rx - 14, fy - ry - 32, rx * 2 + 28, ry + 60], 31) : null}
+        {capNode ? paintOver(capNode, "capx", "felt", [8, fy - ry - 32, 84, 104 - (fy - ry - 32)], 31) : null}
         {hatGroup}
         {look.hat !== "nessuno" && look.hat !== "cappuccio" ? paintOver(hatGroup, "hatx", hatMat, [4, fy - ry - 42, 92, ry + 38], 33) : null}
         {look.warpaint ? <g>{[0, 5].map((d) => <g key={d}><PaintStroke a={[41, fy + 3.5 + d]} b={[32.5, fy + 1.5 + d]} bend={0.8} w={2.3 - d * 0.05} color="#2a3a5a" /><PaintStroke a={[59, fy + 3.5 + d]} b={[67.5, fy + 1.5 + d]} bend={-0.8} w={2.3 - d * 0.05} color="#2a3a5a" /></g>)}</g> : null}

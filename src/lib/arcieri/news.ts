@@ -1,4 +1,5 @@
 import { asNum } from "./access";
+import { specialLooksFor } from "./special-looks";
 import type { getSql } from "@/lib/db";
 
 type Sql = Awaited<ReturnType<typeof getSql>>;
@@ -9,6 +10,16 @@ function weekKey(date = new Date()) {
 }
 
 export async function publishNews(sql: Sql, userId: string) {
+  // abiti su misura regalati: un avviso in Bacheca per il titolare, una volta sola
+  const me = await sql<{ given_name: string | null; family_name: string | null }>`select given_name, family_name from members where user_id = ${userId} limit 1`;
+  const gifts = me[0] ? specialLooksFor(me[0].given_name ?? "", me[0].family_name ?? "") : [];
+  if (gifts.length) {
+    const names = gifts.map((g) => `«${g.label.replace(/^[^·]*·\s*/, "")}»`).join(" e ");
+    await sql`
+      insert into notifications (user_id, title, body, href, dedupe)
+      values (${userId}, ${gifts.length === 1 ? "Hai un nuovo vestito in regalo" : `Hai ${gifts.length} nuovi vestiti in regalo`}, ${`Il fondatore ti ha disegnato ${gifts.length === 1 ? "un abito" : "due abiti"} su misura: ${names}. Solo tu li puoi indossare: li trovi in Avatar, tra gli abiti.`}, ${"/avatar"}, ${`abiti-su-misura-${userId}`})
+      on conflict (dedupe) do nothing`;
+  }
   const people = await sql<{ user_id: string; name: string; created_at: string }>`
     select user_id,
       coalesce(nullif(nickname, ''), nullif(given_name, ''), 'Un arciere') as name,
