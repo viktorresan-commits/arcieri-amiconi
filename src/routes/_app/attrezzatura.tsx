@@ -10,6 +10,7 @@ import { useLoad } from "@/lib/arcieri/use-load";
 import { Button, Card, Empty, ErrorNote, Field, Loading, PageHead, Select, TextArea, TextInput } from "@/components/kit";
 import { ARROW_USE, BOW_LENGTHS, BOW_TYPES, FLETCH_TYPES, LIMB_COLORS, POINT_TYPES, RISER_COLORS, SHAFT_MATERIALS, SWATCHES, ArrowIcon, BowIcon, CategoryIcon } from "@/components/gear-icons";
 import { ARROW_MODELS, FLETCH_STYLES } from "@/components/arrow-art";
+import { BOW_MODELS, BOW_WOODS } from "@/components/bow-art";
 import { MainGearCard } from "@/components/main-gear";
 import { ArrowWeights, SpineField } from "@/components/arrow-weights";
 import { GRAINS_PER_G, spineLb, spineUnitOf, spineLabel, weightInfo, weightLabel } from "@/lib/arcieri/arrow-spec";
@@ -29,6 +30,9 @@ type Form = {
   notes: string;
   specs: Record<string, string>;
 };
+
+/** archi in cui si vede il legno: lì si può scegliere l'essenza */
+const WOODEN_BOWS = new Set(["longbow", "flatbow", "ricurvo"]);
 
 const EMPTY: Form = { id: null, name: "", brand: "", model: "", category: "arco", status: "in_use", visibility: "personal", price: "", shop: "", notes: "", specs: { bowType: "olimpico", material: "carbonio", fletchType: "alette", fletch: "#d63a2f", cock: "#e6b325", nock: "#f4f1ea", use: "entrambi", numFrom: "1" } };
 
@@ -192,7 +196,19 @@ function Page() {
               ))}
             </div>
             <div className="grid place-items-center rounded-xl border border-line bg-elev p-2">
-              <BowIcon type={spec("bowType") || "olimpico"} riser={spec("riser")} limbs={spec("limbs")} className="h-28 w-28" />
+              <BowIcon type={spec("bowType") || "olimpico"} riser={spec("riser")} limbs={spec("limbs")} wood={spec("wood")} className="h-44 w-28" />
+            </div>
+            <div className="grid gap-1">
+              <span className="text-xs text-muted">Modelli pronti (poi puoi cambiare ogni dettaglio)</span>
+              <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none]">
+                {BOW_MODELS.map((m) => (
+                  <button key={m.id} type="button" onClick={() => setForm((f) => ({ ...f, specs: { ...f.specs, ...m.specs } }))} className="grid w-28 shrink-0 justify-items-center gap-1 rounded-xl border border-line bg-white/[0.03] p-1.5 text-center">
+                    <BowIcon type={m.specs.bowType} riser={m.specs.riser} limbs={m.specs.limbs} wood={m.specs.wood} className="h-20 w-12" />
+                    <span className="text-[0.72rem] font-semibold leading-tight">{m.label}</span>
+                    <span className="text-[0.62rem] leading-tight text-muted">{m.note}</span>
+                  </button>
+                ))}
+              </div>
             </div>
             <div className="grid grid-cols-3 gap-2">
               <Field label="Libbre"><span className="flex items-center gap-1.5"><TextInput inputMode="decimal" value={spec("draw")} onChange={(e) => setSpec("draw", e.target.value)} placeholder="36" /><ConvertButton unit="lb" value={spec("draw")} onUse={(v) => setSpec("draw", v)} className="h-11 min-w-9" /></span></Field>
@@ -207,6 +223,19 @@ function Page() {
                 ))}
               </div>
             </div>
+            {WOODEN_BOWS.has(spec("bowType")) ? (
+              <div className="grid gap-1">
+                <span className="text-xs text-muted">Legno</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {BOW_WOODS.map((w) => (
+                    <button key={w.id} type="button" aria-pressed={spec("wood") === w.id} className="aa-chip gap-1.5" onClick={() => setForm((f) => ({ ...f, specs: { ...f.specs, wood: f.specs.wood === w.id ? "" : w.id, riser: "" } }))}>
+                      <span aria-hidden className="h-3.5 w-3.5 rounded-full border border-black/30" style={{ background: `linear-gradient(90deg, ${w.back} 0 34%, ${w.core} 34% 66%, ${w.belly} 66%)` }} />
+                      {w.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             <ColorRow label="Colore del riser (impugnatura)" value={spec("riser")} colors={RISER_COLORS} onPick={(v) => setSpec("riser", v)} />
             <ColorRow label="Colore dei flettenti" value={spec("limbs")} colors={LIMB_COLORS} onPick={(v) => setSpec("limbs", v)} />
           </>
@@ -301,7 +330,7 @@ function Page() {
             <Card key={item.id} className="grid gap-2 p-3">
               <div className="flex items-start gap-3">
                 <span className="grid h-14 w-14 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-                  {item.category === "arco" ? <BowIcon type={sp.bowType || "olimpico"} riser={sp.riser} limbs={sp.limbs} className="h-12 w-12" /> : <CategoryIcon category={item.category} className="h-8 w-8" />}
+                  {item.category === "arco" ? <BowIcon type={sp.bowType || "olimpico"} riser={sp.riser} limbs={sp.limbs} wood={sp.wood} className="h-12 w-12" /> : <CategoryIcon category={item.category} className="h-8 w-8" />}
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-semibold">{item.name}</p>
