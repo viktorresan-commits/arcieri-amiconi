@@ -20,11 +20,11 @@ const ROUNDS = [
 ] as const;
 
 const BOWS = [
+  { id: "tradizionale", name: "Tradizionale", eta: 0.72, k: 0.5, sighted: false, scatter: 3.8, speed: 0.016 },
+  { id: "longbow", name: "Longbow", eta: 0.68, k: 0.48, sighted: false, scatter: 4.2, speed: 0.018 },
+  { id: "barebow", name: "Nudo", eta: 0.74, k: 0.55, sighted: false, scatter: 3.2, speed: 0.014 },
   { id: "recurve", name: "Olimpico", eta: 0.78, k: 0.55, sighted: true, scatter: 1.8, speed: 0.01 },
   { id: "compound", name: "Compound", eta: 0.84, k: 0.7, sighted: true, scatter: 1.1, speed: 0.006 },
-  { id: "barebow", name: "Nudo", eta: 0.74, k: 0.55, sighted: false, scatter: 3.2, speed: 0.014 },
-  { id: "longbow", name: "Longbow", eta: 0.68, k: 0.48, sighted: false, scatter: 4.2, speed: 0.018 },
-  { id: "tradizionale", name: "Tradizionale", eta: 0.72, k: 0.5, sighted: false, scatter: 3.8, speed: 0.016 },
 ] as const;
 
 const RELEASES = [
@@ -34,21 +34,21 @@ const RELEASES = [
 ] as const;
 
 const START: FlightInput = {
-  drawLb: 36,
+  drawLb: 30,
   drawCm: 71,
-  braceCm: 22,
-  eta: 0.78,
-  k: 0.55,
-  grains: 360,
-  diameterMm: 4.2,
+  braceCm: 20,
+  eta: 0.72,
+  k: 0.5,
+  grains: 420,
+  diameterMm: 6.5,
   lengthCm: 76,
   fletch: "feather3",
   distanceM: 18,
   heightCm: 175,
-  eyeCm: 2,
+  eyeCm: 11,
   eyeBackCm: 8,
   wind: 0,
-  sighted: true,
+  sighted: false,
   faceCm: 40,
   zones: 10,
   slopeDeg: 0,
@@ -89,7 +89,7 @@ function readSaved(): Saved | null {
     }
     if (given.fletch === "spin" || given.fletch === "vane3" || given.fletch === "feather3" || given.fletch === "feather4") form.fletch = given.fletch;
     form.zones = given.zones === 5 ? 5 : 10;
-    const bow = BOWS.find((item) => item.id === raw.bow)?.id ?? "recurve";
+    const bow = BOWS.find((item) => item.id === raw.bow)?.id ?? "tradizionale";
     form.lbAt28 = bow !== "compound";
     const release = RELEASES.find((item) => item.id === raw.release)?.id ?? "dita";
     const round = typeof raw.round === "string" && (raw.round === "" || ROUNDS.some((item) => item.id === raw.round)) ? raw.round : "18";
@@ -105,7 +105,7 @@ function readSaved(): Saved | null {
 
 export function FlightSim() {
   const [form, setForm] = useState(START);
-  const [bow, setBow] = useState<(typeof BOWS)[number]["id"]>("recurve");
+  const [bow, setBow] = useState<(typeof BOWS)[number]["id"]>("tradizionale");
   const [release, setRelease] = useState<(typeof RELEASES)[number]["id"]>("dita");
   const [round, setRound] = useState("18");
   const [other, setOther] = useState("50");
@@ -140,7 +140,7 @@ export function FlightSim() {
         lengthCm: Number(a.length) ? Math.round(Number(a.length) * 2.54 * 2) / 2 : f.lengthCm,
         diameterMm: GEAR_DIAM[a.material] ?? f.diameterMm,
       }));
-      setBow(GEAR_BOW[b.bowType] ?? "recurve");
+      setBow(GEAR_BOW[b.bowType] ?? "tradizionale");
     }
     if (saved) {
       setForm(saved.form);
@@ -167,7 +167,7 @@ export function FlightSim() {
 
   function resetAll() {
     setForm(START);
-    setBow("recurve");
+    setBow("tradizionale");
     setRelease("dita");
     setRound("18");
     setOther("50");
@@ -1056,7 +1056,7 @@ const PRESETS: Composition[] = [
   preset("st", "Storico / a cavallo", "35 lb, pollice o dita, frecce leggere", "tradizionale", "dita", "30", { drawLb: 35, drawCm: 74, grains: 420, diameterMm: 7.5, lengthCm: 80, fletch: "feather3", braceCm: 15 }),
 ];
 
-const GEAR_BOW: Record<string, BowId> = { olimpico: "recurve", compound: "compound", nudo: "barebow", longbow: "longbow", ricurvo: "tradizionale", storico: "tradizionale" };
+const GEAR_BOW: Record<string, BowId> = { ricurvo: "tradizionale", storico: "tradizionale", asiatico: "tradizionale", longbow: "longbow", flatbow: "longbow", nudo: "barebow", olimpico: "recurve", compound: "compound" };
 const GEAR_DIAM: Record<string, number> = { carbonio: 5.2, legno: 8.5, alluminio: 6.5, "carbo-alluminio": 5, bambu: 8.5 };
 
 function describeComp(c: FlightSnapshot) {
@@ -1097,7 +1097,7 @@ function Compositions({ current, onApply }: { current: FlightSnapshot; onApply: 
       }
       const built: Composition[] = [];
       for (const b of bows.slice(0, 4)) {
-        const bow = GEAR_BOW[b.specs.bowType] ?? "recurve";
+        const bow = GEAR_BOW[b.specs.bowType] ?? "tradizionale";
         const list = arrows.length ? arrows.slice(0, 3) : [null];
         for (const a of list) {
           const base = PRESETS.find((p) => p.bow === bow) ?? PRESETS[1];

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { BowOptions } from "@/components/bow-options";
 import { createFileRoute } from "@tanstack/react-router";
 import { challengeBoard, listChallenges, respondChallenge, saveChallenge } from "@/lib/arcieri/club.api";
 import { listRoster } from "@/lib/arcieri/members.api";
@@ -40,7 +41,7 @@ function valueText(rule: Rule, v: number) {
   return String(Math.round(v));
 }
 
-const EMPTY = { title: "", startsOn: "", endsOn: "", metric: "avg", arrows: "30", distanceM: "18", bowType: "olimpico", face: "wa10", discipline: "indoor", gameMode: "fita", gameLevel: "normale", openJoin: true };
+const EMPTY = { title: "", startsOn: "", endsOn: "", metric: "avg", arrows: "30", distanceM: "18", bowType: "tradizionale", face: "wa10", discipline: "indoor", gameMode: "fita", gameLevel: "normale", openJoin: true };
 
 function Page() {
   const { me } = useMember();
@@ -146,11 +147,7 @@ function Page() {
             </div>
             <Field label="Arco">
               <Select value={form.bowType} onChange={(e) => setForm({ ...form, bowType: e.target.value })}>
-                {BOWS.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.label}
-                  </option>
-                ))}
+                <BowOptions />
               </Select>
             </Field>
             <div className="grid grid-cols-2 gap-2">

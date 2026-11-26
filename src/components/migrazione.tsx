@@ -100,7 +100,7 @@ async function pdfJsLines(bytes: Uint8Array) {
   return lines;
 }
 
-const BOW_IDS = ["olimpico", "compound", "nudo", "lungo", "tradizionale", "altro"];
+const BOW_IDS = ["tradizionale", "storico", "foggia storica", "lungo", "nudo", "olimpico", "compound", "altro"];
 
 function reportRows(lines: string[]): ReportRow[] {
   const out: ReportRow[] = [];
@@ -111,7 +111,7 @@ function reportRows(lines: string[]): ReportRow[] {
     out.push({
       startedAt: m[2] ? `${m[1]}T${m[2]}` : m[1],
       distanceM: Number(m[3].replace(",", ".")),
-      bowType: BOW_IDS.includes(bow) ? bow : "olimpico",
+      bowType: BOW_IDS.includes(bow) ? bow : "tradizionale",
       place: BOW_IDS.includes(bow) ? (m[5] ?? "").trim() : `${m[4] ?? ""} ${m[5] ?? ""}`.trim(),
     });
   }

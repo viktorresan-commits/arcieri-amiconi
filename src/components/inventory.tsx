@@ -152,7 +152,7 @@ export function Inventory() {
         return (
           <Card key={cat} className="grid gap-2 p-3">
             <button type="button" onClick={() => setOpen(open === cat ? null : cat)} className="flex items-center gap-3 text-left" aria-expanded={isOpen}>
-              <CategoryIcon category={cat} className="h-11 w-11 shrink-0" />
+              <CategoryIcon category={cat} className="h-12 w-12 shrink-0" />
               <span className="min-w-0 flex-1">
                 <span className="block font-semibold">{categoryLabel(cat)}</span>
                 <span className="block text-xs text-muted">
@@ -224,7 +224,7 @@ export function Inventory() {
           <p className="-mt-1 text-xs text-muted">Dagli scontrini e dalla lista della spesa: mettili in attrezzatura per contarli nell'inventario.</p>
           {loose.slice(0, 20).map((s) => (
             <div key={s.id} className="flex items-center gap-2 rounded-2xl bg-white/[0.04] p-2">
-              <CategoryIcon category={s.category} className="h-9 w-9 shrink-0" />
+              <CategoryIcon category={s.category} className="h-11 w-11 shrink-0" />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-semibold">{s.name}{s.qty > 1 ? ` × ${s.qty}` : ""}</span>
                 <span className="block truncate text-xs text-muted">{categoryLabel(s.category)}{s.priceCents != null ? ` · ${euro(s.priceCents * (s.qty || 1))}` : ""}</span>

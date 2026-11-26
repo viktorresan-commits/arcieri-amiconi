@@ -1,4 +1,5 @@
 import { useEntryState } from "@/lib/arcieri/back-restore";
+import { BowOptions } from "@/components/bow-options";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { authClient } from "@/lib/auth/client";
@@ -12,7 +13,6 @@ import { ArcherStage } from "@/components/archer-stage";
 import { FitastLinkCard } from "@/components/fitast-link";
 import { useLoad } from "@/lib/arcieri/use-load";
 import { simplePdf } from "@/lib/arcieri/pdf";
-import { BOWS } from "@/lib/arcieri/labels";
 import { useMember } from "@/components/shell";
 import { Button, Card, ErrorNote, Field, PageHead, Select, TextArea, TextInput } from "@/components/kit";
 import { saveFile } from "@/lib/arcieri/native";
@@ -287,7 +287,7 @@ function Page() {
               <Field label="Soprannome"><TextInput value={nick} onChange={(e) => setNick(e.target.value)} /></Field>
               <div className="grid grid-cols-2 gap-2">
                 <Field label="Arco abituale">
-                  <Select value={bow} onChange={(e) => setBow(e.target.value)}><option value="">Non indicato</option>{BOWS.map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}</Select>
+                  <Select value={bow} onChange={(e) => setBow(e.target.value)}><option value="">Non indicato</option><BowOptions /></Select>
                 </Field>
                 <Field label="Nel gruppo dal"><TextInput type="date" value={joined} onChange={(e) => setJoined(e.target.value)} /></Field>
               </div>

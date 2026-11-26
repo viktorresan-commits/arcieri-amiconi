@@ -80,7 +80,7 @@ export function MainGearCard({ compact = false }: { compact?: boolean }) {
       {main ? (
         <div className="grid grid-cols-[4.5rem_1fr] items-center gap-3">
           <span className="grid h-[4.5rem] w-[4.5rem] place-items-center rounded-2xl bg-white/[0.05]">
-            <BowIcon type={b.bowType || "olimpico"} riser={b.riser} limbs={b.limbs} wood={b.wood} className="h-16 w-16" />
+            <BowIcon type={b.bowType || "ricurvo"} riser={b.riser} limbs={b.limbs} wood={b.wood} className="h-16 w-16" />
           </span>
           <div className="grid min-w-0 gap-1">
             <p className="truncate text-sm"><b>{main.bowName || "Arco"}</b>{bowLabel ? <span className="text-muted"> · {bowLabel}</span> : null}</p>

@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
+import { BowOptions } from "@/components/bow-options";
 import { useNavigate, Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { elapsed, pauseClock, startClock } from "@/lib/arcieri/clock";
 import { loadDraft, newDraft, saveDraft, type Draft, type DraftMeta, type DraftShot } from "@/lib/arcieri/draft";
-import { BOWS, DISCIPLINES, DISTANCES, bowLabel } from "@/lib/arcieri/labels";
+import { DISCIPLINES, DISTANCES, bowLabel } from "@/lib/arcieri/labels";
 import {
   BODIES,
   DISPERSIONS,
@@ -39,8 +40,8 @@ import { MediaPick } from "./media-pick";
 import { GestureHub } from "./gesture-hub";
 
 const QUICK: Array<Partial<DraftMeta> & { label: string }> = [
-  { label: "Indoor 18 m", distanceM: 18, bowType: "olimpico", face: "wa10", discipline: "indoor", arrowsPerEnd: 3, endsPlanned: 10, blocksPlanned: 1 },
-  { label: "Outdoor 70 m", distanceM: 70, bowType: "olimpico", face: "wa10", discipline: "outdoor", arrowsPerEnd: 6, endsPlanned: 6, blocksPlanned: 2 },
+  { label: "Indoor 18 m", distanceM: 18, bowType: "tradizionale", face: "wa10", discipline: "indoor", arrowsPerEnd: 3, endsPlanned: 10, blocksPlanned: 1 },
+  { label: "Outdoor 70 m", distanceM: 70, bowType: "tradizionale", face: "wa10", discipline: "outdoor", arrowsPerEnd: 6, endsPlanned: 6, blocksPlanned: 2 },
   { label: "Compound 50 m", distanceM: 50, bowType: "compound", face: "wa10", discipline: "outdoor", arrowsPerEnd: 3, endsPlanned: 10, blocksPlanned: 1 },
   { label: "Tradizionale", distanceM: 20, bowType: "tradizionale", face: "field6", discipline: "tradizionale", arrowsPerEnd: 3, endsPlanned: 6, blocksPlanned: 1 },
 ];
@@ -931,7 +932,7 @@ function Setup({
     place: "",
     distanceM: 18,
     discipline: "indoor",
-    bowType: "olimpico",
+    bowType: "tradizionale",
     bowCustom: "",
     face: "wa10",
     aimTarget: "padiglione",
@@ -1046,7 +1047,7 @@ function Setup({
         </Field>
         <Field label="Arco">
           <Select value={meta.bowType} onChange={(e) => apply({ bowType: e.target.value })}>
-            {BOWS.map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}
+            <BowOptions />
           </Select>
         </Field>
         {meta.bowType === "altro" ? (

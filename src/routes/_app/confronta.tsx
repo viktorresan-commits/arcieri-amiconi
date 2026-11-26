@@ -1,7 +1,8 @@
 import { useState } from "react";
+import { BowOptions } from "@/components/bow-options";
 import { createFileRoute } from "@tanstack/react-router";
 import { compareSessions, listSessions, rankings } from "@/lib/arcieri/training.api";
-import { BOWS, DISCIPLINES, memberLabel } from "@/lib/arcieri/labels";
+import { DISCIPLINES, memberLabel } from "@/lib/arcieri/labels";
 import { fmtAvg, fmtPct } from "@/lib/arcieri/scoring";
 import { fmtWhen } from "@/lib/arcieri/time";
 import { useLoad } from "@/lib/arcieri/use-load";
@@ -33,7 +34,7 @@ function Page() {
         <h2 className="font-display text-2xl">Arcieri</h2>
         <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Filtra un nome" className="min-h-12 rounded-xl border border-line bg-bg px-3" />
         <div className="grid grid-cols-2 gap-2">
-          <Select value={bow} onChange={(event) => setBow(event.target.value)}><option value="">Tutti gli archi</option>{BOWS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</Select>
+          <Select value={bow} onChange={(event) => setBow(event.target.value)}><option value="">Tutti gli archi</option><BowOptions /></Select>
           <input value={distance} onChange={(event) => setDistance(event.target.value)} placeholder="Distanza m" className="min-h-12 rounded-xl border border-line bg-bg px-3" />
           <Select value={face} onChange={(event) => setFace(event.target.value)}>
             <option value="">Tutti i bersagli</option>

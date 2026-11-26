@@ -1,7 +1,8 @@
 import { useState } from "react";
+import { BowOptions } from "@/components/bow-options";
 import { createFileRoute } from "@tanstack/react-router";
 import { clearRanking, rankings } from "@/lib/arcieri/training.api";
-import { BOWS, DISCIPLINES, DISTANCES, DIVISIONS, memberLabel } from "@/lib/arcieri/labels";
+import { DISCIPLINES, DISTANCES, DIVISIONS, memberLabel } from "@/lib/arcieri/labels";
 import { fmtAvg, fmtPct } from "@/lib/arcieri/scoring";
 import type { PeriodKind } from "@/lib/arcieri/time";
 import type { RankMetric } from "@/lib/arcieri/rank";
@@ -56,7 +57,7 @@ function Page() {
         {METRICS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
       </Select>
       <div className="grid grid-cols-2 gap-2">
-        <Select value={bow} onChange={(e) => setBow(e.target.value)}><option value="">Tutti gli archi</option>{BOWS.map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}</Select>
+        <Select value={bow} onChange={(e) => setBow(e.target.value)}><option value="">Tutti gli archi</option><BowOptions /></Select>
         <Select value={distance} onChange={(e) => setDistance(e.target.value)}><option value="">Tutte le distanze</option>{DISTANCES.map((d) => <option key={d} value={d}>{d} m</option>)}</Select>
         <Select value={face} onChange={(e) => setFace(e.target.value)}>
           <option value="">Tutti i bersagli</option>

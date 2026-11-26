@@ -20,7 +20,7 @@ export type ArcherSetup = {
   summary: string;
 };
 
-const BOW_NAMES: Record<string, string> = { olimpico: "olimpico", compound: "compound", nudo: "arco nudo", longbow: "longbow", ricurvo: "ricurvo", storico: "storico", asiatico: "asiatico", flatbow: "flatbow" };
+const BOW_NAMES: Record<string, string> = { ricurvo: "tradizionale", storico: "storico", asiatico: "foggia storica", longbow: "longbow", flatbow: "flatbow", nudo: "arco nudo", olimpico: "olimpico", compound: "compound" };
 
 const num = (s: string | undefined) => Number(String(s ?? "").replace(",", ".")) || 0;
 const it = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1)).replace(".", ",");
@@ -28,7 +28,7 @@ const it = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1)).repla
 export function setupOf(bowSpecs: Record<string, string> | undefined, arrowSpecs: Record<string, string> | undefined, arrowName = ""): ArcherSetup {
   const b = bowSpecs ?? {};
   const a = arrowSpecs ?? {};
-  const bowType = b.bowType || "olimpico";
+  const bowType = b.bowType || "ricurvo";
   const lb = num(b.draw);
   const drawIn = num(b.drawLen) || 28;
   const real = lb ? realLb({ bowType, draw: String(lb), drawLen: String(drawIn) }) : 0;

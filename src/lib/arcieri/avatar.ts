@@ -258,7 +258,7 @@ export const AVATAR_DEFAULT: AvatarLook = {
   pouch: false,
   pose: "animata",
   useMain: true,
-  bowType: "olimpico",
+  bowType: "ricurvo",
   riser: "#2f6fbe",
   limbs: "#15191d",
   string: "#f4f1ea",

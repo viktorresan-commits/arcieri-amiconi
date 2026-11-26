@@ -7,7 +7,7 @@ import { AvatarScene, useAvatar } from "@/components/avatar-hero";
 import { Archer3D } from "@/components/archer-3d";
 import { ArcherAvatar, AvatarFace } from "@/components/archer-avatar";
 import { AvatarPhotoButton } from "@/components/avatar-photo";
-import { BOW_TYPES } from "@/components/gear-icons";
+import { BOW_TYPES, MAIN_BOW_TYPES, bowTypesShown } from "@/components/gear-icons";
 import { Button, Card, Chips, Segmented } from "@/components/kit";
 import { Glyph } from "@/components/icons";
 import { SceneBackdrop, SceneThumb } from "@/components/scene-2d";
@@ -422,6 +422,7 @@ function OptionSearch({ look, shown, onPick }: { look: AvatarLook; shown: Avatar
 export function AvatarEditor() {
   const { look, setLook, shown, main } = useAvatar();
   const [tab, setTab] = useEntryState<Tab>("avatar-tab", "corpo");
+  const [allBows, setAllBows] = useState(false);
   const [mode, setMode] = useState<"semplice" | "completa">(() => {
     try {
       return (localStorage.getItem("aa-avatar-mode") as "semplice" | "completa") || "semplice";
@@ -770,7 +771,7 @@ export function AvatarEditor() {
               <>
                 <Row label="Tipo di arco">
                   <div className="grid grid-cols-3 gap-2">
-                    {BOW_TYPES.map((t) => (
+                    {bowTypesShown(look.bowType, allBows).map((t) => (
                       <Pick key={t.id} on={look.bowType === t.id} label={t.label} onClick={() => set("bowType", t.id)}>
                         <div className="relative h-28 w-full overflow-hidden rounded-xl bg-gradient-to-b from-white/[0.06] to-transparent">
                           <div className="absolute left-[-24%] top-[-8%] w-[140%]">
@@ -780,6 +781,11 @@ export function AvatarEditor() {
                       </Pick>
                     ))}
                   </div>
+                  {allBows ? null : (
+                    <button type="button" onClick={() => setAllBows(true)} className="mt-2 rounded-lg border border-white/15 px-2.5 py-1 text-xs text-white/70">
+                      Altri archi: {BOW_TYPES.filter((t) => !MAIN_BOW_TYPES.includes(t.id)).map((t) => t.label.toLowerCase()).join(", ")}
+                    </button>
+                  )}
                 </Row>
                 <Row label="Riser (impugnatura)"><Colors value={look.riser} colors={GEAR_COLORS} onPick={(c) => set("riser", c)} /></Row>
                 <Row label="Flettenti"><Colors value={look.limbs} colors={["#15191d", "#9b6334", "#5b3618", "#f4f1ea", "#2f6fbe", "#b02a2a", "#3d9b74", "#e6b325"]} onPick={(c) => set("limbs", c)} /></Row>

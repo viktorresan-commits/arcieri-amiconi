@@ -8,7 +8,7 @@ import { AppIcon, Glyph } from "@/components/icons";
 import { CATEGORIES, categoryLabel, euro, parseEuro } from "@/lib/arcieri/labels";
 import { useLoad } from "@/lib/arcieri/use-load";
 import { Button, Card, Empty, ErrorNote, Field, Loading, PageHead, Select, TextArea, TextInput } from "@/components/kit";
-import { ARROW_USE, BOW_LENGTHS, BOW_TYPES, FLETCH_TYPES, LIMB_COLORS, POINT_TYPES, RISER_COLORS, SHAFT_MATERIALS, SWATCHES, ArrowIcon, BowIcon, CategoryIcon } from "@/components/gear-icons";
+import { ARROW_USE, BOW_LENGTHS, BOW_TYPES, MAIN_BOW_TYPES, bowTypesShown, FLETCH_TYPES, LIMB_COLORS, POINT_TYPES, RISER_COLORS, SHAFT_MATERIALS, SWATCHES, ArrowIcon, BowIcon, CategoryIcon } from "@/components/gear-icons";
 import { ARROW_MODELS, FLETCH_STYLES } from "@/components/arrow-art";
 import { BOW_MODELS, BOW_WOODS } from "@/components/bow-art";
 import { GearSpecSheet, type GearItem } from "@/components/gear-spec-sheet";
@@ -35,7 +35,7 @@ type Form = {
 /** archi in cui si vede il legno: lì si può scegliere l'essenza */
 const WOODEN_BOWS = new Set(["longbow", "flatbow", "ricurvo"]);
 
-const EMPTY: Form = { id: null, name: "", brand: "", model: "", category: "arco", status: "in_use", visibility: "personal", price: "", shop: "", notes: "", specs: { bowType: "olimpico", material: "carbonio", fletchType: "alette", fletch: "#d63a2f", cock: "#e6b325", nock: "#f4f1ea", use: "entrambi", numFrom: "1" } };
+const EMPTY: Form = { id: null, name: "", brand: "", model: "", category: "arco", status: "in_use", visibility: "personal", price: "", shop: "", notes: "", specs: { bowType: "ricurvo", material: "carbonio", fletchType: "alette", fletch: "#d63a2f", cock: "#e6b325", nock: "#f4f1ea", use: "entrambi", numFrom: "1" } };
 
 function Page() {
   const [nonce, setNonce] = useState(0);
@@ -100,6 +100,7 @@ function Page() {
   }
   const spec = (k: string) => form.specs[k] ?? "";
   const setSpec = (k: string, v: string) => setForm((f) => ({ ...f, specs: { ...f.specs, [k]: v } }));
+  const [allBows, setAllBows] = useState(false);
   const shown = (gear.data ?? []).filter((g) => filter === "tutto" || g.category === filter);
   // le mie attrezzature; i pezzi che i compagni mettono nell'inventario del gruppo stanno a parte
   const items = shown.filter((g) => g.mine);
@@ -175,13 +176,13 @@ function Page() {
         </div>
         <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-7">
           {CATEGORIES.map((c) => (
-            <button key={c.id} type="button" onClick={() => setForm({ ...form, category: c.id })} className={`flex min-h-16 flex-col items-center justify-center gap-0.5 rounded-xl border px-1 text-[11px] ${form.category === c.id ? "border-accent bg-accent/15 text-fg" : "border-line text-muted"}`}>
-              <CategoryIcon category={c.id} className="h-7 w-7" />
+            <button key={c.id} type="button" onClick={() => setForm({ ...form, category: c.id })} className={`flex min-h-[5.5rem] flex-col items-center justify-center gap-1 rounded-xl border px-1 py-1.5 text-[11px] ${form.category === c.id ? "border-accent bg-accent/15 text-fg" : "border-line text-muted"}`}>
+              <CategoryIcon category={c.id} className="h-12 w-12" />
               <span className="truncate">{c.label}</span>
             </button>
           ))}
         </div>
-        <Field label="Nome"><TextInput value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={form.category === "freccia" ? "Es. Frecce gara 18 m" : form.category === "arco" ? "Es. Il mio olimpico" : ""} /></Field>
+        <Field label="Nome"><TextInput value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={form.category === "freccia" ? "Es. Frecce gara 18 m" : form.category === "arco" ? "Es. Il mio tradizionale" : ""} /></Field>
         <div className="grid grid-cols-2 gap-2">
           <Field label="Marca"><TextInput value={form.brand} onChange={(e) => setForm({ ...form, brand: e.target.value })} /></Field>
           <Field label="Modello"><TextInput value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} /></Field>
@@ -191,15 +192,20 @@ function Page() {
           <>
             <p className="text-sm font-semibold">Tipo di arco</p>
             <div className="grid grid-cols-3 gap-1.5">
-              {BOW_TYPES.map((t) => (
-                <button key={t.id} type="button" onClick={() => setSpec("bowType", t.id)} className={`flex flex-col items-center rounded-xl border p-1.5 text-[11px] ${spec("bowType") === t.id ? "border-accent bg-accent/15" : "border-line text-muted"}`}>
-                  <BowIcon type={t.id} className="h-12 w-12" />
+              {bowTypesShown(spec("bowType") || "ricurvo", allBows).map((t) => (
+                <button key={t.id} type="button" onClick={() => setSpec("bowType", t.id)} className={`flex flex-col items-center rounded-xl border p-1.5 text-[11px] ${(spec("bowType") || "ricurvo") === t.id ? "border-accent bg-accent/15" : "border-line text-muted"}`}>
+                  <BowIcon type={t.id} className="h-16 w-16" />
                   {t.label}
                 </button>
               ))}
             </div>
+            {allBows ? null : (
+              <button type="button" onClick={() => setAllBows(true)} className="justify-self-start rounded-lg border border-line px-2.5 py-1 text-xs text-muted">
+                Altri archi: {BOW_TYPES.filter((t) => !MAIN_BOW_TYPES.includes(t.id)).map((t) => t.label.toLowerCase()).join(", ")}
+              </button>
+            )}
             <div className="grid place-items-center rounded-xl border border-line bg-elev p-2">
-              <BowIcon type={spec("bowType") || "olimpico"} riser={spec("riser")} limbs={spec("limbs")} wood={spec("wood")} className="h-44 w-28" />
+              <BowIcon type={spec("bowType") || "ricurvo"} riser={spec("riser")} limbs={spec("limbs")} wood={spec("wood")} className="h-44 w-28" />
             </div>
             <div className="grid gap-1">
               <span className="text-xs text-muted">Modelli pronti (poi puoi cambiare ogni dettaglio)</span>
@@ -312,8 +318,8 @@ function Page() {
       )}
       <div className="flex gap-1.5 overflow-x-auto pb-1">
         {[{ id: "tutto", label: "Tutto" }, ...CATEGORIES].map((c) => (
-          <button key={c.id} type="button" onClick={() => setFilter(c.id)} className={`flex min-h-10 shrink-0 items-center gap-1.5 rounded-full py-1 pl-1.5 pr-3 text-sm ${filter === c.id ? "bg-primary text-primary-fg" : "border border-line"}`}>
-            {c.id === "tutto" ? <span className="grid h-7 w-7 place-items-center rounded-full bg-white/10 text-xs font-bold">∗</span> : <CategoryIcon category={c.id} className="h-7 w-7" />}
+          <button key={c.id} type="button" onClick={() => setFilter(c.id)} className={`flex min-h-11 shrink-0 items-center gap-1.5 rounded-full py-1 pl-1.5 pr-3 text-sm ${filter === c.id ? "bg-primary text-primary-fg" : "border border-line"}`}>
+            {c.id === "tutto" ? <span className="grid h-9 w-9 place-items-center rounded-full bg-white/10 text-xs font-bold">∗</span> : <CategoryIcon category={c.id} className="h-9 w-9" />}
             {c.label}
           </button>
         ))}
@@ -332,8 +338,8 @@ function Page() {
           return (
             <Card key={item.id} className="grid gap-2 p-3">
               <div className="flex items-start gap-3">
-                <span className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-xl bg-primary/10 text-primary">
-                  {item.photoUrl?.startsWith("data:image/") ? <img src={item.photoUrl} alt="" className="h-full w-full bg-white object-contain" /> : item.category === "arco" ? <BowIcon type={sp.bowType || "olimpico"} riser={sp.riser} limbs={sp.limbs} wood={sp.wood} className="h-12 w-12" /> : <CategoryIcon category={item.category} className="h-8 w-8" />}
+                <span className="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-xl text-primary">
+                  {item.photoUrl?.startsWith("data:image/") ? <img src={item.photoUrl} alt="" className="h-full w-full bg-white object-contain" /> : item.category === "arco" ? <BowIcon type={sp.bowType || "ricurvo"} riser={sp.riser} limbs={sp.limbs} wood={sp.wood} className="h-16 w-16" /> : <CategoryIcon category={item.category} className="h-16 w-16" />}
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-semibold">{item.name}</p>

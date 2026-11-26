@@ -95,7 +95,7 @@ function Page() {
           <button type="button" onClick={() => setCat("tutte")} className={`flex min-h-10 shrink-0 items-center rounded-full px-3 text-sm ${cat === "tutte" ? "bg-primary text-primary-fg" : "border border-line"}`}>Tutte</button>
           {cats.map((c) => (
             <button key={c} type="button" onClick={() => setCat(c)} className={`flex min-h-10 shrink-0 items-center gap-1.5 rounded-full py-1 pl-1.5 pr-3 text-sm ${cat === c ? "bg-primary text-primary-fg" : "border border-line"}`}>
-              <CategoryIcon category={c} className="h-7 w-7" />
+              <CategoryIcon category={c} className="h-9 w-9" />
               {categoryLabel(c)}
             </button>
           ))}
@@ -123,7 +123,7 @@ function Page() {
           <div className="grid grid-cols-4 gap-1.5">
             {CATEGORIES.map((c) => (
               <button key={c.id} type="button" onClick={() => setForm({ ...form, category: c.id })} className={`grid justify-items-center gap-0.5 rounded-xl border p-1.5 text-[0.62rem] leading-tight ${form.category === c.id ? "border-primary bg-primary/15" : "border-line"}`}>
-                <CategoryIcon category={c.id} className="h-10 w-10" />
+                <CategoryIcon category={c.id} className="h-12 w-12" />
                 <span className="line-clamp-2 text-center">{c.label}</span>
               </button>
             ))}
@@ -164,7 +164,7 @@ function Page() {
         return (
           <Card key={item.id} className="grid gap-2.5 p-3">
             <div className="flex items-start gap-3">
-              <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-white/[0.05]"><CategoryIcon category={item.category} className="h-12 w-12" /></span>
+              <span className="grid h-16 w-16 shrink-0 place-items-center"><CategoryIcon category={item.category} className="h-16 w-16" /></span>
               <div className="min-w-0 flex-1">
                 <p className="font-semibold leading-tight">{item.name}{item.qty > 1 ? <span className="text-muted"> × {item.qty}</span> : null}</p>
                 <p className="mt-0.5 text-xs text-muted">{categoryLabel(item.category)}{item.sizeLabel ? ` · taglia ${item.sizeLabel}` : ""}</p>

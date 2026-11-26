@@ -4,16 +4,22 @@ import { GearArt } from "./gear-art";
 import type { IconName } from "./icons";
 /** Disegni dell'attrezzatura: archi per tipo, frecce con i loro colori, icone per categoria. */
 
+/** tipi d'arco disegnati: prima tradizionale, storico e foggia storica; gli altri in fondo, per chi li sceglie */
 export const BOW_TYPES = [
+  { id: "ricurvo", label: "Tradizionale" },
+  { id: "storico", label: "Storico" },
+  { id: "asiatico", label: "Foggia storica" },
+  { id: "longbow", label: "Longbow" },
+  { id: "flatbow", label: "Flatbow" },
+  { id: "nudo", label: "Arco nudo" },
   { id: "olimpico", label: "Olimpico" },
   { id: "compound", label: "Compound" },
-  { id: "nudo", label: "Arco nudo" },
-  { id: "longbow", label: "Longbow" },
-  { id: "ricurvo", label: "Ricurvo tradizionale" },
-  { id: "storico", label: "Storico / a cavallo" },
-  { id: "asiatico", label: "Asiatico (corno)" },
-  { id: "flatbow", label: "Flatbow" },
 ] as const;
+export const MAIN_BOW_TYPES = ["ricurvo", "storico", "asiatico"];
+/** i tipi da mostrare: i tre principali, quello scelto se è un altro, tutti se si apre «Altri archi» */
+export function bowTypesShown(current: string, all: boolean) {
+  return BOW_TYPES.filter((t) => all || MAIN_BOW_TYPES.includes(t.id) || t.id === current);
+}
 
 export const SHAFT_MATERIALS = [
   { id: "legno", label: "Legno", color: "#d8b07a" },
@@ -107,5 +113,6 @@ export const CATEGORY_GLYPH: Record<string, IconName> = {
 
 export function CategoryIcon({ category, className = "h-8 w-8" }: { category: string; className?: string }) {
   // oggetto disegnato con i suoi materiali; il vecchio simbolo resta per chi lo chiede per nome (CATEGORY_GLYPH)
-  return <GearArt category={category} className={["shrink-0", className].filter(Boolean).join(" ")} />;
+  // senza tessera di sfondo: l'oggetto pieno, con un'ombra leggera che lo stacca dal fondo scuro
+  return <GearArt bare category={category} className={["aa-gear-art shrink-0", className].filter(Boolean).join(" ")} />;
 }

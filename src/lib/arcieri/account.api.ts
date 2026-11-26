@@ -170,7 +170,7 @@ export const importReportSessions = createServerFn({ method: "POST" })
     const rows = rowsOf((input as { rows?: unknown })?.rows, 2000).map((r) => ({
       startedAt: clip(r.startedAt, 40),
       distanceM: Number(r.distanceM),
-      bowType: clip(r.bowType, 40) || "olimpico",
+      bowType: clip(r.bowType, 40) || "tradizionale",
       place: clip(r.place, 120),
     }));
     return { rows: rows.filter((r) => /^\d{4}-\d{2}-\d{2}/.test(r.startedAt) && Number.isFinite(r.distanceM) && r.distanceM > 0 && r.distanceM < 200) };

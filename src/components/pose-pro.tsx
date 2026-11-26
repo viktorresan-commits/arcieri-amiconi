@@ -12,7 +12,7 @@ import { placeLabel } from "@/lib/arcieri/overlay-labels";
 
 export type ProSave = { total: number; areas: Record<string, number | null>; issues: string[]; m: Partial<ProMetrics>; setup: ProSetup; at: number | null };
 
-const PRO_DEFAULT: ProSetup = { bowType: "olimpico", arrowIn: 29, heightCm: 0 };
+const PRO_DEFAULT: ProSetup = { bowType: "ricurvo", arrowIn: 29, heightCm: 0 };
 
 /**
  * Pannello dell'analisi pro: impostazioni (arco, freccia, altezza), punteggio per zona del corpo,

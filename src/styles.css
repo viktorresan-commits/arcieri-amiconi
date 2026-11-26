@@ -2173,3 +2173,9 @@ html[data-motion="ridotta"] .aa-turn-in { animation: none; }
 .is-in .aa-shot2-ping { animation: aa-ping2 0.7s ease-out both; animation-delay: calc(var(--d) + 600ms); }
 @keyframes aa-ping2 { 0% { opacity: 0.9; transform: scale(0.3); } 100% { opacity: 0; transform: scale(2.2); } }
 @media (prefers-reduced-motion: reduce) { .is-in .aa-shot2-fly, .is-in .aa-shot2-trail { animation: none; opacity: 1; } .is-in .aa-shot2-ping { animation: none; } }
+
+/* oggetti dell'attrezzatura senza tessera: ombra morbida sotto e un filo di luce sul bordo, così anche i pezzi scuri si leggono sul fondo scuro */
+.aa-gear-art {
+  overflow: visible;
+  filter: drop-shadow(0 0 0.6px rgb(255 255 255 / 0.32)) drop-shadow(0 2px 2px rgb(0 0 0 / 0.5));
+}

@@ -1,11 +1,15 @@
+/** archi delle gare e degli allenamenti: prima quelli della compagnia (tradizionale, storico, foggia storica), poi gli altri */
 export const BOWS = [
+  { id: "tradizionale", label: "Arco tradizionale" },
+  { id: "storico", label: "Arco storico" },
+  { id: "foggia storica", label: "Foggia storica" },
+  { id: "lungo", label: "Arco lungo" },
+  { id: "nudo", label: "Arco nudo" },
   { id: "olimpico", label: "Arco olimpico" },
   { id: "compound", label: "Arco compound" },
-  { id: "nudo", label: "Arco nudo" },
-  { id: "lungo", label: "Arco lungo" },
-  { id: "tradizionale", label: "Arco tradizionale" },
   { id: "altro", label: "Altro" },
 ] as const;
+export const MAIN_BOWS = ["tradizionale", "storico", "foggia storica"];
 
 export const DISCIPLINES = [
   { id: "indoor", label: "Indoor" },
