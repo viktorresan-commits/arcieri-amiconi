@@ -26,7 +26,9 @@ export type SceneId =
   // del Fondatore
   | "trono"
   | "drago"
-  | "cielo";
+  | "cielo"
+  // del Demone di Montelago (solo per chi ha il costume)
+  | "montelago";
 
 export const SCENES: { id: SceneId; label: string; ground: [string, string]; tone: string; indoor?: boolean; /** cielo e luce propri, uguali a ogni ora */ ownSky?: boolean }[] = [
   { id: "fabriano", label: "Piazza del Comune, Fabriano", ground: ["#86827b", "#5f5c57"], tone: "#a8402f" },
@@ -57,6 +59,7 @@ export const SCENES: { id: SceneId; label: string; ground: [string, string]; ton
   { id: "trono", label: "Sala del Trono", ground: ["#3a2c34", "#140d12"], tone: "#8a1424", indoor: true, ownSky: true },
   { id: "drago", label: "Picco del Drago", ground: ["#1a0e0e", "#0a0606"], tone: "#9a2a0c", ownSky: true },
   { id: "cielo", label: "Cittadella Celeste", ground: ["#f4ecdc", "#c9b89a"], tone: "#5a3c86", ownSky: true },
+  { id: "montelago", label: "L'Arpa di Montelago, di notte", ground: ["#2a2418", "#141008"], tone: "#8a2a14", ownSky: true },
 ];
 
 export const isIndoor = (id: string | undefined) => Boolean(sceneById(id).indoor);

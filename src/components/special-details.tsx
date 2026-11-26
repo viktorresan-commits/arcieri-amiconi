@@ -4,6 +4,7 @@
  */
 import { CompanyCrest } from "./avatar-extras";
 import type { AvatarLook } from "@/lib/arcieri/avatar";
+import { DemonFrontLeg, DemonFrontTorso, DemonSideTorso, demonOf } from "./demon-costume";
 
 const f = (n: number) => n.toFixed(1);
 const OUTL = "#160f0a";
@@ -28,6 +29,7 @@ function Baldric({ a, b, crest, s = 1 }: { a: [number, number]; b: [number, numb
 
 /** davanti, sul busto (sopra la veste) */
 export function SpecialFrontTorso({ look, cx, sh, hip, layer = "under", uid = "sp" }: { look: AvatarLook; cx: number; sh: { l: number; r: number }; hip: { l: number; r: number }; /** "over": sopra le braccia (la pellegrina copre spalle e braccia) */ layer?: "under" | "over"; uid?: string }) {
+  if (demonOf(look)) return <DemonFrontTorso look={look} cx={cx} sh={sh} hip={hip} layer={layer} />;
   if (look.special === "simone-medievale" && look.style === "medievale") {
     // la bandoliera intera sta sotto le braccia; sopra, la pellegrina e il tratto di bandoliera che la attraversa
     if (layer !== "over") return <Baldric a={[sh.r - 7, 100]} b={[hip.l + 4, 200]} crest={look.crest} />;
@@ -80,6 +82,7 @@ export function SpecialFrontTorso({ look, cx, sh, hip, layer = "under", uid = "s
 
 /** davanti, su una gamba: pantaloni da trekking a due colori con la tasca a cerniera */
 export function SpecialFrontLeg({ look, L, legW, i, bootTop }: { look: AvatarLook; L: (y: number, d: number) => string; legW: number; i: number; bootTop: number }) {
+  if (demonOf(look)) return <DemonFrontLeg look={look} L={L} legW={legW} />;
   if (look.special !== "simone-inverno" || look.bottom !== "cargo") return null;
   const out = i ? 1 : -1;
   // pannello grigio sul davanti della coscia e dello stinco, i fianchi restano arancio
@@ -97,6 +100,7 @@ export function SpecialFrontLeg({ look, L, legW, i, bootTop }: { look: AvatarLoo
 /** di profilo, sul busto: bandoliera o spallaccio e zaino */
 export function SpecialSideTorso({ look, cx, shoulderL, shoulderR, hipL, hipR }: { look: AvatarLook; cx: number; shoulderL: number; shoulderR: number; hipL: number; hipR: number }) {
   void hipR;
+  if (demonOf(look)) return <DemonSideTorso look={look} cx={cx} shoulderL={shoulderL} shoulderR={shoulderR} />;
   if (look.special === "simone-medievale" && look.style === "medievale") return <Baldric a={[shoulderR - 6, 122]} b={[hipL + 6, 200]} crest={look.crest} s={1.05} />;
   if (look.special === "simone-inverno" && look.top === "giacca") {
     return (

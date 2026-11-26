@@ -4,6 +4,7 @@ import { AvatarFace, bodyWidth, CAPE_CLOTH, shade } from "./archer-avatar";
 import { PATTERN2_IDS } from "@/lib/arcieri/avatar-more";
 import { Pendant } from "./avatar-more";
 import { SpecialFrontLeg, SpecialFrontTorso } from "./special-details";
+import { DemonStaffFront, demonHand, demonOf, demonScale } from "./demon-costume";
 import { FrontShoe, frontBootTop } from "./avatar-shoes";
 import { FrontFist } from "./avatar-hands";
 import { RimLightDefs } from "./avatar-light";
@@ -25,6 +26,7 @@ const LONG_SLEEVES = ["felpa", "giacca", "camicia", "tunica", "tunica-lunga", "f
 export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false, armsOut }: { look: AvatarLook; className?: string; /** riquadro da mostrare (viewBox), per le miniature di un dettaglio */ crop?: string; /** ritratto: ragazzi e arcieri bassi riempiono il riquadro come gli altri (niente vuoto sopra la testa) */ fit?: boolean; /** braccia aperte a T (per misurare l'apertura): distanza dal centro alla punta delle dita, senza arco */ armsOut?: number }) {
   const live = !crop;
   const uid = (useId().replace(/[^a-zA-Z0-9]/g, "") + "_");
+  const demon = demonOf(look);
   const woman = look.body === "donna" || look.body === "ragazza";
   const W = bodyWidth(look);
   const tw = (woman ? 0.9 : 1) * W;
@@ -113,7 +115,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
           </g>
         ) : null}
         {/* mano (con le braccia aperte, tutte e due) */}
-        {bowArm ? null : <FrontFist x={hand.x} y={hand.y + 1} r={handR} skin={skin} gloves={Boolean(look.gloves)} flip={side < 0 ? 1 : -1} />}
+        {bowArm ? null : <FrontFist x={hand.x} y={hand.y + 1} r={handR} skin={demonHand(look) ?? skin} gloves={Boolean(look.gloves)} flip={side < 0 ? 1 : -1} claws={demon === "rosso"} />}
       </g>
     );
   };
@@ -266,7 +268,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
               {look.wraps ? [0, 1, 2, 3, 4].map((k) => <path key={k} d={`M${L(246 + k * 12, -legW / 2)} ${246 + k * 12} L${L(240 + k * 12, legW / 2)} ${240 + k * 12}`} stroke={look.wrapsColor} strokeWidth="4" />) : null}
               {/* calzatura */}
               <FrontShoe look={look} L={L} legW={legW} i={i} uid={uid} skin={skin} />
-              {look.special && !shorts ? <SpecialFrontLeg look={look} L={L} legW={legW} i={i} bootTop={bootTop} /> : null}
+              {look.special && (!shorts || demon) ? <SpecialFrontLeg look={look} L={L} legW={legW} i={i} bootTop={bootTop} /> : null}
               {look.bottom === "cargo" ? <rect x={L(244, i ? 2 : -legW / 2 - 2)} y="244" width={legW / 2 + 1} height="16" rx="2" fill={shade(look.pants, -0.15)} stroke={shade(look.pants, -0.45)} strokeWidth="0.8" /> : null}
             </g>
           );
@@ -357,7 +359,11 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
         ) : null}
 
         {/* faretra al fianco sopra la veste, sotto il braccio */}
-        {armsOut != null ? null : heldArrow}
+        {armsOut != null ? null : demon ? (
+          <g className={live ? "aa-front-arm" : undefined} style={live ? { transformOrigin: `${f(freeHand.x)}px 108px` } : undefined}>
+            <DemonStaffFront kind={demon} x={freeHand.x} uid={uid} lean={-bowSide * 7} />
+          </g>
+        ) : heldArrow}
         {arm(bowSide === 1 ? -1 : 1)}
         {arm(bowSide)}
         {look.special && armsOut == null ? <SpecialFrontTorso look={look} cx={cx} sh={sh} hip={hip} layer="over" uid={uid} /> : null}
@@ -404,7 +410,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
               </g>
             )}
             {/* pugno chiuso sull'impugnatura: nocche, dita che avvolgono, pollice */}
-            <FrontFist x={2} y={1} r={handR} skin={skin} gloves={Boolean(look.gloves)} flip={-1} />
+            <FrontFist x={2} y={1} r={handR} skin={demonHand(look) ?? skin} gloves={Boolean(look.gloves)} flip={-1} claws={demon === "rosso"} />
           </g>
         </g>
         )}
@@ -426,7 +432,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
 /** quanto è alto l'arciere di fronte (ragazzi più bassi, statura scelta): scala attorno ai piedi (100, 360) */
 export function frontScale(look: AvatarLook) {
   const kid = look.body === "ragazzo" || look.body === "ragazza";
-  return (kid ? 0.84 : 1) * (0.9 + (tune(look.stature, 50, 0, 100) / 100) * 0.2);
+  return (kid ? 0.84 : 1) * (0.9 + (tune(look.stature, 50, 0, 100) / 100) * 0.2) * demonScale(look);
 }
 
 function lerp(a: number, b: number, t: number) {

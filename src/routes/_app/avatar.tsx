@@ -15,7 +15,7 @@ import { ArcherFront } from "@/components/archer-front";
 import { FACE_BGS, SCENES, sceneById } from "@/lib/arcieri/scenes";
 import { useSky } from "@/lib/arcieri/sky3d";
 import { PALETTES } from "@/lib/arcieri/avatar-more";
-import { specialLooksFor, type SpecialLook } from "@/lib/arcieri/special-looks";
+import { EXCLUSIVE_SCENES, specialLooksFor, type SpecialLook } from "@/lib/arcieri/special-looks";
 import {
   AVATAR_DEFAULT,
   AVATAR_PRESETS,
@@ -461,7 +461,9 @@ export function AvatarEditor() {
   const founder = Boolean(member?.me.isSuper) && member?.me.role === "admin";
   const hats: [AvatarLook["hat"], string][] = founder ? [...HAT_OPTS, ["corona", "Corona"]] : HAT_OPTS;
   // abiti su misura: li vede solo il loro titolare
-  const mine: SpecialLook[] = member ? specialLooksFor(member.me.givenName ?? "", member.me.familyName ?? "") : [];
+  const mine: SpecialLook[] = member ? specialLooksFor(member.me.givenName ?? "", member.me.familyName ?? "", founder) : [];
+  // sfondi riservati (l'Arpa di Montelago): solo per chi ha il costume
+  const scenes = SCENES.filter((sc) => !EXCLUSIVE_SCENES[sc.id] || EXCLUSIVE_SCENES[sc.id].some((id) => mine.some((m) => m.id === id)));
   const mineStrip = mine.length ? (
     <Strip
       title="I tuoi abiti su misura"
@@ -558,7 +560,7 @@ export function AvatarEditor() {
           <OutfitIdeas base={shown} onPick={(l) => setLook(l)} />
           <Strip title="Posa" current={look.pose} onPick={(id) => set("pose", id as AvatarLook["pose"])} items={POSE_OPTS.map(([id, label]) => ({ id, label, preview: <span className="absolute left-[-14%] top-[-4%] w-[128%]"><ArcherAvatar look={{ ...shown, pose: id, lefty: false }} pose={id === "animata" ? "mira" : id} still interactive={false} className="h-auto w-full" /></span> }))} />
           <Strip title="Stili pronti" current="" hint="tocca per provarne uno" onPick={(id) => { const p = AVATAR_PRESETS.find((x) => x.id === id); if (p) setLook((l) => presetLook(l, p.look)); }} items={AVATAR_PRESETS.map((p) => ({ id: p.id, label: p.label, preview: <AvatarFace look={{ ...presetLook(shown, p.look), frame: "nessuna" }} className="absolute left-[-6%] top-[-4%] h-[112%] w-[112%]" /> }))} />
-          <Strip title="Ambientazione" current={look.scene} onPick={(id) => set("scene", id)} items={SCENES.map((sc) => ({ id: sc.id, label: sc.label.replace(" (al chiuso)", ""), preview: <SceneThumb scene={sc.id} sky={sky} className="h-full w-full" /> }))} />
+          <Strip title="Ambientazione" current={look.scene} onPick={(id) => set("scene", id)} items={scenes.map((sc) => ({ id: sc.id, label: sc.label.replace(" (al chiuso)", ""), preview: <SceneThumb scene={sc.id} sky={sky} className="h-full w-full" /> }))} />
           <Strip title="Capelli" current={look.hair} onPick={(id) => set("hair", id as AvatarLook["hair"])} items={HAIR_OPTS.map(([id, label]) => ({ id, label, preview: <AvatarFace look={{ ...shown, hair: id, hat: "nessuno", frame: "nessuna" }} className="h-full w-full" /> }))} />
           <Row label="Colore dei capelli"><Tint value={look.hairColor} onPick={(c) => set("hairColor", c)} quick={HAIR_COLORS} /></Row>
           {look.body === "uomo" ? <Strip title="Barba" current={look.beard} onPick={(id) => set("beard", id as AvatarLook["beard"])} items={BEARD_OPTS.map(([id, label]) => ({ id, label, preview: <AvatarFace look={{ ...shown, beard: id, frame: "nessuna" }} className="absolute left-[-30%] top-[-26%] h-[160%] w-[160%]" /> }))} /> : null}
@@ -758,7 +760,7 @@ export function AvatarEditor() {
           <>
             <Row label="Ambientazione (Home e profilo)">
               <div className="grid grid-cols-3 gap-2">
-                {SCENES.map((sc) => (
+                {scenes.map((sc) => (
                   <button key={sc.id} type="button" aria-pressed={look.scene === sc.id} onClick={() => set("scene", sc.id)} className={`grid gap-1 rounded-2xl p-1 text-left text-[0.7rem] font-semibold ${look.scene === sc.id ? "bg-[#7cf0a8]/15 ring-2 ring-[#7cf0a8]" : "bg-white/[0.04]"}`}>
                     <SceneThumb scene={sc.id} sky={sky} className="h-14 w-full" />
                     <span className="truncate px-1">{sc.label}</span>

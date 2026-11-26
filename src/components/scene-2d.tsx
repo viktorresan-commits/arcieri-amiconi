@@ -1,5 +1,6 @@
 import { FlapBird, SceneLife } from "./scene-life";
 import { FOUNDER_LAYERS } from "./scene-founder";
+import { MONTELAGO_LAYER } from "./scene-montelago";
 import { memo, type ReactNode } from "react";
 import type { Sky } from "@/lib/arcieri/sky3d";
 import { sceneById, type SceneId } from "@/lib/arcieri/scenes";
@@ -730,6 +731,7 @@ const LAYERS: Record<SceneId, (id: string, night: boolean) => ReactNode> = {
   trono: (id) => FOUNDER_LAYERS.trono(id),
   drago: (id) => FOUNDER_LAYERS.drago(id),
   cielo: (id) => FOUNDER_LAYERS.cielo(id),
+  montelago: (id) => MONTELAGO_LAYER(id),
   fabriano: (id, night) => <FabrianoPiazza id={id} night={night} />,
   campo: (id, night) => (
     <g>

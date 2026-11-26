@@ -2190,3 +2190,7 @@ html[data-motion="ridotta"] .aa-turn-in { animation: none; }
 .aa-secbar-item.is-drop { box-shadow: inset 0 0 0 2px rgb(255 255 255 / 0.8); border-radius: 1rem; background: rgb(255 255 255 / 0.1); }
 @keyframes aa-jiggle { from { transform: rotate(-1.6deg); } to { transform: rotate(1.6deg); } }
 @media (prefers-reduced-motion: reduce) { .aa-tray-item.is-arrange { animation: none; } }
+
+/* Demone di Montelago: le poi di fuoco che girano attorno alla mano del giocoliere */
+svg .aa-poi { transform-box: view-box; animation: aa-spin 1s linear infinite; }
+@media (prefers-reduced-motion: reduce) { svg .aa-poi { animation: none; } }

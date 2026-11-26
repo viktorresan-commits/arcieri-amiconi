@@ -2,6 +2,7 @@ import { ink, cubicPts, Tufts, Clumps, fanStrokes, MetalDefs } from "./avatar-in
 import { PATTERN2_IDS } from "@/lib/arcieri/avatar-more";
 import { EyepatchFront, EyepatchProfile, Marks2Front, Marks2Profile, Pendant, browShape } from "./avatar-more";
 import { SpecialSideTorso } from "./special-details";
+import { DemonFaceSvg, DemonSideBack, DemonSideHead, DemonSideLeg, DemonStaffSide, demonHand, demonOf } from "./demon-costume";
 import { cloneElement, isValidElement, useEffect, useId, useMemo, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { tune, type AvatarLook, type Pose, nearSide, sideOf } from "@/lib/arcieri/avatar";
 import { zigQ, BowDeco, Buckle, ChestEmblem, Clasp, ClothPattern, Earring, FaceFrame, FacePaintFront, FacePaintProfile, Fletching, HairOrnament, PaintStroke, Pouch, QuiverBody } from "./avatar-extras";
@@ -319,6 +320,7 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4, cssBlink = fals
   const nockPt = hookW > 0.5 ? drawHand : null;
 
   const face = def.face ?? look.expression;
+  const demon = demonOf(look);
   const torsoW = (woman ? 0.9 : 1) * W;
   const cx = 147;
   const shoulderL = cx - 26 * torsoW;
@@ -367,6 +369,7 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4, cssBlink = fals
         {shorts ? (
           <>
             {limb(L.knee, L.ankle, w * 0.72, skin)}
+            <DemonSideLeg look={look} knee={L.knee} ankle={L.ankle} w={w * 0.72} />
             {limb(lerpP(L.hip, L.knee, 0.6), L.knee, w * 0.78, skin)}
             {limb(L.hip, lerpP(L.hip, L.knee, 0.72), w, `url(#${uid}pants)`)}
             <LegDetail uid={uid} a={L.hip} b={lerpP(L.hip, L.knee, 0.66)} w={w} />
@@ -482,7 +485,7 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4, cssBlink = fals
             <BracerLacing a={lerpP(e, h, 0.42)} b={lerpP(e, h, 0.74)} w={foreW + 4} color={shade(look.bracers, 0.6)} />
           </g>
         ) : null}
-        <SideHand h={h} e={e} r={7.4 * W} skin={skin} gloves={Boolean(look.gloves)} kind={which === "bow" ? "bow" : hook > 0.5 ? "draw" : "free"} />
+        <SideHand h={h} e={e} r={7.4 * W} skin={demonHand(look) ?? skin} gloves={Boolean(look.gloves)} kind={which === "bow" ? "bow" : hook > 0.5 ? "draw" : "free"} />
         {which === "draw" ? (
           <g>
             <rect x={f(h.x + 1)} y={f(h.y - 6.5)} width="8" height="13" rx="2.5" fill={look.tab} stroke={OUT} strokeOpacity="0.43" strokeWidth="0.24" />
@@ -738,7 +741,12 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4, cssBlink = fals
       })() : null}
       {look.hat === "cappuccio" ? <path d={`M${f(shoulderL)} 126 C${f(shoulderL + 8)} 112 ${f(shoulderR - 8)} 112 ${f(shoulderR)} 126 C${f(cx + 10)} 132 ${f(cx - 10)} 132 ${f(shoulderL)} 126 Z`} fill={shade(look.hatColor, -0.2)} /> : null}
 
-      <HairBack look={look} uid={uid} t={t} />
+      {demon ? <DemonStaffSide kind={demon} uid={uid} /> : null}
+      {demon ? (
+        <g transform={`translate(${f(H.x)} ${f(H.y)}) scale(${kid ? 1.06 : 0.92}) translate(${f(-H.x)} ${f(-H.y)})`}>
+          <DemonSideBack kind={demon} dy={H.y - 86} />
+        </g>
+      ) : <HairBack look={look} uid={uid} t={t} />}
       {look.quiverPlace === "schiena" ? quiver("schiena") : null}
 
       {leg(legs.back, "lb")}
@@ -919,7 +927,7 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4, cssBlink = fals
       ) : null}
       {/* testa in proporzione con il corpo, come nella vista di fronte (un po' più piccola che nel vecchio stile) */}
       <g transform={`translate(${f(H.x)} ${f(H.y)}) scale(${kid ? 1.06 : 0.92}) translate(${f(-H.x)} ${f(-H.y)})`}>
-        <Head look={look} H={H} face={face} blink={blink} uid={uid} t={t} cssBlink={cssBlink} />
+        {demon ? <DemonSideHead kind={demon} uid={uid} dy={H.y - 86} /> : <Head look={look} H={H} face={face} blink={blink} uid={uid} t={t} cssBlink={cssBlink} />}
       </g>
 
       {bow}
@@ -2484,6 +2492,9 @@ function hairCapFront(rx: number, ry: number, fy: number, woman: boolean) {
 
 export function AvatarFace({ look, className = "h-10 w-10", bare = false, part }: { look: AvatarLook; className?: string; /** solo la testa, senza sfondo né spalle: per il ritratto a figura intera */ bare?: boolean; /** figura intera: "back" disegna solo capelli lunghi e cappuccio (dietro il corpo), "front" tutto il resto */ part?: "back" | "front" }) {
   const uid = (useId().replace(/[^a-zA-Z0-9]/g, "") + "_");
+  // costume del Demone di Montelago: la maschera al posto del volto
+  const demon = demonOf(look);
+  if (demon) return <DemonFaceSvg look={look} kind={demon} uid={uid} className={className} bare={bare} part={part} frame={bare ? null : <FaceFrame kind={look.frame} />} />;
   const skin = look.skin;
   const skinD = shade(skin, -0.2);
   const hair = look.hairColor;

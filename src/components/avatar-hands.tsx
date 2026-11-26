@@ -3,6 +3,7 @@
  * pollice con l'unghia, pieghe e luce da sinistra; con i guanti il cuoio, le cuciture e il polsino.
  * Di fronte (FrontFist) e di profilo, orientata lungo l'avambraccio (SideHand).
  */
+import { Claws } from "./demon-costume";
 import { useId } from "react";
 
 type P = { x: number; y: number };
@@ -48,7 +49,7 @@ function HandGrad({ id, t }: { id: string; t: ReturnType<typeof tones> }) {
  * Pugno di fronte, al centro (x, y): l'impugnatura o la freccia passano in verticale. `flip` = 1 con le nocche a
  * destra di chi guarda, -1 a sinistra.
  */
-export function FrontFist({ x, y, r, skin, gloves, flip = 1 }: { x: number; y: number; r: number; skin: string; gloves: boolean; flip?: 1 | -1 }) {
+export function FrontFist({ x, y, r, skin, gloves, flip = 1, claws = false }: { x: number; y: number; r: number; skin: string; gloves: boolean; flip?: 1 | -1; /** artigli d'oro (costume del demone) */ claws?: boolean }) {
   const t = tones(skin, gloves);
   const gid = `hf${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
   const rows = [0, 1, 2, 3].map((k) => ({ y: -0.74 * r + k * 0.49 * r, x0: -0.78 * r + (k === 3 ? 0.14 * r : 0), x1: 0.94 * r - (k === 3 ? 0.12 * r : k === 0 ? 0.04 * r : 0) }));
@@ -98,6 +99,7 @@ export function FrontFist({ x, y, r, skin, gloves, flip = 1 }: { x: number; y: n
           <path d={`M${f(-0.62 * r)} ${f(-1.18 * r)} H${f(0.62 * r)}`} stroke="#c9a46a" strokeOpacity="0.55" strokeWidth={f(0.022 * r)} strokeDasharray={`${f(0.09 * r)} ${f(0.08 * r)}`} />
         </g>
       ) : null}
+      {claws ? <Claws r={r} /> : null}
     </g>
   );
 }
