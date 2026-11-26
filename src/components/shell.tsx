@@ -304,7 +304,7 @@ export function Shell({ children }: { children: ReactNode }) {
   return (
     <MemberCtx.Provider value={{ me, reload: () => setNonce((n) => n + 1) }}>
       <div className="aa-app min-h-dvh text-fg" data-app="arcieri-amiconi">
-        <Scene path={path} />
+        <Scene path={path} search={search} />
         <XpToasts />
         <aside className="aa-side inset-y-0 left-0 z-[60] hidden w-60 flex-col overflow-hidden border-r border-line bg-elev px-4 py-5 md:flex">
           <Link to="/" className="mb-6 flex items-center gap-2">

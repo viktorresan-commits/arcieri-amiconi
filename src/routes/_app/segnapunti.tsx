@@ -37,6 +37,8 @@ function Page() {
   // la piazzola a cui stai dando bersaglio e distanza resta ferma finché non segni la freccia dopo
   const [pin, setPin] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  // persona da togliere (si chiede conferma: i suoi punti si perdono)
+  const [removing, setRemoving] = useState<number | null>(null);
   const sag = st.mode === "sagome";
   const p = st.players[st.cur] ?? st.players[0];
   const total = (x: P) => x.ends.flat().reduce((a, b) => a + (b === 11 ? 10 : b), 0);
@@ -72,10 +74,18 @@ function Page() {
     setSt({ ...st, info: next, recent });
   };
   const press = (k: string) => {
+    const v = k === "X" ? 11 : k === "M" ? 0 : Number(k);
+    // correzione: la piazzola (o volée) scelta sul cartellino e rimasta incompleta si riempie prima di tutto
+    if (focus != null && focus < p.ends.length - 1 && (p.ends[focus]?.length ?? 0) < st.per) {
+      const players = st.players.map((x, i) => (i === st.cur ? { ...x, ends: x.ends.map((e, j) => (j === focus ? [...e, v] : e)) } : x));
+      setSt({ ...st, players });
+      if ((p.ends[focus]?.length ?? 0) + 1 >= st.per) setFocus(null);
+      if (navigator.vibrate) navigator.vibrate(8);
+      return;
+    }
     if (finished(p)) return;
     setFocus(null);
     setPin(null);
-    const v = k === "X" ? 11 : k === "M" ? 0 : Number(k);
     const players = st.players.map((x, i) => {
       if (i !== st.cur) return x;
       const ends = x.ends.map((e) => [...e]);
@@ -109,6 +119,26 @@ function Page() {
     setPin(null);
     setSt({ ...st, players: st.players.map((x, i) => (i === st.cur ? { ...x, ends: (() => { const e = x.ends.map((y) => [...y]); if (!e[e.length - 1].length && e.length > 1) e.pop(); e[e.length - 1].pop(); return e; })() } : x)) });
   };
+  // cancella una freccia o tutta la piazzola/volée di chi sta tirando (l'ultima, se resta vuota, sparisce)
+  const clearArrows = (endIdx: number, arrowIdx?: number) => {
+    setPin(null);
+    const players = st.players.map((x, i) => {
+      if (i !== st.cur) return x;
+      const ends = x.ends.map((e, j) => (j === endIdx ? (arrowIdx == null ? [] : e.filter((_, a) => a !== arrowIdx)) : [...e]));
+      while (ends.length > 1 && !ends[ends.length - 1].length) ends.pop();
+      return { ...x, ends };
+    });
+    setSt({ ...st, players });
+    if (endIdx >= players[st.cur].ends.length) setFocus(null);
+  };
+  const removePlayer = (idx: number) => {
+    const players = st.players.filter((_, i) => i !== idx);
+    const cur = st.cur === idx ? 0 : st.cur > idx ? st.cur - 1 : st.cur;
+    setRemoving(null);
+    setFocus(null);
+    setPin(null);
+    setSt({ ...st, players, cur });
+  };
   const share = async () => {
     const head = sag ? `Sagome · ${st.lanes} piazzole da ${st.per} frecce` : `Padiglione · volée da ${st.per}`;
     const text = `Segnapunti Arcieri Amiconi · ${head}\n${rank.map((x, i) => `${i + 1}. ${x.name}: ${total(x)} (${xs(x)} ${tieLabel})`).join("\n")}`;
@@ -136,12 +166,27 @@ function Page() {
       <Card className="grid gap-2">
         <div className="flex flex-wrap gap-1.5">
           {st.players.map((x, i) => (
-            <button key={i} type="button" onClick={() => setSt({ ...st, cur: i })} className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold transition ${i === st.cur ? "bg-white/15 ring-2" : "bg-white/5"}`} style={{ ["--tw-ring-color" as string]: x.color }}>
-              <span className="h-2.5 w-2.5 rounded-full" style={{ background: x.color }} />
-              {x.name}
-            </button>
+            <span key={i} className={`flex items-center rounded-full text-sm font-semibold transition ${i === st.cur ? "bg-white/15 ring-2" : "bg-white/5"}`} style={{ ["--tw-ring-color" as string]: x.color }}>
+              <button type="button" onClick={() => { setFocus(null); setSt({ ...st, cur: i }); }} className={`flex items-center gap-1.5 py-1.5 pl-3 ${i === 0 ? "pr-3" : "pr-1.5"}`}>
+                <span className="h-2.5 w-2.5 rounded-full" style={{ background: x.color }} />
+                {x.name}
+              </button>
+              {/* «Io» resta sempre: è il punteggio che si salva nella gara */}
+              {i > 0 ? (
+                <button type="button" aria-label={`Togli ${x.name}`} onClick={() => setRemoving(i)} className="mr-1 grid h-7 w-7 place-items-center rounded-full text-white/60 active:bg-white/10">
+                  <Glyph name="close" size={13} />
+                </button>
+              ) : null}
+            </span>
           ))}
         </div>
+        {removing != null && st.players[removing] ? (
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-danger/40 bg-danger/10 p-2.5 text-sm">
+            <span className="min-w-0 flex-1">Togliere <b>{st.players[removing].name}</b> dalla partita? I suoi punti si perdono.</span>
+            <button type="button" className="aa-chip" onClick={() => setRemoving(null)}>Annulla</button>
+            <button type="button" className="aa-chip !border-transparent !bg-danger !text-danger-fg" onClick={() => removePlayer(removing)}>Togli</button>
+          </div>
+        ) : null}
         <div className="flex gap-2">
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome di un amico" className="min-h-11 flex-1 rounded-xl border border-hair bg-black/20 px-3 text-sm outline-none" />
           <button type="button" aria-label="Aggiungi" className="grid h-11 w-11 place-items-center rounded-xl bg-primary text-primary-fg" onClick={() => { if (name.trim() && st.players.length < 6) { setSt({ ...st, players: [...st.players, { name: name.trim(), color: COLORS[st.players.length % COLORS.length], ends: [[]] }] }); setName(""); } }}><Glyph name="plus" size={18} /></button>
@@ -229,7 +274,42 @@ function Page() {
             })}
           </div>
         ) : null}
-        <button type="button" className="justify-self-start text-xs text-muted" onClick={undo}>Annulla l'ultima</button>
+        {!sag && p.ends.some((e) => e.length) ? (
+          // cartellino delle volée di chi sta tirando: toccane una per cancellare o correggere le frecce
+          <div className="flex flex-wrap gap-1">
+            {p.ends.map((e, i) => (
+              <button key={i} type="button" onClick={() => setFocus(focus === i ? null : i)} aria-label={`Volée ${i + 1}`} className={`grid min-w-11 place-items-center rounded-md px-1.5 py-1 text-[0.7rem] font-bold tabular-nums ${focus === i ? "ring-2 ring-white" : ""}`} style={{ background: e.length ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.05)" }}>
+                <span className="text-[0.58rem] font-semibold text-muted">V{i + 1}</span>
+                {e.length ? total({ ...p, ends: [e] }) : "—"}
+              </button>
+            ))}
+          </div>
+        ) : null}
+        {focus != null && p.ends[focus] ? (
+          // correzione: le frecce della piazzola (o volée) scelta, ognuna si cancella con un tocco
+          <div className="grid gap-1.5 rounded-xl border border-white/15 bg-white/[0.05] p-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold">{sag ? `Piazzola ${focus + 1}` : `Volée ${focus + 1}`} di {p.name}</p>
+              <button type="button" className="text-xs font-semibold text-muted" onClick={() => setFocus(null)}>Fatto</button>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {p.ends[focus].map((v, a) => (
+                <button key={a} type="button" onClick={() => clearArrows(focus, a)} aria-label={`Cancella la freccia ${a + 1}`} className="flex items-center gap-1 rounded-full bg-white/10 py-1 pl-3 pr-2 font-display text-lg leading-none">
+                  {v === 11 ? "X" : v === 0 ? (sag ? "0" : "M") : v}
+                  <Glyph name="close" size={12} className="text-white/60" />
+                </button>
+              ))}
+              {p.ends[focus].length ? (
+                <button type="button" className="aa-chip ml-auto" onClick={() => clearArrows(focus)}>
+                  <Glyph name="trash" size={13} /> {sag ? "Svuota la piazzola" : "Svuota la volée"}
+                </button>
+              ) : null}
+            </div>
+            {p.ends[focus].length < st.per && focus < p.ends.length - 1 ? <p className="text-[0.7rem] text-muted">Tocca i punti qui sopra per rimettere le frecce in questa {sag ? "piazzola" : "volée"}.</p> : null}
+          </div>
+        ) : null}
+        <button type="button" className="aa-chip justify-self-start" onClick={undo}><Glyph name="history" size={13} /> Annulla l'ultima freccia</button>
+        <p className="text-[0.7rem] text-muted">Per cancellare o correggere altri punti tocca {sag ? "la piazzola" : "la volée"} sul cartellino.</p>
       </Card>
       {sag && myLanes > 0 ? (
         saving ? (
