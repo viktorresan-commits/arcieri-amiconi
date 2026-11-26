@@ -6,6 +6,7 @@ import { Pendant } from "./avatar-more";
 import { SpecialFrontLeg, SpecialFrontTorso } from "./special-details";
 import { FrontShoe, frontBootTop } from "./avatar-shoes";
 import { FrontFist } from "./avatar-hands";
+import { RimLightDefs } from "./avatar-light";
 import { Buckle, ChestEmblem, Clasp, ClothPattern, Fletching, Pouch, QuiverBody, zigQ } from "./avatar-extras";
 import { seamOf, BeltDetail, ClothButton, ClothDetail, DetailDefs, LeatherBand, SleeveDetail } from "./avatar-detail";
 import { BUTTON_TOPS } from "./archer-avatar";
@@ -179,9 +180,13 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
         <DetailDefs uid={`${uid}1`} />
         <DetailDefs uid={`${uid}-1`} />
         <clipPath id={`${uid}tcl`}><path d={torsoD} />{longTop ? <path d={tunicD} /> : null}</clipPath>
+        <RimLightDefs id={`${uid}rim`} />
       </defs>
       <g transform={`translate(100 360) scale(${(fit ? 1 : frontScale(look)).toFixed(3)}) translate(-100 -360)`}>
-        <ellipse cx="100" cy="356" rx="62" ry="7" fill="#000" opacity="0.3" />
+        {/* ombra a terra morbida, più scura sotto i piedi */}
+        <ellipse cx="100" cy="356" rx="70" ry="8.5" fill={`url(#${uid}rimg)`} />
+        <ellipse cx="100" cy="355" rx="34" ry="3.4" fill="#000" opacity="0.28" />
+        <g filter={`url(#${uid}rim)`}>
         <g className={live ? "aa-front-sway" : undefined}>
         {/* dietro: mantello e faretra sulla schiena */}
         {look.cape ? (() => {
@@ -408,6 +413,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
           <svg x={cx - 65} y="-8" width="130" height="130" viewBox="0 0 100 100" overflow="visible">
             <AvatarFace look={look} className="" bare part="front" />
           </svg>
+        </g>
         </g>
         </g>
         </g>

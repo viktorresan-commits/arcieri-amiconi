@@ -9,6 +9,7 @@ import { sceneById } from "@/lib/arcieri/scenes";
 import { SideShoe } from "./avatar-shoes";
 import { SideHand } from "./avatar-hands";
 import { FaceHat, MailCoif, SideHat } from "./avatar-hats";
+import { RimLightDefs } from "./avatar-light";
 import { seamOf, ClothButton, BeardTexture, BeltDetail, BrowHairs, ClothDetail, DetailDefs, EyeDetail, FaceShade, HairFineStrands, LeatherBand, LipDetail, SleeveDetail } from "./avatar-detail";
 
 /**
@@ -2303,9 +2304,12 @@ export function ArcherAvatar({ look, className = "h-72 w-auto", interactive = tr
   return (
     <svg ref={host} viewBox="40 0 300 350" className={`${className}${cssBlink ? " aa-av-breathe" : ""}`} role="img" aria-label="Il tuo arciere" onClick={tap} shapeRendering="geometricPrecision" style={{ cursor: interactive && mode !== "animata" ? "pointer" : undefined, overflow: "visible" }}>
       <Defs look={look} uid={uid} />
+      <defs><RimLightDefs id={`${uid}rim`} /></defs>
       <g transform={look.lefty ? "translate(380 0) scale(-1 1)" : undefined} filter={light ? `url(#${light})` : undefined}>
-        <ellipse cx="150" cy="340" rx="80" ry="7" fill="#000" opacity="0.28" />
-        <g transform={`translate(150 342) scale(${((kid ? 0.8 : 1) * (0.9 + (tune(look.stature, 50, 0, 100) / 100) * 0.2)).toFixed(3)}) translate(-150 -342)`}>
+        <ellipse cx="150" cy="340" rx="86" ry="8.5" fill={`url(#${uid}rimg)`} />
+        <ellipse cx="150" cy="339.5" rx="40" ry="3.6" fill="#000" opacity="0.26" />
+        {/* luce di contorno (calda davanti, fredda dietro); nel gioco no, la figura si muove di continuo */}
+        <g filter={drive ? undefined : `url(#${uid}rim)`} transform={`translate(150 342) scale(${((kid ? 0.8 : 1) * (0.9 + (tune(look.stature, 50, 0, 100) / 100) * 0.2)).toFixed(3)}) translate(-150 -342)`}>
           <Figure look={look} def={def} t={t} flying={hideFlight ? null : flying} blink={blink} uid={uid} wind={wind} cssBlink={cssBlink} />
         </g>
       </g>
