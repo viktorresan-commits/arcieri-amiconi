@@ -243,7 +243,7 @@ export function PathMap({ onPick, current, currentSearch, showSearch = false, fo
               </div>
               <div className="grid grid-cols-3 gap-2.5">
                 {mine.map((s) => (
-                  <Link key={s.id} to={s.to as "/"} search={(s.search ?? {}) as never} onClick={() => { touch(s); go(); }} aria-current={isHere(s) ? "page" : undefined} className={cx("aa-short aa-cat-tile flex min-w-0 flex-col items-center gap-1.5 rounded-[1.4rem] px-1.5 pb-2.5 pt-3 text-center", isHere(s) && "is-here")}>
+                  <Link key={s.id} to={s.to as "/"} search={(s.search ?? {}) as never} onClick={() => { touch(s); go(); }} aria-current={isHere(s) ? "page" : undefined} className="aa-short aa-cat-tile flex min-w-0 flex-col items-center gap-1.5 rounded-[1.4rem] px-1.5 pb-2.5 pt-3 text-center">
                     <AppIcon name={s.icon} enamel={stationOf(s.group)?.enamel} size={60} className="aa-short-icon" glow={lastTouched[s.group] === s.id} />
                     <span className="w-full truncate text-[0.78rem] font-semibold leading-tight">{s.label}</span>
                     <span className="line-clamp-2 w-full text-[0.6rem] leading-tight text-muted">{s.hint}</span>
@@ -309,6 +309,8 @@ function SectionStack({ onGo, isHere, hide = [], lastTouched = {}, searching, on
           {STATIONS.map((st) => {
             const items = SHORTCUTS.filter((s) => s.group === st.id && !hide.includes(s.id));
             if (!items.length) return null;
+            // in evidenza solo con i raggi che girano: la voce della pagina aperta, o l'ultima toccata della sezione
+            const glowId = items.find(isHere)?.id ?? lastTouched[st.id];
             return (
               <section key={st.id} data-sec={st.id} className="aa-menu-sec" style={{ ["--cat" as string]: st.color }}>
                 <div className="mb-2.5 flex items-baseline gap-2 border-b pb-1.5" style={{ borderColor: `color-mix(in srgb, ${st.color} 55%, transparent)` }}>
@@ -317,8 +319,8 @@ function SectionStack({ onGo, isHere, hide = [], lastTouched = {}, searching, on
                 </div>
                 <div className="grid grid-cols-3 gap-y-3.5">
                   {items.map((s) => (
-                    <Link key={s.id} to={s.to as "/"} search={(s.search ?? {}) as never} onClick={() => onGo(s)} aria-current={isHere(s) ? "page" : undefined} className={cx("aa-short aa-menu-item flex min-w-0 flex-col items-center gap-1 rounded-2xl px-0.5 py-1 text-center", isHere(s) && "is-here")}>
-                      <AppIcon name={s.icon} size={58} className="aa-short-icon" enamel={st.enamel} glow={lastTouched[st.id] === s.id} />
+                    <Link key={s.id} to={s.to as "/"} search={(s.search ?? {}) as never} onClick={() => onGo(s)} aria-current={isHere(s) ? "page" : undefined} className="aa-short aa-menu-item flex min-w-0 flex-col items-center gap-1 rounded-2xl px-0.5 py-1 text-center">
+                      <span className="grid h-[64px] w-[64px] place-items-center"><AppIcon name={s.icon} size={58} className="aa-short-icon" enamel={st.enamel} glow={glowId === s.id} /></span>
                       <span className="line-clamp-2 w-full text-[0.76rem] font-semibold leading-tight">{s.label}</span>
                     </Link>
                   ))}

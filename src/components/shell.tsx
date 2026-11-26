@@ -192,21 +192,25 @@ export function Shell({ children }: { children: ReactNode }) {
     if (!root) return;
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const seen = new Set<Element>();
-    let count = 0;
+    // le schede compaiono una volta sola, salendo piano mentre si scorre. Quelle già in vista all'apertura
+    // non si toccano (prima sparivano e rientravano di lato: era lo scatto all'apertura di una pagina),
+    // e una scheda già comparsa non sparisce più uscendo dallo schermo
     const io = new IntersectionObserver(
       (entries) => {
-        for (const entry of entries) entry.target.classList.toggle("is-in", entry.isIntersecting);
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          entry.target.classList.add("is-in");
+          io.unobserve(entry.target);
+        }
       },
-      { threshold: 0.01, rootMargin: "8% 0px" },
+      { threshold: 0.01, rootMargin: "0px 0px -4% 0px" },
     );
     const arm = (node: Element) => {
       if (!(node instanceof HTMLElement) || seen.has(node) || !node.matches(".aa-glow-panel, .aa-tile")) return;
       seen.add(node);
+      if (reduce || node.getBoundingClientRect().top < window.innerHeight) return;
       node.classList.add("aa-watch");
-      node.dataset.side = count % 2 ? "right" : "left";
-      count += 1;
-      if (reduce) node.classList.add("is-in");
-      else io.observe(node);
+      io.observe(node);
     };
     const scan = (base: ParentNode) => {
       if (base instanceof Element) arm(base);

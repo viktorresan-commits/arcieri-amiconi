@@ -66,42 +66,48 @@ export function SectionBar({ path, search, hide = [], onSearch }: { path: string
     setOpen(null);
   };
   const isHere = (s: Shortcut) => hereItem?.id === s.id;
+  // la voce in evidenza (solo i raggi che girano): quella della pagina aperta se è di questa sezione, altrimenti l'ultima toccata
+  const glowId = st ? (hereItem?.group === st.id ? hereItem.id : lastTouched[st.id]) : undefined;
 
   return (
     <>
       {/* veste, riquadro e barra nello stesso livello della pagina: la barra resta sopra il velo */}
       {st ? (
             <div className="md:hidden">
-              <button type="button" aria-label="Chiudi" className="aa-tray-veil fixed inset-0 z-[35] bg-black/55 backdrop-blur-[3px]" onClick={() => setOpen(null)} />
+              {/* velo scuro senza sfocatura: la sfocatura a tutto schermo rallenta i telefoni e fa scattare l'apertura */}
+              <button type="button" aria-label="Chiudi" className="aa-tray-veil fixed inset-0 z-[35] bg-black/65" onClick={() => setOpen(null)} />
               <div
                 role="dialog"
                 aria-label={st.title}
-                className="aa-tray fixed inset-x-2 z-[36] rounded-[1.7rem] p-3 pb-3.5"
+                className="aa-tray fixed inset-x-1.5 z-[36] rounded-[1.9rem] p-3.5 pb-4"
                 style={{
                   bottom: "calc(env(safe-area-inset-bottom) + 4.9rem)",
                   ["--cat" as string]: st.color,
                   ["--at" as string]: `${anchor * 100}%`,
-                  background: `radial-gradient(120% 90% at var(--at) 110%, color-mix(in srgb, ${st.color} 30%, transparent), transparent 60%), linear-gradient(180deg, color-mix(in srgb, ${st.color} 22%, #151b24), #0e131a 75%)`,
+                  // sfumatura dall'alto verso il basso: colore della sezione in cima, scuro in fondo
+                  background: `linear-gradient(180deg, color-mix(in srgb, ${st.color} 46%, #131820) 0%, color-mix(in srgb, ${st.color} 22%, #10151c) 42%, color-mix(in srgb, ${st.color} 6%, #0b0f14) 78%, #090c10 100%)`,
                 } as CSSProperties}
               >
-                {/* bersaglio decorativo nell'angolo */}
-                <svg aria-hidden viewBox="0 0 200 200" className="pointer-events-none absolute -right-10 -top-12 h-44 w-44 opacity-[0.14]">
-                  {[96, 78, 60, 42, 24].map((r, k) => <circle key={r} cx="100" cy="100" r={r} fill="none" stroke="#fff" strokeWidth={k === 4 ? 10 : 6} />)}
-                </svg>
-                <div className="relative mb-2.5 flex items-center gap-2.5">
-                  <AppIcon name={st.icon} size={40} enamel={st.enamel} />
+                {/* bersaglio decorativo nell'angolo, ritagliato dentro il riquadro (prima sporgeva sopra) */}
+                <span aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]">
+                  <svg viewBox="0 0 200 200" className="absolute -right-12 -top-14 h-48 w-48 opacity-[0.12]">
+                    {[96, 78, 60, 42, 24].map((r, k) => <circle key={r} cx="100" cy="100" r={r} fill="none" stroke="#fff" strokeWidth={k === 4 ? 10 : 6} />)}
+                  </svg>
+                </span>
+                <div className="relative mb-3.5 flex items-center gap-3">
+                  <AppIcon name={st.icon} size={50} enamel={st.enamel} />
                   <div className="min-w-0 flex-1">
-                    <p className="font-display text-[1.6rem] leading-none text-white">{st.title}</p>
-                    <p className="truncate text-[0.72rem] text-white/65">{st.sub}</p>
+                    <p className="font-display text-[2rem] leading-none text-white">{st.title}</p>
+                    <p className="mt-0.5 truncate text-[0.8rem] text-white/70">{st.sub}</p>
                   </div>
-                  <button type="button" onClick={() => { setOpen(null); onSearch(); }} aria-label="Cerca fra tutte le voci" className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white/[0.09] text-white">
-                    <Glyph name="search" size={17} />
+                  <button type="button" onClick={() => { setOpen(null); onSearch(); }} aria-label="Cerca fra tutte le voci" className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white/[0.1] text-white">
+                    <Glyph name="search" size={19} />
                   </button>
-                  <button type="button" onClick={() => setOpen(null)} aria-label="Chiudi" className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white/[0.09] text-white">
-                    <Glyph name="close" size={17} />
+                  <button type="button" onClick={() => setOpen(null)} aria-label="Chiudi" className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white/[0.1] text-white">
+                    <Glyph name="close" size={19} />
                   </button>
                 </div>
-                <div className="relative grid max-h-[52dvh] grid-cols-4 gap-x-1 gap-y-3 overflow-y-auto pb-0.5 [scrollbar-width:none]">
+                <div className="relative grid max-h-[60dvh] grid-cols-3 gap-x-2 gap-y-4 overflow-y-auto px-0.5 pb-1 pt-1 [scrollbar-width:none]">
                   {items.map((s, i) => (
                     <Link
                       key={s.id}
@@ -109,11 +115,11 @@ export function SectionBar({ path, search, hide = [], onSearch }: { path: string
                       search={(s.search ?? {}) as never}
                       onClick={() => pick(s)}
                       aria-current={isHere(s) ? "page" : undefined}
-                      className={cx("aa-tray-item aa-short grid min-w-0 justify-items-center gap-1 rounded-2xl px-0.5 py-1 text-center", isHere(s) && "is-here")}
+                      className="aa-tray-item aa-short grid min-w-0 justify-items-center gap-1.5 rounded-2xl px-1 py-1 text-center"
                       style={{ animationDelay: `${60 + i * 28}ms` }}
                     >
-                      <AppIcon name={s.icon} size={52} className="aa-short-icon" enamel={st.enamel} glow={lastTouched[st.id] === s.id} />
-                      <span className="line-clamp-2 w-full text-[0.7rem] font-semibold leading-tight text-white">{s.label}</span>
+                      <span className="grid h-[76px] w-[76px] place-items-center"><AppIcon name={s.icon} size={70} className="aa-short-icon" enamel={st.enamel} glow={glowId === s.id} /></span>
+                      <span className="line-clamp-2 w-full text-[0.86rem] font-semibold leading-tight text-white">{s.label}</span>
                     </Link>
                   ))}
                 </div>
@@ -122,7 +128,7 @@ export function SectionBar({ path, search, hide = [], onSearch }: { path: string
               </div>
             </div>
       ) : null}
-      <nav aria-label="Sezioni" className="aa-bottomnav aa-bar-bottom fixed inset-x-0 bottom-0 z-[37] border-t pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden">
+      <nav aria-label="Sezioni" className="aa-bottomnav aa-bar-bottom fixed inset-x-0 bottom-0 z-[37] border-t pb-[env(safe-area-inset-bottom)] md:hidden">
         <div ref={scroller} className={cx("aa-secbar flex snap-x overflow-x-auto px-1 [scrollbar-width:none]", scrolls && "is-scroll")}>
           <Link
             to="/"

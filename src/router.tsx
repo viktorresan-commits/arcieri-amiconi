@@ -8,8 +8,9 @@ export function getRouter() {
     routeTree,
     rewrite: previewPathRewrite(),
     defaultErrorComponent: AppErrorComponent,
-    // dissolvenza morbida fra le pagine dove il browser la supporta
-    defaultViewTransition: true,
+    // niente "View Transitions": la foto dell'intero schermo a ogni cambio di pagina faceva scattare i telefoni
+    // e muoveva anche le barre fisse; l'ingresso della pagina è già animato dal suo contenuto
+    defaultViewTransition: false,
     scrollRestoration: true,
   });
 }
