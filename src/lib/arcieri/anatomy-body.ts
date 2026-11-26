@@ -236,7 +236,7 @@ export type Grips = {
   wrap?: { side: "L" | "R"; k: number; toward: V3 };
 };
 
-export function bodyMatrices(meta: BodyMeta, J: Record<number, V3>, look?: V3, grips?: Grips): Float32Array {
+export function bodyMatrices(meta: BodyMeta, J: Record<number, V3>, look?: V3, grips?: Grips, /** 32 numeri: la piega delle dita in presa per la scheda grafica (mano S, poi D) */ curl?: Float32Array): Float32Array {
   const rest = (i: number | string) => meta.rest[String(i)];
   const hasHand = (base: number) => Boolean(J[base] && J[base + 5] && J[base + 17]);
   // le mani da 21 punti hanno nocche vere: con quelle si usano le teste dei metacarpi del modello
@@ -302,50 +302,45 @@ export function bodyMatrices(meta: BodyMeta, J: Record<number, V3>, look?: V3, g
     Fc[`dita_${s}`] = fingers(avg([5, 9, 13, 17]), avg([8, 12, 16, 20]), Fr[`dita_${s}`]);
     Fc[`pollice_${s}`] = fingers(J[base + 2], J[base + 4], Fr[`pollice_${s}`]);
   }
-  // dita in presa. All'ancoraggio la mano della corda è contro il viso e i suoi punti sono poco
-  // affidabili: le dita, diritte e lunghe, uscivano a ventaglio. Ora quelle della mano della corda
-  // vanno dalle nocche alla cocca (la corda sta nella piega delle dita, le punte oltre), corte come
-  // dita piegate; quelle della mano dell'arco si chiudono a pugno attorno all'impugnatura.
+  // Dita in presa: si piegano davvero (nocca, seconda e terza falange) nella scheda grafica, con la
+  // mano che le porta. Mano della corda: presa mediterranea, l'indice sopra la freccia, medio e anulare
+  // sotto, agganciati alla corda con la piega delle dita; il palmo verso il viso. Mano dell'arco: chiusa
+  // attorno all'impugnatura. Qui: l'orientamento della mano della corda e quanto piegare (curl).
+  const curlK: Record<"L" | "R", { k: number; a1: number; a2: number; spread: number } | null> = { L: null, R: null };
+  const torsoUp = norm(sub(lerp(J[11], J[12], 0.5), lerp(J[23], J[24], 0.5)));
   for (const [g, wrap] of [[grips?.hook, false], [grips?.wrap, true]] as const) {
     if (!g || g.k <= 0.05) continue;
     const s = g.side;
+    const k = Math.min(1, g.k);
+    curlK[s] = wrap
+      ? { k, a1: (62 * Math.PI) / 180, a2: (92 * Math.PI) / 180, spread: 0 }
+      : { k, a1: (14 * Math.PI) / 180, a2: (100 * Math.PI) / 180, spread: (9 * Math.PI) / 180 };
+    if (wrap) continue;
+    // mano della corda: dal polso verso la cocca, indice in alto (sopra la freccia)
     const base = s === "L" ? 33 : 54;
-    const hasH = hasHand(base) && J[base + 9] && J[base + 13];
+    const hasH = hasHand(base);
     const W = hasH ? J[base] : J[s === "L" ? 15 : 16];
     const IX = hasH ? J[base + 5] : J[s === "L" ? 19 : 20];
     const PK = hasH ? J[base + 17] : J[s === "L" ? 17 : 18];
-    const d0 = rest(`dita0_${s}`);
-    const d1 = rest(`dita1_${s}`);
-    if (!W || !IX || !PK || !d0 || !d1) continue;
-    const r = Fr[`dita_${s}`] ?? frame(d0, d1, [0, 0, 1], [1, 0, 0]);
-    Fr[`dita_${s}`] = r;
-    const knuck = hasH ? mul(add(add(J[base + 5], J[base + 9]), add(J[base + 13], J[base + 17])), 0.25) : lerp(IX, PK, 0.5);
-    const e1 = norm(sub(knuck, W));
-    const nC = norm(cross(sub(IX, W), sub(PK, W)));
-    const restL = r.L * kT;
-    const k = Math.min(1, g.k);
-    let dir: V3;
-    let L: number;
-    if (!wrap) {
-      // verso la cocca, appena oltre
-      const to = sub(g.toward, knuck);
-      const d = len(to);
-      dir = d > 0.01 ? norm(to) : e1;
-      L = Math.max(0.4 * restL, Math.min(0.75 * restL, d + 0.02));
-    } else {
-      // pugno: piegate oltre l'angolo retto verso il palmo (che guarda l'impugnatura)
-      const sg = dot(nC, sub(g.toward, knuck)) >= 0 ? 1 : -1;
-      const ph = (100 * Math.PI) / 180;
-      dir = norm(add(mul(e1, Math.cos(ph)), mul(nC, sg * Math.sin(ph))));
-      L = 0.45 * restL;
-    }
-    dir = norm(add(mul(e1, 1 - k), mul(dir, k)));
-    L = restL + (L - restL) * k;
-    // il dorso delle dita resta dalla parte del dorso della mano
-    const side = norm(cross(e1, nC));
-    let nRot = norm(cross(side, dir));
-    if (dot(nRot, nC) < 0 && dot(dir, e1) > 0.3) nRot = mul(nRot, -1);
-    Fc[`dita_${s}`] = frame(knuck, add(knuck, mul(dir, L)), nRot, [0, 0, 1]);
+    const el = J[s === "L" ? 13 : 14];
+    if (!W || !IX || !PK || !el) continue;
+    const mid = lerp(IX, PK, 0.5);
+    const hLen = len(sub(mid, W)) || 0.08;
+    const wid = len(sub(IX, PK)) || 0.07;
+    const e1v = norm(sub(mid, W));
+    const Xv = norm(sub(IX, PK));
+    const toNock = sub(g.toward, W);
+    const e1d = len(toNock) > 0.01 ? norm(toNock) : e1v;
+    const e1 = norm(add(mul(e1v, 1 - k), mul(e1d, k)));
+    const Xd = perpTo(e1, torsoUp, Xv);
+    const X = perpTo(e1, add(mul(Xv, 1 - k), mul(Xd, k)), Xd);
+    const IXn = add(add(W, mul(e1, hLen)), mul(X, wid / 2));
+    const PKn = add(add(W, mul(e1, hLen)), mul(X, -wid / 2));
+    const palm = cross(sub(IXn, W), sub(PKn, W));
+    const fwd = norm(cross(norm(sub(J[11], J[12])), torsoUp));
+    Fc[`mano_${s}`] = frame(W, lerp(IXn, PKn, 0.5), palm, fwd);
+    // l'avambraccio gira con la mano (niente polso attorcigliato)
+    Fc[`avambr_${s}`] = frame(el, W, palm, fwd);
   }
   const out = new Float32Array(meta.segments.length * 16);
   const idx = (name: string) => meta.segments.indexOf(name);
@@ -370,6 +365,34 @@ export function bodyMatrices(meta: BodyMeta, J: Record<number, V3>, look?: V3, g
       const k = idx(f);
       if (k >= 0 && m >= 0 && !Fc[f]) out.copyWithin(k * 16, m * 16, m * 16 + 16);
     }
+  }
+  // dita in presa: seguono la mano (la piega la fa la scheda grafica con curl)
+  const cv = curl ?? null;
+  if (cv) cv.fill(0);
+  for (const s of ["L", "R"] as const) {
+    const c = curlK[s];
+    const m = idx(`mano_${s}`);
+    const d = idx(`dita_${s}`);
+    const pl = idx(`pollice_${s}`);
+    if (!c || m < 0 || d < 0) continue;
+    for (const f of [d, pl]) {
+      if (f < 0) continue;
+      const kk = f === pl ? c.k * 0.6 : c.k;
+      for (let i = 0; i < 16; i++) out[f * 16 + i] = out[f * 16 + i] * (1 - kk) + out[m * 16 + i] * kk;
+    }
+    if (!cv) continue;
+    const k0 = rest(`dita0_${s}`);
+    const k1 = rest(`dita1_${s}`);
+    const ix = rest(s === "L" ? 19 : 20);
+    const pk = rest(s === "L" ? 17 : 18);
+    if (!k0 || !k1 || !ix || !pk) continue;
+    const L = len(sub(k1, k0));
+    const F = norm(sub(k1, k0));
+    // a riposo i palmi guardano avanti: la piega va verso +z
+    const S = norm(cross(F, perpTo(F, [0, 0, 1], [0, 0, 1])));
+    const X = norm(sub(ix, pk));
+    const o = s === "L" ? 0 : 16;
+    cv.set([k0[0], k0[1], k0[2], L, F[0], F[1], F[2], c.a1 * c.k, S[0], S[1], S[2], c.a2 * c.k, X[0], X[1], X[2], c.spread * c.k * (dot(X, S) > 0 ? -1 : 1)], o);
   }
   return out;
 }

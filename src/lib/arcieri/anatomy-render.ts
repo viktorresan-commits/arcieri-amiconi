@@ -65,10 +65,29 @@ void main(){
 /* corpo anatomico vero: ogni vertice segue due segmenti (deformazione sulla scheda grafica) */
 const BVS = `
 attribute vec3 aP; attribute vec3 aN; attribute vec2 aJ; attribute vec4 aM; attribute float aT;
-uniform mat4 uVP; uniform mat4 uSeg[21]; uniform vec3 uLo; uniform vec3 uHi;
+uniform mat4 uVP; uniform vec4 uSeg[63]; uniform vec3 uLo; uniform vec3 uHi;
 uniform vec4 uAct[16]; uniform vec4 uBul[16]; uniform float uLayerV;
+uniform vec4 uCurl[8]; uniform vec2 uDita;
 varying vec3 vW; varying vec3 vN; varying vec2 vF; varying float vAct; varying float vFoc; varying float vTend; varying float vStr;
 float pick(vec4 v, int k){ return k == 0 ? v.x : k == 1 ? v.y : k == 2 ? v.z : v.w; }
+vec3 rotA(vec3 v, vec3 ax, float a){ float c = cos(a); float s = sin(a); return v * c + cross(ax, v) * s + ax * dot(ax, v) * (1.0 - c); }
+// dita piegate in presa (prima di seguire i segmenti): terza falange, seconda, allargamento dell'indice, nocca
+void curl(int h, inout vec3 p, inout vec3 n){
+  vec4 c0 = uCurl[h * 4]; vec4 c1 = uCurl[h * 4 + 1]; vec4 c2 = uCurl[h * 4 + 2]; vec4 c3 = uCurl[h * 4 + 3];
+  if (c1.w == 0.0 && c2.w == 0.0) return;
+  vec3 K = c0.xyz; float L = c0.w; vec3 F = c1.xyz; vec3 S = c2.xyz; vec3 X = c3.xyz;
+  vec3 d = p - K; float t = dot(d, F) / L; float u = dot(d, X);
+  float little = smoothstep(-0.012, -0.022, u);
+  float index = smoothstep(0.012, 0.02, u);
+  float a2 = c2.w * (1.0 + 0.3 * little); float a3 = c2.w * 0.55 * (1.0 + 0.3 * little);
+  vec3 J2 = K + F * (L * 0.47); vec3 J3 = K + F * (L * 0.76);
+  float s1 = smoothstep(-0.05, 0.08, t); float s2 = smoothstep(0.40, 0.54, t); float s3 = smoothstep(0.70, 0.82, t);
+  p = J3 + rotA(p - J3, S, a3 * s3); n = rotA(n, S, a3 * s3);
+  p = J2 + rotA(p - J2, S, a2 * s2); n = rotA(n, S, a2 * s2);
+  vec3 Pn = cross(S, F); float sp = c3.w * index * s1;
+  p = K + rotA(p - K, Pn, sp); n = rotA(n, Pn, sp);
+  p = K + rotA(p - K, S, c1.w * s1 * (1.0 + 0.25 * little)); n = rotA(n, S, c1.w * s1 * (1.0 + 0.25 * little));
+}
 void main(){
   int g = int(aM.y + 0.5); int gi = g / 4; int gk = g - gi * 4;
   // il ventre del muscolo si gonfia quando si accorcia e si assottiglia quando si allunga (tendini fermi);
@@ -77,14 +96,21 @@ void main(){
   float belly = pow(max(sin(3.14159 * tt), 0.0), 0.75);
   float follow = uLayerV < 0.5 ? aM.w / 255.0 : (uLayerV > 1.5 ? 1.0 - aT : 0.0);
   vec3 p = uLo + aP * (uHi - uLo) + aN * (pick(uBul[gi], gk) * belly * follow);
+  vec3 n0 = aN;
+  if (abs(aJ.x - uDita.x) < 0.5 || abs(aJ.y - uDita.x) < 0.5) curl(0, p, n0);
+  else if (abs(aJ.x - uDita.y) < 0.5 || abs(aJ.y - uDita.y) < 0.5) curl(1, p, n0);
   float w = aM.x / 255.0;
-  mat4 MA = uSeg[int(aJ.x + 0.5)]; mat4 MB = uSeg[int(aJ.y + 0.5)];
-  mat4 M = MA * w + MB * (1.0 - w);
-  vec4 wp = M * vec4(p, 1.0);
+  // segmenti come tre righe (meno uniformi: ci sta anche la piega delle dita sui telefoni più semplici)
+  int ia = int(aJ.x + 0.5) * 3; int ib = int(aJ.y + 0.5) * 3;
+  vec4 A0 = uSeg[ia]; vec4 A1 = uSeg[ia + 1]; vec4 A2 = uSeg[ia + 2];
+  vec4 B0 = uSeg[ib]; vec4 B1 = uSeg[ib + 1]; vec4 B2 = uSeg[ib + 2];
+  vec4 R0 = A0 * w + B0 * (1.0 - w); vec4 R1 = A1 * w + B1 * (1.0 - w); vec4 R2 = A2 * w + B2 * (1.0 - w);
+  vec4 hp = vec4(p, 1.0);
+  vec4 wp = vec4(dot(R0, hp), dot(R1, hp), dot(R2, hp), 1.0);
   // quanto è stirata la superficie qui: i due segmenti la tirano in punti lontani
-  float gap = length((MA * vec4(p, 1.0) - MB * vec4(p, 1.0)).xyz) * 4.0 * w * (1.0 - w);
+  float gap = length(vec3(dot(A0 - B0, hp), dot(A1 - B1, hp), dot(A2 - B2, hp))) * 4.0 * w * (1.0 - w);
   vStr = smoothstep(0.02, 0.09, gap);
-  vN = normalize(mat3(M[0].xyz, M[1].xyz, M[2].xyz) * aN);
+  vN = normalize(vec3(dot(R0.xyz, n0), dot(R1.xyz, n0), dot(R2.xyz, n0)));
   // lavoro e messa in evidenza nello stesso numero (meno uniformi: alcuni telefoni ne hanno poche)
   float pv = pick(uAct[gi], gk); float fc = floor(pv / 2.0) - 1.0;
   vAct = pv - (fc + 1.0) * 2.0; vFoc = fc;
@@ -365,6 +391,8 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     uBul: gl.getUniformLocation(bprog, "uBul"),
     uLayerV: gl.getUniformLocation(bprog, "uLayerV"),
     uTime: gl.getUniformLocation(bprog, "uTime"),
+    uCurl: gl.getUniformLocation(bprog, "uCurl"),
+    uDita: gl.getUniformLocation(bprog, "uDita"),
   };
   type GpuBody = { meta: BodyMeta; flex: FlexInfo; batches: { layer: BodyBatch["layer"]; vb: WebGLBuffer; ib: WebGLBuffer; count: number }[] };
   const bodies: Partial<Record<BodyLevel, GpuBody>> = {};
@@ -422,6 +450,8 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     for (const p of parts) one(p);
   };
   const bul = new Float32Array(64);
+  const segRows = new Float32Array(63 * 4);
+  const curlBuf = new Float32Array(32);
   const drawBody = (model: Model, VP: Float32Array, eye: V3, L: Layers, focus: Set<string> | null | undefined, time: number) => {
     if (!body || !model.J || !model.hand) return;
     const meta = body.meta;
@@ -432,7 +462,10 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     const mats = bodyMatrices(meta, model.J, model.headF, model.grip ? {
       hook: { side: side(sd.draw[2]), k: model.grip.draw, toward: pts.nock },
       wrap: { side: side(sd.bow[2]), k: model.grip.bow, toward: v3.add(pts.grip, v3.mul(v3.norm(aim), 0.05)) },
-    } : undefined);
+    } : undefined, curlBuf);
+    // matrici dei segmenti come tre righe ciascuna (la quarta è sempre 0 0 0 1)
+    const nSeg = Math.min(21, meta.segments.length);
+    for (let i = 0; i < nSeg; i++) for (let r = 0; r < 3; r++) for (let c = 0; c < 4; c++) segRows[(i * 3 + r) * 4 + c] = mats[i * 16 + c * 4 + r];
     const acts = new Map<string, number>();
     for (const p of model.parts) if (p.layer === "muscolo" && p.id) acts.set(p.id, Math.max(acts.get(p.id) ?? 0, p.act));
     const g = groupValues(meta, model.hand, acts, focus);
@@ -449,7 +482,9 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     gl.useProgram(bprog);
     for (const a of bodyAttribs) if (a >= 0) gl.enableVertexAttribArray(a);
     gl.uniformMatrix4fv(bl.uVP, false, VP);
-    gl.uniformMatrix4fv(bl.uSeg, false, mats);
+    gl.uniform4fv(bl.uSeg, segRows);
+    gl.uniform4fv(bl.uCurl, curlBuf);
+    gl.uniform2f(bl.uDita, meta.segments.indexOf("dita_L"), meta.segments.indexOf("dita_R"));
     gl.uniform3fv(bl.uLo, meta.lo);
     gl.uniform3fv(bl.uHi, meta.hi);
     const a16 = new Float32Array(64);

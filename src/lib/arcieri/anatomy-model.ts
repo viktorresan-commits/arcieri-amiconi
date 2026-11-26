@@ -255,10 +255,18 @@ function bodyPointsRaw(lm: Landmark[], aspect: number, cal: BoneCal | null = nul
   // testa: il viso guarda dove è girato il naso rispetto alle orecchie
   const shZ = (out[11][2] + out[12][2]) / 2;
   const earsZ = shZ - 0.01;
-  const faceTurn = Math.max(-1, Math.min(1, (out[0][0] - (out[7][0] + out[8][0]) / 2) / 0.09));
+  // quanto è girata la testa rispetto alla camera, da due misure del video: il naso spostato di lato
+  // rispetto alle orecchie (sin) e le orecchie che si avvicinano tra loro (cos, a 15 cm di fronte)
+  const earMx = (out[7][0] + out[8][0]) / 2;
+  const off = out[0][0] - earMx;
+  const yawN = Math.asin(Math.min(1, Math.abs(off) / 0.095));
+  const earsSeen = vis(lm[7]) > 0.5 && vis(lm[8]) > 0.5;
+  const yawE = Math.acos(Math.min(1, Math.abs(out[7][0] - out[8][0]) / 0.15));
+  const yaw = earsSeen ? (yawN + yawE) / 2 : yawN;
   for (const i of [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]) if (out[i]) out[i][2] = earsZ;
-  out[0][2] = earsZ + 0.09 * Math.sqrt(Math.max(0, 1 - faceTurn * faceTurn * 0.6));
-  for (const i of [1, 2, 3, 4, 5, 6, 9, 10]) if (out[i]) out[i][2] = earsZ + 0.07 * Math.sqrt(Math.max(0, 1 - faceTurn * faceTurn * 0.6));
+  out[0][2] = earsZ + 0.095 * Math.cos(yaw);
+  if (Math.abs(off) < 0.095 * Math.sin(yaw)) out[0][0] = earMx + Math.sign(off || 1) * 0.095 * Math.sin(yaw);
+  for (const i of [1, 2, 3, 4, 5, 6, 9, 10]) if (out[i]) out[i][2] = earsZ + 0.07 * Math.cos(yaw);
   // Mano al viso o al collo (in trazione, all'ancoraggio, nell'accompagnamento dopo il rilascio): la
   // mano tocca il corpo, quindi ha la profondità del viso o del collo, non quella stimata (che la
   // portava mezzo metro davanti). Il gomito tiene l'avambraccio della sua lunghezza: in trazione sulla
@@ -284,18 +292,35 @@ function bodyPointsRaw(lm: Landmark[], aspect: number, cal: BoneCal | null = nul
       [neckC, out[sh], 0.06, 0.13],
       [neckC, sternum, 0.1, 0.13],
     ];
+    // a toccare il viso sono le dita (all'ancoraggio il polso sta qualche centimetro più in là, dietro la mano):
+    // conta il punto della mano più vicino, polso, dita del corpo e, se ci sono, i 21 punti della mano
+    const hand: V3[] = [out[wr]];
+    for (const f of wr === 15 ? [17, 19, 21] : [18, 20, 22]) if (out[f] && vis(lm[f]) > 0.3) hand.push(out[f]);
+    const hb = wr === 15 ? 33 : 54;
+    if (lm.length >= 133 && vis(lm[hb]) >= 0.5) {
+      const h0 = XY(hb);
+      for (const k of [4, 5, 8, 9, 12, 13, 16, 17]) {
+        const q = XY(hb + k);
+        hand.push([q[0] - h0[0] + out[wr][0], q[1] - h0[1] + out[wr][1], 0]);
+      }
+    }
     let best: { d: number; z: number; w: number } | null = null;
     for (const [p, q, dz, lim] of segs) {
       const ax = q[0] - p[0];
       const ay = q[1] - p[1];
-      const t = Math.max(0, Math.min(1, ((out[wr][0] - p[0]) * ax + (out[wr][1] - p[1]) * ay) / (ax * ax + ay * ay || 1)));
-      const c = lerp(p, q, t);
-      const d = d2v(out[wr], c);
-      // vicino al corpo la mano lo tocca; avvicinandosi ci arriva piano (prima saltava di colpo)
-      if (d <= lim && (!best || d < best.d)) best = { d, z: c[2] + fwdZ * dz, w: Math.max(0, Math.min(1, (lim - d) / (lim * 0.4))) };
+      for (const hp of hand) {
+        const t = Math.max(0, Math.min(1, ((hp[0] - p[0]) * ax + (hp[1] - p[1]) * ay) / (ax * ax + ay * ay || 1)));
+        const c = lerp(p, q, t);
+        const d = d2v(hp, c);
+        // vicino al corpo la mano lo tocca; avvicinandosi ci arriva piano (prima saltava di colpo)
+        if (d <= lim && (!best || d < best.d)) best = { d, z: c[2] + fwdZ * dz, w: Math.max(0, Math.min(1, (lim - d) / (lim * 0.4))) };
+      }
     }
     if (!best) continue;
-    const drawing = d2v(out[wr], mouth) < 0.16 && d2v(out[owr], out[osh]) > 0.4 && Math.abs(out[owr][1] - out[osh][1]) < 0.25 && Math.abs(out[el][1] - out[sh][1]) < 0.22;
+    const toMouth = Math.min(...hand.map((hp) => d2v(hp, mouth)));
+    const drawing = toMouth < 0.16 && d2v(out[owr], out[osh]) > 0.4 && Math.abs(out[owr][1] - out[osh][1]) < 0.25 && Math.abs(out[el][1] - out[sh][1]) < 0.22;
+    // in trazione con la mano al viso il contatto è pieno: la mano non resta a mezz'aria davanti
+    if (drawing) best.w = Math.max(best.w, Math.max(0, Math.min(1, (0.16 - toMouth) / 0.06)));
     const wz = best.z;
     const lfa = d2v(out[el], out[wr]);
     const Lfa = Math.max(lfa, L(fa));
@@ -833,7 +858,9 @@ function headAim(J: Record<number, V3>, bow: { sh: V3; el: V3; wr: V3 }, drw: { 
   const drawing = raised * Math.max(0, Math.min(1, (0.24 - toFace) / 0.1));
   const aim = flat(sub(bow.wr, drawing > 0.2 ? drw.wr : bow.sh));
   if (!aim || raised < 0.05) return { f: look, raised, drawing };
-  const w = Math.min(0.92, 0.55 * raised + 0.37 * drawing);
+  // il viso segue il video (naso e orecchie); in trazione solo una spinta leggera verso la freccia,
+  // quanto basta a togliere il tremolio dei punti del viso (prima la testa girava più del vero)
+  const w = Math.min(0.3, 0.12 * raised + 0.18 * drawing);
   let f = add(mul(look, 1 - w), mul(aim, w));
   if (len(f) < 1e-3) f = aim;
   f = perp(up, f);

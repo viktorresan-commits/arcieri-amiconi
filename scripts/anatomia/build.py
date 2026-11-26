@@ -59,7 +59,7 @@ def muscle_candidates(name):
     if re.search(r"hand|pollicis|opponens", n): return seg('avambr', 'mano', 'dita', 'pollice')
     if re.search(r"frontalis|occipitalis|temporalis|masseter|orbicularis|zygomaticus|risorius|depressor|levator (labii|anguli)|nasalis|procerus|mentalis|corrugator|bucinator|buccinator", n): return ['testa']
     if re.search(r"hyoid|thyroid", n): return ['testa', 'torace']
-    if re.search(r"pyramidalis", n): return ['bacino', 'torace']
+    if re.search(r"pyramidalis|linea alba", n): return ['bacino', 'torace']
     if re.search(r"deltoid|supraspinatus|infraspinatus|teres|subscapularis", n): return seg('clav', 'omero')
     if re.search(r"pectoralis major", n): return seg('torace', 'clav', 'omero')
     if re.search(r"latissimus", n): return seg('torace', 'bacino', 'omero')
@@ -345,6 +345,47 @@ def open_rectus():
         x['P'] = P[used]; x['I'] = remap[I]; x['N'] = recompute_normals(x['P'], x['I']); x['full'] = x['P']
         print('obliquo: tolta la lamina davanti al retto', before - len(I), 'triangoli')
 open_rectus()
+
+# linea alba: la fascia bianca tra i due retti dell'addome. Senza, tra un retto e l'altro si vedeva la
+# colonna vertebrale (una striscia azzurra e frastagliata in mezzo agli addominali)
+def linea_alba():
+    rect = [x for x in parts if x['kind'] == 'muscle' and 'rectus abdominis' in x['name'].lower()]
+    if len(rect) < 2: return
+    R = np.vstack([x['P'] for x in rect]); RN = np.vstack([x['N'] for x in rect])
+    front = RN[:, 2] > 0.2
+    Lm = R[(R[:, 0] > 0) & front]; Rm = R[(R[:, 0] < 0) & front]
+    if len(Lm) < 20 or len(Rm) < 20: return
+    y0 = max(Lm[:, 1].min(), Rm[:, 1].min()) + 0.004
+    y1 = min(Lm[:, 1].max(), Rm[:, 1].max()) - 0.004
+    rows = []
+    for y in np.arange(y0, y1, 0.005):
+        a = Lm[np.abs(Lm[:, 1] - y) < 0.005]; b = Rm[np.abs(Rm[:, 1] - y) < 0.005]
+        if len(a) < 2 or len(b) < 2: continue
+        pa = a[np.argmin(a[:, 0])]; pb = b[np.argmax(b[:, 0])]
+        rows.append([y, pa[0], pa[2], pb[0], pb[2]])
+    if len(rows) < 8: return
+    rows = np.array(rows)
+    # bordi senza denti: media mobile lungo l'altezza
+    k = 5; ker = np.ones(k) / k
+    for c in range(1, 5):
+        pad = np.pad(rows[:, c], (k // 2, k // 2), mode='edge')
+        rows[:, c] = np.convolve(pad, ker, mode='valid')
+    P, I = [], []
+    for y, ax, az, bx, bz in rows:
+        # entra di qualche millimetro sotto ogni retto (nessuna fessura), appena incavata in mezzo
+        P.append([ax + 0.004, y, az - 0.002]); P.append([(ax + bx) / 2, y, min(az, bz) - 0.0015]); P.append([bx - 0.004, y, bz - 0.002])
+    P = np.array(P, float)
+    for r in range(len(rows) - 1):
+        o = r * 3
+        for c in range(2):
+            I.append([o + c, o + c + 1, o + 3 + c]); I.append([o + c + 1, o + 4 + c, o + 3 + c])
+    I = np.array(I, np.int64)
+    N = recompute_normals(P, I)
+    if N[:, 2].mean() < 0:
+        I = I[:, [0, 2, 1]]; N = recompute_normals(P, I)
+    parts.append(dict(kind='muscle', name='Linea alba', P=P, N=N, I=I, full=P, za=True))
+    print('linea alba: righe', len(rows), 'larghezza media mm', round(float(np.mean(rows[:, 1] - rows[:, 3])) * 1000, 1))
+linea_alba()
 inflate_skin()
 SP = skin['P']
 print('Z-Anatomy: parti', n_za, 'muscoli', sum(1 for x in parts if x['kind'] == 'muscle'), 'triangoli muscoli', sum(len(x['I']) for x in parts if x['kind'] == 'muscle'))
@@ -505,7 +546,7 @@ for x in parts:
     if long_ or 'calcaneal' in x['name'].lower():
         tl = np.clip(Q @ vt[0], None, None); tl = (tl - tl.min()) / max(1e-6, tl.max() - tl.min())
         x['TD'] = np.clip(np.maximum((0.1 - tl) / 0.08, (tl - 0.9) / 0.08), 0, 1)
-    if 'calcaneal' in x['name'].lower(): x['TD'][:] = 1
+    if 'calcaneal' in x['name'].lower() or 'linea alba' in x['name'].lower(): x['TD'][:] = 1
     # retto dell'addome: tre intersezioni tendinee chiare (i "quadretti" degli addominali)
     if 'rectus abdominis' in x['name'].lower():
         tt = x['T']
