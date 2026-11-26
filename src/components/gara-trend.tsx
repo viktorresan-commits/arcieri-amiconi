@@ -22,9 +22,10 @@ type MetricId = (typeof METRICS)[number]["id"];
 
 const MONTHS = ["gen", "feb", "mar", "apr", "mag", "giu", "lug", "ago", "set", "ott", "nov", "dic"];
 const MONTHS_LONG = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"];
-const dayShort = (d: string) => {
-  const [, m, g] = d.split("-").map(Number);
-  return m ? `${g} ${MONTHS[m - 1]}` : d;
+/** «15 nov», o «15 nov 24» quando le gare coprono più anni */
+const dayShort = (d: string, years = false) => {
+  const [y, m, g] = d.split("-").map(Number);
+  return m ? `${g} ${MONTHS[m - 1]}${years ? ` ${String(y).slice(2)}` : ""}` : d;
 };
 const dayLong = (d: string) => {
   const [y, m, g] = d.split("-").map(Number);
@@ -223,7 +224,7 @@ export function GaraTrend({ points, activeId }: { points: GaraPoint[]; activeId?
           {points.map((x, i) =>
             i % every === 0 || i === points.length - 1 ? (
               <text key={x.id} x={xAt(i)} y={H - 8} textAnchor={points.length === 1 ? "middle" : i === 0 ? "start" : i === points.length - 1 ? "end" : "middle"} fontSize="10.5" fill="currentColor" className={i === sel ? "" : "text-muted"} fontWeight={i === sel ? 700 : 400}>
-                {dayShort(x.day)}
+                {dayShort(x.day, points[0].day.slice(0, 4) !== points[points.length - 1].day.slice(0, 4))}
               </text>
             ) : null,
           )}

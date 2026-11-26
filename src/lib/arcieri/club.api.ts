@@ -1012,7 +1012,7 @@ export type ArcherSeason = {
   avg: number | null;
   champ: number;
   general: SeasonGeneral | null;
-  races: { name: string; day: string; rank: number | null; score: number | null; category: string; champ: number | null }[];
+  races: { name: string; day: string; rank: number | null; score: number | null; category: string; champ: number | null; spot: number | null; lanes: number }[];
 };
 
 /**
@@ -1033,7 +1033,7 @@ async function seasonsOf(sql: Awaited<ReturnType<typeof db>>, done: GaraLoad[], 
     if (l.rank === 1) g.wins += 1;
     if (l.rank != null && l.rank <= 3) g.podiums += 1;
     g.champ += l.champ ?? 0;
-    g.races.push({ name: l.name, day: l.day, rank: l.rank, score: l.points, category: divisionOf(l.category ?? "") || l.category || "", champ: l.champ });
+    g.races.push({ name: l.name, day: l.day, rank: l.rank, score: l.points, category: divisionOf(l.category ?? "") || l.category || "", champ: l.champ, spot: l.spot, lanes: l.piazzole });
   }
   // le classifiche generali delle stagioni chiuse
   const general = await pastTables(sql, "generale-arcieri", namePattern([who])).catch(() => []);

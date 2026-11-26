@@ -33,7 +33,10 @@ function Page() {
   if (error || !data) return <ErrorNote text={error || "Errore"} />;
   const { name } = archerName(data);
   const train = data.trainings.slice(-12).map((s) => ({ name: s.day.slice(5), avg: Number(s.avg.toFixed(2)) }));
-  const comps = data.comps.map((c) => ({ name: c.day.slice(5), score: c.score }));
+  // gara dopo gara: tutte le gare con un punteggio, anche quelle degli anni passati (app, portale e archivio FITAST)
+  const races = data.stats.seasons.flatMap((s) => s.races).filter((r) => r.score != null).sort((a, b) => a.day.localeCompare(b.day));
+  const comps = races.length ? races.map((r) => ({ name: dayTick(r.day, races[0].day.slice(0, 4) !== races[races.length - 1].day.slice(0, 4)), score: r.score as number })) : data.comps.map((c) => ({ name: c.day.slice(5), score: c.score }));
+  const raceSince = races[0]?.day.slice(0, 4) ?? "";
   const shownPrizes = topPrizes((gadgets.data?.prizes ?? []).filter((prize) => prize.holders.some((holder) => holder.userId === data.userId)));
   return (
     <div className="grid gap-5">
@@ -84,7 +87,7 @@ function Page() {
         <AvgLine data={train} />
       </Card>
       <Card className="grid gap-2">
-        <KindHeading kind="campionato" title="Gara dopo gara" sub="Punteggio nelle gare del calendario" />
+        <KindHeading kind="campionato" title="Gara dopo gara" sub={races.length ? `Punteggio di ${races.length} ${races.length === 1 ? "gara" : "gare"}${raceSince ? `, dal ${raceSince}` : ""}` : "Punteggio nelle gare del calendario"} />
         <ScoreLine data={comps} />
       </Card>
       <p className="text-sm text-muted">Qui si vede solo il riassunto. Note, attrezzatura personale e acquisti restano di chi li ha scritti.</p>
@@ -93,6 +96,12 @@ function Page() {
 }
 
 type Stats = Board["stats"];
+
+/** il giorno sull'asse del grafico: 15/11, o 15/11/24 quando le gare coprono più anni */
+const dayTick = (day: string, years: boolean) => {
+  const [y, m, d] = day.split("-");
+  return years ? `${d}/${m}/${y.slice(2)}` : `${d}/${m}`;
+};
 
 const fmtNum = (v: number | null | undefined) => (v == null ? "—" : Math.round(v).toLocaleString("it-IT"));
 

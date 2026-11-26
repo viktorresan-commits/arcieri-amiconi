@@ -3,7 +3,7 @@ import { Glyph, IconLabel } from "@/components/icons";
 import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { statsSeries } from "@/lib/arcieri/training.api";
-import { listCompetitions, skillBoard } from "@/lib/arcieri/club.api";
+import { archerBoard, listCompetitions, skillBoard } from "@/lib/arcieri/club.api";
 import { fmtAvg, aimAngleLabel, aimTargetLabel } from "@/lib/arcieri/scoring";
 import { useLoad } from "@/lib/arcieri/use-load";
 import { BodyStats } from "@/components/body-stats";
@@ -13,6 +13,7 @@ import { GaraTrend, type GaraPoint } from "@/components/gara-trend";
 import { Card, Chips, ErrorNote, Kpi, Loading, PageHead, SectionHead, Segmented } from "@/components/kit";
 import { KindChip, KindEmblem } from "@/components/kind-emblem";
 import { bowLabel } from "@/lib/arcieri/labels";
+import { champSeasonOf } from "@/lib/arcieri/stagioni";
 import { animalByLabel } from "@/lib/arcieri/sagome";
 
 export const Route = createFileRoute("/_app/statistiche")({ component: Page });
@@ -49,7 +50,9 @@ function Page() {
   const { me } = useMember();
   const { data, error, loading } = useLoad(`stats-${nonce}`, () => statsSeries({ data: {} }));
   const comps = useLoad(`comps-${nonce}`, () => listCompetitions());
-  const mine: GaraPoint[] = (comps.data?.competitions ?? [])
+  // le gare degli anni passati (portale e archivio FITAST): le stesse del profilo
+  const board = useLoad(`archer-${me.id}`, () => archerBoard({ data: { id: me.id } }));
+  const inApp: GaraPoint[] = (comps.data?.competitions ?? [])
     .flatMap((c) => c.entries.filter((e) => e.userId === me.userId && (e.score != null || e.championshipPoints != null || e.spot != null || e.laneCount != null)).map((e) => ({
       id: `${c.id}:${e.userId}`,
       day: c.startsOn,
@@ -60,12 +63,26 @@ function Page() {
       championshipPoints: e.championshipPoints,
     })))
     .sort((a, b) => a.day.localeCompare(b.day) || a.id.localeCompare(b.id));
-  const gara = mine.filter((e) => e.score != null).map((e) => ({ name: e.day.slice(5), score: e.score ?? 0 }));
-  const spots = mine.filter((e) => e.spot != null).map((e) => ({ name: e.day.slice(5), score: e.spot ?? 0 }));
+  // un giorno con una gara segnata nell'app resta quella (ha spot e piazzole); gli altri vengono dal portale
+  const appDays = new Set(inApp.map((e) => e.day));
+  const fromPortal: GaraPoint[] = (board.data?.stats.seasons ?? [])
+    .flatMap((x) => x.races)
+    .filter((r) => !appDays.has(r.day))
+    .map((r) => ({ id: `p:${r.day}:${r.name}`, day: r.day, name: r.name, laneCount: r.lanes || null, score: r.score, spot: r.spot, championshipPoints: r.champ }));
+  const mine: GaraPoint[] = [...inApp, ...fromPortal].sort((a, b) => a.day.localeCompare(b.day) || a.id.localeCompare(b.id));
+  const years = mine.length > 1 && mine[0].day.slice(0, 4) !== mine[mine.length - 1].day.slice(0, 4);
+  const tick = (day: string) => {
+    const [y, m, d] = day.split("-");
+    return years ? `${d}/${m}/${y.slice(2)}` : `${d}/${m}`;
+  };
+  const gara = mine.filter((e) => e.score != null).map((e) => ({ name: tick(e.day), score: e.score ?? 0 }));
+  const spots = mine.filter((e) => e.spot != null).map((e) => ({ name: tick(e.day), score: e.spot ?? 0 }));
+  // la somma dei punti campionato riparte a ogni stagione: qui quella in corso
+  const champ = champSeasonOf(new Date().toISOString().slice(0, 10));
   let running = 0;
-  const season = mine.filter((e) => e.championshipPoints != null).map((e) => {
+  const season = mine.filter((e) => e.championshipPoints != null && e.day >= champ.from && e.day <= champ.to).map((e) => {
     running += e.championshipPoints ?? 0;
-    return { name: e.day.slice(5), score: running };
+    return { name: tick(e.day), score: running };
   });
   const last = mine.at(-1);
   const prev = mine.at(-2);
@@ -204,7 +221,7 @@ function Page() {
           </Card>
           <Card><SectionHead title="Punti, gara dopo gara" /><ScoreLine data={gara} label="Punti" /></Card>
           <Card><SectionHead title="Spot, gara dopo gara" /><ScoreLine data={spots} label="Spot" empty="Servono almeno due gare con gli spot." /></Card>
-          <Card><SectionHead title="Punti campionato, somma" /><ScoreLine data={season} label="Campionato" empty="Servono almeno due gare con i punti campionato." /></Card>
+          <Card><SectionHead title="Punti campionato, somma" sub={champ.name} /><ScoreLine data={season} label="Campionato" empty="Servono almeno due gare con i punti campionato in questa stagione." /></Card>
           <SagomaCard userId={me.userId ?? ""} />
         </>
       )}
