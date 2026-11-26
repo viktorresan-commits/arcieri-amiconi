@@ -99,8 +99,12 @@ export function GareBody({ embedded = false, league }: { embedded?: boolean; /**
   const comps = (data?.competitions ?? []) as Comp[];
   const pool = comps.filter((comp) => (tab === "past" ? comp.startsOn < today : comp.startsOn >= today));
   const tookPart = (comp: Comp) => comp.attended === true || comp.entries.some((entry) => entry.userId === me.userId && hasResult(entry));
-  const shown = pool
-    .filter((comp) => (scope === "mine" ? tookPart(comp) : !tookPart(comp)))
+  // gare in arrivo a cui hai detto «Non ci vado»: non stanno più fra le altre, si rivedono a parte (e si può cambiare idea)
+  const [showNo, setShowNo] = useState(false);
+  const [note, setNote] = useState("");
+  const declined = tab === "next" ? pool.filter((comp) => comp.attended === false) : [];
+  const noMode = showNo && declined.length > 0;
+  const shown = (noMode ? declined : pool.filter((comp) => (scope === "mine" ? tookPart(comp) : !tookPart(comp) && !(tab === "next" && comp.attended === false))))
     .slice()
     .sort((a, b) => (tab === "next" ? a.startsOn.localeCompare(b.startsOn) : b.startsOn.localeCompare(a.startsOn)) || a.id - b.id);
   // la gara mostrata: quella scelta nella striscia, altrimenti la più recente (o la più vicina)
@@ -142,13 +146,15 @@ export function GareBody({ embedded = false, league }: { embedded?: boolean; /**
   const totals = useMemo(() => totalsOf(comps, me.userId ?? ""), [comps, me.userId]);
 
   useEffect(() => {
-    const id = Number(String(hash).replace(/^#gara-/, ""));
+    // l'hash del router arriva senza «#»: «gara-12»
+    const id = Number(String(hash).replace(/^#?gara-/, ""));
     if (!id || !comps.length) return;
     const comp = comps.find((item) => item.id === id);
     if (!comp) return;
     setTab(comp.startsOn >= today ? "next" : "past");
     const mine = comp.attended === true || comp.entries.some((entry) => entry.userId === me.userId && hasResult(entry));
     setScope(mine ? "mine" : "rest");
+    setShowNo(comp.startsOn >= today && comp.attended === false);
     setPickId(id);
     const timer = window.setTimeout(() => {
       document.getElementById(`gara-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -162,9 +168,20 @@ export function GareBody({ embedded = false, league }: { embedded?: boolean; /**
   }
 
   function mark(id: number, attended: boolean) {
+    const comp = comps.find((item) => item.id === id);
     setPresence({ data: { competitionId: id, attended } })
       .then(() => {
-        if (attended) setScope("mine");
+        if (attended) {
+          setScope("mine");
+          setShowNo(false);
+          setPickId(id);
+          setNote(tab === "next" ? `Segnato: ci vai${comp ? ` a «${comp.name}»` : ""}.` : "");
+        } else if (tab === "next") {
+          // non ci vai: la gara si toglie da quelle in arrivo e si passa alla prossima
+          setScope("rest");
+          if (!showNo) setPickId(null);
+          setNote(`Segnato: non ci vai${comp ? ` a «${comp.name}»` : ""}. L'ho nascosta: la ritrovi in «Gare a cui non vai» se cambi idea.`);
+        }
         setNonce((n) => n + 1);
       })
       .catch(() => setNonce((n) => n + 1));
@@ -205,14 +222,20 @@ export function GareBody({ embedded = false, league }: { embedded?: boolean; /**
       {league?.running ? <p className="px-1 text-xs text-muted">Aggiorno le classifiche dal portale FITAST…</p> : null}
       <div className="grid grid-cols-2 gap-2">
         {([["past", "Passate"], ["next", "In arrivo"]] as const).map(([id, label]) => (
-          <button key={id} type="button" onClick={() => setTab(id)} className={`min-h-11 rounded-xl text-sm font-semibold ${tab === id ? "bg-primary text-primary-fg" : "border border-line"}`}>{label}</button>
+          <button key={id} type="button" onClick={() => { setTab(id); setShowNo(false); setNote(""); }} className={`min-h-11 rounded-xl text-sm font-semibold ${tab === id ? "bg-primary text-primary-fg" : "border border-line"}`}>{label}</button>
         ))}
       </div>
       <div className="grid grid-cols-2 gap-2">
         {([["mine", "Le mie"], ["rest", "Le altre"]] as const).map(([id, label]) => (
-          <button key={id} type="button" onClick={() => setScope(id)} className={`min-h-11 rounded-xl text-sm font-semibold ${scope === id ? "bg-accent text-accent-fg" : "border border-line"}`}>{label}</button>
+          <button key={id} type="button" onClick={() => { setScope(id); setShowNo(false); setNote(""); }} className={`min-h-11 rounded-xl text-sm font-semibold ${scope === id && !noMode ? "bg-accent text-accent-fg" : "border border-line"}`}>{label}</button>
         ))}
       </div>
+      {declined.length ? (
+        <button type="button" onClick={() => { setShowNo((v) => !v); setPickId(null); setNote(""); }} aria-pressed={noMode} className={cx("justify-self-center rounded-full px-3 py-1.5 text-xs font-semibold", noMode ? "bg-white/15" : "border border-line text-muted")}>
+          {noMode ? "Torna alle gare in arrivo" : `Gare a cui non vai (${declined.length})`}
+        </button>
+      ) : null}
+      {note ? <p className="rounded-xl bg-white/[0.05] px-3 py-2 text-center text-xs text-muted">{note}</p> : null}
       {loading ? <Loading /> : null}
       {error ? <ErrorNote text={error} /> : null}
       {!loading && !shown.length ? <Empty title={scope === "mine" ? "Nessuna tua gara" : "Nessuna altra gara"} text={scope === "mine" ? "Segna quelle a cui hai partecipato. Le altre restano nel calendario, senza chiedere il punteggio." : "Qui ci sono le gare che non hai segnato."} /> : null}
@@ -348,10 +371,15 @@ export function GareBody({ embedded = false, league }: { embedded?: boolean; /**
                   {tab === "next" ? "Piazzole e iscritti sul portale" : "Cerca sul portale FITAST"}
                 </Button>
               ) : null}
-              {scope === "rest" && !comp.virtual ? (
+              {/* la scelta resta segnata (pieno = scelto) e si può cambiare quando si vuole */}
+              {(scope === "rest" || noMode || !past) && !comp.virtual ? (
                 <div className="grid grid-cols-2 gap-2">
-                  <Button className="w-full text-sm" onClick={() => mark(comp.id, true)}>{past ? "Ho partecipato" : "Ci vado"}</Button>
-                  <Button className="w-full text-sm" variant="ghost" onClick={() => mark(comp.id, false)}>{past ? "Non ho partecipato" : "Non ci vado"}</Button>
+                  <Button className="w-full text-sm" variant={comp.attended === true ? "accent" : "ghost"} aria-pressed={comp.attended === true} onClick={() => mark(comp.id, true)}>
+                    {comp.attended === true ? <Glyph name="check" size={15} /> : null}{past ? "Ho partecipato" : "Ci vado"}
+                  </Button>
+                  <Button className="w-full text-sm" variant={comp.attended === false ? "accent" : "ghost"} aria-pressed={comp.attended === false} onClick={() => mark(comp.id, false)}>
+                    {comp.attended === false ? <Glyph name="check" size={15} /> : null}{past ? "Non ho partecipato" : "Non ci vado"}
+                  </Button>
                 </div>
               ) : null}
               {!comp.virtual && ((scope === "mine" && !mine?.portal) || comp.canDelete) ? (
