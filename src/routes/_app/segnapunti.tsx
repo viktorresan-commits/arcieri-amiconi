@@ -342,7 +342,8 @@ function Page() {
 function SaveToGara({ st, onClose, onSaved }: { st: Store; onClose: () => void; onSaved: (compId: number) => void }) {
   const { me } = useMember();
   const comps = useLoad("segnapunti-gare", () => listCompetitions());
-  const list = (comps.data?.competitions ?? []) as { id: number; name: string; startsOn: string; entries: { userId: string; rank: number | null; category: string; championshipPoints: number | null; piazzole: unknown[] }[] }[];
+  // solo le gare dell'app (quelle lette solo dal portale non hanno dove salvare le piazzole)
+  const list = ((comps.data?.competitions ?? []) as { id: number; name: string; startsOn: string; entries: { userId: string; rank: number | null; category: string; championshipPoints: number | null; piazzole: unknown[] }[] }[]).filter((c) => c.id > 0);
   const today = romeDayKey(new Date().toISOString());
   // la gara di oggi, se c'è; altrimenti la più vicina (prima le appena passate)
   const byNear = [...list].sort((a, b) => Math.abs(Date.parse(a.startsOn) - Date.parse(today)) - Math.abs(Date.parse(b.startsOn) - Date.parse(today)) || (a.startsOn < b.startsOn ? 1 : -1));

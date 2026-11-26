@@ -8,6 +8,7 @@ import { exportMine, listRoster, updateMember } from "@/lib/arcieri/members.api"
 import { AvatarPhotoButton } from "@/components/avatar-photo";
 import { useAvatar } from "@/components/avatar-hero";
 import { listCompetitions, listGadgets } from "@/lib/arcieri/club.api";
+import { FitastLinkCard } from "@/components/fitast-link";
 import { useLoad } from "@/lib/arcieri/use-load";
 import { simplePdf } from "@/lib/arcieri/pdf";
 import { BOWS } from "@/lib/arcieri/labels";
@@ -283,6 +284,12 @@ function Page() {
               {msg ? <ErrorNote text={msg} /> : null}
             </div>
             <p className="text-[0.7rem] text-muted">{autoState === "busy" ? "Salvo…" : autoState === "err" ? "Non salvato: controlla la rete." : ""}</p>
+          </Card>
+        ) : null}
+        {tab === "io" ? (
+          <Card className="grid gap-2">
+            <IconTitle icon="trophy" color="#c9962f" sub="Con il nome collegato le gare del campionato si riempiono da sole.">Nome su FITAST</IconTitle>
+            <FitastLinkCard always />
           </Card>
         ) : null}
 

@@ -8,7 +8,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { listCompanies } from "@/lib/arcieri/compagnie.api";
 import { CompanyForm, CompanyHero, CompanyLeague, joinAndReload } from "@/components/compagnia";
 import { CompanyTrophies } from "@/components/palmares";
-import { FitastArchersCard, FitastCompanyBoard, FitastGare, FitastHeader, FitastTeamsBoard, useFitastLeague } from "@/components/fitast-league";
+import { FitastArchersCard, FitastCompanyBoard, FitastHeader, FitastTeamsBoard, useFitastLeague } from "@/components/fitast-league";
 import { RankBars } from "@/components/rank-bars";
 import { Heat } from "@/components/shot-lab";
 import { useLocalState } from "@/lib/arcieri/local-store";
@@ -408,8 +408,7 @@ export function CompagniaPage({ initial }: { initial?: Section } = {}) {
 
       {section === "gare" ? (
         <>
-          <GareBody embedded />
-          {companies.data ? <FitastGareTab companies={companies.data.companies} /> : null}
+          <GareTab companies={companies.data?.companies ?? NO_COMPANIES} />
         </>
       ) : null}
 
@@ -509,10 +508,13 @@ function CompagnieTab({ board, onJoin, busy, onSynced }: { board: Awaited<Return
   );
 }
 
-/** le gare del campionato FITAST già fatte, ognuna con i punti campionato presi in quella gara */
-function FitastGareTab({ companies }: { companies: Awaited<ReturnType<typeof listCompanies>>["companies"] }) {
+const NO_COMPANIES: Awaited<ReturnType<typeof listCompanies>>["companies"] = [];
+
+/** le gare: quelle dell'app e quelle del campionato FITAST insieme, una scheda per gara */
+function GareTab({ companies }: { companies: Awaited<ReturnType<typeof listCompanies>>["companies"] }) {
+  // le classifiche del portale: stemmi delle compagnie e aggiornamento quando sono vecchie
   const league = useFitastLeague(companies);
-  return <FitastGare league={league} />;
+  return <GareBody embedded league={league} />;
 }
 
 const ORDER_LABEL: Record<string, string> = {

@@ -17,6 +17,9 @@ import { FitastPanel } from "@/components/fitast-panel";
 import { Medal, teamResultText } from "@/components/palmares";
 import { KindEmblem } from "@/components/kind-emblem";
 import type { TeamResult } from "@/lib/arcieri/palmares.api";
+import { CrestMark, GaraBoard, type Crest, type FitastLeagueState, type OurArcher } from "@/components/fitast-league";
+import { FitastLinkCard } from "@/components/fitast-link";
+import { categoryGroup } from "@/lib/arcieri/fitast-league";
 
 
 
@@ -39,6 +42,9 @@ type Entry = {
   photoUrl: string | null;
   avatarColor: string;
   piazzole: Lane[];
+  /** dal portale FITAST: "solo" (nessun punteggio segnato nell'app) o "anche" */
+  portal?: "" | "solo" | "anche";
+  categorySize?: number | null;
 };
 type Comp = {
   id: number;
@@ -53,6 +59,10 @@ type Comp = {
   roster: { userId: string; attended: boolean; givenName: string; familyName: string; nickname: string; slug: string; photoUrl: string | null; avatarColor: string }[];
   entries: Entry[];
   teamResults?: TeamResult[];
+  /** gara del campionato FITAST: tappa, campionato, arcieri in classifica e i nostri come li scrive il portale */
+  fitast?: { garaId: string; step: number; champ: string; total: number; read: boolean; ours: OurArcher[] } | null;
+  /** solo dal portale: nell'app la gara non c'è (niente presenza né punteggio da segnare) */
+  virtual?: boolean;
 };
 
 function hasResult(entry: Entry) {
@@ -61,8 +71,10 @@ function hasResult(entry: Entry) {
 
 
 /** Le gare: dentro la Compagnia (scheda Gare) e alla pagina /gare, che apre la Compagnia su questa scheda. */
-export function GareBody({ embedded = false }: { embedded?: boolean } = {}) {
+export function GareBody({ embedded = false, league }: { embedded?: boolean; /** classifiche FITAST (stemmi e aggiornamento dal portale) */ league?: FitastLeagueState } = {}) {
   const { me } = useMember();
+  const crestOf = league?.crestOf ?? noCrest;
+  const [board, setBoard] = useState<number | null>(null);
   const today = romeDayKey(new Date().toISOString());
   const [nonce, setNonce] = useState(0);
   const [tab, setTab] = useEntryState<"past" | "next">("gare-tab", "past");
@@ -73,7 +85,8 @@ export function GareBody({ embedded = false }: { embedded?: boolean } = {}) {
   const [portal, setPortal] = useState<{ code: string } | null>(null);
   const myName = [me.familyName, me.givenName].filter(Boolean).join(" ").trim() || me.nickname || "";
   const hash = useRouterState({ select: (state) => state.location.hash });
-  const { data, error, loading } = useLoad(`gare-${nonce}`, () => listCompetitions());
+  // quando le classifiche del portale si aggiornano, le gare si rileggono (posti e punti nuovi)
+  const { data, error, loading } = useLoad(`gare-${nonce}-${league?.data?.updatedAt ?? ""}`, () => listCompetitions());
   const comps = (data?.competitions ?? []) as Comp[];
   const pool = comps.filter((comp) => (tab === "past" ? comp.startsOn < today : comp.startsOn >= today));
   const tookPart = (comp: Comp) => comp.attended === true || comp.entries.some((entry) => entry.userId === me.userId && hasResult(entry));
@@ -143,6 +156,8 @@ export function GareBody({ embedded = false }: { embedded?: boolean } = {}) {
           ) : null}
         </Card>
       ) : null}
+      <FitastLinkCard crestOf={crestOf} onChanged={() => setNonce((n) => n + 1)} />
+      {league?.running ? <p className="px-1 text-xs text-muted">Aggiorno le classifiche dal portale FITAST…</p> : null}
       <div className="grid grid-cols-2 gap-2">
         {([["past", "Passate"], ["next", "In arrivo"]] as const).map(([id, label]) => (
           <button key={id} type="button" onClick={() => setTab(id)} className={`min-h-11 rounded-xl text-sm font-semibold ${tab === id ? "bg-primary text-primary-fg" : "border border-line"}`}>{label}</button>
@@ -159,65 +174,98 @@ export function GareBody({ embedded = false }: { embedded?: boolean } = {}) {
       <div className="grid gap-3">
         {shown.map((comp) => {
           const mine = comp.entries.find((entry) => entry.userId === me.userId) ?? null;
-          const ownScore = mine ? hasResult(mine) : false;
-          const ask = scope === "mine" && comp.attended !== false;
+          const ownScore = mine ? hasResult(mine) && mine.portal !== "solo" : false;
+          const ask = scope === "mine" && comp.attended !== false && !comp.virtual;
+          const scored = comp.entries.filter((entry) => hasResult(entry)).sort((a, b) => Number(b.userId === me.userId) - Number(a.userId === me.userId) || (b.championshipPoints ?? -1) - (a.championshipPoints ?? -1) || (b.score ?? -1) - (a.score ?? -1));
+          const fromPortal = scored.some((entry) => entry.portal);
+          const f = comp.fitast ?? null;
+          const portalCode = f?.garaId ?? "";
+          const others = (comp.roster ?? []).filter((person) => !scored.some((entry) => entry.userId === person.userId));
           return (
             <div key={comp.id} id={`gara-${comp.id}`} className="scroll-mt-4">
             <Card className="grid min-w-0 gap-3">
-              <div>
-                <p className="text-xs text-muted">{comp.startsOn}{comp.place ? ` · ${comp.place}` : ""}</p>
-                <h2 className="break-words font-display text-2xl leading-tight">{comp.name}</h2>
-                {comp.organizer ? <p className="mt-1 break-words text-sm text-muted">{comp.organizer}</p> : null}
-                {comp.attended === false ? <p className="mt-1 text-sm text-muted">{tab === "past" ? "Non hai partecipato." : "Non ci vai."}</p> : null}
-                {/^fitast:\d+/.test(comp.notes ?? "") ? (
-                  <button type="button" className="aa-chip mt-2" onClick={() => { setPortal({ code: (comp.notes ?? "").replace(/^fitast:(\d+).*/, "$1") }); window.setTimeout(() => document.getElementById("fitast")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60); }}>
-                    {tab === "next" ? "Piazzole e iscritti su FITAST" : "Risultati su FITAST"}
-                  </button>
-                ) : null}
-                {comp.teamResults?.length ? <TeamLine results={comp.teamResults} /> : null}
-                <Roster tab={tab} people={comp.roster ?? []} />
-              </div>
-              <ul className="grid min-w-0 gap-2">
-                {comp.entries.filter((entry) => hasResult(entry)).map((entry) => {
-                  const own = entry.userId === me.userId;
-                  const key = `${comp.id}:${entry.userId}`;
-                  const row = (
-                    <button type="button" className="w-full min-w-0 text-left" onClick={() => setFocus(focus === key ? null : key)}>
-                      <ScoreRow entry={entry} peers={comp.entries} />
+              <GaraHead comp={comp} crestOf={crestOf} tab={tab} />
+              {scored.length ? (
+                <div className="grid min-w-0 gap-1.5">
+                  <p className="flex items-baseline justify-between gap-2 text-sm font-semibold">
+                    <span>I nostri</span>
+                    {fromPortal ? <span className="text-[0.7rem] font-normal text-muted">dal portale FITAST</span> : null}
+                  </p>
+                  <ul className="grid min-w-0 gap-1.5">
+                    {scored.map((entry) => {
+                      const own = entry.userId === me.userId;
+                      const key = `${comp.id}:${entry.userId}`;
+                      const row = (
+                        <button type="button" className="w-full min-w-0 text-left" onClick={() => setFocus(focus === key ? null : key)}>
+                          <ScoreRow entry={entry} peers={comp.entries} own={own} />
+                        </button>
+                      );
+                      return (
+                        <li key={entry.id} className="grid min-w-0 gap-2">
+                          {own && entry.id > 0 ? (
+                            <HoldDelete label="Eliminare questo punteggio?" onDelete={() => deleteEntry({ data: { competitionId: comp.id, userId: entry.userId } }).then(() => setNonce((n) => n + 1))}>
+                              {row}
+                            </HoldDelete>
+                          ) : row}
+                          {focus === key ? (
+                            <div className="grid min-w-0 gap-3">
+                              <GaraResult title={comp.name} entry={entry} peers={comp.entries.filter((person) => hasResult(person))} />
+                              <GaraTrend points={pointsOf(comps, entry.userId)} activeId={key} />
+                            </div>
+                          ) : null}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ) : null}
+              {comp.teamResults?.length ? <TeamLine results={comp.teamResults} /> : null}
+              <Roster tab={tab} people={tab === "past" ? others : comp.roster ?? []} also={scored.length > 0} />
+              {f?.read && tab === "past" ? (
+                board === comp.id ? (
+                  <div className="grid gap-2 rounded-2xl border border-line p-2.5">
+                    <button type="button" onClick={() => setBoard(null)} className="flex items-center justify-between gap-2 text-left text-sm font-semibold">
+                      <span>Classifica della gara</span>
+                      <Glyph name="chevron" size={16} className="-rotate-90 text-muted" />
                     </button>
-                  );
-                  return (
-                    <li key={entry.id} className="grid min-w-0 gap-2">
-                      {own ? (
-                        <HoldDelete label="Eliminare questo punteggio?" onDelete={() => deleteEntry({ data: { competitionId: comp.id, userId: entry.userId } }).then(() => setNonce((n) => n + 1))}>
-                          {row}
-                        </HoldDelete>
-                      ) : row}
-                      {focus === key ? (
-                        <div className="grid min-w-0 gap-3">
-                          <GaraResult title={comp.name} entry={entry} peers={comp.entries.filter((person) => hasResult(person))} />
-                          <GaraTrend points={pointsOf(comps, entry.userId)} activeId={key} />
-                        </div>
-                      ) : null}
-                    </li>
-                  );
-                })}
-              </ul>
-              {ask ? (
-                open === comp.id ? (
-                  <LaneEditor compId={comp.id} mine={mine} onSaved={() => setNonce((n) => n + 1)} onDone={() => { setOpen(null); setFocus(`${comp.id}:${me.userId}`); reload(); }} />
+                    <GaraBoard garaId={f.garaId} ours={f.ours} me={me.userId ?? ""} crestOf={crestOf} myTeam={comp.teamResults?.[0]?.team ?? ""} />
+                  </div>
                 ) : (
-                  <Button className="w-full" variant="ghost" onClick={() => setOpen(comp.id)}>{ownScore ? "Modifica il punteggio" : "Metti il punteggio"}</Button>
+                  <button type="button" onClick={() => setBoard(comp.id)} className="aa-press flex items-center gap-3 rounded-2xl border border-line px-3 py-2.5 text-left">
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/[0.06]"><Glyph name="podium" size={18} /></span>
+                    <span className="min-w-0 flex-1">
+                      <b className="block text-sm">Classifica della gara</b>
+                      <span className="block text-xs text-muted">tutte le categorie{f.total ? ` · ${f.total} arcieri` : ""}</span>
+                    </span>
+                    <Glyph name="chevron" size={16} className="rotate-90 text-muted" />
+                  </button>
                 )
-              ) : scope === "rest" ? (
+              ) : null}
+              {portalCode || ask ? (
+                <div className={portalCode && ask && open !== comp.id ? "grid grid-cols-2 gap-2" : "grid gap-2"}>
+                  {ask ? (
+                    open === comp.id ? (
+                      <LaneEditor compId={comp.id} mine={mine && mine.id > 0 ? mine : null} onSaved={() => setNonce((n) => n + 1)} onDone={() => { setOpen(null); setFocus(`${comp.id}:${me.userId}`); reload(); }} />
+                    ) : (
+                      <Button className="w-full text-sm" variant="ghost" onClick={() => setOpen(comp.id)}>{ownScore ? "Le tue piazzole" : mine?.portal === "solo" ? "Aggiungi le piazzole" : "Metti il punteggio"}</Button>
+                    )
+                  ) : null}
+                  {portalCode && open !== comp.id ? (
+                    <Button className="w-full text-sm" variant="ghost" onClick={() => { setPortal({ code: portalCode }); window.setTimeout(() => document.getElementById("fitast")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60); }}>
+                      {tab === "next" ? "Piazzole e iscritti" : "Compagni di piazzola"}
+                    </Button>
+                  ) : null}
+                </div>
+              ) : null}
+              {scope === "rest" && !comp.virtual ? (
                 <div className="grid grid-cols-2 gap-2">
                   <Button className="w-full text-sm" onClick={() => mark(comp.id, true)}>{tab === "past" ? "Ho partecipato" : "Ci vado"}</Button>
                   <Button className="w-full text-sm" variant="ghost" onClick={() => mark(comp.id, false)}>{tab === "past" ? "Non ho partecipato" : "Non ci vado"}</Button>
                 </div>
               ) : null}
-              {scope === "mine" || comp.canDelete ? (
+              {!comp.virtual && ((scope === "mine" && !mine?.portal) || comp.canDelete) ? (
                 <div className="grid gap-1.5 border-t border-white/[0.06] pt-2">
-                  {scope === "mine" ? (
+                  {scope === "mine" && !mine?.portal ? (
                     <HoldDelete hint={false} label="Togliere questa gara dalle tue?" onDelete={() => deleteCompetition({ data: { id: comp.id, scope: "mine" } }).then(() => setNonce((n) => n + 1))}>
                       <span className="block text-center text-xs text-muted">Tieni premuto per togliere la gara dalle tue (punteggio compreso)</span>
                     </HoldDelete>
@@ -333,14 +381,56 @@ function distanceOf(rows: Entry[]) {
   };
 }
 
-function Roster({ tab, people }: { tab: "past" | "next"; people: Comp["roster"] }) {
+function Roster({ tab, people, also = false }: { tab: "past" | "next"; people: Comp["roster"]; /** sopra ci sono già i risultati: qui solo gli altri */ also?: boolean }) {
   const going = people.filter((person) => person.attended);
   const out = people.filter((person) => !person.attended);
   if (!people.length) return null;
+  if (also && tab === "past") {
+    return going.length ? <FaceRow label="C'erano anche" people={going} /> : null;
+  }
   return (
-    <div className="mt-3 grid gap-2">
+    <div className="grid gap-2">
       <FaceRow label={tab === "next" ? "Ci vanno" : "C'erano"} people={going} />
       <FaceRow label={tab === "next" ? "Non ci vanno" : "Non c'erano"} people={out} />
+    </div>
+  );
+}
+
+const noCrest = (): Crest | null => null;
+
+/** giorno della gara per esteso: «domenica 15 novembre» */
+function longDay(day: string) {
+  const d = new Date(`${day}T12:00:00`);
+  return Number.isNaN(d.getTime()) ? day : d.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" });
+}
+
+/**
+ * Testata della gara. Per le gare del campionato FITAST il nome è la compagnia che la organizza, con sotto
+ * la tappa del campionato: sul portale si chiamano tutte uguali («Gara di Campionato Invernale 3D»).
+ */
+function GaraHead({ comp, crestOf, tab }: { comp: Comp; crestOf: (t: string) => Crest | null; tab: "past" | "next" }) {
+  const f = comp.fitast ?? null;
+  const host = comp.organizer.trim();
+  if (!f) {
+    return (
+      <div>
+        <p className="text-xs text-muted">{longDay(comp.startsOn)}{comp.place ? ` · ${comp.place}` : ""}</p>
+        <h2 className="break-words font-display text-2xl leading-tight">{comp.name}</h2>
+        {host ? <p className="mt-1 break-words text-sm text-muted">{host}</p> : null}
+        {comp.attended === false ? <p className="mt-1 text-sm text-muted">{tab === "past" ? "Non hai partecipato." : "Non ci vai."}</p> : null}
+      </div>
+    );
+  }
+  const step = [f.step > 0 ? `${f.step}ª tappa` : "", f.champ].filter(Boolean).join(" · ");
+  return (
+    <div className="flex min-w-0 items-start gap-3">
+      {host ? <CrestMark crest={crestOf(host)} team={host} size={52} /> : null}
+      <div className="min-w-0 flex-1">
+        <h2 className="break-words font-display text-[1.65rem] leading-tight">{host || comp.name}</h2>
+        {step ? <p className="text-sm text-[#f1cf8a]">{step}</p> : null}
+        <p className="text-xs text-muted">{[longDay(comp.startsOn), comp.place].filter(Boolean).join(" · ")}</p>
+        {comp.attended === false ? <p className="mt-1 text-sm text-muted">{tab === "past" ? "Non hai partecipato." : "Non ci vai."}</p> : null}
+      </div>
     </div>
   );
 }
@@ -386,22 +476,39 @@ function pointsOf(comps: Comp[], userId: string): GaraPoint[] {
     .sort((a, b) => a.day.localeCompare(b.day) || a.id.localeCompare(b.id));
 }
 
-function ScoreRow({ entry, peers }: { entry: Entry; peers: Entry[] }) {
-  const division = divisionOf(entry.category);
+/** la categoria da leggere: «Messeri · Tradizionale» dal portale, «Messeri» da quella segnata a mano */
+function categoryText(category: string) {
+  const { group, tipologia } = categoryGroup(category);
+  return [group, tipologia].filter(Boolean).join(" · ") || divisionOf(category) || "";
+}
+
+function ScoreRow({ entry, peers, own = false }: { entry: Entry; peers: Entry[]; own?: boolean }) {
+  const looks = useTeamAvatars();
+  const cat = categoryText(entry.category);
+  const lanes = entry.laneCount ?? (entry.piazzole.length || null);
+  const detail = [
+    entry.score != null ? `${entry.score} punti` : null,
+    lanes != null ? `${lanes} piazzole` : null,
+    entry.spot != null ? `${entry.spot} spot` : null,
+    entry.targetKind === "sagoma" ? "sagoma" : entry.targetKind === "padiglione" ? "padiglione" : null,
+  ].filter(Boolean).join(" · ");
+  const camp = entry.championshipPoints;
   return (
-    <div className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface p-3">
-      <div className="min-w-0">
-        <p className="truncate font-semibold">{memberLabel(entry, peers)}</p>
-        <p className="text-sm text-muted">{[
-          (entry.laneCount ?? (entry.piazzole.length || null)) != null ? `${entry.laneCount ?? entry.piazzole.length} piazzole` : null,
-          entry.score != null ? `${entry.score} punti` : null,
-          entry.spot != null ? `${entry.spot} spot` : null,
-          entry.championshipPoints != null ? `${entry.championshipPoints} pt campionato` : null,
-          entry.rank ? `${entry.rank}°${division ? ` ${division}` : ""}` : null,
-          entry.targetKind === "sagoma" ? "sagoma" : entry.targetKind === "padiglione" ? "padiglione" : null,
-        ].filter(Boolean).join(" · ")}</p>
+    <div className={`flex min-w-0 items-center gap-2.5 rounded-2xl px-2.5 py-2 ${own ? "border border-[#e0b15a]/45 bg-[#e0b15a]/[0.08]" : "bg-white/[0.035]"}`}>
+      <Avatar size="sm" label={memberLabel(entry, peers)} color={entry.avatarColor} photo={entry.photoUrl} look={looks[entry.userId]} userId={entry.userId} />
+      <div className="min-w-0 flex-1">
+        <p className="flex min-w-0 items-center gap-1.5">
+          <b className="truncate">{memberLabel(entry, peers)}</b>
+          {own ? <span className="shrink-0 rounded-full bg-[#e0b15a] px-1.5 py-px text-[0.58rem] font-bold uppercase tracking-wide text-black">tu</span> : null}
+        </p>
+        {entry.rank || cat ? <p className="truncate text-xs">{[entry.rank ? `${entry.rank}°` : "", cat].filter(Boolean).join(" ")}{entry.rank && entry.categorySize ? <span className="text-muted"> su {entry.categorySize}</span> : null}</p> : null}
+        {detail ? <p className="truncate text-[0.72rem] text-muted">{detail}</p> : null}
       </div>
-      <p className="font-display text-3xl tabular-nums">{entry.score}</p>
+      {entry.rank && entry.rank <= 3 ? <Medal place={entry.rank} size={26} /> : null}
+      <div className="shrink-0 text-right">
+        <p className="font-display text-2xl leading-none tabular-nums">{camp ?? entry.score ?? "—"}</p>
+        <p className="text-[0.56rem] uppercase tracking-wider text-muted">{camp != null ? "pt camp." : "punti"}</p>
+      </div>
     </div>
   );
 }

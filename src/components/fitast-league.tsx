@@ -6,11 +6,12 @@ import { Medal } from "@/components/palmares";
 import { CrestPodium } from "@/components/podium";
 import { Insignia } from "@/components/insignia";
 import { useLoad } from "@/lib/arcieri/use-load";
-import { fitastStandingRows, fitastStandings, fitastTeamArchers, fitastTeamStats, type Standing, type StandingRow, type TeamArcher, type TeamStat } from "@/lib/arcieri/fitast-league.api";
+import { fitastGaraBoard, fitastStandingRows, fitastStandings, fitastTeamArchers, fitastTeamStats, type Standing, type StandingRow, type TeamArcher, type TeamStat } from "@/lib/arcieri/fitast-league.api";
 import { categoryGroup, cleanCategory, crestOf as drawCrest, teamKey, titleName } from "@/lib/arcieri/fitast-league";
 import { syncStandings, type SyncProgress } from "@/lib/arcieri/fitast-sync";
+import { nameKey } from "@/lib/arcieri/fitast-rank";
 
-type Crest = { name: string; logoUrl: string | null; color: string; fitastName?: string };
+export type Crest = { name: string; logoUrl: string | null; color: string; fitastName?: string };
 
 const GROUPS = ["Messeri", "Madonne", "Juniores", "Juvenis", "Pueri", "Tutti"];
 const STALE_MS = 12 * 3_600_000;
@@ -19,7 +20,7 @@ const pts = (r: StandingRow) => r.camp ?? r.score;
 const num = (n: number | null) => (n == null ? "—" : n.toLocaleString("it-IT"));
 
 /** stemma della compagnia scritta nella classifica, se è nell'app */
-function useCrests(companies: Crest[]) {
+export function useCrests(companies: Crest[]) {
   return useMemo(() => {
     const map = new Map<string, Crest>();
     for (const c of companies) {
@@ -31,7 +32,7 @@ function useCrests(companies: Crest[]) {
 
 const drawn = new Map<string, string>();
 /** stemma della compagnia; se non è nell'app, quello disegnato dal suo nome (sempre lo stesso) */
-function CrestMark({ crest, team, size = 30 }: { crest: Crest | null; team: string; size?: number }) {
+export function CrestMark({ crest, team, size = 30 }: { crest: Crest | null; team: string; size?: number }) {
   let src = crest?.logoUrl ?? "";
   if (!src && team) {
     src = drawn.get(team) ?? drawCrest(team).logo;
@@ -78,19 +79,21 @@ function useSplit(items: Standing[]) {
   }, [items]);
 }
 
-function RankList({ rows, crestOf, team, limit, onTeam }: { rows: StandingRow[]; crestOf: (t: string) => Crest | null; team?: boolean; limit: number; /** tocca una compagnia: i suoi arcieri */ onTeam?: (name: string) => void }) {
+function RankList({ rows, crestOf, team, limit, onTeam, mark }: { rows: StandingRow[]; crestOf: (t: string) => Crest | null; team?: boolean; limit: number; /** tocca una compagnia: i suoi arcieri */ onTeam?: (name: string) => void; /** i nostri arcieri (o la nostra compagnia), evidenziati */ mark?: (r: StandingRow) => "tu" | "nostro" | null }) {
   return (
     <ol className="grid gap-1.5">
-      {rows.slice(0, limit).map((r, i) => (
+      {rows.slice(0, limit).map((r, i) => {
+        const m = mark?.(r) ?? null;
+        return (
         <li
           key={`${r.name}-${i}`}
-          className={cx("flex items-center gap-2.5 rounded-xl bg-white/[0.035] px-2.5 py-2", onTeam && "aa-press cursor-pointer active:bg-white/[0.07]")}
+          className={cx("flex items-center gap-2.5 rounded-xl px-2.5 py-2", m ? "border border-[#e0b15a]/45 bg-[#e0b15a]/[0.08]" : "bg-white/[0.035]", onTeam && "aa-press cursor-pointer active:bg-white/[0.07]")}
           {...(onTeam ? { role: "button", tabIndex: 0, onClick: () => onTeam(team ? r.name : r.team), onKeyDown: (e: { key: string }) => { if (e.key === "Enter") onTeam(team ? r.name : r.team); } } : {})}
         >
           <Place place={r.place} />
           <CrestMark crest={crestOf(team ? r.name : r.team)} team={team ? r.name : r.team} />
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm font-semibold">{titleName(r.name)}</span>
+            <span className="block truncate text-sm font-semibold">{titleName(r.name)}{m ? <span className="ml-1.5 text-[0.68rem] font-semibold text-[#f1cf8a]">{m}</span> : null}</span>
             {!team && r.team ? <span className="block truncate text-xs text-muted">{titleName(r.team)}</span> : null}
           </span>
           <span className="shrink-0 text-right">
@@ -98,7 +101,8 @@ function RankList({ rows, crestOf, team, limit, onTeam }: { rows: StandingRow[];
             <span className="text-[0.58rem] uppercase tracking-wider text-muted">{r.camp != null ? "pt camp." : "punti"}</span>
           </span>
         </li>
-      ))}
+        );
+      })}
     </ol>
   );
 }
@@ -393,6 +397,89 @@ export function FitastArchersCard({ league }: { league: FitastLeagueState }) {
 }
 
 /** ogni gara del campionato: primi tre arcieri per categoria e squadre */
+export type OurArcher = { userId: string; name: string; team: string; category: string; place: number | null };
+
+/**
+ * Tutta la classifica di una gara del campionato, dentro la scheda della gara: si apre sulla categoria
+ * dell'arciere, i primi tre, poi i nostri (anche se lontani dal podio), e a richiesta tutti.
+ */
+export function GaraBoard({ garaId, ours, me, crestOf, myTeam }: { garaId: string; ours: OurArcher[]; me: string; crestOf: (t: string) => Crest | null; myTeam: string }) {
+  const { data, error, loading } = useLoad(`fitast-gara-${garaId}`, () => fitastGaraBoard({ data: { garaId } }));
+  const arcieri = useMemo(() => data?.arcieri ?? [], [data]);
+  const { groups, order } = useSplit(arcieri);
+  const mine = ours.find((o) => o.userId === me) ?? ours[0] ?? null;
+  const start = mine ? categoryGroup(mine.category) : { group: "", tipologia: "" };
+  const [g, setG] = useState("");
+  const group = order.includes(g) ? g : order.includes(start.group || "Tutti") ? start.group || "Tutti" : order[0] ?? "";
+  const tips = [...(groups.get(group)?.keys() ?? [])];
+  const [t, setT] = useState("");
+  const tip = tips.includes(t) ? t : tips.includes(start.tipologia || "Tutte") ? start.tipologia || "Tutte" : tips[0] ?? "";
+  const it = groups.get(group)?.get(tip);
+  const [open, setOpen] = useState(false);
+  const [shown, setShown] = useState<string | null>(null);
+  const ourKeys = useMemo(() => new Map(ours.map((o) => [`${nameKey(o.name)}|${teamKey(o.team)}`, o.userId])), [ours]);
+  const mark = (r: StandingRow) => {
+    const id = ourKeys.get(`${nameKey(r.name)}|${teamKey(r.team ?? "")}`);
+    return id == null ? null : id === me ? "tu" : "nostro";
+  };
+  const myTeamK = teamKey(myTeam);
+  const markTeam = (r: StandingRow) => (myTeamK && teamKey(r.name) === myTeamK ? ("nostro" as const) : null);
+  if (loading) return <Loading />;
+  if (error) return <ErrorNote text={error} />;
+  if (!arcieri.length) return <p className="text-sm text-muted">Classifica arcieri non ancora letta dal portale.</p>;
+  const rows = it?.rows ?? [];
+  const far = rows.slice(3).filter((r) => mark(r));
+  return (
+    <div className="grid gap-2">
+      <Chips value={group} options={order} onChange={(v) => { setG(v); setOpen(false); }} />
+      <Chips value={tip} options={tips} onChange={(v) => { setT(v); setOpen(false); }} />
+      {open ? (
+        <RankList rows={rows} crestOf={crestOf} limit={rows.length} onTeam={setShown} mark={mark} />
+      ) : (
+        <>
+          <RankList rows={rows} crestOf={crestOf} limit={3} onTeam={setShown} mark={mark} />
+          {far.length ? (
+            <>
+              <p className="text-center text-xs leading-none text-muted" aria-hidden>· · ·</p>
+              <RankList rows={far} crestOf={crestOf} limit={far.length} onTeam={setShown} mark={mark} />
+            </>
+          ) : null}
+        </>
+      )}
+      {rows.length > 3 ? (
+        <button type="button" onClick={() => setOpen((v) => !v)} className="aa-chip justify-self-center px-4 py-2 text-sm">
+          {open ? "Solo i primi e i nostri" : `Mostra tutti i ${rows.length} arcieri`}
+        </button>
+      ) : null}
+      {data?.squadre.length ? (
+        <div className="mt-1 grid gap-1.5">
+          <p className="text-sm font-semibold">Squadre</p>
+          <TeamsOfGara items={data.squadre} crestOf={crestOf} mark={markTeam} onTeam={setShown} />
+        </div>
+      ) : null}
+      <p className="px-1 text-[0.7rem] text-muted">Tocca una riga per vedere tutti gli arcieri di quella compagnia nel campionato.</p>
+      {shown ? <TeamArchersSheet team={shown} crest={crestOf(shown)} onClose={() => setShown(null)} /> : null}
+    </div>
+  );
+}
+
+/** la classifica squadre di una gara: le sue categorie e la nostra compagnia evidenziata */
+function TeamsOfGara({ items, crestOf, mark, onTeam }: { items: Standing[]; crestOf: (t: string) => Crest | null; mark: (r: StandingRow) => "tu" | "nostro" | null; onTeam: (name: string) => void }) {
+  const opts = items.map((x) => cleanCategory(x.category) || "Tutte");
+  const [c, setC] = useState("");
+  const i = Math.max(0, opts.indexOf(c));
+  const it = items[i];
+  const rows = it?.rows ?? [];
+  const ourAt = rows.findIndex((r) => mark(r));
+  return (
+    <div className="grid gap-1.5">
+      <Chips value={opts[i] ?? ""} options={opts} onChange={setC} />
+      <RankList rows={rows} crestOf={crestOf} team limit={Math.max(3, Math.min(5, rows.length))} onTeam={onTeam} mark={mark} />
+      {ourAt >= 5 ? <RankList rows={[rows[ourAt]]} crestOf={crestOf} team limit={1} onTeam={onTeam} mark={mark} /> : null}
+    </div>
+  );
+}
+
 export function FitastGare({ league }: { league: FitastLeagueState }) {
   const { gare, crestOf, running } = league;
   return (

@@ -421,6 +421,33 @@ export const fitastStandingRows = createServerFn({ method: "POST" })
     return { rows: Array.isArray(found[0]?.rows) ? found[0].rows : [] };
   });
 
+/** tutta la classifica di una gara (arcieri di ogni categoria e squadre), quando la si apre dalla scheda della gara */
+export const fitastGaraBoard = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: unknown) => ({ garaId: clip((input as { garaId?: unknown } | null)?.garaId, 10).replace(/\D/g, "") }))
+  .handler(async ({ context, data }) => {
+    const sql = await db();
+    await ensureMember(sql, context.userId);
+    if (!data.garaId) return { arcieri: [] as Standing[], squadre: [] as Standing[] };
+    const rows = await sql<{ kind: string; season: string; season_name: string; gara_id: string; gara_title: string; held_on: string | null; category: string; rows: StandingRow[]; updated_at: string }>`
+      select kind, season, season_name, gara_id, gara_title, held_on::text as held_on, category, rows, updated_at
+      from fitast_standings where gara_id = ${data.garaId} and kind in ('gara-arcieri', 'gara-squadre')
+      order by updated_at desc`;
+    const items: Standing[] = rows.map((r) => ({
+      kind: r.kind as StandingKind,
+      season: r.season,
+      seasonName: r.season_name,
+      garaId: r.gara_id,
+      garaTitle: r.gara_title,
+      day: r.held_on ?? "",
+      category: r.category,
+      rows: Array.isArray(r.rows) ? r.rows : [],
+      total: Array.isArray(r.rows) ? r.rows.length : 0,
+      updatedAt: new Date(r.updated_at).toISOString(),
+    }));
+    return { arcieri: items.filter((x) => x.kind === "gara-arcieri"), squadre: items.filter((x) => x.kind === "gara-squadre") };
+  });
+
 const optNum = (v: unknown, max: number) => {
   const n = typeof v === "number" ? v : Number(v);
   return Number.isFinite(n) && Math.abs(n) <= max ? n : null;

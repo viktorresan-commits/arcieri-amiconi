@@ -11,6 +11,7 @@ import { divisionOf } from "./labels";
 import { accountWriter, writerFor } from "./acting.api";
 import { activityXp } from "./xp.api";
 import { fitastRankOf, loadGenerale, type GenTable } from "./fitast-rank";
+import { archersIn, championshipName, oursInGara, stepsOf, type GaraTable, type PortalResult, type Who } from "./fitast-ours";
 import type { TallyShot } from "./scoring";
 import { aimSpot, faceById, ringPoint, scoreAtRadius } from "./scoring";
 
@@ -483,6 +484,11 @@ export const challengeBoard = createServerFn({ method: "POST" })
     return { title: ch[0].title, rule, rows, teams: teamMeans(rows.map((r) => ({ userId: r.userId, team: r.team, value: r.value }))) };
   });
 
+/** id della gara FITAST scritto nelle note della gara («fitast:2472»), o "" */
+function fitastIdOf(notes: string | null | undefined) {
+  return /^fitast:(\d+)/.exec(notes ?? "")?.[1] ?? "";
+}
+
 export const listCompetitions = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }) => {
@@ -504,61 +510,84 @@ export const listCompetitions = createServerFn({ method: "GET" })
     const presence = await sql<{ competition_id: number; user_id: string; attended: boolean }>`
       select competition_id, user_id, attended from competition_presence`;
     const mine = new Map(presence.filter((row) => row.user_id === context.userId).map((row) => [asNum(row.competition_id), asBool(row.attended)]));
-    const members = await sql<MemberRow>`select * from members where user_id is not null`;
+    const members = await sql<MemberRow & { fitast_name?: string; fitast_team?: string }>`select * from members where user_id is not null`;
     // risultati di squadra della propria compagnia (dalla classifica squadre del portale FITAST)
     const teamRows = await teamResultsOf(sql, (await myMembership(sql, context.userId)).companyId);
     const linkedTo = (c: { id: number; notes: string }) =>
       teamRows.filter((r) => r.competitionId === asNum(c.id) || (r.fitastId !== "" && new RegExp(`^fitast:${r.fitastId}(\\D|$)`).test(c.notes ?? "")));
-    return {
-      competitions: comps.map((c) => ({
-        id: asNum(c.id),
-        name: c.name,
-        startsOn: String(c.starts_on).slice(0, 10),
-        place: c.place,
-        organizer: c.organizer,
-        kind: c.kind,
-        distanceM: asNumOrNull(c.distance_m),
-        category: c.category,
-        signupDeadline: c.signup_deadline ? String(c.signup_deadline).slice(0, 10) : null,
-        externalUrl: c.external_url,
-        notes: c.notes,
-        // la elimina per tutti solo il fondatore
-        canDelete: staffHere,
-        teamResults: linkedTo(c),
-        attended: mine.has(asNum(c.id)) ? mine.get(asNum(c.id)) ?? null : null,
-        roster: presence.filter((row) => row.competition_id === c.id).map((row) => {
-          const member = members.find((item) => item.user_id === row.user_id);
-          return {
-            userId: row.user_id,
-            attended: asBool(row.attended),
-            givenName: member?.given_name ?? "",
-            familyName: member?.family_name ?? "",
-            nickname: member?.nickname ?? "",
-            slug: member?.slug ?? "",
-            photoUrl: member?.photo_url ?? null,
-            avatarColor: member?.avatar_color ?? "#1f5c38",
-          };
-        }),
-        entries: entries.filter((e) => e.competition_id === c.id).map((e) => ({
+
+    // classifiche di gara del portale: i nostri arcieri (posto, punti, punti campionato) e la tappa del campionato
+    const tables = await sql<GaraTable>`
+      select gara_id, gara_title, held_on::text as held_on, season, category, rows from fitast_standings
+      where kind = 'gara-arcieri' and gara_id <> ''`.catch(() => [] as GaraTable[]);
+    const homes = await sql<{ user_id: string; name: string; fitast_name: string }>`
+      select cm.user_id, c.name, c.fitast_name from company_members cm join companies c on c.id = cm.company_id`.catch(() => []);
+    const homeOf = new Map(homes.map((h) => [h.user_id, h.fitast_name || h.name]));
+    const who: Who[] = members.map((m) => ({
+      userId: m.user_id ?? "",
+      fitastName: String(m.fitast_name ?? ""),
+      fitastTeam: String(m.fitast_team ?? ""),
+      fullName: [m.given_name, m.family_name].filter(Boolean).join(" "),
+      givenName: m.given_name ?? "",
+      nickname: m.nickname ?? "",
+      team: homeOf.get(m.user_id ?? "") ?? "",
+    }));
+    const byGara = new Map<string, GaraTable[]>();
+    for (const t of tables) byGara.set(t.gara_id, [...(byGara.get(t.gara_id) ?? []), t]);
+    const steps = stepsOf(tables);
+    const portal = new Map<string, { ours: Map<string, PortalResult>; total: number; title: string; day: string }>();
+    for (const [id, list] of byGara) {
+      portal.set(id, { ours: oursInGara(list, who), total: archersIn(list), title: list.find((t) => t.gara_title)?.gara_title ?? "", day: String(list.find((t) => t.held_on)?.held_on ?? "").slice(0, 10) });
+    }
+    const memberOf = (userId: string) => members.find((m) => m.user_id === userId);
+    const face = (userId: string) => {
+      const m = memberOf(userId);
+      return { givenName: m?.given_name ?? "", familyName: m?.family_name ?? "", nickname: m?.nickname ?? "", slug: m?.slug ?? "", photoUrl: m?.photo_url ?? null, avatarColor: m?.avatar_color ?? "#1f5c38" };
+    };
+    const fitastOf = (garaId: string) => {
+      const g = garaId ? portal.get(garaId) : undefined;
+      if (!garaId) return null;
+      const step = steps.get(garaId);
+      return {
+        garaId,
+        step: step?.n ?? 0,
+        champ: step?.champ || championshipName(g?.title ?? ""),
+        total: g?.total ?? 0,
+        read: Boolean(g),
+        // i nostri come li scrive il portale: per evidenziarli nella classifica della gara
+        ours: g ? [...g.ours.entries()].map(([userId, r]) => ({ userId, name: r.name, team: r.team, category: r.category, place: r.place })) : [],
+      };
+    };
+    type EntryOut = {
+      id: number; userId: string; score: number | null; rank: number | null; laneCount: number | null; spot: number | null; championshipPoints: number | null;
+      targetKind: "" | "sagoma" | "padiglione"; sagomaMax: 10 | 8 | 11 | null; category: string; notes: string;
+      givenName: string; familyName: string; nickname: string; slug: string; photoUrl: string | null; avatarColor: string;
+      piazzole: { n: number; score: number; arrows: number[]; label: string; distanceM: number | null; note: string; aimAngle: string }[];
+      /** dal portale FITAST: solo il portale (nessun punteggio segnato nell'app) o anche il portale */
+      portal: "" | "solo" | "anche";
+      /** arcieri nella sua categoria, secondo il portale */
+      categorySize: number | null;
+    };
+    const entriesOf = (compId: number, garaId: string): EntryOut[] => {
+      const found = garaId ? portal.get(garaId)?.ours ?? new Map<string, PortalResult>() : new Map<string, PortalResult>();
+      const out: EntryOut[] = entries.filter((e) => asNum(e.competition_id) === compId).map((e) => {
+        const r = found.get(e.user_id);
+        return {
           id: asNum(e.id),
           userId: e.user_id,
-          score: asNumOrNull(e.score),
-          rank: asNumOrNull(e.rank),
+          score: asNumOrNull(e.score) ?? r?.score ?? null,
+          // il posto e la categoria veri sono quelli del portale
+          rank: r?.place ?? asNumOrNull(e.rank),
           laneCount: asNumOrNull(e.lane_count),
           spot: asNumOrNull(e.spot),
-          championshipPoints: asNumOrNull(e.championship_points),
+          championshipPoints: r?.camp ?? asNumOrNull(e.championship_points),
           targetKind: e.target_kind === "sagoma" ? "sagoma" : e.target_kind === "padiglione" ? "padiglione" : "",
           sagomaMax: e.sagoma_max === 10 || e.sagoma_max === 8 || e.sagoma_max === 11 ? e.sagoma_max : null,
-          category: e.category,
+          category: r?.category || e.category,
           notes: e.user_id === context.userId ? e.notes : "",
-          givenName: members.find((m) => m.user_id === e.user_id)?.given_name ?? "",
-          familyName: members.find((m) => m.user_id === e.user_id)?.family_name ?? "",
-          nickname: members.find((m) => m.user_id === e.user_id)?.nickname ?? "",
-          slug: members.find((m) => m.user_id === e.user_id)?.slug ?? "",
-          photoUrl: members.find((m) => m.user_id === e.user_id)?.photo_url ?? null,
-          avatarColor: members.find((m) => m.user_id === e.user_id)?.avatar_color ?? "#1f5c38",
+          ...face(e.user_id),
           piazzole: lanes
-            .filter((p) => p.competition_id === c.id && p.user_id === e.user_id)
+            .filter((p) => asNum(p.competition_id) === compId && p.user_id === e.user_id)
             .map((p) => ({
               n: asNum(p.n),
               score: asNum(p.score),
@@ -573,9 +602,97 @@ export const listCompetitions = createServerFn({ method: "GET" })
               note: String(p.note ?? ""),
               aimAngle: String(p.aim_angle ?? ""),
             })),
-        })),
-      })),
+          portal: r ? "anche" : "",
+          categorySize: r?.size || null,
+        };
+      });
+      // chi è nella classifica del portale ma non ha segnato nulla nell'app: il risultato del portale
+      let k = 0;
+      for (const [userId, r] of found) {
+        if (out.some((e) => e.userId === userId)) continue;
+        k += 1;
+        out.push({
+          id: -(Math.abs(compId) * 1000 + k),
+          userId,
+          score: r.score,
+          rank: r.place,
+          laneCount: null,
+          spot: null,
+          championshipPoints: r.camp,
+          targetKind: "",
+          sagomaMax: null,
+          category: r.category,
+          notes: "",
+          ...face(userId),
+          piazzole: [],
+          portal: "solo",
+          categorySize: r.size || null,
+        });
+      }
+      return out;
     };
+    const rosterOf = (compId: number, garaId: string) => {
+      const found = garaId ? portal.get(garaId)?.ours ?? new Map<string, PortalResult>() : new Map<string, PortalResult>();
+      const rows = presence.filter((row) => asNum(row.competition_id) === compId).map((row) => ({ userId: row.user_id, attended: asBool(row.attended) || found.has(row.user_id), ...face(row.user_id) }));
+      // nella classifica del portale vuol dire che c'era
+      for (const userId of found.keys()) if (!rows.some((r) => r.userId === userId)) rows.push({ userId, attended: true, ...face(userId) });
+      return rows;
+    };
+    const listed = new Set<string>();
+    const out = comps.map((c) => {
+      const garaId = fitastIdOf(c.notes);
+      if (garaId) listed.add(garaId);
+      const iWas = garaId ? portal.get(garaId)?.ours.has(context.userId) ?? false : false;
+      return {
+        id: asNum(c.id),
+        name: c.name,
+        startsOn: String(c.starts_on).slice(0, 10),
+        place: c.place,
+        organizer: c.organizer,
+        kind: c.kind,
+        distanceM: asNumOrNull(c.distance_m),
+        category: c.category,
+        signupDeadline: c.signup_deadline ? String(c.signup_deadline).slice(0, 10) : null,
+        externalUrl: c.external_url,
+        notes: c.notes,
+        // la elimina per tutti solo il fondatore
+        canDelete: staffHere,
+        teamResults: linkedTo(c),
+        attended: iWas ? true : mine.has(asNum(c.id)) ? mine.get(asNum(c.id)) ?? null : null,
+        roster: rosterOf(asNum(c.id), garaId),
+        entries: entriesOf(asNum(c.id), garaId),
+        fitast: fitastOf(garaId),
+        /** solo dal portale: nessuna gara nell'app (niente presenza né punteggio da segnare) */
+        virtual: false,
+      };
+    });
+    // gare del portale che nell'app non ci sono, ma con dentro qualcuno dei nostri
+    for (const [garaId, g] of portal) {
+      if (listed.has(garaId) || !g.ours.size || !g.day) continue;
+      const id = -Number(garaId);
+      out.push({
+        id,
+        name: championshipName(g.title) || `Gara ${garaId}`,
+        startsOn: g.day,
+        place: "",
+        organizer: "",
+        kind: "campionato",
+        distanceM: null,
+        category: "",
+        signupDeadline: null,
+        externalUrl: "",
+        notes: `fitast:${garaId}`,
+        canDelete: false,
+        teamResults: teamRows.filter((r) => r.fitastId === garaId),
+        attended: g.ours.has(context.userId) ? true : null,
+        roster: rosterOf(id, garaId),
+        entries: entriesOf(id, garaId),
+        fitast: fitastOf(garaId),
+        virtual: true,
+      });
+    }
+    out.sort((a, b) => a.startsOn.localeCompare(b.startsOn) || a.id - b.id);
+    return { competitions: out };
   });
 
 export const saveCompetition = createServerFn({ method: "POST" })
