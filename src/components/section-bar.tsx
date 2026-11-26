@@ -29,7 +29,10 @@ export function SectionBar({ path, hide = [], onSearch }: { path: string; /** vo
   useEffect(() => setOpen(null), [path]);
   useEffect(() => {
     if (!open) return;
-    const off = onBack(() => setOpen(null));
+    const off = onBack(() => {
+      setOpen(null);
+      return true;
+    });
     const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(null);
     window.addEventListener("keydown", esc);
     return () => {
