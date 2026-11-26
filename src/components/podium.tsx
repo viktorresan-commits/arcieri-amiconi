@@ -16,8 +16,10 @@ const METALS = {
 /** riquadro dell'arciere nello scudo: per un adulto medio a sinistra -22%, in alto -12%, largo 192% */
 function frame(look: AvatarLook) {
   const k = Math.max(0.85, Math.min(1.35, 1 / figureScale(look)));
-  // il punto dei piedi (150, 342 nel disegno) resta fermo: 110/300 della larghezza, 342/300 in altezza
-  return { left: `${(-22 - 70.4 * (k - 1)).toFixed(2)}%`, top: `${(-12 - 171 * (k - 1)).toFixed(2)}%`, width: `${(192 * k).toFixed(2)}%` };
+  // il punto dei piedi (150, 342 nel disegno) resta fermo al centro dello scudo: 110/300 della larghezza,
+  // 342/300 in altezza. Il mancino è disegnato specchiato attorno a x=190: i suoi piedi stanno a 190/300
+  const fx = look.lefty ? 190 / 300 : 110 / 300;
+  return { left: `${(48.4 - fx * 192 * k).toFixed(2)}%`, top: `${(-12 - 171 * (k - 1)).toFixed(2)}%`, width: `${(192 * k).toFixed(2)}%` };
 }
 
 type Place = 1 | 2 | 3;
