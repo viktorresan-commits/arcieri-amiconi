@@ -253,7 +253,7 @@ export function CompagniaPage({ initial }: { initial?: Section } = {}) {
       setSection("arcieri");
       // appena entrato: «Sei uno di loro?» con gli arcieri FITAST della compagnia
       const co = companies.data?.companies.find((c) => c.id === id);
-      if (co) setLinkFor({ team: co.fitastName || co.name, name: co.name });
+      if (co) setLinkFor({ team: co.fitastTeam || co.fitastName || co.name, name: co.name });
     } finally {
       setBusy(null);
     }

@@ -7,8 +7,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 import type { Sql } from "@/lib/db";
 import { asNum, cleanPhoto, clip, db, ensureMember, staffLevel } from "./access";
-import { fitastAvgBy, fitastPointsBy } from "./fitast-league.api";
-import { cleanCompanyNames, GARBLED_NAME, teamKey } from "./fitast-league";
+import { fitastAvgBy, fitastPointsBy, standingTeams } from "./fitast-league.api";
+import { cleanCompanyNames, GARBLED_NAME, matchTeam, teamKey } from "./fitast-league";
 import { withRealCrest } from "./stemmi-veri";
 import { garaLoads, sumLoads, type GaraLoad } from "./gara-volume";
 
@@ -161,6 +161,7 @@ export const listCompanies = createServerFn({ method: "GET" })
     const fitastPts = await fitastPointsBy(sql).catch(() => new Map<string, { points: number; place: number | null; season: string }>());
     // media dei punti campionato per arciere: tutti gli arcieri di ogni compagnia nella generale arcieri FITAST
     const fitastAvg = await fitastAvgBy(sql).catch(() => new Map<string, { avg: number; archers: number }>());
+    const teams = await standingTeams(sql).catch(() => [] as string[]);
     const trainOf = new Map(train.map((row) => [row.user_id, row]));
     const compOf = new Map(comps.map((row) => [row.user_id, row]));
     // frecce delle gare: dal cartellino o dalle piazzole inserite, altrimenti piazzole della gara × 3
@@ -189,8 +190,10 @@ export const listCompanies = createServerFn({ method: "GET" })
         gareRaw += asNum(c?.points);
       }
       const clean = cleanCompanyNames(row.name, row.fitast_name);
-      const fp = fitastPts.get(teamKey(clean.fitastName || "")) ?? fitastPts.get(teamKey(clean.name));
-      const fa = fitastAvg.get(teamKey(clean.fitastName || "")) ?? fitastAvg.get(teamKey(clean.name));
+      // la compagnia nelle classifiche del portale (il nome può essere scritto un po' diverso)
+      const team = matchTeam(clean.fitastName || clean.name, teams) ?? (clean.fitastName ? matchTeam(clean.name, teams) : null) ?? "";
+      const fp = (team ? fitastPts.get(teamKey(team)) : undefined) ?? fitastPts.get(teamKey(clean.fitastName || "")) ?? fitastPts.get(teamKey(clean.name));
+      const fa = (team ? fitastAvg.get(teamKey(team)) : undefined) ?? fitastAvg.get(teamKey(clean.fitastName || "")) ?? fitastAvg.get(teamKey(clean.name));
       return {
         ...toCompany(row),
         fitastPoints: fp ? fp.points : null,
@@ -198,6 +201,8 @@ export const listCompanies = createServerFn({ method: "GET" })
         fitastSeason: fp ? fp.season : "",
         fitastAvg: fa ? fa.avg : null,
         fitastArchers: fa ? fa.archers : 0,
+        /** il nome con cui la compagnia compare nelle classifiche del portale */
+        fitastTeam: team,
         members: crew.length,
         arrows,
         sessions,
@@ -333,14 +338,22 @@ export const companyWelcome = createServerFn({ method: "GET" })
     const sql = await db();
     await ensureMember(sql, context.userId);
     const mine = await myMembership(sql, context.userId);
-    if (mine.chosen) return { chosen: true as const, companies: [] as { id: number; name: string; city: string; logoUrl: string | null; color: string; members: number; fitastName: string }[], homeId: mine.companyId };
+    if (mine.chosen) return { chosen: true as const, companies: [] as { id: number; name: string; city: string; logoUrl: string | null; color: string; members: number; fitastName: string; fitastTeam: string; fitastArchers: number }[], homeId: mine.companyId };
     const home = await homeId(sql);
     const rows = await sql<{ id: number; name: string; city: string; logo_url: string | null; fitast_name: string | null; color: string; members: number }>`
       select c.id, c.name, c.city, c.logo_url, c.fitast_name, c.color, count(cm.user_id)::int as members
       from companies c left join company_members cm on cm.company_id = c.id
       group by c.id order by (c.id = ${home}) desc, count(cm.user_id) desc, c.name`;
-    const list = rows.map((r) => ({ id: asNum(r.id), ...cleanCompanyNames(r.name, r.fitast_name), city: r.city, logoUrl: withRealCrest(r.logo_url, r.fitast_name, r.name), color: r.color, members: asNum(r.members) }));
-    return { chosen: false as const, companies: list.filter((c) => c.members > 0 || !GARBLED_NAME.test(c.name)), homeId: home };
+    // quanti arcieri ha ogni compagnia nel campionato FITAST: l'elenco va dalla più numerosa
+    const teams = await standingTeams(sql).catch(() => [] as string[]);
+    const avgBy = await fitastAvgBy(sql).catch(() => new Map<string, { avg: number; archers: number }>());
+    const list = rows.map((r) => {
+      const clean = cleanCompanyNames(r.name, r.fitast_name);
+      const team = matchTeam(clean.fitastName || clean.name, teams) ?? "";
+      return { id: asNum(r.id), ...clean, fitastTeam: team, fitastArchers: avgBy.get(teamKey(team || clean.fitastName || clean.name))?.archers ?? 0, city: r.city, logoUrl: withRealCrest(r.logo_url, r.fitast_name, r.name), color: r.color, members: asNum(r.members) };
+    });
+    const size = (c: { members: number; fitastArchers: number }) => Math.max(c.members, c.fitastArchers);
+    return { chosen: false as const, companies: list.filter((c) => c.members > 0 || !GARBLED_NAME.test(c.name)).sort((a, b) => Number(b.id === home) - Number(a.id === home) || size(b) - size(a) || a.name.localeCompare(b.name, "it")), homeId: home };
   });
 
 /**

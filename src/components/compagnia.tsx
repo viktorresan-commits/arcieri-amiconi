@@ -238,7 +238,7 @@ function useTeamStats() {
   const { data } = useLoad("fitast-team-stats", () => fitastTeamStats());
   const map = new Map<string, TeamStat>();
   for (const t of data?.teams ?? []) map.set(teamKey(t.team), t);
-  return (co: { name: string; fitastName?: string }) => map.get(teamKey(co.fitastName || "")) ?? map.get(teamKey(co.name)) ?? null;
+  return (co: { name: string; fitastName?: string; fitastTeam?: string }) => map.get(teamKey(co.fitastTeam || "")) ?? map.get(teamKey(co.fitastName || "")) ?? map.get(teamKey(co.name)) ?? null;
 }
 
 /** quante compagnie si vedono prima di "Mostra tutte" */
@@ -431,8 +431,9 @@ export function CompanyLeague({ board, onJoin, busy, onSynced, part, fitastBoard
         ) : null}
         {(() => {
           const matching = board.companies.filter((co) => !find.trim() || `${co.name} ${co.city}`.toLowerCase().includes(find.trim().toLowerCase()));
-          // prima la propria compagnia, poi le altre; ne bastano 10, le altre a richiesta
-          const ordered = [...matching].sort((a, b) => Number(b.id === board.mine) - Number(a.id === board.mine));
+          // dalla compagnia più numerosa (arcieri nel campionato FITAST o iscritti all'app); ne bastano 10, le altre a richiesta
+          const size = (co: (typeof matching)[number]) => Math.max(statOf(co)?.archers ?? co.fitastArchers ?? 0, co.members);
+          const ordered = [...matching].sort((a, b) => size(b) - size(a) || Number(b.id === board.mine) - Number(a.id === board.mine) || a.name.localeCompare(b.name, "it"));
           const shown = find.trim() || showAll ? ordered : ordered.slice(0, FIRST_COMPANIES);
           return (
             <>
@@ -504,8 +505,8 @@ export function CompanyLeague({ board, onJoin, busy, onSynced, part, fitastBoard
                     </div>
                   ) : co.members > 0 && co.id !== board.mine ? <p className="text-xs text-muted">Gli iscritti li vedono il presidente e il fondatore.</p> : null}
                   <CompanyTrophies companyId={co.id} companyName={co.name} />
-                  <TeamArchersInline team={co.fitastName || co.name} canClaim={co.id === board.mine} />
-                  <button type="button" onClick={() => setTeamOf({ team: co.fitastName || co.name, crest: { name: co.name, logoUrl: co.logoUrl, color: co.color, fitastName: co.fitastName } })} className="aa-chip justify-self-start">
+                  <TeamArchersInline team={co.fitastTeam || co.fitastName || co.name} canClaim={co.id === board.mine} />
+                  <button type="button" onClick={() => setTeamOf({ team: co.fitastTeam || co.fitastName || co.name, crest: { name: co.name, logoUrl: co.logoUrl, color: co.color, fitastName: co.fitastName } })} className="aa-chip justify-self-start">
                     Classifica dei suoi arcieri
                   </button>
                   {board.isAdmin ? (
@@ -767,7 +768,7 @@ export function CompanyWelcome() {
     try {
       await joinCompany({ data: { id } });
       const c = w?.companies.find((x) => x.id === id);
-      if (c) setLinkFor({ team: c.fitastName || c.name, name: c.name });
+      if (c) setLinkFor({ team: c.fitastTeam || c.fitastName || c.name, name: c.name });
       else done();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Non riuscito");
@@ -816,7 +817,7 @@ export function CompanyWelcome() {
                     <span className="h-12 w-11 shrink-0">{c.logoUrl ? <img src={c.logoUrl} alt="" className="h-full w-full object-contain" /> : <DefaultCrest color={c.color} letter={c.name.replace(/^Compagnia (degli |dei |di )?/i, "").slice(0, 1)} />}</span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate font-semibold text-white">{c.name}</span>
-                      <span className="block truncate text-xs text-white/60">{[c.city, `${c.members} arcieri`].filter(Boolean).join(" · ")}</span>
+                      <span className="block truncate text-xs text-white/60">{[c.city, c.fitastArchers ? `${c.fitastArchers} arcieri FITAST` : "", c.members ? `${c.members} nell'app` : ""].filter(Boolean).join(" · ") || "nessun arciere in classifica"}</span>
                     </span>
                     <button type="button" disabled={busy != null} onClick={() => void join(c.id)} className="aa-press min-h-9 shrink-0 rounded-full border border-white/25 px-3 text-xs font-semibold text-white">{busy === c.id ? "Entro…" : "Entra"}</button>
                   </div>

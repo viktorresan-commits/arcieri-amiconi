@@ -11,7 +11,7 @@ export type GaraHow =
   | { kind: "press"; press: Press }
   | { kind: "option"; select: string; value: string }
   | { kind: "input"; input: string }
-  | { kind: "row"; index: number }
+  | { kind: "row"; index: number; /** tabella WEBDEV della riga: la riga scelta si manda come valore della tabella */ alias?: string }
   | { kind: "current" };
 /** key: la chiave del record della riga (CLEENREG), forse lo stesso numero della gara: da verificare aprendola */
 export type Gara = { id: string; date: string | null; title: string; alts: GaraHow[]; key?: string };
@@ -161,7 +161,7 @@ export function findGare(page: FitastPage): Gara[] {
         for (const [f, v] of Object.entries(press.set)) if (id) alts.push({ kind: "option", select: f, value: v });
         alts.push({ kind: "press", press });
       }
-      alts.push({ kind: "row", index: k + 1 });
+      alts.push({ kind: "row", index: k + 1, ...(t.alias ? { alias: t.alias } : {}) });
       const key = (t.keys?.[k] ?? "").trim();
       add({ id: ID.test(id) ? id : "", date, title, alts, ...(ID.test(key) ? { key } : {}) });
     });

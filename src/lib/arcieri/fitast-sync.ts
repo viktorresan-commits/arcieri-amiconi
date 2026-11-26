@@ -126,6 +126,12 @@ export async function syncStandings(opts: { onProgress: (p: SyncProgress) => voi
       const r = pressReq(page, garaBtn, {}, step);
       if (r) reqs.push(r);
     }
+    // la gara scelta come riga della tabella dell'elenco (come toccarla), poi PIAZZOLE
+    const row = g?.alts.find((a) => a.kind === "row" && a.alias);
+    if (pzBtn && row && row.kind === "row" && row.alias) {
+      const r = pressReq(base, pzBtn, { ...choose, [row.alias]: String(row.index) }, step);
+      if (r) reqs.push(r);
+    }
     if (pzBtn && g) {
       const how = g.alts.find((a) => a.kind === "option" || a.kind === "input");
       if (how) {

@@ -52,6 +52,58 @@ export function teamKey(name: string) {
   );
 }
 
+/** parole che tante compagnie hanno nel nome: da sole non dicono quale compagnia è */
+const TEAM_COMMON = new Set(["ARCIERI", "ARCIERE", "ARCIER", "ARCO", "ARCHI", "TIRO", "STORICI", "STORICO", "STORICA", "STORICHE", "TRADIZIONALE", "TRADIZIONALI", "SPORT", "SPORTIVO", "CLUB", "CITTA", "SAN", "SANTA", "SANTO", "SANT", "NUOVA", "NUOVO", "ITALIA", "MEDIEVALE", "MEDIEVALI", "BALESTRIERI", "SAGITTARII", "ARCATORES", "ARCATORI", "SAGITTAE"]);
+
+/** le parole che riconoscono una compagnia (le sigle A.M.A.L.A.C. anche tutte attaccate) */
+export function teamWords(name: string) {
+  const key = teamKey(name);
+  const words = key.split(" ").filter((w) => w.length >= 3 && !TEAM_COMMON.has(w));
+  const letters = /(?:\b[A-Z]\b ?){3,}/.exec(key)?.[0].replace(/ /g, "");
+  if (letters) words.push(letters);
+  return [...new Set(words)];
+}
+
+/**
+ * La compagnia come la scrive la classifica del portale: l'elenco delle compagnie e le classifiche non usano
+ * sempre lo stesso nome («ARCARIUS HELVINIUM» e «A.S.D. ARCARIUS HELVINIUM GUALDO»). Si sceglie il nome della
+ * classifica con più parole rare in comune; se due nomi vanno bene allo stesso modo, nessuno.
+ */
+export function matchTeam(name: string, teams: string[]): string | null {
+  const key = teamKey(name);
+  if (!key) return null;
+  const exact = teams.find((t) => teamKey(t) === key);
+  if (exact) return exact;
+  const mine = teamWords(name);
+  if (!mine.length) return null;
+  // peso di ogni parola: più è rara fra tutte le squadre, più conta
+  const freq = new Map<string, number>();
+  const tw = teams.map((t) => {
+    const w = teamWords(t);
+    for (const x of w) freq.set(x, (freq.get(x) ?? 0) + 1);
+    return w;
+  });
+  const weight = (w: string) => 1 / (freq.get(w) ?? 1);
+  const same = (a: string, b: string) => a === b || (a.length >= 6 && b.length >= 6 && (a.startsWith(b.slice(0, 6)) || b.startsWith(a.slice(0, 6))));
+  const total = mine.reduce((t, w) => t + weight(w), 0);
+  let best = -1;
+  let top = 0;
+  let second = 0;
+  tw.forEach((w, i) => {
+    if (!w.length) return;
+    const hit = mine.filter((m) => w.some((x) => same(m, x)));
+    if (!hit.length) return;
+    const extra = w.filter((x) => !mine.some((m) => same(m, x))).length;
+    const score = hit.reduce((t, m) => t + weight(m), 0) / total - extra * 0.05;
+    if (score > top) {
+      second = top;
+      top = score;
+      best = i;
+    } else if (score > second) second = score;
+  });
+  return best >= 0 && top >= 0.45 && top - second >= 0.15 ? teams[best] : null;
+}
+
 const SMALL = new Set(["di", "del", "della", "delle", "dei", "degli", "da", "dal", "e", "ed", "in", "la", "le", "il", "lo", "gli", "a", "al", "alla", "sul", "sulla", "con"]);
 /** ARCIERI DI GROTTAZZOLINA → Arcieri di Grottazzolina (le sigle come A.S.D. restano maiuscole) */
 export function titleName(name: string) {

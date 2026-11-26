@@ -10,7 +10,7 @@ import { asNum, clip, db, ensureMember, staffLevel } from "./access";
 import { readFitastPage } from "./fitast.api";
 import { realCrest } from "./stemmi-veri";
 import { nameKey } from "./fitast-rank";
-import { COMPAGNIE_URL, crestOf, GARBLED_NAME, goodCompanyName, parseCompanies, parseCompanyText, teamKey, titleName, type PortalCompany, type RankRow } from "./fitast-league";
+import { COMPAGNIE_URL, crestOf, GARBLED_NAME, goodCompanyName, matchTeam, parseCompanies, parseCompanyText, teamKey, titleName, type PortalCompany, type RankRow } from "./fitast-league";
 import { imageInfo, logoCandidates, siteFromEmail, usableLogo } from "./company-logo";
 
 const DAY = 86_400_000;
@@ -663,6 +663,22 @@ export const fitastTeamStats = createServerFn({ method: "POST" })
 export type TeamArcherMember = { memberId: number; label: string; photoUrl: string | null; color: string; userId: string; me: boolean } | { taken: true; me: boolean };
 export type TeamArcher = { name: string; points: number | null; category: string; place: number | null; categories: { category: string; place: number | null }[]; member?: TeamArcherMember | null };
 
+/** i nomi delle compagnie come li scrivono le classifiche del campionato più recente */
+export async function standingTeams(sql: Sql): Promise<string[]> {
+  const latest = await sql<{ season: string }>`select season from fitast_standings order by updated_at desc limit 1`.catch(() => []);
+  if (!latest[0]) return [];
+  const rows = await sql<{ kind: string; rows: StandingRow[] }>`select kind, rows from fitast_standings where season = ${latest[0].season}`.catch(() => []);
+  const out = new Map<string, string>();
+  for (const r of rows) {
+    for (const x of Array.isArray(r.rows) ? r.rows : []) {
+      const t = r.kind.endsWith("squadre") ? x.name : x.team;
+      const k = teamKey(t || "");
+      if (k && !out.has(k)) out.set(k, t);
+    }
+  }
+  return [...out.values()];
+}
+
 /** tutti gli arcieri di una compagnia nella classifica generale arcieri del campionato (dal migliore) */
 export const fitastTeamArchers = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
@@ -670,7 +686,8 @@ export const fitastTeamArchers = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const sql = await db();
     const me = await ensureMember(sql, context.userId);
-    const key = teamKey(data.team);
+    // il nome della compagnia come lo scrive la classifica (può essere un po' diverso da quello dell'elenco)
+    const key = teamKey(matchTeam(data.team, await standingTeams(sql)) ?? data.team);
     const myLink = String((me as { fitast_name?: string }).fitast_name ?? "");
     const latest = await sql<{ season: string; season_name: string }>`select season, season_name from fitast_standings where kind in ('generale-arcieri', 'gara-arcieri') order by updated_at desc limit 1`;
     if (!key || !latest[0]) return { season: latest[0]?.season_name ?? "", archers: [] as TeamArcher[], myLink };
