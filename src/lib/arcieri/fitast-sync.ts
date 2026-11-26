@@ -6,7 +6,7 @@
  */
 import { FITAST_HOME, fitastRead } from "./fitast.api";
 import type { FitastPage } from "./fitast-parse";
-import { classificaUrl, cleanTitle, titleScore, findGare, garaDateOf, garaIdOf, garaTitleOf, seasonRange, seasonSelect, type Gara } from "./fitast-gare";
+import { classificaUrl, cleanTitle, titleScore, findGare, garaDateOf, garaIdOf, garaTitleOf, rowFields, seasonRange, seasonSelect, type Gara } from "./fitast-gare";
 import { currentTexts, filterCombos, pressReq, type Req } from "./fitast-nav";
 import { piazzoleRows, rankingRows, SQUADRE_PAGES, type RankRow } from "./fitast-league";
 import { saveFitastStandings, type StandingKind } from "./fitast-league.api";
@@ -109,6 +109,43 @@ export async function syncStandings(opts: { onProgress: (p: SyncProgress) => voi
     pzName = "";
   }
   const pzStats = { tried: 0, read: 0, people: 0, seen: [] as string[] };
+  /**
+   * Come si sceglie una riga dell'elenco delle gare (il campo nascosto della tabella WEBDEV e se le righe si
+   * contano da 1 o da 0): si scopre una volta premendo CLASSIFICA su una gara nota, come fa la ricerca del nome,
+   * e si ricorda. Serve per premere PIAZZOLE sulla gara giusta, come si fa a mano.
+   */
+  const selOf = (p: FitastPage, f: string): Record<string, string> => ((p.wdAliases ?? []).includes(f) ? { [`${f}_SEL`]: p.form?.fields[f] ?? "" } : {});
+  const rowIdx = (g: Gara) => g.alts.find((a): a is { kind: "row"; index: number } => a.kind === "row")?.index ?? 0;
+  let rowSel: { field: string; shift: number } | null | undefined;
+  try {
+    const saved = JSON.parse(localStorage.getItem("aa-fitast-rowsel") ?? "null") as { field?: string; shift?: number } | null;
+    if (saved?.field) rowSel = { field: saved.field, shift: Number(saved.shift) || 0 };
+  } catch {
+    rowSel = undefined;
+  }
+  const probeRow = async (): Promise<{ field: string; shift: number } | null> => {
+    if (rowSel !== undefined) return rowSel;
+    rowSel = null;
+    const cl = (base.form?.buttons ?? []).find((b) => /classific/i.test(b.label) && !/squadr|general/i.test(b.label));
+    const g2 = findGare(base).find((g) => g.id && rowIdx(g) > 1);
+    if (!cl || !g2) return null;
+    for (const f of rowFields(base)) {
+      for (const shift of [0, -1]) {
+        if (opts.stop()) return null;
+        const t = await read(pressReq(base, cl, { ...choose, [f]: String(rowIdx(g2) + shift), ...selOf(base, f) }, "Riga dell'elenco"));
+        if (t && garaIdOf(t) === g2.id) {
+          rowSel = { field: f, shift };
+          try {
+            localStorage.setItem("aa-fitast-rowsel", JSON.stringify(rowSel));
+          } catch {
+            /* niente */
+          }
+          return rowSel;
+        }
+      }
+    }
+    return null;
+  };
   const piazzole = async (id: string, gara: { id: string; title: string; day: string }, referer: string, g?: Gara, page?: FitastPage | null) => {
     if (opts.stop()) return;
     step = `${gara.title || "Gara"} · piazzole`;
@@ -126,11 +163,18 @@ export async function syncStandings(opts: { onProgress: (p: SyncProgress) => voi
       const r = pressReq(page, garaBtn, {}, step);
       if (r) reqs.push(r);
     }
-    // la gara scelta come riga della tabella dell'elenco (come toccarla), poi PIAZZOLE
-    const row = g?.alts.find((a) => a.kind === "row" && a.alias);
-    if (pzBtn && row && row.kind === "row" && row.alias) {
-      const r = pressReq(base, pzBtn, { ...choose, [row.alias]: String(row.index) }, step);
-      if (r) reqs.push(r);
+    // la gara scelta come riga dell'elenco (come toccarla), poi PIAZZOLE: il modo che si usa a mano
+    if (pzBtn && g && rowIdx(g)) {
+      const sel = await probeRow();
+      if (sel) {
+        const r = pressReq(base, pzBtn, { ...choose, [sel.field]: String(rowIdx(g) + sel.shift), ...selOf(base, sel.field) }, step);
+        if (r) reqs.unshift(r);
+      }
+      const row = g.alts.find((a) => a.kind === "row" && a.alias);
+      if (row && row.kind === "row" && row.alias && row.alias !== sel?.field) {
+        const r = pressReq(base, pzBtn, { ...choose, [row.alias]: String(row.index), ...selOf(base, row.alias) }, step);
+        if (r) reqs.push(r);
+      }
     }
     if (pzBtn && g) {
       const how = g.alts.find((a) => a.kind === "option" || a.kind === "input");
@@ -258,5 +302,11 @@ export async function syncStandings(opts: { onProgress: (p: SyncProgress) => voi
       ? `Piazzole lette per ${pzStats.read} ${pzStats.read === 1 ? "gara" : "gare"} su ${pzStats.tried} (${pzStats.people} arcieri).`
       : `Piazzole non trovate sul portale per ${pzStats.tried} ${pzStats.tried === 1 ? "gara" : "gare"}.${pzStats.seen.length ? ` Pagine viste: ${pzStats.seen.join(" | ")}` : ""}`
     : "";
+  // l'ultimo esito delle piazzole resta: la gara lo mostra quando «Con te in piazzola» è vuoto
+  try {
+    if (note) localStorage.setItem("aa-fitast-pz-note", JSON.stringify({ at: new Date().toISOString(), note, pzBtn: Boolean(pzBtn), rowSel: rowSel ?? null }));
+  } catch {
+    /* niente */
+  }
   report({ done: true, ...(note ? { note } : {}) });
 }

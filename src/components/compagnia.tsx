@@ -9,6 +9,7 @@ import { findCompanyLogos, fitastTeamStats, syncFitastCompanies, type TeamStat }
 import { useLoad } from "@/lib/arcieri/use-load";
 import { teamKey } from "@/lib/arcieri/fitast-league";
 import { Avatar, Button, Card, ErrorNote, Field, Segmented, TextInput } from "./kit";
+import { Glyph } from "./icons";
 import { RankBars } from "./rank-bars";
 import { CrestPodium } from "./podium";
 import { JoinLinkSheet, TeamArchersInline, TeamArchersSheet } from "./fitast-league";
@@ -121,7 +122,17 @@ function hrefOf(kind: ContactKind, value: string) {
   }
 }
 
-function ContactButton({ kind, href, tint }: { kind: ContactKind; href: string; tint: string }) {
+function ContactButton({ kind, href, tint, compact = false }: { kind: ContactKind; href: string; tint: string; /** solo il bottone tondo, senza scritta (nell'intestazione) */ compact?: boolean }) {
+  if (compact) {
+    const dot = (
+      <span className="grid h-9 w-9 place-items-center rounded-full text-white shadow-[0_6px_14px_-8px_rgba(0,0,0,.8)] [&_svg]:h-[17px] [&_svg]:w-[17px]" style={{ background: `linear-gradient(150deg, color-mix(in srgb, ${tint} 85%, white 15%), color-mix(in srgb, ${tint} 70%, black 30%))` }}>
+        <ContactIcon kind={kind} />
+      </span>
+    );
+    if (kind === "board") return <Link to="/bacheca" aria-label={LABEL[kind]} title={LABEL[kind]} className="aa-press">{dot}</Link>;
+    const ext = /^https:/.test(href);
+    return <a href={href} aria-label={LABEL[kind]} title={LABEL[kind]} target={ext ? "_blank" : undefined} rel={ext ? "noreferrer" : undefined} className="aa-press">{dot}</a>;
+  }
   const inner = (
     <>
       <span className="grid h-12 w-12 place-items-center rounded-2xl text-white shadow-[0_6px_18px_-8px_rgba(0,0,0,.7)]" style={{ background: `linear-gradient(150deg, color-mix(in srgb, ${tint} 85%, white 15%), color-mix(in srgb, ${tint} 70%, black 30%))` }}>
@@ -162,17 +173,24 @@ export function CompanyHero({ co, canEdit, onEdit }: { co: Co; canEdit: boolean;
   return (
     <section className="aa-company relative overflow-hidden rounded-[var(--radius-card)] border border-hair shadow-card" style={{ ["--co" as string]: co.color }}>
       <div className="aa-company-bg" aria-hidden />
-      <div className="relative grid gap-4 p-4">
-        <div className="flex items-center gap-4">
-          <div className="aa-company-crest relative grid h-28 w-24 shrink-0 place-items-center">
+      <div className="relative grid gap-3 p-4">
+        {/* chi è: stemma, nome, motto (e la matita per chi la può modificare) */}
+        <div className="flex items-center gap-3">
+          <div className="aa-company-crest relative grid h-20 w-[4.3rem] shrink-0 place-items-center">
             {co.logoUrl ? <img src={co.logoUrl} alt={`Stemma di ${co.name}`} className="h-full w-full object-contain drop-shadow-[0_8px_14px_rgba(0,0,0,.45)]" /> : <DefaultCrest color={co.color} letter={co.name.replace(/^Compagnia (degli |dei |di )?/i, "").slice(0, 1)} />}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/70">{co.city ? `Compagnia · ${co.city}` : "Compagnia"}</p>
-            <h2 className="font-display text-[1.6rem] leading-[1.05] text-white">{co.name}</h2>
-            {co.motto ? <p className="mt-1 font-display text-base italic text-white/85">«{co.motto}»</p> : null}
+            <p className="text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-white/70">{co.city ? `Compagnia · ${co.city}` : "Compagnia"}</p>
+            <h2 className="font-display text-[1.5rem] leading-[1.05] text-white">{co.name}</h2>
+            {co.motto ? <p className="mt-0.5 truncate font-display text-sm italic text-white/80">«{co.motto}»</p> : null}
           </div>
+          {canEdit ? (
+            <button type="button" onClick={onEdit} aria-label="Modifica la compagnia" title="Modifica la compagnia" className="aa-press grid h-10 w-10 shrink-0 place-items-center self-start rounded-full bg-white/15 text-white backdrop-blur">
+              <Glyph name="edit" size={17} />
+            </button>
+          ) : null}
         </div>
+        {/* i numeri: quelli del campionato FITAST se la compagnia c'è, se no quelli dell'app */}
         <div className="grid grid-cols-4 gap-1.5">
           {(st
             ? [
@@ -188,25 +206,20 @@ export function CompanyHero({ co, canEdit, onEdit }: { co: Co; canEdit: boolean;
                 ["Gare", co.gare.toLocaleString("it-IT")],
               ]
           ).map(([k, v]) => (
-            <div key={k} className="rounded-2xl bg-black/25 px-1 py-2 text-center backdrop-blur-sm">
-              <p className="font-display text-lg leading-none text-white tabular-nums">{v}</p>
-              <p className="mt-1 text-[0.6rem] font-semibold uppercase tracking-wider text-white/65">{k}</p>
+            <div key={k} className="rounded-xl bg-black/25 px-1 py-1.5 text-center backdrop-blur-sm">
+              <p className="font-display text-base leading-none text-white tabular-nums">{v}</p>
+              <p className="mt-1 text-[0.56rem] font-semibold uppercase tracking-wider text-white/65">{k}</p>
             </div>
           ))}
         </div>
-        {co.bio ? <p className="text-sm text-white/85">{co.bio}</p> : null}
-        <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1 [scrollbar-width:none]">
-          {links.map((item) => <ContactButton key={item.kind} kind={item.kind} href={item.href} tint={CONTACT_TINT[item.kind]} />)}
-          <ContactButton kind="board" href="" tint={CONTACT_TINT.board} />
+        {co.bio ? <p className="line-clamp-2 text-xs text-white/80">{co.bio}</p> : null}
+        {/* contatti: una fila di bottoni tondi (il nome compare tenendo premuto), poi il campo */}
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(2.25rem,1fr))] justify-items-center gap-1">
+          {links.map((item) => <ContactButton key={item.kind} kind={item.kind} href={item.href} tint={CONTACT_TINT[item.kind]} compact />)}
+          <ContactButton kind="board" href="" tint={CONTACT_TINT.board} compact />
         </div>
-        {co.address || co.email ? (
-          <div className="grid gap-0.5 text-xs text-white/85">
-            {co.address ? <a className="truncate underline-offset-2 hover:underline" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(co.address)}`} target="_blank" rel="noreferrer">Campo: {co.address}</a> : null}
-            {co.email ? <a className="truncate underline-offset-2 hover:underline" href={`mailto:${co.email}`}>{co.email}</a> : null}
-          </div>
-        ) : null}
-        {links.length === 0 ? <p className="text-xs text-white/70">{canEdit ? "Aggiungi telefono, WhatsApp e social: compariranno qui per tutti." : "Telefono e social non sono ancora stati inseriti."}</p> : null}
-        {canEdit ? <button type="button" onClick={onEdit} className="aa-press justify-self-start rounded-full bg-white/15 px-3.5 py-2 text-xs font-semibold text-white backdrop-blur">Modifica la compagnia</button> : null}
+        {co.address ? <a className="truncate text-xs text-white/80 underline-offset-2 hover:underline" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(co.address)}`} target="_blank" rel="noreferrer">Campo: {co.address}</a> : null}
+        {links.length === 0 ? <p className="text-xs text-white/70">{canEdit ? "Aggiungi telefono, WhatsApp e social con la matita: compariranno qui per tutti." : "Telefono e social non sono ancora stati inseriti."}</p> : null}
       </div>
     </section>
   );

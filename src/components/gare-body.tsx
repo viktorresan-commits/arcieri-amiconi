@@ -502,7 +502,17 @@ function pzWhy(comp: Comp) {
   const pz = comp.pzInfo;
   const mine = comp.group?.piazzola || null;
   if (!comp.fitast?.garaId && !pz) return "Questa gara non è collegata a una gara del portale FITAST: fotografa il cartellino qui sotto, oppure collegala dalla gara.";
-  if (!pz?.read) return "L'elenco delle piazzole di questa gara non è ancora arrivato dal portale. In Campionato premi «Aggiorna dal portale»: alla fine una riga dice per quante gare le ha trovate. Intanto puoi fotografare il cartellino qui sotto.";
+  if (!pz?.read) {
+    // l'ultimo aggiornamento dal portale, se c'è stato: cosa ha trovato (serve per capire cosa manca)
+    let last = "";
+    try {
+      const v = JSON.parse(localStorage.getItem("aa-fitast-pz-note") ?? "null") as { at?: string; note?: string; pzBtn?: boolean; rowSel?: { field: string } | null } | null;
+      if (v?.note) last = ` Ultimo aggiornamento (${new Date(v.at ?? "").toLocaleString("it-IT", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}): ${v.note}${v.pzBtn === false ? " Pulsante PIAZZOLE non trovato." : ""}${v.rowSel ? "" : " Riga della gara non selezionabile."}`;
+    } catch {
+      last = "";
+    }
+    return `L'elenco delle piazzole di questa gara non è ancora arrivato dal portale. In Campionato premi «Aggiorna dal portale». Intanto puoi fotografare il cartellino qui sotto.${last}`;
+  }
   if (pz.mine == null && !mine) return `Elenco delle piazzole letto (${pz.people} arcieri, ${pz.lanes} piazzole), ma non trovo il tuo nome: collega il tuo nome FITAST nel Profilo.`;
   return `Elenco delle piazzole letto (${pz.people} arcieri, ${pz.lanes} piazzole): nella piazzola ${pz.mine ?? mine} non risulta nessun altro.${pz.mine != null && mine && pz.mine !== mine ? ` Sul cartellino hai la ${mine}, sul portale la ${pz.mine}.` : ""}`;
 }

@@ -44,11 +44,11 @@ export const Route = createFileRoute("/_app/squadra")({ component: Page });
 type Section = "arcieri" | "gare" | "bersaglio" | "bacheca" | "compagnie";
 /** le schede della Compagnia, una cosa per scheda: chi c'è, chi va meglio, dove tiriamo, cosa abbiamo vinto */
 const SECTIONS: { id: Section; label: string; icon: IconName; lede: string }[] = [
-  { id: "arcieri", label: "Arcieri", icon: "team", lede: "Chi tira con noi e i podi per divisione: tocca un nome per la scheda, confronta fino a tre arcieri." },
-  { id: "gare", label: "Gare", icon: "flag", lede: "Segni solo quelle a cui hai partecipato. Il punteggio degli altri si vede, ma si cambia solo il tuo." },
-  { id: "bersaglio", label: "Bersaglio", icon: "target", lede: "Dove arrivano le frecce: le tue, di tutta la compagnia o di chi scegli, in allenamento e in gara." },
-  { id: "bacheca", label: "Trofei", icon: "trophy", lede: "La bacheca della compagnia: podi degli arcieri, piazzamenti di squadra, trofei e premi." },
-  { id: "compagnie", label: "Compagnie", icon: "shield", lede: "Classifica delle compagnie e campionato FITAST letto dal portale: arcieri, gare, squadre. Qui entri in un'altra compagnia o ne fondi una." },
+  { id: "arcieri", label: "Arcieri", icon: "team", lede: "Chi tira con noi, i podi per divisione e il confronto fra arcieri." },
+  { id: "gare", label: "Gare", icon: "flag", lede: "Le gare della stagione: segni le tue, quelle degli altri si vedono." },
+  { id: "bersaglio", label: "Bersaglio", icon: "target", lede: "Dove arrivano le frecce, tue o della compagnia." },
+  { id: "bacheca", label: "Trofei", icon: "trophy", lede: "Podi, piazzamenti di squadra e trofei." },
+  { id: "compagnie", label: "Compagnie", icon: "shield", lede: "Tutte le compagnie e il campionato FITAST." },
 ];
 /** le schede salvate dalla versione di prima */
 const OLD_SECTION: Record<string, Section> = { compagnia: "arcieri", statistiche: "arcieri", classifiche: "arcieri", classifica: "compagnie", fitast: "compagnie", sfida: "arcieri" };
