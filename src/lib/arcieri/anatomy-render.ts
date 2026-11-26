@@ -459,17 +459,29 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     const side = (i: number): "L" | "R" => (i === 15 ? "L" : "R");
     const pts = model.hud.pts;
     const aim = v3.sub(pts.bowWr, pts.drawWr);
-    const mats = bodyMatrices(meta, model.J, model.headF, model.grip ? {
+    const grips = model.grip ? {
       hook: { side: side(sd.draw[2]), k: model.grip.draw, toward: pts.nock },
       wrap: { side: side(sd.bow[2]), k: model.grip.bow, toward: v3.add(pts.grip, v3.mul(v3.norm(aim), 0.05)) },
-    } : undefined, curlBuf);
+    } : undefined;
+    // le mani in presa si mettono sull'attrezzo: il pugno chiuso attorno all'impugnatura dell'arco e la piega
+    // delle dita sulla corda alla cocca. Prima si guarda dove cade il «buco» delle dita piegate, poi si sposta
+    // la mano (solo lei: l'avambraccio si allunga di pochi centimetri) perché cada proprio lì
+    let J = model.J;
+    if (grips) {
+      const first = bodyMatrices(meta, J, model.headF, grips, curlBuf);
+      J = seatHands(meta, J, first, [
+        grips.wrap.k > 0.3 ? { side: grips.wrap.side, base: grips.wrap.side === "L" ? 33 : 54, at: pts.grip, hole: "wrap" as const } : null,
+        grips.hook.k > 0.3 ? { side: grips.hook.side, base: grips.hook.side === "L" ? 33 : 54, at: pts.nock, hole: "hook" as const } : null,
+      ]);
+    }
+    const mats = bodyMatrices(meta, J, model.headF, grips, curlBuf);
     // matrici dei segmenti come tre righe ciascuna (la quarta è sempre 0 0 0 1)
     const nSeg = Math.min(21, meta.segments.length);
     for (let i = 0; i < nSeg; i++) for (let r = 0; r < 3; r++) for (let c = 0; c < 4; c++) segRows[(i * 3 + r) * 4 + c] = mats[i * 16 + c * 4 + r];
     const acts = new Map<string, number>();
     for (const p of model.parts) if (p.layer === "muscolo" && p.id) acts.set(p.id, Math.max(acts.get(p.id) ?? 0, p.act));
     const g = groupValues(meta, model.hand, acts, focus);
-    flexValues(body.flex, model.J, g.act, bul);
+    flexValues(body.flex, J, g.act, bul);
     gl.enable(gl.DEPTH_TEST);
     gl.enable(gl.BLEND);
     gl.disable(gl.CULL_FACE);
@@ -600,4 +612,41 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
 export function viewFrom(target: V3, yaw: number, pitch: number, dist: number, aspect: number, fovDeg = 34, near = 0.05) {
   const eye: V3 = [target[0] + Math.sin(yaw) * Math.cos(pitch) * dist, target[1] + Math.sin(pitch) * dist, target[2] + Math.cos(yaw) * Math.cos(pitch) * dist];
   return { eye, VP: mul4(perspective((fovDeg * Math.PI) / 180, aspect, near, 30), lookAt(eye, target)) };
+}
+
+
+/** un punto di riposo portato dove lo mette la matrice del segmento (colonne, come WebGL) */
+function xf(m: Float32Array, at: number, p: V3): V3 {
+  const o = at * 16;
+  return [m[o] * p[0] + m[o + 4] * p[1] + m[o + 8] * p[2] + m[o + 12], m[o + 1] * p[0] + m[o + 5] * p[1] + m[o + 9] * p[2] + m[o + 13], m[o + 2] * p[0] + m[o + 6] * p[1] + m[o + 10] * p[2] + m[o + 14]];
+}
+
+/**
+ * Sposta le mani in presa sull'attrezzo. Il «buco» delle dita piegate, a riposo: per la mano dell'arco
+ * davanti al palmo all'altezza delle nocche (dove passa l'impugnatura), per quella della corda nella
+ * piega della prima falange. Si calcola dove cade con la posa attuale e si trasla tutta la mano (polso,
+ * dita e i suoi 21 punti) perché cada sull'impugnatura o sulla cocca; mai più di 7 cm.
+ */
+function seatHands(meta: BodyMeta, J: Record<number, V3>, mats: Float32Array, hands: ({ side: "L" | "R"; base: number; at: V3; hole: "wrap" | "hook" } | null)[]): Record<number, V3> {
+  let out: Record<number, V3> | null = null;
+  for (const h of hands) {
+    if (!h) continue;
+    const m = meta.segments.indexOf(`mano_${h.side}`);
+    const k0 = meta.rest[`dita0_${h.side}`];
+    const k1 = meta.rest[`dita1_${h.side}`];
+    if (m < 0 || !k0 || !k1) continue;
+    const F = v3.norm(v3.sub(k1, k0));
+    const L = v3.len(v3.sub(k1, k0));
+    // a riposo i palmi guardano avanti (+z): le dita si piegano da quella parte
+    const holeRest: V3 = h.hole === "wrap" ? v3.add(v3.add(k0, [0, 0, 0.024]), v3.mul(F, 0.012)) : v3.add(v3.add(k0, v3.mul(F, L * 0.42)), [0, 0, 0.012]);
+    const hole = xf(mats, m, holeRest);
+    let d = v3.sub(h.at, hole);
+    const dl = v3.len(d);
+    if (dl < 0.002) continue;
+    if (dl > 0.07) d = v3.mul(d, 0.07 / dl);
+    out ??= { ...J };
+    const wr = h.side === "L" ? [15, 17, 19, 21] : [16, 18, 20, 22];
+    for (const i of [...wr, ...Array.from({ length: 21 }, (_, k) => h.base + k)]) if (J[i]) out[i] = v3.add(J[i], d);
+  }
+  return out ?? J;
 }

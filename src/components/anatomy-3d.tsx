@@ -482,11 +482,11 @@ function paintHud(ctx: CanvasRenderingContext2D, model: Model, VP: Float32Array,
     return [((x / w) * 0.5 + 0.5) * W, (1 - ((y / w) * 0.5 + 0.5)) * H, w];
   };
   const hudD = model.hud;
-  ctx.lineWidth = 1.2 * dpr;
+  ctx.lineWidth = 0.8 * dpr;
   // anelli a terra
-  for (const [r, a] of [[0.45, 0.55], [0.62, 0.3], [0.8, 0.16]] as const) {
+  for (const [r, a] of [[0.45, 0.4], [0.62, 0.2], [0.8, 0.1]] as const) {
     ctx.strokeStyle = `rgba(95,212,255,${a})`;
-    ctx.setLineDash(r > 0.5 ? [4 * dpr, 5 * dpr] : []);
+    ctx.setLineDash(r > 0.5 ? [3 * dpr, 5 * dpr] : []);
     ctx.beginPath();
     for (let i = 0; i <= 64; i++) {
       const an = (i / 64) * Math.PI * 2;
@@ -497,11 +497,11 @@ function paintHud(ctx: CanvasRenderingContext2D, model: Model, VP: Float32Array,
     ctx.stroke();
   }
   ctx.setLineDash([]);
-  for (let i = 0; i < 24; i++) {
-    const an = (i / 24) * Math.PI * 2 + time * 0.2;
+  for (let i = 0; i < 16; i++) {
+    const an = (i / 16) * Math.PI * 2 + time * 0.2;
     const a = proj([hudD.feet[0] + Math.cos(an) * 0.45, 0.002, hudD.feet[2] + Math.sin(an) * 0.45]);
-    const b = proj([hudD.feet[0] + Math.cos(an) * 0.5, 0.002, hudD.feet[2] + Math.sin(an) * 0.5]);
-    ctx.strokeStyle = "rgba(95,212,255,0.55)";
+    const b = proj([hudD.feet[0] + Math.cos(an) * 0.48, 0.002, hudD.feet[2] + Math.sin(an) * 0.48]);
+    ctx.strokeStyle = "rgba(95,212,255,0.35)";
     ctx.beginPath();
     ctx.moveTo(a[0], a[1]);
     ctx.lineTo(b[0], b[1]);
@@ -520,26 +520,25 @@ function paintHud(ctx: CanvasRenderingContext2D, model: Model, VP: Float32Array,
     while (d > Math.PI) d -= Math.PI * 2;
     while (d < -Math.PI) d += Math.PI * 2;
     a2 = a1 + d;
-    ctx.strokeStyle = "rgba(255,214,120,0.9)";
-    ctx.lineWidth = 2 * dpr;
+    ctx.strokeStyle = "rgba(255,214,120,0.85)";
+    ctx.lineWidth = 1.1 * dpr;
     ctx.beginPath();
-    ctx.arc(o[0], o[1], 16 * dpr, Math.min(a1, a2), Math.max(a1, a2));
+    ctx.arc(o[0], o[1], 11 * dpr, Math.min(a1, a2), Math.max(a1, a2));
     ctx.stroke();
   }
   // quota dell'allungo
-  ctx.font = `600 ${11 * dpr}px system-ui, sans-serif`;
   for (const d of hudD.dims) {
     const a = proj(d.a);
     const b = proj(d.b);
     const nx = -(b[1] - a[1]);
     const ny = b[0] - a[0];
     const nl = Math.hypot(nx, ny) || 1;
-    const off = 18 * dpr;
+    const off = 13 * dpr;
     const ox = (nx / nl) * off * (ny / nl > 0 ? -1 : 1);
     const oy = (ny / nl) * off * (ny / nl > 0 ? -1 : 1);
-    ctx.strokeStyle = "rgba(255,214,120,0.95)";
-    ctx.lineWidth = 1.2 * dpr;
-    ctx.setLineDash([5 * dpr, 4 * dpr]);
+    ctx.strokeStyle = "rgba(255,214,120,0.8)";
+    ctx.lineWidth = 0.8 * dpr;
+    ctx.setLineDash([3 * dpr, 3 * dpr]);
     ctx.beginPath();
     ctx.moveTo(a[0] + ox, a[1] + oy);
     ctx.lineTo(b[0] + ox, b[1] + oy);
@@ -548,38 +547,53 @@ function paintHud(ctx: CanvasRenderingContext2D, model: Model, VP: Float32Array,
     for (const q of [a, b]) {
       ctx.beginPath();
       ctx.moveTo(q[0], q[1]);
-      ctx.lineTo(q[0] + ox * 1.3, q[1] + oy * 1.3);
+      ctx.lineTo(q[0] + ox * 1.2, q[1] + oy * 1.2);
       ctx.stroke();
     }
   }
-  // etichette con linea guida: a sinistra o a destra della figura, senza sovrapporsi
+  // etichette con linea guida: a sinistra o a destra della figura, senza sovrapporsi tra loro.
+  // Le misure il cui punto è fuori dall'inquadratura (zoom su una mano) non si disegnano.
   const mid = proj(model.center)[0];
-  const items = [...hudD.labels, ...hudD.dims.map((d) => ({ at: v3.lerp(d.a, d.b, 0.55), text: d.text, tone: "gold" as const }))].map((l) => {
-    const p = proj(l.at);
-    return { ...l, p, side: p[0] < mid ? -1 : 1 };
-  });
-  for (const side of [-1, 1]) {
-    const col = items.filter((i) => i.side === side).sort((a, b) => a.p[1] - b.p[1]);
-    let y = -1e9;
-    for (const it of col) {
-      const ty = Math.max(it.p[1] - 14 * dpr, y + 24 * dpr);
-      y = ty;
-      ctx.font = `600 ${11 * dpr}px system-ui, sans-serif`;
-      const tw = ctx.measureText(it.text).width + 12 * dpr;
-      // la casella resta dentro il riquadro: la linea guida arriva al suo bordo
-      const tx = side < 0 ? Math.max(4 * dpr + tw, it.p[0] - 70 * dpr) : Math.min(W - 4 * dpr - tw, it.p[0] + 70 * dpr);
-      ctx.strokeStyle = it.tone === "warn" ? "rgba(255,160,110,0.9)" : it.tone === "gold" ? "rgba(255,214,120,0.9)" : "rgba(95,212,255,0.85)";
-      ctx.lineWidth = 1 * dpr;
-      ctx.beginPath();
-      ctx.moveTo(it.p[0], it.p[1]);
-      ctx.lineTo(tx, ty);
-      ctx.stroke();
-      ctx.fillStyle = ctx.strokeStyle;
-      ctx.beginPath();
-      ctx.arc(it.p[0], it.p[1], 2.5 * dpr, 0, Math.PI * 2);
-      ctx.fill();
-      tag(ctx, it.text, tx, ty, it.tone, dpr, false, side);
+  const H2 = ctx.canvas.height;
+  ctx.font = TAG_FONT(dpr);
+  const gap = 3 * dpr;
+  const th = 14 * dpr;
+  const items = [...hudD.labels, ...hudD.dims.map((d) => ({ at: v3.lerp(d.a, d.b, 0.55), text: d.text, tone: "gold" as const }))]
+    .map((l) => {
+      const p = proj(l.at);
+      const tw = ctx.measureText(l.text).width + 10 * dpr;
+      let side = p[0] < mid ? -1 : 1;
+      // dal lato scelto non c'è posto: l'etichetta va dall'altra parte
+      if (side < 0 && p[0] - 52 * dpr - tw < 4 * dpr) side = 1;
+      else if (side > 0 && p[0] + 52 * dpr + tw > W - 4 * dpr) side = -1;
+      return { ...l, p, tw, side };
+    })
+    .filter((it) => it.p[2] > 0 && it.p[0] >= 0 && it.p[0] <= W && it.p[1] >= 0 && it.p[1] <= H2)
+    .sort((a, b) => a.p[1] - b.p[1]);
+  const placed: { x0: number; x1: number; y0: number; y1: number }[] = [];
+  for (const it of items) {
+    // la casella resta dentro il riquadro: la linea guida arriva al suo bordo
+    const tx = it.side < 0 ? Math.max(4 * dpr + it.tw, it.p[0] - 52 * dpr) : Math.min(W - 4 * dpr - it.tw, it.p[0] + 52 * dpr);
+    const x0 = it.side < 0 ? tx - it.tw : tx;
+    const x1 = x0 + it.tw;
+    let ty = it.p[1] - 12 * dpr;
+    for (let guard = 0; guard < 40; guard++) {
+      const hit = placed.find((b) => x0 < b.x1 + gap && x1 > b.x0 - gap && ty - th / 2 < b.y1 + gap && ty + th / 2 > b.y0 - gap);
+      if (!hit) break;
+      ty = hit.y1 + gap + th / 2;
     }
+    placed.push({ x0, x1, y0: ty - th / 2, y1: ty + th / 2 });
+    ctx.strokeStyle = it.tone === "warn" ? "rgba(255,160,110,0.75)" : it.tone === "gold" ? "rgba(255,214,120,0.75)" : "rgba(95,212,255,0.7)";
+    ctx.lineWidth = 0.7 * dpr;
+    ctx.beginPath();
+    ctx.moveTo(it.p[0], it.p[1]);
+    ctx.lineTo(tx, ty);
+    ctx.stroke();
+    ctx.fillStyle = ctx.strokeStyle;
+    ctx.beginPath();
+    ctx.arc(it.p[0], it.p[1], 1.6 * dpr, 0, Math.PI * 2);
+    ctx.fill();
+    tag(ctx, it.text, tx, ty, it.tone, dpr, false, it.side);
   }
 }
 
@@ -619,44 +633,55 @@ function drawJoints(ctx: CanvasRenderingContext2D, J: Record<number, V3>, proj: 
     ctx.lineTo(q[0], q[1]);
     ctx.stroke();
   };
-  for (const [a, b] of BODY_LINKS) line(a, b, "rgba(4,20,34,0.55)", 4.2);
-  for (const [a, b] of BODY_LINKS) line(a, b, a <= 10 ? "rgba(255,255,255,0.9)" : tone(b), 2);
+  for (const [a, b] of BODY_LINKS) line(a, b, "rgba(4,20,34,0.45)", 2.6);
+  for (const [a, b] of BODY_LINKS) line(a, b, a <= 10 ? "rgba(255,255,255,0.85)" : tone(b), 1.2);
   for (const base of [33, 54]) {
     if (!J[base]) continue;
     const col = base === 33 ? tone(15) : tone(16);
-    for (const [a, b] of HAND_LINKS) line(base + a, base + b, col, 1.2);
+    for (const [a, b] of HAND_LINKS) line(base + a, base + b, col, 0.7);
   }
   const dot = (i: number, r: number) => {
     const p = P[i];
     if (!p || p[2] <= 0) return;
     ctx.fillStyle = "rgba(4,20,34,0.8)";
     ctx.beginPath();
-    ctx.arc(p[0], p[1], (r + 1.4) * dpr, 0, Math.PI * 2);
+    ctx.arc(p[0], p[1], (r + 0.8) * dpr, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = tone(i);
     ctx.beginPath();
     ctx.arc(p[0], p[1], r * dpr, 0, Math.PI * 2);
     ctx.fill();
   };
-  for (const i of [0, 7, 8, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32]) dot(i, i >= 15 && i <= 22 ? 2.2 : 3.2);
-  for (const base of [33, 54]) if (J[base]) for (let k = 1; k < 21; k++) dot(base + k, 1.4);
+  for (const i of [0, 7, 8, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32]) dot(i, i >= 15 && i <= 22 ? 1.4 : 2);
+  for (const base of [33, 54]) if (J[base]) for (let k = 1; k < 21; k++) dot(base + k, 0.9);
 }
 
 /** etichetta con fondo scuro e bordo del colore della misura */
+const TAG_FONT = (dpr: number) => `500 ${9.5 * dpr}px system-ui, sans-serif`;
+
+/** etichetta piccola: fondo scuro arrotondato, una sola tacca del colore della misura sul lato della linea guida */
 function tag(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, tone: "cyan" | "gold" | "warn", dpr: number, center: boolean, side = 1) {
-  ctx.font = `600 ${11 * dpr}px system-ui, sans-serif`;
-  const w = ctx.measureText(text).width + 12 * dpr;
-  const h = 19 * dpr;
+  ctx.font = TAG_FONT(dpr);
+  const w = ctx.measureText(text).width + 10 * dpr;
+  const h = 14 * dpr;
   const W = ctx.canvas.width;
   const bx = Math.max(4 * dpr, Math.min(W - w - 4 * dpr, center ? x - w / 2 : side < 0 ? x - w : x));
   const by = y - h / 2;
-  ctx.fillStyle = "rgba(3,16,26,0.78)";
-  ctx.fillRect(bx, by, w, h);
-  ctx.strokeStyle = tone === "warn" ? "rgba(255,160,110,0.95)" : tone === "gold" ? "rgba(255,214,120,0.95)" : "rgba(95,212,255,0.9)";
-  ctx.lineWidth = 1 * dpr;
-  ctx.strokeRect(bx + 0.5, by + 0.5, w - 1, h - 1);
-  ctx.fillStyle = "#fff";
+  const r = 3 * dpr;
+  ctx.fillStyle = "rgba(3,16,26,0.7)";
+  ctx.beginPath();
+  ctx.moveTo(bx + r, by);
+  ctx.arcTo(bx + w, by, bx + w, by + h, r);
+  ctx.arcTo(bx + w, by + h, bx, by + h, r);
+  ctx.arcTo(bx, by + h, bx, by, r);
+  ctx.arcTo(bx, by, bx + w, by, r);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = tone === "warn" ? "#ffa06e" : tone === "gold" ? "#ffd678" : "#5fd4ff";
+  const ax = center ? bx + r : side < 0 ? bx + w - 2 * dpr : bx;
+  ctx.fillRect(ax, by + 3 * dpr, 2 * dpr, h - 6 * dpr);
+  ctx.fillStyle = "rgba(255,255,255,0.94)";
   ctx.textBaseline = "middle";
   ctx.textAlign = "left";
-  ctx.fillText(text, bx + 6 * dpr, y + 0.5 * dpr);
+  ctx.fillText(text, bx + 5 * dpr, y + 0.5 * dpr);
 }

@@ -333,7 +333,12 @@ export function bodyMatrices(meta: BodyMeta, J: Record<number, V3>, look?: V3, g
     const e1d = len(toNock) > 0.01 ? norm(toNock) : e1v;
     const e1 = norm(add(mul(e1v, 1 - k), mul(e1d, k)));
     const Xd = perpTo(e1, torsoUp, Xv);
-    const X = perpTo(e1, add(mul(Xv, 1 - k), mul(Xd, k)), Xd);
+    // il lato dell'indice letto dal video a volte si ribalta (mano vista di taglio, punti scambiati):
+    // si prende sempre dalla stessa parte di quello voluto, e in presa piena conta solo quello voluto,
+    // così la mano non gira di colpo su se stessa
+    const Xs = dot(Xv, Xd) < 0 ? mul(Xv, -1) : Xv;
+    const kx = Math.min(1, k * 1.6);
+    const X = perpTo(e1, add(mul(Xs, 1 - kx), mul(Xd, kx)), Xd);
     const IXn = add(add(W, mul(e1, hLen)), mul(X, wid / 2));
     const PKn = add(add(W, mul(e1, hLen)), mul(X, -wid / 2));
     const palm = cross(sub(IXn, W), sub(PKn, W));
