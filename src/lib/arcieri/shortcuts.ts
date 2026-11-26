@@ -71,14 +71,14 @@ export const SHORTCUTS: Shortcut[] = [
 
 /** Le tappe della mappa: il percorso naturale di un arciere, dalla preparazione alla squadra. */
 /** ogni sezione ha il suo colore e il suo smalto, ben distinti fra loro (anche nella barra in basso) */
-export const STATIONS: { id: StationId; title: string; sub: string; icon: IconName; color: string; enamel: "amber" | "emerald" | "night" | "teal" | "ruby" | "sapphire" | "amethyst" | "ivory" }[] = [
-  { id: "prepara", title: "Preparati", sub: "Arco, frecce e simulatore di volo", icon: "quiver", color: "#e0a13a", enamel: "amber" },
-  { id: "allena", title: "Allenati", sub: "Tira, fotografa, riprendi il gesto", icon: "bow", color: "#3fcf7f", enamel: "emerald" },
-  { id: "strumenti", title: "Strumenti", sub: "Calcoli e messa a punto", icon: "caliper", color: "#8fa3c8", enamel: "night" },
-  { id: "analizza", title: "Analizza", sub: "Numeri, storico e traguardi", icon: "chart", color: "#2fc4b2", enamel: "teal" },
-  { id: "gareggia", title: "Gareggia", sub: "Gare, calendario e classifiche", icon: "trophy", color: "#e0435a", enamel: "ruby" },
-  { id: "impara", title: "Impara", sub: "Sfide, quiz e giochi per crescere", icon: "daily", color: "#4a8fe8", enamel: "sapphire" },
-  { id: "squadra", title: "Compagnia", sub: "Arcieri, news e profilo", icon: "team", color: "#a988f0", enamel: "amethyst" },
+export const STATIONS: { id: StationId; title: string; /** nome corto, come nella barra in basso */ short: string; sub: string; icon: IconName; color: string; enamel: "amber" | "emerald" | "night" | "teal" | "ruby" | "sapphire" | "amethyst" | "ivory" }[] = [
+  { id: "prepara", title: "Preparati", short: "Prepara", sub: "Arco, frecce e simulatore di volo", icon: "quiver", color: "#e0a13a", enamel: "amber" },
+  { id: "allena", title: "Allenati", short: "Allena", sub: "Tira, fotografa, riprendi il gesto", icon: "bow", color: "#3fcf7f", enamel: "emerald" },
+  { id: "strumenti", title: "Strumenti", short: "Strumenti", sub: "Calcoli e messa a punto", icon: "caliper", color: "#8fa3c8", enamel: "night" },
+  { id: "analizza", title: "Analizza", short: "Analizza", sub: "Numeri, storico e traguardi", icon: "chart", color: "#2fc4b2", enamel: "teal" },
+  { id: "gareggia", title: "Gareggia", short: "Gare", sub: "Gare, calendario e classifiche", icon: "trophy", color: "#e0435a", enamel: "ruby" },
+  { id: "impara", title: "Impara", short: "Impara", sub: "Sfide, quiz e giochi per crescere", icon: "daily", color: "#4a8fe8", enamel: "sapphire" },
+  { id: "squadra", title: "Compagnia", short: "Compagnia", sub: "Arcieri, news e profilo", icon: "team", color: "#a988f0", enamel: "amethyst" },
 ];
 
 export const DEFAULT_PINNED = ["rapido", "foto", "gesto", "statistiche", "balistica", "gare", "attrezzatura", "squadra"];
@@ -170,10 +170,31 @@ const NEXT: Record<string, string> = {
   riepilogo: "statistiche", istruttore: "segreteria", segreteria: "staff",
 };
 
-export function currentShortcut(path: string) {
-  // a parità di indirizzo vince la voce "pulita" (senza parametri): su /allenamento è "Allenamento"
-  const plain = (s: Shortcut) => (s.search || s.hash ? 1 : 0);
-  return [...SHORTCUTS].sort((a, b) => b.to.length - a.to.length || plain(a) - plain(b)).find((s) => s.to !== "/" && path.startsWith(s.to)) ?? null;
+/**
+ * La voce del menu della pagina aperta. Più voci possono aprire la stessa pagina con parametri diversi
+ * (su /allenamento: Tiro rapido, Da foto, Analisi gesto, Già fatto, Storico): con i parametri dell'indirizzo
+ * vince quella che corrisponde, altrimenti la voce "pulita" senza parametri. Così se ne accende una sola.
+ */
+export function currentShortcut(path: string, search?: unknown) {
+  const q = search && typeof search === "object" ? (search as Record<string, unknown>) : null;
+  const onPath = SHORTCUTS.filter((s) => s.to !== "/" && path.startsWith(s.to));
+  if (!onPath.length) return null;
+  const longest = Math.max(...onPath.map((s) => s.to.length));
+  const same = onPath.filter((s) => s.to.length === longest);
+  const fits = (s: Shortcut) => !!s.search && !!q && Object.entries(s.search).every(([k, v]) => String(q[k] ?? "") === v);
+  const byParams = same.filter(fits).sort((a, b) => Object.keys(b.search ?? {}).length - Object.keys(a.search ?? {}).length)[0];
+  return byParams ?? same.find((s) => !s.search && !s.hash) ?? same.find((s) => !s.search) ?? same[0];
+}
+
+/** La sezione della pagina aperta (null in Casa). Profilo e schede degli arcieri stanno nella Compagnia. */
+export function sectionOf(path: string, search?: unknown): StationId | null {
+  if (path === "/") return null;
+  if (path.startsWith("/arciere") || path.startsWith("/profilo")) return "squadra";
+  return currentShortcut(path, search)?.group ?? null;
+}
+
+export function stationOf(id: StationId | null | undefined) {
+  return id ? STATIONS.find((s) => s.id === id) ?? null : null;
 }
 
 export function nextShortcut(path: string) {

@@ -7,7 +7,7 @@ import { getMe } from "@/lib/arcieri/members.api";
 import type { PublicMember } from "@/lib/arcieri/access";
 import { memberLabel, initials } from "@/lib/arcieri/labels";
 import { Avatar, LevelHalo, Loading, Mark, cx } from "./kit";
-import { SHORTCUTS, STATIONS, currentShortcut } from "@/lib/arcieri/shortcuts";
+import { SHORTCUTS, STATIONS, currentShortcut, sectionOf, stationOf } from "@/lib/arcieri/shortcuts";
 import { NextCard, PathMap, ShortcutEditor, TipCard, rememberPage } from "./shortcuts";
 import { SectionBar } from "./section-bar";
 import { CompanyWelcome } from "./compagnia";
@@ -146,6 +146,7 @@ export function Shell({ children }: { children: ReactNode }) {
   }, []);
   const path = useRouterState({ select: (s) => s.location.pathname });
   const href = useRouterState({ select: (s) => s.location.href });
+  const search = useRouterState({ select: (s) => s.location.search });
   // indietro = esattamente dove si era: scorrimento della pagina e, se si era partiti dal Menu, il Menu aperto allo stesso punto
   const menuBox = useRef<HTMLDivElement>(null);
   const menuTop = useRef<number | null>(null);
@@ -179,7 +180,9 @@ export function Shell({ children }: { children: ReactNode }) {
   }, [menu, help, prefsOpen, editShort]);
   const { prefs } = usePrefs();
   const navigate = useNavigate();
-  const here = currentShortcut(path);
+  // la voce e la sezione della pagina aperta: la pagina prende il colore della sua sezione
+  const here = currentShortcut(path, search);
+  const station = stationOf(sectionOf(path, search));
   useEffect(() => {
     rememberPage(path);
   }, [path]);
@@ -320,8 +323,8 @@ export function Shell({ children }: { children: ReactNode }) {
                 <div key={st.id} className="mt-3 grid gap-0.5">
                   <p className="px-3 pb-1 text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-muted/80">{st.title}</p>
                   {items.map((sc) => (
-                    <Link key={sc.id} to={sc.to as "/"} search={(sc.search ?? {}) as never} hash={sc.hash} className={cx("aa-sidelink flex items-center gap-2.5 rounded-xl px-2.5 py-1.5 text-sm font-medium", !sc.search && !sc.hash && sc.to !== "/" && path.startsWith(sc.to) ? "is-active" : "text-muted")} style={{ "--c": sc.color } as CSSProperties}>
-                      <AppIcon name={sc.icon} color={sc.color} size={26} />
+                    <Link key={sc.id} to={sc.to as "/"} search={(sc.search ?? {}) as never} hash={sc.hash} className={cx("aa-sidelink flex items-center gap-2.5 rounded-xl px-2.5 py-1.5 text-sm font-medium", here?.id === sc.id ? "is-active" : "text-muted")} style={{ "--c": st.color } as CSSProperties}>
+                      <AppIcon name={sc.icon} enamel={st.enamel} size={26} />
                       <span className="truncate">{sc.label}</span>
                     </Link>
                   ))}
@@ -338,7 +341,7 @@ export function Shell({ children }: { children: ReactNode }) {
             <span className="truncate text-sm font-semibold">{label}</span>
           </Link>
         </aside>
-        <div className="aa-main relative z-0 min-w-0 md:ml-60">
+        <div className={cx("aa-main relative z-0 min-w-0 md:ml-60", station && "has-sec")} data-sec={station?.id} style={station ? ({ "--sec": station.color } as CSSProperties) : undefined}>
           {path === "/" ? (
             /* Home: in alto il profilo (volto, nome, categoria e livello, esperienza) e gli avvisi */
             <header className="aa-appheader aa-homehead aa-bar sticky top-0 z-20 flex items-center gap-3 border-b px-3 py-2 backdrop-blur-md md:px-4">
@@ -373,7 +376,7 @@ export function Shell({ children }: { children: ReactNode }) {
                 <button type="button" onClick={() => (window.history.length > 1 ? window.history.back() : void navigate({ to: "/" }))} aria-label="Indietro" className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white/[0.06] active:scale-95">
                   <Glyph name="chevron" size={18} className="rotate-180" />
                 </button>
-                {here ? <AppIcon name={here.icon} color={here.color} size={30} /> : null}
+                {here ? <AppIcon name={here.icon} enamel={station?.enamel} size={30} /> : null}
                 <p className="truncate font-display text-xl leading-none">{here?.label ?? "Arcieri Amiconi"}</p>
               </div>
             <div className="flex shrink-0 items-center gap-1.5">
@@ -411,13 +414,14 @@ export function Shell({ children }: { children: ReactNode }) {
           </main>
           {/* barra in basso: solo voci che in Home non ci sono già (Tiro rapido, Da foto, Segnapunti e Statistiche stanno sul gioco) */}
           {/* barra in basso: Casa e le sette sezioni; un tocco apre le voci della sezione sopra la barra */}
-          <SectionBar path={path} hide={hide} onSearch={() => { setMenuSearch(true); setMenu(true); }} />
+          <SectionBar path={path} search={search} hide={hide} onSearch={() => { setMenuSearch(true); setMenu(true); }} />
           {menu ? (
             <div ref={menuBox} data-menu-scroll className="aa-sheet fixed inset-0 z-40 overflow-y-auto bg-bg pb-[calc(env(safe-area-inset-bottom)+1.5rem)] md:hidden">
               {/* niente intestazione: Cerca e Chiudi stanno sul margine destro, sotto le sezioni */}
               <div className="grid gap-3 pl-4 pr-[4.4rem] pt-[calc(env(safe-area-inset-top)+0.9rem)]">
                 <PathMap
                   current={path}
+                  currentSearch={search}
                   showSearch={menuSearch}
                   focus={focus}
                   hide={hide}
@@ -431,7 +435,7 @@ export function Shell({ children }: { children: ReactNode }) {
               </div>
             </div>
           ) : null}
-          {help ? <HelpSheet path={path} onClose={() => setHelp(false)} onMenu={() => setMenu(true)} /> : null}
+          {help ? <HelpSheet path={path} search={search} onClose={() => setHelp(false)} onMenu={() => setMenu(true)} /> : null}
           {prefsOpen ? <PersonalizeSheet onClose={() => setPrefsOpen(false)} /> : null}
           {editShort ? <ShortcutEditor onClose={() => setEditShort(false)} /> : null}
         </div>

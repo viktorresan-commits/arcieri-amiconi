@@ -10,13 +10,14 @@ import { ShortcutTile } from "./shortcuts";
  * Aiuto in contesto: cosa fa questa pagina, come si usa e dove andare dopo.
  * Si apre dal "?" in alto e si chiude toccando fuori, con la X o con Esc.
  */
-export function HelpSheet({ path, onClose, onMenu }: { path: string; onClose: () => void; onMenu: () => void }) {
-  const here = currentShortcut(path);
+export function HelpSheet({ path, search, onClose, onMenu }: { path: string; search?: unknown; onClose: () => void; onMenu: () => void }) {
+  const here = currentShortcut(path, search);
   const station = here ? STATIONS.find((s) => s.id === here.group) : null;
   const tips = helpFor(path);
   const related = here ? SHORTCUTS.filter((s) => s.group === here.group && s.to !== here.to).slice(0, 6) : [];
   const title = path === "/" ? "Casa" : here?.label ?? "Questa pagina";
-  const color = here?.color ?? "#2c8a57";
+  // il colore della sezione, come la pagina
+  const color = station?.color ?? "#2c8a57";
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -35,7 +36,7 @@ export function HelpSheet({ path, onClose, onMenu }: { path: string; onClose: ()
       >
         <div className="mx-auto h-1.5 w-10 rounded-full bg-white/20 md:hidden" />
         <header className="aa-help-head relative flex items-center gap-3 overflow-hidden rounded-2xl p-3">
-          {here ? <AppIcon name={here.icon} color={here.color} size={52} /> : <AppIcon name="home" color={color} size={52} />}
+          {here ? <AppIcon name={here.icon} enamel={station?.enamel} size={52} /> : <AppIcon name="home" enamel="ivory" size={52} />}
           <div className="min-w-0 flex-1">
             {station ? <p className="text-[0.66rem] font-semibold uppercase tracking-[0.16em] text-white/70">{station.title}</p> : null}
             <h2 className="truncate font-display text-2xl leading-tight">{title}</h2>

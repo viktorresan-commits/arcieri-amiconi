@@ -3,7 +3,7 @@ import { CURIOSITA, randomCuriosita } from "@/lib/arcieri/curiosita";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "@tanstack/react-router";
-import { SHORTCUTS, STATIONS, nextShortcut, shortcutById, usePinned, type Shortcut } from "@/lib/arcieri/shortcuts";
+import { SHORTCUTS, STATIONS, currentShortcut, nextShortcut, shortcutById, stationOf, usePinned, type Shortcut } from "@/lib/arcieri/shortcuts";
 import { cx } from "./kit";
 import { menuAllOpen, setMenuAllOpen } from "@/lib/arcieri/percorso";
 import { AppIcon, Glyph } from "./icons";
@@ -23,7 +23,7 @@ export function ShortcutTile({ s, size = "md", onClick, index = 0 }: { s: Shortc
       className={cx("aa-short group flex flex-col items-center gap-1.5 text-center", size === "lg" ? "min-w-0" : "w-[4.6rem] shrink-0")}
       style={{ "--c": s.color, animationDelay: `${index * 40}ms` } as CSSProperties}
     >
-      <AppIcon name={s.icon} color={s.color} size={size === "lg" ? 56 : 54} className="aa-short-icon" />
+      <AppIcon name={s.icon} enamel={stationOf(s.group)?.enamel} size={size === "lg" ? 56 : 54} className="aa-short-icon" />
       <span className="w-full truncate text-[0.7rem] font-semibold leading-tight">{s.label}</span>
       {size === "lg" ? <span className="-mt-1 line-clamp-2 text-[0.62rem] leading-tight text-muted">{s.hint}</span> : null}
     </Link>
@@ -43,7 +43,7 @@ function BigTile({ s, recent = false }: { s: Shortcut; recent?: boolean }) {
       className="aa-bigtile relative flex w-[5.4rem] shrink-0 flex-col items-center gap-1.5 rounded-[1.4rem] px-1 pb-2 pt-2.5 text-center"
       style={{ "--c": s.color } as CSSProperties}
     >
-      <AppIcon name={s.icon} color={s.color} size={62} />
+      <AppIcon name={s.icon} enamel={stationOf(s.group)?.enamel} size={62} />
       <span className="line-clamp-2 w-full text-[0.72rem] font-semibold leading-tight">{s.label}</span>
       {recent ? (
         <span className="absolute right-1.5 top-1.5 grid h-5 w-5 place-items-center rounded-full bg-black/55 text-white" title="Aperta di recente">
@@ -107,7 +107,7 @@ export function ShortcutEditor({ onClose }: { onClose: () => void }) {
             return (
               <li key={s.id} className="aa-rise flex items-center gap-2 rounded-2xl border border-white/15 bg-white/[0.06] px-2 py-2">
                 <span className="w-5 text-center font-display text-sm tabular-nums text-muted">{i + 1}</span>
-                <AppIcon name={s.icon} color={s.color} size={38} />
+                <AppIcon name={s.icon} enamel={stationOf(s.group)?.enamel} size={38} />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-semibold">{s.label}</span>
                   <span className="block truncate text-[0.7rem] text-muted">{s.hint}</span>
@@ -124,7 +124,7 @@ export function ShortcutEditor({ onClose }: { onClose: () => void }) {
           {SHORTCUTS.filter((s) => !pinned.includes(s.id)).map((s) => (
             <li key={s.id}>
               <button type="button" onClick={() => toggle(s.id)} className="flex w-full items-center gap-3 rounded-2xl border border-transparent px-3 py-2 text-left opacity-80 transition hover:opacity-100">
-                <AppIcon name={s.icon} color={s.color} size={38} />
+                <AppIcon name={s.icon} enamel={stationOf(s.group)?.enamel} size={38} />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-semibold">{s.label}</span>
                   <span className="block truncate text-[0.7rem] text-muted">{s.hint}</span>
@@ -159,7 +159,7 @@ export function TipCard() {
     <button type="button" onClick={next} className="mb-4 mt-8 flex w-full items-start gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5 text-left transition hover:bg-white/[0.05]">
       <span key={`e${i}${personal}`} className="aa-pop shrink-0 opacity-90"><AppIcon name={tip.icon} color="#2f9e6a" size={32} /></span>
       <span key={`t${i}${personal}`} className="aa-rise min-w-0">
-        <span className="block text-[0.6rem] font-semibold uppercase tracking-[0.16em] text-[#7cf0a8]/90">{personal ? "Per il tuo arco" : "Lo sapevi?"}</span>
+        <span className="block text-[0.6rem] font-semibold uppercase tracking-[0.16em] aa-tone">{personal ? "Per il tuo arco" : "Lo sapevi?"}</span>
         <span className="mt-0.5 block text-[0.78rem] leading-snug text-white/85">{tip.text}</span>
       </span>
       <Glyph name="sparkle" size={14} className="ml-auto mt-1 shrink-0 text-muted" />
@@ -190,14 +190,16 @@ function readRecent() {
 }
 
 /** Menu: cerca, riprendi una pagina recente, oppure scegli dalle sezioni, tutte in vista. */
-export function PathMap({ onPick, current, showSearch = false, focus = null, hide = [], onSearch, onClose }: { onPick?: () => void; current?: string; showSearch?: boolean; /** percorso dei nuovi: le voci da mostrare prima di tutte */ focus?: string[] | null; /** voci che questa persona non può aprire */ hide?: string[]; /** pulsanti sul margine destro, sotto l'indice delle sezioni */ onSearch?: () => void; onClose?: () => void }) {
+export function PathMap({ onPick, current, currentSearch, showSearch = false, focus = null, hide = [], onSearch, onClose }: { onPick?: () => void; current?: string; /** parametri dell'indirizzo della pagina aperta */ currentSearch?: unknown; showSearch?: boolean; /** percorso dei nuovi: le voci da mostrare prima di tutte */ focus?: string[] | null; /** voci che questa persona non può aprire */ hide?: string[]; /** pulsanti sul margine destro, sotto l'indice delle sezioni */ onSearch?: () => void; onClose?: () => void }) {
   const [q, setQ] = useState("");
   const [all, setAll] = useState(() => !focus || menuAllOpen());
   const query = q.trim().toLowerCase();
   const visible = SHORTCUTS.filter((s) => !hide.includes(s.id));
   const found = query ? visible.filter((s) => `${s.label} ${s.hint}`.toLowerCase().includes(query)) : [];
   const mine = focus ? focus.map((id) => shortcutById(id)).filter((s): s is Shortcut => !!s && !hide.includes(s.id)) : [];
-  const isHere = (s: Shortcut) => !!current && s.to !== "/" && current.startsWith(s.to);
+  // una sola voce accesa: quella della pagina aperta, parametri compresi
+  const hereId = current && current !== "/" ? currentShortcut(current, currentSearch)?.id : undefined;
+  const isHere = (s: Shortcut) => !!hereId && s.id === hereId;
   // l'ultima voce toccata di ogni sezione brilla e ha i raggi che girano
   const [lastTouched, setLastTouched] = useLocalState<Record<string, string>>(MENU_LAST_KEY, {});
   const touch = (s: Shortcut) => setLastTouched((m) => (m[s.group] === s.id ? m : { ...m, [s.group]: s.id }));
@@ -219,7 +221,7 @@ export function PathMap({ onPick, current, showSearch = false, focus = null, hid
             return (
               <li key={s.id} className="aa-menu-row" style={{ animationDelay: `${Math.min(i, 10) * 30}ms` }}>
                 <Link to={s.to as "/"} search={(s.search ?? {}) as never} onClick={() => { touch(s); go(); }} className="aa-short flex items-center gap-3 rounded-2xl px-2 py-1.5 active:bg-white/[0.05]">
-                  <AppIcon name={s.icon} accent={sta?.color} size={42} className="aa-short-icon" glow={lastTouched[s.group] === s.id} />
+                  <AppIcon name={s.icon} enamel={sta?.enamel} size={42} className="aa-short-icon" glow={lastTouched[s.group] === s.id} />
                   <span className="min-w-0 flex-1">
                     <span className="block text-[0.95rem] font-semibold">{s.label}</span>
                     <span className="block truncate text-xs text-muted">{sta ? `${sta.title} · ` : ""}{s.hint}</span>
@@ -242,7 +244,7 @@ export function PathMap({ onPick, current, showSearch = false, focus = null, hid
               <div className="grid grid-cols-3 gap-2.5">
                 {mine.map((s) => (
                   <Link key={s.id} to={s.to as "/"} search={(s.search ?? {}) as never} onClick={() => { touch(s); go(); }} aria-current={isHere(s) ? "page" : undefined} className={cx("aa-short aa-cat-tile flex min-w-0 flex-col items-center gap-1.5 rounded-[1.4rem] px-1.5 pb-2.5 pt-3 text-center", isHere(s) && "is-here")}>
-                    <AppIcon name={s.icon} color={s.color} size={60} className="aa-short-icon" glow={lastTouched[s.group] === s.id} />
+                    <AppIcon name={s.icon} enamel={stationOf(s.group)?.enamel} size={60} className="aa-short-icon" glow={lastTouched[s.group] === s.id} />
                     <span className="w-full truncate text-[0.78rem] font-semibold leading-tight">{s.label}</span>
                     <span className="line-clamp-2 w-full text-[0.6rem] leading-tight text-muted">{s.hint}</span>
                   </Link>
@@ -316,7 +318,7 @@ function SectionStack({ onGo, isHere, hide = [], lastTouched = {}, searching, on
                 <div className="grid grid-cols-3 gap-y-3.5">
                   {items.map((s) => (
                     <Link key={s.id} to={s.to as "/"} search={(s.search ?? {}) as never} onClick={() => onGo(s)} aria-current={isHere(s) ? "page" : undefined} className={cx("aa-short aa-menu-item flex min-w-0 flex-col items-center gap-1 rounded-2xl px-0.5 py-1 text-center", isHere(s) && "is-here")}>
-                      <AppIcon name={s.icon} size={58} className="aa-short-icon" glow={lastTouched[st.id] === s.id} />
+                      <AppIcon name={s.icon} size={58} className="aa-short-icon" enamel={st.enamel} glow={lastTouched[st.id] === s.id} />
                       <span className="line-clamp-2 w-full text-[0.76rem] font-semibold leading-tight">{s.label}</span>
                     </Link>
                   ))}
@@ -360,7 +362,7 @@ export function NextCard({ path, onGo }: { path: string; onGo?: () => void }) {
   if (!next || path === "/") return null;
   return (
     <Link to={next.to as "/"} search={(next.search ?? {}) as never} onClick={onGo} className="aa-next mt-6 flex items-center gap-3 rounded-[var(--radius-card)] p-3">
-      <AppIcon name={next.icon} color={next.color} size={46} />
+      <AppIcon name={next.icon} enamel={stationOf(next.group)?.enamel} size={46} />
       <span className="min-w-0 flex-1">
         <span className="block text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-muted">Continua con</span>
         <span className="block font-display text-xl leading-tight">{next.label}</span>

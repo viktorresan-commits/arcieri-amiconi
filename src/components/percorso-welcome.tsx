@@ -2,7 +2,7 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import { setPercorso } from "@/lib/arcieri/account.api";
 import { PERCORSI, type Percorso } from "@/lib/arcieri/percorso";
-import { shortcutById } from "@/lib/arcieri/shortcuts";
+import { shortcutById, stationOf } from "@/lib/arcieri/shortcuts";
 import { AppIcon } from "./icons";
 import { cx } from "./kit";
 
@@ -92,7 +92,7 @@ function FocusItem({ id }: { id: string }) {
   if (!s) return null;
   return (
     <span className="flex flex-col items-center gap-1 text-center">
-      <AppIcon name={s.icon} color={s.color} size={40} />
+      <AppIcon name={s.icon} enamel={stationOf(s.group)?.enamel} size={40} />
       <span className="w-full truncate text-[0.66rem] font-semibold text-white/85">{s.label}</span>
     </span>
   );

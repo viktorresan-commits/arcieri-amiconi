@@ -5,7 +5,7 @@ import { AvatarFace } from "./archer-avatar";
 import { haloOfXp } from "./level-crest";
 import { useLevels } from "@/lib/arcieri/levels";
 import { useRouterState } from "@tanstack/react-router";
-import { currentShortcut } from "@/lib/arcieri/shortcuts";
+import { currentShortcut, sectionOf, stationOf } from "@/lib/arcieri/shortcuts";
 import { Glyph } from "./icons";
 
 export function cx(...parts: Array<string | false | null | undefined>) {
@@ -75,11 +75,13 @@ export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
 }
 
 export function PageHead({ title, lede, action, kicker, children }: { title: string; lede?: string; action?: ReactNode; kicker?: string; children?: ReactNode }) {
-  // ogni sezione prende il colore e l'icona della sua voce di menu
+  // la testata prende il colore della sezione (come la barra in basso) e il disegno della sua voce
   const path = useRouterState({ select: (st) => st.location.pathname });
-  const here = currentShortcut(path);
+  const search = useRouterState({ select: (st) => st.location.search });
+  const here = currentShortcut(path, search);
+  const station = stationOf(sectionOf(path, search));
   return (
-    <div className={cx("aa-hero mb-3 px-4 pb-4 pt-4", here ? "has-page" : "")} style={here ? ({ "--page": here.color } as CSSProperties) : undefined}>
+    <div className={cx("aa-hero mb-3 px-4 pb-4 pt-4", station ? "has-page" : "")} style={station ? ({ "--page": station.color } as CSSProperties) : undefined}>
       {here ? (
         <span aria-hidden className="aa-hero-mark pointer-events-none absolute -bottom-6 right-2 text-white">
           <Glyph name={here.icon} size={118} strokeWidth={1.1} detailed />
@@ -87,7 +89,7 @@ export function PageHead({ title, lede, action, kicker, children }: { title: str
       ) : null}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          {kicker ? <p className="text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-white/60">{kicker}</p> : null}
+          {kicker ? <p className="text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-white/60">{kicker}</p> : station ? <p className="aa-hero-sec mb-1 flex items-center gap-1.5 text-[0.74rem] font-semibold"><span aria-hidden className="h-2 w-2 rounded-full" />{station.short}</p> : null}
           <h1 className="font-display text-[2.1rem] leading-none tracking-tight">{title}</h1>
         </div>
         {action}

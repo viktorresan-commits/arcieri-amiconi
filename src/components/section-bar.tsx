@@ -5,21 +5,33 @@
  */
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { Link } from "@tanstack/react-router";
-import { SHORTCUTS, STATIONS, currentShortcut, type Shortcut, type StationId } from "@/lib/arcieri/shortcuts";
+import { SHORTCUTS, STATIONS, currentShortcut, sectionOf, type Shortcut, type StationId } from "@/lib/arcieri/shortcuts";
 import { useLocalState } from "@/lib/arcieri/local-store";
 import { onBack } from "@/lib/arcieri/native";
 import { AppIcon, Glyph } from "./icons";
 import { cx } from "./kit";
 
-const SHORT: Record<StationId, string> = { prepara: "Prepara", allena: "Allena", strumenti: "Strumenti", analizza: "Analizza", gareggia: "Gare", impara: "Impara", squadra: "Compagnia" };
 const MENU_LAST_KEY = "aa-menu-last";
 
-export function SectionBar({ path, hide = [], onSearch }: { path: string; /** voci che questa persona non può aprire */ hide?: string[]; /** apre la ricerca fra tutte le voci */ onSearch: () => void }) {
+export function SectionBar({ path, search, hide = [], onSearch }: { path: string; /** parametri dell'indirizzo: distinguono le voci che aprono la stessa pagina */ search?: unknown; /** voci che questa persona non può aprire */ hide?: string[]; /** apre la ricerca fra tutte le voci */ onSearch: () => void }) {
   const [open, setOpen] = useState<StationId | null>(null);
   const [anchor, setAnchor] = useState(0.5);
   const scroller = useRef<HTMLDivElement>(null);
-  const here = path === "/" ? null : currentShortcut(path)?.group ?? null;
+  const here = sectionOf(path, search);
+  // una sola voce accesa: quella della pagina aperta, parametri compresi
+  const hereItem = path === "/" ? null : currentShortcut(path, search);
   const [lastTouched, setLastTouched] = useLocalState<Record<string, string>>(MENU_LAST_KEY, {});
+  // sfumatura ai lati solo se la barra scorre davvero (telefono stretto)
+  const [scrolls, setScrolls] = useState(false);
+  useLayoutEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const check = () => setScrolls(el.scrollWidth > el.clientWidth + 2);
+    check();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(check) : null;
+    ro?.observe(el);
+    return () => ro?.disconnect();
+  }, []);
   // la sezione della pagina resta in vista nella barra che scorre
   useLayoutEffect(() => {
     const el = scroller.current?.querySelector<HTMLElement>(`[data-st="${here ?? "casa"}"]`);
@@ -53,7 +65,7 @@ export function SectionBar({ path, hide = [], onSearch }: { path: string; /** vo
     setLastTouched((m) => (m[s.group] === s.id ? m : { ...m, [s.group]: s.id }));
     setOpen(null);
   };
-  const isHere = (s: Shortcut) => s.to !== "/" && path.startsWith(s.to);
+  const isHere = (s: Shortcut) => hereItem?.id === s.id;
 
   return (
     <>
@@ -100,7 +112,7 @@ export function SectionBar({ path, hide = [], onSearch }: { path: string; /** vo
                       className={cx("aa-tray-item aa-short grid min-w-0 justify-items-center gap-1 rounded-2xl px-0.5 py-1 text-center", isHere(s) && "is-here")}
                       style={{ animationDelay: `${60 + i * 28}ms` }}
                     >
-                      <AppIcon name={s.icon} size={52} className="aa-short-icon" glow={lastTouched[st.id] === s.id} />
+                      <AppIcon name={s.icon} size={52} className="aa-short-icon" enamel={st.enamel} glow={lastTouched[st.id] === s.id} />
                       <span className="line-clamp-2 w-full text-[0.7rem] font-semibold leading-tight text-white">{s.label}</span>
                     </Link>
                   ))}
@@ -111,7 +123,7 @@ export function SectionBar({ path, hide = [], onSearch }: { path: string; /** vo
             </div>
       ) : null}
       <nav aria-label="Sezioni" className="aa-bottomnav aa-bar-bottom fixed inset-x-0 bottom-0 z-[37] border-t pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden">
-        <div ref={scroller} className="aa-secbar flex snap-x overflow-x-auto px-1 [scrollbar-width:none]">
+        <div ref={scroller} className={cx("aa-secbar flex snap-x overflow-x-auto px-1 [scrollbar-width:none]", scrolls && "is-scroll")}>
           <Link
             to="/"
             data-st="casa"
@@ -121,7 +133,7 @@ export function SectionBar({ path, hide = [], onSearch }: { path: string; /** vo
             style={{ ["--acc" as string]: "#f2e6c4" }}
           >
             <AppIcon name="home" size={30} enamel="ivory" />
-            <span className="text-[0.58rem] font-semibold leading-none tracking-tight">Casa</span>
+            <span className="text-[0.6rem] font-semibold leading-none tracking-tight">Casa</span>
           </Link>
           {STATIONS.map((x) => {
             const on = open ? open === x.id : here === x.id;
@@ -136,7 +148,7 @@ export function SectionBar({ path, hide = [], onSearch }: { path: string; /** vo
                 style={{ ["--acc" as string]: x.color }}
               >
                 <AppIcon name={x.icon} size={30} enamel={x.enamel} />
-                <span className="text-[0.58rem] font-semibold leading-none tracking-tight">{SHORT[x.id]}</span>
+                <span className="text-[0.6rem] font-semibold leading-none tracking-tight">{x.short}</span>
               </button>
             );
           })}
