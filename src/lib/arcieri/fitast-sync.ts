@@ -10,6 +10,7 @@ import { classificaUrl, cleanTitle, titleScore, findGare, garaDateOf, garaIdOf, 
 import { currentTexts, FILTER_BUTTON, filterCombos, pressReq, type Req } from "./fitast-nav";
 import { namesOnly, piazzoleRows, pzName as cleanPz, smartPiazzoleRows, rankingRows, SQUADRE_PAGES, type RankRow } from "./fitast-league";
 import { saveFitastStandings, type StandingKind } from "./fitast-league.api";
+import { listCompetitions } from "./club.api";
 
 export type SyncProgress = { step: string; pages: number; saved: number; diag?: string[]; done?: boolean; error?: string; /** a fine giro: cosa si è letto delle piazzole */ note?: string };
 type Item = { kind: StandingKind; season: string; seasonName: string; garaId: string; garaTitle: string; day: string; category: string; rows: RankRow[] };
@@ -69,6 +70,7 @@ export async function syncStandings(opts: { onProgress: (p: SyncProgress) => voi
     }
   };
   let pending: Item[] = [];
+  let saveError = "";
   const flush = async () => {
     if (!pending.length) return;
     const batch = pending;
@@ -76,8 +78,9 @@ export async function syncStandings(opts: { onProgress: (p: SyncProgress) => voi
     try {
       const r = await saveFitastStandings({ data: { items: batch } });
       saved += r.saved;
-    } catch {
+    } catch (e) {
       /* si riprova al prossimo aggiornamento */
+      saveError = e instanceof Error ? e.message.slice(0, 80) : "errore";
     }
     report();
   };
@@ -130,7 +133,7 @@ export async function syncStandings(opts: { onProgress: (p: SyncProgress) => voi
   } catch {
     pzName = "";
   }
-  const pzStats = { tried: 0, read: 0, people: 0, seen: [] as string[] };
+  const pzStats = { tried: 0, read: 0, people: 0, seen: [] as string[], gare: [] as string[], unsaved: 0 };
   /**
    * Come si sceglie una riga dell'elenco delle gare (il campo nascosto della tabella WEBDEV e se le righe si
    * contano da 1 o da 0): si scopre una volta premendo CLASSIFICA su una gara nota, come fa la ricerca del nome,
@@ -184,7 +187,7 @@ export async function syncStandings(opts: { onProgress: (p: SyncProgress) => voi
     const now: Record<string, string> = Object.fromEntries(sels.map((x) => [x.name, (x.options.find((o) => o.selected) ?? x.options[0])?.value ?? ""]));
     return { pz, turn, input, btn, now, sels };
   };
-  // una piazzola alla volta solo per le gare più vicine: le due appena fatte e le prossime tre
+  // una piazzola alla volta solo per le gare più vicine: le tre appena fatte e le prossime tre
   const pzDeep = { past: 0, next: 0 };
   /**
    * Tutte le piazzole di una gara dalla sua pagina: quelle già mostrate, poi «tutte» se il portale lo permette,
@@ -280,11 +283,12 @@ export async function syncStandings(opts: { onProgress: (p: SyncProgress) => voi
     }
     // poi una alla volta: solo per poche gare (le più vicine), le pagine lette hanno un limite
     const future = Boolean(day) && day > today;
-    if (future ? pzDeep.next >= 3 : pzDeep.past >= 2) return [...got.values()];
+    if (future ? pzDeep.next >= 3 : pzDeep.past >= 3) return [...got.values()];
     if (future) pzDeep.next++;
     else pzDeep.past++;
     let spent = 0;
-    const values = c.pz ? c.pz.options.filter((o) => isNum(o.text)).map((o) => ({ v: o.value, t: o.text.trim() })) : Array.from({ length: 40 }, (_, k) => ({ v: String(k + 1), t: String(k + 1) }));
+    // «0» è la tendina vuota (nessuna piazzola scelta): non mostra nessuno
+    const values = c.pz ? c.pz.options.filter((o) => isNum(o.text) && Number(o.text.trim()) > 0).map((o) => ({ v: o.value, t: o.text.trim() })) : Array.from({ length: 40 }, (_, k) => ({ v: String(k + 1), t: String(k + 1) }));
     for (const [ti, t] of turns.entries()) {
       let empty = 0;
       let found = 0;
@@ -297,6 +301,8 @@ export async function syncStandings(opts: { onProgress: (p: SyncProgress) => voi
         empty = n ? 0 : empty + 1;
         // a mano (campo di testo) ci si ferma dopo tre piazzole vuote di fila; un secondo turno vuoto non si gira tutto
         if (!c.pz && empty >= 3 && got.size) break;
+        // finite le piazzole usate dalla gara (le tendine arrivano oltre): quattro vuote di fila dopo i nomi bastano
+        if (found && empty >= 4) break;
         if (ti > 0 && !found && empty >= 3) break;
       }
     }
@@ -381,17 +387,84 @@ export async function syncStandings(opts: { onProgress: (p: SyncProgress) => voi
       pzStats.read++;
       pzStats.people += rows.length;
       pending.push({ kind: "gara-piazzole", season, seasonName, garaId: gara.id, garaTitle: gara.title, day: gara.day, category: "Piazzole", rows });
+      const before = saved;
       await flush();
+      if (saved === before) pzStats.unsaved++;
+      pzStats.gare.push(`gara ${gara.id} del ${gara.day ? gara.day.split("-").reverse().slice(0, 2).join("/") : "?"} (${rows.length})`);
       return;
     }
     if (other.size && pzStats.seen.length < 3) pzStats.seen.push(`gara ${id}: il portale ha aperto ${[...other].join(", ")} (scartata)`);
   };
 
-  // classifiche generali del campionato: compagnie e arcieri
+  // le gare del campionato già fatte (dalla più recente) e quelle delle prossime tre settimane
+  const range = now ? seasonRange(now.text) ?? seasonRange(now.value) : null;
+  const learned = learnedIds();
+  const listed = findGare(base);
+  const gare = listed
+    .filter((g) => g.date && g.date <= today && (!range || (g.date >= range.from && g.date <= range.to)))
+    .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
+  const soon = isoDay(new Date(Date.now() + 21 * 86_400_000));
+  const nextGare = listed.filter((x) => x.date && x.date > today && x.date <= soon);
+  const idOfRow = (g: Gara) => [g.id, g.key ?? ""].find((x) => /^\d{3,6}$/.test(x)) ?? "";
+
+  // 1. le piazzole prima di tutto (le pagine lette hanno un limite e le classifiche intere ne usano tante):
+  //    prima le gare che l'app mostra ancora senza elenco, poi le ultime fatte, poi le prossime
+  const wanted = new Map<string, { day: string; title: string }>();
+  try {
+    const from = isoDay(new Date(Date.now() - 45 * 86_400_000));
+    const { competitions } = await listCompetitions();
+    for (const c of competitions) {
+      const id = c.fitast?.garaId ?? "";
+      if (/^\d{3,6}$/.test(id) && !c.pzInfo?.read && c.startsOn >= from && c.startsOn <= soon) wanted.set(id, { day: c.startsOn, title: c.name });
+    }
+  } catch {
+    /* senza l'elenco delle gare dell'app si va per data */
+  }
+  // ogni gara fatta: il suo numero confermato dalla sua classifica (serve anche dopo, per le classifiche intere)
+  type Done = { g: Gara; id: string; p0: FitastPage | null; r0: Req | null; gara: { id: string; title: string; day: string } };
+  const done: Done[] = [];
+  for (const g of gare) {
+    if (opts.stop() || pages >= MAX_PAGES) break;
+    // il numero della gara: dall'elenco, dalla chiave della riga o dalle gare già viste nelle ricerche (stessa data)
+    const candidates = [g.id, g.key ?? "", ...Object.entries(learned).filter(([, d]) => d === g.date).map(([id]) => id)].filter((x, i, a) => /^\d{3,6}$/.test(x) && a.indexOf(x) === i);
+    let hit: Done | null = null;
+    for (const id of candidates.slice(0, 4)) {
+      if (done.some((d) => d.id === id) || opts.stop()) continue;
+      step = `${g.title || "Gara"} · ${g.date?.split("-").reverse().join("/") ?? ""}`;
+      const r0: Req = { url: classificaUrl(id, FITAST_HOME), referer: FITAST_HOME, label: step };
+      const p0 = await read(r0);
+      if (!p0 || garaIdOf(p0) !== id) continue;
+      // più gare nello stesso giorno: deve essere quella dell'elenco
+      const title = cleanTitle(garaTitleOf(p0) || g.title) || g.title;
+      if (candidates.length > 1 && titleScore(g.title, title) < 1 && candidates.indexOf(id) < candidates.length - 1) continue;
+      hit = { g, id, p0, r0, gara: { id, title, day: garaDateOf(p0) ?? g.date ?? "" } };
+      break;
+    }
+    // classifica non confermata: le piazzole si cercano lo stesso col numero dell'elenco (come a mano: riga della gara, poi PIAZZOLE)
+    const id = hit?.id ?? candidates[0] ?? "";
+    if (!id || done.some((d) => d.id === id)) continue;
+    done.push(hit ?? { g, id, p0: null, r0: null, gara: { id, title: cleanTitle(g.title) || g.title, day: g.date ?? "" } });
+  }
+  const pzSeen = new Set<string>();
+  const pzOf = async (id: string, gara: { id: string; title: string; day: string }, g?: Gara, p0?: FitastPage | null) => {
+    if (!id || pzSeen.has(id) || opts.stop() || pages >= MAX_PAGES) return;
+    pzSeen.add(id);
+    step = `${gara.title || "Gara"} · ${gara.day ? gara.day.split("-").reverse().join("/") : ""} · piazzole`;
+    await piazzole(id, gara, p0?.url ?? FITAST_HOME, g, p0 ?? null);
+  };
+  for (const [id, w] of wanted) {
+    const d = done.find((x) => x.id === id);
+    const g = d?.g ?? listed.find((x) => idOfRow(x) === id);
+    await pzOf(id, d?.gara ?? { id, title: cleanTitle(g?.title ?? "") || w.title, day: g?.date ?? w.day }, g, d?.p0);
+  }
+  for (const d of done) await pzOf(d.id, d.gara, d.g, d.p0);
+  for (const g of nextGare) await pzOf(idOfRow(g), { id: idOfRow(g), title: cleanTitle(g.title) || g.title, day: g.date ?? "" }, g);
+
+  // 2. classifiche generali del campionato: compagnie e arcieri
   const btns = base.form?.buttons ?? [];
   const genSq = btns.find((b) => /general/i.test(b.label) && /squadr|compagn|societ/i.test(b.label));
   const genAr = btns.find((b) => /general/i.test(b.label) && /arcier/i.test(b.label));
-  if (genSq) {
+  if (genSq && !opts.stop()) {
     step = `Classifica generale compagnie · ${seasonName}`;
     const r0 = pressReq(base, genSq, choose, step);
     await allCombos(await read(r0), r0, "generale-squadre", 40, 8);
@@ -403,73 +476,41 @@ export async function syncStandings(opts: { onProgress: (p: SyncProgress) => voi
     await allCombos(await read(r0), r0, "generale-arcieri", 600, 24);
   }
 
-  // gare del campionato già fatte: classifica arcieri (primi 3 per categoria) e squadre
-  const range = now ? seasonRange(now.text) ?? seasonRange(now.value) : null;
-  const learned = learnedIds();
-  // dalla più recente: le piazzole delle ultime gare servono prima (le pagine lette hanno un limite)
-  const gare = findGare(base)
-    .filter((g) => g.date && g.date <= today && (!range || (g.date >= range.from && g.date <= range.to)))
-    .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
-  const seen = new Set<string>();
+  // 3. per ogni gara fatta: tutti gli arcieri e la classifica squadre
   let sqName = "";
   try {
     sqName = localStorage.getItem("aa-fitast-squadre") ?? "";
   } catch {
     sqName = "";
   }
-  for (const g of gare) {
+  for (const { id, p0, r0, gara } of done) {
     if (opts.stop() || pages >= MAX_PAGES) break;
-    // il numero della gara: dall'elenco, dalla chiave della riga o dalle gare già viste nelle ricerche (stessa data)
-    const candidates = [g.id, g.key ?? "", ...Object.entries(learned).filter(([, d]) => d === g.date).map(([id]) => id)].filter((x, i, a) => /^\d{3,6}$/.test(x) && a.indexOf(x) === i);
-    for (const id of candidates.slice(0, 4)) {
-      if (seen.has(id) || opts.stop()) continue;
-      step = `${g.title || "Gara"} · ${g.date?.split("-").reverse().join("/") ?? ""}`;
-      const r0: Req = { url: classificaUrl(id, FITAST_HOME), referer: FITAST_HOME, label: step };
-      const p0 = await read(r0);
-      if (!p0 || garaIdOf(p0) !== id) continue;
-      // più gare nello stesso giorno: deve essere quella dell'elenco
-      const title = cleanTitle(garaTitleOf(p0) || g.title) || g.title;
-      if (candidates.length > 1 && titleScore(g.title, title) < 1 && candidates.indexOf(id) < candidates.length - 1) continue;
-      seen.add(id);
-      const gara = { id, title, day: garaDateOf(p0) ?? g.date ?? "" };
-      // prima chi era in piazzola con chi (poche pagine), poi le classifiche intere
-      await piazzole(id, gara, p0.url, g, p0);
-      // tutti gli arcieri della gara (la pagina ne mostra i primi tre): servono iscritti e gare di ogni compagnia
-      await allCombos(p0, r0, "gara-arcieri", 400, 24, gara);
-      // classifica squadre della gara: l'indirizzo che ha funzionato l'ultima volta, poi i nomi simili
-      for (const name of [...new Set([sqName, ...(home.awp ?? []).filter((x) => /squadr|compagn|societ/i.test(x) && !/general/i.test(x)), ...SQUADRE_PAGES].filter(Boolean))].slice(0, 5)) {
-        if (opts.stop()) break;
-        const r1: Req = { url: new URL(`${name}?P1=${id}`, FITAST_HOME).toString(), referer: p0.url, label: `${step} · squadre` };
-        const p1 = await read(r1);
-        if (!p1 || (garaIdOf(p1) && garaIdOf(p1) !== id)) continue;
-        if (!rankingRows(p1, "squadre", 1).length && !garaIdOf(p1)) continue;
-        sqName = name;
-        try {
-          localStorage.setItem("aa-fitast-squadre", name);
-        } catch {
-          /* niente */
-        }
-        await allCombos(p1, r1, "gara-squadre", 200, 4, gara);
-        break;
+    if (!p0 || !r0) continue;
+    step = `${gara.title || "Gara"} · ${gara.day ? gara.day.split("-").reverse().join("/") : ""}`;
+    // tutti gli arcieri della gara (la pagina ne mostra i primi tre): servono iscritti e gare di ogni compagnia
+    await allCombos(p0, r0, "gara-arcieri", 400, 24, gara);
+    // classifica squadre della gara: l'indirizzo che ha funzionato l'ultima volta, poi i nomi simili
+    for (const name of [...new Set([sqName, ...(home.awp ?? []).filter((x) => /squadr|compagn|societ/i.test(x) && !/general/i.test(x)), ...SQUADRE_PAGES].filter(Boolean))].slice(0, 5)) {
+      if (opts.stop()) break;
+      const r1: Req = { url: new URL(`${name}?P1=${id}`, FITAST_HOME).toString(), referer: p0.url, label: `${step} · squadre` };
+      const p1 = await read(r1);
+      if (!p1 || (garaIdOf(p1) && garaIdOf(p1) !== id)) continue;
+      if (!rankingRows(p1, "squadre", 1).length && !garaIdOf(p1)) continue;
+      sqName = name;
+      try {
+        localStorage.setItem("aa-fitast-squadre", name);
+      } catch {
+        /* niente */
       }
+      await allCombos(p1, r1, "gara-squadre", 200, 4, gara);
       break;
     }
-  }
-  // gare delle prossime tre settimane: chi tira con chi (elenco delle piazzole)
-  const soon = isoDay(new Date(Date.now() + 21 * 86_400_000));
-  for (const g of findGare(base).filter((x) => x.date && x.date > today && x.date <= soon)) {
-    if (opts.stop() || pages >= MAX_PAGES) break;
-    const id = [g.id, g.key ?? ""].find((x) => /^\d{3,6}$/.test(x));
-    if (!id || seen.has(id)) continue;
-    seen.add(id);
-    step = `${g.title || "Gara"} · ${g.date?.split("-").reverse().join("/") ?? ""} · piazzole`;
-    await piazzole(id, { id, title: cleanTitle(g.title) || g.title, day: g.date ?? "" }, FITAST_HOME, g);
   }
   await flush();
   step = "Fatto";
   const note = pzStats.tried
     ? pzStats.read
-      ? `Piazzole lette per ${pzStats.read} ${pzStats.read === 1 ? "gara" : "gare"} su ${pzStats.tried} (${pzStats.people} arcieri).`
+      ? `Piazzole lette per ${pzStats.read} ${pzStats.read === 1 ? "gara" : "gare"} su ${pzStats.tried} (${pzStats.people} arcieri): ${pzStats.gare.join(", ")}.${pzStats.unsaved ? ` Non salvate (${saveError || "errore"}).` : ""}`
       : `Piazzole non trovate sul portale per ${pzStats.tried} ${pzStats.tried === 1 ? "gara" : "gare"}.${pzStats.seen.length ? ` Pagine viste: ${pzStats.seen.join(" | ")}` : ""}`
     : "";
   // l'ultimo esito delle piazzole resta: la gara lo mostra quando «Con te in piazzola» è vuoto

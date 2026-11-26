@@ -560,11 +560,32 @@ export const listCompetitions = createServerFn({ method: "GET" })
       if (top > (cardTop.get(asNum(card.competition_id)) ?? 0)) cardTop.set(asNum(card.competition_id), top);
     }
     const meWho = who.find((x) => x.userId === context.userId) ?? null;
-    const groupOf = (compId: number, garaId: string) => {
+    /**
+     * le piazzole del portale per una gara: con il suo numero; se il portale le ha date con un altro numero
+     * (la pagina delle piazzole e la classifica non sempre coincidono), quelle lette per lo stesso giorno,
+     * e fra più gare dello stesso giorno quella in cui ci sono io
+     */
+    const near = (a: string, b: string) => !a || !b || Math.abs(Date.parse(a) - Date.parse(b)) <= 3 * 86_400_000;
+    const pzFor = (garaId: string, day: string): GaraTable[] => {
+      const d = (day || "").slice(0, 10);
+      // con il suo numero, se il giorno torna (un collegamento sbagliato a un'altra tappa non deve dare l'elenco di quella)
+      const exact = garaId ? pzTables.filter((t) => t.gara_id === garaId && near(String(t.held_on ?? "").slice(0, 10), d)) : [];
+      if (exact.length) return exact;
+      if (!d) return [];
+      const sameDay = pzTables.filter((t) => String(t.held_on ?? "").slice(0, 10) === d);
+      const ids = [...new Set(sameDay.map((t) => t.gara_id))];
+      if (ids.length <= 1) return sameDay;
+      for (const id of ids) {
+        const list = sameDay.filter((t) => t.gara_id === id);
+        if (meWho && matchPerson(peopleOf(list), meWho)) return list;
+      }
+      return [];
+    };
+    const groupOf = (compId: number, garaId: string, day = "") => {
       const mineKeys = new Set([nameKey(meWho?.fitastName ?? ""), nameKey(meWho?.fullName ?? "")].filter(Boolean));
       const here = cards.filter((c) => asNum(c.competition_id) === compId);
       const myCard = here.find((c) => c.user_id === context.userId) ?? here.find((c) => mineKeys.has(c.name_key)) ?? null;
-      const pz = garaId ? pzTables.filter((t) => t.gara_id === garaId) : [];
+      const pz = pzFor(garaId, day);
       const pzPeople = pz.length ? peopleOf(pz) : [];
       const meOnPortal = meWho && pzPeople.length ? matchPerson(pzPeople, meWho) : null;
       const portalPz = meOnPortal ? meOnPortal.p.entries[0]?.place ?? null : null;
@@ -599,11 +620,23 @@ export const listCompetitions = createServerFn({ method: "GET" })
       return { piazzola, mates: [...mates.values()].sort((a, b) => (b.total ?? -1) - (a.total ?? -1) || a.name.localeCompare(b.name, "it")) };
     };
     /** l'elenco delle piazzole del portale per questa gara: letto o no, quanti arcieri, la mia piazzola lì */
-    const pzInfoOf = (garaId: string) => {
-      if (!garaId) return null;
-      const people = peopleOf(pzTables.filter((t) => t.gara_id === garaId));
+    // gli elenchi delle piazzole già letti (numero della gara, giorno, arcieri): se una gara non trova il suo, si vede quali ci sono
+    const pzKnown = [...new Map(pzTables.map((t) => [t.gara_id, { id: t.gara_id, day: String(t.held_on ?? "").slice(0, 10), n: Array.isArray(t.rows) ? t.rows.length : 0 }])).values()]
+      .sort((a, b) => b.day.localeCompare(a.day))
+      .slice(0, 4);
+    const pzInfoOf = (garaId: string, day = "") => {
+      const list = pzFor(garaId, day);
+      if (!garaId && !list.length) return null;
+      const people = peopleOf(list);
       const me = meWho && people.length ? matchPerson(people, meWho) : null;
-      return { read: people.length > 0, people: people.length, mine: me ? me.p.entries[0]?.place ?? null : null, lanes: new Set(people.map((p) => p.entries[0]?.place).filter((x) => x != null)).size };
+      return {
+        read: people.length > 0,
+        people: people.length,
+        mine: me ? me.p.entries[0]?.place ?? null : null,
+        lanes: new Set(people.map((p) => p.entries[0]?.place).filter((x) => x != null)).size,
+        garaId: list[0]?.gara_id ?? garaId,
+        known: people.length ? [] : pzKnown,
+      };
     };
     const memberOf = (userId: string) => members.find((m) => m.user_id === userId);
     const face = (userId: string) => {
@@ -730,8 +763,8 @@ export const listCompetitions = createServerFn({ method: "GET" })
         entries: entriesOf(asNum(c.id), garaId),
         fitast: fitastOf(garaId),
         /** con chi si era in piazzola (cartellini e portale) */
-        group: groupOf(asNum(c.id), garaId),
-        pzInfo: pzInfoOf(garaId),
+        group: groupOf(asNum(c.id), garaId, String(c.starts_on).slice(0, 10)),
+        pzInfo: pzInfoOf(garaId, String(c.starts_on).slice(0, 10)),
         /** solo dal portale: nessuna gara nell'app (niente presenza né punteggio da segnare) */
         virtual: false,
       };
@@ -759,8 +792,8 @@ export const listCompetitions = createServerFn({ method: "GET" })
         roster: rosterOf(id, garaId),
         entries: entriesOf(id, garaId),
         fitast: fitastOf(garaId),
-        group: groupOf(id, garaId),
-        pzInfo: pzInfoOf(garaId),
+        group: groupOf(id, garaId, g.day),
+        pzInfo: pzInfoOf(garaId, g.day),
         virtual: true,
       });
     }

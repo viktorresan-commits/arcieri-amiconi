@@ -103,6 +103,11 @@ export function garaTitleOf(page: FitastPage): string {
 }
 
 const ID = /^\d{3,6}$/;
+/** il numero della gara come lo scrive il portale: «2472» o col punto delle migliaia «2.472» */
+const idText = (x: string) => {
+  const t = x.trim();
+  return /^\d{1,3}(?:[.'’\u00a0 ]\d{3})+$/.test(t) ? t.replace(/\D/g, "") : t;
+};
 /** il nome della gara da una riga dell'elenco: senza date, numero, codice stagione e stato */
 export function cleanTitle(text: string, id = "") {
   return text
@@ -149,7 +154,7 @@ export function findGare(page: FitastPage): Gara[] {
     if (!looksGare) continue;
     t.rows.slice(1).forEach((r, k) => {
       const texts = r.map((c) => c.text);
-      const id = idCol >= 0 ? (texts[idCol] ?? "").trim() : (texts.find((x) => ID.test(x.trim())) ?? "").trim();
+      const id = idCol >= 0 ? idText(texts[idCol] ?? "") : texts.map(idText).find((x) => ID.test(x)) ?? "";
       const date = dateCol >= 0 ? dateIn(texts[dateCol] ?? "") : dateIn(texts.join(" "));
       if (!id && !date) return;
       const title = (titleCol >= 0 ? texts[titleCol] : [...texts].filter((x) => HAS_WORDS.test(x)).sort((a, b) => b.length - a.length)[0]) ?? "";
@@ -162,7 +167,7 @@ export function findGare(page: FitastPage): Gara[] {
         alts.push({ kind: "press", press });
       }
       alts.push({ kind: "row", index: k + 1, ...(t.alias ? { alias: t.alias } : {}) });
-      const key = (t.keys?.[k] ?? "").trim();
+      const key = idText(t.keys?.[k] ?? "");
       add({ id: ID.test(id) ? id : "", date, title, alts, ...(ID.test(key) ? { key } : {}) });
     });
   }
@@ -170,7 +175,7 @@ export function findGare(page: FitastPage): Gara[] {
   // 2) elementi cliccabili (righe di zone ripetute) con un id o una data
   for (const b of page.blocks ?? []) {
     const date = dateIn(b.text);
-    const id = /(?:^|\s)(\d{3,6})(?=\s|$)/.exec(b.text)?.[1] ?? "";
+    const id = idText(/(?:^|\s)(\d{1,3}\.\d{3}|\d{3,6})(?=\s|$)/.exec(b.text)?.[1] ?? "");
     if (!date && !(id && /gara|camp|trofeo|torneo|memorial|coppa/i.test(b.text))) continue;
     const press = parsePress(b.press);
     if (!press) continue;
@@ -186,7 +191,7 @@ export function findGare(page: FitastPage): Gara[] {
     if (/categ|tipolog|classe|divisi|arco|sesso/i.test(s.label)) continue;
     for (const o of s.options) {
       const date = dateIn(o.text);
-      const id = /^\s*(\d{3,6})\b/.exec(o.text)?.[1] ?? (ID.test(o.value.trim()) ? o.value.trim() : "");
+      const id = idText(/^\s*(\d{1,3}\.\d{3}|\d{3,6})(?!\.?\d)/.exec(o.text)?.[1] ?? "") || (ID.test(o.value.trim()) ? o.value.trim() : "");
       if (!date && !id) continue;
       add({ id, date, title: cleanTitle(o.text, id), alts: [{ kind: "option", select: s.name, value: o.value }] });
     }
@@ -198,7 +203,7 @@ export function findGare(page: FitastPage): Gara[] {
     let cur: { id: string; lines: string[] } | null = null;
     const recs: { id: string; lines: string[] }[] = [];
     for (const l of page.lines.slice(h + 1, h + 4000)) {
-      const t = l.trim();
+      const t = idText(l);
       if (ID.test(t)) {
         cur = { id: t, lines: [] };
         recs.push(cur);
@@ -214,7 +219,7 @@ export function findGare(page: FitastPage): Gara[] {
   // righe di testo con id e data insieme ("2472 15/11/2026 GARA …")
   for (const l of page.lines) {
     const date = dateIn(l);
-    const id = /(?:^|\s)(\d{3,6})(?=\s|$)/.exec(l)?.[1] ?? "";
+    const id = idText(/(?:^|\s)(\d{1,3}\.\d{3}|\d{3,6})(?=\s|$)/.exec(l)?.[1] ?? "");
     if (date && id && l.length < 300 && !found.some((g) => g.id === id)) add({ id, date, title: cleanTitle(l, id), alts: [{ kind: "current" }] });
   }
 

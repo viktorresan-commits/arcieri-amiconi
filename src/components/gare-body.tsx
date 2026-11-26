@@ -70,7 +70,7 @@ type Comp = {
   /** con chi si era in piazzola: dai cartellini letti dalla foto e dall'elenco delle piazzole del portale */
   group?: { piazzola: number; mates: Mate[] } | null;
   /** l'elenco delle piazzole del portale per questa gara */
-  pzInfo?: { read: boolean; people: number; mine: number | null; lanes: number } | null;
+  pzInfo?: { read: boolean; people: number; mine: number | null; lanes: number; garaId?: string; known?: { id: string; day: string; n: number }[] } | null;
 };
 type Mate = { name: string; team: string; lanes: { p: number; arrows: number[] }[] | null; total: number | null; spots: number | null; place: number | null; category: string; camp: number | null; size: number };
 
@@ -528,7 +528,10 @@ function pzWhy(comp: Comp) {
     } catch {
       last = "";
     }
-    return `L'elenco delle piazzole di questa gara non è ancora arrivato dal portale. In Campionato premi «Aggiorna dal portale». Intanto puoi fotografare il cartellino qui sotto.${last}`;
+    // quali elenchi sono già arrivati (numero e giorno): se c'è quello di questa gara con un altro numero si vede subito
+    const dd = (d: string) => (d ? d.split("-").reverse().slice(0, 2).join("/") : "senza data");
+    const known = pz?.known?.length ? ` Elenchi già letti: ${pz.known.map((k) => `gara ${k.id} del ${dd(k.day)} (${k.n} arcieri)`).join(", ")}; questa gara è la ${comp.fitast?.garaId || "—"} del ${dd(comp.startsOn)}.` : "";
+    return `L'elenco delle piazzole di questa gara non è ancora arrivato dal portale. In Campionato premi «Aggiorna dal portale». Intanto puoi fotografare il cartellino qui sotto.${known}${last}`;
   }
   if (pz.mine == null && !mine) return `Elenco delle piazzole letto (${pz.people} arcieri, ${pz.lanes} piazzole), ma non trovo il tuo nome: collega il tuo nome FITAST nel Profilo.`;
   return `Elenco delle piazzole letto (${pz.people} arcieri, ${pz.lanes} piazzole): nella piazzola ${pz.mine ?? mine} non risulta nessun altro.${pz.mine != null && mine && pz.mine !== mine ? ` Sul cartellino hai la ${mine}, sul portale la ${pz.mine}.` : ""}`;
