@@ -83,20 +83,6 @@ export function CoachCard({ form, perks, lefty, look }: { form: Form; perks: Dat
         {notes.length > 1 ? <p className="mt-1.5 text-[0.68rem] text-muted">Altro: {notes.slice(1).map((n) => n.title.toLowerCase()).join(" · ")}</p> : null}
       </div>
       <PerkList perks={perks} compact />
-      <Link
-        to="/squadra"
-        onClick={() => {
-          try {
-            localStorage.setItem("aa-compagnia-tab", JSON.stringify("sfida"));
-          } catch {
-            /* niente */
-          }
-        }}
-        className="flex items-center justify-between rounded-2xl bg-white/[0.05] px-3 py-2.5 text-sm font-semibold"
-      >
-        <span className="flex items-center gap-2"><Glyph name="duel" size={16} /> Sfida degli avatar nella compagnia</span>
-        <Glyph name="chevron" size={14} />
-      </Link>
     </Card>
   );
 }

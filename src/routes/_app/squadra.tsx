@@ -1,7 +1,6 @@
 import { useEntryState } from "@/lib/arcieri/back-restore";
 import { haloOfXp } from "@/components/level-crest";
 import { GareBody } from "@/components/gare-body";
-import { AvatarChallenge } from "@/components/avatar-challenge";
 import { removeTeamMember } from "@/lib/arcieri/account.api";
 import { TargetGL } from "@/components/target-gl";
 import { useMemo, useState, type ReactNode } from "react";
@@ -42,7 +41,7 @@ const MEMBER_SKY: Sky = { tod: "pomeriggio", weather: "sereno", clouds: 0.25, se
 
 export const Route = createFileRoute("/_app/squadra")({ component: Page });
 
-type Section = "arcieri" | "gare" | "bersaglio" | "bacheca" | "compagnie" | "sfida";
+type Section = "arcieri" | "gare" | "bersaglio" | "bacheca" | "compagnie";
 /** le schede della Compagnia, una cosa per scheda: chi c'è, chi va meglio, dove tiriamo, cosa abbiamo vinto */
 const SECTIONS: { id: Section; label: string; icon: IconName; lede: string }[] = [
   { id: "arcieri", label: "Arcieri", icon: "team", lede: "Chi tira con noi e i podi per divisione: tocca un nome per la scheda, confronta fino a tre arcieri." },
@@ -50,10 +49,9 @@ const SECTIONS: { id: Section; label: string; icon: IconName; lede: string }[] =
   { id: "bersaglio", label: "Bersaglio", icon: "target", lede: "Dove arrivano le frecce della compagnia, sul paglione e sulle sagome 3D." },
   { id: "bacheca", label: "Trofei", icon: "trophy", lede: "Il palmarès della compagnia, i premi e la spesa comune." },
   { id: "compagnie", label: "Compagnie", icon: "shield", lede: "Classifica delle compagnie e campionato FITAST letto dal portale: arcieri, gare, squadre. Qui entri in un'altra compagnia o ne fondi una." },
-  { id: "sfida", label: "Sfida", icon: "duel", lede: "Sfida gli altri arcieri con il tuo avatar." },
 ];
 /** le schede salvate dalla versione di prima */
-const OLD_SECTION: Record<string, Section> = { compagnia: "arcieri", statistiche: "arcieri", classifiche: "arcieri", classifica: "compagnie", fitast: "compagnie" };
+const OLD_SECTION: Record<string, Section> = { compagnia: "arcieri", statistiche: "arcieri", classifiche: "arcieri", classifica: "compagnie", fitast: "compagnie", sfida: "arcieri" };
 
 type Archer = Awaited<ReturnType<typeof squadBoard>>["people"][number] & { name: string; color: string; mark: string; skill: number };
 
@@ -276,7 +274,7 @@ export function CompagniaPage({ initial }: { initial?: Section } = {}) {
         />
       ) : null}
       <nav aria-label="Sezioni della compagnia" className="aa-club-tabs sticky top-[calc(env(safe-area-inset-top)+3.6rem)] z-20 -mx-1 px-1">
-        <div className="grid grid-cols-6 gap-1 rounded-2xl p-1">
+        <div className="grid grid-cols-5 gap-1 rounded-2xl p-1">
           {SECTIONS.map((x) => (
             <button key={x.id} type="button" aria-pressed={section === x.id} onClick={() => setSection(x.id)} className="aa-club-tab grid min-h-14 place-items-center gap-0.5 rounded-xl px-0 py-1 text-[0.62rem] font-semibold leading-tight tracking-tight">
               <Glyph name={x.icon} size={18} />
@@ -404,7 +402,6 @@ export function CompagniaPage({ initial }: { initial?: Section } = {}) {
         </>
       ) : null}
 
-      {section === "sfida" ? <AvatarChallenge looks={looks} /> : null}
 
       {section === "gare" ? (
         <>
