@@ -5,7 +5,8 @@ import { Buckle, ChestEmblem, Clasp, ClothPattern, Fletching, Pouch, QuiverBody,
 import { seamOf, BeltDetail, ClothButton, ClothDetail, DetailDefs, LeatherBand, SleeveDetail } from "./avatar-detail";
 import { BUTTON_TOPS } from "./archer-avatar";
 
-const OUT = "#1b130d";
+// contorno dipinto: bruno scuro morbido, non più nero a china
+const OUT = "#2a1d14";
 const LONG_TOPS: Record<string, number> = { tunica: 252, "tunica-lunga": 266, ranger: 262, incrociata: 250, cappotto: 258, "cappotto-lungo": 292, giubba: 230, cotta: 240, giubbetto: 234 };
 const LONG_SLEEVES = ["felpa", "giacca", "camicia", "tunica", "tunica-lunga", "farsetto", "ranger", "incrociata", "cappotto", "giubba", "cappotto-lungo", "cotta", "giubbetto"];
 
@@ -90,6 +91,8 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
         {LONG_SLEEVES.includes(look.top) || look.top === "canotta" ? null : <path d={`M${f(s0.x)} ${f(s0.y)} L${f(s0.x + side * 4)} 130`} stroke={look.top === "gilet" || look.top === "corpetto" ? look.sleeves || look.trim : shirt} strokeWidth={19 * W} strokeLinecap="round" />}
         {look.top === "canotta" ? null : <SleeveDetail s={s0} e={elbow} h={hand} w={upW} color={seamOf(sleeve)} long={sleeveLong} />}
         <path d={`M${f(s0.x - side * upW * 0.18)} ${f(s0.y + 4)} L${f(elbow.x - side * upW * 0.18)} ${f(elbow.y)}`} stroke="#fff" strokeOpacity="0.14" strokeWidth={upW * 0.26} strokeLinecap="round" />
+        {/* ombra sul lato in ombra del braccio (la luce viene da sinistra) */}
+        <path d={`M${f(s0.x + upW * 0.3)} ${f(s0.y + 4)} L${f(elbow.x + upW * 0.3)} ${f(elbow.y)}${sleeveLong ? ` L${f(cuff.x + foreW * 0.3)} ${f(cuff.y)}` : ""}`} stroke="#000" strokeOpacity="0.18" strokeWidth={upW * 0.34} strokeLinecap="round" strokeLinejoin="round" fill="none" />
         {medievalTop ? <circle cx={f(cuff.x)} cy={f(cuff.y)} r={6.8 * W} fill={look.trim} stroke={OUT} strokeOpacity="0.6" strokeWidth="0.8" /> : null}
         {look.armband && !bowArm ? <path d={`M${f(lerp(s0.x, elbow.x, 0.42))} ${f(lerp(s0.y, elbow.y, 0.42))} L${f(lerp(s0.x, elbow.x, 0.58))} ${f(lerp(s0.y, elbow.y, 0.58))}`} stroke={look.trim} strokeWidth={upW + 1.4} /> : null}
         {look.watch && !bowArm ? <g><circle cx={f(lerp(elbow.x, hand.x, 0.8))} cy={f(lerp(elbow.y, hand.y, 0.8))} r="5.4" fill="#1d2126" /><circle cx={f(lerp(elbow.x, hand.x, 0.8))} cy={f(lerp(elbow.y, hand.y, 0.8))} r="3" fill="#dfe6ee" /></g> : null}
@@ -135,6 +138,17 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
   return (
     <svg viewBox={crop ?? "0 0 200 370"} className={className} style={crop ? undefined : { aspectRatio: "200 / 370" }} role="img" aria-label="L'arciere di fronte">
       <defs>
+        {/* volume dipinto sopra gli abiti: luce da sinistra, ombra sul fianco destro, ombra sotto il petto e sotto la cintura */}
+        <linearGradient id={`${uid}vol`} x1="0" x2="1">
+          <stop offset="0" stopColor="#fff" stopOpacity="0.16" />
+          <stop offset="0.3" stopColor="#fff" stopOpacity="0.04" />
+          <stop offset="0.6" stopColor="#000" stopOpacity="0" />
+          <stop offset="1" stopColor="#000" stopOpacity="0.34" />
+        </linearGradient>
+        <linearGradient id={`${uid}ao`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#000" stopOpacity="0.38" />
+          <stop offset="1" stopColor="#000" stopOpacity="0" />
+        </linearGradient>
         <linearGradient id={`${uid}sh`} x1="0" x2="1">
           <stop offset="0" stopColor={shade(shirt, -0.28)} />
           <stop offset="0.45" stopColor={shade(shirt, 0.1)} />
@@ -244,6 +258,9 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
               <path d={`M${L(206, -legW / 2)} 206 L${L(206, legW / 2)} 206 L${L(330, legW / 2 - (tight ? 2 : 0))} 330 L${L(330, -legW / 2 + (tight ? 2 : 0))} 330 Z`} fill={shorts ? skin : `url(#${uid}pa)`} stroke={OUT} strokeOpacity="0.75" strokeWidth="1.4" />
               {shorts ? null : <path d={`M${L(268, -legW * 0.3)} 266 q${f(legW * 0.3)} 4 ${f(legW * 0.6)} 0 M${L(274, -legW * 0.25)} 273 q${f(legW * 0.25)} 3 ${f(legW * 0.5)} 0`} stroke="#000" strokeOpacity="0.25" strokeWidth="0.9" fill="none" />}
               {shorts ? null : <path d={`M${L(212, -legW * 0.22)} 212 L${L(326, -legW * 0.22)} 326`} stroke="#fff" strokeOpacity="0.1" strokeWidth={f(legW * 0.18)} strokeLinecap="round" />}
+              {/* volume della gamba e ombra sotto la veste */}
+              <path d={`M${L(206, -legW / 2)} 206 L${L(206, legW / 2)} 206 L${L(330, legW / 2 - (tight ? 2 : 0))} 330 L${L(330, -legW / 2 + (tight ? 2 : 0))} 330 Z`} fill={`url(#${uid}vol)`} pointerEvents="none" />
+              <path d={`M${L(206, -legW / 2)} 206 L${L(206, legW / 2)} 206 L${L(226, legW / 2)} 226 L${L(226, -legW / 2)} 226 Z`} fill={`url(#${uid}ao)`} opacity="0.7" pointerEvents="none" />
               {shorts ? <path d={`M${L(206, -legW / 2 - 1)} 206 h${legW + 2} l${f(sp * 0.33)} 46 h${-legW - 2} Z`} fill={`url(#${uid}pa)`} stroke={OUT} strokeOpacity="0.75" strokeWidth="1.2" /> : null}
               {look.bottom === "jeans" ? <path d={`M${L(214, i ? -3 : 3)} 214 L${L(326, i ? -3 : 3)} 326`} stroke={shade(look.pants, 0.3)} strokeWidth="0.8" strokeDasharray="3 2" /> : null}
               {look.wraps ? [0, 1, 2, 3, 4].map((k) => <path key={k} d={`M${L(246 + k * 12, -legW / 2)} ${246 + k * 12} L${L(240 + k * 12, legW / 2)} ${240 + k * 12}`} stroke={look.wrapsColor} strokeWidth="4" />) : null}
@@ -301,11 +318,24 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
           <path d={`M${cx - 7.5} 76 C${cx - 8} 88 ${cx - 9.5} 96 ${cx - 16} 103 M${cx + 7.5} 76 C${cx + 8} 88 ${cx + 9.5} 96 ${cx + 16} 103`} stroke={OUT} strokeOpacity="0.75" strokeWidth="1.2" fill="none" />
         </g>
         {/* veste */}
-        {longTop ? <path d={tunicD} fill={`url(#${uid}sh)`} stroke={OUT} strokeOpacity="0.8" strokeWidth="1.8" /> : null}
-        <path d={torsoD} fill={`url(#${uid}sh)`} stroke={OUT} strokeOpacity="0.8" strokeWidth="1.8" />
+        {longTop ? <path d={tunicD} fill={`url(#${uid}sh)`} stroke={OUT} strokeOpacity="0.75" strokeWidth="1.4" /> : null}
+        <path d={torsoD} fill={`url(#${uid}sh)`} stroke={OUT} strokeOpacity="0.75" strokeWidth="1.4" />
         <ClothPattern kind={look.pattern} shapes={longTop ? [torsoD, tunicD] : [torsoD]} base={shirt} trim={look.trim} uid={`${uid}f`} box={[sh.l - 16, 94, sh.r + 16, (longTop ? hem : 208) + 6]} />
         <ClothDetail uid={`${uid}cd`} shapes={longTop ? [torsoD, tunicD] : [torsoD]} cx={cx} shoulderL={sh.l} shoulderR={sh.r} hipL={hip.l} hipR={hip.r} tunicLen={longTop ? hem : 206} longTunic={longTop} seam={seamOf(shirt)} />
         <FrontTop look={look} cx={cx} sh={sh} waist={waist} hip={hip} hem={hem} sideLen={sideLen} longTop={longTop} skin={skin} shirt={shirt} sleeve={sleeve} uid={uid} tw={tw} />
+        <g pointerEvents="none">
+          <clipPath id={`${uid}vc`}>
+            <path d={torsoD} />
+            {longTop ? <path d={tunicD} /> : null}
+          </clipPath>
+          <g clipPath={`url(#${uid}vc)`}>
+            <rect x={sh.l - 20} y="90" width={sh.r - sh.l + 40} height={(longTop ? hem : 210) - 84} fill={`url(#${uid}vol)`} />
+            {/* ombra sotto il petto, sotto la cintura e lungo l'orlo */}
+            <ellipse cx={cx} cy="166" rx={(sh.r - sh.l) * 0.42} ry="14" fill="#000" opacity="0.08" />
+            <rect x={sh.l - 20} y="193" width={sh.r - sh.l + 40} height="16" fill={`url(#${uid}ao)`} />
+            <ellipse cx={cx - 8} cy="118" rx={(sh.r - sh.l) * 0.26} ry="9" fill="#fff" opacity="0.07" />
+          </g>
+        </g>
         {look.chestguard ? <path d={`M${cx + bowSide * 6} 118 C${cx + bowSide * 30} 116 ${cx + bowSide * 34} 150 ${cx + bowSide * 26} 168 L${cx + bowSide * 6} 164 Z`} fill={look.chestColor} opacity="0.92" stroke={OUT} strokeOpacity="0.7" strokeWidth="1" /> : null}
         {look.straps ? <path d={`M${sh.l + 8} 106 L${hip.r - 6} 196 M${sh.r - 8} 106 L${hip.l + 6} 196`} stroke="#3a2414" strokeWidth="4.4" /> : null}
         {look.sash ? <path d={`M${waist.l - 2} 182 Q${cx} 192 ${waist.r + 2} 182 L${waist.r + 2} 194 Q${cx} 204 ${waist.l - 2} 194 Z M${waist.l + 6} 192 l-6 34 l10 -4 Z`} fill={look.sashColor} /> : null}

@@ -335,7 +335,7 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4, cssBlink = fals
   const legW = 19 * W;
 
   // contorno scuro e lume chiaro: il tratto da illustrazione dei giochi
-  const OUT = "#1b130d";
+  const OUT = "#2a1d14";
   const limb = (a: P, b: P, w: number, color: string, outline = true, tex?: string) => (
     <g>
       {outline ? <line x1={f(a.x)} y1={f(a.y)} x2={f(b.x)} y2={f(b.y)} stroke={OUT} strokeOpacity="0.9" strokeWidth={w + 2.4} strokeLinecap="round" /> : null}
@@ -835,6 +835,29 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4, cssBlink = fals
       <ClothPattern kind={look.pattern} shapes={longTunic ? [torso, tunicD] : [torso]} base={look.shirt} trim={look.trim} uid={uid} box={[shoulderL - 16, 112, shoulderR + 16, (longTunic ? tunicLen : 210) + 6]} />
       <ClothDetail uid={uid} shapes={longTunic ? [torso, tunicD] : [torso]} cx={cx} shoulderL={shoulderL} shoulderR={shoulderR} hipL={hipL} hipR={hipR} tunicLen={tunicLen} longTunic={longTunic} seam={seamOf(look.shirt)} />
       <Outfit look={look} cx={cx} shoulderL={shoulderL} shoulderR={shoulderR} hipL={hipL} hipR={hipR} tunicLen={tunicLen} W={W} woman={woman} uid={uid} />
+      {/* volume dipinto della veste: luce sul petto verso il bersaglio, schiena in ombra, ombra sotto la cintura */}
+      <g pointerEvents="none">
+        <clipPath id={`${uid}tv`}>
+          <path d={torso} />
+          {longTunic ? <path d={tunicD} /> : null}
+        </clipPath>
+        <g clipPath={`url(#${uid}tv)`}>
+          <rect x={f(shoulderL - 18)} y="112" width={f(shoulderR - shoulderL + 36)} height={f((longTunic ? tunicLen : 212) - 108)} fill={`url(#${uid}tvol)`} />
+          <rect x={f(shoulderL - 18)} y="208" width={f(shoulderR - shoulderL + 36)} height="16" fill={`url(#${uid}tao)`} />
+        </g>
+        <defs>
+          <linearGradient id={`${uid}tvol`} x1="0" x2="1">
+            <stop offset="0" stopColor="#000" stopOpacity="0.3" />
+            <stop offset="0.45" stopColor="#000" stopOpacity="0" />
+            <stop offset="0.8" stopColor="#fff" stopOpacity="0.05" />
+            <stop offset="1" stopColor="#fff" stopOpacity="0.14" />
+          </linearGradient>
+          <linearGradient id={`${uid}tao`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#000" stopOpacity="0.32" />
+            <stop offset="1" stopColor="#000" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+      </g>
       <ChestEmblem kind={look.emblem} crest={look.crest} x={cx + 9} y={look.top === "giubbetto" ? 160 : 150} s={look.emblem === "compagnia" ? 0.95 : 0.72} base={look.shirt} trim={look.trim} />
       {/* bottoni sulla chiusura davanti: metallo sul giubbetto, legno sulle giubbe, osso sulle camicie */}
       {BUTTON_TOPS[look.top] ? (look.emblem !== "nessuno" ? (tunicLen > 222 ? [217, 227] : []) : [136, 148, 160, 172, 184, ...(tunicLen > 222 ? [217, 227] : [])]).map((y) => <ClothButton key={y} x={cx + 1} y={y} r={1.9} color={BUTTON_TOPS[look.top]} metal={look.top === "giubbetto" || look.top === "divisa" || look.top === "cappotto-lungo"} />) : null}
@@ -980,7 +1003,8 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4, cssBlink = fals
   );
 }
 
-const OUTLINE = "#1b130d";
+// contorno dipinto: bruno scuro morbido, non più nero a china
+const OUTLINE = "#2a1d14";
 
 /** quali vesti hanno bottoni davanti, e di che colore */
 export const BUTTON_TOPS: Partial<Record<string, string>> = { giubbetto: "#cfd5db", giubba: "#8a5a2e", farsetto: "#d9b45a", cappotto: "#6b4224", "cappotto-lungo": "#cfd5db", giacca: "#2a2a2a", divisa: "#d9b45a", camicia: "#efe6d2", polo: "#efe6d2", gilet: "#d9b45a" };
