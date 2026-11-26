@@ -1434,6 +1434,28 @@ function HairBack({ look, uid, t }: { look: AvatarLook; uid: string; t: number }
 }
 
 /**
+ * Capelli lunghi sciolti di profilo: sopra la nuca continuano con la stessa trama di quelli che scendono
+ * dietro le spalle, sfumati, così tra calotta e capelli lunghi non resta nessuna riga. L'orecchio resta libero.
+ */
+function LooseBridge({ look, uid }: { look: AvatarLook; uid: string }) {
+  if (!(look.hair === "lunghi" || look.hair === "lunghi-mossi") || look.hat === "cappuccio" || look.hat === "elmo") return null;
+  const nape = 96 + (tune(look.hairLength, 50, 0, 100) - 50) * 0.12;
+  const bridge = `M127.2 90 C125.8 70 137 58.6 151 57.6 C144 61 138.8 67 137.4 75 C136.4 82 136.2 89 136.6 96 C135 ${f(nape + 2)} 132.8 ${f(nape + 4)} 130.2 ${f(nape + 3.5)} C128.4 ${f(nape)} 127.2 94 127.2 90 Z`;
+  return (
+    <g pointerEvents="none">
+      <defs>
+        <filter id={`${uid}hbf`} x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="1.6" /></filter>
+        <mask id={`${uid}hbm`} maskUnits="userSpaceOnUse" x="110" y="45" width="50" height="70"><path d={bridge} fill="#fff" filter={`url(#${uid}hbf)`} /></mask>
+      </defs>
+      <g mask={`url(#${uid}hbm)`}>
+        <path d={bridge} fill={`url(#${uid}hair)`} />
+        <ProfileHairPaint uid={uid} id="hbr" clip={<path d={bridge} />} kind="down" box={[104, 46, 74, 124]} color={look.hairColor} seed={look.hair.length} />
+      </g>
+    </g>
+  );
+}
+
+/**
  * Base dei capelli sulla testa: copre nuca, tempia e basetta davanti all'orecchio, così
  * tra capelli e pelle non resta mai uno spazio scoperto. Sopra vanno le pettinature.
  */
@@ -1441,10 +1463,14 @@ function HairCap({ look, uid }: { look: AvatarLook; uid: string }) {
   if (["calvo", "rasati", "cresta", "undercut", "vichinga"].includes(look.hair) || look.hat === "cappuccio" || look.hat === "elmo") return null;
   const nape = 96 + (tune(look.hairLength, 50, 0, 100) - 50) * 0.12;
   const d = `M127.6 90 C126.2 70 137 58.6 151 57.6 C163 57.6 170.6 64 171.6 74.5 C166.2 70.8 159.2 69.8 153.2 71.8 C148.6 70.4 144.8 73.2 144.2 79 C145.2 84 146 88.6 146.6 93 C144.4 95 142 95.6 139.8 95.2 C137.4 ${f(nape + 1)} 133.4 ${f(nape + 3.5)} 130.4 ${f(nape + 2.5)} C128.6 ${f(nape - 1)} 127.6 94 127.6 90 Z`;
+  // capelli che scendono dietro (sciolti o legati): niente bordo sulla nuca, così calotta e capelli lunghi
+  // sono una cosa sola; quelli sciolti continuano anche sopra la calotta, con la stessa trama verso il basso
+  const hangs = ["lunghi", "lunghi-mossi", "coda", "coda-alta", "treccia", "trecce", "codini", "dread", "vichinga", "caschetto"].includes(look.hair);
   return (
     <g>
-      <path d={d} fill={`url(#${uid}hair)`} stroke={blend(shade(look.hairColor, -0.6), "#1b130d", 0.4)} strokeOpacity="0.7" strokeWidth="0.6" />
+      <path d={d} fill={`url(#${uid}hair)`} stroke={hangs ? "none" : blend(shade(look.hairColor, -0.6), "#1b130d", 0.4)} strokeOpacity="0.7" strokeWidth="0.6" />
       <ProfileHairPaint uid={uid} id="hcp" clip={<path d={d} />} kind={look.hair === "ricci" ? "curl" : "sweep"} box={[124, 56, 50, 42]} color={look.hairColor} seed={5} />
+      {hangs ? <path d="M151 57.6 C163 57.6 170.6 64 171.6 74.5 C166.2 70.8 159.2 69.8 153.2 71.8 C148.6 70.4 144.8 73.2 144.2 79 C145.2 84 146 88.6 146.6 93" stroke={blend(shade(look.hairColor, -0.6), "#1b130d", 0.4)} strokeOpacity="0.6" strokeWidth="0.55" fill="none" /> : null}
       <path d="M146.4 80 C147 86 147.4 90 147 93.4" stroke={shade(look.hairColor, -0.35)} strokeWidth="0.6" fill="none" opacity="0.4" />
       {/* attaccatura morbida: peli corti che scendono sulla fronte e sulla tempia */}
       <path
@@ -1607,8 +1633,9 @@ function Head({ look, H, face, blink, uid, t, cssBlink = false }: { look: Avatar
         </g>
       ) : null}
       <g transform={`translate(151 70) scale(${hairScale(look).toFixed(3)}) translate(-151 -70)`}>
-        <g stroke={shade(look.hairColor, -0.55)} strokeOpacity="0.6" strokeWidth="0.5" strokeLinejoin="round"><HairFront look={look} uid={uid} t={t} /></g>
+        <g stroke={shade(look.hairColor, -0.55)} strokeOpacity={["lunghi", "lunghi-mossi", "coda", "coda-alta", "treccia", "trecce", "codini", "dread", "vichinga", "caschetto"].includes(look.hair) ? 0.2 : 0.6} strokeWidth="0.5" strokeLinejoin="round"><HairFront look={look} uid={uid} t={t} /></g>
         <HairStrands look={look} />
+        <LooseBridge look={look} uid={uid} />
       </g>
       {look.hairAcc && look.hairAcc !== "nessuno" && !capOn && look.hair !== "calvo" ? <HairOrnament kind={look.hairAcc} x={134} y={76} tilt={-18} color={look.hatColor} /> : null}
       {look.mark === "sopracciglio" ? <path d="M161.6 72.4 l1.6 2.4" stroke={skin} strokeWidth="1.4" /> : null}
@@ -1868,7 +1895,7 @@ function HairFrontShape({ look, uid, t }: { look: AvatarLook; uid: string; t: nu
     case "spettinati":
       return <path d={`M130 86 C126 70 132 60 140 57 L138 50 L146 55 L148 46 L154 54 L160 47 L162 56 L170 52 L168 62 C${f(174 + sway)} 64 175 70 172 78 C168 72 162 70 156 72 L158 66 L150 72 C146 70 141 74 141 82 C138 84 135 88 133 94 Z`} fill={fill} />;
     case "lunghi-mossi":
-      return <path d={`M129 90 C124 64 138 53 152 54 C167 55 ${f(176 + sway)} 64 ${f(173 + sway)} 80 C170 74 165 72 160 74 C157 69 151 69 147 73 C142 74 140 82 141 92 C137 96 134 104 132 110 C129 104 129 96 129 90 Z`} fill={fill} />;
+      return <path d={`M129 90 C124 64 138 53 152 54 C167 55 ${f(176 + sway)} 64 ${f(173 + sway)} 80 C170 74 165 72 160 74 C157 69 151 69 147 73 C142 74 140 82 141 92 C138 94 135 95.4 133 95.4 C130.8 93.6 129.2 92 129 90 Z`} fill={fill} />;
     case "raccolti":
       return <path d="M131 84 C129 66 139 58 151 58 C163 58 171 65 170 75 C164 70 157 69 151 71 C146 68 141 72 141 82 C138 84 135 87 133 91 Z" fill={fill} />;
     case "afro":
@@ -3290,13 +3317,14 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false, part }
         {look.mark === "sopracciglio" ? <path d={`M57 ${eyeY - 10.6} l1.6 2.4`} stroke={skin} strokeWidth="1.6" /> : null}
         {look.eyepatch && look.eyepatch !== "nessuna" ? <EyepatchFront kind={look.eyepatch} ey={eyeY} rx={rx} /> : null}
         <g transform={`translate(50 ${fy - ry + 4}) scale(${hv.toFixed(3)}) translate(-50 ${-(fy - ry + 4)})`}>
-          {!capOn ? <g stroke={shade(hair, -0.55)} strokeOpacity="0.6" strokeWidth="0.5" strokeLinejoin="round">{top}</g> : null}
+          {!capOn ? <g stroke={shade(hair, -0.55)} strokeOpacity={hairBack[look.hair] ? 0.18 : 0.6} strokeWidth="0.5" strokeLinejoin="round">{top}</g> : null}
           {!capOn && top && flowHair ? (
             <>
               <mask id={`${uid}hm`} maskUnits="userSpaceOnUse" x="-20" y="-40" width="140" height="180"><g filter={`url(#${uid}wh)`}>{top}</g></mask>
               <g mask={`url(#${uid}hm)`} fill="none" strokeLinecap="round" pointerEvents="none">
                 {/* profondità in basso, riflesso lucido largo e ciocche fini dalla scriminatura verso i lati */}
-                <rect x={50 - rx - 8} y={fy - ry - 14} width={rx * 2 + 16} height={ry + 14} fill={`url(#${uid}hdp)`} />
+                {/* con i capelli lunghi la calotta non scurisce in basso: continua nei capelli che scendono */}
+                <rect x={50 - rx - 8} y={fy - ry - 14} width={rx * 2 + 16} height={ry + 14} fill={`url(#${uid}hdp)`} opacity={hairBack[look.hair] ? 0.3 : 1} />
                 <path d={`M${50 - rx + 2} ${fy - ry + 5} Q50 ${fy - ry - 4} ${50 + rx - 2} ${fy - ry + 5}`} stroke={shade(hair, 0.45)} strokeWidth="2.6" strokeOpacity="0.22" />
                 {hairFlow}
               </g>
