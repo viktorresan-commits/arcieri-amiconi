@@ -214,16 +214,8 @@ export function LiveTraining({ sessionId, openHistory = false, start }: { sessio
     if (draft && (phase === "live" || phase === "foto")) saveDraft(draft);
   }, [draft, phase]);
 
-  useEffect(() => {
-    if (!draft || (phase !== "live" && phase !== "foto")) return;
-    if (phase === "foto" && !draft.shots.length) return;
-    const handle = window.setTimeout(() => {
-      void saveSession({ data: payload(draft, false) })
-        .then(() => setPending(""))
-        .catch(() => setPending("In attesa di rete: le frecce sono sul telefono."));
-    }, 700);
-    return () => window.clearTimeout(handle);
-  }, [draft, phase]);
+  // Niente salvataggi automatici sul server: l'allenamento resta solo sul telefono (bozza) finché
+  // l'arciere non decide di salvarlo. Prima ogni allenamento aperto finiva subito nello storico e nel calendario.
 
   const face = faceById(draft?.meta.face ?? "wa10");
 
