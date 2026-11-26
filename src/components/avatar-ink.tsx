@@ -62,8 +62,10 @@ export function Tufts({ pts, c, len, fill, stroke, w = 0.4, seed = 1 }: { pts: X
     const ix = (p: number, q: number) => [p - nx * 0.6, q - ny * 0.6];
     const [a1, a2] = ix(ax, ay);
     const [b1, b2] = ix(bx, by);
-    // aperto: il tratto segue solo i due fianchi della punta, la base resta dentro la barba
-    d += `M${f(a1)} ${f(a2)} Q${f((ax + tx) / 2)} ${f((ay + ty) / 2 + 0.2)} ${f(tx)} ${f(ty)} Q${f((bx + tx) / 2)} ${f((by + ty) / 2 + 0.2)} ${f(b1)} ${f(b2)}`;
+    // ciocca morbida, non un dente: i fianchi si gonfiano verso l'esterno e la punta piega di lato
+    // (aperto: il tratto segue solo i due fianchi, la base resta dentro la barba)
+    const bulge = k * 0.55;
+    d += `M${f(a1)} ${f(a2)} C${f(ax + nx * bulge)} ${f(ay + ny * bulge)} ${f(tx - (bx - ax) * 0.18)} ${f(ty - k * 0.3)} ${f(tx)} ${f(ty)} C${f(tx + (bx - ax) * 0.05)} ${f(ty - k * 0.45)} ${f(bx + nx * bulge * 0.6)} ${f(by + ny * bulge * 0.6)} ${f(b1)} ${f(b2)}`;
   }
   return <path d={d} fill={fill} stroke={stroke} strokeWidth={w} strokeLinejoin="round" />;
 }

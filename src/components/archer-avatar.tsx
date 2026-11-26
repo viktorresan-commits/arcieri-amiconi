@@ -1445,7 +1445,18 @@ function HairCap({ look, uid }: { look: AvatarLook; uid: string }) {
     <g>
       <path d={d} fill={`url(#${uid}hair)`} stroke={blend(shade(look.hairColor, -0.6), "#1b130d", 0.4)} strokeOpacity="0.7" strokeWidth="0.6" />
       <ProfileHairPaint uid={uid} id="hcp" clip={<path d={d} />} kind={look.hair === "ricci" ? "curl" : "sweep"} box={[124, 56, 50, 42]} color={look.hairColor} seed={5} />
-      <path d="M146.4 80 C147 86 147.4 90 147 93.4" stroke={shade(look.hairColor, -0.35)} strokeWidth="0.9" fill="none" opacity="0.7" />
+      <path d="M146.4 80 C147 86 147.4 90 147 93.4" stroke={shade(look.hairColor, -0.35)} strokeWidth="0.6" fill="none" opacity="0.4" />
+      {/* attaccatura morbida: peli corti che scendono sulla fronte e sulla tempia */}
+      <path
+        d={[...cubicPts([171.6, 74.5], [166.2, 70.8], [159.2, 69.8], [153.2, 71.8], 0.05, 1, 12), ...cubicPts([153.2, 71.8], [148.6, 70.4], [144.8, 73.2], [144.2, 79], 0.1, 1, 8)]
+          .map(([x, y], i) => `M${f(x - 0.4)} ${f(y - 0.9)} q${f(0.5 + (i % 3) * 0.2)} ${f(0.6)} ${f(0.9 + (i % 2) * 0.5)} ${f(1.3 + (i % 3) * 0.35)}`)
+          .join("")}
+        stroke={shade(look.hairColor, -0.15)}
+        strokeOpacity="0.45"
+        strokeWidth="0.3"
+        fill="none"
+        strokeLinecap="round"
+      />
     </g>
   );
 }
@@ -2412,6 +2423,19 @@ function SkinPaint({ uid, faceD, skin, rx, ry, fy, eyeY, woman, kid }: { uid: st
   );
 }
 
+/**
+ * Capelli di fronte (taglio corto o capelli lunghi pettinati all'indietro): volume sopra la testa,
+ * attaccatura vera con le stempiature e le tempie, basette sottili davanti alle orecchie.
+ */
+function hairCapFront(rx: number, ry: number, fy: number, woman: boolean) {
+  const P = (x: number, y: number) => [50 + x, fy + y] as [number, number];
+  const vol = woman ? 3.2 : 2.6;
+  // contorno esterno da sinistra (basetta) a destra, poi l'attaccatura da destra a sinistra
+  const outer: [number, number][] = [P(-rx - 0.4, -3), P(-rx - vol, -ry * 0.45), P(-rx * 0.72, -ry - 5.5), P(0, -ry - 8.5), P(rx * 0.72, -ry - 5.5), P(rx + vol, -ry * 0.45), P(rx + 0.4, -3)];
+  const inner: [number, number][] = [P(rx - 1.4, -3.4), P(rx - 1.9, -ry * 0.42), P(rx * 0.56, -ry + 6.6), P(rx * 0.2, -ry + 5.6), P(0, -ry + 6.3), P(-rx * 0.2, -ry + 5.6), P(-rx * 0.56, -ry + 6.6), P(-rx + 1.9, -ry * 0.42), P(-rx + 1.4, -3.4)];
+  return smoothLoop([...outer, ...inner]);
+}
+
 export function AvatarFace({ look, className = "h-10 w-10", bare = false, part }: { look: AvatarLook; className?: string; /** solo la testa, senza sfondo né spalle: per il ritratto a figura intera */ bare?: boolean; /** figura intera: "back" disegna solo capelli lunghi e cappuccio (dietro il corpo), "front" tutto il resto */ part?: "back" | "front" }) {
   const uid = (useId().replace(/[^a-zA-Z0-9]/g, "") + "_");
   const skin = look.skin;
@@ -2555,7 +2579,8 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false, part }
   };
   const fillH = `url(#${uid}h)`;
   const hairBack: Partial<Record<string, ReactNode>> = {
-    lunghi: <path d={`M26 ${fy - 6} C22 ${fy + 20} 24 ${fy + 40} 30 96 L70 96 C76 ${fy + 40} 78 ${fy + 20} 74 ${fy - 6} Z`} fill={fillH} />,
+    // capelli lunghi che scendono dietro le spalle: partono sotto la calotta, si allargano e finiscono a ciocche
+    lunghi: <path d={`M${50 - rx - 1} ${fy - 12} C${50 - rx - 6} ${fy + 6} ${50 - rx - 8} ${fy + 28} ${50 - rx - 5} ${fy + 44} L${50 - rx - 2} ${fy + 41} L${50 - rx + 1} ${fy + 46} L${50 + rx - 1} ${fy + 46} L${50 + rx + 2} ${fy + 41} L${50 + rx + 5} ${fy + 44} C${50 + rx + 8} ${fy + 28} ${50 + rx + 6} ${fy + 6} ${50 + rx + 1} ${fy - 12} Z`} fill={fillH} />,
     caschetto: <path d={`M27 ${fy - 8} C25 ${fy + 8} 27 ${fy + 20} 32 ${fy + 24} L68 ${fy + 24} C73 ${fy + 20} 75 ${fy + 8} 73 ${fy - 8} Z`} fill={fillH} />,
     coda: <path d={`M70 ${fy - 14} C82 ${fy - 8} 84 ${fy + 12} 78 ${fy + 26} C76 ${fy + 12} 74 ${fy} 68 ${fy - 6} Z`} fill={fillH} />,
     treccia: <path d={`M68 ${fy + 2} C74 ${fy + 16} 74 ${fy + 30} 70 ${fy + 44} L64 ${fy + 42} C67 ${fy + 30} 66 ${fy + 16} 62 ${fy + 6} Z`} fill={fillH} />,
@@ -2567,7 +2592,7 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false, part }
     ),
   };
   const capOn = look.hat === "cappuccio" || look.hat === "elmo";
-  hairBack["lunghi-mossi"] = <path d={`M24 ${fy - 8} C18 ${fy + 16} 28 ${fy + 30} 22 ${fy + 46} L78 ${fy + 46} C72 ${fy + 30} 82 ${fy + 16} 76 ${fy - 8} Z`} fill={fillH} />;
+  hairBack["lunghi-mossi"] = <path d={`M${50 - rx - 1} ${fy - 12} C${50 - rx - 9} ${fy + 2} ${50 - rx - 3} ${fy + 16} ${50 - rx - 9} ${fy + 28} C${50 - rx - 12} ${fy + 36} ${50 - rx - 6} ${fy + 42} ${50 - rx - 8} ${fy + 48} L${50 - rx - 3} ${fy + 45} L${50 - rx} ${fy + 50} L${50 + rx} ${fy + 50} L${50 + rx + 3} ${fy + 45} L${50 + rx + 8} ${fy + 48} C${50 + rx + 6} ${fy + 42} ${50 + rx + 12} ${fy + 36} ${50 + rx + 9} ${fy + 28} C${50 + rx + 3} ${fy + 16} ${50 + rx + 9} ${fy + 2} ${50 + rx + 1} ${fy - 12} Z`} fill={fillH} />;
   hairBack.afro = <circle cx="50" cy={fy - 6} r="38" fill={fillH} />;
   hairBack.dread = (
     <g stroke={fillH} strokeWidth="4.6" strokeLinecap="round" fill="none">
@@ -2661,7 +2686,7 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false, part }
       default:
         return (
           <g>
-            <path d={`M${50 - rx - 2} ${fy - 2} C${50 - rx - 4} ${fy - ry - 10} ${50 + rx + 4} ${fy - ry - 10} ${50 + rx + 2} ${fy - 2} C${50 + rx - 2} ${fy - ry + 2} 56 ${fy - ry + 6} 48 ${fy - ry + 6} C40 ${fy - ry + 8} ${50 - rx + 2} ${fy - ry + 6} ${50 - rx - 2} ${fy - 2} Z`} fill={fillH} />
+            <path d={hairCapFront(rx, ry, fy, woman)} fill={fillH} />
             {look.hair === "chignon" ? <circle cx="50" cy={fy - ry - 6} r="8" fill={fillH} /> : null}
           </g>
         );
@@ -2773,20 +2798,41 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false, part }
   const hv = 0.88 + (tune(look.hairVolume, 50, 0, 100) / 100) * 0.24;
   // ciocche dipinte: tante linee sottili dalla scriminatura verso tempie e fronte, scure e chiare
   const flowHair = !["calvo", "rasati", "ricci", "afro", "dread", "vichinga", "cresta"].includes(look.hair);
+  // capelli pettinati: ciocche che partono dall'attaccatura e salgono verso la nuca seguendo la testa,
+  // con una riga leggermente a sinistra; scure e chiare, di spessore e lunghezza diversi
+  const capHair = !["mossi", "caschetto", "spettinati", "frangia", "ciuffo", "undercut", "coda-alta", "raccolti"].includes(look.hair);
   const hairFlow = flowHair
-    ? Array.from({ length: 56 }, (_, i) => {
-        const t = (i % 28) / 27;
-        const j = ((i * 37) % 11) / 11;
-        const sx = 50 + (t - 0.5) * 8 + (j - 0.5) * 2;
-        const ex = 50 + (t - 0.5) * (rx * 2 + 8) + (j - 0.5) * 3;
-        // al centro le ciocche finiscono sull'attaccatura, ai lati scendono sulle tempie
-        const ey = fy - ry + 5 + Math.abs(t - 0.5) * 2 * (ry - 6) + j * 2;
-        const cxq = 50 + (t - 0.5) * (rx * 2 - 4);
-        const cyq = fy - ry - 4 + j * 2;
+    ? Array.from({ length: 70 }, (_, i) => {
+        const t = (i % 35) / 34;
+        const j = hash(i * 3.7 + 1);
+        const side = t - 0.5;
+        const lineY = fy - ry + 6.2 + Math.pow(Math.abs(side) * 2, 2.2) * ry * 0.62;
+        const sx = 50 + side * (rx * 2 - 2.4) + (j - 0.5) * 1.6;
+        const sy = lineY - 0.5 - j * 1.4;
+        // la riga: le ciocche a sinistra vanno a sinistra, le altre si pettinano verso destra
+        const part = 46;
+        const dirX = sx < part ? -1 : 1;
+        const ex = sx < part ? 50 - rx * 0.2 - (part - sx) * 0.35 : part + (sx - part) * 0.55;
+        const ey = fy - ry - 7 + Math.abs(side) * 5 + j * 2;
+        const cxq = sx + dirX * (2 + Math.abs(side) * rx * 0.9);
+        const cyq = (sy + ey) / 2 - 1.5;
         const lightK = i % 3 === 0;
-        return <path key={i} d={`M${sx.toFixed(1)} ${(fy - ry - 6 + j * 2).toFixed(1)} Q${cxq.toFixed(1)} ${cyq.toFixed(1)} ${ex.toFixed(1)} ${ey.toFixed(1)}`} stroke={lightK ? shade(hair, 0.45) : shade(hair, -0.5)} strokeOpacity={lightK ? 0.32 : 0.5} strokeWidth={i % 5 === 0 ? 0.5 : 0.28} />;
+        return <path key={i} d={`M${sx.toFixed(1)} ${sy.toFixed(1)} Q${cxq.toFixed(1)} ${cyq.toFixed(1)} ${ex.toFixed(1)} ${ey.toFixed(1)}`} stroke={lightK ? shade(hair, 0.5) : shade(hair, -0.5)} strokeOpacity={lightK ? 0.3 : 0.42} strokeWidth={i % 5 === 0 ? 0.55 : 0.26 + j * 0.12} />;
       })
     : null;
+  // attaccatura morbida: peli corti che escono dalla forma sulla fronte e sulle tempie
+  const hairlineFlicks = flowHair && capHair
+    ? Array.from({ length: 34 }, (_, i) => {
+        const t = i / 33;
+        const side = t - 0.5;
+        const j = hash(i * 5.3 + 2);
+        const lineY = fy - ry + 6.2 + Math.pow(Math.abs(side) * 2, 2.2) * ry * 0.62;
+        const sx = 50 + side * (rx * 2 - 2.6);
+        const len = 0.9 + j * 1.1;
+        const lean = side * 1.4 + (j - 0.5) * 0.6;
+        return `M${sx.toFixed(2)} ${(lineY - 1.2).toFixed(2)} q${(lean * 0.5).toFixed(2)} ${(len * 0.6).toFixed(2)} ${lean.toFixed(2)} ${len.toFixed(2)}`;
+      }).join("")
+    : "";
   // ---- capelli dipinti: sopra la forma piatta, dentro una maschera della stessa forma, si stendono
   // profondità (più scuro in basso), un lume morbido e la trama giusta per il tipo di capelli ----
   const hairLt = shade(hair, 0.45);
@@ -3123,11 +3169,12 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false, part }
         {look.cape && !bare ? <path d="M10 100 C14 82 30 74 50 74 C70 74 86 82 90 100 Z" fill={shade(look.capeColor, -0.1)} /> : null}
         {part === "front" ? null : hoodNode}
         {part === "front" ? null : backNode}
+        {/* collo: più largo alla base, ombra della mascella in alto, i muscoli del collo appena accennati */}
+        {bare ? null : <path d={`M${woman ? 44 : 42.6} ${fy + 12} C${woman ? 44.4 : 43} ${fy + 20} ${woman ? 42.6 : 41} ${fy + 26} ${woman ? 40.6 : 38.6} ${fy + 31} L${woman ? 59.4 : 61.4} ${fy + 31} C${woman ? 57.4 : 59} ${fy + 26} ${woman ? 55.6 : 57} ${fy + 20} ${woman ? 56 : 57.4} ${fy + 12} Z`} fill={`url(#${uid}nk)`} stroke={shade(skin, -0.55)} strokeOpacity="0.4" strokeWidth="0.45" />}
+        {bare ? null : <path d={`M${woman ? 45.6 : 44.6} ${fy + 19} Q${woman ? 46.4 : 45.6} ${fy + 25} 48.6 ${fy + 30} M${woman ? 54.4 : 55.4} ${fy + 19} Q${woman ? 53.6 : 54.4} ${fy + 25} 51.4 ${fy + 30}`} stroke={shade(skin, -0.4)} strokeOpacity="0.22" strokeWidth="0.9" fill="none" strokeLinecap="round" />}
         {bare ? null : <path d="M22 100 C24 84 36 78 50 78 C64 78 76 84 78 100 Z" fill={look.shirt} />}
         {bare ? null : <path d="M42 78 L50 88 L58 78" stroke={look.trim} strokeWidth="3" fill="none" />}
         {/* nel ritratto a figura intera il collo lo disegna il corpo, dietro la veste */}
-        {bare ? null : <rect x="43" y={fy + 14} width="14" height="16" fill={`url(#${uid}nk)`} />}
-        {bare ? null : <path d={`M43.4 ${fy + 14} V${fy + 30} M56.6 ${fy + 14} V${fy + 30}`} stroke={shade(skin, -0.55)} strokeOpacity="0.35" strokeWidth="0.7" />}
         {capOn ? null : look.ears === "punta" ? (
           <g fill={`url(#${uid}ear)`} stroke={shade(skin, -0.5)} strokeOpacity="0.55" strokeWidth="0.5" strokeLinejoin="round">
             <path d={`M${50 - rx + 1} ${eyeY - 1} Q${50 - rx - 5} ${eyeY - 4} ${50 - rx - 9} ${eyeY - 10} Q${50 - rx - 6} ${eyeY + 2} ${50 - rx - 3} ${eyeY + 9} Z`} />
@@ -3253,6 +3300,7 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false, part }
                 <path d={`M${50 - rx + 2} ${fy - ry + 5} Q50 ${fy - ry - 4} ${50 + rx - 2} ${fy - ry + 5}`} stroke={shade(hair, 0.45)} strokeWidth="2.6" strokeOpacity="0.22" />
                 {hairFlow}
               </g>
+              {hairlineFlicks ? <path d={hairlineFlicks} stroke={shade(hair, -0.15)} strokeOpacity="0.42" strokeWidth="0.26" fill="none" strokeLinecap="round" pointerEvents="none" /> : null}
             </>
           ) : null}
           {!capOn && top && look.hair === "spettinati" ? paintOver(top, "hsp", "down", [50 - rx - 10, fy - ry - 18, rx * 2 + 20, ry + 18], 11, false) : null}
