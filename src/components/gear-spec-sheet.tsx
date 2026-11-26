@@ -304,8 +304,29 @@ export function GearSpecSheet({ item, gear, onClose, onSaved }: { item: GearItem
           ) : null}
           {linkOpen ? (
             <div className="flex gap-2">
-              <TextInput value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://negozio.it/prodotto…" inputMode="url" aria-label="Link della pagina del prodotto" />
-              <Button onClick={() => void run({ url: url.trim(), replace: true })} disabled={reading || url.trim().length < 8}>Leggi</Button>
+              <TextInput
+                value={url}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setUrl(v);
+                  // link incollato intero: si legge subito, senza premere niente
+                  const link = /https?:\/\/\S{6,}/.exec(v)?.[0];
+                  if (link && !reading && Math.abs(v.length - url.length) > 6) void run({ url: link, replace: true });
+                }}
+                placeholder="https://negozio.it/prodotto…"
+                inputMode="url"
+                aria-label="Link della pagina del prodotto"
+              />
+              <Button
+                onClick={() => {
+                  const link = /https?:\/\/\S{6,}/.exec(url)?.[0];
+                  if (link) void run({ url: link, replace: true });
+                  else setNote("Incolla il link intero della pagina del prodotto (inizia con https://).");
+                }}
+                disabled={reading}
+              >
+                {reading ? "Leggo…" : "Leggi"}
+              </Button>
             </div>
           ) : (
             <button type="button" className="text-left text-xs font-semibold text-primary" onClick={() => setLinkOpen(true)}>Hai il link del negozio? Incollalo qui</button>

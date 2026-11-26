@@ -177,6 +177,7 @@ function clothOf(t: string): string {
   add(/\b(poliestere|polyester)\b/i, "poliestere");
   add(/\bnylon\b/i, "nylon");
   add(/\b(tela|canvas|canapa)\b/i, "tela");
+  add(/\b(stoffa|tessuto|fabric)\b/i, "stoffa");
   add(/\b(cotone|cotton)\b/i, "cotone");
   add(/\b(feltro|felt)\b/i, "feltro");
   add(/\b(pile|fleece)\b/i, "pile");
