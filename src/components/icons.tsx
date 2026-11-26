@@ -873,7 +873,7 @@ function coinOf(name: string): Coin {
 
 /** Tessera d'icona: placca scura con riflesso e cornice, disegno inciso in metallo del colore dell'app.
  *  Stesso aspetto ovunque. `accent` (solo nel Menu) dà a una sezione la sua tinta, sullo stesso materiale. */
-export function AppIcon({ name, size = 52, className, accent, color, fluid = false, plain = false, glow = false }: { name: IconName; color?: string; size?: number; className?: string; accent?: string; /** riempie il contenitore invece di una misura fissa */ fluid?: boolean; /** tessera semplice (vecchio stile) */ plain?: boolean; /** raggi di luce che girano e brillano: solo per la voce in evidenza (l'ultima toccata nel Menu) */ glow?: boolean }) {
+export function AppIcon({ name, size = 52, className, accent, color, fluid = false, plain = false, glow = false, enamel }: { name: IconName; color?: string; size?: number; className?: string; accent?: string; /** riempie il contenitore invece di una misura fissa */ fluid?: boolean; /** tessera semplice (vecchio stile) */ plain?: boolean; /** raggi di luce che girano e brillano: solo per la voce in evidenza (l'ultima toccata nel Menu) */ glow?: boolean; /** smalto scelto (le sezioni hanno ognuna il suo, ben distinto) */ enamel?: InsigniaProps["enamel"] }) {
   const id = `ai${(useId().replace(/[^a-zA-Z0-9]/g, "") + "_")}`;
   if (!plain && !fluid) {
     // insegna coniata: gare, premi, sfide e obiettivi in oro con il loro simbolo; le altre voci in argento,
@@ -883,11 +883,11 @@ export function AppIcon({ name, size = 52, className, accent, color, fluid = fal
       <span className={["aa-appicon-ins relative grid shrink-0 place-items-center", glow && "aa-appicon-hot", className].filter(Boolean).join(" ")} style={{ width: size, height: size }}>
         {/* tutte uguali: moneta tonda d'oro; cambia solo lo smalto (il colore) e il disegno in rilievo */}
         {ins ? (
-          <Insignia symbol={ins.symbol} enamel={ins.enamel} metal="gold" shape="round" size={Math.round(size * 1.02 * (glow ? 1.13 : 1))} glow={glow} />
+          <Insignia symbol={ins.symbol} enamel={enamel ?? ins.enamel} metal="gold" shape="round" size={Math.round(size * 1.02 * (glow ? 1.13 : 1))} glow={glow} />
         ) : (
           (() => {
-            const [, enamel] = coinOf(name);
-            return <Insignia art={DETAILED[name] ?? ICONS[name]} metal="gold" enamel={enamel} shape="round" size={Math.round(size * 1.02 * (glow ? 1.13 : 1))} glow={glow} />;
+            const [, own] = coinOf(name);
+            return <Insignia art={DETAILED[name] ?? ICONS[name]} metal="gold" enamel={enamel ?? own} shape="round" size={Math.round(size * 1.02 * (glow ? 1.13 : 1))} glow={glow} />;
           })()
         )}
       </span>

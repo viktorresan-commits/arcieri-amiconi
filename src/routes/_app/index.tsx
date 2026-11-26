@@ -175,18 +175,14 @@ function Home() {
             perks={activePerks}
             banner={duel.data?.company.color}
             info={
-              /* blocco di oggi: data, il tuo campo, uscite e frecce del mese, ultimo tiro (dati reali) */
+              /* blocco di oggi: data, il tuo campo e l'ultimo tiro (uscite, frecce e media del mese sono già sotto, in Statistiche) */
               <div className="aa-hud aa-day grid justify-items-start gap-0.5 rounded-2xl px-3 py-2">
-                <p className="aa-day-date flex items-center gap-1.5 text-[0.58rem] font-semibold uppercase tracking-[0.18em] text-white/75"><Glyph name="calendar" size={12} className="aa-hud-ico" />{new Date().toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" })}</p>
+                <p className="aa-day-date flex items-center gap-1.5 text-[0.68rem] font-semibold capitalize text-white/80"><Glyph name="calendar" size={12} className="aa-hud-ico" />{new Date().toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" })}</p>
                 <h1 className="aa-day-title font-display text-[1.6rem] leading-none tracking-tight">Il tuo campo</h1>
-                <p className="flex items-center gap-1.5 text-[0.7rem] leading-snug text-white/90"><Glyph name="target" size={12} className="aa-hud-ico shrink-0" />{data.month.sessions} {data.month.sessions === 1 ? "uscita" : "uscite"} · {num(data.month.arrows)} frecce questo mese</p>
-                {data.since ? (
-                  <p className="aa-day-last flex items-center gap-1.5 text-[0.7rem] leading-snug text-white/80"><Glyph name="history" size={12} className="aa-hud-ico shrink-0" />Ultimo tiro {data.since.n} {data.since.unit === "h" ? (data.since.n === 1 ? "ora" : "ore") : data.since.n === 1 ? "giorno" : "giorni"} fa</p>
-                ) : null}
-                {data.streak > 1 || activePerks.includes("corona") ? (
+                <p className="aa-day-last flex items-center gap-1.5 text-[0.72rem] leading-snug text-white/85"><Glyph name="history" size={12} className="aa-hud-ico shrink-0" />{data.since ? `Ultimo tiro ${data.since.n} ${data.since.unit === "h" ? (data.since.n === 1 ? "ora" : "ore") : data.since.n === 1 ? "giorno" : "giorni"} fa` : "Pronto per il primo tiro"}</p>
+                {activePerks.includes("corona") ? (
                   <p className="aa-day-extra mt-0.5 flex flex-wrap gap-1">
-                    {data.streak > 1 ? <span className="rounded-full bg-white/10 px-2 py-0.5 text-[0.62rem] font-semibold">{data.streak} giorni di fila</span> : null}
-                    {activePerks.includes("corona") ? <span className="inline-flex items-center gap-1 rounded-full bg-[#ffcf5a] px-2 py-0.5 text-[0.62rem] font-bold text-[#1a1408]"><Glyph name="trophy" size={11} /> Corona</span> : null}
+                    <span className="inline-flex items-center gap-1 rounded-full bg-[#ffcf5a] px-2 py-0.5 text-[0.62rem] font-bold text-[#1a1408]"><Glyph name="trophy" size={11} /> Corona</span>
                   </p>
                 ) : null}
               </div>
@@ -199,175 +195,166 @@ function Home() {
           {duel.data ? <CoachCard form={duel.data.form} perks={duel.data.perks} lefty={Boolean(avatar.shown.lefty)} look={avatar.shown} /> : null}
         </div>
       </Rise>
-      {/* la prossima gara subito sotto il gioco: il conto alla rovescia è la cosa più urgente */}
-      {data.nextComp ? (
-        <Rise i={1}>
-          <Link to="/gare" hash={`gara-${data.nextComp.id}`} className="block">
-            <Card className="aa-tile flex items-center gap-3 p-3">
-              <CountdownBadge day={data.nextComp.startsOn} />
-              <div className="min-w-0 flex-1">
-                <p className="aa-home-label">Prossima gara</p>
-                <p className="truncate font-display text-[1.45rem] leading-tight">{data.nextComp.name}</p>
-                <p className="truncate text-xs text-muted">{fmtDay(data.nextComp.startsOn)}{data.nextComp.place ? ` · ${data.nextComp.place}` : ""}{data.nextComp.signupDeadline ? ` · iscrizioni entro ${fmtDay(data.nextComp.signupDeadline)}` : ""}</p>
-              </div>
-              <Glyph name="chevron" size={16} className="shrink-0 text-muted" />
-            </Card>
-          </Link>
-        </Rise>
-      ) : null}
+      {/* sotto il gioco, tre gruppi: Oggi, Il tuo tiro, Progressi (più la compagnia se c'è qualcosa).
+          Niente doppioni: uscite, frecce e media del mese stanno solo in Statistiche, il livello solo in alto */}
+      <Rise i={1}>
+        <section className="aa-home-group">
+          <header><h2>Oggi</h2></header>
+          {data.nextComp ? (
+            <Link to="/gare" hash={`gara-${data.nextComp.id}`} className="block">
+              <Card className="aa-tile flex items-center gap-3 p-3">
+                <CountdownBadge day={data.nextComp.startsOn} />
+                <div className="min-w-0 flex-1">
+                  <p className="aa-home-label">Prossima gara</p>
+                  <p className="truncate font-display text-[1.45rem] leading-tight">{data.nextComp.name}</p>
+                  <p className="truncate text-xs text-muted">{fmtDay(data.nextComp.startsOn)}{data.nextComp.place ? ` · ${data.nextComp.place}` : ""}{data.nextComp.signupDeadline ? ` · iscrizioni entro ${fmtDay(data.nextComp.signupDeadline)}` : ""}</p>
+                </div>
+                <Glyph name="chevron" size={16} className="shrink-0 text-muted" />
+              </Card>
+            </Link>
+          ) : null}
+          <TodayCard />
+        </section>
+      </Rise>
       {prefs.home.shortcuts ? (
-        <Rise i={1}>
+        <Rise i={2}>
           <ShortcutRow hide={HOME_HIDE} />
         </Rise>
       ) : null}
-      <Rise i={2}>
-        <TodayCard />
-      </Rise>
-      {/* ultimi allenamenti: un solo riquadro con tre righe (senza le uscite a zero frecce) */}
-      <Rise i={2}>
-        <Card className="grid p-1.5">
-          <div className="flex items-baseline justify-between gap-2 px-2 pb-1 pt-1.5">
-            <h2 className="aa-section-title">Ultimi allenamenti</h2>
-            <Link to="/allenamento" search={{ vista: "storico" }} className="flex items-center gap-0.5 text-[0.72rem] font-semibold text-muted">Tutti <Glyph name="chevron" size={12} /></Link>
-          </div>
-          {recent.length ? (
-            recent.map((s, index) => {
-              const d = new Date(s.startedAt);
-              const good = s.avg >= 8 ? "#7cf0a8" : s.avg >= 6 ? "#ffd27a" : "#ff8a7a";
-              return (
-                <HoldDelete key={s.id} hint={false} label="Eliminare questo allenamento?" onDelete={() => deleteSession({ data: { id: s.id } }).then(() => setNonce((n) => n + 1))}>
-                  <Link to="/allenamento/$id" params={{ id: String(s.id) }} className={cx("aa-press flex items-center gap-3 rounded-xl px-2 py-2", index > 0 && "border-t border-white/[0.07]")}>
-                    <div className="grid h-12 w-11 shrink-0 place-items-center rounded-xl bg-white/[0.06] text-center leading-none">
-                      <span className="font-display text-xl">{d.getDate()}</span>
-                      <span className="text-[0.56rem] font-semibold uppercase tracking-wider text-muted">{d.toLocaleDateString("it-IT", { month: "short" })}</span>
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[0.82rem] font-semibold">{s.distanceM} m · {s.arrows} frecce{programById(s.program) ? ` · ${programById(s.program)?.title}` : ""}</p>
-                      <p className="truncate text-[0.7rem] text-muted">{fmtWhen(s.startedAt)}{s.place ? ` · ${s.place}` : ""}</p>
-                      <div className="mt-1 h-1 overflow-hidden rounded-full bg-white/10">
-                        <div className="aa-grow h-full rounded-full" style={{ width: `${Math.min(100, (s.avg / 10) * 100)}%`, background: good }} />
+      <Rise i={3}>
+        <section className="aa-home-group">
+          <header>
+            <h2>Il tuo tiro</h2>
+            <Link to="/allenamento" search={{ vista: "storico" }} className="flex items-center gap-0.5 pb-0.5 text-[0.74rem] font-semibold text-muted">Tutti gli allenamenti <Glyph name="chevron" size={12} /></Link>
+          </header>
+          {/* ultimi allenamenti: un solo riquadro con tre righe (senza le uscite a zero frecce) */}
+          <Card className="grid p-1.5">
+            {recent.length ? (
+              recent.map((s, index) => {
+                const d = new Date(s.startedAt);
+                const good = s.avg >= 8 ? "#7cf0a8" : s.avg >= 6 ? "#ffd27a" : "#ff8a7a";
+                return (
+                  <HoldDelete key={s.id} hint={false} label="Eliminare questo allenamento?" onDelete={() => deleteSession({ data: { id: s.id } }).then(() => setNonce((n) => n + 1))}>
+                    <Link to="/allenamento/$id" params={{ id: String(s.id) }} className={cx("aa-press flex items-center gap-3 rounded-xl px-2 py-2", index > 0 && "border-t border-white/[0.07]")}>
+                      <div className="grid h-12 w-11 shrink-0 place-items-center rounded-xl bg-white/[0.06] text-center leading-none">
+                        <span className="font-display text-xl">{d.getDate()}</span>
+                        <span className="text-[0.6rem] font-semibold text-muted">{d.toLocaleDateString("it-IT", { month: "short" })}</span>
                       </div>
-                    </div>
-                    <div className="grid shrink-0 justify-items-end leading-none">
-                      <span className="font-display text-[1.7rem] tabular-nums" style={{ color: good }}>{num(s.avg, 2)}</span>
-                      <span className="text-[0.58rem] text-muted">media</span>
-                    </div>
-                  </Link>
-                </HoldDelete>
-              );
-            })
-          ) : (
-            <p className="px-2 pb-2 text-sm text-muted">Il quaderno è vuoto: il primo tiro comparirà qui.</p>
-          )}
-        </Card>
-      </Rise>
-      {prefs.home.numbers ? (
-        <Rise i={3}>
-          <section className="grid gap-2">
-            <div className="flex items-baseline justify-between gap-2 px-1">
-              <h2 className="aa-section-title">I tuoi numeri</h2>
-              <Link to="/statistiche" className="flex items-center gap-0.5 text-[0.72rem] font-semibold text-muted">Statistiche <Glyph name="chevron" size={12} /></Link>
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              <Link to="/statistiche" className="block"><Meter label="Media del mese" value={data.month.arrows ? data.month.avg : null} digits={2} color="#e0b15a" /></Link>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[0.86rem] font-semibold">{s.distanceM} m · {s.arrows} frecce{programById(s.program) ? ` · ${programById(s.program)?.title}` : ""}</p>
+                        <p className="truncate text-[0.7rem] text-muted">{fmtWhen(s.startedAt)}{s.place ? ` · ${s.place}` : ""}</p>
+                        <div className="mt-1 h-1 overflow-hidden rounded-full bg-white/10">
+                          <div className="aa-grow h-full rounded-full" style={{ width: `${Math.min(100, (s.avg / 10) * 100)}%`, background: good }} />
+                        </div>
+                      </div>
+                      <div className="grid shrink-0 justify-items-end leading-none">
+                        <span className="font-display text-[1.7rem] tabular-nums" style={{ color: good }}>{num(s.avg, 2)}</span>
+                        <span className="text-[0.62rem] text-muted">media</span>
+                      </div>
+                    </Link>
+                  </HoldDelete>
+                );
+              })
+            ) : (
+              <p className="px-2 py-2 text-sm text-muted">Il quaderno è vuoto: il primo tiro comparirà qui.</p>
+            )}
+          </Card>
+          {prefs.home.numbers ? (
+            <div className="grid grid-cols-2 gap-2">
               <Link to="/statistiche" className="block"><Meter label="Precisione" value={data.all.precisePct} digits={1} suffix="%" color="#3d8f5f" /></Link>
               <Link to="/statistiche" className="block"><Meter label="Miglior media" value={data.all.bestAvg || null} digits={2} color="#c4a2f2" /></Link>
               <Link to="/statistiche" className="block"><Meter label="Frecce in tutto" value={data.all.arrows} color="#5aa6e8" /></Link>
-              <Link to="/calendario" className="block"><Meter label="Uscite del mese" value={data.month.sessions} color="#9dbea4" /></Link>
               <Link to="/statistiche" className="block"><Meter label="Distanza più lunga" value={data.bestDistance} suffix=" m" color="#e07a72" /></Link>
             </div>
+          ) : null}
+          {prefs.home.arrows && data.lastShots.length ? (
+            <Card>
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <p className="aa-home-label">Le ultime frecce</p>
+                <Link to="/attrezzatura" aria-label="Personalizza frecce" className="aa-press grid h-8 w-8 place-items-center rounded-full bg-white/[0.06] text-muted"><Glyph name="palette" size={16} /></Link>
+              </div>
+              <LastSummary shots={data.lastShots} />
+              <LastArrows shots={data.lastShots} />
+            </Card>
+          ) : null}
+        </section>
+      </Rise>
+      {prefs.home.journey || data.rank ? (
+        <Rise i={4}>
+          <section className="aa-home-group">
+            <header><h2>Progressi</h2></header>
+            {prefs.home.journey ? <JourneyCard totalArrows={data.all.arrows} weekArrows={data.weekArrows} streak={data.streak} /> : null}
+            {data.rank ? (
+              <Link to="/classifiche" className="block">
+                <Card className="flex items-center gap-3">
+                  <AppIcon name="podium" size={46} />
+                  <div className="min-w-0 flex-1">
+                    <p className="aa-home-label">Classifica del tuo tiro più frequente</p>
+                    <p className="font-display text-[1.8rem] leading-none"><Count value={data.rank.position} />° <span className="text-lg text-muted">su {data.rank.of}</span></p>
+                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-bg">
+                      <div className="aa-grow h-full rounded-full bg-accent" style={{ width: `${rankFill}%`, animationDelay: "280ms" }} />
+                    </div>
+                  </div>
+                  <Glyph name="chevron" size={16} className="shrink-0 text-muted" />
+                </Card>
+              </Link>
+            ) : null}
           </section>
         </Rise>
       ) : null}
-      {prefs.home.journey ? (
-        <Rise i={4}>
-          <JourneyCard totalArrows={data.all.arrows} weekArrows={data.weekArrows} streak={data.streak} />
-        </Rise>
-      ) : null}
-      {prefs.home.arrows ? <Rise i={5}>
-        <Card>
-          <div className="mb-1 flex items-baseline justify-between gap-2">
-            <p className="aa-section-title">Ultime frecce</p>
-            <Link to="/attrezzatura" aria-label="Personalizza frecce" className="aa-press grid h-8 w-8 place-items-center rounded-full bg-white/[0.06] text-muted"><Glyph name="palette" size={16} /></Link>
-          </div>
-          {data.lastShots.length ? (
-            <>
-              <LastSummary shots={data.lastShots} />
-              <LastArrows shots={data.lastShots} />
-            </>
-          ) : <p className="text-xs text-muted">Le frecce che tiri compaiono qui.</p>}
-        </Card>
-      </Rise> : null}
-      {/* classifica, sfide, obiettivi e note: solo quando c'è qualcosa da mostrare */}
-      {data.rank ? (
-        <Rise i={6}>
-          <Link to="/classifiche" className="block">
-            <Card className="flex items-center gap-3">
-              <AppIcon name="podium" size={46} />
-              <div className="min-w-0 flex-1">
-                <p className="aa-home-label">Classifica del tuo tiro più frequente</p>
-                <p className="font-display text-[1.8rem] leading-none"><Count value={data.rank.position} />° <span className="text-lg text-muted">su {data.rank.of}</span></p>
-                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-bg">
-                  <div className="aa-grow h-full rounded-full bg-accent" style={{ width: `${rankFill}%`, animationDelay: "280ms" }} />
-                </div>
-              </div>
-              <Glyph name="chevron" size={16} className="shrink-0 text-muted" />
-            </Card>
-          </Link>
-        </Rise>
-      ) : null}
-      {data.challenges.length ? (
-        <Rise i={7}>
-          <Link to="/sfide" className="block">
-            <Card>
-              <p className="aa-home-label">Sfide aperte</p>
-              <ul className="mt-2 grid gap-2">
-                {data.challenges.map((c) => (
-                  <li key={c.id} className="flex items-center justify-between gap-2 text-sm">
-                    <span className="min-w-0 truncate">{c.title}</span>
-                    <span className="shrink-0 text-xs text-muted">{c.state === "accepted" ? "dentro" : c.state === "invited" ? "invito" : "aperta"} · {c.endsOn}</span>
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          </Link>
-        </Rise>
-      ) : null}
-      {data.goals.length ? (
-        <Rise i={8}>
-          <Link to="/obiettivi" className="block">
-            <Card>
-              <p className="aa-home-label">Obiettivi</p>
-              <ul className="mt-2 grid gap-1 text-sm">
-                {data.goals.map((g) => <li key={g.id}>{g.title}{g.collective ? " · gruppo" : ""}</li>)}
-              </ul>
-            </Card>
-          </Link>
-        </Rise>
-      ) : null}
-      {notes.data?.items.length ? (
-        <Rise i={9}>
-          <Card>
-            <p className="aa-home-label">Note del quaderno</p>
-            <ul className="mt-2 grid gap-2">
-              {notes.data.items.map((item) => (
-                <li key={`${item.source}-${item.id}`} className="flex items-start gap-2">
-                  <button
-                    type="button"
-                    aria-label="Segna come fatto"
-                    className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-line"
-                    onClick={() => dismissNote({ data: { source: item.source, id: item.id } }).then(() => setNonce((n) => n + 1))}
-                  >
-                    <Glyph name="check" size={14} />
-                  </button>
-                  <div className="min-w-0">
-                    <p className="text-sm">{item.text}</p>
-                    <p className="text-xs text-muted">{item.where}</p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </Card>
+      {data.challenges.length || data.goals.length || notes.data?.items.length ? (
+        <Rise i={5}>
+          <section className="aa-home-group">
+            <header><h2>Con la compagnia</h2></header>
+            {data.challenges.length ? (
+              <Link to="/sfide" className="block">
+                <Card>
+                  <p className="aa-home-label">Sfide aperte</p>
+                  <ul className="mt-2 grid gap-2">
+                    {data.challenges.map((c) => (
+                      <li key={c.id} className="flex items-center justify-between gap-2 text-sm">
+                        <span className="min-w-0 truncate">{c.title}</span>
+                        <span className="shrink-0 text-xs text-muted">{c.state === "accepted" ? "dentro" : c.state === "invited" ? "invito" : "aperta"} · scade {fmtDay(c.endsOn)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </Card>
+              </Link>
+            ) : null}
+            {data.goals.length ? (
+              <Link to="/obiettivi" className="block">
+                <Card>
+                  <p className="aa-home-label">Obiettivi</p>
+                  <ul className="mt-2 grid gap-1 text-sm">
+                    {data.goals.map((g) => <li key={g.id}>{g.title}{g.collective ? " · gruppo" : ""}</li>)}
+                  </ul>
+                </Card>
+              </Link>
+            ) : null}
+            {notes.data?.items.length ? (
+              <Card>
+                <p className="aa-home-label">Note del quaderno</p>
+                <ul className="mt-2 grid gap-2">
+                  {notes.data.items.map((item) => (
+                    <li key={`${item.source}-${item.id}`} className="flex items-start gap-2">
+                      <button
+                        type="button"
+                        aria-label="Segna come fatto"
+                        className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-line"
+                        onClick={() => dismissNote({ data: { source: item.source, id: item.id } }).then(() => setNonce((n) => n + 1))}
+                      >
+                        <Glyph name="check" size={14} />
+                      </button>
+                      <div className="min-w-0">
+                        <p className="text-sm">{item.text}</p>
+                        <p className="text-xs text-muted">{item.where}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            ) : null}
+          </section>
         </Rise>
       ) : null}
     </div>

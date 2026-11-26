@@ -334,7 +334,7 @@ function SectionStack({ onGo, isHere, hide = [], lastTouched = {}, searching, on
                 return (
                   <button key={st.id} type="button" onClick={() => jump(st.id)} aria-current={on ? "true" : undefined} className={cx("aa-rail-item relative grid w-full shrink-0 justify-items-center gap-0.5 py-1", on && "is-on")} style={{ ["--acc" as string]: st.color }}>
                     {on ? <span aria-hidden className="absolute inset-y-1 right-0 w-[3px] rounded-l" style={{ background: st.color }} /> : null}
-                    <span className={cx("transition", on ? "" : "opacity-60 grayscale-[35%]")}><AppIcon name={st.icon} size={on ? 40 : 32} /></span>
+                    <span className={cx("transition", on ? "" : "opacity-60 grayscale-[35%]")}><AppIcon name={st.icon} size={on ? 40 : 32} enamel={st.enamel} /></span>
                     <span className="text-[0.56rem] font-semibold leading-tight" style={{ color: on ? `color-mix(in srgb, ${st.color} 60%, white)` : "rgb(255 255 255 / 0.55)" }}>{st.title}</span>
                   </button>
                 );

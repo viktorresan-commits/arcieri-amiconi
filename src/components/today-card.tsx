@@ -2,11 +2,11 @@ import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { AppIcon, Glyph } from "./icons";
 import { drillOfDay, QUIZ } from "@/lib/arcieri/learn";
-import { award, levelOf, today, useXp } from "@/lib/arcieri/xp";
+import { award, today } from "@/lib/arcieri/xp";
 import { useLocalState } from "@/lib/arcieri/local-store";
 
 /**
- * "Oggi per te" in Home: livello in punti, la sfida del giorno e una domanda lampo
+ * "Oggi per te" in Home: la sfida del giorno e una domanda lampo (il livello sta già in alto)
  * a cui si risponde direttamente qui, con un tocco. Dopo la risposta la domanda
  * resta visibile qualche secondo per la spiegazione, poi sparisce: la successiva
  * compare 12 ore dopo.
@@ -17,8 +17,6 @@ function quizAt(n: number) {
   return QUIZ[(n * 7 + 3) % QUIZ.length] ?? QUIZ[0];
 }
 export function TodayCard() {
-  const xp = useXp();
-  const lv = levelOf(xp.xp);
   const d = drillOfDay();
   const day = today();
   const [done] = useLocalState<{ done: string[] }>("aa-sfida-giorno-v1", { done: [] });
@@ -54,31 +52,16 @@ export function TodayCard() {
   const drillDone = done.done.includes(day);
   return (
     <section className="aa-today grid gap-3 rounded-[var(--radius-card)] p-3.5">
-      <div className="flex items-center gap-3">
-        <div className="relative grid h-14 w-14 shrink-0 place-items-center">
-          <svg viewBox="0 0 56 56" className="absolute inset-0 -rotate-90">
-            <circle cx="28" cy="28" r="24" fill="none" stroke="currentColor" strokeOpacity={0.1} strokeWidth="5" />
-            <circle cx="28" cy="28" r="24" fill="none" stroke="url(#aa-xp-g)" strokeWidth="5" strokeLinecap="round" strokeDasharray={150.8} strokeDashoffset={150.8 * (1 - lv.into / lv.need)} style={{ transition: "stroke-dashoffset .8s cubic-bezier(.22,1,.36,1)" }} />
-            <defs><linearGradient id="aa-xp-g"><stop offset="0" stopColor="#f6c43a" /><stop offset="1" stopColor="#e07a2f" /></linearGradient></defs>
-          </svg>
-          <span className="font-display text-xl">{lv.level}</span>
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-[0.66rem] font-semibold uppercase tracking-[0.16em] text-muted">Oggi per te</p>
-          <p className="font-semibold">Livello {lv.level} · {xp.xp} punti</p>
-          <p className="text-xs text-muted">{lv.need - lv.into} punti al prossimo livello</p>
-        </div>
-      </div>
       <Link to="/sfida-giorno" className="aa-press flex items-center gap-3 rounded-2xl bg-white/[0.05] p-2.5">
         <AppIcon name="daily" size={40} />
         <span className="min-w-0 flex-1">
-          <span className="block text-[0.62rem] font-semibold uppercase tracking-wider text-muted">Sfida del giorno · +{d.xp}</span>
+          <span className="block text-[0.7rem] font-semibold text-muted">Sfida del giorno · +{d.xp} punti</span>
           <span className="block truncate font-semibold">{d.title}</span>
         </span>
         {drillDone ? <span className="grid h-7 w-7 place-items-center rounded-full bg-emerald-500/25 text-emerald-200"><Glyph name="check" size={14} strokeWidth={2.6} /></span> : <Glyph name="chevron" size={16} className="text-muted" />}
       </Link>
       {showQuiz ? <div className="grid gap-2 rounded-2xl bg-white/[0.05] p-2.5">
-        <p className="flex items-center gap-2 text-[0.62rem] font-semibold uppercase tracking-wider text-muted"><Glyph name="quiz" size={22} className="aa-tone-hi shrink-0" />Domanda lampo · +10</p>
+        <p className="flex items-center gap-2 text-[0.7rem] font-semibold text-muted"><Glyph name="quiz" size={22} className="aa-tone-hi shrink-0" />Domanda lampo · +10 punti</p>
         <p className="text-sm font-semibold">{q.q}</p>
         <div className="grid grid-cols-2 gap-1.5">
           {q.options.map((o, k) => {

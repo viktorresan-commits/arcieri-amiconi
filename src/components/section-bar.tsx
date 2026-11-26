@@ -77,7 +77,7 @@ export function SectionBar({ path, hide = [], onSearch }: { path: string; /** vo
                   {[96, 78, 60, 42, 24].map((r, k) => <circle key={r} cx="100" cy="100" r={r} fill="none" stroke="#fff" strokeWidth={k === 4 ? 10 : 6} />)}
                 </svg>
                 <div className="relative mb-2.5 flex items-center gap-2.5">
-                  <AppIcon name={st.icon} size={40} />
+                  <AppIcon name={st.icon} size={40} enamel={st.enamel} />
                   <div className="min-w-0 flex-1">
                     <p className="font-display text-[1.6rem] leading-none text-white">{st.title}</p>
                     <p className="truncate text-[0.72rem] text-white/65">{st.sub}</p>
@@ -118,9 +118,9 @@ export function SectionBar({ path, hide = [], onSearch }: { path: string; /** vo
             onClick={() => setOpen(null)}
             aria-current={path === "/" ? "page" : undefined}
             className={cx("aa-secbar-item relative grid min-w-[3rem] flex-1 snap-start justify-items-center gap-0.5 pb-1.5 pt-2", path === "/" && !open && "is-on")}
-            style={{ ["--acc" as string]: "#7cf0a8" }}
+            style={{ ["--acc" as string]: "#f2e6c4" }}
           >
-            <AppIcon name="home" size={30} />
+            <AppIcon name="home" size={30} enamel="ivory" />
             <span className="text-[0.58rem] font-semibold leading-none tracking-tight">Casa</span>
           </Link>
           {STATIONS.map((x) => {
@@ -135,7 +135,7 @@ export function SectionBar({ path, hide = [], onSearch }: { path: string; /** vo
                 className={cx("aa-secbar-item relative grid min-w-[3rem] flex-1 snap-start justify-items-center gap-0.5 pb-1.5 pt-2", on && "is-on")}
                 style={{ ["--acc" as string]: x.color }}
               >
-                <AppIcon name={x.icon} size={30} />
+                <AppIcon name={x.icon} size={30} enamel={x.enamel} />
                 <span className="text-[0.58rem] font-semibold leading-none tracking-tight">{SHORT[x.id]}</span>
               </button>
             );

@@ -1997,9 +1997,9 @@ svg .aa-fall { stroke-dasharray: 4 3; animation: aa-fall 0.8s linear infinite; }
 /* barra delle sezioni in basso: icona e nome, quella attiva accesa nel suo colore; scorre se è stretta */
 .aa-secbar { mask-image: linear-gradient(90deg, transparent 0, #000 10px, #000 calc(100% - 10px), transparent 100%); }
 .aa-secbar-item { color: rgb(255 255 255 / 0.62); transition: color 0.2s ease; }
-.aa-secbar-item .aa-appicon-ins { transition: transform 0.25s cubic-bezier(0.22, 1.4, 0.36, 1), filter 0.25s ease; filter: saturate(0.75) brightness(0.92); }
+.aa-secbar-item .aa-appicon-ins { transition: transform 0.25s cubic-bezier(0.22, 1.4, 0.36, 1), opacity 0.25s ease; opacity: 0.9; }
 .aa-secbar-item.is-on { color: color-mix(in srgb, var(--acc) 60%, #fff); }
-.aa-secbar-item.is-on .aa-appicon-ins { transform: translateY(-2px) scale(1.12); filter: none; }
+.aa-secbar-item.is-on .aa-appicon-ins { transform: translateY(-2px) scale(1.12); opacity: 1; }
 .aa-secbar-item.is-on::before { content: ""; position: absolute; top: 0; left: 50%; width: 1.6rem; height: 3px; translate: -50% 0; border-radius: 0 0 4px 4px; background: var(--acc); box-shadow: 0 0 10px var(--acc); }
 .aa-secbar-item.is-on::after { content: ""; position: absolute; inset: 0.3rem 0.35rem; z-index: -1; border-radius: 1rem; background: radial-gradient(closest-side, color-mix(in srgb, var(--acc) 26%, transparent), transparent); }
 .aa-secbar-item:active .aa-appicon-ins { transform: scale(0.92); }
@@ -2014,3 +2014,12 @@ svg .aa-fall { stroke-dasharray: 4 3; animation: aa-fall 0.8s linear infinite; }
 @keyframes aa-veil-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes aa-tray-item { from { opacity: 0; transform: translateY(10px) scale(0.9); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .aa-tray, .aa-tray-veil, .aa-tray-item { animation: none; } }
+
+/* Home: titoli dei gruppi in carattere da titolo, etichette delle carte leggere (niente maiuscolo spaziato) */
+.aa-home .aa-section-title { font-family: var(--font-display); font-size: 1.3rem; font-weight: 700; line-height: 1; text-transform: none; letter-spacing: 0.005em; color: var(--fg); }
+.aa-home .aa-home-label { font-size: 0.74rem; font-weight: 600; text-transform: none; letter-spacing: 0.01em; color: var(--tone-hi, var(--tone)); }
+.aa-home-group { display: grid; gap: 0.6rem; }
+.aa-home-group + .aa-home-group { margin-top: 0.6rem; }
+.aa-home-group > header { display: flex; align-items: flex-end; justify-content: space-between; gap: 0.5rem; padding: 0 0.25rem; }
+.aa-home-group > header h2 { font-family: var(--font-display); font-size: 1.5rem; line-height: 1; }
+.aa-home-group > header h2::after { content: ""; display: block; width: 1.6rem; height: 3px; margin-top: 0.35rem; border-radius: 3px; background: var(--tone, #7cf0a8); opacity: 0.85; }

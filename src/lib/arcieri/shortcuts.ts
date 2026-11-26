@@ -70,14 +70,15 @@ export const SHORTCUTS: Shortcut[] = [
 ];
 
 /** Le tappe della mappa: il percorso naturale di un arciere, dalla preparazione alla squadra. */
-export const STATIONS: { id: StationId; title: string; sub: string; icon: IconName; color: string }[] = [
-  { id: "prepara", title: "Preparati", sub: "Arco, frecce e simulatore di volo", icon: "quiver", color: "#c08a52" },
-  { id: "allena", title: "Allenati", sub: "Tira, fotografa, riprendi il gesto", icon: "bow", color: "#4fb37a" },
-  { id: "strumenti", title: "Strumenti", sub: "Calcoli e messa a punto", icon: "caliper", color: "#5b93d6" },
-  { id: "analizza", title: "Analizza", sub: "Numeri, storico e traguardi", icon: "chart", color: "#3bb3b0" },
-  { id: "gareggia", title: "Gareggia", sub: "Gare, calendario e classifiche", icon: "trophy", color: "#d9ad3c" },
-  { id: "impara", title: "Impara", sub: "Sfide, quiz e giochi per crescere", icon: "daily", color: "#e57f45" },
-  { id: "squadra", title: "Compagnia", sub: "Arcieri, news e profilo", icon: "team", color: "#9a7be0" },
+/** ogni sezione ha il suo colore e il suo smalto, ben distinti fra loro (anche nella barra in basso) */
+export const STATIONS: { id: StationId; title: string; sub: string; icon: IconName; color: string; enamel: "amber" | "emerald" | "night" | "teal" | "ruby" | "sapphire" | "amethyst" | "ivory" }[] = [
+  { id: "prepara", title: "Preparati", sub: "Arco, frecce e simulatore di volo", icon: "quiver", color: "#e0a13a", enamel: "amber" },
+  { id: "allena", title: "Allenati", sub: "Tira, fotografa, riprendi il gesto", icon: "bow", color: "#3fcf7f", enamel: "emerald" },
+  { id: "strumenti", title: "Strumenti", sub: "Calcoli e messa a punto", icon: "caliper", color: "#8fa3c8", enamel: "night" },
+  { id: "analizza", title: "Analizza", sub: "Numeri, storico e traguardi", icon: "chart", color: "#2fc4b2", enamel: "teal" },
+  { id: "gareggia", title: "Gareggia", sub: "Gare, calendario e classifiche", icon: "trophy", color: "#e0435a", enamel: "ruby" },
+  { id: "impara", title: "Impara", sub: "Sfide, quiz e giochi per crescere", icon: "daily", color: "#4a8fe8", enamel: "sapphire" },
+  { id: "squadra", title: "Compagnia", sub: "Arcieri, news e profilo", icon: "team", color: "#a988f0", enamel: "amethyst" },
 ];
 
 export const DEFAULT_PINNED = ["rapido", "foto", "gesto", "statistiche", "balistica", "gare", "attrezzatura", "squadra"];

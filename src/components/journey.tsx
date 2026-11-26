@@ -35,10 +35,7 @@ export function JourneyCard({ totalArrows, weekArrows, streak }: { totalArrows: 
   const nextGoal = () => update({ weekGoal: WEEK_GOALS[(WEEK_GOALS.indexOf(goal) + 1) % WEEK_GOALS.length] });
   return (
     <section className="aa-journey relative overflow-hidden rounded-[var(--radius-card)] border border-hair p-3.5">
-      <div className="flex items-center justify-between">
-        <h2 className="aa-section-title">Il tuo percorso</h2>
-        <span className="text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-muted">Livello {lv.n + 1}</span>
-      </div>
+      <p className="aa-home-label">La tua settimana</p>
       <div className="mt-2.5 grid grid-cols-[auto_1fr] items-center gap-3.5">
         <button type="button" onClick={nextGoal} className="relative grid h-[84px] w-[84px] place-items-center" aria-label={`Obiettivo settimanale ${goal} frecce: tocca per cambiarlo`}>
           <svg viewBox="0 0 80 80" className="absolute inset-0 -rotate-90">
@@ -63,7 +60,7 @@ export function JourneyCard({ totalArrows, weekArrows, streak }: { totalArrows: 
           </svg>
           <span className="text-center leading-none">
             <span className="block font-display text-[1.5rem] tabular-nums">{weekArrows}</span>
-            <span className="mt-0.5 block text-[0.58rem] uppercase tracking-wider text-muted">di {goal}</span>
+            <span className="mt-0.5 block text-[0.62rem] text-muted">di {goal}</span>
           </span>
         </button>
         <div className="grid min-w-0 gap-2.5">
@@ -88,8 +85,8 @@ export function JourneyCard({ totalArrows, weekArrows, streak }: { totalArrows: 
           </div>
         </div>
       </div>
-      <p className="mt-2 flex items-center gap-1 text-[0.66rem] text-muted">
-        <Glyph name="edit" size={12} /> Tocca l'anello per cambiare l'obiettivo della settimana.
+      <p className="mt-2 flex items-center gap-1 text-[0.68rem] text-muted">
+        <Glyph name="edit" size={12} /> Tocca l'anello per cambiare l'obiettivo.
       </p>
     </section>
   );
