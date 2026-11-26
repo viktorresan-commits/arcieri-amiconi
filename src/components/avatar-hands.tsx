@@ -58,7 +58,7 @@ export function FrontFist({ x, y, r, skin, gloves, flip = 1 }: { x: number; y: n
   return (
     <g transform={`translate(${f(x)} ${f(y)}) scale(${flip} 1)`}>
       <HandGrad id={gid} t={t} />
-      <path d={silhouette} fill={`url(#${gid})`} stroke={OUT} strokeOpacity="0.78" strokeWidth="0.5" strokeLinejoin="round" />
+      <path d={silhouette} fill={`url(#${gid})`} stroke={OUT} strokeOpacity="0.56" strokeWidth="0.3" strokeLinejoin="round" />
       {/* dita: rotoli sovrapposti, il bordo alto in luce e la piega scura sotto */}
       {rows.map((w, k) => (
         <g key={k}>
@@ -73,7 +73,7 @@ export function FrontFist({ x, y, r, skin, gloves, flip = 1 }: { x: number; y: n
       {/* ombra sul lato del palmo, in ombra (la luce viene da sinistra di chi guarda) */}
       <path d={`M${f(-0.7 * r)} ${f(-0.9 * r)} C${f(-0.92 * r)} ${f(-0.3 * r)} ${f(-0.9 * r)} ${f(0.5 * r)} ${f(-0.6 * r)} ${f(0.95 * r)}`} stroke={t.lo} strokeWidth={f(0.08 * r)} fill="none" opacity="0.35" strokeLinecap="round" />
       {/* pollice che chiude sopra l'indice, con l'unghia */}
-      <path d={`M${f(-0.98 * r)} ${f(-0.42 * r)} C${f(-0.7 * r)} ${f(-0.98 * r)} ${f(-0.1 * r)} ${f(-1.02 * r)} ${f(0.42 * r)} ${f(-0.82 * r)}`} stroke={OUT} strokeOpacity="0.75" strokeWidth={f(0.44 * r)} fill="none" strokeLinecap="round" />
+      <path d={`M${f(-0.98 * r)} ${f(-0.42 * r)} C${f(-0.7 * r)} ${f(-0.98 * r)} ${f(-0.1 * r)} ${f(-1.02 * r)} ${f(0.42 * r)} ${f(-0.82 * r)}`} stroke={OUT} strokeOpacity="0.54" strokeWidth={f(0.44 * r)} fill="none" strokeLinecap="round" />
       <path d={`M${f(-0.98 * r)} ${f(-0.42 * r)} C${f(-0.7 * r)} ${f(-0.98 * r)} ${f(-0.1 * r)} ${f(-1.02 * r)} ${f(0.42 * r)} ${f(-0.82 * r)}`} stroke={t.base} strokeWidth={f(0.38 * r)} fill="none" strokeLinecap="round" />
       <path d={`M${f(-0.86 * r)} ${f(-0.62 * r)} C${f(-0.6 * r)} ${f(-1.02 * r)} ${f(-0.1 * r)} ${f(-1.08 * r)} ${f(0.3 * r)} ${f(-0.92 * r)}`} stroke={t.hi} strokeWidth={f(0.045 * r)} fill="none" strokeLinecap="round" opacity="0.9" />
       {gloves ? null : <ellipse cx={f(0.36 * r)} cy={f(-0.84 * r)} rx={f(0.15 * r)} ry={f(0.1 * r)} fill={t.nail} stroke={t.line} strokeWidth={f(0.03 * r)} strokeOpacity="0.6" transform={`rotate(-18 ${f(0.36 * r)} ${f(-0.84 * r)})`} />}
@@ -81,7 +81,7 @@ export function FrontFist({ x, y, r, skin, gloves, flip = 1 }: { x: number; y: n
       {/* polsino del guanto */}
       {gloves ? (
         <g>
-          <path d={`M${f(-0.74 * r)} ${f(-1.36 * r)} L${f(0.74 * r)} ${f(-1.36 * r)} L${f(0.68 * r)} ${f(-1.02 * r)} L${f(-0.68 * r)} ${f(-1.02 * r)} Z`} fill="#3a220f" stroke={OUT} strokeOpacity="0.7" strokeWidth="0.35" />
+          <path d={`M${f(-0.74 * r)} ${f(-1.36 * r)} L${f(0.74 * r)} ${f(-1.36 * r)} L${f(0.68 * r)} ${f(-1.02 * r)} L${f(-0.68 * r)} ${f(-1.02 * r)} Z`} fill="#3a220f" stroke={OUT} strokeOpacity="0.5" strokeWidth="0.21" />
           <path d={`M${f(-0.62 * r)} ${f(-1.18 * r)} H${f(0.62 * r)}`} stroke="#c9a46a" strokeOpacity="0.55" strokeWidth={f(0.022 * r)} strokeDasharray={`${f(0.09 * r)} ${f(0.08 * r)}`} />
         </g>
       ) : null}
@@ -107,7 +107,7 @@ export function SideHand({ h, e, r, skin, gloves, kind }: { h: P; e: P; r: numbe
   return (
     <g transform={`translate(${f(h.x)} ${f(h.y)}) rotate(${f(ang)}) scale(1 ${up})`}>
       <HandGrad id={gid} t={t} />
-      <path d={body} fill={`url(#${gid})`} stroke={OUT} strokeOpacity="0.8" strokeWidth="0.5" strokeLinejoin="round" />
+      <path d={body} fill={`url(#${gid})`} stroke={OUT} strokeOpacity="0.58" strokeWidth="0.3" strokeLinejoin="round" />
       {/* luce sul dorso, ombra sul palmo */}
       <path d={`M${f(-0.7 * r)} ${f(-0.5 * r)} C${f(-0.1 * r)} ${f(-0.74 * r)} ${f(0.5 * r)} ${f(-0.74 * r)} ${f(0.8 * r)} ${f(-0.5 * r)}`} stroke={t.hi} strokeWidth={f(0.05 * r)} fill="none" strokeLinecap="round" opacity="0.85" />
       <path d={`M${f(-0.7 * r)} ${f(0.48 * r)} C${f(-0.1 * r)} ${f(0.78 * r)} ${f(0.4 * r)} ${f(0.8 * r)} ${f(0.72 * r)} ${f(0.66 * r)}`} stroke={t.lo} strokeWidth={f(0.07 * r)} fill="none" strokeLinecap="round" opacity="0.45" />
@@ -126,13 +126,13 @@ export function SideHand({ h, e, r, skin, gloves, kind }: { h: P; e: P; r: numbe
         </g>
       )}
       {/* pollice: dal polso lungo il fianco della mano, con l'unghia */}
-      <path d={open ? `M${f(-0.5 * r)} ${f(0.3 * r)} C${f(-0.1 * r)} ${f(0.7 * r)} ${f(0.3 * r)} ${f(0.86 * r)} ${f(0.56 * r)} ${f(0.8 * r)}` : `M${f(-0.55 * r)} ${f(-0.42 * r)} C${f(-0.1 * r)} ${f(-0.86 * r)} ${f(0.4 * r)} ${f(-0.86 * r)} ${f(0.66 * r)} ${f(-0.66 * r)}`} stroke={OUT} strokeOpacity="0.75" strokeWidth={f(0.38 * r)} fill="none" strokeLinecap="round" />
+      <path d={open ? `M${f(-0.5 * r)} ${f(0.3 * r)} C${f(-0.1 * r)} ${f(0.7 * r)} ${f(0.3 * r)} ${f(0.86 * r)} ${f(0.56 * r)} ${f(0.8 * r)}` : `M${f(-0.55 * r)} ${f(-0.42 * r)} C${f(-0.1 * r)} ${f(-0.86 * r)} ${f(0.4 * r)} ${f(-0.86 * r)} ${f(0.66 * r)} ${f(-0.66 * r)}`} stroke={OUT} strokeOpacity="0.54" strokeWidth={f(0.38 * r)} fill="none" strokeLinecap="round" />
       <path d={open ? `M${f(-0.5 * r)} ${f(0.3 * r)} C${f(-0.1 * r)} ${f(0.7 * r)} ${f(0.3 * r)} ${f(0.86 * r)} ${f(0.56 * r)} ${f(0.8 * r)}` : `M${f(-0.55 * r)} ${f(-0.42 * r)} C${f(-0.1 * r)} ${f(-0.86 * r)} ${f(0.4 * r)} ${f(-0.86 * r)} ${f(0.66 * r)} ${f(-0.66 * r)}`} stroke={t.base} strokeWidth={f(0.32 * r)} fill="none" strokeLinecap="round" />
       {gloves ? null : <ellipse cx={f(open ? 0.56 * r : 0.64 * r)} cy={f(open ? 0.8 * r : -0.66 * r)} rx={f(0.13 * r)} ry={f(0.09 * r)} fill={t.nail} opacity="0.95" />}
       {/* polso: l'attacco all'avambraccio, con il polsino se c'è il guanto */}
       {gloves ? (
         <g>
-          <path d={`M${f(-0.98 * r)} ${f(-0.62 * r)} L${f(-0.66 * r)} ${f(-0.66 * r)} L${f(-0.66 * r)} ${f(0.62 * r)} L${f(-0.98 * r)} ${f(0.58 * r)} Z`} fill="#3a220f" stroke={OUT} strokeOpacity="0.7" strokeWidth="0.3" />
+          <path d={`M${f(-0.98 * r)} ${f(-0.62 * r)} L${f(-0.66 * r)} ${f(-0.66 * r)} L${f(-0.66 * r)} ${f(0.62 * r)} L${f(-0.98 * r)} ${f(0.58 * r)} Z`} fill="#3a220f" stroke={OUT} strokeOpacity="0.5" strokeWidth="0.18" />
           <path d={`M${f(-0.2 * r)} ${f(-0.6 * r)} C${f(0.3 * r)} ${f(-0.7 * r)} ${f(0.6 * r)} ${f(-0.6 * r)} ${f(0.8 * r)} ${f(-0.4 * r)}`} stroke="#c9a46a" strokeOpacity="0.5" strokeWidth={f(0.022 * r)} strokeDasharray={`${f(0.09 * r)} ${f(0.08 * r)}`} fill="none" />
         </g>
       ) : (

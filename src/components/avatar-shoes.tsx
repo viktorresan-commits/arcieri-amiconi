@@ -62,7 +62,7 @@ function FurBand({ x0, x1, y, h, uid }: { x0: number; x1: number; y: number; h: 
       </defs>
       {/* ombra della pelliccia sul cuoio */}
       <path d={`M${f(x0 + 0.4)} ${f(y + h + 0.4)} L${f(x1 - 0.4)} ${f(y + h + 0.4)} L${f(x1 - 1)} ${f(y + h + 1.6)} L${f(x0 + 1)} ${f(y + h + 1.6)} Z`} fill="#000" opacity="0.2" />
-      <path d={`M${f(x0)} ${f(y)} ${top} L${f(x1)} ${f(y + h)} ${bot} Z`} fill={`url(#${id})`} stroke={OUT} strokeOpacity="0.4" strokeWidth="0.3" strokeLinejoin="round" />
+      <path d={`M${f(x0)} ${f(y)} ${top} L${f(x1)} ${f(y + h)} ${bot} Z`} fill={`url(#${id})`} stroke={OUT} strokeOpacity="0.29" strokeWidth="0.18" strokeLinejoin="round" />
       {Array.from({ length: n * 3 }, (_, i) => {
         const x = x0 + (i + 0.5) * (step / 3);
         const yy = y + 0.4 + j(i, 5) * (h * 0.62);
@@ -103,11 +103,11 @@ export function SideShoe({ look, a, uid, skin }: { look: AvatarLook; a: P; uid: 
     // piede nudo: dita, unghia dell'alluce, suola di cuoio e lacci alla schiava fin sopra la caviglia
     return (
       <g>
-        <path d={`M${X(-9)} ${Y(-5)} C${X(-2)} ${Y(-5.6)} ${X(8)} ${Y(-2.6)} ${X(15)} ${Y(1.4)} C${X(19)} ${Y(3.4)} ${X(23.4)} ${Y(4)} ${X(24)} ${Y(6.2)} Q${X(24.4)} ${Y(8.2)} ${X(22)} ${Y(8.2)} L${X(-10.4)} ${Y(8.2)} C${X(-12.6)} ${Y(5.6)} ${X(-12)} ${Y(-1.6)} ${X(-9)} ${Y(-5)} Z`} fill={skin} stroke={OUT} strokeOpacity="0.75" strokeWidth="0.55" />
+        <path d={`M${X(-9)} ${Y(-5)} C${X(-2)} ${Y(-5.6)} ${X(8)} ${Y(-2.6)} ${X(15)} ${Y(1.4)} C${X(19)} ${Y(3.4)} ${X(23.4)} ${Y(4)} ${X(24)} ${Y(6.2)} Q${X(24.4)} ${Y(8.2)} ${X(22)} ${Y(8.2)} L${X(-10.4)} ${Y(8.2)} C${X(-12.6)} ${Y(5.6)} ${X(-12)} ${Y(-1.6)} ${X(-9)} ${Y(-5)} Z`} fill={skin} stroke={OUT} strokeOpacity="0.54" strokeWidth="0.33" />
         <path d={`M${X(-9)} ${Y(1)} C${X(0)} ${Y(-1)} ${X(10)} ${Y(2)} ${X(20)} ${Y(5)}`} stroke="#000" strokeOpacity="0.12" strokeWidth="1.1" fill="none" />
         {[18.4, 20.6, 22.6].map((x) => <path key={x} d={`M${X(x)} ${Y(4.2)} q0.6 1.8 0 3.6`} stroke={shade(skin, -0.35)} strokeWidth="0.32" fill="none" />)}
         <path d={`M${X(21.4)} ${Y(4.4)} q1.8 -0.4 2.2 1.2`} stroke="#fff" strokeOpacity="0.55" strokeWidth="0.4" fill="none" strokeLinecap="round" />
-        <path d={`M${X(-11.6)} ${Y(8)} L${X(24.8)} ${Y(8)} Q${X(26.2)} ${Y(9)} ${X(24.6)} ${Y(10.6)} L${X(-12)} ${Y(10.6)} Z`} fill={shade(sc, -0.15)} stroke={OUT} strokeOpacity="0.7" strokeWidth="0.42" />
+        <path d={`M${X(-11.6)} ${Y(8)} L${X(24.8)} ${Y(8)} Q${X(26.2)} ${Y(9)} ${X(24.6)} ${Y(10.6)} L${X(-12)} ${Y(10.6)} Z`} fill={shade(sc, -0.15)} stroke={OUT} strokeOpacity="0.5" strokeWidth="0.25" />
         <path d={`M${X(-11)} ${Y(9.2)} H${X(24)}`} stroke={STITCH} strokeOpacity="0.4" strokeWidth="0.28" strokeDasharray="0.8 0.65" />
         <g stroke={sc} strokeWidth="1" strokeLinecap="round" fill="none">
           <path d={`M${X(-8)} ${Y(-22)} L${X(5)} ${Y(-13)} M${X(5)} ${Y(-22)} L${X(-8)} ${Y(-13)} M${X(-8)} ${Y(-13)} L${X(5)} ${Y(-4)} M${X(5)} ${Y(-13)} L${X(-8)} ${Y(-4)}`} />
@@ -122,7 +122,7 @@ export function SideShoe({ look, a, uid, skin }: { look: AvatarLook; a: P; uid: 
   return (
     <g>
       {/* gambale e tomaia */}
-      <path d={body} fill={`url(#${uid}boot)`} stroke={OUT} strokeOpacity="0.88" strokeWidth="0.6" strokeLinejoin="round" />
+      <path d={body} fill={`url(#${uid}boot)`} stroke={OUT} strokeOpacity="0.63" strokeWidth="0.36" strokeLinejoin="round" />
       {/* volume: luce sul gambale, ombra sul retro, ombra sotto il collo del piede */}
       {/* riflesso sottile sul gambale (il volume lo dà la sfumatura) */}
       {!low ? <path d={`M${X(-6)} ${Y(-top + 6)} L${X(-5.5)} ${Y(-7)}`} stroke="#fff" strokeOpacity="0.26" strokeWidth="0.35" strokeLinecap="round" /> : null}
@@ -137,7 +137,7 @@ export function SideShoe({ look, a, uid, skin }: { look: AvatarLook; a: P; uid: 
       <path d={`M${X(1)} ${Y(-6.2)} q4 0.6 7.4 2.6 M${X(0)} ${Y(-9.6)} q4.4 0.4 8.2 2.4`} stroke="#000" strokeOpacity="0.3" strokeWidth="0.4" fill="none" strokeLinecap="round" />
       <path d={`M${X(1)} ${Y(-5.4)} q4 0.6 7.4 2.6`} stroke="#fff" strokeOpacity="0.12" strokeWidth="0.32" fill="none" />
       {/* suola con tacco, bordo cucito */}
-      <path d={sole} fill={hiker ? "#24201c" : sportive ? "#f2efe8" : SOLE} stroke={OUT} strokeOpacity="0.85" strokeWidth="0.5" strokeLinejoin="round" />
+      <path d={sole} fill={hiker ? "#24201c" : sportive ? "#f2efe8" : SOLE} stroke={OUT} strokeOpacity="0.61" strokeWidth="0.3" strokeLinejoin="round" />
       <path d={`M${X(-12)} ${Y(8.4)} H${X(23.8)}`} stroke={sportive ? "#fff" : "#6a5a4a"} strokeOpacity="0.55" strokeWidth="0.32" />
       {!sportive ? <path d={`M${X(-9.6)} ${Y(7)} H${X(21.6)}`} stroke={STITCH} strokeOpacity="0.45" strokeWidth="0.28" strokeDasharray="0.8 0.65" /> : null}
 
@@ -173,8 +173,8 @@ export function SideShoe({ look, a, uid, skin }: { look: AvatarLook; a: P; uid: 
           })}
           <path d={`M${X(8.6)} ${Y(-top + 3)} ${[1, 2, 3].map((k) => `L${X(k % 2 ? 6 : 8.6)} ${Y(-top + 3 + k * ((top - 6) / 3.2))}`).join(" ")} L${X(10)} ${Y(-2.6)}`} stroke={hiker ? "#c8553a" : "#e2cfa6"} strokeWidth="0.5" fill="none" strokeLinejoin="round" />
           {/* collarino imbottito e linguetta dietro */}
-          <path d={`M${X(-10.6)} ${Y(-top)} L${X(9.4)} ${Y(-top)} L${X(9.2)} ${Y(-top + 3.4)} L${X(-10.6)} ${Y(-top + 3.4)} Z`} fill={shade(sc, -0.25)} stroke={OUT} strokeOpacity="0.6" strokeWidth="0.4" />
-          <path d={`M${X(-11.4)} ${Y(-top - 3)} h3.4 v6 h-3.4 z`} fill={dk} stroke={OUT} strokeOpacity="0.6" strokeWidth="0.32" />
+          <path d={`M${X(-10.6)} ${Y(-top)} L${X(9.4)} ${Y(-top)} L${X(9.2)} ${Y(-top + 3.4)} L${X(-10.6)} ${Y(-top + 3.4)} Z`} fill={shade(sc, -0.25)} stroke={OUT} strokeOpacity="0.43" strokeWidth="0.24" />
+          <path d={`M${X(-11.4)} ${Y(-top - 3)} h3.4 v6 h-3.4 z`} fill={dk} stroke={OUT} strokeOpacity="0.43" strokeWidth="0.19" />
         </g>
       ) : null}
       {hiker ? (
@@ -192,12 +192,12 @@ export function SideShoe({ look, a, uid, skin }: { look: AvatarLook; a: P; uid: 
           <path d={`M${X(-1.4)} ${Y(-top + 5)} L${X(-1)} ${Y(-6)}`} stroke={line} strokeOpacity="0.5" strokeWidth="0.4" />
           <path d={`M${X(-0.4)} ${Y(-top + 5)} L${X(0)} ${Y(-6)}`} stroke={STITCH} strokeOpacity="0.32" strokeWidth="0.26" strokeDasharray="0.8 0.65" />
           {/* bordo in alto */}
-          {fw === "stivali" ? <path d={`M${X(-10.6)} ${Y(-top)} L${X(9.6)} ${Y(-top)} L${X(9.4)} ${Y(-top + 5)} L${X(-10.4)} ${Y(-top + 5)} Z`} fill={shade(sc, -0.28)} stroke={OUT} strokeOpacity="0.6" strokeWidth="0.4" /> : null}
+          {fw === "stivali" ? <path d={`M${X(-10.6)} ${Y(-top)} L${X(9.6)} ${Y(-top)} L${X(9.4)} ${Y(-top + 5)} L${X(-10.4)} ${Y(-top + 5)} Z`} fill={shade(sc, -0.28)} stroke={OUT} strokeOpacity="0.43" strokeWidth="0.24" /> : null}
           {fw === "stivali" ? <path d={`M${X(-9.6)} ${Y(-top + 3.6)} H${X(8.6)}`} stroke={STITCH} strokeOpacity="0.4" strokeWidth="0.26" strokeDasharray="0.8 0.65" /> : null}
           {/* cinturino con fibbia sulla caviglia */}
           {fw === "stivali" || fw === "stivali-pelliccia" ? (
             <g>
-              <path d={`M${X(-10.4)} ${Y(-13)} L${X(8.8)} ${Y(-11)} L${X(8.8)} ${Y(-8)} L${X(-10.4)} ${Y(-10)} Z`} fill={dk} stroke={OUT} strokeOpacity="0.6" strokeWidth="0.32" />
+              <path d={`M${X(-10.4)} ${Y(-13)} L${X(8.8)} ${Y(-11)} L${X(8.8)} ${Y(-8)} L${X(-10.4)} ${Y(-10)} Z`} fill={dk} stroke={OUT} strokeOpacity="0.43" strokeWidth="0.19" />
               <Buckle x={a.x + 1.4} y={a.y - 12.8} w={3.4} h={4.4} />
             </g>
           ) : null}
@@ -207,7 +207,7 @@ export function SideShoe({ look, a, uid, skin }: { look: AvatarLook; a: P; uid: 
       {fw === "stivali-risvolto" ? (
         <g>
           {/* risvolto: il dentro dello stivale ripiegato, scamosciato e più chiaro, con l'orlo cucito */}
-          <path d={`M${X(-12.2)} ${Y(-top - 2)} L${X(11.2)} ${Y(-top - 2)} L${X(12.6)} ${Y(-top + 12)} Q${X(0)} ${Y(-top + 14.6)} ${X(-13.4)} ${Y(-top + 12)} Z`} fill={lt} stroke={OUT} strokeOpacity="0.75" strokeWidth="0.5" />
+          <path d={`M${X(-12.2)} ${Y(-top - 2)} L${X(11.2)} ${Y(-top - 2)} L${X(12.6)} ${Y(-top + 12)} Q${X(0)} ${Y(-top + 14.6)} ${X(-13.4)} ${Y(-top + 12)} Z`} fill={lt} stroke={OUT} strokeOpacity="0.54" strokeWidth="0.3" />
           <path d={`M${X(-12.6)} ${Y(-top + 10)} Q${X(0)} ${Y(-top + 12.6)} ${X(12)} ${Y(-top + 10)}`} stroke={line} strokeOpacity="0.45" strokeWidth="0.28" strokeDasharray="0.8 0.65" fill="none" />
           <path d={`M${X(-12)} ${Y(-top - 1)} H${X(11)}`} stroke="#fff" strokeOpacity="0.3" strokeWidth="0.55" />
           <path d={`M${X(-9)} ${Y(-top + 1)} q1 5 0 10 M${X(6)} ${Y(-top + 1)} q1 5 0 10`} stroke="#000" strokeOpacity="0.14" strokeWidth="0.75" fill="none" />
@@ -218,13 +218,13 @@ export function SideShoe({ look, a, uid, skin }: { look: AvatarLook; a: P; uid: 
       {fw === "stivali-alti" ? (
         <g>
           {/* gambale da cavaliere: ginocchiera alta davanti, due cinturini con fibbie, borchie */}
-          <path d={`M${X(-11.4)} ${Y(-top + 3)} L${X(-11.6)} ${Y(-top - 1)} L${X(7)} ${Y(-top - 9)} Q${X(11.6)} ${Y(-top - 9.6)} ${X(11)} ${Y(-top - 4)} L${X(10.4)} ${Y(-top + 8)} Z`} fill={shade(sc, -0.12)} stroke={OUT} strokeOpacity="0.85" strokeWidth="0.55" strokeLinejoin="round" />
+          <path d={`M${X(-11.4)} ${Y(-top + 3)} L${X(-11.6)} ${Y(-top - 1)} L${X(7)} ${Y(-top - 9)} Q${X(11.6)} ${Y(-top - 9.6)} ${X(11)} ${Y(-top - 4)} L${X(10.4)} ${Y(-top + 8)} Z`} fill={shade(sc, -0.12)} stroke={OUT} strokeOpacity="0.61" strokeWidth="0.33" strokeLinejoin="round" />
           <path d={`M${X(-10.4)} ${Y(-top)} L${X(7)} ${Y(-top - 7.6)} Q${X(10)} ${Y(-top - 8)} ${X(9.6)} ${Y(-top - 3.4)}`} stroke={STITCH} strokeOpacity="0.4" strokeWidth="0.28" strokeDasharray="0.8 0.65" fill="none" />
           <path d={`M${X(-9)} ${Y(-top + 1)} L${X(6.6)} ${Y(-top - 5.8)}`} stroke="#fff" strokeOpacity="0.2" strokeWidth="0.6" strokeLinecap="round" />
           {[0, 1, 2].map((k) => <circle key={k} cx={X(-6 + k * 6)} cy={Y(-top + 1.6 - k * 2.6)} r="0.6" fill={BRASS} stroke="#5c4316" strokeWidth="0.2" />)}
           {[22, 34].filter((d) => d < top - 9).map((d) => (
             <g key={d}>
-              <path d={`M${X(-11)} ${Y(-top + d)} L${X(10)} ${Y(-top + d - 1.6)} L${X(10)} ${Y(-top + d + 2.2)} L${X(-11)} ${Y(-top + d + 3.8)} Z`} fill={dk} stroke={OUT} strokeOpacity="0.6" strokeWidth="0.32" />
+              <path d={`M${X(-11)} ${Y(-top + d)} L${X(10)} ${Y(-top + d - 1.6)} L${X(10)} ${Y(-top + d + 2.2)} L${X(-11)} ${Y(-top + d + 3.8)} Z`} fill={dk} stroke={OUT} strokeOpacity="0.43" strokeWidth="0.19" />
               <Buckle x={a.x + 2.8} y={a.y - top + d - 1.8} w={3.6} h={4.8} />
               <path d={`M${X(7)} ${Y(-top + d + 0.4)} l3.4 3.6`} stroke={dk} strokeWidth="0.75" strokeLinecap="round" />
             </g>
@@ -242,7 +242,7 @@ export function SideShoe({ look, a, uid, skin }: { look: AvatarLook; a: P; uid: 
             const d = ds.map((v, k) => `${k ? "L" : "M"}${X(k % 2 ? 5.4 : 8.4)} ${Y(-top + v)}`).join(" ");
             return (
               <g>
-                <path d={d} stroke={OUT} strokeOpacity="0.45" strokeWidth="0.55" fill="none" strokeLinejoin="round" />
+                <path d={d} stroke={OUT} strokeOpacity="0.32" strokeWidth="0.33" fill="none" strokeLinejoin="round" />
                 <path d={d} stroke="#dcc8a0" strokeWidth="0.3" fill="none" strokeLinejoin="round" />
                 {ds.map((v, k) => <circle key={v} cx={X(k % 2 ? 5.4 : 8.45)} cy={Y(-top + v)} r="0.42" fill="#1a120c" stroke={BRASS} strokeWidth="0.18" />)}
               </g>
@@ -310,13 +310,13 @@ export function FrontShoe({ look, L, legW, i, uid, skin }: { look: AvatarLook; L
     return (
       <g>
         {/* piede nudo visto davanti: collo del piede, dita, alluce */}
-        <path d={`M${Pt(318, -h + 1)} L${Pt(318, h - 1)} L${Pt(336, h)} C${Pt(340, h + 3.4 + o)} ${Pt(345, h + 4.6 + o)} ${Pt(349, h + 4 + o)} L${Pt(349, -h - 4 + o)} C${Pt(345, -h - 4.6 + o)} ${Pt(340, -h - 3.4 + o)} ${Pt(336, -h)} Z`} fill={skin} stroke={OUT} strokeOpacity="0.75" strokeWidth="0.55" />
+        <path d={`M${Pt(318, -h + 1)} L${Pt(318, h - 1)} L${Pt(336, h)} C${Pt(340, h + 3.4 + o)} ${Pt(345, h + 4.6 + o)} ${Pt(349, h + 4 + o)} L${Pt(349, -h - 4 + o)} C${Pt(345, -h - 4.6 + o)} ${Pt(340, -h - 3.4 + o)} ${Pt(336, -h)} Z`} fill={skin} stroke={OUT} strokeOpacity="0.54" strokeWidth="0.33" />
         <path d={`M${Pt(320, h - 2)} L${Pt(346, h + 2 + o)}`} stroke="#000" strokeOpacity="0.14" strokeWidth="1.3" />
         {[-0.72, -0.36, 0, 0.32, 0.62].map((k, n) => {
           const d = k * (h + 3) * (i === 0 ? -1 : 1) + o;
           return <path key={k} d={`M${Pt(349, d - (n === 0 ? 2 : 1.4))} q${f(n === 0 ? 2 : 1.4)} ${f(-3.2)} ${f(n === 0 ? 4 : 2.8)} 0`} fill={shade(skin, -0.05)} stroke={shade(skin, -0.4)} strokeWidth="0.32" />;
         })}
-        <path d={sole.replace(/^M/, "M")} fill={shade(sc, -0.15)} stroke={OUT} strokeOpacity="0.7" strokeWidth="0.42" />
+        <path d={sole.replace(/^M/, "M")} fill={shade(sc, -0.15)} stroke={OUT} strokeOpacity="0.5" strokeWidth="0.25" />
         <g stroke={st} strokeWidth="1" strokeLinecap="round" fill="none">
           <path d={`M${Pt(322, -h)} L${Pt(322, h)}`} />
           <path d={`M${Pt(334, -h - 1)} L${Pt(344, h + 3 + o)} M${Pt(334, h + 1)} L${Pt(344, -h - 3 + o)}`} />
@@ -330,7 +330,7 @@ export function FrontShoe({ look, L, legW, i, uid, skin }: { look: AvatarLook; L
 
   return (
     <g>
-      <path d={shape} fill={`url(#${uid}bo)`} stroke={OUT} strokeOpacity="0.88" strokeWidth="0.6" strokeLinejoin="round" />
+      <path d={shape} fill={`url(#${uid}bo)`} stroke={OUT} strokeOpacity="0.63" strokeWidth="0.36" strokeLinejoin="round" />
       {/* luce sul lato sinistro, ombra sul destro, ombra sotto il collo del piede */}
       {top < 330 ? <path d={`M${Pt(top + 5, -h * 0.52)} L${Pt(334, -h * 0.52)}`} stroke="#fff" strokeOpacity="0.24" strokeWidth="0.35" strokeLinecap="round" /> : null}
       <path d={`M${Pt(339, -h - 1 + o)} Q${Pt(336.6, o)} ${Pt(339, h + 1 + o)}`} stroke="#000" strokeOpacity="0.3" strokeWidth="0.75" fill="none" />
@@ -341,7 +341,7 @@ export function FrontShoe({ look, L, legW, i, uid, skin }: { look: AvatarLook; L
       {/* pieghe alla caviglia */}
       {top < 326 ? <path d={`M${Pt(328, -h * 0.6)} q${f(h * 0.6)} 1.8 ${f(h * 1.2)} 0 M${Pt(332.4, -h * 0.55)} q${f(h * 0.55)} 1.6 ${f(h * 1.1)} 0`} stroke="#000" strokeOpacity="0.3" strokeWidth="0.38" fill="none" /> : null}
       {/* suola */}
-      <path d={sole} fill={hiker ? "#24201c" : sportive ? "#f2efe8" : SOLE} stroke={OUT} strokeOpacity="0.85" strokeWidth="0.5" strokeLinejoin="round" />
+      <path d={sole} fill={hiker ? "#24201c" : sportive ? "#f2efe8" : SOLE} stroke={OUT} strokeOpacity="0.61" strokeWidth="0.3" strokeLinejoin="round" />
       <path d={`M${Pt(soleTop + 0.5, -h - 5 + o)} L${Pt(soleTop + 0.5, h + 5 + o)}`} stroke={sportive ? "#fff" : "#6a5a4a"} strokeOpacity="0.55" strokeWidth="0.32" />
       {!sportive ? <path d={`M${Pt(soleTop - 0.9, -h - 4.4 + o)} L${Pt(soleTop - 0.9, h + 4.4 + o)}`} stroke={STITCH} strokeOpacity="0.4" strokeWidth="0.26" strokeDasharray="0.8 0.65" /> : null}
 
@@ -349,7 +349,7 @@ export function FrontShoe({ look, L, legW, i, uid, skin }: { look: AvatarLook; L
         <g>
           <path d={`M${Pt(350.8, -h - 5 + o)} L${Pt(350.8, h + 5 + o)}`} stroke="#b9b4aa" strokeWidth="0.32" />
           {/* linguetta, lacci bianchi, fasce laterali */}
-          <path d={`M${Pt(top - 2, -h * 0.42)} Q${Pt(top - 4, 0)} ${Pt(top - 2, h * 0.42)} L${Pt(334, h * 0.4)} L${Pt(334, -h * 0.4)} Z`} fill={lt} stroke={OUT} strokeOpacity="0.55" strokeWidth="0.36" />
+          <path d={`M${Pt(top - 2, -h * 0.42)} Q${Pt(top - 4, 0)} ${Pt(top - 2, h * 0.42)} L${Pt(334, h * 0.4)} L${Pt(334, -h * 0.4)} Z`} fill={lt} stroke={OUT} strokeOpacity="0.4" strokeWidth="0.22" />
           {[322, 326, 330, 334].map((y) => <path key={y} d={`M${Pt(y, -h * 0.55)} L${Pt(y + 1.2, h * 0.55)}`} stroke="#f4f1ea" strokeWidth="0.55" strokeLinecap="round" />)}
           <path d={`M${Pt(330, -h - 0.4)} C${Pt(336, -h - 2)} ${Pt(342, -h - 4 + o)} ${Pt(346, -h - 4 + o)} M${Pt(330, h + 0.4)} C${Pt(336, h + 2)} ${Pt(342, h + 4 + o)} ${Pt(346, h + 4 + o)}`} stroke={shade(sc, 0.55)} strokeWidth="0.65" fill="none" strokeLinecap="round" />
         </g>
@@ -358,7 +358,7 @@ export function FrontShoe({ look, L, legW, i, uid, skin }: { look: AvatarLook; L
       {fw === "stivaletti" || hiker ? (
         <g>
           {/* allacciatura con ganci e collarino */}
-          <path d={`M${Pt(top, -h)} L${Pt(top, h)} L${Pt(top + 4.4, h)} L${Pt(top + 4.4, -h)} Z`} fill={shade(sc, -0.25)} stroke={OUT} strokeOpacity="0.6" strokeWidth="0.4" />
+          <path d={`M${Pt(top, -h)} L${Pt(top, h)} L${Pt(top + 4.4, h)} L${Pt(top + 4.4, -h)} Z`} fill={shade(sc, -0.25)} stroke={OUT} strokeOpacity="0.43" strokeWidth="0.24" />
           {hiker ? <path d={`M${Pt(top + 0.6, -h + 0.6)} Q${Pt(top - 1.6, 0)} ${Pt(top + 0.6, h - 0.6)}`} stroke="#fff" strokeOpacity="0.25" strokeWidth="0.5" fill="none" /> : null}
           {[0, 1, 2, 3, 4].map((k) => {
             const y = top + 7 + k * 5.4;
@@ -382,14 +382,14 @@ export function FrontShoe({ look, L, legW, i, uid, skin }: { look: AvatarLook; L
 
       {fw === "stivali" ? (
         <g>
-          <path d={`M${Pt(top, -h - flare)} L${Pt(top, h + flare)} L${Pt(top + 6, h + flare * 0.7)} L${Pt(top + 6, -h - flare * 0.7)} Z`} fill={shade(sc, -0.28)} stroke={OUT} strokeOpacity="0.6" strokeWidth="0.4" />
+          <path d={`M${Pt(top, -h - flare)} L${Pt(top, h + flare)} L${Pt(top + 6, h + flare * 0.7)} L${Pt(top + 6, -h - flare * 0.7)} Z`} fill={shade(sc, -0.28)} stroke={OUT} strokeOpacity="0.43" strokeWidth="0.24" />
           <path d={`M${Pt(top + 4.2, -h)} L${Pt(top + 4.2, h)}`} stroke={STITCH} strokeOpacity="0.4" strokeWidth="0.26" strokeDasharray="0.8 0.65" />
         </g>
       ) : null}
       {fw === "stivali" || fw === "stivali-pelliccia" ? (
         <g>
           {/* cinturino della caviglia con fibbia sul lato esterno */}
-          <path d={`M${Pt(323, -h - 0.4)} L${Pt(323, h + 0.4)} L${Pt(327, h + 0.4)} L${Pt(327, -h - 0.4)} Z`} fill={dk} stroke={OUT} strokeOpacity="0.6" strokeWidth="0.32" />
+          <path d={`M${Pt(323, -h - 0.4)} L${Pt(323, h + 0.4)} L${Pt(327, h + 0.4)} L${Pt(327, -h - 0.4)} Z`} fill={dk} stroke={OUT} strokeOpacity="0.43" strokeWidth="0.19" />
           <g transform={`translate(${i === 0 ? -h * 0.62 : h * 0.18} 0)`}>
             <Buckle x={Number(L(322.2, 0))} y={322.2} w={3.2} h={5} />
           </g>
@@ -402,7 +402,7 @@ export function FrontShoe({ look, L, legW, i, uid, skin }: { look: AvatarLook; L
       {fw === "stivali-risvolto" ? (
         <g>
           {/* risvolto scamosciato con orlo cucito e lo scollo a V davanti */}
-          <path d={`M${Pt(top - 3, -h - 3.4)} L${Pt(top - 3, h + 3.4)} L${Pt(top + 13, h + 2.8)} L${Pt(top + 15.4, h * 0.2)} L${Pt(top + 12, 0)} L${Pt(top + 15.4, -h * 0.2)} L${Pt(top + 13, -h - 2.8)} Z`} fill={lt} stroke={OUT} strokeOpacity="0.75" strokeWidth="0.5" strokeLinejoin="round" />
+          <path d={`M${Pt(top - 3, -h - 3.4)} L${Pt(top - 3, h + 3.4)} L${Pt(top + 13, h + 2.8)} L${Pt(top + 15.4, h * 0.2)} L${Pt(top + 12, 0)} L${Pt(top + 15.4, -h * 0.2)} L${Pt(top + 13, -h - 2.8)} Z`} fill={lt} stroke={OUT} strokeOpacity="0.54" strokeWidth="0.3" strokeLinejoin="round" />
           <path d={`M${Pt(top + 10.6, -h - 2.2)} L${Pt(top + 10.6, -h * 0.25)} M${Pt(top + 10.6, h * 0.25)} L${Pt(top + 10.6, h + 2.2)}`} stroke={line} strokeOpacity="0.45" strokeWidth="0.28" strokeDasharray="0.8 0.65" />
           <path d={`M${Pt(top - 2, -h - 2.6)} L${Pt(top - 2, h + 2.6)}`} stroke="#fff" strokeOpacity="0.3" strokeWidth="0.5" />
           <path d={`M${Pt(top + 15, -h - 1)} L${Pt(top + 15, h + 1)}`} stroke="#000" strokeOpacity="0.28" strokeWidth="0.75" />
@@ -412,13 +412,13 @@ export function FrontShoe({ look, L, legW, i, uid, skin }: { look: AvatarLook; L
       {fw === "stivali-alti" ? (
         <g>
           {/* ginocchiera a scudo con borchie, due cinturini con fibbie */}
-          <path d={`M${Pt(top + 8, -h - 2.4)} L${Pt(top + 1, -h - 2.2)} L${Pt(top - 4, -h * 0.35)} Q${Pt(top - 9, 0)} ${Pt(top - 4, h * 0.35)} L${Pt(top + 1, h + 2.2)} L${Pt(top + 8, h + 2.4)} Z`} fill={shade(sc, -0.1)} stroke={OUT} strokeOpacity="0.85" strokeWidth="0.55" strokeLinejoin="round" />
+          <path d={`M${Pt(top + 8, -h - 2.4)} L${Pt(top + 1, -h - 2.2)} L${Pt(top - 4, -h * 0.35)} Q${Pt(top - 9, 0)} ${Pt(top - 4, h * 0.35)} L${Pt(top + 1, h + 2.2)} L${Pt(top + 8, h + 2.4)} Z`} fill={shade(sc, -0.1)} stroke={OUT} strokeOpacity="0.61" strokeWidth="0.33" strokeLinejoin="round" />
           <path d={`M${Pt(top + 6, -h - 1)} L${Pt(top + 1.6, -h - 0.8)} L${Pt(top - 2.6, -h * 0.3)} Q${Pt(top - 6.6, 0)} ${Pt(top - 2.6, h * 0.3)} L${Pt(top + 1.6, h + 0.8)} L${Pt(top + 6, h + 1)}`} stroke={STITCH} strokeOpacity="0.4" strokeWidth="0.26" strokeDasharray="0.8 0.65" fill="none" />
           <path d={`M${Pt(top - 2.4, -h * 0.25)} Q${Pt(top - 5.4, -h * 0.05)} ${Pt(top - 4.6, h * 0.1)}`} stroke="#fff" strokeOpacity="0.3" strokeWidth="0.5" fill="none" strokeLinecap="round" />
           {[-0.5, 0, 0.5].map((k) => <circle key={k} cx={L(top + 3, k * h)} cy={top + 3 - Math.abs(k) * 0} r="0.62" fill={BRASS} stroke="#5c4316" strokeWidth="0.2" />)}
           {[290, 306].filter((y) => y > top + 7).map((y) => (
             <g key={y}>
-              <path d={`M${Pt(y, -h - 1)} L${Pt(y, h + 1)} L${Pt(y + 4, h + 1)} L${Pt(y + 4, -h - 1)} Z`} fill={dk} stroke={OUT} strokeOpacity="0.6" strokeWidth="0.32" />
+              <path d={`M${Pt(y, -h - 1)} L${Pt(y, h + 1)} L${Pt(y + 4, h + 1)} L${Pt(y + 4, -h - 1)} Z`} fill={dk} stroke={OUT} strokeOpacity="0.43" strokeWidth="0.19" />
               <g transform={`translate(${i === 0 ? -h * 0.7 : h * 0.2} 0)`}>
                 <Buckle x={Number(L(y - 0.6, 0))} y={y - 0.6} w={3.2} h={5.2} />
               </g>
@@ -430,11 +430,11 @@ export function FrontShoe({ look, L, legW, i, uid, skin }: { look: AvatarLook; L
       {fw === "stivali-pelliccia" ? (
         <g>
           {/* allacciatura incrociata davanti: occhielli sui due lembi e un laccio sottile */}
-          <path d={`M${Pt(top + 9, -h * 0.06)} L${Pt(Math.min(top + 38, 336), -h * 0.06)} M${Pt(top + 9, h * 0.06)} L${Pt(Math.min(top + 38, 336), h * 0.06)}`} stroke={OUT} strokeOpacity="0.4" strokeWidth="0.3" />
+          <path d={`M${Pt(top + 9, -h * 0.06)} L${Pt(Math.min(top + 38, 336), -h * 0.06)} M${Pt(top + 9, h * 0.06)} L${Pt(Math.min(top + 38, 336), h * 0.06)}`} stroke={OUT} strokeOpacity="0.29" strokeWidth="0.18" />
           {[0, 1, 2, 3].filter((k) => top + 18 + k * 7 <= 336).map((k) => {
             const y0 = top + 11 + k * 7;
             return <g key={k}>
-              <path d={`M${Pt(y0, -h * 0.34)} L${Pt(y0 + 7, h * 0.34)} M${Pt(y0, h * 0.34)} L${Pt(y0 + 7, -h * 0.34)}`} stroke={OUT} strokeOpacity="0.45" strokeWidth="0.55" />
+              <path d={`M${Pt(y0, -h * 0.34)} L${Pt(y0 + 7, h * 0.34)} M${Pt(y0, h * 0.34)} L${Pt(y0 + 7, -h * 0.34)}`} stroke={OUT} strokeOpacity="0.32" strokeWidth="0.33" />
               <path d={`M${Pt(y0, -h * 0.34)} L${Pt(y0 + 7, h * 0.34)} M${Pt(y0, h * 0.34)} L${Pt(y0 + 7, -h * 0.34)}`} stroke="#dcc8a0" strokeWidth="0.3" />
             </g>;
           })}
@@ -450,7 +450,7 @@ export function FrontShoe({ look, L, legW, i, uid, skin }: { look: AvatarLook; L
             {[0, 1, 2].map((k) => <path key={k} d={`M${Pt(296 + k * 10, -h + 0.5)} L${Pt(306 + k * 10, h - 0.5)} M${Pt(296 + k * 10, h - 0.5)} L${Pt(306 + k * 10, -h + 0.5)}`} />)}
           </g>
           <path d={`M${Pt(296, 0)} q${i === 0 ? -3 : 3} 4 ${i === 0 ? -2 : 2} 9 M${Pt(296, 0)} q${i === 0 ? -5 : 5} 2 ${i === 0 ? -6 : 6} 7`} stroke={shade(sc, -0.12)} strokeWidth="0.65" fill="none" strokeLinecap="round" />
-          <circle cx={L(296, 0)} cy="296" r="1" fill={shade(sc, -0.2)} stroke={OUT} strokeOpacity="0.5" strokeWidth="0.25" />
+          <circle cx={L(296, 0)} cy="296" r="1" fill={shade(sc, -0.2)} stroke={OUT} strokeOpacity="0.36" strokeWidth="0.15" />
           <path d={`M${Pt(337.6, -h * 0.6 + o)} Q${Pt(333.4, o)} ${Pt(337.6, h * 0.6 + o)}`} stroke={STITCH} strokeOpacity="0.5" strokeWidth="0.3" strokeDasharray="0.8 0.65" fill="none" />
           {[-0.6, -0.2, 0.2, 0.6].map((k) => <path key={k} d={`M${Pt(top, k * h)} l0 3.6`} stroke={dk} strokeWidth="0.42" strokeLinecap="round" />)}
         </g>

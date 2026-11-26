@@ -89,7 +89,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
     const brB = lerpP(elbow, hand, 0.84);
     return (
       <g key={side} className={live ? (bowArm ? "aa-front-bowarm" : "aa-front-arm") : undefined} style={live ? { transformOrigin: `${f(s0.x)}px ${f(s0.y)}px` } : undefined}>
-        <path d={`${segs} L${f(hand.x)} ${f(hand.y)}`} stroke={OUT} strokeOpacity="0.8" strokeWidth={upW + 2.6} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+        <path d={`${segs} L${f(hand.x)} ${f(hand.y)}`} stroke={OUT} strokeOpacity="0.58" strokeWidth={upW + 1.3} strokeLinecap="round" strokeLinejoin="round" fill="none" />
         <path d={segs} stroke={sleeve} strokeWidth={upW} strokeLinecap="round" fill="none" />
         {sleeve !== skin ? <path d={segs} stroke={`url(#${uid}linen)`} strokeWidth={upW} strokeLinecap="round" fill="none" /> : null}
         <path d={`M${f(elbow.x)} ${f(elbow.y)} L${f(sleeveLong ? cuff.x : hand.x)} ${f(sleeveLong ? cuff.y : hand.y)}`} stroke={sleeveLong ? sleeve : skin} strokeWidth={foreW + (sleeveLong ? 1.5 : 0)} strokeLinecap="round" fill="none" />
@@ -99,13 +99,13 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
         <path d={`M${f(s0.x - side * upW * 0.18)} ${f(s0.y + 4)} L${f(elbow.x - side * upW * 0.18)} ${f(elbow.y)}`} stroke="#fff" strokeOpacity="0.14" strokeWidth={upW * 0.26} strokeLinecap="round" />
         {/* ombra sul lato in ombra del braccio (la luce viene da sinistra) */}
         <path d={`M${f(s0.x + upW * 0.3)} ${f(s0.y + 4)} L${f(elbow.x + upW * 0.3)} ${f(elbow.y)}${sleeveLong ? ` L${f(cuff.x + foreW * 0.3)} ${f(cuff.y)}` : ""}`} stroke="#000" strokeOpacity="0.18" strokeWidth={upW * 0.34} strokeLinecap="round" strokeLinejoin="round" fill="none" />
-        {medievalTop ? <circle cx={f(cuff.x)} cy={f(cuff.y)} r={6.8 * W} fill={look.trim} stroke={OUT} strokeOpacity="0.6" strokeWidth="0.8" /> : null}
+        {medievalTop ? <circle cx={f(cuff.x)} cy={f(cuff.y)} r={6.8 * W} fill={look.trim} stroke={OUT} strokeOpacity="0.43" strokeWidth="0.48" /> : null}
         {look.armband && !bowArm ? <path d={`M${f(lerp(s0.x, elbow.x, 0.42))} ${f(lerp(s0.y, elbow.y, 0.42))} L${f(lerp(s0.x, elbow.x, 0.58))} ${f(lerp(s0.y, elbow.y, 0.58))}`} stroke={look.trim} strokeWidth={upW + 1.4} /> : null}
         {look.watch && !bowArm ? <g><circle cx={f(lerp(elbow.x, hand.x, 0.8))} cy={f(lerp(elbow.y, hand.y, 0.8))} r="5.4" fill="#1d2126" /><circle cx={f(lerp(elbow.x, hand.x, 0.8))} cy={f(lerp(elbow.y, hand.y, 0.8))} r="3" fill="#dfe6ee" /></g> : null}
         {bowArm && look.armguard ? <path d={`M${f(lerp(elbow.x, hand.x, 0.2))} ${f(lerp(elbow.y, hand.y, 0.2))} L${f(lerp(elbow.x, hand.x, 0.76))} ${f(lerp(elbow.y, hand.y, 0.76))}`} stroke={look.armguard} strokeWidth={foreW + 3} strokeLinecap="round" opacity="0.95" /> : null}
         {look.bracers ? (
           <g>
-            <path d={`M${f(brA.x)} ${f(brA.y)} L${f(brB.x)} ${f(brB.y)}`} stroke={OUT} strokeOpacity="0.8" strokeWidth={foreW + 5} strokeLinecap="round" />
+            <path d={`M${f(brA.x)} ${f(brA.y)} L${f(brB.x)} ${f(brB.y)}`} stroke={OUT} strokeOpacity="0.58" strokeWidth={foreW + 2.5} strokeLinecap="round" />
             <path d={`M${f(brA.x)} ${f(brA.y)} L${f(brB.x)} ${f(brB.y)}`} stroke={look.bracers} strokeWidth={foreW + 4} strokeLinecap="round" />
             <LeatherBand uid={`${uid}${side}`} a={lerpP(elbow, hand, 0.36)} b={lerpP(elbow, hand, 0.82)} w={foreW + 4} color={shade(look.bracers, 0.6)} />
             <BracerLacing a={lerpP(elbow, hand, 0.42)} b={lerpP(elbow, hand, 0.74)} w={foreW + 4} color={shade(look.bracers, 0.6)} />
@@ -205,7 +205,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
             const lining = `M${f(sx + side * 7)} 124 C${f(sx + side * 15)} 186 ${f(outX + side * 4)} ${f(hemY - 70)} ${f(outX)} ${f(hemY - 4)} L${f(outX - side * 6)} ${f(hemY - 2)} C${f(outX - side * 4)} ${f(hemY - 70)} ${f(sx + side * 8)} 190 ${f(sx + side * 2)} 126 Z`;
             return (
               <g key={side} className={live ? "aa-front-flap" : undefined} style={live ? { transformOrigin: `${f(sx)}px 104px`, animationDelay: side < 0 ? "0s" : "-2.4s" } : undefined}>
-                <path d={d} fill={`url(#${uid}cp)`} stroke={OUT} strokeOpacity="0.75" strokeWidth="1.4" />
+                <path d={d} fill={`url(#${uid}cp)`} stroke={OUT} strokeOpacity="0.54" strokeWidth="0.84" />
                 {look.capePattern && look.capePattern !== "liscio" && look.capePattern !== "stemma" ? (
                   look.capePattern === "stelle" ? (
                     <g>
@@ -255,13 +255,13 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
           const L = (y: number, d: number) => f(lx(y) + d);
           return (
             <g key={x}>
-              <path d={`M${L(206, -legW / 2)} 206 L${L(206, legW / 2)} 206 L${L(330, legW / 2 - (tight ? 2 : 0))} 330 L${L(330, -legW / 2 + (tight ? 2 : 0))} 330 Z`} fill={shorts ? skin : `url(#${uid}pa)`} stroke={OUT} strokeOpacity="0.75" strokeWidth="1.4" />
+              <path d={`M${L(206, -legW / 2)} 206 L${L(206, legW / 2)} 206 L${L(330, legW / 2 - (tight ? 2 : 0))} 330 L${L(330, -legW / 2 + (tight ? 2 : 0))} 330 Z`} fill={shorts ? skin : `url(#${uid}pa)`} stroke={OUT} strokeOpacity="0.54" strokeWidth="0.84" />
               {shorts ? null : <path d={`M${L(268, -legW * 0.3)} 266 q${f(legW * 0.3)} 4 ${f(legW * 0.6)} 0 M${L(274, -legW * 0.25)} 273 q${f(legW * 0.25)} 3 ${f(legW * 0.5)} 0`} stroke="#000" strokeOpacity="0.25" strokeWidth="0.9" fill="none" />}
               {shorts ? null : <path d={`M${L(212, -legW * 0.22)} 212 L${L(326, -legW * 0.22)} 326`} stroke="#fff" strokeOpacity="0.1" strokeWidth={f(legW * 0.18)} strokeLinecap="round" />}
               {/* volume della gamba e ombra sotto la veste */}
               <path d={`M${L(206, -legW / 2)} 206 L${L(206, legW / 2)} 206 L${L(330, legW / 2 - (tight ? 2 : 0))} 330 L${L(330, -legW / 2 + (tight ? 2 : 0))} 330 Z`} fill={`url(#${uid}vol)`} pointerEvents="none" />
               <path d={`M${L(206, -legW / 2)} 206 L${L(206, legW / 2)} 206 L${L(226, legW / 2)} 226 L${L(226, -legW / 2)} 226 Z`} fill={`url(#${uid}ao)`} opacity="0.7" pointerEvents="none" />
-              {shorts ? <path d={`M${L(206, -legW / 2 - 1)} 206 h${legW + 2} l${f(sp * 0.33)} 46 h${-legW - 2} Z`} fill={`url(#${uid}pa)`} stroke={OUT} strokeOpacity="0.75" strokeWidth="1.2" /> : null}
+              {shorts ? <path d={`M${L(206, -legW / 2 - 1)} 206 h${legW + 2} l${f(sp * 0.33)} 46 h${-legW - 2} Z`} fill={`url(#${uid}pa)`} stroke={OUT} strokeOpacity="0.54" strokeWidth="0.72" /> : null}
               {look.bottom === "jeans" ? <path d={`M${L(214, i ? -3 : 3)} 214 L${L(326, i ? -3 : 3)} 326`} stroke={shade(look.pants, 0.3)} strokeWidth="0.8" strokeDasharray="3 2" /> : null}
               {look.wraps ? [0, 1, 2, 3, 4].map((k) => <path key={k} d={`M${L(246 + k * 12, -legW / 2)} ${246 + k * 12} L${L(240 + k * 12, legW / 2)} ${240 + k * 12}`} stroke={look.wrapsColor} strokeWidth="4" />) : null}
               {/* calzatura */}
@@ -274,7 +274,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
 
         {look.bottom === "gonna" ? (
           <g>
-            <path d={`M${hip.l - 2} 200 L${hip.r + 2} 200 L${hip.r + 12} 262 Q${cx} 268 ${hip.l - 12} 262 Z`} fill={`url(#${uid}pa)`} stroke={OUT} strokeOpacity="0.8" strokeWidth="1.4" />
+            <path d={`M${hip.l - 2} 200 L${hip.r + 2} 200 L${hip.r + 12} 262 Q${cx} 268 ${hip.l - 12} 262 Z`} fill={`url(#${uid}pa)`} stroke={OUT} strokeOpacity="0.58" strokeWidth="0.84" />
             {[-0.7, -0.35, 0, 0.35, 0.7].map((k) => <path key={k} d={`M${cx + k * 28} 204 L${cx + k * 38} 262`} stroke={shade(look.pants, -0.35)} strokeWidth="1" />)}
           </g>
         ) : null}
@@ -290,11 +290,11 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
           <path d={`M${cx - 7.5} 76 C${cx - 8} 88 ${cx - 9.5} 96 ${cx - 16} 103 L${cx - 10} 103 C${cx - 6} 96 ${cx - 5} 88 ${cx - 5} 78 Z M${cx + 7.5} 76 C${cx + 8} 88 ${cx + 9.5} 96 ${cx + 16} 103 L${cx + 10} 103 C${cx + 6} 96 ${cx + 5} 88 ${cx + 5} 78 Z`} fill={shade(skin, -0.36)} opacity="0.5" />
           <ellipse cx={cx} cy="83" rx="9" ry="5" fill={`url(#${uid}sd)`} opacity="0.75" />
           <path d={`M${cx - 6} 84 Q${cx - 4} 94 ${cx - 1.4} 101 M${cx + 6} 84 Q${cx + 4} 94 ${cx + 1.4} 101`} stroke={shade(skin, -0.4)} strokeOpacity="0.3" strokeWidth="0.7" fill="none" />
-          <path d={`M${cx - 7.5} 76 C${cx - 8} 88 ${cx - 9.5} 96 ${cx - 16} 103 M${cx + 7.5} 76 C${cx + 8} 88 ${cx + 9.5} 96 ${cx + 16} 103`} stroke={OUT} strokeOpacity="0.75" strokeWidth="1.2" fill="none" />
+          <path d={`M${cx - 7.5} 76 C${cx - 8} 88 ${cx - 9.5} 96 ${cx - 16} 103 M${cx + 7.5} 76 C${cx + 8} 88 ${cx + 9.5} 96 ${cx + 16} 103`} stroke={OUT} strokeOpacity="0.54" strokeWidth="0.72" fill="none" />
         </g>
         {/* veste */}
-        {longTop ? <path d={tunicD} fill={`url(#${uid}sh)`} stroke={OUT} strokeOpacity="0.75" strokeWidth="1.4" /> : null}
-        <path d={torsoD} fill={`url(#${uid}sh)`} stroke={OUT} strokeOpacity="0.75" strokeWidth="1.4" />
+        {longTop ? <path d={tunicD} fill={`url(#${uid}sh)`} stroke={OUT} strokeOpacity="0.54" strokeWidth="0.84" /> : null}
+        <path d={torsoD} fill={`url(#${uid}sh)`} stroke={OUT} strokeOpacity="0.54" strokeWidth="0.84" />
         <ClothPattern kind={look.pattern} shapes={longTop ? [torsoD, tunicD] : [torsoD]} base={shirt} trim={look.trim} uid={`${uid}f`} box={[sh.l - 16, 94, sh.r + 16, (longTop ? hem : 208) + 6]} />
         <ClothDetail uid={`${uid}cd`} shapes={longTop ? [torsoD, tunicD] : [torsoD]} cx={cx} shoulderL={sh.l} shoulderR={sh.r} hipL={hip.l} hipR={hip.r} tunicLen={longTop ? hem : 206} longTunic={longTop} seam={seamOf(shirt)} />
         <FrontTop look={look} cx={cx} sh={sh} waist={waist} hip={hip} hem={hem} sideLen={sideLen} longTop={longTop} skin={skin} shirt={shirt} sleeve={sleeve} uid={uid} tw={tw} />
@@ -311,13 +311,13 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
             <ellipse cx={cx - 8} cy="118" rx={(sh.r - sh.l) * 0.26} ry="9" fill="#fff" opacity="0.07" />
           </g>
         </g>
-        {look.chestguard ? <path d={`M${cx + bowSide * 6} 118 C${cx + bowSide * 30} 116 ${cx + bowSide * 34} 150 ${cx + bowSide * 26} 168 L${cx + bowSide * 6} 164 Z`} fill={look.chestColor} opacity="0.92" stroke={OUT} strokeOpacity="0.7" strokeWidth="1" /> : null}
+        {look.chestguard ? <path d={`M${cx + bowSide * 6} 118 C${cx + bowSide * 30} 116 ${cx + bowSide * 34} 150 ${cx + bowSide * 26} 168 L${cx + bowSide * 6} 164 Z`} fill={look.chestColor} opacity="0.92" stroke={OUT} strokeOpacity="0.5" strokeWidth="0.6" /> : null}
         {look.straps ? <path d={`M${sh.l + 8} 106 L${hip.r - 6} 196 M${sh.r - 8} 106 L${hip.l + 6} 196`} stroke="#3a2414" strokeWidth="4.4" /> : null}
         {look.special ? <SpecialFrontTorso look={look} cx={cx} sh={sh} hip={hip} uid={uid} /> : null}
         {look.sash ? <path d={`M${waist.l - 2} 182 Q${cx} 192 ${waist.r + 2} 182 L${waist.r + 2} 194 Q${cx} 204 ${waist.l - 2} 194 Z M${waist.l + 6} 192 l-6 34 l10 -4 Z`} fill={look.sashColor} /> : null}
         {look.belt !== "nessuna" ? (
           <g>
-            <path d={`M${waist.l - 1} ${look.belt === "larga" ? 184 : 187} L${waist.r + 1} ${look.belt === "larga" ? 184 : 187} L${waist.r + 1} 194 L${waist.l - 1} 194 Z`} fill={look.beltColor} stroke={OUT} strokeOpacity="0.7" strokeWidth="1" />
+            <path d={`M${waist.l - 1} ${look.belt === "larga" ? 184 : 187} L${waist.r + 1} ${look.belt === "larga" ? 184 : 187} L${waist.r + 1} 194 L${waist.l - 1} 194 Z`} fill={look.beltColor} stroke={OUT} strokeOpacity="0.5" strokeWidth="0.6" />
             <BeltDetail uid={uid} x={waist.l - 1} y={look.belt === "larga" ? 184 : 187} w={waist.r - waist.l + 2} h={look.belt === "larga" ? 10 : 7} cx={cx} />
             {look.buckle && look.buckle !== "semplice" ? <Buckle kind={look.buckle} x={cx} y={190} /> : <rect x={cx - 5} y={look.belt === "larga" ? 183 : 186} width="10" height={look.belt === "larga" ? 12 : 9} rx="1.5" fill="none" stroke="#d9b45a" strokeWidth="1.8" />}
           </g>
@@ -367,11 +367,11 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
           <g className={live ? "aa-front-bow" : undefined}>
             {([1, -1] as const).map((sg) => (
               <g key={sg}>
-                <path d={limbD(sg)} stroke={OUT} strokeOpacity="0.85" strokeWidth={longbow ? 8 : 7} strokeLinecap="round" fill="none" />
+                <path d={limbD(sg)} stroke={OUT} strokeOpacity="0.61" strokeWidth={longbow ? 8 : 7} strokeLinecap="round" fill="none" />
                 <path d={limbD(sg)} stroke={limbs} strokeWidth={longbow ? 5.8 : 4.8} strokeLinecap="round" fill="none" />
                 <path d={limbD(sg)} stroke={shade(limbs, wood ? 0.35 : 0.55)} strokeOpacity={wood ? 0.6 : 0.4} strokeWidth="1.4" strokeLinecap="round" fill="none" transform="translate(1.2 0)" />
                 <path d={limbD(sg)} stroke="#000" strokeOpacity="0.25" strokeWidth="1.2" strokeLinecap="round" fill="none" transform="translate(-1.4 0)" />
-                <circle cx={tip(sg).x} cy={tip(sg).y} r={longbow ? 2.6 : 2.1} fill={wood ? "#efe3c4" : "#2a2f35"} stroke={OUT} strokeOpacity="0.8" strokeWidth="0.7" />
+                <circle cx={tip(sg).x} cy={tip(sg).y} r={longbow ? 2.6 : 2.1} fill={wood ? "#efe3c4" : "#2a2f35"} stroke={OUT} strokeOpacity="0.58" strokeWidth="0.42" />
                 {compound ? <g transform={`translate(${tipX} ${-half * sg})`}><ellipse rx="7" ry="8" fill="#b7c0c8" stroke="#2a2f35" strokeWidth="1.2" /><ellipse rx="3.6" ry="4.2" fill="#8a939c" /><circle r="1.2" fill="#e3a21a" /></g> : null}
               </g>
             ))}
@@ -381,12 +381,12 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
             {/* riser */}
             {longbow ? (
               <g>
-                <rect x="-4.6" y="-14" width="9.2" height="28" rx="3.4" fill="#4a2c16" stroke={OUT} strokeOpacity="0.8" strokeWidth="0.8" />
+                <rect x="-4.6" y="-14" width="9.2" height="28" rx="3.4" fill="#4a2c16" stroke={OUT} strokeOpacity="0.58" strokeWidth="0.48" />
                 {[0, 1, 2, 3, 4, 5].map((k) => <path key={k} d={`M-4.4 ${-11 + k * 4.2} L4.4 ${-9 + k * 4.2}`} stroke="#c9a46a" strokeWidth="0.7" opacity="0.8" />)}
               </g>
             ) : (
               <g>
-                <path d={`M-1 ${-rs} L8 ${-rs} C9 ${-rs * 0.5} 10 -12 9 -8 L9 ${rs} L-1 ${rs} C-2 ${rs * 0.6} -2 14 -4 9 C-5 4 -5 -6 -2 -11 Z`} fill={`url(#${uid}ri)`} stroke={OUT} strokeOpacity="0.85" strokeWidth="0.9" />
+                <path d={`M-1 ${-rs} L8 ${-rs} C9 ${-rs * 0.5} 10 -12 9 -8 L9 ${rs} L-1 ${rs} C-2 ${rs * 0.6} -2 14 -4 9 C-5 4 -5 -6 -2 -11 Z`} fill={`url(#${uid}ri)`} stroke={OUT} strokeOpacity="0.61" strokeWidth="0.54" />
                 {wood ? null : <path d={`M3 ${-rs + 6} L7 ${-rs + 6} L7 -10 L3.4 -10 Z`} fill="#000" opacity="0.3" />}
                 <path d="M9 -6 l4 0 l0 2.4" stroke="#c9d0d8" strokeWidth="1.1" fill="none" />
                 {look.bowType === "olimpico" ? (
@@ -468,7 +468,7 @@ function FrontTop({ look, cx, sh, waist, hip, hem, sideLen, longTop, skin, shirt
       return (
         <g>
           {scoop(8, 7, shade(shirt, -0.3), 1, true)}
-          <path d={`M${cx - 11} 96.6 L${cx} 110 L${cx + 11} 96.6 L${cx + 7} 95.6 L${cx} 104 L${cx - 7} 95.6 Z`} fill={tr} stroke={OUT} strokeOpacity="0.6" strokeWidth="0.6" />
+          <path d={`M${cx - 11} 96.6 L${cx} 110 L${cx + 11} 96.6 L${cx + 7} 95.6 L${cx} 104 L${cx - 7} 95.6 Z`} fill={tr} stroke={OUT} strokeOpacity="0.43" strokeWidth="0.36" />
           <path d={`M${cx} 104 v14`} stroke={shade(shirt, -0.3)} strokeWidth="1" />
           {[110, 116].map((y) => <circle key={y} cx={cx} cy={y} r="1.1" fill={tr} />)}
         </g>
@@ -476,7 +476,7 @@ function FrontTop({ look, cx, sh, waist, hip, hem, sideLen, longTop, skin, shirt
     case "felpa":
       return (
         <g>
-          <path d={`M${cx - 19} 99 C${cx - 15} 91 ${cx + 15} 91 ${cx + 19} 99 C${cx + 10} 109 ${cx - 10} 109 ${cx - 19} 99 Z`} fill={shade(shirt, -0.3)} stroke={OUT} strokeOpacity="0.6" strokeWidth="0.8" />
+          <path d={`M${cx - 19} 99 C${cx - 15} 91 ${cx + 15} 91 ${cx + 19} 99 C${cx + 10} 109 ${cx - 10} 109 ${cx - 19} 99 Z`} fill={shade(shirt, -0.3)} stroke={OUT} strokeOpacity="0.43" strokeWidth="0.48" />
           <path d={`M${cx - 9} 99 Q${cx} 104 ${cx + 9} 99`} fill="none" stroke={shade(shirt, -0.5)} strokeWidth="1" />
           <path d={`M${cx - 5} 105 v17 M${cx + 5} 105 v15`} stroke={tr} strokeWidth="1.3" strokeLinecap="round" />
           <path d={`M${cx - 18} ${yt(176)} h36 l4 ${yt(196) - yt(176)} h-44 Z`} fill={shade(shirt, -0.12)} stroke={shade(shirt, -0.35)} strokeWidth="0.8" />
@@ -497,7 +497,7 @@ function FrontTop({ look, cx, sh, waist, hip, hem, sideLen, longTop, skin, shirt
         <g>
           {scoop(13, 12, shade(shirt, -0.3), 0.8, true)}
           <path d={`M${cx} 110 V196`} stroke={shade(shirt, 0.45)} strokeWidth="1.4" />
-          <path d={`M${cx - 16} 96 L${cx} 110 L${cx + 16} 96 L${cx + 17} 104 L${cx} 118 L${cx - 17} 104 Z`} fill={shade(shirt, -0.3)} stroke={OUT} strokeOpacity="0.6" strokeWidth="0.7" />
+          <path d={`M${cx - 16} 96 L${cx} 110 L${cx + 16} 96 L${cx + 17} 104 L${cx} 118 L${cx - 17} 104 Z`} fill={shade(shirt, -0.3)} stroke={OUT} strokeOpacity="0.43" strokeWidth="0.42" />
           <path d={`M${cx - 22} ${yt(160)} h12 M${cx + 10} ${yt(160)} h12`} stroke={shade(shirt, -0.3)} strokeWidth="1.6" />
         </g>
       );
@@ -534,7 +534,7 @@ function FrontTop({ look, cx, sh, waist, hip, hem, sideLen, longTop, skin, shirt
           </g>
           {[124, 140, 156, 172].map((y) => <circle key={y} cx={cx} cy={y} r="1.8" fill={tr} />)}
           {/* colletto ritto che avvolge la base del collo */}
-          <path d={`M${cx - 12} 90 Q${cx} 92.6 ${cx + 12} 90 L${cx + 13} 99 Q${cx} 102 ${cx - 13} 99 Z`} fill={tr} stroke={OUT} strokeOpacity="0.75" strokeWidth="0.9" />
+          <path d={`M${cx - 12} 90 Q${cx} 92.6 ${cx + 12} 90 L${cx + 13} 99 Q${cx} 102 ${cx - 13} 99 Z`} fill={tr} stroke={OUT} strokeOpacity="0.54" strokeWidth="0.54" />
           <path d={`M${cx - 11} 91.4 Q${cx} 93.8 ${cx + 11} 91.4`} stroke="#fff" strokeOpacity="0.25" strokeWidth="0.7" fill="none" />
         </g>
       );
@@ -542,7 +542,7 @@ function FrontTop({ look, cx, sh, waist, hip, hem, sideLen, longTop, skin, shirt
       return (
         <g>
           {scoop(11, 8, tr, 3)}
-          <path d={`M${sh.l + 10} 112 C${cx - 12} 106 ${cx + 12} 106 ${sh.r - 10} 112 L${waist.r - 2} 186 L${waist.l + 2} 186 Z`} fill="#6b4224" stroke={OUT} strokeOpacity="0.7" strokeWidth="1" />
+          <path d={`M${sh.l + 10} 112 C${cx - 12} 106 ${cx + 12} 106 ${sh.r - 10} 112 L${waist.r - 2} 186 L${waist.l + 2} 186 Z`} fill="#6b4224" stroke={OUT} strokeOpacity="0.5" strokeWidth="0.6" />
           <path d={`M${sh.l + 10} 112 C${cx - 12} 106 ${cx + 12} 106 ${sh.r - 10} 112 L${waist.r - 2} 186 L${waist.l + 2} 186 Z`} fill={`url(#${uid}grain)`} />
           {[122, 135, 148, 161, 174].map((y) => <path key={y} d={`M${cx - 4} ${y} L${cx + 4} ${y + 6} M${cx + 4} ${y} L${cx - 4} ${y + 6}`} stroke="#e8d9b0" strokeWidth="0.9" />)}
         </g>
@@ -555,7 +555,7 @@ function FrontTop({ look, cx, sh, waist, hip, hem, sideLen, longTop, skin, shirt
           {scoop(13, 8, shade(shirt, -0.3), 1.4)}
           <g clipPath={clip}>
             <path d={`${edge} L${sh.r + 30} ${hem + 10} L${sh.r + 30} 90 Z`} fill={shade(shirt, -0.12)} opacity="0.55" />
-            <path d={edge} stroke={OUT} strokeOpacity="0.6" strokeWidth="1" fill="none" transform="translate(-2 1)" />
+            <path d={edge} stroke={OUT} strokeOpacity="0.43" strokeWidth="0.6" fill="none" transform="translate(-2 1)" />
           </g>
           <path d={edge} stroke={tr} strokeWidth="3" fill="none" />
         </g>
@@ -567,7 +567,7 @@ function FrontTop({ look, cx, sh, waist, hip, hem, sideLen, longTop, skin, shirt
           <path d={`M${cx - 14} 97.4 L${cx + 1} 132 L${cx + 14} 97.4 Q${cx} 95.6 ${cx - 14} 97.4 Z`} fill={neckC} />
           <path d={`M${cx - 14} 97 L${cx + 8} 150 M${cx + 14} 97 L${cx - 4} 136`} stroke={tr} strokeWidth="5" strokeLinecap="round" />
           <path d={`M${cx - 14} 97 L${cx + 8} 150`} stroke={shade(tr, -0.35)} strokeWidth="1" transform="translate(2 0)" />
-          {look.sash ? null : <rect x={waist.l - 3} y="172" width={waist.r - waist.l + 6} height="20" rx="3" fill={shade(tr, -0.1)} stroke={OUT} strokeOpacity="0.7" strokeWidth="1.2" />}
+          {look.sash ? null : <rect x={waist.l - 3} y="172" width={waist.r - waist.l + 6} height="20" rx="3" fill={shade(tr, -0.1)} stroke={OUT} strokeOpacity="0.5" strokeWidth="0.72" />}
           {longTop ? <path d={`M${hip.l - 4} ${yb(232)} Q${cx} ${yb(238)} ${hip.r + 6} ${yb(230)}`} stroke={shade(shirt, -0.3)} strokeWidth="1.4" fill="none" /> : null}
           {folds([-1, 0, 1])}
         </g>
@@ -576,7 +576,7 @@ function FrontTop({ look, cx, sh, waist, hip, hem, sideLen, longTop, skin, shirt
       // giubba di cuoio sopra la camicia, chiusa da alamari
       return (
         <g>
-          <path d={`M${cx - 11} 96.6 Q${cx} 102 ${cx + 11} 96.6 L${cx + 12} 104 Q${cx} 110 ${cx - 12} 104 Z`} fill={look.sleeves || "#c9b48a"} stroke={OUT} strokeOpacity="0.6" strokeWidth="0.7" />
+          <path d={`M${cx - 11} 96.6 Q${cx} 102 ${cx + 11} 96.6 L${cx + 12} 104 Q${cx} 110 ${cx - 12} 104 Z`} fill={look.sleeves || "#c9b48a"} stroke={OUT} strokeOpacity="0.43" strokeWidth="0.42" />
           <path d={`M${cx} 104 L${cx} 186`} stroke={shade(shirt, -0.45)} strokeWidth="1.4" />
           {longTop ? <path d={`M${cx} 198 L${cx} ${hem}`} stroke={shade(shirt, -0.5)} strokeWidth="2" /> : null}
           {[136, 150, 164, 178].map((y) => (
@@ -595,7 +595,7 @@ function FrontTop({ look, cx, sh, waist, hip, hem, sideLen, longTop, skin, shirt
       return (
         <g>
           <path d={`M${cx + 2} 100 L${cx + 4} ${longTop ? hem : 206}`} stroke={tr} strokeWidth="2.4" />
-          <path d={`M${cx + 2} 100 L${cx + 4} ${longTop ? hem : 206}`} stroke={OUT} strokeOpacity="0.7" strokeWidth="0.8" transform="translate(-2 0)" />
+          <path d={`M${cx + 2} 100 L${cx + 4} ${longTop ? hem : 206}`} stroke={OUT} strokeOpacity="0.5" strokeWidth="0.48" transform="translate(-2 0)" />
           {[132, 146, 160, 174].map((y) => <circle key={y} cx={cx + 9} cy={yt(y)} r="1.7" fill={tr} stroke={shade(tr, -0.4)} strokeWidth="0.5" />)}
           <path d={`M${sh.l + 6} ${yt(140)} L${cx - 8} ${yt(140)} M${sh.r - 6} ${yt(140)} L${cx + 14} ${yt(140)}`} stroke={shade(shirt, -0.4)} strokeWidth="1.2" />
           {hemTrim(2)}
@@ -607,7 +607,7 @@ function FrontTop({ look, cx, sh, waist, hip, hem, sideLen, longTop, skin, shirt
             </g>
           ) : folds([-1, 1])}
           <path d={`M${cx - 12} 86 Q${cx} 88.6 ${cx + 12} 86 L${cx + 14.5} 100 Q${cx} 103.6 ${cx - 14.5} 100 Z`} fill={shade(shirt, -0.15)} stroke={tr} strokeWidth="1.2" strokeLinejoin="round" />
-          <path d={`M${cx - 12} 86 Q${cx} 88.6 ${cx + 12} 86`} stroke={OUT} strokeOpacity="0.7" strokeWidth="0.8" fill="none" />
+          <path d={`M${cx - 12} 86 Q${cx} 88.6 ${cx + 12} 86`} stroke={OUT} strokeOpacity="0.5" strokeWidth="0.48" fill="none" />
           <path d={`M${cx + 2} 88 L${cx + 2} 102`} stroke={tr} strokeWidth="1.2" />
         </g>
       );

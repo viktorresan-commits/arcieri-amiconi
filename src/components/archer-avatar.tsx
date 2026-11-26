@@ -346,7 +346,7 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4, cssBlink = fals
   const OUT = "#2a1d14";
   const limb = (a: P, b: P, w: number, color: string, outline = true, tex?: string) => (
     <g>
-      {outline ? <line x1={f(a.x)} y1={f(a.y)} x2={f(b.x)} y2={f(b.y)} stroke={OUT} strokeOpacity="0.9" strokeWidth={w + 2.4} strokeLinecap="round" /> : null}
+      {outline ? <line x1={f(a.x)} y1={f(a.y)} x2={f(b.x)} y2={f(b.y)} stroke={OUT} strokeOpacity="0.65" strokeWidth={w + 1.2} strokeLinecap="round" /> : null}
       <line x1={f(a.x)} y1={f(a.y)} x2={f(b.x)} y2={f(b.y)} stroke={color} strokeWidth={w} strokeLinecap="round" />
       {tex ? <line x1={f(a.x)} y1={f(a.y)} x2={f(b.x)} y2={f(b.y)} stroke={`url(#${tex})`} strokeWidth={w} strokeLinecap="round" /> : null}
       {outline && w > 8 ? <line x1={f(a.x - w * 0.18)} y1={f(a.y - w * 0.1)} x2={f(b.x - w * 0.18)} y2={f(b.y - w * 0.1)} stroke="#fff" strokeOpacity="0.13" strokeWidth={w * 0.28} strokeLinecap="round" /> : null}
@@ -474,7 +474,7 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4, cssBlink = fals
         ) : null}
         {look.bracers ? (
           <g>
-            <line x1={f(lerp(e.x, h.x, 0.32))} y1={f(lerp(e.y, h.y, 0.32))} x2={f(lerp(e.x, h.x, 0.86))} y2={f(lerp(e.y, h.y, 0.86))} stroke={OUT} strokeOpacity="0.8" strokeWidth={foreW + 5} strokeLinecap="round" />
+            <line x1={f(lerp(e.x, h.x, 0.32))} y1={f(lerp(e.y, h.y, 0.32))} x2={f(lerp(e.x, h.x, 0.86))} y2={f(lerp(e.y, h.y, 0.86))} stroke={OUT} strokeOpacity="0.58" strokeWidth={foreW + 2.5} strokeLinecap="round" />
             <line x1={f(lerp(e.x, h.x, 0.32))} y1={f(lerp(e.y, h.y, 0.32))} x2={f(lerp(e.x, h.x, 0.86))} y2={f(lerp(e.y, h.y, 0.86))} stroke={look.bracers} strokeWidth={foreW + 4} strokeLinecap="round" />
             <LeatherBand uid={uid} a={lerpP(e, h, 0.34)} b={lerpP(e, h, 0.84)} w={foreW + 4} color={shade(look.bracers, 0.6)} />
             <BracerLacing a={lerpP(e, h, 0.42)} b={lerpP(e, h, 0.74)} w={foreW + 4} color={shade(look.bracers, 0.6)} />
@@ -483,7 +483,7 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4, cssBlink = fals
         <SideHand h={h} e={e} r={7.4 * W} skin={skin} gloves={Boolean(look.gloves)} kind={which === "bow" ? "bow" : hook > 0.5 ? "draw" : "free"} />
         {which === "draw" ? (
           <g>
-            <rect x={f(h.x + 1)} y={f(h.y - 6.5)} width="8" height="13" rx="2.5" fill={look.tab} stroke={OUT} strokeOpacity="0.6" strokeWidth="0.4" />
+            <rect x={f(h.x + 1)} y={f(h.y - 6.5)} width="8" height="13" rx="2.5" fill={look.tab} stroke={OUT} strokeOpacity="0.43" strokeWidth="0.24" />
             <path d={`M${f(h.x + 3)} ${f(h.y - 3)} h5 M${f(h.x + 3)} ${f(h.y + 1)} h5 M${f(h.x + 3)} ${f(h.y + 5)} h5`} stroke={shade(look.tab, 0.4)} strokeWidth="0.35" />
           </g>
         ) : null}
@@ -516,7 +516,7 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4, cssBlink = fals
       {/* flettenti: contorno, corpo, più spessi vicino al riser, lamina del ventre e luce */}
       {[1, -1].map((s) => (
         <g key={s}>
-          <path d={limbPath(s as 1 | -1)} stroke={OUTLINE} strokeOpacity="0.85" strokeWidth={g.width + 2.2} strokeLinecap="round" fill="none" />
+          <path d={limbPath(s as 1 | -1)} stroke={OUTLINE} strokeOpacity="0.61" strokeWidth={g.width + 1.1} strokeLinecap="round" fill="none" />
           <path d={limbPath(s as 1 | -1)} stroke={limbStroke} strokeWidth={g.width} strokeLinecap="round" fill="none" />
           <path d={limbPath(s as 1 | -1)} pathLength={100} strokeDasharray="42 100" stroke={limbStroke} strokeWidth={g.width + 1.6} strokeLinecap="round" fill="none" />
           <path d={limbPath(s as 1 | -1)} stroke={g.wood ? shade(limbBase, 0.35) : shade(limbBase, 0.5)} strokeOpacity={g.wood ? 0.4 : 0.12} strokeWidth={Math.max(0.6, g.width * 0.18)} strokeLinecap="round" fill="none" />
@@ -526,7 +526,7 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4, cssBlink = fals
             const tp = tipAt(s as 1 | -1);
             return (
               <g>
-                <circle cx={f(tp.x)} cy={f(tp.y)} r={longWood ? 2.6 : 2.1} fill={longWood || g.siyah ? "#efe3c4" : "#2a2f35"} stroke={OUTLINE} strokeOpacity="0.8" strokeWidth="0.7" />
+                <circle cx={f(tp.x)} cy={f(tp.y)} r={longWood ? 2.6 : 2.1} fill={longWood || g.siyah ? "#efe3c4" : "#2a2f35"} stroke={OUTLINE} strokeOpacity="0.58" strokeWidth="0.42" />
                 <circle cx={f(tp.x)} cy={f(tp.y)} r="0.8" fill={look.string || "#f4f1ea"} />
               </g>
             );
@@ -534,7 +534,7 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4, cssBlink = fals
           {/* tasche dei flettenti e bulloni sui riser moderni */}
           {g.recurve && g.riser > 0 ? (
             <g>
-              <rect x="-5" y={f(s > 0 ? -g.riser - 3 : g.riser - 4)} width="11" height="7" rx="2" fill={metal ? "#2a2f35" : "#3a2414"} stroke={OUTLINE} strokeOpacity="0.75" strokeWidth="0.6" />
+              <rect x="-5" y={f(s > 0 ? -g.riser - 3 : g.riser - 4)} width="11" height="7" rx="2" fill={metal ? "#2a2f35" : "#3a2414"} stroke={OUTLINE} strokeOpacity="0.54" strokeWidth="0.36" />
               <circle cx="0.5" cy={f(s > 0 ? -g.riser + 0.5 : g.riser - 0.5)} r="1.5" fill="#c9d0d8" />
             </g>
           ) : null}
@@ -568,7 +568,7 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4, cssBlink = fals
       {/* riser: sagoma con finestra, impugnatura e appoggio della freccia */}
       {g.riser > 0 ? (
         <g>
-          <path d={`M-4 ${f(-g.riser)} L6 ${f(-g.riser)} C7 ${f(-g.riser * 0.5)} 7.5 -12 6 -7 L6 ${f(g.riser)} L-4 ${f(g.riser)} C-5 ${f(g.riser * 0.6)} -5 16 -8 9 C-9 4 -8 -6 -5 -11 C-4 ${f(-g.riser * 0.5)} -4 ${f(-g.riser * 0.8)} -4 ${f(-g.riser)} Z`} fill={riserFill} stroke={OUTLINE} strokeOpacity="0.85" strokeWidth="1" />
+          <path d={`M-4 ${f(-g.riser)} L6 ${f(-g.riser)} C7 ${f(-g.riser * 0.5)} 7.5 -12 6 -7 L6 ${f(g.riser)} L-4 ${f(g.riser)} C-5 ${f(g.riser * 0.6)} -5 16 -8 9 C-9 4 -8 -6 -5 -11 C-4 ${f(-g.riser * 0.5)} -4 ${f(-g.riser * 0.8)} -4 ${f(-g.riser)} Z`} fill={riserFill} stroke={OUTLINE} strokeOpacity="0.61" strokeWidth="0.6" />
           {metal || g.cams ? <path d={`M1 ${f(-g.riser + 6)} L5 ${f(-g.riser + 6)} L5 -9 L1.5 -9 Z`} fill="#000" opacity="0.32" /> : null}
           {metal || g.cams ? <path d={`M-1 ${f(g.riser - 6)} L4 ${f(g.riser - 6)} L4 14 Z`} fill="#000" opacity="0.25" /> : null}
           <path d="M-7.6 -6 C-8.6 0 -8 8 -5 12 L1 12 L1 -6 Z" fill={g.wood ? "#3a2414" : "#1d2126"} opacity="0.85" />
@@ -579,7 +579,7 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4, cssBlink = fals
       ) : (
         <g>
           {/* arco di legno intero: impugnatura fasciata di cuoio con cucitura */}
-          <rect x="-4" y="-13" width="9" height="26" rx="3.2" fill="#4a2c16" stroke={OUTLINE} strokeOpacity="0.8" strokeWidth="0.8" />
+          <rect x="-4" y="-13" width="9" height="26" rx="3.2" fill="#4a2c16" stroke={OUTLINE} strokeOpacity="0.58" strokeWidth="0.48" />
           {[0, 1, 2, 3, 4, 5].map((k) => <path key={k} d={`M-4 ${-11 + k * 4.2} L5 ${-9 + k * 4.2}`} stroke="#c9a46a" strokeWidth="0.7" opacity="0.8" />)}
           <path d="M5 -13 l3.6 -1.6 l0 3.2 Z" fill="#c9a46a" />
         </g>
@@ -706,7 +706,7 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4, cssBlink = fals
         return (
           <g>
             <path d={d} fill={shade(look.capeColor, -0.55)} transform="translate(-2.4 1.6)" opacity="0.9" />
-            <path d={d} fill={`url(#${uid}cape)`} stroke={OUT} strokeOpacity="0.7" strokeWidth="1.6" />
+            <path d={d} fill={`url(#${uid}cape)`} stroke={OUT} strokeOpacity="0.5" strokeWidth="0.96" />
             {capeDecor(d, [Math.min(back(1), back(0.6)) - 8, 116, front(1) + 12, bottom + 16])}
             {/* pieghe: solchi in ombra con il bordo in luce, che seguono il vento */}
             {folds.map((v, i) => {
@@ -726,7 +726,7 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4, cssBlink = fals
             {/* orlo: bordo appena più chiaro e ombra sotto */}
             <path d={`M${f(hemPts[0].x)} ${f(hemPts[0].y)} ${hem.replace(/^L[^QL]*/, "")}`} stroke={shade(look.capeColor, 0.25)} strokeOpacity="0.45" strokeWidth="1.2" fill="none" />
             {/* collo del mantello raccolto sulle spalle */}
-            <path d={`M${f(shoulderL - 2)} 124 C${f(shoulderL + 8)} 114 ${f(shoulderR - 8)} 114 ${f(shoulderR + 2)} 124 C${f(shoulderR - 6)} 128 ${f(shoulderL + 6)} 130 ${f(shoulderL - 2)} 124 Z`} fill={shade(look.capeColor, -0.2)} stroke={OUT} strokeOpacity="0.65" strokeWidth="1" />
+            <path d={`M${f(shoulderL - 2)} 124 C${f(shoulderL + 8)} 114 ${f(shoulderR - 8)} 114 ${f(shoulderR + 2)} 124 C${f(shoulderR - 6)} 128 ${f(shoulderL + 6)} 130 ${f(shoulderL - 2)} 124 Z`} fill={shade(look.capeColor, -0.2)} stroke={OUT} strokeOpacity="0.47" strokeWidth="0.6" />
           </g>
         );
       })() : null}
@@ -739,7 +739,7 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4, cssBlink = fals
       {leg(legs.front, "lf")}
       {look.bottom === "gonna" ? (
         <g>
-          <path d={`M${f(hipL - 2)} 200 L${f(hipR + 2)} 200 L${f(hipR + 12)} 258 Q${f(cx)} 263 ${f(hipL - 12)} 258 Z`} fill={`url(#${uid}pants)`} stroke={OUT} strokeOpacity="0.8" strokeWidth="1.6" />
+          <path d={`M${f(hipL - 2)} 200 L${f(hipR + 2)} 200 L${f(hipR + 12)} 258 Q${f(cx)} 263 ${f(hipL - 12)} 258 Z`} fill={`url(#${uid}pants)`} stroke={OUT} strokeOpacity="0.58" strokeWidth="0.96" />
           {[-0.75, -0.45, -0.15, 0.15, 0.45, 0.75].map((k) => <path key={k} d={`M${f(cx + k * 22)} 204 L${f(cx + k * 30)} 258`} stroke={shade(look.pants, -0.35)} strokeWidth="1" />)}
           <path d={`M${f(hipL - 11)} 252 Q${f(cx)} 257 ${f(hipR + 11)} 252`} stroke={look.trim} strokeWidth="1.6" fill="none" />
         </g>
@@ -754,7 +754,7 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4, cssBlink = fals
         const shape = `M${f(nx - 8)} 95 C${f(nx - 8.6)} 104 ${f(nx - 10)} 111 ${f(nx - 13)} 116 C${f(nx - 15)} 119.5 ${f(nx - 18)} 122 ${f(nx - 22)} 125 L${f(nx + 12.5)} 125 C${f(nx + 9.6)} 120 ${f(nx + 7.8)} 116 ${f(nx + 7.4)} 112.5 C${f(nx + 7.2 + adam)} 110 ${f(nx + 6.4)} 106 ${f(nx + 6)} 100 Z`;
         return (
           <g>
-            <path d={shape} fill={skinD} stroke={OUT} strokeOpacity="0.75" strokeWidth="1.8" strokeLinejoin="round" />
+            <path d={shape} fill={skinD} stroke={OUT} strokeOpacity="0.54" strokeWidth="1.08" strokeLinejoin="round" />
             {/* lato in ombra verso la nuca e trapezio */}
             <path d={`M${f(nx - 8)} 95 C${f(nx - 8.6)} 104 ${f(nx - 10)} 111 ${f(nx - 13)} 116 C${f(nx - 15)} 119.5 ${f(nx - 18)} 122 ${f(nx - 22)} 125 L${f(nx - 10)} 125 C${f(nx - 6)} 119 ${f(nx - 4.6)} 110 ${f(nx - 4)} 99 Z`} fill={shade(skin, -0.32)} opacity="0.45" />
             {/* ombra portata dalla mandibola */}
@@ -768,10 +768,10 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4, cssBlink = fals
           </g>
         );
       })()}
-      {longTunic ? <path d={tunicD} fill={`url(#${uid}shirt)`} stroke={OUT} strokeOpacity="0.8" strokeWidth="2.2" /> : null}
+      {longTunic ? <path d={tunicD} fill={`url(#${uid}shirt)`} stroke={OUT} strokeOpacity="0.58" strokeWidth="1.32" /> : null}
       {/* borsello sull'altro fianco: dietro al busto, se ne vede solo il davanti */}
       {look.pouch && sideOf(look.pouchSide, nearSide(look)) !== nearSide(look) ? <g opacity="0.9"><Pouch kind={look.pouchType} x={hipR - 1} y={205} /></g> : null}
-      <path d={torso} fill={`url(#${uid}shirt)`} stroke={OUT} strokeOpacity="0.8" strokeWidth="2.2" />
+      <path d={torso} fill={`url(#${uid}shirt)`} stroke={OUT} strokeOpacity="0.58" strokeWidth="1.32" />
       <ClothPattern kind={look.pattern} shapes={longTunic ? [torso, tunicD] : [torso]} base={look.shirt} trim={look.trim} uid={uid} box={[shoulderL - 16, 112, shoulderR + 16, (longTunic ? tunicLen : 210) + 6]} />
       <ClothDetail uid={uid} shapes={longTunic ? [torso, tunicD] : [torso]} cx={cx} shoulderL={shoulderL} shoulderR={shoulderR} hipL={hipL} hipR={hipR} tunicLen={tunicLen} longTunic={longTunic} seam={seamOf(look.shirt)} />
       <Outfit look={look} cx={cx} shoulderL={shoulderL} shoulderR={shoulderR} hipL={hipL} hipR={hipR} tunicLen={tunicLen} W={W} woman={woman} uid={uid} />
@@ -809,7 +809,7 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4, cssBlink = fals
         const drape = `M${f(kx)} ${ky - 3} C${f(cx + 2)} 117 ${f(cx - 10)} 115.5 ${f(cx - 16)} 115.5 C${f(shoulderL + 6)} 115.5 ${f(shoulderL - 1)} 116 ${f(shoulderL - 3)} 119 C${f(shoulderL - 6)} 132 ${f(shoulderL - 5)} 146 ${f(shoulderL - 2)} 158 C${f(shoulderL + 6)} 150 ${f(shoulderL + 12)} 136 ${f(cx - 4)} 128 C${f(cx + 2)} 125 ${f(kx - 4)} ${ky + 3} ${f(kx)} ${ky + 3} Z`;
         return (
           <g>
-            <path d={drape} fill={`url(#${uid}cape)`} stroke={OUT} strokeOpacity="0.75" strokeWidth="1.4" />
+            <path d={drape} fill={`url(#${uid}cape)`} stroke={OUT} strokeOpacity="0.54" strokeWidth="0.84" />
             <path d={`M${f(shoulderL + 2)} 122 C${f(shoulderL + 2)} 134 ${f(shoulderL + 4)} 144 ${f(shoulderL + 2)} 152`} stroke={shade(look.capeColor, -0.55)} strokeOpacity="0.7" strokeWidth="2" fill="none" strokeLinecap="round" />
             <path d={`M${f(cx - 10)} 117.5 C${f(cx - 16)} 117 ${f(shoulderL + 4)} 117.5 ${f(shoulderL - 1)} 121.5`} stroke={shade(look.capeColor, 0.55)} strokeOpacity="0.55" strokeWidth="1.4" fill="none" strokeLinecap="round" />
             <path d={`M${f(shoulderL - 2)} 158 C${f(shoulderL + 6)} 150 ${f(shoulderL + 12)} 136 ${f(cx - 4)} 128 C${f(cx + 2)} 125 ${f(kx - 4)} ${ky + 3} ${f(kx)} ${ky + 3}`} stroke={look.trim} strokeOpacity="0.85" strokeWidth="1.5" fill="none" />
@@ -834,7 +834,7 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4, cssBlink = fals
         <g>
           {[[shoulderL + 6, 124, hipR - 4, 198], [shoulderR - 6, 124, hipL + 6, 194]].map(([x1, y1, x2, y2], i) => (
             <g key={i}>
-              <path d={`M${f(x1)} ${y1} L${f(x2)} ${y2}`} stroke={OUT} strokeOpacity="0.8" strokeWidth="7.5" strokeLinecap="round" />
+              <path d={`M${f(x1)} ${y1} L${f(x2)} ${y2}`} stroke={OUT} strokeOpacity="0.58" strokeWidth="4.5" strokeLinecap="round" />
               <path d={`M${f(x1)} ${y1} L${f(x2)} ${y2}`} stroke="#3a2416" strokeWidth="5.4" strokeLinecap="round" />
               <path d={`M${f(x1)} ${y1} L${f(x2)} ${y2}`} stroke="#fff" strokeOpacity="0.12" strokeWidth="1" />
               <rect x={f(lerp(x1, x2, 0.38) - 4)} y={f(lerp(y1, y2, 0.38) - 4)} width="8" height="8" rx="1.4" fill="none" stroke="#c9a46a" strokeWidth="1.4" />
@@ -845,15 +845,15 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4, cssBlink = fals
       ) : null}
       {look.sash ? (
         <g>
-          <path d={`M${f(hipL - 3)} 188 C${f(cx)} 184 ${f(cx)} 184 ${f(hipR + 3)} 188 L${f(hipR + 3)} 206 C${f(cx)} 202 ${f(cx)} 202 ${f(hipL - 3)} 206 Z`} fill={look.sashColor} stroke={OUT} strokeOpacity="0.75" strokeWidth="1.2" />
+          <path d={`M${f(hipL - 3)} 188 C${f(cx)} 184 ${f(cx)} 184 ${f(hipR + 3)} 188 L${f(hipR + 3)} 206 C${f(cx)} 202 ${f(cx)} 202 ${f(hipL - 3)} 206 Z`} fill={look.sashColor} stroke={OUT} strokeOpacity="0.54" strokeWidth="0.72" />
           {[192, 197, 202].map((y) => <path key={y} d={`M${f(hipL)} ${y} Q${f(cx)} ${y - 3} ${f(hipR)} ${y}`} stroke={shade(look.sashColor, -0.3)} strokeWidth="0.8" fill="none" />)}
-          <path d={`M${f(cx + 8)} 204 C${f(cx + 12 + capeSway * 0.4)} 222 ${f(cx + 10 + capeSway * 0.6)} 238 ${f(cx + 14 + capeSway * 0.8)} 252 L${f(cx + 24 + capeSway * 0.8)} 250 C${f(cx + 20)} 236 ${f(cx + 20)} 220 ${f(cx + 17)} 204 Z`} fill={shade(look.sashColor, -0.1)} stroke={OUT} strokeOpacity="0.7" strokeWidth="1" />
+          <path d={`M${f(cx + 8)} 204 C${f(cx + 12 + capeSway * 0.4)} 222 ${f(cx + 10 + capeSway * 0.6)} 238 ${f(cx + 14 + capeSway * 0.8)} 252 L${f(cx + 24 + capeSway * 0.8)} 250 C${f(cx + 20)} 236 ${f(cx + 20)} 220 ${f(cx + 17)} 204 Z`} fill={shade(look.sashColor, -0.1)} stroke={OUT} strokeOpacity="0.5" strokeWidth="0.6" />
           <path d={`M${f(cx + 14 + capeSway * 0.8)} 252 l1.5 5 M${f(cx + 18 + capeSway * 0.8)} 251 l1.5 5 M${f(cx + 22 + capeSway * 0.8)} 250 l1.5 5`} stroke={shade(look.sashColor, -0.2)} strokeWidth="1.2" />
         </g>
       ) : null}
       {look.quiverPlace !== "schiena" ? quiver("fianco") : (
         <g>
-          <path d={`M${f(shoulderL + 4)} 122 L${f(hipR - 2)} 204`} stroke={OUT} strokeOpacity="0.8" strokeWidth="9" strokeLinecap="round" />
+          <path d={`M${f(shoulderL + 4)} 122 L${f(hipR - 2)} 204`} stroke={OUT} strokeOpacity="0.58" strokeWidth="5.4" strokeLinecap="round" />
           <path d={`M${f(shoulderL + 4)} 122 L${f(hipR - 2)} 204`} stroke={shade(look.quiver, -0.15)} strokeWidth="6.5" strokeLinecap="round" />
           <path d={`M${f(shoulderL + 4)} 122 L${f(hipR - 2)} 204`} stroke={shade(look.quiver, 0.35)} strokeWidth="0.8" strokeDasharray="2.5 2" />
           <rect x={f(lerp(shoulderL + 4, hipR - 2, 0.45) - 4)} y={f(lerp(122, 204, 0.45) - 4)} width="8" height="8" rx="1.5" fill="none" stroke="#c9a46a" strokeWidth="1.4" />
@@ -894,7 +894,7 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4, cssBlink = fals
             const u = i / 10;
             const x = lerp(shoulderL - 6, shoulderR + 4, u);
             const y = 120 - Math.sin(u * Math.PI) * 8 + (i % 2) * 3;
-            return <ellipse key={i} cx={f(x)} cy={f(y)} rx="9" ry="7.5" fill={shade(look.furColor, (i % 3) * 0.08 - 0.08)} stroke={OUT} strokeOpacity="0.55" strokeWidth="0.8" />;
+            return <ellipse key={i} cx={f(x)} cy={f(y)} rx="9" ry="7.5" fill={shade(look.furColor, (i % 3) * 0.08 - 0.08)} stroke={OUT} strokeOpacity="0.4" strokeWidth="0.48" />;
           })}
           {Array.from({ length: 14 }, (_, i) => {
             const x = lerp(shoulderL - 10, shoulderR + 8, i / 13);
@@ -904,9 +904,9 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4, cssBlink = fals
       ) : null}
       {look.cowl ? (
         <g>
-          <path d={`M${f(cx - 24)} 128 C${f(cx - 26)} 112 ${f(cx - 12)} 100 ${f(cx + 2)} 100 C${f(cx + 16)} 100 ${f(cx + 26)} 112 ${f(cx + 24)} 128 C${f(cx + 16)} 142 ${f(cx - 16)} 142 ${f(cx - 24)} 128 Z`} fill={look.cowlColor} stroke={OUT} strokeOpacity="0.75" strokeWidth="1.4" />
+          <path d={`M${f(cx - 24)} 128 C${f(cx - 26)} 112 ${f(cx - 12)} 100 ${f(cx + 2)} 100 C${f(cx + 16)} 100 ${f(cx + 26)} 112 ${f(cx + 24)} 128 C${f(cx + 16)} 142 ${f(cx - 16)} 142 ${f(cx - 24)} 128 Z`} fill={look.cowlColor} stroke={OUT} strokeOpacity="0.54" strokeWidth="0.84" />
           {[0, 1, 2].map((i) => <path key={i} d={`M${f(cx - 20 + i * 2)} ${118 + i * 6} Q${f(cx)} ${124 + i * 6} ${f(cx + 20 - i * 2)} ${116 + i * 6}`} stroke={shade(look.cowlColor, -0.35)} strokeWidth="1.1" fill="none" />)}
-          <path d={`M${f(cx - 14)} 136 C${f(cx - 18 + capeSway)} 156 ${f(cx - 10 + capeSway)} 170 ${f(cx - 2 + capeSway)} 176 L${f(cx + 8)} 138 Z`} fill={shade(look.cowlColor, -0.12)} stroke={OUT} strokeOpacity="0.65" strokeWidth="1" />
+          <path d={`M${f(cx - 14)} 136 C${f(cx - 18 + capeSway)} 156 ${f(cx - 10 + capeSway)} 170 ${f(cx - 2 + capeSway)} 176 L${f(cx + 8)} 138 Z`} fill={shade(look.cowlColor, -0.12)} stroke={OUT} strokeOpacity="0.47" strokeWidth="0.6" />
         </g>
       ) : null}
       {/* testa in proporzione con il corpo, come nella vista di fronte (un po' più piccola che nel vecchio stile) */}
@@ -1088,7 +1088,7 @@ function Outfit({ look, cx, shoulderL, shoulderR, hipL, hipR, tunicLen, W, woman
         <g>
           <path d={`M${f(cx - 14)} 116 C${f(cx - 4)} 140 ${f(cx + 10)} 176 ${f(hipR + 2)} 210 L${f(hipR + 12)} ${tunicLen} L${f(hipR + 2)} ${tunicLen + 2} C${f(cx + 6)} 232 ${f(cx - 6)} 190 ${f(cx - 20)} 130 Z`} fill={shade(sh, -0.12)} opacity="0.55" />
           <path d={`M${f(cx - 14)} 116 C${f(cx - 4)} 140 ${f(cx + 10)} 176 ${f(hipR + 2)} 210 L${f(hipR + 12)} ${tunicLen}`} stroke={tr} strokeWidth="3" fill="none" />
-          <path d={`M${f(cx - 14)} 116 C${f(cx - 4)} 140 ${f(cx + 10)} 176 ${f(hipR + 2)} 210`} stroke={OUTLINE} strokeOpacity="0.65" strokeWidth="1" fill="none" transform="translate(-2 1)" />
+          <path d={`M${f(cx - 14)} 116 C${f(cx - 4)} 140 ${f(cx + 10)} 176 ${f(hipR + 2)} 210`} stroke={OUTLINE} strokeOpacity="0.47" strokeWidth="0.6" fill="none" transform="translate(-2 1)" />
           <path d={`M${f(cx + 12)} 116 Q${f(cx + 2)} 124 ${f(cx - 6)} 128`} stroke={shade(sh, -0.3)} strokeWidth="1.4" fill="none" />
           <path d={`M${f(hipL - 10)} ${tunicLen - 4} L${f(hipL - 4)} ${tunicLen + 10} L${f(cx - 4)} ${tunicLen - 2} M${f(cx - 2)} 220 L${f(cx - 6)} ${tunicLen - 4}`} stroke={shade(sh, -0.3)} strokeWidth="1.1" fill="none" />
           {belt}
@@ -1103,7 +1103,7 @@ function Outfit({ look, cx, shoulderL, shoulderR, hipL, hipR, tunicLen, W, woman
           <path d={`M${f(hipL - 6)} 232 Q${f(cx)} 238 ${f(hipR + 8)} 230`} stroke={shade(sh, -0.3)} strokeWidth="1.4" fill="none" />
           <path d={`M${f(hipL - 8)} 232 L${f(hipL - 12)} ${tunicLen} M${f(hipR + 8)} 230 L${f(hipR + 12)} ${tunicLen}`} stroke={shade(sh, -0.25)} strokeWidth="1" />
           {[[-16, 212, -20, 248], [0, 214, 0, 250], [14, 212, 18, 248]].map(([x1, y1, x2, y2]) => <path key={x1} d={`M${f(cx + x1)} ${y1} Q${f(cx + (x1 + x2) / 2 + 2)} ${(y1 + y2) / 2} ${f(cx + x2)} ${y2}`} stroke={shade(sh, -0.22)} strokeWidth="1" fill="none" />)}
-          {look.sash ? null : <rect x={f(hipL - 3)} y="186" width={f(hipR - hipL + 6)} height="20" rx="3" fill={shade(tr, -0.1)} stroke={OUTLINE} strokeOpacity="0.7" strokeWidth="1.2" />}
+          {look.sash ? null : <rect x={f(hipL - 3)} y="186" width={f(hipR - hipL + 6)} height="20" rx="3" fill={shade(tr, -0.1)} stroke={OUTLINE} strokeOpacity="0.5" strokeWidth="0.72" />}
           {belt}
         </g>
       );
@@ -1132,7 +1132,7 @@ function Outfit({ look, cx, shoulderL, shoulderR, hipL, hipR, tunicLen, W, woman
         <g>
           <path d={`M${f(cx - 12)} 108 L${f(cx + 12)} 108 L${f(cx + 14)} 122 L${f(cx - 14)} 122 Z`} fill={shade(sh, -0.15)} stroke={tr} strokeWidth="1.2" />
           <path d={`M${f(cx + 2)} 122 L${f(cx + 6)} ${tunicLen}`} stroke={tr} strokeWidth="2.2" />
-          <path d={`M${f(cx + 2)} 122 L${f(cx + 6)} ${tunicLen}`} stroke={OUTLINE} strokeOpacity="0.7" strokeWidth="0.8" transform="translate(-2 0)" />
+          <path d={`M${f(cx + 2)} 122 L${f(cx + 6)} ${tunicLen}`} stroke={OUTLINE} strokeOpacity="0.5" strokeWidth="0.48" transform="translate(-2 0)" />
           {[132, 146, 160, 174].map((y) => <circle key={y} cx={f(cx + 8)} cy={y} r="1.5" fill={tr} />)}
           <path d={`M${f(shoulderL + 4)} 140 L${f(cx - 6)} 140 M${f(shoulderR - 4)} 140 L${f(cx + 12)} 140`} stroke={shade(sh, -0.4)} strokeWidth="1.2" />
           <path d={`M${f(hipL - 10)} ${tunicLen} L${f(hipR + 12)} ${tunicLen}`} stroke={tr} strokeWidth="2" />
