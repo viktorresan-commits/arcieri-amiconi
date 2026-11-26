@@ -136,7 +136,7 @@ export function FocTool() {
               const sp = x.specs as Record<string, string>;
               return (
                 <button key={x.id} type="button" aria-pressed={st0.setId === x.id} onClick={() => applySet(x)} className={`grid w-40 shrink-0 gap-1 rounded-2xl border p-2 text-left ${st0.setId === x.id ? "border-primary bg-primary/10" : "border-line bg-white/[0.03]"}`}>
-                  <ArrowIcon material={sp.material} shaft={sp.shaft} fletch={sp.fletch} cock={sp.cock} nock={sp.nock} wrap={sp.wrap} fletchType={sp.fletchType} fletchStyle={sp.fletchStyle} fletch2={sp.fletch2} point={sp.pointType || "ogiva"} className="h-6 w-full" />
+                  <ArrowIcon material={sp.material} shaft={sp.shaft} fletch={sp.fletch} cock={sp.cock} nock={sp.nock} wrap={sp.wrap} fletchType={sp.fletchType} fletchStyle={sp.fletchStyle} fletch2={sp.fletch2} fletchLen={sp.fletchLen} point={sp.pointType || "ogiva"} className="h-6 w-full" />
                   <span className="truncate text-[0.78rem] font-semibold">{x.name}</span>
                   <span className="text-[0.66rem] text-muted">{weightInfo(sp) ? `${f1(weightInfo(sp)!.avgG)} g` : "peso ?"}{sp.spine ? ` · ${spineLb(sp.spine, sp.spineUnit, sp.material) ? `${Math.round(spineLb(sp.spine, sp.spineUnit, sp.material)!)} lb` : sp.spine}` : ""}{sp.length ? ` · ${sp.length}″` : ""}</span>
                 </button>

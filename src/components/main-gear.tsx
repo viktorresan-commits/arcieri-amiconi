@@ -84,7 +84,7 @@ export function MainGearCard({ compact = false }: { compact?: boolean }) {
           </span>
           <div className="grid min-w-0 gap-1">
             <p className="truncate text-sm"><b>{main.bowName || "Arco"}</b>{bowLabel ? <span className="text-muted"> · {bowLabel}</span> : null}</p>
-            <ArrowIcon material={a.material} shaft={a.shaft} fletch={a.fletch} cock={a.cock} nock={a.nock} wrap={a.wrap} fletchType={a.fletchType} fletchStyle={a.fletchStyle} fletch2={a.fletch2} point={a.pointType} className="h-7 w-full" />
+            <ArrowIcon material={a.material} shaft={a.shaft} fletch={a.fletch} cock={a.cock} nock={a.nock} wrap={a.wrap} fletchType={a.fletchType} fletchStyle={a.fletchStyle} fletch2={a.fletch2} fletchLen={a.fletchLen} point={a.pointType} className="h-7 w-full" />
             <p className="truncate text-xs text-muted">{main.arrowName || "Frecce"}</p>
           </div>
         </div>

@@ -182,6 +182,7 @@ export function LastArrows({ shots: all }: { shots: LastShot[] }) {
                     fletchType={sp.fletchType || "alette"}
                     fletchStyle={sp.fletchStyle}
                     fletch2={sp.fletch2}
+                    fletchLen={sp.fletchLen}
                     point={sp.pointType || "ogiva"}
                     number={num}
                     ground={false}

@@ -8,8 +8,10 @@ import { useId } from "react";
 
 export const FLETCH_SHAPES = [
   { id: "alette", label: "Alette classiche" },
-  { id: "penne", label: "Penne naturali" },
-  { id: "scudo", label: "Penne a scudo (FF 418)" },
+  { id: "parabolica", label: "Penne a parabola" },
+  { id: "scudo", label: "Penne a scudo" },
+  { id: "banana", label: "Penne a banana" },
+  { id: "penne", label: "Penne intere" },
   { id: "plastifletch", label: "Plastifletch" },
   { id: "blazer", label: "Blazer" },
   { id: "fusion", label: "Fusion" },
@@ -26,6 +28,7 @@ export const FLETCH_STYLES = [
   { id: "bicolore", label: "Bicolore" },
   { id: "punta", label: "Punta colorata" },
   { id: "maculato", label: "Maculate" },
+  { id: "camo", label: "Camo (Tre)" },
   { id: "elicoidale", label: "Montate elicoidali" },
 ] as const;
 
@@ -65,17 +68,25 @@ function shade(hex: string, k: number) {
   return `#${out.toString(16).padStart(6, "0")}`;
 }
 
-type Vane = (x: number, y: number, dir: 1 | -1) => string;
+/** forma di una penna o aletta: x,y attacco verso la cocca, d verso fuori (−1 su, +1 giù), L lunghezza, H altezza */
+type Vane = (x: number, y: number, d: 1 | -1, L: number, H: number) => string;
 
-const VANES: Record<string, { len: number; path: Vane }> = {
-  alette: { len: 46, path: (x, y, d) => `M${x} ${y} L${x + 4} ${y + d * 9} L${x + 30} ${y + d * 9} L${x + 46} ${y} Z` },
-  penne: { len: 74, path: (x, y, d) => `M${x} ${y} C${x - 1} ${y + d * 14} ${x + 30} ${y + d * 13} ${x + 74} ${y} Z` },
-  scudo: { len: 72, path: (x, y, d) => `M${x} ${y} L${x + 1} ${y + d * 10} Q${x + 6} ${y + d * 12.5} ${x + 26} ${y + d * 12} Q${x + 52} ${y + d * 9} ${x + 72} ${y} Z` },
-  plastifletch: { len: 52, path: (x, y, d) => `M${x} ${y} L${x + 3} ${y + d * 9.5} C${x + 22} ${y + d * 10} ${x + 42} ${y + d * 5} ${x + 52} ${y} Z` },
-  blazer: { len: 34, path: (x, y, d) => `M${x} ${y} C${x} ${y + d * 12} ${x + 12} ${y + d * 13} ${x + 34} ${y} Z` },
-  fusion: { len: 48, path: (x, y, d) => `M${x} ${y} L${x + 2} ${y + d * 8} C${x + 14} ${y + d * 11.5} ${x + 32} ${y + d * 7} ${x + 48} ${y} Z` },
-  quickspin: { len: 40, path: (x, y, d) => `M${x} ${y} Q${x} ${y + d * 10.5} ${x + 14} ${y + d * 10.5} Q${x + 32} ${y + d * 9} ${x + 40} ${y} Z` },
-  spin: { len: 40, path: (x, y, d) => `M${x} ${y} C${x + 2} ${y + d * 14} ${x + 30} ${y + d * 13} ${x + 40} ${y} Z` },
+const f2 = (v: number) => Math.round(v * 100) / 100;
+const VANES: Record<string, { len: number; h: number; inch: number; path: Vane }> = {
+  alette: { len: 46, h: 9, inch: 3, path: (x, y, d, L, H) => `M${x} ${y} L${f2(x + L * 0.087)} ${f2(y + d * H)} L${f2(x + L * 0.652)} ${f2(y + d * H)} L${f2(x + L)} ${y} Z` },
+  // penne intere (full length): lunga gobba morbida
+  penne: { len: 74, h: 13.5, inch: 5.5, path: (x, y, d, L, H) => `M${x} ${y} C${f2(x - L * 0.0135)} ${f2(y + d * H * 1.04)} ${f2(x + L * 0.405)} ${f2(y + d * H * 0.96)} ${f2(x + L)} ${y} Z` },
+  // a parabola: dorso alto e arrotondato verso la cocca, poi scende in una curva lunga e regolare fino alla punta
+  parabolica: { len: 66, h: 13, inch: 5, path: (x, y, d, L, H) => `M${x} ${y} C${f2(x - L * 0.01)} ${f2(y + d * H * 0.62)} ${f2(x + L * 0.02)} ${f2(y + d * H)} ${f2(x + L * 0.13)} ${f2(y + d * H)} C${f2(x + L * 0.42)} ${f2(y + d * H * 0.99)} ${f2(x + L * 0.78)} ${f2(y + d * H * 0.46)} ${f2(x + L)} ${y} Z` },
+  // a scudo: dorso dritto con lo spigolo in alto, cima quasi piana, poi lo scalino concavo dello scudo e una discesa dritta
+  scudo: { len: 64, h: 13, inch: 5, path: (x, y, d, L, H) => `M${x} ${y} L${f2(x + L * 0.015)} ${f2(y + d * H * 0.9)} Q${f2(x + L * 0.03)} ${f2(y + d * H * 1.04)} ${f2(x + L * 0.08)} ${f2(y + d * H)} L${f2(x + L * 0.3)} ${f2(y + d * H * 0.93)} C${f2(x + L * 0.4)} ${f2(y + d * H * 0.9)} ${f2(x + L * 0.42)} ${f2(y + d * H * 0.5)} ${f2(x + L * 0.56)} ${f2(y + d * H * 0.42)} L${f2(x + L)} ${f2(y + d * H * 0.03)} L${f2(x + L)} ${y} Z` },
+  // a banana: gobba simmetrica, alta al centro
+  banana: { len: 62, h: 12.5, inch: 5, path: (x, y, d, L, H) => `M${x} ${y} C${f2(x + L * 0.02)} ${f2(y + d * H * 0.8)} ${f2(x + L * 0.22)} ${f2(y + d * H * 1.12)} ${f2(x + L * 0.5)} ${f2(y + d * H)} C${f2(x + L * 0.78)} ${f2(y + d * H * 0.9)} ${f2(x + L * 0.94)} ${f2(y + d * H * 0.35)} ${f2(x + L)} ${y} Z` },
+  plastifletch: { len: 52, h: 9.5, inch: 2.5, path: (x, y, d, L, H) => `M${x} ${y} L${f2(x + L * 0.058)} ${f2(y + d * H)} C${f2(x + L * 0.423)} ${f2(y + d * H * 1.05)} ${f2(x + L * 0.808)} ${f2(y + d * H * 0.53)} ${f2(x + L)} ${y} Z` },
+  blazer: { len: 34, h: 12, inch: 2, path: (x, y, d, L, H) => `M${x} ${y} C${x} ${f2(y + d * H)} ${f2(x + L * 0.353)} ${f2(y + d * H * 1.08)} ${f2(x + L)} ${y} Z` },
+  fusion: { len: 48, h: 11.5, inch: 2.1, path: (x, y, d, L, H) => `M${x} ${y} L${f2(x + L * 0.042)} ${f2(y + d * H * 0.7)} C${f2(x + L * 0.292)} ${f2(y + d * H)} ${f2(x + L * 0.667)} ${f2(y + d * H * 0.61)} ${f2(x + L)} ${y} Z` },
+  quickspin: { len: 40, h: 10.5, inch: 1.75, path: (x, y, d, L, H) => `M${x} ${y} Q${x} ${f2(y + d * H)} ${f2(x + L * 0.35)} ${f2(y + d * H)} Q${f2(x + L * 0.8)} ${f2(y + d * H * 0.86)} ${f2(x + L)} ${y} Z` },
+  spin: { len: 40, h: 13, inch: 1.75, path: (x, y, d, L, H) => `M${x} ${y} C${f2(x + L * 0.05)} ${f2(y + d * H * 1.08)} ${f2(x + L * 0.75)} ${f2(y + d * H)} ${f2(x + L)} ${y} Z` },
 };
 
 /** numeri ripetibili: le venature e le barbe vengono uguali a ogni disegno della stessa freccia */
@@ -94,7 +105,7 @@ const hash = (t: string) => {
 const r1 = (v: number) => Math.round(v * 100) / 100;
 
 /** penne vere: piuma di tacchino o d'oca, con la costa, le barbe e qualche spaccatura */
-const NATURAL = new Set(["penne", "scudo"]);
+const NATURAL = new Set(["penne", "scudo", "parabolica", "banana"]);
 
 export function ArrowArt({
   material = "carbonio",
@@ -112,7 +123,16 @@ export function ArrowArt({
   fletch2 = "",
   stretch = false,
   ground = true,
+  fletchLen,
+  view,
+  part,
 }: {
+  /** un solo pezzo, inquadrato da vicino: le penne, la punta, la cocca o un tratto d'asta */
+  part?: "aste" | "alette" | "punte" | "cocche";
+  /** riquadro da mostrare (viewBox): per disegnare un solo pezzo, la cocca, le penne o la punta */
+  view?: string;
+  /** lunghezza delle penne in pollici (2", 3", 4", 5"...): cambia misura e altezza del disegno */
+  fletchLen?: string | number;
   /** ombra a terra sotto la freccia (da togliere quando la freccia è disegnata dentro una scena) */
   ground?: boolean;
   /** riempie il riquadro anche in altezza (freccia più grossa nelle liste) */
@@ -142,13 +162,18 @@ export function ArrowArt({
   const x1 = 290; // inizio della punta
   const natural = NATURAL.has(fletchType);
   const vane = VANES[fletchType] ?? VANES.alette;
+  // misura delle penne: in proporzione ai pollici, un po' esagerata perché si legga anche piccola
+  const inch = Number(String(fletchLen ?? "").replace(",", ".")) || 0;
+  const scale = inch > 0 ? Math.max(0.55, Math.min(1.35, inch / vane.inch)) : 1;
+  const L = Math.round(vane.len * scale);
+  const H = Math.round(vane.h * Math.max(0.78, Math.min(1.12, Math.sqrt(scale))) * 10) / 10;
   const fx = x0 + (wooden ? 14 : 10); // le penne partono poco dopo la cocca
   const seed = hash(`${material}${fletch}${fletchType}${number ?? ""}`);
   const rnd = rng(seed);
   const deco =
     fletchStyle === "striato" ? `url(#fs-${id})` :
     fletchStyle === "spirale" ? `url(#fp-${id})` :
-    fletchStyle === "maculato" ? `url(#fm-${id})` :
+    fletchStyle === "maculato" || fletchStyle === "camo" ? `url(#fm-${id})` :
     fletchStyle === "bicolore" ? `url(#fb-${id})` :
     fletchStyle === "punta" ? `url(#ft-${id})` : "";
   const second = fletch2 || shade(fletch, -0.55);
@@ -168,16 +193,63 @@ export function ArrowArt({
   // barbe della piuma: inclinate all'indietro (verso la cocca) e verso l'esterno
   const barbs = (y0: number, dir: 1 | -1, step: number, off: number) => {
     const out: string[] = [];
-    for (let x = fx - 8 + off; x < fx + vane.len + 6; x += step) out.push(`M${r1(x)} ${r1(y0)} Q${r1(x - 4)} ${r1(y0 + dir * 8)} ${r1(x - 11)} ${r1(y0 + dir * 16)}`);
+    for (let x = fx - 8 + off; x < fx + L + 6; x += step) out.push(`M${r1(x)} ${r1(y0)} Q${r1(x - 4)} ${r1(y0 + dir * 8)} ${r1(x - 11)} ${r1(y0 + dir * 16)}`);
     return out.join(" ");
   };
   // spaccature: le barbe si separano in qualche punto e si vede attraverso la penna
   const splits = (y0: number, dir: 1 | -1) =>
     [0.22, 0.47, 0.71, 0.86].map((f) => {
-      const x = fx + vane.len * f + (rnd() - 0.5) * 5;
+      const x = fx + L * f + (rnd() - 0.5) * 5;
       const depth = 5 + rnd() * 5;
       return `M${r1(x + 1.5)} ${r1(y0 + dir * 2.2)} Q${r1(x - 1.4)} ${r1(y0 + dir * (2.2 + depth * 0.55))} ${r1(x - 5.2)} ${r1(y0 + dir * (2.2 + depth))}`;
     });
+  // barre delle penne barrate: bande scure che seguono l'inclinazione delle barbe, con il bordo mosso
+  const barbAt = (bx: number, y0: number, dir: 1 | -1, t: number) => {
+    const k = Math.max(1, H / 12);
+    const x = (1 - t) * (1 - t) * bx + 2 * (1 - t) * t * (bx - 4 * k) + t * t * (bx - 11 * k);
+    const yy = (1 - t) * (1 - t) * y0 + 2 * (1 - t) * t * (y0 + dir * 8 * k) + t * t * (y0 + dir * 16 * k);
+    return [x, yy] as const;
+  };
+  const bars = (y0: number, dir: 1 | -1, color: string) => {
+    const per = 6.4 * Math.max(0.8, H / 13);
+    const w = per * 0.5;
+    const out: string[] = [];
+    const ph = rnd() * 6;
+    for (let bx = fx - 10; bx < fx + L + 16; bx += per) {
+      const a: string[] = [];
+      const b: string[] = [];
+      for (let i = 0; i <= 8; i++) {
+        const t = i / 8;
+        const wob = Math.sin(t * 7 + bx * 0.3 + ph) * 0.9;
+        const [x0, y1] = barbAt(bx + wob, y0, dir, t);
+        const [x1, y2] = barbAt(bx + w + Math.sin(t * 6.3 + bx * 0.27 + ph + 1.4) * 0.8, y0, dir, t);
+        a.push(`${r1(x0)} ${r1(y1)}`);
+        b.unshift(`${r1(x1)} ${r1(y2)}`);
+      }
+      out.push(`M${a.join(" L")} L${b.join(" L")} Z`);
+    }
+    const d = out.join(" ");
+    return (
+      <g>
+        <path d={d} fill={color} opacity="0.9" />
+        <path d={d} fill="none" stroke={color} strokeOpacity="0.35" strokeWidth="0.9" />
+      </g>
+    );
+  };
+  // camo (tipo «Tre»): macchie allungate lungo le barbe, scure e qualcuna chiara
+  const camo = (y0: number, dir: 1 | -1, dark: string, base: string) => {
+    const ang = (Math.atan2(dir * 16, -11) * 180) / Math.PI;
+    return (
+      <g>
+        {Array.from({ length: Math.round(L / 1.4) }, (_, i) => {
+          const cx = fx - 4 + rnd() * (L + 6);
+          const cy = y0 + dir * rnd() * H * 1.05;
+          const light = i % 4 === 0;
+          return <ellipse key={i} cx={r1(cx)} cy={r1(cy)} rx={r1(2.4 + rnd() * 4.6)} ry={r1(0.6 + rnd() * 1.5)} transform={`rotate(${r1(ang + (rnd() - 0.5) * 24)} ${r1(cx)} ${r1(cy)})`} fill={light ? shade(base, 0.5) : dark} opacity={light ? 0.4 : r1(0.45 + rnd() * 0.35)} />;
+        })}
+      </g>
+    );
+  };
   const featherFill = (d: string, y0: number, dir: 1 | -1, base: string, lit: boolean, key: string) => (
     <g key={key}>
       <clipPath id={`cl-${key}-${id}`}>
@@ -188,23 +260,25 @@ export function ArrowArt({
         {/* più scura vicino alla costa e verso la punta della penna, più chiara sul bordo */}
         <path d={d} fill={`url(#fg${dir > 0 ? "d" : "u"}-${id})`} />
         <path d={d} fill={`url(#fl-${id})`} />
-        {deco ? <path d={d} fill={deco} /> : null}
+        {fletchStyle === "striato" ? bars(y0, dir, second) : fletchStyle === "camo" ? camo(y0, dir, fletch2 || shade(base, -0.65), base) : deco ? <path d={d} fill={deco} /> : null}
         {/* barbe: fitte, leggermente curve, chiare e scure alternate */}
-        <path d={barbs(y0, dir, 1.15, 0)} stroke={shade(base, -0.6)} strokeOpacity="0.5" strokeWidth="0.34" fill="none" />
-        <path d={barbs(y0, dir, 1.15, 0.55)} stroke="#fff" strokeOpacity="0.2" strokeWidth="0.3" fill="none" />
-        {splits(y0, dir).map((sd, i) => (
+        <path d={barbs(y0, dir, 0.85, 0)} stroke={shade(base, -0.6)} strokeOpacity="0.26" strokeWidth="0.22" fill="none" />
+        <path d={barbs(y0, dir, 0.85, 0.42)} stroke="#fff" strokeOpacity="0.13" strokeWidth="0.2" fill="none" />
+        {/* lucentezza della piuma: una fascia chiara morbida lungo il bordo e una vicino alla costa */}
+        <path d={d} fill="none" stroke="#fff" strokeOpacity="0.08" strokeWidth="2.4" />
+        {splits(y0, dir).slice(0, 2).map((sd, i) => (
           <g key={i}>
-            <path d={sd} stroke="#0d1013" strokeOpacity="0.75" strokeWidth="0.75" fill="none" />
-            <path d={sd} stroke="#fff" strokeOpacity="0.28" strokeWidth="0.3" fill="none" transform="translate(0.7 0)" />
+            <path d={sd} stroke="#0d1013" strokeOpacity="0.3" strokeWidth="0.45" fill="none" />
+            <path d={sd} stroke="#fff" strokeOpacity="0.16" strokeWidth="0.25" fill="none" transform="translate(0.6 0)" />
           </g>
         ))}
         {!lit ? <path d={d} fill="#000" opacity="0.24" /> : null}
       </g>
       {/* bordo sfrangiato: le punte delle barbe non fanno un contorno netto */}
-      <path d={d} fill="none" stroke={shade(base, 0.25)} strokeOpacity="0.7" strokeWidth="0.8" strokeDasharray="0.3 0.7" />
+      <path d={d} fill="none" stroke={shade(base, 0.25)} strokeOpacity="0.38" strokeWidth="0.6" strokeDasharray="0.25 0.55" />
       {/* la costa (rachide) incollata sull'asta */}
-      <path d={`M${fx - 1} ${r1(y0 + dir * 0.4)} L${fx + vane.len - 2} ${r1(y0 + dir * 0.25)}`} stroke="#f6eedb" strokeOpacity="0.9" strokeWidth="0.75" />
-      <path d={`M${fx - 1} ${r1(y0 + dir * 0.95)} L${fx + vane.len - 4} ${r1(y0 + dir * 0.6)}`} stroke="#000" strokeOpacity="0.25" strokeWidth="0.35" />
+      <path d={`M${fx - 1} ${r1(y0 + dir * 0.4)} L${fx + L - 2} ${r1(y0 + dir * 0.25)}`} stroke="#f6eedb" strokeOpacity="0.9" strokeWidth="0.75" />
+      <path d={`M${fx - 1} ${r1(y0 + dir * 0.95)} L${fx + L - 4} ${r1(y0 + dir * 0.6)}`} stroke="#000" strokeOpacity="0.25" strokeWidth="0.35" />
     </g>
   );
   const vaneFill = (d: string, dir: 1 | -1, base: string, lit: boolean, key: string) => (
@@ -219,13 +293,13 @@ export function ArrowArt({
   );
   const topY = y - r + 0.3;
   const botY = y + r - 0.3;
-  const dTop = vane.path(fx, topY, -1);
-  const dBot = vane.path(fx, botY, 1);
+  const dTop = vane.path(fx, topY, -1, L, H);
+  const dBot = vane.path(fx, botY, 1, L, H);
   const metal = `url(#mt-${id})`;
   const numColor = material === "alluminio" || wooden ? "#14181c" : "#f4f1ea";
-  const crownEnd = fx + vane.len + 10;
+  const crownEnd = fx + L + 10;
   return (
-    <svg viewBox="0 0 320 36" className={className} aria-hidden preserveAspectRatio={stretch ? "none" : "xMidYMid meet"}>
+    <svg viewBox={view ?? (part === "alette" ? `${fx - 5} ${r1(y - H - 3)} ${L + 12} ${r1(H + 5.5)}` : part === "punte" ? `${x1 - 8} ${y - 6.5} 38 13` : part === "cocche" ? `${x0 - 15} ${y - 6.5} 27 13` : part === "aste" ? `120 ${y - 5.5} 110 11` : "0 0 320 36")} className={className} aria-hidden preserveAspectRatio={stretch ? "none" : "xMidYMid meet"}>
       <defs>
         <linearGradient id={`sh-${id}`} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor={shade(sh.a, 0.15)} />
@@ -295,7 +369,7 @@ export function ArrowArt({
         </pattern>
       </defs>
       {/* ombra a terra */}
-      {ground ? <ellipse cx="160" cy="32" rx="138" ry="1.3" fill="#000" opacity="0.14" /> : null}
+      {ground && !part ? <ellipse cx="160" cy="32" rx="138" ry="1.3" fill="#000" opacity="0.14" /> : null}
 
       {/* asta */}
       <rect x={x0} y={y - r} width={x1 - x0} height={r * 2} rx={r} fill={`url(#sh-${id})`} />
@@ -329,8 +403,8 @@ export function ArrowArt({
       {/* fascia (cresting): banda e filetti di contrasto */}
       {wrap ? (
         <g>
-          {!wooden ? <rect x={x0 + 2} y={y - r - 0.15} width={vane.len + 20} height={r * 2 + 0.3} fill={wrap} /> : null}
-          {!wooden ? <rect x={x0 + 2} y={y - r + 0.35} width={vane.len + 20} height="0.6" fill="#fff" opacity="0.3" /> : null}
+          {!wooden ? <rect x={x0 + 2} y={y - r - 0.15} width={L + 20} height={r * 2 + 0.3} fill={wrap} /> : null}
+          {!wooden ? <rect x={x0 + 2} y={y - r + 0.35} width={L + 20} height="0.6" fill="#fff" opacity="0.3" /> : null}
           {[
             [crownEnd + 2, 1.4, "#14181c"],
             [crownEnd + 4.4, 3.2, wrap],
@@ -349,8 +423,8 @@ export function ArrowArt({
         </text>
       ) : null}
 
-      {/* impennaggio */}
-      {fletchType === "fob" ? (
+      {/* impennaggio (nel ritratto di un pezzo solo: una penna, oppure niente) */}
+      {part && part !== "alette" ? null : fletchType === "fob" ? (
         <g>
           <rect x={fx + 2} y={y - 8} width="14" height="16" rx="3.5" fill={fletch} />
           <rect x={fx + 2} y={y - 8} width="14" height="16" rx="3.5" fill={`url(#vnu-${id})`} />
@@ -361,18 +435,20 @@ export function ArrowArt({
         <g>
           <g transform={fletchStyle === "elicoidale" ? `skewX(-8) translate(${y * 0.14} 0)` : undefined}>
             {natural ? featherFill(dTop, topY, -1, fletch, true, "t") : vaneFill(dTop, -1, fletch, true, "t")}
-            {natural ? featherFill(dBot, botY, 1, fletch, false, "b") : vaneFill(dBot, 1, fletch, false, "b")}
+            {part ? null : natural ? featherFill(dBot, botY, 1, fletch, false, "b") : vaneFill(dBot, 1, fletch, false, "b")}
           </g>
           {/* penna guida, vista di sbieco sopra l'asta */}
-          <g transform={`translate(0 ${r1(y * 0.45)}) scale(1 0.55)`}>
-            {natural ? featherFill(vane.path(fx + 2, y - 0.2, -1), y - 0.2, -1, cock, true, "c") : vaneFill(vane.path(fx + 2, y - 0.2, -1), -1, cock, true, "c")}
-          </g>
+          {part ? null : (
+            <g transform={`translate(0 ${r1(y * 0.45)}) scale(1 0.55)`}>
+              {natural ? featherFill(vane.path(fx + 2, y - 0.2, -1, L, H), y - 0.2, -1, cock, true, "c") : vaneFill(vane.path(fx + 2, y - 0.2, -1, L, H), -1, cock, true, "c")}
+            </g>
+          )}
           {fletchType === "quickspin" ? <path d={`M${fx + 4} ${y - 6} Q${fx + 20} ${y - 9} ${fx + 34} ${y - 3}`} stroke="#fff" strokeOpacity="0.45" strokeWidth="0.8" fill="none" /> : null}
           {/* legature in filo alle estremità delle penne (frecce tradizionali) */}
           {natural && wooden ? (
             <g>
               <rect x={fx - 2.4} y={y - r - 0.25} width="2.6" height={r * 2 + 0.5} rx="0.6" fill="#2a1d14" />
-              <rect x={fx + vane.len - 1} y={y - r - 0.25} width="2.6" height={r * 2 + 0.5} rx="0.6" fill="#2a1d14" />
+              <rect x={fx + L - 1} y={y - r - 0.25} width="2.6" height={r * 2 + 0.5} rx="0.6" fill="#2a1d14" />
               <rect x={fx - 2.4} y={y - r} width="2.6" height="0.6" fill="#fff" opacity="0.25" />
             </g>
           ) : null}

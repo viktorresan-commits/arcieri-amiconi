@@ -13,6 +13,8 @@ import { ARROW_MODELS, FLETCH_STYLES } from "@/components/arrow-art";
 import { BOW_MODELS, BOW_WOODS } from "@/components/bow-art";
 import { GearSpecSheet, type GearItem } from "@/components/gear-spec-sheet";
 import { MainGearCard } from "@/components/main-gear";
+import { ArrowComposer } from "@/components/arrow-composer";
+import { FEATHER_COLORS } from "@/lib/arcieri/arrow-compose";
 import { ArrowWeights, SpineField } from "@/components/arrow-weights";
 import { GRAINS_PER_G, spineLb, spineUnitOf, spineLabel, weightInfo, weightLabel } from "@/lib/arcieri/arrow-spec";
 
@@ -254,8 +256,10 @@ function Page() {
           <>
             <p className="rounded-xl bg-white/[0.04] px-3 py-2 text-xs text-muted">Ogni scheda è una <b className="text-fg">serie di frecce</b>: se ne hai più di una (per esempio penne rosse per l'indoor e gialle per l'outdoor) crea una scheda per serie, con nome e colori. Quando dai il numero a una freccia sul bersaglio scegli prima la serie, poi il numero.</p>
             <div className="rounded-xl border border-line bg-elev p-2">
-              <ArrowIcon material={spec("material")} shaft={spec("shaft")} fletch={spec("fletch")} cock={spec("cock")} nock={spec("nock")} wrap={spec("wrap")} fletchType={spec("fletchType")} fletchStyle={spec("fletchStyle")} fletch2={spec("fletch2")} point={spec("pointType") || "ogiva"} number={spec("numFrom") || undefined} className="h-14 w-full" />
+              <ArrowIcon material={spec("material")} shaft={spec("shaft")} fletch={spec("fletch")} cock={spec("cock")} nock={spec("nock")} wrap={spec("wrap")} fletchType={spec("fletchType")} fletchStyle={spec("fletchStyle")} fletch2={spec("fletch2")} fletchLen={spec("fletchLen")} point={spec("pointType") || "ogiva"} number={spec("numFrom") || undefined} className="h-14 w-full" />
             </div>
+            {/* prima la freccia si compone con i pezzi comprati, poi si personalizza */}
+            <ArrowComposer specs={form.specs} isNew={!form.id} onApply={(sp, name) => setForm((f) => ({ ...f, name: !f.name || f.name === f.specs.comp_name ? name : f.name, specs: { ...f.specs, ...sp, comp_name: name } }))} />
             <div className="grid gap-1">
               <span className="text-xs text-muted">Modelli pronti (poi puoi cambiare ogni dettaglio)</span>
               <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none]">
@@ -279,12 +283,13 @@ function Page() {
             <Chips label="Uso" value={spec("use")} options={ARROW_USE} onPick={(v) => setSpec("use", v)} />
             <Chips label="Materiale" value={spec("material")} options={SHAFT_MATERIALS} onPick={(v) => setSpec("material", v)} />
             <Chips label="Impennaggio" value={spec("fletchType")} options={FLETCH_TYPES} onPick={(v) => setSpec("fletchType", v)} />
+            <Chips label="Misura delle penne" value={spec("fletchLen")} options={FLETCH_LENS} onPick={(v) => setSpec("fletchLen", v)} />
             <Chips label="Stile delle penne" value={spec("fletchStyle") || "pieno"} options={FLETCH_STYLES} onPick={(v) => setSpec("fletchStyle", v)} />
             <Chips label="Punta" value={spec("pointType") || "ogiva"} options={POINT_TYPES} onPick={(v) => setSpec("pointType", v)} />
             <Swatches label="Colore asta (vuoto = colore del materiale)" value={spec("shaft")} onPick={(v) => setSpec("shaft", v)} allowNone />
-            <Swatches label="Colore penne / alette" value={spec("fletch")} onPick={(v) => setSpec("fletch", v)} />
-            {spec("fletchStyle") && spec("fletchStyle") !== "pieno" && spec("fletchStyle") !== "elicoidale" ? <Swatches label="Secondo colore delle penne" value={spec("fletch2")} onPick={(v) => setSpec("fletch2", v)} /> : null}
-            <Swatches label="Penna indice (guida)" value={spec("cock")} onPick={(v) => setSpec("cock", v)} />
+            <Swatches label="Colore penne / alette (colori dei cataloghi)" value={spec("fletch")} onPick={(v) => setSpec("fletch", v)} colors={FEATHER_COLORS} />
+            {spec("fletchStyle") && spec("fletchStyle") !== "pieno" && spec("fletchStyle") !== "elicoidale" ? <Swatches label={spec("fletchStyle") === "striato" ? "Colore delle barre" : spec("fletchStyle") === "camo" ? "Colore delle macchie" : "Secondo colore delle penne"} value={spec("fletch2")} onPick={(v) => setSpec("fletch2", v)} colors={FEATHER_COLORS} /> : null}
+            <Swatches label="Penna indice (guida)" value={spec("cock")} onPick={(v) => setSpec("cock", v)} colors={FEATHER_COLORS} />
             <Swatches label="Cocca" value={spec("nock")} onPick={(v) => setSpec("nock", v)} />
             <Swatches label="Fascia (cresting)" value={spec("wrap")} onPick={(v) => setSpec("wrap", v)} allowNone />
           </>
@@ -357,7 +362,7 @@ function Page() {
               </div>
               {isArrow ? (
                 <>
-                  <ArrowIcon material={sp.material} shaft={sp.shaft} fletch={sp.fletch} cock={sp.cock} nock={sp.nock} wrap={sp.wrap} fletchType={sp.fletchType} fletchStyle={sp.fletchStyle} fletch2={sp.fletch2} point={sp.pointType} number={qty ? `${from}–${from + qty - 1}` : sp.numFrom} className="h-9 w-full" />
+                  <ArrowIcon material={sp.material} shaft={sp.shaft} fletch={sp.fletch} cock={sp.cock} nock={sp.nock} wrap={sp.wrap} fletchType={sp.fletchType} fletchStyle={sp.fletchStyle} fletch2={sp.fletch2} fletchLen={sp.fletchLen} point={sp.pointType} number={qty ? `${from}–${from + qty - 1}` : sp.numFrom} className="h-9 w-full" />
                   <div className="flex flex-wrap gap-1 text-[11px]">
                     {sp.use ? <span className={`rounded-full px-2 py-0.5 ${sp.use === "gara" ? "bg-accent text-accent-fg" : "border border-line"}`}>{ARROW_USE.find((u) => u.id === sp.use)?.label}</span> : null}
                     {sp.material ? <span className="rounded-full border border-line px-2 py-0.5">{SHAFT_MATERIALS.find((m) => m.id === sp.material)?.label ?? sp.material}</span> : null}
@@ -510,14 +515,17 @@ function Chips({ label, value, options, onPick }: { label: string; value: string
   );
 }
 
-function Swatches({ label, value, onPick, allowNone }: { label: string; value: string; onPick: (v: string) => void; allowNone?: boolean }) {
+/** misure delle penne naturali e delle alette, in pollici */
+const FLETCH_LENS = [{ id: "", label: "Normale" }, { id: "1.75", label: "1,75″" }, { id: "2", label: "2″" }, { id: "2.5", label: "2,5″" }, { id: "3", label: "3″" }, { id: "4", label: "4″" }, { id: "5", label: "5″" }, { id: "5.5", label: "5,5″" }] as const;
+
+function Swatches({ label, value, onPick, allowNone, colors }: { label: string; value: string; onPick: (v: string) => void; allowNone?: boolean; /** tavolozza con i nomi (es. i colori delle penne dei cataloghi) */ colors?: readonly { hex: string; label: string }[] }) {
   return (
     <div className="grid gap-1">
       <p className="text-xs text-muted">{label}</p>
       <div className="flex flex-wrap items-center gap-1.5">
         {allowNone ? <button type="button" onClick={() => onPick("")} className={`h-8 rounded-full border px-2 text-xs ${value ? "border-line" : "border-fg"}`}>nessuna</button> : null}
-        {SWATCHES.map((c) => (
-          <button key={c} type="button" aria-label={c} onClick={() => onPick(c)} className={`h-8 w-8 rounded-full border-2 ${value === c ? "border-fg" : "border-line"}`} style={{ background: c }} />
+        {(colors ?? SWATCHES.map((c) => ({ hex: c, label: c }))).map((c) => (
+          <button key={c.hex} type="button" aria-label={c.label} title={c.label} onClick={() => onPick(c.hex)} className={`h-8 w-8 rounded-full border-2 ${value === c.hex ? "border-fg" : "border-line"}`} style={{ background: c.hex }} />
         ))}
         <input type="color" value={value || "#ffffff"} onChange={(e) => onPick(e.target.value)} className="h-8 w-10 rounded" aria-label={`${label}: altro colore`} />
       </div>

@@ -79,6 +79,9 @@ export function ArrowIcon({
   fletchStyle?: string;
   fletch2?: string;
   point?: string;
+  fletchLen?: string | number;
+  view?: string;
+  ground?: boolean;
   className?: string;
 }) {
   return <ArrowArt {...look} number={number != null && number !== "" ? `${number}` : undefined} className={className} />;
