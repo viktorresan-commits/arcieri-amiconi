@@ -14,6 +14,7 @@ import { SceneBackdrop, SceneThumb } from "@/components/scene-2d";
 import { ArcherFront } from "@/components/archer-front";
 import { FACE_BGS, SCENES, sceneById } from "@/lib/arcieri/scenes";
 import { useSky } from "@/lib/arcieri/sky3d";
+import { PALETTES } from "@/lib/arcieri/avatar-more";
 import {
   AVATAR_DEFAULT,
   AVATAR_PRESETS,
@@ -90,8 +91,11 @@ const EXTRA_PREVIEW: Record<ExtraKey, "volto" | "fronte" | "arco" | "testo"> = {
   pattern: "fronte", emblem: "fronte", paint: "volto", tattoo: "testo", earringType: "volto", hairAcc: "volto",
   bowDeco: "arco", fletchStyle: "arco", quiverStyle: "fronte", eyeShape: "volto", mouth: "volto", ears: "volto",
   blush: "volto", age: "volto", mark: "volto", buckle: "fronte", pouchType: "fronte", clasp: "fronte",
-  capePattern: "testo", frame: "volto", idle: "testo",
+  capePattern: "fronte", frame: "volto", idle: "testo",
+  eyepatch: "volto", browShape: "volto", pendant: "fronte", palette: "fronte",
 };
+/** i colori di una tavolozza, pronti da mettere sull'arciere */
+const paletteOf = (id: string): Partial<AvatarLook> => ({ ...(PALETTES.find((p) => p.id === id)?.c ?? {}), palette: id });
 /** cosa accendere perché la scelta si veda nell'anteprima */
 const EXTRA_NEEDS: Partial<Record<ExtraKey, Partial<AvatarLook>>> = {
   earringType: { earring: true, hat: "nessuno" },
@@ -100,18 +104,20 @@ const EXTRA_NEEDS: Partial<Record<ExtraKey, Partial<AvatarLook>>> = {
   clasp: { cape: true },
   buckle: { belt: "larga" },
   quiverStyle: { quiverPlace: "fianco" },
+  capePattern: { cape: true },
+  eyepatch: { hat: "nessuno", sunglasses: false, glasses: false },
   tattoo: {},
 };
 
 function ExtraPreview({ k, look, value }: { k: ExtraKey; look: AvatarLook; value: string }) {
   const kind = EXTRA_PREVIEW[k];
-  const l = { ...look, ...EXTRA_NEEDS[k], [k]: value } as AvatarLook;
+  const l = { ...look, ...EXTRA_NEEDS[k], [k]: value, ...(k === "palette" ? paletteOf(value) : {}) } as AvatarLook;
   if (kind === "volto") {
     const zoom = k === "frame" ? "h-full w-full" : "absolute left-[-30%] top-[-26%] h-[160%] w-[160%]";
     return <AvatarFace look={k === "frame" ? l : { ...l, frame: "nessuna" }} className={zoom} />;
   }
   if (kind === "fronte") {
-    const crop = k === "buckle" ? "70 165 60 50" : k === "pouchType" ? "40 170 120 70" : k === "quiverStyle" ? "15 160 100 110" : k === "clasp" ? "40 80 120 60" : "40 90 120 130";
+    const crop = k === "buckle" ? "70 165 60 50" : k === "pouchType" ? "40 170 120 70" : k === "quiverStyle" ? "15 160 100 110" : k === "clasp" ? "40 80 120 60" : k === "pendant" ? "62 88 76 62" : k === "palette" ? "15 40 170 320" : k === "capePattern" ? "10 90 180 200" : "40 90 120 130";
     return <ArcherFront look={{ ...l, lefty: false }} crop={crop} className="h-full w-full" />;
   }
   if (kind === "arco") {
@@ -303,6 +309,107 @@ function Toggle({ on, label, onChange }: { on: boolean; label: string; onChange:
   );
 }
 
+/** accessori da mettere e togliere, ognuno con la sua miniatura */
+type Acc = { key: keyof AvatarLook; label: string; crop?: string };
+const ACCS_FACE: Acc[] = [
+  { key: "glasses", label: "Occhiali" },
+  { key: "sunglasses", label: "Occhiali da sole" },
+  { key: "mask", label: "Maschera sul viso" },
+  { key: "earring", label: "Orecchino" },
+  { key: "hairFeather", label: "Piuma tra i capelli" },
+  { key: "freckles", label: "Lentiggini" },
+  { key: "warpaint", label: "Pittura di guerra" },
+  { key: "scar", label: "Cicatrice" },
+];
+const ACCS_BODY: Acc[] = [
+  { key: "necklace", label: "Collana", crop: "62 88 76 62" },
+  { key: "amulet", label: "Medaglione", crop: "62 88 76 62" },
+  { key: "scarf", label: "Sciarpa", crop: "50 80 100 90" },
+  { key: "cowl", label: "Scialle a cappuccio", crop: "40 60 120 100" },
+  { key: "fur", label: "Pelliccia sulle spalle", crop: "30 70 140 90" },
+  { key: "straps", label: "Cinghie incrociate", crop: "40 90 120 130" },
+  { key: "chestguard", label: "Pettorina", crop: "40 90 120 130" },
+  { key: "armband", label: "Fascia sul braccio", crop: "15 95 170 120" },
+  { key: "watch", label: "Orologio", crop: "15 140 170 100" },
+  { key: "gloves", label: "Guanti", crop: "15 150 170 100" },
+  { key: "pouch", label: "Borsello", crop: "40 170 120 70" },
+  { key: "sash", label: "Fusciacca", crop: "40 160 120 100" },
+  { key: "wraps", label: "Fasce alle gambe", crop: "45 230 110 120" },
+  { key: "cape", label: "Mantello", crop: "10 60 180 280" },
+];
+/** nastro di accessori: ogni tocco mette o toglie, la spunta dice cosa porti */
+function AccessoryStrip({ title, items, look, shown, onToggle }: { title: string; items: Acc[]; look: AvatarLook; shown: AvatarLook; onToggle: (k: keyof AvatarLook, v: boolean) => void }) {
+  const on = items.filter((a) => Boolean(look[a.key])).length;
+  return (
+    <section className="grid gap-1.5">
+      <div className="flex items-baseline justify-between gap-2 px-0.5">
+        <h3 className="text-sm font-semibold">{title}</h3>
+        <span className="shrink-0 text-[0.68rem] tabular-nums text-muted">{on ? `${on} ${on === 1 ? "indossato" : "indossati"}` : "tocca per indossare"}</span>
+      </div>
+      <div className="aa-strip -mx-4 flex snap-x snap-mandatory gap-2 overflow-x-auto px-4 pb-1.5 [scrollbar-width:none]">
+        {items.map((a) => {
+          const isOn = Boolean(look[a.key]);
+          const l = { ...shown, [a.key]: true, ...(a.key === "earring" || a.key === "hairFeather" ? { hat: "nessuno" } : {}), lefty: false } as AvatarLook;
+          return (
+            <button key={String(a.key)} type="button" aria-pressed={isOn} onClick={() => onToggle(a.key, !isOn)} className={`aa-press aa-lazy relative grid w-[5.6rem] shrink-0 snap-start justify-items-center gap-1 rounded-2xl p-1.5 text-center text-[0.64rem] font-semibold leading-tight transition ${isOn ? "bg-[#7cf0a8]/15 ring-2 ring-[#7cf0a8]" : "bg-white/[0.04] ring-1 ring-white/10"}`}>
+              <span className="relative block h-[4.6rem] w-full overflow-hidden rounded-xl bg-gradient-to-b from-white/[0.07] to-transparent">
+                {a.crop ? <ArcherFront look={l} crop={a.crop} className="h-full w-full" /> : <AvatarFace look={{ ...l, frame: "nessuna" }} className="absolute left-[-30%] top-[-26%] h-[160%] w-[160%]" />}
+              </span>
+              <span className="line-clamp-2 min-h-[1.6em]">{a.label}</span>
+              {isOn ? <span className="absolute right-1 top-1 grid h-5 w-5 place-items-center rounded-full bg-[#7cf0a8] text-[#0b120e]"><Glyph name="check" size={12} /></span> : null}
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+/** cerca fra tutte le scelte dell'avatar per nome (es. «benda», «lupo», «oro») */
+type Hit = { k: string; id: string; label: string; group: string };
+const norm = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+function searchIndex(): Hit[] {
+  const extras = (Object.keys(EXTRA_OPTIONS) as ExtraKey[]).flatMap((k) => (EXTRA_OPTIONS[k].items as readonly (readonly [string, string])[]).map(([id, label]) => ({ k, id, label, group: EXTRA_OPTIONS[k].label })));
+  return [
+    ...AVATAR_PRESETS.map((p) => ({ k: "preset", id: p.id, label: p.label, group: "Stili pronti" })),
+    ...HAIR_OPTS.map(([id, label]) => ({ k: "hair", id, label, group: "Capelli" })),
+    ...BEARD_OPTS.map(([id, label]) => ({ k: "beard", id, label, group: "Barba" })),
+    ...STACHE_OPTS.map(([id, label]) => ({ k: "stache", id, label, group: "Baffi" })),
+    ...HAT_OPTS.map(([id, label]) => ({ k: "hat", id, label, group: "In testa" })),
+    ...[...TOPS.moderno, ...TOPS.medievale].map((t) => ({ k: "top", id: t.id, label: t.label, group: "Sopra" })),
+    ...BOTTOM_OPTS.map(([id, label]) => ({ k: "bottom", id, label, group: "Sotto" })),
+    ...FOOT_OPTS.map(([id, label]) => ({ k: "footwear", id, label, group: "Ai piedi" })),
+    ...extras,
+  ];
+}
+let INDEX: Hit[] | null = null;
+function OptionSearch({ look, shown, onPick }: { look: AvatarLook; shown: AvatarLook; onPick: (h: Hit) => void }) {
+  const [q, setQ] = useState("");
+  INDEX ??= searchIndex();
+  const words = norm(q).trim().split(/\s+/).filter((w) => w.length >= 2);
+  const hits = words.length ? INDEX.filter((h) => words.every((w) => norm(`${h.label} ${h.group}`).includes(w))).slice(0, 30) : [];
+  const preview = (h: Hit): ReactNode => {
+    if (h.k === "preset") { const p = AVATAR_PRESETS.find((x) => x.id === h.id); return <AvatarFace look={{ ...presetLook(shown, p?.look ?? {}), frame: "nessuna" }} className="absolute left-[-6%] top-[-4%] h-[112%] w-[112%]" />; }
+    if (h.k === "hair" || h.k === "beard" || h.k === "stache" || h.k === "hat") return <AvatarFace look={{ ...shown, [h.k]: h.id, frame: "nessuna" } as AvatarLook} className="absolute left-[-20%] top-[-18%] h-[140%] w-[140%]" />;
+    if (h.k === "top" || h.k === "bottom" || h.k === "footwear") return <ArcherFront look={{ ...shown, [h.k]: h.id, cape: false, lefty: false } as AvatarLook} crop={h.k === "top" ? "30 70 140 170" : h.k === "bottom" ? "35 180 130 170" : "45 250 110 110"} className="h-full w-full" />;
+    return <ExtraPreview k={h.k as ExtraKey} look={shown} value={h.id} />;
+  };
+  return (
+    <div className="grid gap-2">
+      <label className="flex items-center gap-2 rounded-2xl bg-white/[0.06] px-3 ring-1 ring-white/10 focus-within:ring-2 focus-within:ring-[#7cf0a8]">
+        <Glyph name="search" size={16} />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Cerca fra ${INDEX.length} scelte: benda, lupo, oro, ciondolo…`} className="min-h-11 w-full bg-transparent text-sm outline-none placeholder:text-muted" />
+        {q ? <button type="button" onClick={() => setQ("")} aria-label="Cancella" className="text-muted"><Glyph name="close" size={14} /></button> : null}
+      </label>
+      {words.length ? (
+        hits.length ? (
+          <Strip title={`Trovate ${hits.length}${hits.length === 30 ? "+" : ""}`} current={String((look as Record<string, unknown>)[hits[0]?.k] ?? "")} onPick={(id) => { const h = hits.find((x) => x.id === id); if (h) onPick(h); }} items={hits.map((h) => ({ id: h.id, label: `${h.label} · ${h.group}`, preview: preview(h) }))} />
+        ) : <p className="px-1 text-xs text-muted">Nessuna scelta con «{q}». Prova un'altra parola.</p>
+      ) : null}
+    </div>
+  );
+}
+
 /** Personalizzazione dell'arciere della Home: aspetto, abiti e attrezzatura. Si salva da sé. Vive nel Profilo. */
 export function AvatarEditor() {
   const { look, setLook, shown, main } = useAvatar();
@@ -332,7 +439,7 @@ export function AvatarEditor() {
   const crestOnChest = look.emblem === "compagnia";
   const crestOnCape = look.cape && look.capePattern === "stemma";
   // alcune scelte si vedono solo se c'è l'oggetto: lo accendo insieme
-  const setX = (k: ExtraKey, v: string) => setLook((l) => ({ ...l, [k]: v, ...(k === "earringType" ? { earring: true } : k === "pouchType" ? { pouch: true } : k === "clasp" && v !== "nessuno" ? { cape: true } : {}) }));
+  const setX = (k: ExtraKey, v: string) => setLook((l) => ({ ...l, [k]: v, ...(k === "earringType" ? { earring: true } : k === "pouchType" ? { pouch: true } : k === "clasp" && v !== "nessuno" ? { cape: true } : k === "palette" ? paletteOf(v) : k === "capePattern" && v !== "liscio" ? { cape: true } : {}) }));
   const [view, setView] = useEntryState<"lato" | "fronte" | "3d">("avatar-view", "lato");
   const { sky } = useSky();
   const member = useMemberMaybe();
@@ -433,14 +540,11 @@ export function AvatarEditor() {
               <Toggle on={crestOnCape} label="Sul mantello" onChange={(v) => setLook((l) => ({ ...l, cape: v ? true : l.cape, capePattern: v ? "stemma" : "liscio", crest: v ? l.crest || myCrest : l.crest }))} />
             </div>
           </Row>
-          <Row label="Sul viso">
-            <div className="flex flex-wrap gap-1.5">
-              <Toggle on={look.mask} label="Maschera" onChange={(v) => set("mask", v)} />
-              <Toggle on={look.glasses} label="Occhiali" onChange={(v) => set("glasses", v)} />
-              <Toggle on={look.sunglasses} label="Occhiali da sole" onChange={(v) => set("sunglasses", v)} />
-              <Toggle on={look.freckles} label="Lentiggini" onChange={(v) => set("freckles", v)} />
-            </div>
-          </Row>
+          <AccessoryStrip title="Sul viso" items={ACCS_FACE} look={look} shown={shown} onToggle={(k, v) => setLook((l) => ({ ...l, [k]: v }))} />
+          <AccessoryStrip title="Addosso" items={ACCS_BODY} look={look} shown={shown} onToggle={(k, v) => setLook((l) => ({ ...l, [k]: v }))} />
+          {(["palette", "pendant", "eyepatch"] as ExtraKey[]).map((k) => (
+            <Strip key={k} title={EXTRA_OPTIONS[k].label} current={String(look[k] ?? "")} onPick={(id) => setX(k, id)} items={(EXTRA_OPTIONS[k].items as readonly (readonly [string, string])[]).map(([id, label]) => ({ id, label, preview: <ExtraPreview k={k} look={shown} value={id} /> }))} />
+          ))}
           <Strip title="In testa" current={look.hat} onPick={(id) => set("hat", id as AvatarLook["hat"])} items={hats.map(([id, label]) => ({ id, label, preview: <AvatarFace look={{ ...shown, hat: id, frame: "nessuna" }} className="h-full w-full" /> }))} />
           <Strip title="Sopra" current={look.top} onPick={(id) => set("top", id as AvatarLook["top"])} items={[...TOPS.moderno, ...TOPS.medievale].map((t) => ({ id: t.id, label: t.label, preview: <ArcherFront look={{ ...shown, top: t.id, cape: false, lefty: false }} crop="30 70 140 170" className="h-full w-full" /> }))} />
           <Row label="Colore della veste"><Tint value={look.shirt} onPick={(c) => set("shirt", c)} quick={CLOTH_COLORS} /></Row>
@@ -452,21 +556,22 @@ export function AvatarEditor() {
         </Card>
       ) : null}
       {mode === "completa" ? <>
+      <OptionSearch look={look} shown={shown} onPick={(h) => {
+        if (h.k === "preset") { const p = AVATAR_PRESETS.find((x) => x.id === h.id); if (p) setLook((l) => presetLook(l, p.look)); return; }
+        if (h.k === "top") { setLook((l) => ({ ...l, top: h.id as AvatarLook["top"], style: TOPS.medievale.some((t) => t.id === h.id) ? "medievale" : "moderno" })); return; }
+        if (h.k in EXTRA_OPTIONS) { setX(h.k as ExtraKey, h.id); return; }
+        setLook((l) => ({ ...l, [h.k]: h.id }));
+      }} />
       <div className="-mx-1 overflow-x-auto px-1 [scrollbar-width:none]">
         <Segmented<Tab>
           value={tab}
           onChange={setTab}
-          options={[
-            { id: "corpo", label: "Corpo" },
-            { id: "viso", label: "Viso" },
-            { id: "barba", label: "Barba" },
-            { id: "capelli", label: "Capelli" },
-            { id: "abiti", label: "Abiti" },
-            { id: "accessori", label: "Accessori" },
-            { id: "attrezzatura", label: "Arco" },
-            { id: "posa", label: "Posa" },
-            { id: "scena", label: "Sfondo" },
-          ]}
+          options={(() => {
+            const n = (t: string) => (Object.keys(EXTRA_OPTIONS) as ExtraKey[]).filter((k) => EXTRA_OPTIONS[k].tab === t).reduce((a, k) => a + EXTRA_OPTIONS[k].items.length, 0);
+            const base: Record<Tab, number> = { corpo: 4, viso: 14, barba: BEARD_OPTS.length + STACHE_OPTS.length, capelli: HAIR_OPTS.length + HAT_OPTS.length, abiti: TOPS.moderno.length + TOPS.medievale.length + BOTTOM_OPTS.length + FOOT_OPTS.length, accessori: ACCS_FACE.length + ACCS_BODY.length, attrezzatura: BOW_TYPES.length, posa: POSE_OPTS.length, scena: SCENES.length };
+            const L: [Tab, string][] = [["corpo", "Corpo"], ["viso", "Viso"], ["barba", "Barba"], ["capelli", "Capelli"], ["abiti", "Abiti"], ["accessori", "Accessori"], ["attrezzatura", "Arco"], ["posa", "Posa"], ["scena", "Sfondo"]];
+            return L.map(([id, label]) => ({ id, label: `${label} ${base[id] + n(id)}` }));
+          })()}
         />
       </div>
       <Card className="grid gap-4">
@@ -572,36 +677,8 @@ export function AvatarEditor() {
         ) : null}
         {tab === "accessori" ? (
           <>
-            <Row label="Sul viso e in testa">
-              <div className="flex flex-wrap gap-1.5">
-                <Toggle on={look.mask} label="Maschera sul viso" onChange={(v) => set("mask", v)} />
-                <Toggle on={look.glasses} label="Occhiali" onChange={(v) => set("glasses", v)} />
-                <Toggle on={look.sunglasses} label="Occhiali da sole" onChange={(v) => set("sunglasses", v)} />
-                <Toggle on={look.earring} label="Orecchino" onChange={(v) => set("earring", v)} />
-                <Toggle on={look.hairFeather} label="Piuma tra i capelli" onChange={(v) => set("hairFeather", v)} />
-              </div>
-            </Row>
-            <Row label="Al collo e sul petto">
-              <div className="flex flex-wrap gap-1.5">
-                <Toggle on={look.necklace} label="Collana" onChange={(v) => set("necklace", v)} />
-                <Toggle on={look.amulet} label="Medaglione" onChange={(v) => set("amulet", v)} />
-                <Toggle on={look.scarf} label="Sciarpa" onChange={(v) => set("scarf", v)} />
-                <Toggle on={look.cowl} label="Scialle a cappuccio" onChange={(v) => set("cowl", v)} />
-                <Toggle on={look.fur} label="Pelliccia sulle spalle" onChange={(v) => set("fur", v)} />
-                <Toggle on={look.straps} label="Cinghie incrociate" onChange={(v) => set("straps", v)} />
-              </div>
-            </Row>
-            <Row label="Braccia, vita e gambe">
-              <div className="flex flex-wrap gap-1.5">
-                <Toggle on={look.armband} label="Fascia sul braccio" onChange={(v) => set("armband", v)} />
-                <Toggle on={look.watch} label="Orologio" onChange={(v) => set("watch", v)} />
-                <Toggle on={look.gloves} label="Guanti" onChange={(v) => set("gloves", v)} />
-                <Toggle on={look.pouch} label="Borsello" onChange={(v) => set("pouch", v)} />
-                <Toggle on={look.sash} label="Fusciacca" onChange={(v) => set("sash", v)} />
-                <Toggle on={look.wraps} label="Fasce alle gambe" onChange={(v) => set("wraps", v)} />
-                <Toggle on={look.cape} label="Mantello" onChange={(v) => set("cape", v)} />
-              </div>
-            </Row>
+            <AccessoryStrip title="Sul viso e in testa" items={ACCS_FACE} look={look} shown={shown} onToggle={(k, v) => setLook((l) => ({ ...l, [k]: v }))} />
+            <AccessoryStrip title="Al collo, sul corpo e alle gambe" items={ACCS_BODY} look={look} shown={shown} onToggle={(k, v) => setLook((l) => ({ ...l, [k]: v }))} />
             <Row label="Bracciali di cuoio"><Colors value={look.bracers} colors={["", "#6b4224", "#4a2c16", "#14181c", "#8a2f2f", "#c9a46a"]} onPick={(c) => set("bracers", c)} /></Row>
             {look.cape ? <Row label="Mantello"><Chips value={look.capeStyle} onChange={(v) => set("capeStyle", v)} options={[{ id: "liscio", label: "Lungo" }, { id: "frastagliato", label: "Frastagliato" }, { id: "corto", label: "Corto" }]} /></Row> : null}
             {look.cape ? <Row label="Colore del mantello"><Tint value={look.capeColor} onPick={(c) => set("capeColor", c)} quick={CLOTH_COLORS} /></Row> : null}

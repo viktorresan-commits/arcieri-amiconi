@@ -1,4 +1,6 @@
 import { ink, cubicPts, Tufts, Clumps, fanStrokes, MetalDefs } from "./avatar-ink";
+import { PATTERN2_IDS } from "@/lib/arcieri/avatar-more";
+import { EyepatchFront, EyepatchProfile, Marks2Front, Marks2Profile, Pendant, browShape } from "./avatar-more";
 import { cloneElement, isValidElement, useEffect, useId, useMemo, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { tune, type AvatarLook, type Pose } from "@/lib/arcieri/avatar";
 import { zigQ, BowDeco, Buckle, ChestEmblem, Clasp, ClothPattern, Earring, FaceFrame, FacePaintFront, FacePaintProfile, Fletching, HairOrnament, PaintStroke, Pouch, QuiverBody } from "./avatar-extras";
@@ -721,7 +723,8 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4, cssBlink = fals
   const capeDecor = (d: string, box: [number, number, number, number]) => {
     const cp = look.capePattern;
     if (!cp || cp === "liscio") return null;
-    if (CAPE_CLOTH[cp]) return <ClothPattern kind={CAPE_CLOTH[cp]} shapes={[d]} base={look.capeColor} trim={look.trim} uid={`${uid}cp`} box={box} />;
+    const ck = CAPE_CLOTH[cp] ?? (PATTERN2_IDS.has(cp) ? cp : "");
+    if (ck) return <ClothPattern kind={ck} shapes={[d]} base={look.capeColor} trim={look.trim} uid={`${uid}cp`} box={box} />;
     if (cp === "stelle") {
       return (
         <g>
@@ -883,6 +886,7 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4, cssBlink = fals
           </g>
         );
       })() : null}
+      {look.pendant && look.pendant !== "nessuno" ? <Pendant kind={look.pendant} x={cx + 3} y={look.amulet ? 126 : 132} w={10} y0={116} s={1.05} /> : null}
       {look.amulet ? (
         <g>
           <path d={`M${f(cx - 11)} 116 Q${f(cx - 2)} 140 ${f(cx + 4)} 142 Q${f(cx + 10)} 138 ${f(cx + 12)} 116`} stroke="#c9a46a" strokeWidth="1" fill="none" />
@@ -1548,7 +1552,7 @@ function Head({ look, H, face, blink, uid, t, cssBlink = false }: { look: Avatar
     <g transform={`translate(0 ${f(dy)})`}>
       {look.hair !== "calvo" && look.hair !== "rasati" && look.hair !== "cresta" && !capOn ? <path d="M131 84 C127 66 138 57 150 57 C140 64 136 76 138 92 Z" fill={`url(#${uid}hair)`} /> : null}
       {/* volto di profilo dipinto: contorno nel tono scuro della pelle, non più a china nera */}
-      <path d={headPath} fill={`url(#${uid}face)`} stroke={blend(shade(skin, -0.62), "#1b130d", 0.35)} strokeOpacity="0.85" strokeWidth="1.15" />
+      <path d={headPath} fill={`url(#${uid}face)`} stroke={ink(skin)} strokeOpacity="0.92" strokeWidth="1.2" />
       <g transform={`translate(151 74) scale(${Math.max(1, hairScale(look)).toFixed(3)}) translate(-151 -74)`}>
         <HairCap look={look} uid={uid} />
       </g>
@@ -1580,6 +1584,7 @@ function Head({ look, H, face, blink, uid, t, cssBlink = false }: { look: Avatar
       {look.mark === "fossette" ? <path d="M167.2 98.2 q0.8 1.2 0 2.2" stroke={shade(skin, -0.38)} strokeWidth="0.8" fill="none" strokeLinecap="round" /> : null}
       {look.tattoo === "lacrima" ? <path d="M165.4 88 q-1.2 2 0 3 q1.2 -1 0 -3 Z" fill="#24324a" /> : null}
       {look.tattoo === "stelle" ? <g fill="#24324a">{[[146, 104], [149, 108], [145, 109]].map(([x, y]) => <path key={x + y} d={`M${x} ${y - 1.4} l0.5 1 l1.1 0.1 l-0.8 0.7 l0.3 1.1 l-1.1 -0.6 l-1.1 0.6 l0.3 -1.1 l-0.8 -0.7 l1.1 -0.1 Z`} />)}</g> : null}
+      <Marks2Profile kinds={[look.mark, look.tattoo]} skin={skin} shade={shade} />
       <FacePaintProfile kind={look.paint} color={look.paint === "volpe" ? "#d9822a" : look.paint === "guance" ? "#c4473d" : "#2a3a5a"} />
       <path d={`M${nx(174.2)} ${f(NP[5] + 0.6)} q${f(1.6 * nk)} 1.3 ${f(3 * nk)} 0.3`} stroke={shade(skin, -0.42)} strokeWidth="1" fill="none" strokeLinecap="round" />
       {/* lume sul dorso del naso: dentro il contorno, mai sopra la linea */}
@@ -1600,7 +1605,7 @@ function Head({ look, H, face, blink, uid, t, cssBlink = false }: { look: Avatar
           <EyeDetail uid={uid} eyes={look.eyes} skinDeep={shade(skin, -0.45)} lid={lid} />
           <circle cx="165.6" cy="80.9" r="0.75" fill="#fff" />
           {lid ? <path d={`M156.8 82.5 Q162.5 ${f(77.2 + lid)} 168.6 81.4 L168.6 79 L156.8 79 Z`} fill={skin} /> : null}
-          <path d={`M157.2 83 C159.6 ${f(79.4 + lid * 0.6)} 164.6 ${f(78 + lid * 0.7)} 168.6 81.4`} stroke="#22170f" strokeWidth={woman ? 1.6 : 1.1} fill="none" strokeLinecap="round" />
+          <path d={`M157.2 83 C159.6 ${f(79.4 + lid * 0.6)} 164.6 ${f(78 + lid * 0.7)} 168.6 81.4`} stroke="#1a110b" strokeWidth={woman ? 1.75 : 1.4} fill="none" strokeLinecap="round" />
           {woman ? <path d="M167.6 80.6 l2.4 -1.6 M166.2 79.6 l1.6 -2.2 M164.6 79.2 l0.8 -2.4" stroke="#2a1d14" strokeWidth="0.75" strokeLinecap="round" /> : null}
         </g>
       ) : (
@@ -1614,8 +1619,12 @@ function Head({ look, H, face, blink, uid, t, cssBlink = false }: { look: Avatar
           <path d="M157 82.6 Q162.6 85 168.4 81.8" stroke="#2a1d14" strokeWidth="1.3" fill="none" strokeLinecap="round" />
         </g>
       ) : null}
-      <path d={browD} stroke={shade(hair, -0.15)} strokeWidth={browW * (0.6 + (tune(look.browSize, 50, 0, 100) / 100) * 0.8)} strokeLinecap="round" fill="none" />
-      <BrowHairs d={browD} color={shade(hair, -0.45)} width={browW * (0.6 + (tune(look.browSize, 50, 0, 100) / 100) * 0.8)} />
+      <g transform={`rotate(${(browShape(look.browShape).tilt * 5).toFixed(1)} 162 74) translate(162 75) scale(1 ${(1 + browShape(look.browShape).arch * 0.22).toFixed(3)}) translate(-162 -75)`}>
+        <path d={browD} stroke={ink(hair, 0.35)} strokeWidth={browW * (0.6 + (tune(look.browSize, 50, 0, 100) / 100) * 0.8) * browShape(look.browShape).thick + 0.5} strokeLinecap="round" fill="none" />
+        <path d={browD} stroke={shade(hair, -0.2)} strokeWidth={browW * (0.6 + (tune(look.browSize, 50, 0, 100) / 100) * 0.8) * browShape(look.browShape).thick} strokeLinecap="round" fill="none" />
+        <BrowHairs d={browD} color={shade(hair, -0.45)} width={browW * (0.6 + (tune(look.browSize, 50, 0, 100) / 100) * 0.8) * browShape(look.browShape).thick} />
+      </g>
+      {look.eyepatch && look.eyepatch !== "nessuna" ? <EyepatchProfile kind={look.eyepatch} /> : null}
       {look.mask ? null : face === "felice" || face === "sorriso" || !lips ? mouth : lips}
       {look.mask || face === "felice" || face === "sorriso" || look.mouth === "aperta" ? null : <LipDetail lip={lip} skinDeep={shade(skin, -0.42)} />}
       <path d="M152 95 Q158 98 163 96" stroke={shade(skin, -0.12)} strokeWidth="2" fill="none" opacity="0.4" />
@@ -1634,7 +1643,7 @@ function Head({ look, H, face, blink, uid, t, cssBlink = false }: { look: Avatar
         </g>
       ) : null}
       <g transform={`translate(151 70) scale(${hairScale(look).toFixed(3)}) translate(-151 -70)`}>
-        <HairFront look={look} uid={uid} t={t} />
+        <g stroke={ink(look.hairColor)} strokeWidth="0.8" strokeLinejoin="round"><HairFront look={look} uid={uid} t={t} /></g>
         <HairStrands look={look} />
       </g>
       {look.hairAcc && look.hairAcc !== "nessuno" && !capOn && look.hair !== "calvo" ? <HairOrnament kind={look.hairAcc} x={134} y={76} tilt={-18} color={look.hatColor} /> : null}
@@ -1651,15 +1660,16 @@ function Head({ look, H, face, blink, uid, t, cssBlink = false }: { look: Avatar
       </g>
       {look.sunglasses ? (
         <g>
-          <path d="M157 79.6 C160 78.6 168 78.4 170.6 79.4 C170.6 83.6 168.6 86.2 164 86.2 C159.6 86.2 157.4 83.4 157 79.6 Z" fill="#14181c" stroke="#3a3f45" strokeWidth="0.8" />
-          <path d="M159.4 80.6 L163 80.2" stroke="#fff" strokeOpacity="0.45" strokeWidth="1" strokeLinecap="round" />
-          <path d="M157.4 80.4 L143 83" stroke="#1d2126" strokeWidth="1.5" />
+          <path d="M157.4 80.4 L143 83" stroke="#0e1114" strokeWidth="1.7" strokeLinecap="round" />
+          <path d="M157 79.6 C160 78.6 168 78.4 170.6 79.4 C170.6 83.6 168.6 86.2 164 86.2 C159.6 86.2 157.4 83.4 157 79.6 Z" fill={`url(#${uid}lens)`} stroke="#07090b" strokeWidth="0.9" strokeLinejoin="round" />
+          <path d="M159.4 80.6 L163.4 80.2 M159.6 83.6 l2.4 -2.6" stroke="#fff" strokeOpacity="0.5" strokeWidth="0.8" strokeLinecap="round" />
         </g>
       ) : null}
       {look.glasses && !look.sunglasses ? (
-        <g fill="none" stroke="#1d2126" strokeWidth="1.3">
-          <circle cx="163.6" cy="82.4" r="5.6" fill="#a8d8ff" fillOpacity="0.16" />
-          <path d="M158 82.4 L143 84" />
+        <g>
+          <path d="M158 82.4 L143 84" stroke="#1d2126" strokeWidth="1.3" strokeLinecap="round" />
+          <circle cx="163.6" cy="82.4" r="5.6" fill={`url(#${uid}glass)`} stroke="#0f1215" strokeWidth="1.4" />
+          <path d="M160.2 80.4 q1.4 -2 3.6 -2.4" stroke="#fff" strokeOpacity="0.55" strokeWidth="0.7" fill="none" strokeLinecap="round" />
         </g>
       ) : null}
     </g>
@@ -1771,11 +1781,23 @@ function Beard({ look, uid }: { look: AvatarLook; uid: string }) {
         <path d="M172.2 97.2 L171 109" stroke={c} strokeWidth="2.8" strokeLinecap="round" />
       </g>
     ) : null;
+  const T = (pts: [number, number][], cc: [number, number], len: number) => <Tufts pts={pts} c={cc} len={len} fill={c} stroke={ink(c)} w={0.75} seed={2} />;
+  const sideTufts =
+    look.beard === "piena" ? <>{T(cubicPts([138, 93], [140, 105], [148, 115], [158, 115], 0.35, 1, 6), [156, 100], 2.4)}{T(cubicPts([158, 115], [166, 115], [172, 108], [173, 99], 0, 0.75, 6), [156, 100], 2.4)}</> :
+    look.beard === "corta" ? <>{T(cubicPts([143, 97], [145, 107], [151, 112], [158, 112], 0.4, 1, 5), [158, 102], 1.7)}{T(cubicPts([158, 112], [164.5, 112], [170, 107], [171.3, 101], 0, 0.7, 5), [158, 102], 1.7)}</> :
+    look.beard === "lunga" ? <>{T(cubicPts([138, 93], [139, 108], [146, 122], [152, 132], 0.45, 1, 5), [158, 108], 2.8)}{T(cubicPts([152, 132], [156, 138], [160, 140], [164, 136], 0, 1, 4), [158, 108], 2.8)}{T(cubicPts([164, 136], [168, 128], [172, 112], [173, 99], 0, 0.45, 4), [158, 108], 2.6)}</> :
+    look.beard === "pizzetto" ? T(cubicPts([160, 103], [161, 109], [164, 112], [168, 111], 0.2, 1, 4), [166, 104], 1.3) : null;
+  const sideClumps = bd && look.beard !== "accenno" ? (
+    <Clumps id={`${uid}scb`} clip={<path d={bd} />} dark={shade(c, -0.5)} light={shade(c, 0.42)} w={0.8}
+      strokes={[...fanStrokes(139, 172, 96, look.beard === "lunga" ? 20 : look.beard === "corta" ? 11 : 15, 158, 14, 5), ...(look.beard === "lunga" ? fanStrokes(142, 170, 112, 22, 157, 10, 7) : [])]} />
+  ) : null;
   return (
     <g>
       {body ? (
         <g transform={look.beard === "basette" || look.beard === "barbetta" ? undefined : grow}>
-          {look.beard === "accenno" ? null : body}
+          {look.beard === "accenno" ? null : <g stroke={ink(c)} strokeWidth="0.85" strokeLinejoin="round">{body}</g>}
+          {sideClumps}
+          {sideTufts}
           {bd && look.beard !== "accenno" ? <BeardTexture uid={uid} d={bd} color={c} light={shade(c, 0.35)} dark={lo} /> : null}
           {/* peli dipinti ritagliati sulla barba; per l'accenno un velo leggero e i puntini */}
           {look.beard === "accenno" ? <path d={bd} fill={c} opacity="0.16" /> : null}
@@ -1783,7 +1805,8 @@ function Beard({ look, uid }: { look: AvatarLook; uid: string }) {
         </g>
       ) : null}
       {body && look.beard !== "accenno" && look.beard !== "basette" && look.beard !== "mosca" ? <path d="M150 104 q3 3 6 3.4 M157 108 q3 1.6 6 0.4" stroke={lo} strokeWidth="0.7" fill="none" opacity="0.55" /> : null}
-      <g stroke={lo} strokeOpacity="0.6" strokeWidth="0.45">{stache}</g>
+      <g stroke={ink(c)} strokeOpacity="0.95" strokeWidth="0.7" strokeLinejoin="round">{stache}</g>
+      {st === "classici" || st === "folti" || st === "sottili" ? <Clumps id={`${uid}ssc`} clip={<path d={(stache as { props: { d: string } }).props.d} />} dark={shade(c, -0.5)} light={shade(c, 0.45)} w={0.55} strokes={[0, 1, 2, 3, 4, 5, 6].map((k) => `M${(161 + k * 2).toFixed(1)} 94.6 Q${(162 + k * 2.1).toFixed(1)} 96.4 ${(162.4 + k * 2.2).toFixed(1)} 98.6`)} /> : null}
       {stache ? <ProfileHairPaint uid={uid} id="stp" clip={hairClipOf(stache, c)} kind="stache" box={[158, 90, 22, 12]} color={c} seed={17} /> : null}
     </g>
   );
@@ -2083,6 +2106,7 @@ function Defs({ look, uid }: { look: AvatarLook; uid: string }) {
   const woodBase = look.riser && look.riser !== "#2f6fbe" ? look.riser : "#9b6334";
   return (
     <defs>
+      <MetalDefs uid={uid} />
       <linearGradient id={`${uid}riser`} x1="0" x2="1">
         <stop offset="0" stopColor={shade(look.riser || "#2f6fbe", -0.45)} />
         <stop offset="0.45" stopColor={shade(look.riser || "#2f6fbe", 0.25)} />
@@ -2404,20 +2428,21 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false, part }
     );
   })();
   const brow = (x: number, dir: 1 | -1) => {
-    const tilt = e === "deciso" ? 2 : e === "concentrato" ? 1 : 0;
+    const BS = browShape(look.browShape);
+    const tilt = (e === "deciso" ? 2 : e === "concentrato" ? 1 : 0) + BS.tilt;
     const inner = dir === 1 ? x + 6 : x - 6;
     const outer = dir === 1 ? x - 6 : x + 6;
-    const bw = (look.brows === "folte" ? 3 : look.brows === "sottili" ? 1.2 : 2) * (0.6 + (tune(look.browSize, 50, 0, 100) / 100) * 0.8);
-    const bd = `M${outer} ${eyeY - 8} Q${x} ${eyeY - 11} ${inner} ${eyeY - 8 + tilt}`;
+    const bw = (look.brows === "folte" ? 3 : look.brows === "sottili" ? 1.2 : 2) * (0.6 + (tune(look.browSize, 50, 0, 100) / 100) * 0.8) * BS.thick;
+    const bd = `M${outer} ${eyeY - 8} Q${x} ${eyeY - 11 - BS.arch} ${inner} ${eyeY - 8 + tilt}`;
     // sopracciglio affusolato: testa piena verso il naso, coda sottile verso la tempia
     const tw = bw * 0.55;
-    const shape = `M${outer} ${eyeY - 8} Q${x} ${eyeY - 11 - tw * 0.5} ${inner} ${eyeY - 8 + tilt - bw * 0.55} L${inner + (dir === 1 ? 0.3 : -0.3)} ${eyeY - 8 + tilt + bw * 0.55} Q${x} ${eyeY - 11 + bw * 0.9} ${outer} ${eyeY - 8 + 0.2} Z`;
+    const shape = `M${outer} ${eyeY - 8} Q${x} ${eyeY - 11 - BS.arch - tw * 0.5} ${inner} ${eyeY - 8 + tilt - bw * 0.55} L${inner + (dir === 1 ? 0.3 : -0.3)} ${eyeY - 8 + tilt + bw * 0.55} Q${x} ${eyeY - 11 - BS.arch + bw * 0.9} ${outer} ${eyeY - 8 + 0.2} Z`;
     return (
       <g key={`b${x}`}>
         {/* sopracciglio a peli: base velata e due passate di peli, scuri e del colore dei capelli */}
         <path d={shape} fill={shade(hair, -0.25)} fillOpacity="0.92" stroke={ink(hair)} strokeOpacity="0.75" strokeWidth={Math.min(0.55, tw)} strokeLinejoin="round" />
         <BrowHairs d={bd} color={shade(hair, -0.5)} width={bw * 0.85} />
-        <BrowHairs d={`M${outer} ${eyeY - 7.4} Q${x} ${eyeY - 10.4} ${inner} ${eyeY - 7.4 + tilt}`} color={shade(hair, 0.05)} width={bw * 0.7} />
+        <BrowHairs d={`M${outer} ${eyeY - 7.4} Q${x} ${eyeY - 10.4 - BS.arch} ${inner} ${eyeY - 7.4 + tilt}`} color={shade(hair, 0.05)} width={bw * 0.7} />
       </g>
     );
   };
@@ -3104,6 +3129,7 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false, part }
         {look.mark === "guancia" ? <path d={`M35.5 ${fy + 2} l4 7`} stroke={shade(skin, -0.42)} strokeWidth="1" strokeLinecap="round" /> : null}
         {look.mark === "fossette" ? <g stroke={shade(skin, -0.38)} strokeWidth="0.8" fill="none" strokeLinecap="round"><path d={`M40.5 ${fy + 11} q-0.8 1.2 0 2.2`} /><path d={`M59.5 ${fy + 11} q0.8 1.2 0 2.2`} /></g> : null}
         {look.tattoo === "lacrima" ? <path d={`M61 ${eyeY + 5} q-1.2 2 0 3 q1.2 -1 0 -3 Z`} fill="#24324a" /> : null}
+        <Marks2Front kinds={[look.mark, look.tattoo]} ey={eyeY} rx={rx} skin={skin} shade={shade} />
         <FacePaintFront kind={look.paint} ey={eyeY} fy={fy} rx={rx} color={look.paint === "volpe" ? "#d9822a" : look.paint === "guance" ? "#c4473d" : "#2a3a5a"} />
         {look.freckles ? <g fill={shade(skin, -0.42)} opacity="0.6">{[[36, 54], [39, 56], [42, 53], [58, 53], [61, 56], [64, 54]].map(([x, y]) => <circle key={`${x}${y}`} cx={x} cy={y + (fy - 50)} r="0.8" />)}</g> : null}
         {eye(41)}
@@ -3121,6 +3147,7 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false, part }
         {look.mask || !(look.beard === "barbetta" || look.beard === "basette") || !beardShape ? null : paintOver(beardShape, "bbx", "beard", [50 - rx - 3, fy - 12, rx * 2 + 6, ry + 18], 23, false)}
         {look.mask ? null : realLips}
         {look.mark === "sopracciglio" ? <path d={`M57 ${eyeY - 10.6} l1.6 2.4`} stroke={skin} strokeWidth="1.6" /> : null}
+        {look.eyepatch && look.eyepatch !== "nessuna" ? <EyepatchFront kind={look.eyepatch} ey={eyeY} rx={rx} /> : null}
         <g transform={`translate(50 ${fy - ry + 4}) scale(${hv.toFixed(3)}) translate(-50 ${-(fy - ry + 4)})`}>
           {!capOn ? <g stroke={ink(hair)} strokeWidth="0.8" strokeLinejoin="round">{top}</g> : null}
           {!capOn && top && flowHair ? (
@@ -3198,6 +3225,7 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false, part }
             <circle cx="49.5" cy="94.8" r="0.45" fill="#fff" opacity="0.8" />
           </g>
         ) : null}
+        {look.pendant && look.pendant !== "nessuno" && !bare ? <Pendant kind={look.pendant} x={50} y={look.amulet ? 87 : 89} w={9} y0={81} s={0.72} /> : null}
         {look.emblem && look.emblem !== "nessuno" && !bare ? <ChestEmblem kind={look.emblem} crest={look.crest} x={62} y={93} s={0.42} base={look.shirt} trim={look.trim} /> : null}
         {look.hairAcc && look.hairAcc !== "nessuno" && !capOn && look.hair !== "calvo" ? <HairOrnament kind={look.hairAcc} x={50 - rx + 3} y={fy - ry + 10} tilt={-24} s={0.9} color={look.hatColor} /> : null}
       </g>

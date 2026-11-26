@@ -7,6 +7,8 @@
 import { useId, type ReactNode } from "react";
 import { useCrest } from "@/lib/arcieri/crest";
 import type { AvatarLook } from "@/lib/arcieri/avatar";
+import { BUCKLES2, CLASPS2, HAIRACC2, PATTERN2_IDS } from "@/lib/arcieri/avatar-more";
+import { Earring2, Emblem2, Frame2, HairAcc2, Medallion, Paint2Front, Paint2Profile, Pattern2Tile, Quiver2Overlay, hasEarring2, hasEmblem2, hasQuiver2, registerEmblem } from "./avatar-more";
 
 const f = (n: number) => n.toFixed(1);
 
@@ -183,7 +185,9 @@ export function ClothPattern({ kind, shapes, base, trim, uid, box }: { kind: str
       break;
     }
     default:
-      return null;
+      if (!PATTERN2_IDS.has(kind)) return null;
+      tile = <Pattern2Tile kind={kind} id={id} trim={trim} dark={dark} light={light} />;
+      break;
   }
   return (
     <g>
@@ -307,10 +311,11 @@ export function EmblemGlyph({ kind, color, bg }: { kind: string; color: string; 
       g = <g><circle cx="0" cy="-3" r="6.6" {...s} /><circle cx="-5" cy="0" r="4" {...s} /><circle cx="5" cy="0" r="4" {...s} /><path d="M0 2 V9.5 M-3 9.5 H3" {...st} strokeWidth={1.8} /></g>;
       break;
     default:
-      return null;
+      return hasEmblem2(kind) ? <Emblem2 kind={kind} color={color} /> : null;
   }
   return g;
 }
+registerEmblem(({ kind, color }) => <EmblemGlyph kind={kind} color={color} />);
 
 /** bordo a zig-zag lungo una curva quadratica (ricamo d'argento della divisa) */
 export function zigQ(a: [number, number], c: [number, number], b: [number, number], n: number, amp: number) {
@@ -535,7 +540,7 @@ export function FacePaintFront({ kind, ey, fy, rx, color }: { kind: string; ey: 
     case "spirale":
       return pair((sd) => <path d={`M${50 + sd * 14} ${ey + 8} m${sd * 0.8} 0 a0.8 0.8 0 1 0 ${sd * -1.6} 0 a1.8 1.8 0 1 0 ${sd * 3.6} 0 a2.8 2.8 0 1 0 ${sd * -5.6} 0`} stroke={color} strokeWidth="1.1" fill="none" opacity="0.85" />);
     default:
-      return null;
+      return <Paint2Front kind={kind} ey={ey} rx={rx} />;
   }
 }
 
@@ -609,7 +614,7 @@ export function FacePaintProfile({ kind, color }: { kind: string; color: string 
     case "spirale":
       return <path d="M160.5 93 m0.8 0 a0.8 0.8 0 1 0 -1.6 0 a1.8 1.8 0 1 0 3.6 0 a2.8 2.8 0 1 0 -5.6 0" stroke={color} strokeWidth="1.1" fill="none" opacity="0.85" />;
     default:
-      return null;
+      return <Paint2Profile kind={kind} />;
   }
 }
 
@@ -617,6 +622,7 @@ export function FacePaintProfile({ kind, color }: { kind: string; color: string 
 
 export function Earring({ kind, x, y }: { kind: string; x: number; y: number }) {
   const gold = "#d9b45a";
+  if (hasEarring2(kind)) return <Earring2 kind={kind} x={x} y={y} />;
   switch (kind) {
     case "perla":
       return <g><circle cx={x} cy={y} r="1.9" fill="#f6f2ea" stroke="#c9bfae" strokeWidth="0.4" /><circle cx={x - 0.6} cy={y - 0.6} r="0.6" fill="#fff" /></g>;
@@ -649,6 +655,7 @@ export function Earring({ kind, x, y }: { kind: string; x: number; y: number }) 
 
 export function HairOrnament({ kind, x, y, s = 1, tilt = 0, color }: { kind: string; x: number; y: number; s?: number; tilt?: number; color: string }) {
   const body = (() => {
+    if (HAIRACC2.some((q) => q[0] === kind)) return <HairAcc2 kind={kind} color={color} />;
     switch (kind) {
       case "perline":
         return <g>{[0, 1, 2, 3].map((i) => <circle key={i} cx={0} cy={i * 3.2} r="1.4" fill={["#d9b45a", "#2f9e7a", "#c4473d", "#2f6fbe"][i]} />)}<path d="M0 -2 V10" stroke="#3a2a1e" strokeWidth="0.4" /></g>;
@@ -693,6 +700,7 @@ export function QuiverBody({ kind, color, w = 20, h = 82, top = -42 }: { kind: s
   const x = -w / 2;
   const dark = shadeHex(color, -0.4);
   const light = shadeHex(color, 0.3);
+  if (hasQuiver2(kind)) return <g><QuiverBody kind="cuoio" color={color} w={w} h={h} top={top} /><Quiver2Overlay kind={kind} w={w} h={h} top={top} /></g>;
   switch (kind) {
     case "tubo":
       return (
@@ -819,6 +827,8 @@ export function Fletching({ kind, cock, fletch }: { kind: string; cock: string; 
 /* ---------------- cintura, borsello, mantello ---------------- */
 
 export function Buckle({ kind, x, y, s = 1 }: { kind: string; x: number; y: number; s?: number }) {
+  const m2 = BUCKLES2.find((q) => q[0] === kind);
+  if (m2) return <g transform={`translate(${f(x)} ${f(y)}) scale(${s})`}><Medallion m={m2} s={1.05} /></g>;
   const g = (() => {
     switch (kind) {
       case "oro":
@@ -872,6 +882,8 @@ export function Pouch({ kind, x, y, s = 1 }: { kind: string; x: number; y: numbe
 }
 
 export function Clasp({ kind, x, y, s = 1 }: { kind: string; x: number; y: number; s?: number }) {
+  const c2 = CLASPS2.find((q) => q[0] === kind);
+  if (c2) return <g transform={`translate(${f(x)} ${f(y)}) scale(${s})`}><ellipse cx="0.9" cy="1.4" rx="5.4" ry="4.6" fill="#000" opacity="0.28" /><Medallion m={c2} s={0.95} /></g>;
   // fermagli come piccoli gioielli: ombra portata, metallo con luce in alto a sinistra, spillo dietro
   const metal = (hi: string, mid: string, lo: string, r = 4.6) => (
     <g>
@@ -1030,6 +1042,6 @@ export function FaceFrame({ kind }: { kind: string }) {
     case "fiori":
       return <g>{Array.from({ length: 12 }, (_, i) => { const a = (i / 12) * Math.PI * 2; const x = 50 + Math.cos(a) * 46; const y = 50 + Math.sin(a) * 46; return <g key={i}>{[0, 1, 2, 3, 4].map((k) => <circle key={k} cx={f(x + Math.cos(k * 1.256) * 2.4)} cy={f(y + Math.sin(k * 1.256) * 2.4)} r="1.8" fill={["#ff8fa3", "#ffd166", "#f4f1ea", "#b8a1ff"][i % 4]} />)}<circle cx={f(x)} cy={f(y)} r="1.2" fill="#e6b325" /></g>; })}</g>;
     default:
-      return null;
+      return <Frame2 kind={kind} />;
   }
 }
