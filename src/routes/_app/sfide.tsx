@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { BowOptions } from "@/components/bow-options";
 import { createFileRoute } from "@tanstack/react-router";
 import { challengeBoard, listChallenges, respondChallenge, saveChallenge } from "@/lib/arcieri/club.api";
@@ -13,6 +13,7 @@ import { Button, Card, Empty, ErrorNote, Field, HoldDelete, Loading, PageHead, S
 import { KindChip, KindEmblem, KindHeading } from "@/components/kind-emblem";
 import { Insignia } from "@/components/insignia";
 import { useMember } from "@/components/shell";
+import { ComparePanel } from "@/components/compare-panel";
 
 export const Route = createFileRoute("/_app/sfide")({ component: Page });
 
@@ -52,6 +53,12 @@ function Page() {
   const list = useLoad(`ch-${nonce}`, () => listChallenges());
   const roster = useLoad("roster-sfide", () => listRoster());
   const board = useLoad(openId ? `board-${openId}-${nonce}` : "board-none", () => (openId ? challengeBoard({ data: { id: openId } }) : Promise.resolve(null)));
+  // da Gareggia › Confronta (o dal vecchio indirizzo /confronta) si arriva qui con #confronta: scende alla sezione
+  useEffect(() => {
+    if (window.location.hash !== "#confronta") return;
+    const t = window.setTimeout(() => document.getElementById("confronta")?.scrollIntoView({ behavior: "smooth", block: "start" }), 250);
+    return () => window.clearTimeout(t);
+  }, []);
   const today = new Date();
   const [form, setForm] = useState({ ...EMPTY, startsOn: dayIso(today), endsOn: dayIso(new Date(today.getTime() + 7 * 86_400_000)) });
   const [err, setErr] = useState("");
@@ -294,6 +301,11 @@ function Page() {
           {board.data.teams.length ? <p className="text-xs text-muted">Squadre in media, non in somma: {board.data.teams.map((t) => `${t.team} ${valueText(board.data!.rule, t.value)}`).join(" · ")}</p> : null}
         </Card>
       ) : null}
+
+      {/* Confronta: tu e i compagni, e due tuoi allenamenti a fianco */}
+      <section id="confronta" className="scroll-mt-[calc(env(safe-area-inset-top)+8.5rem)]">
+        <ComparePanel />
+      </section>
     </div>
   );
 }

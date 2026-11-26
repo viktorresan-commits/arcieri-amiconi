@@ -50,6 +50,7 @@ export const PAGE_HELP: Record<string, string[]> = {
   "/sfide": [
     "Una sfida vale solo con stesse frecce, arco, distanza e bersaglio.",
     "Tieni premuta una sfida che hai lanciato tu per eliminarla.",
+    "In fondo c'è Confronta: prima vedi tutti gli arcieri, poi metti a fianco due tuoi allenamenti.",
   ],
   "/obiettivi": [
     "Le medaglie premiano anche il salto di media e i giorni diversi, non solo il numero di frecce.",
@@ -58,7 +59,6 @@ export const PAGE_HELP: Record<string, string[]> = {
     "Qui trovi gli avvisi del gruppo.",
     "Le notifiche arrivano solo per gare, sfide e medaglie.",
   ],
-  "/confronta": ["Prima vedi tutti; il filtro serve dopo, se vuoi restringere."],
   "/acquisti": ["La lista è tua: gli altri non la vedono."],
   "/profilo": ["Dati personali, importazioni, password e preferenze dell'app."],
   "/staff": [

@@ -42,6 +42,14 @@ export const Route = createRootRoute({
             __html: `try{var d=document.documentElement,ink=localStorage.getItem("aa-ink")||"verde",p=JSON.parse(localStorage.getItem("aa-prefs-v1")||"{}");d.dataset.ink=ink;d.dataset.icons=p.icons||"tema";d.dataset.motion=p.motion||"piena";d.dataset.scenes=p.scenes||"si";if(matchMedia("(pointer: coarse)").matches&&Math.min(screen.width,screen.height)<600)d.classList.add("aa-phone")}catch(e){}`,
           }}
         />
+        {/* conta le scritture verso il server (ogni richiesta allo stesso sito che non è una lettura):
+            prima di qualunque altro codice, così le vede tutte. I dati già caricati restano finché non
+            si salva qualcosa (vedi use-load). */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{var F=window.fetch;if(F&&!F.__aa){var W=function(i,o){var p=F.apply(window,arguments);try{var m=String((o&&o.method)||(i&&typeof i==="object"&&i.method)||"GET").toUpperCase();if(m!=="GET"&&m!=="HEAD"){var u=new URL(typeof i==="string"?i:i&&i.url?i.url:String(i),location.href);if(u.origin===location.origin&&u.pathname.indexOf("/_vercel")!==0&&u.pathname.indexOf("/api/auth/")!==0){var b=function(){window.__aaWrites=(window.__aaWrites||0)+1};p.then(b,function(){})}}}catch(e){}return p};W.__aa=1;window.fetch=W}}catch(e){}`,
+          }}
+        />
         <style
           dangerouslySetInnerHTML={{
             __html: "html,body{margin:0;background:#0c1210;color:#f3f0e8}",

@@ -26,11 +26,22 @@ import { rememberMenu, takeMenu, useBackRestore } from "@/lib/arcieri/back-resto
 import { onBack } from "@/lib/arcieri/native";
 import { redeemCode } from "@/lib/arcieri/staff.api";
 import { stopActing } from "@/lib/arcieri/acting.api";
-import { clearLoadCache } from "@/lib/arcieri/use-load";
+import { clearLoadCache, forgetLoadCache, setLoadOwner } from "@/lib/arcieri/use-load";
 import { refreshCrests, useCrest } from "@/lib/arcieri/crest";
 import { applyPrefs, readPrefs, usePrefs } from "@/lib/arcieri/prefs";
 
 type Ctx = { me: PublicMember; reload: () => void };
+
+/** Il profilo dell'ultima persona entrata su questo telefono: all'apertura l'app parte subito da lì. */
+const ME_KEY = "aa-me";
+function storedMe(): { uid: string; me: PublicMember } | null {
+  try {
+    const v = JSON.parse(localStorage.getItem(ME_KEY) || "null") as { uid?: string; me?: PublicMember } | null;
+    return v?.uid && v.me ? { uid: v.uid, me: v.me } : null;
+  } catch {
+    return null;
+  }
+}
 const MemberCtx = createContext<Ctx | null>(null);
 
 /** come useMember, ma senza errore fuori dall'app (anteprime) */
@@ -267,12 +278,48 @@ export function Shell({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // all'apertura: il profilo ricordato e i dati già visti, prima ancora che il server risponda
+  // (in un effetto di disposizione: la pagina servita dal server resta uguale, poi si riempie prima di apparire)
+  const storedUid = useRef("");
+  useLayoutEffect(() => {
+    const s = storedMe();
+    if (!s) return;
+    storedUid.current = s.uid;
+    setLoadOwner(s.uid);
+    setMe((cur) => cur ?? s.me);
+  }, []);
+  useEffect(() => {
+    if (isPending) return;
+    if (!user) {
+      // uscito davvero: niente profilo né dati di qualcun altro sul telefono
+      forgetLoadCache();
+      try {
+        localStorage.removeItem(ME_KEY);
+      } catch {
+        /* niente */
+      }
+      return;
+    }
+    // un'altra persona su questo telefono: via il profilo ricordato, si aspetta il suo
+    if (storedUid.current && storedUid.current !== user.id) {
+      storedUid.current = "";
+      setMe(null);
+    }
+    setLoadOwner(user.id);
+  }, [isPending, user?.id]);
   useEffect(() => {
     if (!user) return;
     let cancel = false;
+    const uid = user.id;
     getMe()
       .then((row) => {
-        if (!cancel) setMe(row);
+        if (cancel) return;
+        setMe(row);
+        try {
+          localStorage.setItem(ME_KEY, JSON.stringify({ uid, me: row }));
+        } catch {
+          /* niente */
+        }
       })
       .catch((e: unknown) => {
         if (!cancel) setError(e instanceof Error ? e.message : "Errore");
@@ -305,16 +352,17 @@ export function Shell({ children }: { children: ReactNode }) {
       .catch((e: unknown) => setInviteMsg(e instanceof Error ? `Invito: ${e.message}` : "Invito non valido."));
   }, [me?.id]);
 
-  if (isPending || (user && !me && !error)) return <Loading />;
-  if (!user || error === "Unauthorized") return <RedirectToSignIn />;
+  // con il profilo ricordato l'app parte subito, mentre la sessione si conferma
+  if ((isPending && !me) || (user && !me && !error)) return <Loading />;
+  if ((!isPending && !user) || error === "Unauthorized") return <RedirectToSignIn />;
   if (!me) return <main className="p-6 text-sm text-danger">{error || "Profilo non disponibile."}</main>;
 
   const label = memberLabel(me, [me]);
   // voci che questa persona non può aprire, e il percorso dei nuovi (prime 6 funzioni)
   // squadra admin, allenatori e segreteria li vede solo chi ha un incarico
   // voci che ora vivono dentro un'altra pagina: Il tuo arciere nel Profilo, Stima distanze in Distanze e bersagli,
-  // Quiz in Lezioni, Tempo di allungo in Allungo, Convertitore a comparsa vicino ai campi, Segreteria in Gestione compagnia
-  const hide = ["avatar", "stima", "quiz", "tempi", "unita", "segreteria", "routine", "respiro", "timer", "storico-gesto", ...(me.hasPlans ? [] : ["schede"]), ...(me.canCoach ? [] : ["istruttore"]), ...(me.canSegreteria ? [] : ["segreteria"]), ...(me.canStaff ? [] : ["staff"])];
+  // Quiz in Lezioni, Tempo di allungo in Allungo, Confronta in Sfide, Convertitore a comparsa vicino ai campi, Segreteria in Gestione compagnia
+  const hide = ["avatar", "stima", "quiz", "tempi", "unita", "segreteria", "routine", "respiro", "timer", "storico-gesto", "confronta", ...(me.hasPlans ? [] : ["schede"]), ...(me.canCoach ? [] : ["istruttore"]), ...(me.canSegreteria ? [] : ["segreteria"]), ...(me.canStaff ? [] : ["staff"])];
   const focus = me.essenziale ? percorsoOf(me.percorso)?.focus ?? null : null;
   const lvl = levelOf(xp.xp);
 
@@ -393,8 +441,7 @@ export function Shell({ children }: { children: ReactNode }) {
                   <span className="shrink-0 text-[0.62rem] tabular-nums text-white/70">{lvl.into.toLocaleString("it-IT")}/{lvl.need.toLocaleString("it-IT")} XP</span>
                 </span>
               </Link>
-              {/* lo stemma della tua compagnia (apre la compagnia) e quello del livello (apre i livelli) */}
-              <CompanyBadge />
+              {/* lo stemma del livello (apre i livelli), gli avvisi e, tutto a destra, lo stemma della tua compagnia */}
               <Link to="/obiettivi" hash="livelli" aria-label={`Livello ${lvl.level}: i livelli`} className="aa-press relative h-12 w-[2.7rem] shrink-0 drop-shadow-[0_4px_8px_rgba(0,0,0,0.5)]">
                 <LevelCrest xp={xp.xp} compact className="h-full w-full" />
               </Link>
@@ -402,6 +449,7 @@ export function Shell({ children }: { children: ReactNode }) {
                 <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15Z" /><path d="M10 20a2 2 0 0 0 4 0" /></svg>
                 {unread > 0 ? <span className="absolute -right-0.5 -top-0.5 grid h-5 min-w-5 place-items-center rounded-full bg-[#d6402f] px-1 text-[0.66rem] font-bold text-white">{unread > 9 ? "9+" : unread}</span> : null}
               </Link>
+              <CompanyBadge />
             </header>
           ) : (
           <header className="aa-appheader aa-bar sticky top-0 z-20 flex h-14 items-center justify-between gap-2 border-b px-4 backdrop-blur-md">

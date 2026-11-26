@@ -11,7 +11,7 @@ import { useAvatar } from "@/components/avatar-hero";
 import { archerBoard, listCompetitions, listGadgets } from "@/lib/arcieri/club.api";
 import { ArcherStage } from "@/components/archer-stage";
 import { FitastLinkCard } from "@/components/fitast-link";
-import { useLoad } from "@/lib/arcieri/use-load";
+import { forgetLoadCache, useLoad } from "@/lib/arcieri/use-load";
 import { simplePdf } from "@/lib/arcieri/pdf";
 import { useMember } from "@/components/shell";
 import { Button, Card, ErrorNote, Field, PageHead, Select, TextArea, TextInput } from "@/components/kit";
@@ -97,6 +97,13 @@ function Page() {
 
   async function switchTo(email: string) {
     const { signOut } = await import("@/lib/auth/client");
+    // cambiando persona: via dal telefono il profilo ricordato e i dati già visti
+    forgetLoadCache();
+    try {
+      localStorage.removeItem("aa-me");
+    } catch {
+      /* niente */
+    }
     await signOut(`/login?utente=${encodeURIComponent(email)}`);
   }
 
