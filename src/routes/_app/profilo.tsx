@@ -7,7 +7,8 @@ import { forgetAccount, rememberAccount, savedAccounts, type SavedAccount } from
 import { exportMine, listRoster, updateMember } from "@/lib/arcieri/members.api";
 import { AvatarPhotoButton } from "@/components/avatar-photo";
 import { useAvatar } from "@/components/avatar-hero";
-import { listCompetitions, listGadgets } from "@/lib/arcieri/club.api";
+import { archerBoard, listCompetitions, listGadgets } from "@/lib/arcieri/club.api";
+import { ArcherStage } from "@/components/archer-stage";
 import { FitastLinkCard } from "@/components/fitast-link";
 import { useLoad } from "@/lib/arcieri/use-load";
 import { simplePdf } from "@/lib/arcieri/pdf";
@@ -20,10 +21,7 @@ import { GestureGallery } from "@/components/gesture-gallery";
 import { AvatarEditor } from "./avatar";
 import { Migrazione } from "@/components/migrazione";
 import { PersonalizePanel } from "@/components/personalize";
-import { Glyph, IconTitle } from "@/components/icons";
-import { LevelCrest, haloOfXp } from "@/components/level-crest";
-import { AvatarTurntable } from "@/components/avatar-turntable";
-import { useXp } from "@/lib/arcieri/xp";
+import { Glyph, IconTitle, type IconName } from "@/components/icons";
 import { unlockAdmin } from "@/lib/arcieri/account.api";
 import { ClaimCard, DeleteAccountCard, InviteCard, PrivacyCard, ResetCard, TeamAdmin } from "@/components/profile-tools";
 
@@ -195,65 +193,72 @@ function Page() {
   const prizes = gadgets.data?.prizes ?? [];
   const myPrizes = prizes.filter((p) => p.holders.some((h) => h.userId === me.userId));
   const TABS = [
-    { id: "io", label: "Io" },
-    { id: "colori", label: "Colori dell'app" },
-    { id: "aspetto", label: "Il tuo arciere" },
-    { id: "gesti", label: "Analisi del gesto" },
-    { id: "account", label: "Account" },
-    { id: "squadra", label: "Squadra" },
-  ] as const;
+    { id: "io", label: "Dati", icon: "user" },
+    { id: "aspetto", label: "Arciere", icon: "archer" },
+    { id: "gesti", label: "Gesto", icon: "posture" },
+    { id: "colori", label: "Colori", icon: "palette" },
+    { id: "account", label: "Account", icon: "lock" },
+    { id: "squadra", label: "Squadra", icon: "team" },
+  ] as const satisfies readonly { id: string; label: string; icon: IconName }[];
+  const gareDone = (comps.data?.competitions ?? []).filter((comp) => comp.entries.some((entry) => entry.userId === me.userId && entry.score != null)).length;
 
-  const xpNow = useXp();
   const tabsRef = useRef<HTMLDivElement>(null);
+  const board = useLoad(`archer-${me.id}`, () => archerBoard({ data: { id: me.id } }));
+  const openLook = () => {
+    pickTab("aspetto");
+    window.setTimeout(() => tabsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
+  };
   return (
     <div className="grid gap-3">
-      {/* il tuo arciere, subito in alto e su tutta la larghezza: si gira trascinando, un tocco apre l'editor */}
-      <AvatarTurntable
-        look={avatar.shown}
-        glow={haloOfXp(xpNow.xp).a}
-        onOpen={() => {
-          pickTab("aspetto");
-          window.setTimeout(() => tabsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
-        }}
-      >
-        <div className="absolute inset-x-0 top-0 flex items-center gap-3 bg-gradient-to-b from-black/70 to-transparent p-3 pb-10">
-          <label className="relative shrink-0 cursor-pointer" aria-label="Cambia la foto">
-            {me.photoUrl ? <img src={me.photoUrl} alt="" className="h-14 w-14 rounded-full object-cover ring-2 ring-white/25" /> : <span className="grid h-14 w-14 place-items-center rounded-full bg-white/10 font-display text-2xl">{(me.givenName || "?").slice(0, 1)}</span>}
-            <span className="absolute -bottom-1 -right-1 grid h-6 w-6 place-items-center rounded-full bg-primary text-primary-fg"><Glyph name="camera" size={12} /></span>
-            <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void photo(f).catch((err: unknown) => setMsg(err instanceof Error ? err.message : "Foto non salvata")); }} />
-          </label>
-          <div className="min-w-0 flex-1">
-            <p className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-              <span className="truncate font-display text-[2rem] leading-none text-white">{[me.givenName, me.familyName].filter(Boolean).join(" ") || me.nickname || "Arciere"}</span>
-              <span className={`inline-flex rounded-full px-2 py-0.5 text-[0.65rem] font-semibold ${me.role === "admin" ? "bg-amber-400 text-black" : "bg-white/15 text-white"}`}>{me.role === "admin" ? "Fondatore" : me.role === "archer" ? "Arciere" : "Ospite"}</span>
-            </p>
-            <p className="mt-1 truncate text-xs text-white/70">{me.email ?? ""}</p>
-          </div>
-        </div>
-        {/* il proprio livello, lo stesso stemma che gli altri vedono sul profilo */}
-        <Link to="/obiettivi" className="aa-prize-float absolute bottom-12 right-2 w-[22%]" aria-label="Livello e punti">
-          <LevelCrest xp={xpNow.xp} />
+      {/* il tuo arciere come lo vedono gli altri (stessa scheda della pagina dell'arciere): tocco sull'arciere = aspetto, tocco sul tondo = foto */}
+      {board.data ? (
+        <ArcherStage
+          data={board.data}
+          look={avatar.shown}
+          onArcherTap={openLook}
+          avatar={
+            <label className="relative block cursor-pointer" aria-label="Cambia la foto">
+              {me.photoUrl ? <img src={me.photoUrl} alt="" className="h-14 w-14 rounded-full object-cover ring-2 ring-white/25" /> : <span className="grid h-14 w-14 place-items-center rounded-full bg-white/10 font-display text-2xl text-white">{(me.givenName || "?").slice(0, 1)}</span>}
+              <span className="absolute -bottom-1 -right-1 grid h-6 w-6 place-items-center rounded-full bg-primary text-primary-fg"><Glyph name="camera" size={12} /></span>
+              <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void photo(f).catch((err: unknown) => setMsg(err instanceof Error ? err.message : "Foto non salvata")); }} />
+            </label>
+          }
+          corner={
+            <button type="button" onClick={openLook} className="aa-press grid h-10 w-10 shrink-0 place-items-center self-start rounded-full bg-black/45 text-white ring-1 ring-white/20" aria-label="Cambia l'aspetto">
+              <Glyph name="edit" size={18} />
+            </button>
+          }
+        />
+      ) : (
+        <div className="aa-profile-stage h-[34rem] animate-pulse rounded-[1.75rem] bg-white/[0.04]" aria-hidden />
+      )}
+      {/* i propri numeri in breve: un tocco porta dove si vedono per intero */}
+      <div className="grid grid-cols-3 gap-2">
+        <Link to="/squadra" className="aa-press grid rounded-2xl border border-hair bg-white/[0.04] px-3 py-2.5">
+          <span className="text-[0.62rem] text-muted">Punti campionato</span>
+          <b className="font-display text-2xl leading-tight tabular-nums">{comps.loading ? "…" : season}</b>
         </Link>
-      </AvatarTurntable>
-      <section className="aa-hero grid gap-3 p-4">
-        <AvatarPhotoButton look={avatar.shown} onDone={reload} />
-        <div className="grid grid-cols-2 gap-2">
-          <span className="rounded-xl bg-black/25 px-3 py-2">
-            <span className="block text-[0.6rem] uppercase tracking-wider text-white/60">Punti campionato</span>
-            <b className="font-display text-2xl tabular-nums">{comps.loading ? "…" : season}</b>
-          </span>
-          <a href="/obiettivi" className="rounded-xl bg-black/25 px-3 py-2">
-            <span className="block text-[0.6rem] uppercase tracking-wider text-white/60">Premi</span>
-            <b className="font-display text-2xl tabular-nums">{myPrizes.length}<span className="text-sm text-white/60"> / {prizes.length}</span></b>
-          </a>
-        </div>
-      </section>
-
-      <div ref={tabsRef} className="-mx-1 flex scroll-mt-20 gap-1.5 overflow-x-auto px-1 [scrollbar-width:none]">
-        {TABS.map((t) => (
-          <button key={t.id} type="button" aria-pressed={tab === t.id} onClick={() => pickTab(t.id)} className="aa-chip shrink-0">{t.label}</button>
-        ))}
+        <Link to="/squadra" className="aa-press grid rounded-2xl border border-hair bg-white/[0.04] px-3 py-2.5">
+          <span className="text-[0.62rem] text-muted">Gare</span>
+          <b className="font-display text-2xl leading-tight tabular-nums">{comps.loading ? "…" : gareDone}</b>
+        </Link>
+        <Link to="/obiettivi" className="aa-press grid rounded-2xl border border-hair bg-white/[0.04] px-3 py-2.5">
+          <span className="text-[0.62rem] text-muted">Premi</span>
+          <b className="font-display text-2xl leading-tight tabular-nums">{myPrizes.length}<span className="text-sm font-normal text-muted"> / {prizes.length}</span></b>
+        </Link>
       </div>
+
+      {/* le parti del profilo, come le schede della Compagnia */}
+      <nav ref={tabsRef} aria-label="Parti del profilo" className="aa-club-tabs scroll-mt-20">
+        <div className="grid grid-cols-6 gap-1 rounded-2xl p-1">
+          {TABS.map((t) => (
+            <button key={t.id} type="button" aria-pressed={tab === t.id} onClick={() => pickTab(t.id)} className="aa-club-tab grid min-h-14 place-items-center gap-0.5 rounded-xl px-0 py-1 text-[0.6rem] font-semibold leading-tight tracking-tight">
+              <Glyph name={t.icon} size={18} />
+              <span className="max-w-full truncate">{t.label}</span>
+            </button>
+          ))}
+        </div>
+      </nav>
 
       <div key={tab} className="aa-rise grid gap-3">
         {tab === "io" ? (
@@ -300,7 +305,12 @@ function Page() {
           </Card>
         ) : null}
 
-        {tab === "aspetto" ? <AvatarEditor /> : null}
+        {tab === "aspetto" ? (
+          <>
+            <AvatarPhotoButton look={avatar.shown} onDone={reload} />
+            <AvatarEditor />
+          </>
+        ) : null}
 
         {tab === "gesti" ? <GestureGallery /> : null}
 

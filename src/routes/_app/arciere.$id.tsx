@@ -1,119 +1,43 @@
 import { useTeamAvatars } from "@/components/avatar-hero";
+import { ArcherStage, ROLE_STYLE, archerName } from "@/components/archer-stage";
 import { InsertFor } from "@/components/insert-for";
-import { SceneBackdrop } from "@/components/scene-2d";
-import { ArcherFront } from "@/components/archer-front";
-import { useSky } from "@/lib/arcieri/sky3d";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { archerBoard, listGadgets } from "@/lib/arcieri/club.api";
-import { bowLabel, memberLabel } from "@/lib/arcieri/labels";
 import { fmtAvg } from "@/lib/arcieri/scoring";
 import { useLoad } from "@/lib/arcieri/use-load";
 import { AvgLine, ScoreLine } from "@/components/charts";
-import { Avatar, Card, ErrorNote, Loading } from "@/components/kit";
+import { Card, ErrorNote, Loading } from "@/components/kit";
 import { PrizeMark, prizeTier, topPrizes } from "@/components/prize-mark";
 import { KindEmblem, KindHeading } from "@/components/kind-emblem";
 import { KINDS } from "@/lib/arcieri/kinds";
-import { AVATAR_DEFAULT } from "@/lib/arcieri/avatar";
 import { useState } from "react";
 import { setRole } from "@/lib/arcieri/staff.api";
 import { refreshCrests } from "@/lib/arcieri/crest";
 import { GAME_LEVELS, GAME_MODES, modeOf } from "@/lib/arcieri/game-modes";
-import { LevelCrest } from "@/components/level-crest";
 import { levelOf } from "@/lib/arcieri/xp";
 import { Glyph } from "@/components/icons";
 import { ArcherPalmares, Medal } from "@/components/palmares";
-import { RankBanner } from "@/components/rank-banner";
-import { haloOfXp } from "@/components/level-crest";
 import { titleName } from "@/lib/arcieri/fitast-league";
 
 type Board = Awaited<ReturnType<typeof archerBoard>>;
-
-const ROLE_STYLE: Record<string, { label: string; color: string }> = {
-  super: { label: "Fondatore", color: "#ffd27a" },
-  leader: { label: "Presidente", color: "#7cf0a8" },
-  coach: { label: "Allenatore", color: "#8cc3f0" },
-};
-
-/** gli incarichi della persona, come etichette colorate */
-function roleBadges(r: Board["roles"]) {
-  return [...(r.level ? [r.level] : []), ...(r.leader ? ["leader"] : []), ...(r.coach ? ["coach"] : [])].map((k) => ROLE_STYLE[k]);
-}
 
 export const Route = createFileRoute("/_app/arciere/$id")({ component: Page });
 
 function Page() {
   const looks = useTeamAvatars();
-  const { sky } = useSky();
   const { id } = Route.useParams();
   const { data, error, loading } = useLoad(`archer-${id}`, () => archerBoard({ data: { id: Number(id) } }));
   const gadgets = useLoad(`archer-gadgets-${id}`, () => listGadgets());
   if (loading) return <Loading />;
   if (error || !data) return <ErrorNote text={error || "Errore"} />;
-  // il nome dell'arciere è quello del profilo; il soprannome si vede accanto
-  const full = [data.givenName, data.familyName].filter(Boolean).join(" ").trim();
-  const name = full || memberLabel(data, [data]);
-  const nick = data.nickname.trim() && data.nickname.trim() !== full ? data.nickname.trim() : "";
-  const badges = roleBadges(data.roles);
+  const { name } = archerName(data);
   const train = data.trainings.slice(-12).map((s) => ({ name: s.day.slice(5), avg: Number(s.avg.toFixed(2)) }));
   const comps = data.comps.map((c) => ({ name: c.day.slice(5), score: c.score }));
   const shownPrizes = topPrizes((gadgets.data?.prizes ?? []).filter((prize) => prize.holders.some((holder) => holder.userId === data.userId)));
-  // gli ultimi tre premi vinti, dal più recente
-  const latest = (gadgets.data?.prizes ?? [])
-    .flatMap((prize) => prize.holders.filter((h) => h.userId === data.userId).map((h) => ({ ...prize, at: h.unlockedAt })))
-    .sort((a, b) => b.at.localeCompare(a.at))
-    .slice(0, 3);
-  const look = looks[data.userId] ?? AVATAR_DEFAULT;
-  const rank = data.stats.fitast;
   return (
     <div className="grid gap-5">
-      {/* il suo arciere, grande e di fronte, con accanto gli ultimi premi */}
-      <div className="aa-profile-stage relative h-[34rem] overflow-hidden rounded-[1.75rem]">
-        <SceneBackdrop sky={sky} id={`pf${data.id}`} scene={look.scene} />
-        {/* luce morbida dietro l'arciere e ombra a terra: l'arciere sta nella scena, non sopra */}
-        <div style={{ ["--glow" as string]: haloOfXp(data.xp).a }} className={`aa-stage-glow aa-stage-glow-lv pointer-events-none absolute inset-x-0 top-[18%] bottom-[8%] ${rank ? "px-[22%]" : "pr-[22%]"}`} aria-hidden />
-        <div className={`aa-stage-shadow pointer-events-none absolute bottom-[3.5%] h-[4.5%] w-[34%] -translate-x-1/2 ${rank ? "left-1/2" : "left-[39%]"}`} aria-hidden />
-        <div className={`absolute inset-x-0 bottom-[1%] top-[11%] flex justify-center ${rank ? "px-[22%]" : "pr-[22%]"}`}>
-          <ArcherFront look={look} fit className="h-full w-auto drop-shadow-[0_16px_24px_rgba(0,0,0,0.5)]" />
-        </div>
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[16%] bg-gradient-to-t from-black/35 to-transparent" aria-hidden />
-        {/* il posto vero nel campionato FITAST, come uno stendardo appeso a sinistra */}
-        {rank ? <RankBanner r={rank} className="absolute left-[4.5%] top-[7.4rem] w-[24%]" /> : null}
-        {/* il livello dell'arciere, come uno stemma in basso a sinistra */}
-        <div className="aa-prize-float absolute bottom-4 left-2 w-[24%]" style={{ animationDelay: "0.1s" }}>
-          <LevelCrest xp={data.xp} />
-        </div>
-        <div className="absolute inset-x-0 top-0 flex items-center gap-3 bg-gradient-to-b from-black/65 to-transparent p-3 pb-8">
-          <span className="relative shrink-0">
-            <Avatar size="lg" label={name} color={data.avatarColor} photo={data.photoUrl} look={looks[data.userId]} admin={data.admin} xp={data.xp} />
-          </span>
-          <div className="min-w-0">
-            {/* nome e incarichi sulla stessa riga */}
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-              <h1 className="min-w-0 truncate font-display text-3xl leading-none text-white">{name}</h1>
-              {badges.map((b) => <span key={b.label} className="shrink-0 rounded-full px-2 py-0.5 text-[0.62rem] font-bold text-[#1a1408] shadow" style={{ background: b.color }}>{b.label}</span>)}
-            </div>
-            {nick ? <p className="text-xs italic text-white/75">«{nick}»</p> : null}
-            {/* arco, compagnia e da quando tira con noi */}
-            <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[0.72rem] text-white/85">
-              <span className="inline-flex items-center gap-1"><Glyph name="bow" size={13} className="shrink-0 text-[#f2c14e]" />{data.bowType ? bowLabel(data.bowType) : "Arco da scegliere"}</span>
-              {data.roles.companyName ? <span className="inline-flex min-w-0 items-center gap-1"><Glyph name="team" size={13} className="shrink-0 text-[#f2c14e]" /><span className="truncate">{data.roles.companyName}</span></span> : null}
-              {data.joinedOn ? <span className="inline-flex items-center gap-1"><Glyph name="calendar" size={13} className="shrink-0 text-[#f2c14e]" />Con noi da {sinceLabel(data.joinedOn)}</span> : null}
-            </div>
-          </div>
-        </div>
-        <div className="absolute bottom-4 right-2 top-24 flex w-[24%] flex-col items-center justify-center gap-3">
-          {latest.length ? (
-            latest.map((prize, i) => (
-              <div key={prize.code} className="aa-prize-float grid justify-items-center text-center" style={{ animationDelay: `${0.2 + i * 0.15}s` }}>
-                <PrizeMark code={prize.code} size={i === 0 ? "lg" : "md"} />
-                <p className="mt-0.5 line-clamp-2 text-[0.65rem] font-semibold leading-tight text-white drop-shadow">{prize.title}</p>
-              </div>
-            ))
-          ) : gadgets.loading ? null : (
-            <p className="rounded-2xl bg-black/40 p-2 text-center text-[0.7rem] text-white/80">Ancora nessun premio</p>
-          )}
-        </div>
-      </div>
+      {/* il suo arciere, grande e di fronte, con accanto gli ultimi premi: la stessa scheda del proprio profilo */}
+      <ArcherStage data={data} look={looks[data.userId] ?? null} />
       {data.viewerStats ? <CompareWithMe them={data.stats} me={data.viewerStats} name={name.split(" ")[0]} /> : null}
       <ChampionshipCard st={data.stats} />
       {data.stats.last ? <LastGara g={data.stats.last} /> : null}
@@ -159,13 +83,6 @@ function Page() {
 }
 
 type Stats = Board["stats"];
-
-/** «marzo 2025» da una data AAAA-MM-GG */
-function sinceLabel(day: string) {
-  const [y, m] = day.split("-").map(Number);
-  if (!y || !m) return day;
-  return new Date(Date.UTC(y, m - 1, 15)).toLocaleDateString("it-IT", { month: "long", year: "numeric", timeZone: "UTC" });
-}
 
 const fmtNum = (v: number | null | undefined) => (v == null ? "—" : Math.round(v).toLocaleString("it-IT"));
 
