@@ -165,9 +165,31 @@ export function LeatherBand({ uid, a, b, w, color }: { uid: string; a: P; b: P; 
   return (
     <g pointerEvents="none" strokeLinecap="round">
       <line x1={f(a.x)} y1={f(a.y)} x2={f(b.x)} y2={f(b.y)} stroke={`url(#${uid}grain)`} strokeWidth={f(w)} />
-      <path d={edge(1)} stroke={color} strokeOpacity="0.75" strokeWidth="0.5" strokeDasharray="1.3 1.1" fill="none" />
-      <path d={edge(-1)} stroke={color} strokeOpacity="0.75" strokeWidth="0.5" strokeDasharray="1.3 1.1" fill="none" />
-      <line x1={f(a.x + d.nx * w * 0.28)} y1={f(a.y + d.ny * w * 0.28)} x2={f(b.x + d.nx * w * 0.28)} y2={f(b.y + d.ny * w * 0.28)} stroke="#000" strokeOpacity="0.18" strokeWidth={f(w * 0.3)} />
+      <path d={edge(1)} stroke={color} strokeOpacity="0.65" strokeWidth="0.28" strokeDasharray="0.8 0.7" fill="none" />
+      <path d={edge(-1)} stroke={color} strokeOpacity="0.65" strokeWidth="0.28" strokeDasharray="0.8 0.7" fill="none" />
+      <line x1={f(a.x + d.nx * w * 0.3)} y1={f(a.y + d.ny * w * 0.3)} x2={f(b.x + d.nx * w * 0.3)} y2={f(b.y + d.ny * w * 0.3)} stroke="#000" strokeOpacity="0.13" strokeWidth={f(w * 0.26)} />
+      <line x1={f(a.x - d.nx * w * 0.22)} y1={f(a.y - d.ny * w * 0.22)} x2={f(b.x - d.nx * w * 0.22)} y2={f(b.y - d.ny * w * 0.22)} stroke="#fff" strokeOpacity="0.2" strokeWidth="0.35" />
+    </g>
+  );
+}
+
+/** Allacciatura di un bracciale tra a e b: occhielli d'ottone sui due lembi e un laccio sottile che incrocia. */
+export function BracerLacing({ a, b, w, color }: { a: P; b: P; w: number; color: string }) {
+  const d = dirN(a, b);
+  const n = Math.max(3, Math.round(d.len / 4));
+  const half = Math.max(1.3, w * 0.17);
+  const pt = (t: number, sg: number) => `${f(a.x + (b.x - a.x) * t + d.nx * half * sg)} ${f(a.y + (b.y - a.y) * t + d.ny * half * sg)}`;
+  const ts = Array.from({ length: n + 1 }, (_, i) => i / n);
+  const cross = ts.slice(0, -1).map((t, i) => `M${pt(t, -1)} L${pt(ts[i + 1], 1)} M${pt(t, 1)} L${pt(ts[i + 1], -1)}`).join(" ");
+  return (
+    <g pointerEvents="none" fill="none" strokeLinecap="round">
+      <path d={`M${pt(0, -1)} L${pt(1, -1)} M${pt(0, 1)} L${pt(1, 1)}`} stroke="#000" strokeOpacity="0.3" strokeWidth="0.25" />
+      <path d={cross} stroke="#000" strokeOpacity="0.4" strokeWidth="0.6" />
+      <path d={cross} stroke={color} strokeWidth="0.3" />
+      {ts.flatMap((t) => [-1, 1].map((sg) => {
+        const [cx, cy] = pt(t, sg).split(" ");
+        return <circle key={`${t}${sg}`} cx={cx} cy={cy} r="0.42" fill="#140c06" stroke="#c9a24a" strokeOpacity="0.85" strokeWidth="0.16" />;
+      }))}
     </g>
   );
 }

@@ -10,7 +10,7 @@ import { SideShoe } from "./avatar-shoes";
 import { SideHand } from "./avatar-hands";
 import { FaceHat, MailCoif, SideHat } from "./avatar-hats";
 import { RimLightDefs } from "./avatar-light";
-import { seamOf, ClothButton, BeardTexture, BeltDetail, BrowHairs, ClothDetail, DetailDefs, EyeDetail, FaceShade, HairFineStrands, LeatherBand, LipDetail, SleeveDetail } from "./avatar-detail";
+import { seamOf, BracerLacing, ClothButton, BeardTexture, BeltDetail, BrowHairs, ClothDetail, DetailDefs, EyeDetail, FaceShade, HairFineStrands, LeatherBand, LipDetail, SleeveDetail } from "./avatar-detail";
 
 /**
  * L'arciere disegnato, in stile gioco: busto rivolto a chi guarda, testa girata verso il bersaglio
@@ -474,26 +474,19 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4, cssBlink = fals
         ) : null}
         {look.bracers ? (
           <g>
-            <line x1={f(lerp(e.x, h.x, 0.32))} y1={f(lerp(e.y, h.y, 0.32))} x2={f(lerp(e.x, h.x, 0.86))} y2={f(lerp(e.y, h.y, 0.86))} stroke={OUT} strokeOpacity="0.8" strokeWidth={foreW + 6} strokeLinecap="round" />
+            <line x1={f(lerp(e.x, h.x, 0.32))} y1={f(lerp(e.y, h.y, 0.32))} x2={f(lerp(e.x, h.x, 0.86))} y2={f(lerp(e.y, h.y, 0.86))} stroke={OUT} strokeOpacity="0.8" strokeWidth={foreW + 5} strokeLinecap="round" />
             <line x1={f(lerp(e.x, h.x, 0.32))} y1={f(lerp(e.y, h.y, 0.32))} x2={f(lerp(e.x, h.x, 0.86))} y2={f(lerp(e.y, h.y, 0.86))} stroke={look.bracers} strokeWidth={foreW + 4} strokeLinecap="round" />
-            {[0.42, 0.56, 0.7].map((k) => {
-              const c = lerpP(e, h, k);
-              return <path key={k} d={`M${f(c.x - 3)} ${f(c.y - 4)} l6 8 M${f(c.x + 3)} ${f(c.y - 4)} l-6 8`} stroke={shade(look.bracers, 0.5)} strokeWidth="0.9" />;
-            })}
-            <line x1={f(lerp(e.x, h.x, 0.33))} y1={f(lerp(e.y, h.y, 0.33) - 1)} x2={f(lerp(e.x, h.x, 0.85))} y2={f(lerp(e.y, h.y, 0.85) - 1)} stroke="#fff" strokeOpacity="0.15" strokeWidth="1.6" strokeLinecap="round" />
             <LeatherBand uid={uid} a={lerpP(e, h, 0.34)} b={lerpP(e, h, 0.84)} w={foreW + 4} color={shade(look.bracers, 0.6)} />
+            <BracerLacing a={lerpP(e, h, 0.42)} b={lerpP(e, h, 0.74)} w={foreW + 4} color={shade(look.bracers, 0.6)} />
           </g>
         ) : null}
         <SideHand h={h} e={e} r={7.4 * W} skin={skin} gloves={Boolean(look.gloves)} kind={which === "bow" ? "bow" : hook > 0.5 ? "draw" : "free"} />
-        {which === "draw" && hook > 0.5 ? <path d={`M${f(h.x + 2)} ${f(h.y - 5)} q4 1 4 4 M${f(h.x + 2)} ${f(h.y - 1)} q4 1 4 4 M${f(h.x + 2)} ${f(h.y + 3)} q4 1 4 4`} stroke={look.gloves ? "#1a0e06" : skinD} strokeWidth="1.1" fill="none" /> : null}
         {which === "draw" ? (
           <g>
-            <rect x={f(h.x + 1)} y={f(h.y - 6.5)} width="8" height="13" rx="2.5" fill={look.tab} />
-            <path d={`M${f(h.x + 3)} ${f(h.y - 3)} h5 M${f(h.x + 3)} ${f(h.y + 1)} h5 M${f(h.x + 3)} ${f(h.y + 5)} h5`} stroke={shade(look.tab, 0.4)} strokeWidth="0.7" />
+            <rect x={f(h.x + 1)} y={f(h.y - 6.5)} width="8" height="13" rx="2.5" fill={look.tab} stroke={OUT} strokeOpacity="0.6" strokeWidth="0.4" />
+            <path d={`M${f(h.x + 3)} ${f(h.y - 3)} h5 M${f(h.x + 3)} ${f(h.y + 1)} h5 M${f(h.x + 3)} ${f(h.y + 5)} h5`} stroke={shade(look.tab, 0.4)} strokeWidth="0.35" />
           </g>
-        ) : (
-          <path d={`M${f(h.x + 1)} ${f(h.y - 6)} q5 2 5 6 M${f(h.x + 1)} ${f(h.y)} q5 2 5 6`} stroke={skinD} strokeWidth="1" fill="none" />
-        )}
+        ) : null}
       </g>
     );
   };

@@ -1,5 +1,5 @@
 /**
- * Luce da illustrazione fantasy: un filo di luce calda sul contorno in alto a sinistra (la luce principale) e uno
+ * Luce da illustrazione fantasy: un filo sottile di luce calda sul contorno in alto a sinistra (la luce principale) e uno
  * freddo sul contorno opposto (la luce da dietro), e l'ombra a terra morbida. Solo spostamenti e composizioni
  * (niente sfocature): costa poco anche quando la figura si muove.
  */
@@ -7,13 +7,13 @@ export function RimLightDefs({ id, warm = "#ffe2a6", cool = "#8fbcff", strength 
   return (
     <>
       <filter id={id} x="-8%" y="-6%" width="116%" height="112%" colorInterpolationFilters="sRGB">
-        <feOffset in="SourceAlpha" dx="1.3" dy="1.1" result="aOff" />
+        <feOffset in="SourceAlpha" dx="0.6" dy="0.5" result="aOff" />
         <feComposite in="SourceAlpha" in2="aOff" operator="out" result="edgeKey" />
-        <feFlood floodColor={warm} floodOpacity={(0.5 * strength).toFixed(2)} />
+        <feFlood floodColor={warm} floodOpacity={(0.55 * strength).toFixed(2)} />
         <feComposite in2="edgeKey" operator="in" result="rimKey" />
-        <feOffset in="SourceAlpha" dx="-1.5" dy="-0.4" result="bOff" />
+        <feOffset in="SourceAlpha" dx="-0.6" dy="-0.15" result="bOff" />
         <feComposite in="SourceAlpha" in2="bOff" operator="out" result="edgeBack" />
-        <feFlood floodColor={cool} floodOpacity={(0.32 * strength).toFixed(2)} />
+        <feFlood floodColor={cool} floodOpacity={(0.3 * strength).toFixed(2)} />
         <feComposite in2="edgeBack" operator="in" result="rimBack" />
         <feMerge>
           <feMergeNode in="SourceGraphic" />

@@ -8,7 +8,7 @@ import { FrontShoe, frontBootTop } from "./avatar-shoes";
 import { FrontFist } from "./avatar-hands";
 import { RimLightDefs } from "./avatar-light";
 import { Buckle, ChestEmblem, Clasp, ClothPattern, Fletching, Pouch, QuiverBody, zigQ } from "./avatar-extras";
-import { seamOf, BeltDetail, ClothButton, ClothDetail, DetailDefs, LeatherBand, SleeveDetail } from "./avatar-detail";
+import { seamOf, BeltDetail, BracerLacing, ClothButton, ClothDetail, DetailDefs, LeatherBand, SleeveDetail } from "./avatar-detail";
 import { BUTTON_TOPS } from "./archer-avatar";
 
 // contorno dipinto: bruno scuro morbido, non più nero a china
@@ -105,13 +105,10 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
         {bowArm && look.armguard ? <path d={`M${f(lerp(elbow.x, hand.x, 0.2))} ${f(lerp(elbow.y, hand.y, 0.2))} L${f(lerp(elbow.x, hand.x, 0.76))} ${f(lerp(elbow.y, hand.y, 0.76))}`} stroke={look.armguard} strokeWidth={foreW + 3} strokeLinecap="round" opacity="0.95" /> : null}
         {look.bracers ? (
           <g>
-            <path d={`M${f(brA.x)} ${f(brA.y)} L${f(brB.x)} ${f(brB.y)}`} stroke={OUT} strokeOpacity="0.8" strokeWidth={foreW + 6} strokeLinecap="round" />
+            <path d={`M${f(brA.x)} ${f(brA.y)} L${f(brB.x)} ${f(brB.y)}`} stroke={OUT} strokeOpacity="0.8" strokeWidth={foreW + 5} strokeLinecap="round" />
             <path d={`M${f(brA.x)} ${f(brA.y)} L${f(brB.x)} ${f(brB.y)}`} stroke={look.bracers} strokeWidth={foreW + 4} strokeLinecap="round" />
-            {[0.42, 0.56, 0.7].map((k) => {
-              const c = lerpP(elbow, hand, k);
-              return <path key={k} d={`M${f(c.x - 4)} ${f(c.y - 3)} l8 6 M${f(c.x + 4)} ${f(c.y - 3)} l-8 6`} stroke={shade(look.bracers, 0.55)} strokeWidth="0.9" />;
-            })}
             <LeatherBand uid={`${uid}${side}`} a={lerpP(elbow, hand, 0.36)} b={lerpP(elbow, hand, 0.82)} w={foreW + 4} color={shade(look.bracers, 0.6)} />
+            <BracerLacing a={lerpP(elbow, hand, 0.42)} b={lerpP(elbow, hand, 0.74)} w={foreW + 4} color={shade(look.bracers, 0.6)} />
           </g>
         ) : null}
         {/* mano (con le braccia aperte, tutte e due) */}
