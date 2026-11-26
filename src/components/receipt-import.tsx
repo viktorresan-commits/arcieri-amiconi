@@ -26,6 +26,7 @@ export function ReceiptsCard({ onSaved }: { onSaved: () => void }) {
   const [photo, setPhoto] = useState("");
   const [busy, setBusy] = useState<{ p: number; what: string } | null>(null);
   const [readErr, setReadErr] = useState("");
+  const [note, setNote] = useState("");
   const [store, setStore] = useState("");
   const [day, setDay] = useState(today());
   const [total, setTotal] = useState("");
@@ -40,6 +41,7 @@ export function ReceiptsCard({ onSaved }: { onSaved: () => void }) {
     setPhoto("");
     setBusy(null);
     setReadErr("");
+    setNote("");
     setStore("");
     setDay(today());
     setTotal("");
@@ -62,12 +64,14 @@ export function ReceiptsCard({ onSaved }: { onSaved: () => void }) {
           setStore(r.store);
           if (r.day) setDay(r.day);
           setTotal(toPrice(r.totalCents));
-          setRows(r.items.map((it) => ({ ...it, price: toPrice(it.priceCents) })));
+          // prima le tue righe, poi le altre del foglio
+          setRows([...r.items.filter((it) => it.mine), ...r.items.filter((it) => !it.mine)].map((it) => ({ ...it, price: toPrice(it.priceCents) })));
+          setNote(r.note);
           if (!r.items.length && r.totalCents == null) setReadErr("Non ho trovato righe con il prezzo: scrivi tu totale e righe.");
         })
         .catch((e: unknown) => {
           setReadErr(e instanceof Error ? e.message : "Non riesco a leggerlo: scrivi tu totale e righe.");
-          setRows([{ name: "", qty: 1, price: "", category: "accessorio", toGear: false }]);
+          setRows([{ name: "", qty: 1, price: "", category: "accessorio", toGear: false, mine: true }]);
         })
         .finally(() => setBusy(null));
     };
@@ -76,17 +80,17 @@ export function ReceiptsCard({ onSaved }: { onSaved: () => void }) {
   };
 
   const set = (i: number, patch: Partial<Row>) => setRows((rs) => rs.map((r, k) => (k === i ? { ...r, ...patch } : r)));
-  const sum = rows.reduce((t, r) => t + (cents(r.price) ?? 0) * (r.qty || 1), 0);
+  const sum = rows.filter((r) => r.mine).reduce((t, r) => t + (cents(r.price) ?? 0) * (r.qty || 1), 0);
   const totalCents = cents(total);
 
   const save = async () => {
     setErr("");
     setSaving(true);
     try {
-      const items = rows.filter((r) => r.name.trim().length >= 2).map((r) => ({ name: r.name.trim(), category: r.category, qty: r.qty || 1, priceCents: cents(r.price) }));
+      const items = rows.filter((r) => r.mine && r.name.trim().length >= 2).map((r) => ({ name: r.name.trim(), category: r.category, qty: r.qty || 1, priceCents: cents(r.price) }));
       await saveReceipt({ data: { store: store.trim(), day, totalCents, photo, items } });
       // i pezzi scelti passano anche in attrezzatura, con la data dello scontrino
-      const gear = rows.filter((r) => r.toGear && r.name.trim().length >= 2);
+      const gear = rows.filter((r) => r.mine && r.toGear && r.name.trim().length >= 2);
       for (const r of gear) {
         await saveEquipment({
           data: {
@@ -154,11 +158,12 @@ export function ReceiptsCard({ onSaved }: { onSaved: () => void }) {
             </div>
           </div>
           {readErr ? <p className="text-sm text-muted">{readErr}</p> : null}
+          {note && !busy ? <p className="rounded-xl bg-white/[0.05] px-3 py-2 text-xs text-muted">Ho letto: {note}. Togli la spunta «Comprato da me» a quello che non è tuo.</p> : null}
           {busy ? null : (
             <>
               <div className="grid gap-2">
                 {rows.map((r, i) => (
-                  <div key={i} className="grid gap-2 rounded-2xl bg-white/[0.04] p-2">
+                  <div key={i} className={`grid gap-2 rounded-2xl bg-white/[0.04] p-2 ${r.mine ? "" : "opacity-55"}`}>
                     <div className="flex items-center gap-2">
                       <CategoryIcon category={r.category} className="h-10 w-10 shrink-0" />
                       <TextInput value={r.name} onChange={(e) => set(i, { name: e.target.value })} placeholder="Cosa hai comprato" />
@@ -171,19 +176,27 @@ export function ReceiptsCard({ onSaved }: { onSaved: () => void }) {
                       <TextInput inputMode="numeric" value={String(r.qty)} onChange={(e) => set(i, { qty: Math.max(1, Math.min(99, Number(e.target.value.replace(/\D/g, "")) || 1)) })} aria-label="Quantità" />
                       <TextInput inputMode="decimal" value={r.price} onChange={(e) => set(i, { price: e.target.value })} placeholder="€ cad." aria-label="Prezzo di un pezzo" />
                     </div>
-                    <label className="flex items-center gap-2 text-xs">
-                      <input type="checkbox" checked={r.toGear} onChange={(e) => set(i, { toGear: e.target.checked })} className="h-4 w-4 accent-[var(--accent)]" />
-                      Metti anche in attrezzatura{r.toGear ? ` · ${categoryLabel(r.category)}` : ""}
-                    </label>
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs">
+                      <label className="flex items-center gap-2 font-semibold">
+                        <input type="checkbox" checked={r.mine} onChange={(e) => set(i, { mine: e.target.checked, toGear: e.target.checked ? r.toGear || r.category !== "altro" : false })} className="h-4 w-4 accent-[var(--accent)]" />
+                        Comprato da me
+                      </label>
+                      {r.mine ? (
+                        <label className="flex items-center gap-2">
+                          <input type="checkbox" checked={r.toGear} onChange={(e) => set(i, { toGear: e.target.checked })} className="h-4 w-4 accent-[var(--accent)]" />
+                          In attrezzatura{r.toGear ? ` · ${categoryLabel(r.category)}` : ""}
+                        </label>
+                      ) : null}
+                    </div>
                   </div>
                 ))}
-                <button type="button" onClick={() => setRows((rs) => [...rs, { name: "", qty: 1, price: "", category: "accessorio", toGear: true }])} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl border border-dashed border-line text-sm">
+                <button type="button" onClick={() => setRows((rs) => [...rs, { name: "", qty: 1, price: "", category: "accessorio", toGear: true, mine: true }])} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl border border-dashed border-line text-sm">
                   <Glyph name="plus" size={15} /> Aggiungi una riga
                 </button>
               </div>
               {rows.length ? (
                 <p className="text-xs text-muted">
-                  Righe {euro(sum) || "0 €"}{totalCents != null ? ` · totale ${euro(totalCents) || "0 €"}` : ""}
+                  Le tue righe {euro(sum) || "0 €"}{totalCents != null ? ` · totale ${euro(totalCents) || "0 €"}` : ""}
                   {totalCents != null && Math.abs(totalCents - sum) > 2 ? " · non tornano: controlla prezzi e quantità, o aggiungi una riga" : ""}
                 </p>
               ) : null}

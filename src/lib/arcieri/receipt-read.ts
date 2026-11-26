@@ -5,8 +5,8 @@
  * indovinata dalle parole (frecce, punte, corda, parabraccio...). Niente servizi esterni.
  */
 
-export type ReceiptItem = { name: string; qty: number; priceCents: number; category: string; toGear: boolean };
-export type ReceiptRead = { store: string; day: string | null; totalCents: number | null; items: ReceiptItem[]; text: string };
+export type ReceiptItem = { name: string; qty: number; priceCents: number; category: string; toGear: boolean; /** comprato da te: si salva solo questo (un foglio a metà fra amici ha le righe segnate a mano) */ mine: boolean };
+export type ReceiptRead = { store: string; day: string | null; totalCents: number | null; items: ReceiptItem[]; text: string; /** cosa si è capito, in una riga: righe trovate, sconto, righe segnate a mano */ note: string };
 
 const TESS = "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1";
 
@@ -30,10 +30,10 @@ function loadTesseract(): Promise<TessLib> {
   });
 }
 
-/** foto pronta per la lettura: lato lungo ~1800 px, grigio con il contrasto allargato */
+/** foto pronta per la lettura: lato lungo ~2600 px (le ricevute A4 hanno il testo piccolo), grigio con il contrasto allargato */
 function prepare(img: HTMLImageElement): HTMLCanvasElement {
   const long = Math.max(img.naturalWidth, img.naturalHeight) || 1;
-  const k = Math.min(1, 1800 / long);
+  const k = Math.min(1.6, 2600 / long);
   const c = document.createElement("canvas");
   c.width = Math.max(1, Math.round(img.naturalWidth * k));
   c.height = Math.max(1, Math.round(img.naturalHeight * k));
@@ -103,10 +103,23 @@ export async function readReceipt(img: HTMLImageElement, onProgress?: (p: number
     },
   });
   try {
+    const page = prepare(img);
     await worker.setParameters({ tessedit_pageseg_mode: "4", preserve_interword_spaces: "1" });
-    const { data } = await worker.recognize(prepare(img));
+    let text = (await worker.recognize(page)).data.text ?? "";
+    let read = parseReceipt(text);
+    // poche righe: si riprova leggendo il foglio come un blocco unico (va meglio con le tabelle)
+    if (read.items.length < 2) {
+      onProgress?.(0.7, "Rileggo come tabella");
+      await worker.setParameters({ tessedit_pageseg_mode: "6", preserve_interword_spaces: "1" });
+      const t2 = (await worker.recognize(page)).data.text ?? "";
+      const r2 = parseReceipt(t2);
+      if (r2.items.length > read.items.length) {
+        read = r2;
+        text = t2;
+      }
+    }
     onProgress?.(1, "Fatto");
-    return { ...parseReceipt(data.text ?? ""), text: data.text ?? "" };
+    return { ...read, text };
   } finally {
     void worker.terminate();
   }
@@ -126,17 +139,30 @@ const cents = (raw: string) => {
 
 const titleCase = (s: string) => s.toLowerCase().replace(/(^|[\s'’-])(\p{L})/gu, (_, a: string, b: string) => a + b.toUpperCase());
 
-/** il testo letto diventa negozio, data, totale e righe */
+const MONEY = /-?\d{1,4}(?:\.\d{3})*,\s?\d{2}(?!\d)|-?\d{1,4}\.\d{2}(?!\d)/g;
+const letters = (t: string) => (t.match(/\p{L}/gu) ?? []).length;
+const HEAD_SKIP = /ricevuta|fattura|cassa\b|causale|data\s*doc|documento|scontrino|cod\.?\s|descrizione|q\.?\s*t[aà]/i;
+
+/** codice articolo in testa alla riga (PENN033-03, PULE024-01, 8012345678901): non fa parte del nome */
+const stripCode = (t: string) => t.replace(/^[A-Z0-9]{3,10}[-/.][A-Z0-9]{1,4}\s+/i, "").replace(/^\d{6,}\s+/, "").replace(/^[A-Z]{2,5}\d{2,5}\s+/, "");
+
+/**
+ * Il testo letto diventa negozio, data, totale e righe. Va bene per lo scontrino della cassa
+ * («PUNTE 100 GR   18,00») e per la ricevuta o fattura a colonne (codice, descrizione, quantità,
+ * prezzo, sconto, totale, IVA). Se sul foglio ci sono righe scritte a mano «1 x20 € 13,40»
+ * (la parte di chi ha comprato in compagnia), le righe stampate con lo stesso prezzo diventano le tue.
+ */
 export function parseReceipt(text: string): Omit<ReceiptRead, "text"> {
   const lines = text
     .split(/\r?\n/)
-    .map((l) => l.replace(/\s+/g, " ").trim())
+    .map((l) => l.replace(/[|¦]/g, " ").replace(/\s+/g, " ").trim())
     .filter((l) => l.length > 1);
-  // negozio: la prima riga con parole vere, in alto
+  // negozio: la prima riga con parole vere, in alto (non «Ricevuta N.», «Cassa», le intestazioni della tabella)
   let store = "";
-  for (const l of lines.slice(0, 6)) {
-    const letters = (l.match(/\p{L}/gu) ?? []).length;
-    if (letters >= 4 && !SKIP.test(l) && !PRICE.test(l) && !/\d{5}/.test(l)) {
+  for (const l of lines.slice(0, 8)) {
+    // solo sopra le righe con i prezzi
+    if ((l.match(MONEY) ?? []).length) break;
+    if (letters(l) >= 4 && !SKIP.test(l) && !HEAD_SKIP.test(l) && !/\d{5}/.test(l)) {
       store = titleCase(l.replace(/[^\p{L}\d&'’ .-]/gu, "").trim()).slice(0, 60);
       break;
     }
@@ -155,25 +181,40 @@ export function parseReceipt(text: string): Omit<ReceiptRead, "text"> {
       break;
     }
   }
-  // totale: «totale complessivo» vince, poi l'ultimo «totale», «importo pagato»...
   let totalCents: number | null = null;
   let totalRank = -1;
-  for (const l of lines) {
-    if (/sub\s*tot|iva|imponibile|sconto/i.test(l)) continue;
-    const rank = /totale\s+complessivo/i.test(l) ? 3 : /\btotale\b|\btotal\b|\btot\.?\s*eur/i.test(l) ? 2 : /importo\s+pagato|da\s+pagare|pagato/i.test(l) ? 1 : -1;
-    if (rank < 0) continue;
-    const m = PRICE.exec(l);
-    const v = m ? cents(m[1]) : null;
-    if (v != null && v > 0 && rank >= totalRank) {
-      totalCents = v;
-      totalRank = rank;
-    }
-  }
-  // righe: testo e prezzo; «2 x 3,50» porta la quantità; «sconto» toglie dalla riga sopra
+  let discount = 0;
+  const alloc: { qty: number; amount: number }[] = [];
   const items: ReceiptItem[] = [];
-  // «2 x 4,50» da sola: è della riga sopra se i conti tornano, altrimenti di quella sotto
   let pending: { q: number; unit: number } | null = null;
-  for (const l of lines) {
+  let lastWasItem = false;
+  for (const raw of lines) {
+    // via l'IVA in fondo alla riga («22%», «22 %», una lettera di codice)
+    let l = raw;
+    for (let k = 0; k < 3; k += 1) l = l.replace(/\s+\d{1,2}(?:[.,]\d+)?\s?%\s*$/, "").replace(/\s+[A-Z]\s*$/, "").trim();
+    const money = [...l.matchAll(MONEY)].map((m) => ({ v: cents(m[0]), i: m.index ?? 0, s: m[0] })).filter((m): m is { v: number; i: number; s: string } => m.v != null);
+    // totale: «totale complessivo» vince, poi «totale» o «tot.» (anche scritto a mano), «importo pagato»...
+    if (!/sub\s*tot|iva\b|imponibile|sconto/i.test(l)) {
+      const rank = /totale\s+(complessivo|documento|fattura)/i.test(l) ? 3 : /\btotale\b|\btotal\b|\btot\b\.?/i.test(l) ? 2 : /importo\s+pagato|da\s+pagare|netto\s+a\s+pagare|pagato/i.test(l) ? 1 : -1;
+      if (rank >= 0) {
+        const v = money.length ? money[money.length - 1].v : null;
+        if (v != null && v > 0 && rank >= totalRank) {
+          totalCents = v;
+          totalRank = rank;
+        }
+        lastWasItem = false;
+        continue;
+      }
+    }
+    // a mano: «1 x20 € 13,40», «2 x 6 € 4,80» (quante ne hai prese e quanto hai speso)
+    const hand = /^\s*(?:\d\s*)?[xX×*]\s*(\d{1,3})\b[^\d]{0,8}(\d{1,4}[,.]\s?\d{2})\s*$/.exec(l.replace(/^(\d)\s+(?=[xX×*])/, ""));
+    if (hand && letters(l) <= 3) {
+      const amount = cents(hand[2]);
+      if (amount) alloc.push({ qty: Number(hand[1]), amount });
+      lastWasItem = false;
+      continue;
+    }
+    // «2 x 4,50» da sola: è della riga sopra se i conti tornano, altrimenti di quella sotto
     const only = /^(\d{1,2})\s*[xX*]\s*(\d{1,4}[,.]\d{2})\s*$/.exec(l);
     if (only) {
       const q = Number(only[1]);
@@ -183,48 +224,124 @@ export function parseReceipt(text: string): Omit<ReceiptRead, "text"> {
         last.qty = q;
         last.priceCents = unit;
       } else pending = { q, unit };
+      lastWasItem = false;
       continue;
     }
-    const m = PRICE.exec(l);
-    if (!m) continue;
-    const v = cents(m[1]);
-    if (v == null) continue;
-    if (/sconto|abbuono|promo/i.test(l) && v !== 0) {
+    if (!money.length) {
+      // seguito della descrizione sulla riga sotto («GIALLO»)
       const last = items[items.length - 1];
-      if (last) last.priceCents = Math.max(0, last.priceCents - Math.abs(v));
+      if (lastWasItem && last && letters(l) >= 3 && l.length <= 28 && !/\d{2,}/.test(l) && !SKIP.test(l) && !HEAD_SKIP.test(l)) last.name = `${last.name} ${titleCase(l)}`.slice(0, 80);
+      lastWasItem = false;
       continue;
     }
-    if (SKIP.test(l) || v <= 0) continue;
-    let name = l.slice(0, m.index).trim();
+    const v = money[money.length - 1].v;
+    if (/^\s*(sconto|abbuono|promo)/i.test(l)) {
+      // sconto su tutto il foglio (riga a sé)
+      discount += Math.abs(v);
+      lastWasItem = false;
+      continue;
+    }
+    if (/sconto|abbuono/i.test(l) && v !== 0) {
+      const last = items[items.length - 1];
+      if (last) last.priceCents = Math.max(0, last.priceCents - Math.round(Math.abs(v) / (last.qty || 1)));
+      lastWasItem = false;
+      continue;
+    }
+    if (SKIP.test(l) || v <= 0) {
+      lastWasItem = false;
+      continue;
+    }
+    // nome e quantità: il testo prima della prima cifra in euro; la quantità è il numero intero subito prima
+    let head = l.slice(0, money[0].i).trim();
     let qty = 1;
-    const lead = /^(\d{1,2})\s*[xX*]\s+/.exec(name);
+    const tail = /\s(\d{1,4})\s*[+\-~^']*\s*$/.exec(head);
+    if (tail && money.length >= 2) {
+      qty = Math.max(1, Math.min(999, Number(tail[1])));
+      head = head.slice(0, tail.index).trim();
+    }
+    const lead = /^(\d{1,2})\s*[xX*]\s+/.exec(head);
     if (lead) {
       qty = Number(lead[1]);
-      name = name.slice(lead[0].length);
+      head = head.slice(lead[0].length);
     }
-    const inner = /\s(\d{1,2})\s*[xX*]\s*\d{1,4}[,.]\d{2}\s*$/.exec(name);
+    const inner = /\s(\d{1,2})\s*[xX*]\s*\d{1,4}[,.]\d{2}\s*$/.exec(head);
     if (inner) {
       qty = Number(inner[1]);
-      name = name.slice(0, inner.index);
+      head = head.slice(0, inner.index);
     }
-    name = name.replace(/^\d{5,}\s*/, "").replace(/\s\d{1,2}([,.]\d+)?\s*%.*$/, "").replace(/[*_=]+/g, " ").replace(/\s+/g, " ").trim();
-    if ((name.match(/\p{L}/gu) ?? []).length < 3) continue;
+    let name = stripCode(head).replace(/\s\d{1,2}([,.]\d+)?\s*%.*$/, "").replace(/[*_=]+/g, " ").replace(/\s+\d$/, "").replace(/\s+/g, " ").trim();
+    if (letters(name) < 3) {
+      lastWasItem = false;
+      continue;
+    }
+    // prezzo di un pezzo: la prima cifra della riga a colonne, se i conti tornano con il totale della riga
     let unit = qty > 1 ? Math.round(v / qty) : v;
+    if (money.length >= 2 && qty > 1) {
+      const first = money[0].v;
+      if (first > 0 && Math.abs(first * qty - v) <= Math.max(3, v * 0.03)) unit = first;
+    }
     if (pending && qty === 1) {
       qty = pending.q;
       unit = Math.abs(v - pending.q * pending.unit) <= 2 ? pending.unit : Math.round(v / pending.q);
     }
     pending = null;
+    name = titleCase(name).slice(0, 80);
     const category = guessCategory(name);
-    // nella lista si tiene il prezzo di un pezzo: la riga dello scontrino è il totale della riga
-    items.push({ name: titleCase(name).slice(0, 80), qty, priceCents: unit, category, toGear: category !== "altro" });
+    items.push({ name, qty, priceCents: unit, category, toGear: category !== "altro", mine: true });
+    lastWasItem = true;
   }
-  return { store, day, totalCents, items: items.slice(0, 40) };
+  const notes: string[] = [];
+  if (items.length) notes.push(`${items.length} ${items.length === 1 ? "riga trovata" : "righe trovate"}`);
+  // righe scritte a mano: le tue sono quelle con lo stesso prezzo a pezzo
+  let matched = 0;
+  if (alloc.length && items.length) {
+    const taken = new Set<number>();
+    const pick: { i: number; qty: number }[] = [];
+    for (const a of alloc) {
+      const unit = a.amount / Math.max(1, a.qty);
+      let best = -1;
+      let gap = Infinity;
+      items.forEach((it, i) => {
+        if (taken.has(i)) return;
+        const g = Math.abs(it.priceCents - unit);
+        if (g < gap) {
+          gap = g;
+          best = i;
+        }
+      });
+      if (best >= 0 && gap <= 1.5) {
+        taken.add(best);
+        pick.push({ i: best, qty: a.qty });
+      }
+    }
+    if (pick.length) {
+      matched = pick.length;
+      items.forEach((it, i) => {
+        const p = pick.find((x) => x.i === i);
+        it.mine = Boolean(p);
+        if (p) it.qty = p.qty;
+        else it.toGear = false;
+      });
+      const mineSum = items.filter((it) => it.mine).reduce((t, it) => t + it.priceCents * it.qty, 0);
+      const handTotal = alloc.reduce((t, a) => t + a.amount, 0);
+      if (totalCents == null || Math.abs(handTotal - mineSum) <= 3) totalCents = handTotal;
+      notes.push(`${matched} ${matched === 1 ? "segnata" : "segnate"} a mano come tue`);
+    }
+  }
+  if (discount) {
+    if (!matched) {
+      // sconto su tutto il foglio: si spalma sulle righe, così la somma torna con il totale
+      const gross = items.reduce((t, it) => t + it.priceCents * it.qty, 0);
+      if (gross > discount) for (const it of items) it.priceCents = Math.max(0, Math.round(it.priceCents * (1 - discount / gross)));
+      notes.push(`sconto di ${(discount / 100).toFixed(2).replace(".", ",")} € diviso sulle righe`);
+    } else notes.push(`sconto di ${(discount / 100).toFixed(2).replace(".", ",")} € sul foglio intero`);
+  }
+  return { store, day, totalCents, items: items.slice(0, 40), note: notes.join(" · ") };
 }
 
 const KEYS: [string, RegExp][] = [
   ["arco", /\barc[oh]i?\b|flettent|limbs?\b|riser|longbow|ricurvo|recurve|compound|flatbow/],
-  ["freccia", /frecc|\baste?\b|shaft|arrow|carbon|alluminio/],
+  ["freccia", /frecc|\bast[ae]\b|shaft|arrow|carbon|alluminio|cedro|rose city/],
   ["corda", /\bcord[ae]\b|string|serving/],
   ["mirino", /mirin|\bsight/],
   ["rest", /\brest\b|poggiafrecc|appoggio|plunger|berger|bottone/],
@@ -240,7 +357,7 @@ const KEYS: [string, RegExp][] = [
   ["supporto", /support|cavallett|\bstand\b/],
   ["abbigliamento", /magli|felpa|giacc|cappell|pantalon|\bpolo\b|t-?shirt|gilet|calz[ea]/],
   ["scarpe", /scarp|stival|scarpon/],
-  ["accessorio", /\bpunt[ae]\b|point|cocc[ah]|nock|penn[ae]|alett|vanes?\b|feather|insert|cera\b|wax|colla|glue|tubett|nastr|spine|tirafrecc|cordino|dragon|sling/],
+  ["accessorio", /\bpunt[ae]\b|point|cocc[ah]|nock|penn[ae]|alett|vanes?\b|feather|gateway|insert|cera\b|wax|colla|glue|tubett|nastr|spine|tirafrecc|cordino|dragon|sling|bullet|bodkin|longobard/],
 ];
 
 /** la categoria dell'attrezzatura più probabile per una riga dello scontrino */
