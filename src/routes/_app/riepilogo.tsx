@@ -187,7 +187,7 @@ function Page() {
   }
   return (
     <div className="grid gap-3">
-      <PageHead kicker="Analizza" title="Il mio mese" lede="I numeri del mese in un'immagine verticale, pronta per Instagram e WhatsApp." />
+      <PageHead kicker="Profilo" title="Il mio mese" lede="I numeri del mese in un'immagine verticale, pronta per Instagram e WhatsApp." />
       <div className="flex items-center justify-between gap-2">
         <button type="button" onClick={() => setMonth(shift(month, -1))} className="grid h-11 w-11 place-items-center rounded-full bg-white/[0.06]" aria-label="Mese prima">
           <Glyph name="chevron" size={18} className="rotate-180" />

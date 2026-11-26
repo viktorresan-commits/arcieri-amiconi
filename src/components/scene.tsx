@@ -14,8 +14,6 @@ const FILE: Record<SceneId, string> = {
   home: "casa",
   prepara: "prepara",
   allena: "allena",
-  strumenti: "strumenti",
-  analizza: "analizza",
   gareggia: "gareggia",
   impara: "impara",
   squadra: "squadra",

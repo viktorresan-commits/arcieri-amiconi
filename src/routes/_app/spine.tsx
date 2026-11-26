@@ -37,7 +37,7 @@ function Page() {
   ];
   return (
     <div className="grid gap-3">
-      <PageHead kicker="Strumenti" title="Spine e libbre" lede="Le libbre scritte sui flettenti valgono a 28″: al tuo allungo cambiano. Da qui spine e peso freccia di partenza." />
+      <PageHead kicker="Prepara" title="Spine e libbre" lede="Le libbre scritte sui flettenti valgono a 28″: al tuo allungo cambiano. Da qui spine e peso freccia di partenza." />
       <ToolArt id="spine" />
       {archer.has ? (
         <button type="button" onClick={() => setSt({ bowType: TYPES.some((t) => t.id === archer.bowType) ? archer.bowType : "olimpico", draw: String(archer.lb), drawLen: String(archer.drawIn), arrowLen: String(archer.arrow.lengthIn || archer.drawIn + 1) })} className="justify-self-start rounded-full border border-line px-3 py-1.5 text-xs font-semibold">

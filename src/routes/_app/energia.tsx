@@ -33,7 +33,7 @@ function Page() {
   ];
   return (
     <div className="grid gap-3">
-      <PageHead kicker="Strumenti" title="Velocità ed energia" lede="Quanto corre e quanta energia porta la freccia: utile per scegliere il peso giusto." />
+      <PageHead kicker="Impara" title="Velocità ed energia" lede="Quanto corre e quanta energia porta la freccia: utile per scegliere il peso giusto." />
       <ToolArt id="energia" />
       <Chips value={st.mode} onChange={(mode) => setSt({ ...st, mode })} options={[{ id: "stima", label: "Stima dalle libbre" }, { id: "misura", label: "Ho il cronografo" }]} />
       <Card className="grid grid-cols-2 gap-2">

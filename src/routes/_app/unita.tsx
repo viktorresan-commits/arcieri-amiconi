@@ -9,7 +9,7 @@ export const Route = createFileRoute("/_app/unita")({ component: Page });
 export function ConvertitoreBody({ embedded = false }: { embedded?: boolean }) {
   return (
     <div className="grid gap-3">
-      {embedded ? null : <PageHead kicker="Strumenti" title="Convertitore" lede="Scrivi in una delle due caselle." />}
+      {embedded ? null : <PageHead kicker="Impara" title="Convertitore" lede="Scrivi in una delle due caselle." />}
       <ToolArt id="unita" />
       <AllUnits />
     </div>

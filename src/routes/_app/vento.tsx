@@ -45,7 +45,7 @@ function Page() {
   const px = Math.min(70, (cm / (faceCm / 2)) * 70) * d.side;
   return (
     <div className="grid gap-3">
-      <PageHead kicker="Strumenti" title="Vento" lede="Quanto il vento laterale sposta la freccia, e dove mirare per compensare." />
+      <PageHead kicker="Impara" title="Vento" lede="Quanto il vento laterale sposta la freccia, e dove mirare per compensare." />
       <ToolArt id="vento" />
       <Card className="grid gap-2.5">
         <div className="grid grid-cols-2 gap-2">

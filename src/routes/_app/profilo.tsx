@@ -21,7 +21,8 @@ import { GestureGallery } from "@/components/gesture-gallery";
 import { AvatarEditor } from "./avatar";
 import { Migrazione } from "@/components/migrazione";
 import { PersonalizePanel } from "@/components/personalize";
-import { Glyph, IconTitle, type IconName } from "@/components/icons";
+import { AppIcon, Glyph, IconTitle, type IconName } from "@/components/icons";
+import { shortcutById } from "@/lib/arcieri/shortcuts";
 import { unlockAdmin } from "@/lib/arcieri/account.api";
 import { ClaimCard, DeleteAccountCard, InviteCard, PrivacyCard, ResetCard, TeamAdmin } from "@/components/profile-tools";
 
@@ -246,6 +247,20 @@ function Page() {
           <span className="text-[0.62rem] text-muted">Premi</span>
           <b className="font-display text-2xl leading-tight tabular-nums">{myPrizes.length}<span className="text-sm font-normal text-muted"> / {prizes.length}</span></b>
         </Link>
+      </div>
+
+      {/* i propri progressi (prima nella sezione Analizza): storico, traguardi, mese e gesti salvati */}
+      <div className="grid grid-cols-4 gap-2">
+        {(["storico", "obiettivi", "riepilogo", "storico-gesto"] as const).map((id) => {
+          const s = shortcutById(id);
+          if (!s) return null;
+          return (
+            <Link key={id} to={s.to as "/"} search={(s.search ?? {}) as never} className="aa-press grid justify-items-center gap-1 rounded-2xl border border-hair bg-white/[0.04] px-1 py-2 text-center">
+              <AppIcon name={s.icon} size={42} enamel="amethyst" />
+              <span className="line-clamp-2 text-[0.66rem] font-semibold leading-tight">{id === "storico-gesto" ? "Gesti salvati" : s.label}</span>
+            </Link>
+          );
+        })}
       </div>
 
       {/* le parti del profilo, come le schede della Compagnia */}

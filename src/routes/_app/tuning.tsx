@@ -47,7 +47,7 @@ function Page() {
   const p = st.cell ? pos(st.cell) : null;
   return (
     <div className="grid gap-3">
-      <PageHead kicker="Strumenti" title="Asta nuda" lede="Tre frecce con le penne e due senza, stessa mira, a 18 m. Tocca dove sono finite le nude." />
+      <PageHead kicker="Prepara" title="Asta nuda" lede="Tre frecce con le penne e due senza, stessa mira, a 18 m. Tocca dove sono finite le nude." />
       <ToolArt id="tuning" />
       <Chips value={st.hand} onChange={(hand) => setSt({ ...st, hand })} options={[{ id: "destro", label: "Arciere destro" }, { id: "mancino", label: "Mancino" }]} />
       <Card className="grid justify-items-center gap-3">

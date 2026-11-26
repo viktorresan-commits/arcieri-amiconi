@@ -24,7 +24,7 @@ function Page() {
   const delta = (a: number, b?: number, unit = "") => (b == null || !Number.isFinite(a - b) || a === b ? null : <span className={a > b ? "text-amber-300" : "text-sky-300"}> {a > b ? "+" : ""}{fmt(a - b, 1)}{unit}</span>);
   return (
     <div className="grid gap-3">
-      <PageHead kicker="Strumenti" title="Assetto arco" lede="Segna le misure quando le controlli: vedi subito se qualcosa si è spostato." />
+      <PageHead kicker="Prepara" title="Assetto arco" lede="Segna le misure quando le controlli: vedi subito se qualcosa si è spostato." />
       <ToolArt id="assetto" />
       <Card className="grid gap-2">
         <div className="grid grid-cols-2 gap-2">

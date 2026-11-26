@@ -16,7 +16,7 @@ function Page() {
   const [view, setView] = useEntryState<"misura" | "tempo">("allungo-vista", "misura");
   return (
     <div className="grid gap-3">
-      <PageHead kicker="Strumenti" title="Allungo" lede={view === "tempo" ? "Dall'inizio della trazione al rilascio. Più è costante, più il tiro è ripetibile." : "Braccia aperte, schiena al muro: misura da punta a punta del dito medio."} />
+      <PageHead kicker="Prepara" title="Allungo" lede={view === "tempo" ? "Dall'inizio della trazione al rilascio. Più è costante, più il tiro è ripetibile." : "Braccia aperte, schiena al muro: misura da punta a punta del dito medio."} />
       <Segmented value={view} onChange={setView} options={[{ id: "misura", label: "Misura l'allungo" }, { id: "tempo", label: "Tempo di allungo" }]} />
       {view === "tempo" ? <TempiBody embedded /> : <Measure />}
     </div>

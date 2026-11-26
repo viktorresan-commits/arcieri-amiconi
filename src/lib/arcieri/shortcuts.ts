@@ -5,7 +5,7 @@ import type { IconName } from "@/components/icons";
  * Tutte le azioni dell'app raggiungibili in un tocco: Home, pulsante ＋ e Menu usano questo elenco,
  * così ogni percorso è lo stesso ovunque e l'utente sceglie quali tenere in vista.
  */
-export type StationId = "prepara" | "allena" | "strumenti" | "analizza" | "gareggia" | "impara" | "squadra";
+export type StationId = "prepara" | "allena" | "gareggia" | "impara" | "squadra";
 
 export type Shortcut = {
   id: string;
@@ -25,25 +25,25 @@ export const SHORTCUTS: Shortcut[] = [
   { id: "nuovo", group: "allena", label: "Allenamento", hint: "Scegli obiettivo e frecce", icon: "bow", color: "#2c8a57", to: "/allenamento" },
   { id: "gesto", group: "allena", label: "Analisi gesto", hint: "Video con scheletro", icon: "archer", color: "#7652d1", to: "/allenamento", search: { avvia: "gesto" } },
   { id: "fatto", group: "allena", label: "Già fatto", hint: "Segna un tiro passato", icon: "notebook", color: "#3f8a76", to: "/allenamento", search: { avvia: "fatto" } },
-  { id: "storico", group: "analizza", label: "Storico", hint: "Tutti i tuoi allenamenti", icon: "history", color: "#55647b", to: "/allenamento", search: { vista: "storico" } },
   { id: "gare", group: "gareggia", label: "Gare", hint: "Iscrizioni e risultati", icon: "trophy", color: "#c39320", to: "/gare" },
-  { id: "storico-gesto", group: "analizza", label: "Storico del gesto", hint: "Le analisi salvate, per le statistiche del corpo", icon: "archer", color: "#7652d1", to: "/gesti" },
-  { id: "statistiche", group: "analizza", label: "Statistiche", hint: "Grafici e progressi", icon: "chart", color: "#1b9097", to: "/statistiche" },
+  { id: "statistiche", group: "gareggia", label: "Statistiche", hint: "Grafici e progressi", icon: "chart", color: "#1b9097", to: "/statistiche" },
   { id: "balistica", group: "prepara", label: "Balistica", hint: "Simulatore di volo e FOC", icon: "ballistics", color: "#cc4f3b", to: "/balistica" },
   { id: "attrezzatura", group: "prepara", label: "Attrezzatura", hint: "Archi, frecce, assetti", icon: "quiver", color: "#8b6a3e", to: "/attrezzatura" },
   { id: "squadra", group: "squadra", label: "Compagnia", hint: "Arcieri, contatti e classifiche", icon: "team", color: "#3d8a4e", to: "/squadra" },
   { id: "calendario", group: "gareggia", label: "Calendario", hint: "Uscite in programma", icon: "calendar", color: "#4568d6", to: "/calendario" },
   { id: "classifiche", group: "gareggia", label: "Classifiche", hint: "Chi è davanti", icon: "podium", color: "#c27d1c", to: "/classifiche" },
   { id: "sfide", group: "gareggia", label: "Sfide", hint: "Sfida i compagni", icon: "duel", color: "#c4475a", to: "/sfide" },
-  { id: "obiettivi", group: "analizza", label: "Obiettivi", hint: "I tuoi traguardi", icon: "flag", color: "#2a9c66", to: "/obiettivi" },
   { id: "bacheca", group: "squadra", label: "Bacheca", hint: "News del gruppo", icon: "megaphone", color: "#b8508a", to: "/bacheca" },
-  { id: "confronta", group: "analizza", label: "Confronta", hint: "Tu contro un compagno", icon: "compare", color: "#5568c2", to: "/confronta" },
+  { id: "confronta", group: "gareggia", label: "Confronta", hint: "Tu contro un compagno", icon: "compare", color: "#5568c2", to: "/confronta" },
   { id: "acquisti", group: "prepara", label: "Acquisti", hint: "Lista della spesa", icon: "bag", color: "#946f42", to: "/acquisti" },
   { id: "profilo", group: "squadra", label: "Profilo", hint: "Dati, colori dell'app, impostazioni", icon: "user", color: "#646c7a", to: "/profilo" },
+  { id: "storico", group: "squadra", label: "Storico", hint: "Tutti i tuoi allenamenti", icon: "history", color: "#55647b", to: "/allenamento", search: { vista: "storico" } },
+  { id: "storico-gesto", group: "squadra", label: "Storico del gesto", hint: "Le analisi salvate, per le statistiche del corpo", icon: "archer", color: "#7652d1", to: "/gesti" },
+  { id: "obiettivi", group: "squadra", label: "Obiettivi", hint: "I tuoi traguardi", icon: "flag", color: "#2a9c66", to: "/obiettivi" },
+  { id: "riepilogo", group: "squadra", label: "Il mio mese", hint: "Riepilogo da condividere", icon: "share", color: "#c46b2b", to: "/riepilogo" },
   { id: "schede", group: "allena", label: "Le mie schede", hint: "Esercizi, classi e richieste dell'allenatore", icon: "notebook", color: "#2f6fd1", to: "/schede" },
   { id: "istruttore", group: "squadra", label: "Allenatore", hint: "Allievi, schede e progressi", icon: "team", color: "#2f6fd1", to: "/istruttore" },
   { id: "segreteria", group: "squadra", label: "Segreteria", hint: "Quote, certificati e presenze", icon: "checklist", color: "#3f8a76", to: "/segreteria" },
-  { id: "riepilogo", group: "analizza", label: "Il mio mese", hint: "Riepilogo da condividere", icon: "share", color: "#c46b2b", to: "/riepilogo" },
   { id: "staff", group: "squadra", label: "Gestione compagnia", hint: "Inviti, iscritti e incarichi", icon: "shield", color: "#8a5bd1", to: "/staff" },
   { id: "avatar", group: "squadra", label: "Il tuo arciere", hint: "Aspetto, abiti e attrezzatura", icon: "archer", color: "#c46b2b", to: "/avatar" },
   { id: "timer", group: "allena", label: "Timer di tiro", hint: "Semaforo e tempi da gara", icon: "stopwatch", color: "#d6582a", to: "/timer" },
@@ -54,31 +54,29 @@ export const SHORTCUTS: Shortcut[] = [
   { id: "routine", group: "allena", label: "Routine di tiro", hint: "I tuoi passi, uno alla volta", icon: "steps", color: "#2a9c66", to: "/routine" },
   { id: "respiro", group: "allena", label: "Respiro", hint: "Calma prima della volée", icon: "lungs", color: "#3a8fc4", to: "/respiro" },
   { id: "segnapunti", group: "gareggia", label: "Segnapunti", hint: "Punti con gli amici", icon: "scorecard", color: "#b8508a", to: "/segnapunti" },
-  { id: "spine", group: "strumenti", label: "Spine e libbre", hint: "Libbre reali e spine giusto", icon: "spine", color: "#2f6fd1", to: "/spine" },
-  { id: "vento", group: "strumenti", label: "Vento", hint: "Di quanto ti sposta", icon: "windsock", color: "#3aa7c4", to: "/vento" },
-  { id: "energia", group: "strumenti", label: "Velocità ed energia", hint: "m/s, joule, quantità di moto", icon: "energy", color: "#d6912a", to: "/energia" },
-  { id: "allungo", group: "strumenti", label: "Allungo", hint: "Dall'apertura delle braccia", icon: "span", color: "#7652d1", to: "/allungo" },
-  { id: "tuning", group: "strumenti", label: "Bare shaft", hint: "Messa a punto con l'asta nuda", icon: "bareshaft", color: "#cc4f3b", to: "/tuning" },
-  { id: "assetto", group: "strumenti", label: "Assetto arco", hint: "Brace, tiller, punto d'incocco", icon: "caliper", color: "#6c7684", to: "/assetto" },
-  { id: "unita", group: "strumenti", label: "Convertitore", hint: "lb, grani, pollici, iarde", icon: "ruler", color: "#8b6a3e", to: "/unita" },
+  { id: "spine", group: "prepara", label: "Spine e libbre", hint: "Libbre reali e spine giusto", icon: "spine", color: "#2f6fd1", to: "/spine" },
+  { id: "allungo", group: "prepara", label: "Allungo", hint: "Dall'apertura delle braccia", icon: "span", color: "#7652d1", to: "/allungo" },
+  { id: "tuning", group: "prepara", label: "Bare shaft", hint: "Messa a punto con l'asta nuda", icon: "bareshaft", color: "#cc4f3b", to: "/tuning" },
+  { id: "assetto", group: "prepara", label: "Assetto arco", hint: "Brace, tiller, punto d'incocco", icon: "caliper", color: "#6c7684", to: "/assetto" },
   { id: "lezioni", group: "impara", label: "Lezioni", hint: "3 livelli, dal primo tiro alla gara", icon: "steps", color: "#2f8f6a", to: "/lezioni" },
   { id: "sfida-giorno", group: "impara", label: "Sfida del giorno", hint: "Un esercizio nuovo ogni giorno", icon: "daily", color: "#d6582a", to: "/sfida-giorno" },
   { id: "quiz", group: "impara", label: "Quiz", hint: "Regole, tecnica, attrezzatura", icon: "quiz", color: "#5568c2", to: "/quiz" },
   { id: "stima", group: "impara", label: "Stima distanze", hint: "Gioco per occhio da 3D", icon: "binoculars", color: "#3d8a4e", to: "/stima" },
   { id: "glossario", group: "impara", label: "Glossario", hint: "Le parole dell'arciere", icon: "book", color: "#946f42", to: "/glossario" },
   { id: "regole", group: "impara", label: "Distanze e bersagli", hint: "Gare indoor, targa, campagna", icon: "rules", color: "#c39320", to: "/regole" },
+  { id: "vento", group: "impara", label: "Vento", hint: "Di quanto ti sposta", icon: "windsock", color: "#3aa7c4", to: "/vento" },
+  { id: "energia", group: "impara", label: "Velocità ed energia", hint: "m/s, joule, quantità di moto", icon: "energy", color: "#d6912a", to: "/energia" },
+  { id: "unita", group: "impara", label: "Convertitore", hint: "lb, grani, pollici, iarde", icon: "ruler", color: "#8b6a3e", to: "/unita" },
 ];
 
 /** Le tappe della mappa: il percorso naturale di un arciere, dalla preparazione alla squadra. */
 /** ogni sezione ha il suo colore e il suo smalto, ben distinti fra loro (anche nella barra in basso) */
 export const STATIONS: { id: StationId; title: string; /** nome corto, come nella barra in basso */ short: string; sub: string; icon: IconName; color: string; enamel: "amber" | "emerald" | "night" | "teal" | "ruby" | "sapphire" | "amethyst" | "ivory" }[] = [
-  { id: "prepara", title: "Preparati", short: "Prepara", sub: "Arco, frecce e simulatore di volo", icon: "quiver", color: "#e0a13a", enamel: "amber" },
+  { id: "prepara", title: "Preparati", short: "Prepara", sub: "Arco, frecce, messa a punto e volo", icon: "quiver", color: "#e0a13a", enamel: "amber" },
   { id: "allena", title: "Allenati", short: "Allena", sub: "Tira, fotografa, riprendi il gesto", icon: "bow", color: "#3fcf7f", enamel: "emerald" },
-  { id: "strumenti", title: "Strumenti", short: "Strumenti", sub: "Calcoli e messa a punto", icon: "caliper", color: "#8fa3c8", enamel: "night" },
-  { id: "analizza", title: "Analizza", short: "Analizza", sub: "Numeri, storico e traguardi", icon: "chart", color: "#2fc4b2", enamel: "teal" },
-  { id: "gareggia", title: "Gareggia", short: "Gare", sub: "Gare, calendario e classifiche", icon: "trophy", color: "#e0435a", enamel: "ruby" },
-  { id: "impara", title: "Impara", short: "Impara", sub: "Sfide, quiz e giochi per crescere", icon: "daily", color: "#4a8fe8", enamel: "sapphire" },
-  { id: "squadra", title: "Compagnia", short: "Compagnia", sub: "Arcieri, news e profilo", icon: "team", color: "#a988f0", enamel: "amethyst" },
+  { id: "gareggia", title: "Gareggia", short: "Gare", sub: "Gare, classifiche e statistiche", icon: "trophy", color: "#e0435a", enamel: "ruby" },
+  { id: "impara", title: "Impara", short: "Impara", sub: "Lezioni, quiz, giochi e calcoli", icon: "daily", color: "#4a8fe8", enamel: "sapphire" },
+  { id: "squadra", title: "Compagnia", short: "Compagnia", sub: "Arcieri, news, profilo e progressi", icon: "team", color: "#a988f0", enamel: "amethyst" },
 ];
 
 export const DEFAULT_PINNED = ["rapido", "foto", "gesto", "statistiche", "balistica", "gare", "attrezzatura", "squadra"];

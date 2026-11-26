@@ -2050,8 +2050,6 @@ svg .aa-fall { stroke-dasharray: 4 3; animation: aa-fall 0.8s linear infinite; }
 }
 .aa-main[data-sec="prepara"] { --primary: #9b6f28; }
 .aa-main[data-sec="allena"] { --primary: #298753; }
-.aa-main[data-sec="strumenti"] { --primary: #687792; }
-.aa-main[data-sec="analizza"] { --primary: #208579; }
 .aa-main[data-sec="gareggia"] { --primary: #d54056; }
 .aa-main[data-sec="impara"] { --primary: #3e78c3; }
 .aa-main[data-sec="squadra"] { --primary: #8269b9; }
