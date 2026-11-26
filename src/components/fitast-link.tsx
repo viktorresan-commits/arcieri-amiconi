@@ -30,7 +30,9 @@ export function FitastLinkCard({ onChanged, crestOf = noCrest, always = false }:
   if (!data) return null;
   const me = data.me;
   const linked = me.fitastName.trim();
-  const unlinked = data.mates.filter((m) => !m.fitastName.trim());
+  const unlinked = data.mates.filter((m) => !m.fitastName.trim() && !m.reserved);
+  // collegato in modo riservato dal fondatore: per l'arciere qui non c'è niente da fare né da vedere
+  const reserved = me.reserved;
   const done = () => {
     setTarget(null);
     setNonce((n) => n + 1);
@@ -39,7 +41,7 @@ export function FitastLinkCard({ onChanged, crestOf = noCrest, always = false }:
   const mine: Target = { userId: me.userId, label: nameOf(me), self: true, linked, team: me.fitastTeam };
   return (
     <>
-      {!linked ? (
+      {reserved ? null : !linked ? (
         <button type="button" onClick={() => setTarget(mine)} className="aa-press flex w-full items-center gap-3 rounded-[var(--radius-card)] border border-[#e0b15a]/30 bg-[#e0b15a]/[0.07] p-3 text-left">
           <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#e0b15a]/25"><Glyph name="trophy" size={22} /></span>
           <span className="min-w-0 flex-1">
@@ -64,24 +66,26 @@ export function FitastLinkCard({ onChanged, crestOf = noCrest, always = false }:
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-white/[0.06]"><Glyph name="duel" size={20} /></span>
           <span className="min-w-0 flex-1">
             <b className="block text-sm">{unlinked.length ? `${unlinked.length} ${unlinked.length === 1 ? "compagno non ancora collegato" : "compagni non ancora collegati"}` : "Tutti i compagni sono collegati"}</b>
-            <span className="block text-xs text-muted">Da presidente puoi scegliere il nome FITAST di ognuno.</span>
+            <span className="block text-xs text-muted">{data.founder ? "Da fondatore puoi scegliere il nome FITAST di ognuno: resta riservato, lo vedi solo tu." : "Da presidente puoi scegliere il nome FITAST di ognuno."}</span>
           </span>
           <Glyph name="chevron" size={16} className="text-muted" />
         </button>
       ) : null}
       {mates ? (
-        <Sheet title="Nomi FITAST dei compagni" sub="Scegli il nome con cui il portale conosce ognuno." onClose={() => setMates(false)}>
+        <Sheet title={data.founder ? "Nomi FITAST degli arcieri" : "Nomi FITAST dei compagni"} sub={data.founder ? "Scegli il nome con cui il portale conosce ognuno. Nessun avviso all'arciere: il collegamento lo vedi solo tu." : "Scegli il nome con cui il portale conosce ognuno."} onClose={() => setMates(false)}>
           <ol className="grid gap-1.5">
-            {[...unlinked, ...data.mates.filter((m) => m.fitastName.trim())].map((m) => (
+            {[...unlinked, ...data.mates.filter((m) => m.fitastName.trim() || m.reserved)].map((m) => (
               <li key={m.userId} className="flex items-center gap-2.5 rounded-xl bg-white/[0.035] px-2.5 py-2">
                 <Avatar size="sm" label={nameOf(m)} color={m.avatarColor} photo={m.photoUrl} userId={m.userId} />
                 <span className="min-w-0 flex-1">
                   <b className="block truncate text-sm">{nameOf(m)}</b>
-                  <span className="block truncate text-xs text-muted">{m.fitastName ? `su FITAST: ${titleName(m.fitastName)}` : "non collegato"}</span>
+                  <span className="block truncate text-xs text-muted">{m.reserved ? "collegato" : m.fitastName ? `su FITAST: ${titleName(m.fitastName)}` : "non collegato"}</span>
                 </span>
-                <button type="button" onClick={() => setTarget({ userId: m.userId, label: nameOf(m), self: false, linked: m.fitastName, team: m.fitastTeam })} className={cx("aa-chip shrink-0", !m.fitastName && "border-[#e0b15a]/60 bg-[#e0b15a]/15 text-[#f1cf8a]")}>
-                  {m.fitastName ? "Cambia" : "Collega"}
-                </button>
+                {m.reserved ? null : (
+                  <button type="button" onClick={() => setTarget({ userId: m.userId, label: nameOf(m), self: false, linked: m.fitastName, team: m.fitastTeam })} className={cx("aa-chip shrink-0", !m.fitastName && "border-[#e0b15a]/60 bg-[#e0b15a]/15 text-[#f1cf8a]")}>
+                    {m.fitastName ? "Cambia" : "Collega"}
+                  </button>
+                )}
               </li>
             ))}
           </ol>

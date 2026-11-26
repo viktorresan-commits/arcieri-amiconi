@@ -11,7 +11,7 @@ import { myMembership } from "./compagnie.api";
 import { cleanCategory, teamKey, titleName, type RankRow } from "./fitast-league";
 import { nameKey } from "./fitast-rank";
 
-type Row = MemberRow & { fitast_name?: string; fitast_team?: string };
+type Row = MemberRow & { fitast_name?: string; fitast_team?: string; fitast_hidden?: boolean };
 
 async function homeTeam(sql: Sql, userId: string) {
   const r = await sql<{ id: number; name: string; fitast_name: string }>`
@@ -29,17 +29,26 @@ async function mayLink(sql: Sql, me: MemberRow, userId: string, target: string) 
   return Boolean(theirs[0]) && asNum(theirs[0].company_id) === mine.companyId;
 }
 
-const face = (m: Row) => ({
-  userId: m.user_id ?? "",
-  givenName: m.given_name ?? "",
-  familyName: m.family_name ?? "",
-  nickname: m.nickname ?? "",
-  slug: m.slug ?? "",
-  photoUrl: m.photo_url ?? null,
-  avatarColor: m.avatar_color ?? "#1f5c38",
-  fitastName: String(m.fitast_name ?? ""),
-  fitastTeam: String(m.fitast_team ?? ""),
-});
+/**
+ * Il profilo con il suo nome FITAST. Un nome collegato dal fondatore resta riservato: lo vede solo lui;
+ * agli altri (arciere compreso) risulta solo «collegato», senza nome.
+ */
+const face = (m: Row, founder: boolean) => {
+  const hidden = Boolean(m.fitast_hidden) && Boolean(m.fitast_name) && !founder;
+  return {
+    userId: m.user_id ?? "",
+    givenName: m.given_name ?? "",
+    familyName: m.family_name ?? "",
+    nickname: m.nickname ?? "",
+    slug: m.slug ?? "",
+    photoUrl: m.photo_url ?? null,
+    avatarColor: m.avatar_color ?? "#1f5c38",
+    fitastName: hidden ? "" : String(m.fitast_name ?? ""),
+    fitastTeam: hidden ? "" : String(m.fitast_team ?? ""),
+    /** collegato, ma il nome non si mostra */
+    reserved: hidden,
+  };
+};
 
 /** il mio collegamento e, per il presidente, quello dei compagni */
 export const fitastLinkState = createServerFn({ method: "GET" })
@@ -49,14 +58,21 @@ export const fitastLinkState = createServerFn({ method: "GET" })
     const me = (await ensureMember(sql, context.userId)) as Row;
     const mine = await myMembership(sql, context.userId);
     const home = await homeTeam(sql, context.userId);
-    const canManage = mine.role === "owner" || staffLevel(me) != null;
-    const mates = canManage
+    const founder = staffLevel(me) != null;
+    const canManage = mine.role === "owner" || founder;
+    // il fondatore collega chiunque; il presidente i compagni della sua compagnia
+    const mates = founder
       ? await sql<Row>`
-          select m.* from members m join company_members cm on cm.user_id = m.user_id
-          where cm.company_id = ${mine.companyId} and m.user_id <> ${context.userId} and coalesce(m.status, '') <> 'left'
+          select m.* from members m
+          where m.user_id is not null and m.user_id <> ${context.userId} and coalesce(m.status, '') <> 'left'
           order by m.given_name, m.family_name`.catch(() => [] as Row[])
-      : [];
-    return { me: face(me), team: home.team, canManage, mates: mates.map(face) };
+      : canManage
+        ? await sql<Row>`
+            select m.* from members m join company_members cm on cm.user_id = m.user_id
+            where cm.company_id = ${mine.companyId} and m.user_id <> ${context.userId} and coalesce(m.status, '') <> 'left'
+            order by m.given_name, m.family_name`.catch(() => [] as Row[])
+        : [];
+    return { me: face(me, founder), team: home.team, canManage, founder, mates: mates.map((m) => face(m, founder)) };
   });
 
 type Person = { name: string; team: string; key: string; words: string[]; category: string; gare: Set<string>; points: number | null };
@@ -116,9 +132,13 @@ export const fitastNameSearch = createServerFn({ method: "POST" })
     }
     // nomi già presi da altri profili
     const linked = await sql<Row>`select * from members where coalesce(fitast_name, '') <> '' and user_id <> ${target}`;
+    const founder = staffLevel(me) != null;
     const takenBy = (p: Person) => {
       const m = linked.find((x) => nameKey(String(x.fitast_name ?? "")) === p.key && (!x.fitast_team || teamKey(String(x.fitast_team)) === teamKey(p.team)));
-      return m ? [m.given_name, m.family_name].filter(Boolean).join(" ") || m.nickname || "un altro arciere" : "";
+      if (!m) return "";
+      // un collegamento riservato del fondatore non dice di chi è
+      if (m.fitast_hidden && !founder) return "un altro arciere";
+      return [m.given_name, m.family_name].filter(Boolean).join(" ") || m.nickname || "un altro arciere";
     };
     const results = list
       .sort((a, b) => Number(teamKey(b.team) === team) - Number(teamKey(a.team) === team) || (b.points ?? -1) - (a.points ?? -1) || a.name.localeCompare(b.name, "it"))
@@ -145,6 +165,11 @@ export const setFitastLink = createServerFn({ method: "POST" })
       const key = nameKey(data.name);
       if (!all.some((p) => p.key === key && (!data.team || teamKey(p.team) === teamKey(data.team)))) throw new Error("Questo nome non è nelle classifiche del portale.");
     }
-    await sql`update members set fitast_name = ${data.name}, fitast_team = ${data.name ? data.team : ""} where user_id = ${target}`;
+    // collegato dal fondatore per un altro arciere: riservato (nessun avviso, nessun nome mostrato)
+    const reserved = Boolean(data.name) && target !== context.userId && staffLevel(me) != null;
+    const old = (await sql<Row>`select * from members where user_id = ${target} limit 1`)[0];
+    // un collegamento riservato lo cambia o lo toglie solo il fondatore
+    if (old?.fitast_hidden && old.fitast_name && staffLevel(me) == null) throw new Error("Questo profilo è già collegato.");
+    await sql`update members set fitast_name = ${data.name}, fitast_team = ${data.name ? data.team : ""}, fitast_hidden = ${reserved} where user_id = ${target}`;
     return { ok: true };
   });
