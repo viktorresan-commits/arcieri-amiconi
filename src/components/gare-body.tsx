@@ -1,25 +1,25 @@
 import { useEntryState } from "@/lib/arcieri/back-restore";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode, type TouchEvent as RTouchEvent } from "react";
 import { useRouterState } from "@tanstack/react-router";
 import { deleteCompetition, deleteEntry, listCompetitions, saveCompetition, setPresence } from "@/lib/arcieri/club.api";
 import { memberLabel, divisionOf } from "@/lib/arcieri/labels";
 import { romeDayKey } from "@/lib/arcieri/time";
 import { useLoad } from "@/lib/arcieri/use-load";
 import { useMember } from "@/components/shell";
-import { Avatar, Button, Card, Empty, ErrorNote, Field, HoldDelete, Loading, PageHead, TextInput } from "@/components/kit";
+import { Avatar, Button, Card, Empty, ErrorNote, Field, HoldDelete, Loading, PageHead, TextInput, cx } from "@/components/kit";
 import { GaraTrend, type GaraPoint } from "@/components/gara-trend";
 import { GaraResult } from "@/components/gara-result";
 import { LaneEditor } from "@/components/lane-editor";
-import { Glyph } from "@/components/icons";
+import { Glyph, type IconName } from "@/components/icons";
 import { useTeamAvatars } from "@/components/avatar-hero";
 import { FitastPanel } from "@/components/fitast-panel";
 import { Medal, teamResultText } from "@/components/palmares";
 import { KindEmblem } from "@/components/kind-emblem";
 import type { TeamResult } from "@/lib/arcieri/palmares.api";
-import { CrestMark, GaraBoard, type Crest, type FitastLeagueState, type OurArcher } from "@/components/fitast-league";
+import { CrestMark, FitastLogo, GaraBoard, type Crest, type FitastLeagueState, type OurArcher } from "@/components/fitast-league";
 import { FitastLinkCard } from "@/components/fitast-link";
 import { ScorecardImport } from "@/components/scorecard-import";
-import { categoryGroup } from "@/lib/arcieri/fitast-league";
+import { categoryGroup, titleName } from "@/lib/arcieri/fitast-league";
 
 
 
@@ -79,30 +79,12 @@ function hasResult(entry: Entry) {
 export function GareBody({ embedded = false, league }: { embedded?: boolean; /** classifiche FITAST (stemmi e aggiornamento dal portale) */ league?: FitastLeagueState } = {}) {
   const { me } = useMember();
   const crestOf = league?.crestOf ?? noCrest;
-  const [board, setBoard] = useState<number | null>(null);
-  const [photoFor, setPhotoFor] = useState<number | null>(null);
-  const [openGare, setOpenGare] = useState<Record<number, boolean>>(() => {
-    try {
-      return JSON.parse(localStorage.getItem("aa-gare-aperte") ?? "{}") as Record<number, boolean>;
-    } catch {
-      return {};
-    }
-  });
-  const toggleOpen = (id: number, was: boolean) =>
-    setOpenGare((cur) => {
-      const next = { ...cur, [id]: !was };
-      try {
-        localStorage.setItem("aa-gare-aperte", JSON.stringify(next));
-      } catch {
-        /* niente */
-      }
-      return next;
-    });
+  // sezioni aperte o chiuse di ogni gara («id:sezione»)
+  const [folds, setFolds] = useState<Record<string, boolean>>({});
   const today = romeDayKey(new Date().toISOString());
   const [nonce, setNonce] = useState(0);
   const [tab, setTab] = useEntryState<"past" | "next">("gare-tab", "past");
   const [scope, setScope] = useEntryState<"mine" | "rest">("gare-scope", "mine");
-  const [open, setOpen] = useState<number | null>(null);
   const [focus, setFocus] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [portal, setPortal] = useState<{ code: string } | null>(null);
@@ -117,6 +99,41 @@ export function GareBody({ embedded = false, league }: { embedded?: boolean; /**
     .filter((comp) => (scope === "mine" ? tookPart(comp) : !tookPart(comp)))
     .slice()
     .sort((a, b) => (tab === "next" ? a.startsOn.localeCompare(b.startsOn) : b.startsOn.localeCompare(a.startsOn)) || a.id - b.id);
+  // la gara mostrata: quella scelta nella striscia, altrimenti la più recente (o la più vicina)
+  const [pickId, setPickId] = useState<number | null>(null);
+  const pickIndex = Math.max(0, shown.findIndex((comp) => comp.id === pickId));
+  const picked = shown[pickIndex] ?? null;
+  const strip = useRef<HTMLDivElement>(null);
+  const pickAt = (i: number) => {
+    const comp = shown[Math.max(0, Math.min(shown.length - 1, i))];
+    if (!comp) return;
+    setPickId(comp.id);
+    setFocus(null);
+    strip.current?.querySelector<HTMLElement>(`[data-gara="${comp.id}"]`)?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+  };
+  // scorrendo la scheda a destra o a sinistra si passa alla gara accanto
+  const touch = useRef<{ x: number; y: number } | null>(null);
+  const swipeStart = (e: RTouchEvent) => {
+    const t = e.touches[0];
+    touch.current = t ? { x: t.clientX, y: t.clientY } : null;
+  };
+  const swipeEnd = (e: RTouchEvent) => {
+    const a = touch.current;
+    const t = e.changedTouches[0];
+    touch.current = null;
+    if (!a || !t) return;
+    const dx = t.clientX - a.x;
+    const dy = t.clientY - a.y;
+    if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.6) return;
+    // niente cambio se il dito era su qualcosa che scorre da sé (tabelle, striscia delle piazzole)
+    if ((e.target as HTMLElement).closest(".overflow-x-auto")) return;
+    pickAt(pickIndex + (dx < 0 ? 1 : -1));
+  };
+  useEffect(() => {
+    if (!picked) return;
+    strip.current?.querySelector<HTMLElement>(`[data-gara="${picked.id}"]`)?.scrollIntoView({ block: "nearest", inline: "center" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [picked?.id, tab, scope]);
   const minePoints = useMemo(() => pointsOf(comps, me.userId ?? ""), [comps, me.userId]);
   const totals = useMemo(() => totalsOf(comps, me.userId ?? ""), [comps, me.userId]);
 
@@ -128,6 +145,7 @@ export function GareBody({ embedded = false, league }: { embedded?: boolean; /**
     setTab(comp.startsOn >= today ? "next" : "past");
     const mine = comp.attended === true || comp.entries.some((entry) => entry.userId === me.userId && hasResult(entry));
     setScope(mine ? "mine" : "rest");
+    setPickId(id);
     const timer = window.setTimeout(() => {
       document.getElementById(`gara-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 80);
@@ -136,7 +154,7 @@ export function GareBody({ embedded = false, league }: { embedded?: boolean; /**
 
   function reload(id?: number) {
     setNonce((n) => n + 1);
-    if (id != null) setOpen(id);
+    if (id != null) setFolds((cur) => ({ ...cur, [`${id}:piazzole`]: true, [`${id}:lanes`]: true }));
   }
 
   function mark(id: number, attended: boolean) {
@@ -194,10 +212,40 @@ export function GareBody({ embedded = false, league }: { embedded?: boolean; /**
       {loading ? <Loading /> : null}
       {error ? <ErrorNote text={error} /> : null}
       {!loading && !shown.length ? <Empty title={scope === "mine" ? "Nessuna tua gara" : "Nessuna altra gara"} text={scope === "mine" ? "Segna quelle a cui hai partecipato. Le altre restano nel calendario, senza chiedere il punteggio." : "Qui ci sono le gare che non hai segnato."} /> : null}
-      <div className="grid gap-3">
-        {shown.map((comp, index) => {
-          // le prime due gare aperte, le altre chiuse; ognuna si apre e si chiude con un tocco (e resta così)
-          const isOpen = openGare[comp.id] ?? index < 2;
+      {/* una gara alla volta: la striscia scorre dalla più recente (o dalla più vicina, in arrivo) */}
+      {shown.length ? (
+        <div className="grid gap-1.5">
+          <div className="flex items-center gap-1.5">
+            <button type="button" aria-label={tab === "past" ? "Gara più recente" : "Gara prima"} disabled={pickIndex <= 0} onClick={() => pickAt(pickIndex - 1)} className="grid h-11 w-9 shrink-0 place-items-center rounded-xl border border-line disabled:opacity-30">
+              <Glyph name="chevron" size={16} className="rotate-180" />
+            </button>
+            <div ref={strip} className="flex min-w-0 flex-1 snap-x gap-1.5 overflow-x-auto [scrollbar-width:none]">
+              {shown.map((comp, i) => {
+                const on = i === pickIndex;
+                return (
+                  <button
+                    key={comp.id}
+                    type="button"
+                    data-gara={comp.id}
+                    aria-pressed={on}
+                    onClick={() => pickAt(i)}
+                    className={cx("grid min-h-11 w-[7.6rem] shrink-0 snap-start content-center rounded-xl px-2 text-left leading-tight", on ? "bg-primary text-primary-fg" : "border border-line bg-white/[0.03]")}
+                  >
+                    <span className={cx("block text-[0.62rem] font-semibold uppercase tracking-wide", on ? "opacity-85" : "text-muted")}>{shortDay(comp.startsOn)}</span>
+                    <span className="block truncate text-[0.78rem] font-semibold">{comp.organizer.trim() && comp.fitast ? titleName(comp.organizer) : comp.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <button type="button" aria-label={tab === "past" ? "Gara meno recente" : "Gara dopo"} disabled={pickIndex >= shown.length - 1} onClick={() => pickAt(pickIndex + 1)} className="grid h-11 w-9 shrink-0 place-items-center rounded-xl border border-line disabled:opacity-30">
+              <Glyph name="chevron" size={16} />
+            </button>
+          </div>
+          <p className="text-center text-[0.7rem] text-muted">{pickIndex + 1} di {shown.length} · {tab === "past" ? "dalla più recente alla meno recente" : "dalla più vicina"} · scorri la scheda per cambiare</p>
+        </div>
+      ) : null}
+      {picked ? (() => {
+          const comp = picked;
           const mine = comp.entries.find((entry) => entry.userId === me.userId) ?? null;
           const ownScore = mine ? hasResult(mine) && mine.portal !== "solo" : false;
           const ask = scope === "mine" && comp.attended !== false && !comp.virtual;
@@ -206,23 +254,17 @@ export function GareBody({ embedded = false, league }: { embedded?: boolean; /**
           const f = comp.fitast ?? null;
           const portalCode = f?.garaId ?? "";
           const others = (comp.roster ?? []).filter((person) => !scored.some((entry) => entry.userId === person.userId));
+          const fold = (key: string, byDefault: boolean) => ({ open: folds[`${comp.id}:${key}`] ?? byDefault, onToggle: () => setFolds((cur) => ({ ...cur, [`${comp.id}:${key}`]: !(cur[`${comp.id}:${key}`] ?? byDefault) })) });
+          const past = tab === "past";
+          const mates = comp.group?.mates ?? [];
+          const lanesSet = mine?.piazzole.length ?? 0;
           return (
-            <div key={comp.id} id={`gara-${comp.id}`} className="scroll-mt-4">
-            <Card className="grid min-w-0 gap-3">
-              <button type="button" onClick={() => toggleOpen(comp.id, isOpen)} aria-expanded={isOpen} className="flex w-full min-w-0 items-start gap-2 text-left">
-                <span className="min-w-0 flex-1"><GaraHead comp={comp} crestOf={crestOf} tab={tab} /></span>
-                <span className="mt-1 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/[0.06]" aria-hidden>
-                  <Glyph name="chevron" size={14} className={`text-muted transition-transform ${isOpen ? "-rotate-90" : "rotate-90"}`} />
-                </span>
-              </button>
-              {isOpen ? (
-                <>
+            <div key={comp.id} id={`gara-${comp.id}`} className="scroll-mt-4" onTouchStart={swipeStart} onTouchEnd={swipeEnd}>
+            <Card className="aa-rise grid min-w-0 gap-3">
+              <GaraHead comp={comp} crestOf={crestOf} tab={tab} />
               {scored.length ? (
-                <div className="grid min-w-0 gap-1.5">
-                  <p className="flex items-baseline justify-between gap-2 text-sm font-semibold">
-                    <span>I nostri</span>
-                    {fromPortal ? <span className="text-[0.7rem] font-normal text-muted">dal portale FITAST</span> : null}
-                  </p>
+                <Fold icon="team" title="I nostri" sub={`${scored.length} ${scored.length === 1 ? "arciere" : "arcieri"}${fromPortal ? " · dal portale FITAST" : ""}`} logo={fromPortal} {...fold("nostri", true)}>
+                  {comp.teamResults?.length ? <TeamLine results={comp.teamResults} /> : null}
                   <ul className="grid min-w-0 gap-1.5">
                     {scored.map((entry) => {
                       const own = entry.userId === me.userId;
@@ -249,64 +291,48 @@ export function GareBody({ embedded = false, league }: { embedded?: boolean; /**
                       );
                     })}
                   </ul>
-                </div>
-              ) : null}
-              {comp.teamResults?.length ? <TeamLine results={comp.teamResults} /> : null}
-              {comp.group?.mates.length ? <PiazzolaMates group={comp.group} past={tab === "past"} /> : null}
-              <Roster tab={tab} people={tab === "past" ? others : comp.roster ?? []} also={scored.length > 0} />
-              {f?.read && tab === "past" ? (
-                board === comp.id ? (
-                  <div className="grid gap-2 rounded-2xl border border-line p-2.5">
-                    <button type="button" onClick={() => setBoard(null)} className="flex items-center justify-between gap-2 text-left text-sm font-semibold">
-                      <span>Classifica della gara</span>
-                      <Glyph name="chevron" size={16} className="-rotate-90 text-muted" />
-                    </button>
-                    <GaraBoard garaId={f.garaId} ours={f.ours} me={me.userId ?? ""} crestOf={crestOf} myTeam={comp.teamResults?.[0]?.team ?? ""} />
-                  </div>
-                ) : (
-                  <button type="button" onClick={() => setBoard(comp.id)} className="aa-press flex items-center gap-3 rounded-2xl border border-line px-3 py-2.5 text-left">
-                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/[0.06]"><Glyph name="podium" size={18} /></span>
-                    <span className="min-w-0 flex-1">
-                      <b className="block text-sm">Classifica della gara</b>
-                      <span className="block text-xs text-muted">tutte le categorie{f.total ? ` · ${f.total} arcieri` : ""}</span>
-                    </span>
-                    <Glyph name="chevron" size={16} className="rotate-90 text-muted" />
-                  </button>
-                )
-              ) : null}
-              {portalCode || ask ? (
-                <div className={portalCode && ask && open !== comp.id ? "grid grid-cols-2 gap-2" : "grid gap-2"}>
-                  {ask ? (
-                    open === comp.id ? (
-                      <LaneEditor compId={comp.id} mine={mine && mine.id > 0 ? mine : null} onSaved={() => setNonce((n) => n + 1)} onDone={() => { setOpen(null); setFocus(`${comp.id}:${me.userId}`); reload(); }} />
-                    ) : (
-                      <Button className="w-full text-sm" variant="ghost" onClick={() => setOpen(comp.id)}>{ownScore ? "Le tue piazzole" : mine?.portal === "solo" ? "Aggiungi le piazzole" : "Metti il punteggio"}</Button>
-                    )
+                  <Roster tab={tab} people={past ? others : comp.roster ?? []} also />
+                </Fold>
+              ) : (
+                <Roster tab={tab} people={comp.roster ?? []} />
+              )}
+              {/* le tue piazzole: con chi eri, i punti piazzola per piazzola, il cartellino in foto */}
+              {(past && ask) || mates.length ? (
+                <Fold
+                  icon="target"
+                  title={past ? "Le tue piazzole" : "La tua piazzola"}
+                  sub={[comp.group?.piazzola ? `piazzola ${comp.group.piazzola}` : "", mates.length ? `${mates.length} ${past ? "con te" : "con cui tirerai"}` : "", past && lanesSet ? `${lanesSet} segnate` : ""].filter(Boolean).join(" · ") || "con chi eri, punti e cartellino"}
+                  {...fold("piazzole", true)}
+                >
+                  <Fold icon="team" title={past ? "Con te in piazzola" : "Tirerai con"} sub={mates.length ? mates.map((m) => m.name.split(" ")[0]).slice(0, 4).join(", ") + (mates.length > 4 ? "…" : "") : "dal portale o dal cartellino"} inner {...fold("mates", true)}>
+                    {mates.length ? <PiazzolaMates group={comp.group as { piazzola: number; mates: Mate[] }} past={past} /> : <p className="text-xs text-muted">Ancora nessuno: in Campionato premi «Aggiorna dal portale» (legge l'elenco delle piazzole della FITAST) oppure fotografa il cartellino qui sotto.</p>}
+                  </Fold>
+                  {past && ask ? (
+                    <Fold icon="scorecard" title={ownScore ? "Punti piazzola per piazzola" : mine?.portal === "solo" ? "Aggiungi le piazzole" : "Metti il punteggio"} sub={lanesSet ? `${lanesSet} piazzole · tocca per modificare` : "a mano, freccia per freccia"} inner {...fold("lanes", false)}>
+                      <LaneEditor compId={comp.id} mine={mine && mine.id > 0 ? mine : null} onSaved={() => setNonce((n) => n + 1)} onDone={() => { fold("lanes", false).onToggle(); setFocus(`${comp.id}:${me.userId}`); reload(); }} />
+                    </Fold>
                   ) : null}
-                  {portalCode && open !== comp.id ? (
-                    <Button className="w-full text-sm" variant="ghost" onClick={() => { setPortal({ code: portalCode }); window.setTimeout(() => document.getElementById("fitast")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60); }}>
-                      {tab === "next" ? "Piazzole e iscritti" : "Cerca sul portale"}
-                    </Button>
+                  {past && !comp.virtual && me.role !== "viewer" ? (
+                    <Fold icon="camera" title="Cartellino dalla foto" sub="le tue piazzole e quelle dei compagni di piazzola" inner {...fold("foto", false)}>
+                      <ScorecardImport compId={comp.id} onClose={() => fold("foto", false).onToggle()} onSaved={() => setNonce((n) => n + 1)} />
+                    </Fold>
                   ) : null}
-                </div>
+                </Fold>
               ) : null}
-              {tab === "past" && !comp.virtual && me.role !== "viewer" ? (
-                photoFor === comp.id ? (
-                  <ScorecardImport compId={comp.id} onClose={() => setPhotoFor(null)} onSaved={() => setNonce((n) => n + 1)} />
-                ) : (
-                  <button type="button" onClick={() => setPhotoFor(comp.id)} className="aa-press flex items-center gap-3 rounded-2xl border border-line px-3 py-2.5 text-left">
-                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/[0.06]"><Glyph name="camera" size={18} /></span>
-                    <span className="min-w-0 flex-1">
-                      <b className="block text-sm">Cartellino dalla foto</b>
-                      <span className="block text-xs text-muted">le tue piazzole e quelle dei compagni di piazzola</span>
-                    </span>
-                  </button>
-                )
+              {f?.read && past ? (
+                <Fold icon="podium" title="Classifica della gara" sub={`tutte le categorie${f.total ? ` · ${f.total} arcieri` : ""}`} logo {...fold("board", false)}>
+                  <GaraBoard garaId={f.garaId} ours={f.ours} me={me.userId ?? ""} crestOf={crestOf} myTeam={comp.teamResults?.[0]?.team ?? ""} />
+                </Fold>
+              ) : null}
+              {portalCode ? (
+                <Button className="w-full text-sm" variant="ghost" onClick={() => { setPortal({ code: portalCode }); window.setTimeout(() => document.getElementById("fitast")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60); }}>
+                  {tab === "next" ? "Piazzole e iscritti sul portale" : "Cerca sul portale FITAST"}
+                </Button>
               ) : null}
               {scope === "rest" && !comp.virtual ? (
                 <div className="grid grid-cols-2 gap-2">
-                  <Button className="w-full text-sm" onClick={() => mark(comp.id, true)}>{tab === "past" ? "Ho partecipato" : "Ci vado"}</Button>
-                  <Button className="w-full text-sm" variant="ghost" onClick={() => mark(comp.id, false)}>{tab === "past" ? "Non ho partecipato" : "Non ci vado"}</Button>
+                  <Button className="w-full text-sm" onClick={() => mark(comp.id, true)}>{past ? "Ho partecipato" : "Ci vado"}</Button>
+                  <Button className="w-full text-sm" variant="ghost" onClick={() => mark(comp.id, false)}>{past ? "Non ho partecipato" : "Non ci vado"}</Button>
                 </div>
               ) : null}
               {!comp.virtual && ((scope === "mine" && !mine?.portal) || comp.canDelete) ? (
@@ -323,15 +349,10 @@ export function GareBody({ embedded = false, league }: { embedded?: boolean; /**
                   ) : null}
                 </div>
               ) : null}
-                </>
-              ) : (
-                <p className="-mt-1 text-xs text-muted">{closedLine(comp, mine, scored.length)}</p>
-              )}
             </Card>
             </div>
           );
-        })}
-      </div>
+        })() : null}
       {minePoints.length ? (
         <Card>
           <h2 className="mb-2 font-display text-2xl">Tra gara e gara</h2>
@@ -353,7 +374,8 @@ export function GareBody({ embedded = false, league }: { embedded?: boolean; /**
               const comp = comps.find((c) => c.id === id);
               if (comp) setTab(comp.startsOn < today ? "past" : "next");
               setScope("mine");
-              setOpen(id);
+              setPickId(id);
+              setFolds((cur) => ({ ...cur, [`${id}:piazzole`]: true, [`${id}:lanes`]: true }));
               window.setTimeout(() => document.getElementById(`gara-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 120);
             }}
           />
@@ -477,10 +499,8 @@ function PiazzolaMates({ group, past }: { group: { piazzola: number; mates: Mate
   const [open, setOpen] = useState<string | null>(null);
   return (
     <div className="grid gap-1.5">
-      <p className="flex items-baseline justify-between gap-2 text-sm font-semibold">
-        <span>{past ? "In piazzola con te" : "Tirerai con"}</span>
-        {group.piazzola ? <span className="text-[0.7rem] font-normal text-muted">piazzola {group.piazzola}</span> : null}
-      </p>
+      {/* il titolo è nella tendina sopra: qui solo chi c'era, anche delle altre compagnie */}
+      {group.piazzola ? <p className="text-[0.7rem] text-muted">{past ? "Piazzola di partenza" : "Partirai dalla piazzola"} {group.piazzola} · tocca un arciere per le sue piazzole</p> : null}
       <ul className="grid gap-1.5">
         {group.mates.map((m) => {
           const cat = categoryText(m.category);
@@ -522,6 +542,30 @@ function PiazzolaMates({ group, past }: { group: { piazzola: number; mates: Mate
   );
 }
 
+/** una parte della gara che si apre e si chiude a tendina */
+function Fold({ icon, title, sub, open, onToggle, children, inner = false, logo = false }: { icon: IconName; title: string; sub?: string; open: boolean; onToggle: () => void; children: ReactNode; /** dentro un'altra tendina: più leggera */ inner?: boolean; /** il logo FITAST accanto al titolo */ logo?: boolean }) {
+  return (
+    <div className={cx("grid min-w-0 rounded-2xl", inner ? "bg-white/[0.03]" : "border border-line")}>
+      <button type="button" onClick={onToggle} aria-expanded={open} className="flex min-w-0 items-center gap-3 px-3 py-2.5 text-left">
+        <span className={cx("grid shrink-0 place-items-center rounded-xl bg-white/[0.06]", inner ? "h-8 w-8" : "h-9 w-9")}><Glyph name={icon} size={inner ? 16 : 18} /></span>
+        <span className="min-w-0 flex-1">
+          <b className="block text-sm">{title}</b>
+          {sub ? <span className="block truncate text-xs text-muted">{sub}</span> : null}
+        </span>
+        {logo ? <FitastLogo size={26} /> : null}
+        <Glyph name="chevron" size={15} className={cx("shrink-0 text-muted transition-transform", open ? "-rotate-90" : "rotate-90")} />
+      </button>
+      {open ? <div className={cx("grid min-w-0 gap-2 pb-3", inner ? "px-2" : "px-3")}>{children}</div> : null}
+    </div>
+  );
+}
+
+/** giorno breve per la striscia delle gare: «22 nov» */
+function shortDay(day: string) {
+  const d = new Date(`${day}T12:00:00`);
+  return Number.isNaN(d.getTime()) ? day : d.toLocaleDateString("it-IT", { day: "numeric", month: "short", year: d.getFullYear() === new Date().getFullYear() ? undefined : "2-digit" });
+}
+
 /** giorno della gara per esteso: «domenica 15 novembre» */
 function longDay(day: string) {
   const d = new Date(`${day}T12:00:00`);
@@ -532,16 +576,6 @@ function longDay(day: string) {
  * Testata della gara. Per le gare del campionato FITAST il nome è la compagnia che la organizza, con sotto
  * la tappa del campionato: sul portale si chiamano tutte uguali («Gara di Campionato Invernale 3D»).
  */
-/** la gara chiusa in una riga: il proprio risultato, quanti dei nostri, chi era in piazzola */
-function closedLine(comp: Comp, mine: Entry | null, ours: number) {
-  const parts = [
-    mine && mine.score != null ? `Tu: ${mine.score} punti${mine.rank ? ` · ${mine.rank}°` : ""}${mine.championshipPoints != null ? ` · ${mine.championshipPoints} pt camp.` : ""}` : "",
-    ours ? `${ours} dei nostri` : "",
-    comp.group?.mates.length ? `${comp.group.mates.length} in piazzola con te` : "",
-  ].filter(Boolean);
-  return parts.length ? parts.join(" · ") : "Tocca per aprire";
-}
-
 function GaraHead({ comp, crestOf, tab }: { comp: Comp; crestOf: (t: string) => Crest | null; tab: "past" | "next" }) {
   const f = comp.fitast ?? null;
   const host = comp.organizer.trim();

@@ -6,7 +6,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Glyph } from "@/components/icons";
 import { Avatar, Button, ErrorNote, Loading, TextInput, cx } from "@/components/kit";
-import { CrestMark, type Crest } from "@/components/fitast-league";
+import { CrestMark, FitastLogo, type Crest } from "@/components/fitast-league";
 import { fitastLinkState, fitastNameSearch, setFitastLink } from "@/lib/arcieri/fitast-link.api";
 import { titleName } from "@/lib/arcieri/fitast-league";
 import { memberLabel } from "@/lib/arcieri/labels";
@@ -43,7 +43,7 @@ export function FitastLinkCard({ onChanged, crestOf = noCrest, always = false }:
     <>
       {reserved ? null : !linked ? (
         <button type="button" onClick={() => setTarget(mine)} className="aa-press flex w-full items-center gap-3 rounded-[var(--radius-card)] border border-[#e0b15a]/30 bg-[#e0b15a]/[0.07] p-3 text-left">
-          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#e0b15a]/25"><Glyph name="trophy" size={22} /></span>
+          <FitastLogo size={44} />
           <span className="min-w-0 flex-1">
             <b className="block">Collega il tuo nome FITAST</b>
             <span className="block text-xs text-muted">Le gare del campionato si riempiono da sole con il tuo posto e i punti campionato.</span>

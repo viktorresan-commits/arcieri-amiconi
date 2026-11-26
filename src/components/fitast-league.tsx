@@ -309,7 +309,7 @@ export function FitastHeader({ league }: { league: FitastLeagueState }) {
   return (
     <Card className="grid gap-3 overflow-hidden">
       <div className="flex items-start gap-3">
-        <Insignia symbol="laurel" metal="gold" enamel="sapphire" shape="rosette" size={58} />
+        <FitastLogo size={62} />
         <div className="min-w-0 flex-1">
           <h2 className="font-display text-2xl leading-tight">Campionato FITAST</h2>
           <p className="text-sm text-muted">{data?.seasonName || "Campionato in corso"} · classifiche lette dal portale FITAST e salvate per tutti.</p>
@@ -541,4 +541,9 @@ export function FitastLeague({ companies }: { companies: Crest[] }) {
       <FitastGare league={league} />
     </div>
   );
+}
+
+/** il logo vero della F.IT.A.ST. (Formazione Italiana Arcieri Storici), dal suo sito */
+export function FitastLogo({ size = 40, className }: { size?: number; className?: string }) {
+  return <img src="/fitast-logo.webp" alt="F.IT.A.ST." width={size} height={size} className={["shrink-0 object-contain drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]", className].filter(Boolean).join(" ")} loading="lazy" decoding="async" />;
 }

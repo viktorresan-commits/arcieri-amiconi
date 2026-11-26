@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button, Card, ErrorNote, Field, Loading, Select, TextInput, cx } from "@/components/kit";
 import { Glyph } from "@/components/icons";
+import { FitastLogo } from "@/components/fitast-league";
 import { saveEntry } from "@/lib/arcieri/club.api";
 import { refreshActivity } from "@/lib/arcieri/xp";
 import { DIVISIONS, divisionOf, type Division } from "@/lib/arcieri/labels";
@@ -859,9 +860,12 @@ export function FitastPanel({ comps, myName, userId, startCode, onSaved, onClose
   return (
     <Card className="grid gap-3">
       <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="text-[0.66rem] font-semibold uppercase tracking-[0.16em] text-[#e0b15a]">Portale FITAST</p>
-          <p className="font-display text-2xl leading-tight">Gare, piazzole e classifiche</p>
+        <div className="flex min-w-0 items-center gap-3">
+          <FitastLogo size={48} />
+          <div className="min-w-0">
+            <p className="text-[0.66rem] font-semibold uppercase tracking-[0.16em] text-[#e0b15a]">Portale FITAST</p>
+            <p className="font-display text-2xl leading-tight">Gare, piazzole e classifiche</p>
+          </div>
         </div>
         {onClose ? <button type="button" onClick={onClose} aria-label="Chiudi" className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/[0.08] text-lg leading-none">×</button> : null}
       </div>
