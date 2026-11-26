@@ -6,7 +6,6 @@ import { memberLabel, divisionOf } from "@/lib/arcieri/labels";
 import { romeDayKey } from "@/lib/arcieri/time";
 import { useLoad } from "@/lib/arcieri/use-load";
 import { useMember } from "@/components/shell";
-import { MainGearCard } from "@/components/main-gear";
 import { Avatar, Button, Card, Empty, ErrorNote, Field, HoldDelete, Loading, PageHead, TextInput } from "@/components/kit";
 import { GaraTrend, type GaraPoint } from "@/components/gara-trend";
 import { GaraResult } from "@/components/gara-result";
@@ -133,7 +132,6 @@ export function GareBody({ embedded = false, league }: { embedded?: boolean; /**
   return (
     <div className="grid min-w-0 gap-4">
       {embedded ? null : <PageHead title="Gare" lede="Segni solo quelle a cui hai partecipato. Il punteggio degli altri si vede, ma si cambia solo il tuo." />}
-      <MainGearCard compact />
       {totals.gare > 0 ? (
         <Card className="relative">
           <span className="absolute right-3 top-3"><KindEmblem kind="campionato" size={54} glow /></span>
