@@ -5,7 +5,8 @@ import { sectionOf, type StationId } from "@/lib/arcieri/shortcuts";
  * Sfondo della sezione: un dipinto dello stesso mondo del campo di tiro in Casa, uno per sezione e nel suo colore
  * (bottega dell'arco, radura di allenamento, banco degli strumenti, studio sul lago, torneo, biblioteca, cortile della compagnia).
  * Le immagini sono già piccole e ammorbidite: il telefono non deve sfocarle mentre apre la pagina.
- * Cambiando sezione il nuovo dipinto compare sopra il vecchio; si muove piano a ciclo (fermo con «movimento ridotto»).
+ * Cambiando sezione il nuovo dipinto compare sopra il vecchio. Il dipinto è fermo e in Casa non c'è:
+ * lì il campo lo disegna già il gioco, e un secondo strato a tutto schermo pesava sulla grafica del telefono.
  */
 export type SceneId = "home" | StationId;
 
@@ -30,6 +31,7 @@ let preloaded = false;
 
 export function Scene({ path, search }: { path: string; search?: unknown }) {
   const id = sceneOf(path, search);
+  const home = id === "home";
   const [layers, setLayers] = useState<{ id: SceneId; n: number }[]>(() => [{ id, n: 0 }]);
   useEffect(() => {
     setLayers((cur) => {
@@ -42,7 +44,7 @@ export function Scene({ path, search }: { path: string; search?: unknown }) {
     if (preloaded) return;
     preloaded = true;
     const t = window.setTimeout(() => {
-      for (const k of Object.keys(FILE) as SceneId[]) new Image().src = url(k);
+      for (const k of Object.keys(FILE) as SceneId[]) if (k !== "home") new Image().src = url(k);
     }, 2500);
     return () => window.clearTimeout(t);
   }, []);
@@ -52,12 +54,17 @@ export function Scene({ path, search }: { path: string; search?: unknown }) {
   };
   return (
     <div aria-hidden className="aa-scene" data-scene={id}>
-      {layers.map((l, i) => (
-        <span key={l.n} className={i > 0 ? "aa-scene-layer is-new" : "aa-scene-layer"} onAnimationEnd={i > 0 ? done : undefined}>
-          <span className="aa-scene-img" style={{ backgroundImage: `url(${url(l.id)})` }} />
-        </span>
-      ))}
-      <span className="aa-scene-motes" />
+      {home
+        ? null
+        : layers.map((l, i) => {
+            if (l.id === "home") return null;
+            const fresh = i > 0 && i === layers.length - 1;
+            return (
+              <span key={l.n} className={fresh ? "aa-scene-layer is-new" : "aa-scene-layer"} onAnimationEnd={fresh ? done : undefined}>
+                <span className="aa-scene-img" style={{ backgroundImage: `url(${url(l.id)})` }} />
+              </span>
+            );
+          })}
       <span className="aa-scene-veil" />
     </div>
   );
