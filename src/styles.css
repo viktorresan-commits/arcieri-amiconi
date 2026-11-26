@@ -1528,7 +1528,9 @@ html[data-motion="ridotta"] .aa-hero-mark, html[data-motion="ridotta"] .aa-empty
 .aa-staff-step.is-mine { background: color-mix(in srgb, var(--primary) 16%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 45%, transparent); }
 
 /* profilo di un arciere: palco grande e premi che arrivano dall'alto */
-.aa-profile-stage { box-shadow: 0 24px 48px -24px rgb(0 0 0 / 0.8), inset 0 0 0 1px rgb(255 255 255 / 0.06); }
+.aa-profile-stage { box-shadow: none; }
+/* la scena della scheda arciere sfuma in basso nella pagina: nessun riquadro */
+.aa-stage-bleed { -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 74%, rgb(0 0 0 / 0.55) 88%, transparent 100%); mask-image: linear-gradient(180deg, #000 0%, #000 74%, rgb(0 0 0 / 0.55) 88%, transparent 100%); }
 .aa-stage-glow { background: radial-gradient(42% 48% at 50% 46%, rgb(255 244 214 / 0.32), rgb(255 244 214 / 0.08) 55%, transparent 75%); mix-blend-mode: soft-light; }
 .aa-stage-shadow { border-radius: 50%; background: radial-gradient(closest-side, rgb(0 0 0 / 0.45), rgb(0 0 0 / 0.18) 60%, transparent); filter: blur(2px); }
 .aa-crest-shield { animation: aa-crest-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) both; }

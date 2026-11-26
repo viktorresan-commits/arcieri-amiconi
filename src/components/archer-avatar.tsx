@@ -516,7 +516,9 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4, cssBlink = fals
       {/* flettenti: contorno, corpo, più spessi vicino al riser, lamina del ventre e luce */}
       {[1, -1].map((s) => (
         <g key={s}>
-          <path d={limbPath(s as 1 | -1)} stroke={OUTLINE} strokeOpacity="0.61" strokeWidth={g.width + 1.1} strokeLinecap="round" fill="none" />
+          {/* bordo netto e pieno (un bordo trasparente sullo sfondo chiaro sembra un alone) */}
+          <path d={limbPath(s as 1 | -1)} stroke={OUTLINE} strokeOpacity="0.95" strokeWidth={g.width + 1.3} strokeLinecap="round" fill="none" />
+          <path d={limbPath(s as 1 | -1)} pathLength={100} strokeDasharray="42 100" stroke={OUTLINE} strokeOpacity="0.95" strokeWidth={g.width + 2.9} strokeLinecap="round" fill="none" />
           <path d={limbPath(s as 1 | -1)} stroke={limbStroke} strokeWidth={g.width} strokeLinecap="round" fill="none" />
           <path d={limbPath(s as 1 | -1)} pathLength={100} strokeDasharray="42 100" stroke={limbStroke} strokeWidth={g.width + 1.6} strokeLinecap="round" fill="none" />
           <path d={limbPath(s as 1 | -1)} stroke={g.wood ? shade(limbBase, 0.35) : shade(limbBase, 0.5)} strokeOpacity={g.wood ? 0.4 : 0.12} strokeWidth={Math.max(0.6, g.width * 0.18)} strokeLinecap="round" fill="none" />

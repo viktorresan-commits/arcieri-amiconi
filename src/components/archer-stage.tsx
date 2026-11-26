@@ -68,8 +68,12 @@ export function ArcherStage({ data, look: lookIn, avatar, onArcherTap, corner }:
   const rank = data.stats.fitast;
   const figure = <ArcherFront look={look} fit className="h-full w-auto drop-shadow-[0_16px_24px_rgba(0,0,0,0.5)]" />;
   return (
-    <div className="aa-profile-stage relative h-[34rem] overflow-hidden rounded-[1.75rem]">
-      <SceneBackdrop sky={sky} id={`pf${data.id}`} scene={look.scene} />
+    // la scena va da bordo a bordo, parte subito sotto l'intestazione e in basso sfuma nella pagina (come in Casa)
+    <div className="aa-profile-stage relative -mx-4 -mt-6 h-[38rem] overflow-hidden">
+      <div className="aa-stage-bleed pointer-events-none absolute inset-0" aria-hidden>
+        <SceneBackdrop sky={sky} id={`pf${data.id}`} scene={look.scene} />
+        <div className="absolute inset-x-0 bottom-0 h-[22%] bg-gradient-to-t from-black/35 to-transparent" />
+      </div>
       {/* luce morbida dietro l'arciere e ombra a terra: l'arciere sta nella scena, non sopra */}
       <div style={{ ["--glow" as string]: haloOfXp(data.xp).a }} className={`aa-stage-glow aa-stage-glow-lv pointer-events-none absolute inset-x-0 top-[18%] bottom-[8%] ${rank ? "px-[22%]" : "pr-[22%]"}`} aria-hidden />
       <div className={`aa-stage-shadow pointer-events-none absolute bottom-[3.5%] h-[4.5%] w-[34%] -translate-x-1/2 ${rank ? "left-1/2" : "left-[39%]"}`} aria-hidden />
@@ -82,14 +86,13 @@ export function ArcherStage({ data, look: lookIn, avatar, onArcherTap, corner }:
           figure
         )}
       </div>
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[16%] bg-gradient-to-t from-black/35 to-transparent" aria-hidden />
       {/* il posto vero nel campionato FITAST, come uno stendardo appeso a sinistra */}
-      {rank ? <RankBanner r={rank} className="absolute left-[4.5%] top-[7.4rem] w-[24%]" /> : null}
+      {rank ? <RankBanner r={rank} className="absolute left-[6%] top-[8rem] w-[23%]" /> : null}
       {/* il livello dell'arciere, come uno stemma in basso a sinistra */}
-      <div className="aa-prize-float absolute bottom-4 left-2 w-[24%]" style={{ animationDelay: "0.1s" }}>
+      <div className="aa-prize-float absolute bottom-[5%] left-4 w-[23%]" style={{ animationDelay: "0.1s" }}>
         <LevelCrest xp={data.xp} />
       </div>
-      <div className="absolute inset-x-0 top-0 flex items-center gap-3 bg-gradient-to-b from-black/65 to-transparent p-3 pb-8">
+      <div className="absolute inset-x-0 top-0 flex items-center gap-3 bg-gradient-to-b from-black/65 to-transparent px-4 pb-8 pt-4">
         <span className="relative shrink-0">
           {avatar ?? <Avatar size="lg" label={name} color={data.avatarColor} photo={data.photoUrl} look={lookIn ?? undefined} admin={data.admin} xp={data.xp} />}
         </span>
@@ -109,7 +112,7 @@ export function ArcherStage({ data, look: lookIn, avatar, onArcherTap, corner }:
         </div>
         {corner}
       </div>
-      <div className="absolute bottom-4 right-2 top-24 flex w-[24%] flex-col items-center justify-center gap-3">
+      <div className="absolute bottom-[8%] right-4 top-28 flex w-[23%] flex-col items-center justify-center gap-3">
         {latest.length ? (
           latest.map((prize, i) => (
             <div key={prize.code} className="aa-prize-float grid justify-items-center text-center" style={{ animationDelay: `${0.2 + i * 0.15}s` }}>

@@ -231,7 +231,7 @@ function Page() {
           }
         />
       ) : (
-        <div className="aa-profile-stage h-[34rem] animate-pulse rounded-[1.75rem] bg-white/[0.04]" aria-hidden />
+        <div className="aa-profile-stage -mx-4 -mt-6 h-[38rem] animate-pulse bg-white/[0.04]" aria-hidden />
       )}
       {/* i propri numeri in breve: un tocco porta dove si vedono per intero */}
       <div className="grid grid-cols-3 gap-2">

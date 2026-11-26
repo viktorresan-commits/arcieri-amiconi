@@ -12,6 +12,22 @@ const rnd = (i: number) => {
 };
 const f = (n: number) => n.toFixed(1);
 
+/**
+ * Uccello che batte davvero le ali: le punte salgono e scendono attorno al corpo (animazione del
+ * tracciato, non uno schiacciamento). x, y = punta sinistra; a = mezza apertura di un'ala.
+ */
+export function FlapBird({ x, y, a, dur = 0.5, delay = 0, stroke = "#2a3a46", width = 1.3, opacity }: { x: number; y: number; a: number; dur?: number; delay?: number; stroke?: string; width?: number; opacity?: number }) {
+  const d = (tip: number, ctl: number) => `M${f(x)} ${f(y + tip * a)} Q${f(x + a)} ${f(y + ctl * a)} ${f(x + 2 * a)} ${f(y)} Q${f(x + 3 * a)} ${f(y + ctl * a)} ${f(x + 4 * a)} ${f(y + tip * a)}`;
+  const up = d(-0.6, -1.3);
+  const mid = d(0, -0.8);
+  const down = d(0.75, 0.15);
+  return (
+    <path d={mid} stroke={stroke} strokeWidth={width} strokeOpacity={opacity} fill="none" strokeLinecap="round" strokeLinejoin="round">
+      <animate attributeName="d" dur={`${dur}s`} begin={`${delay}s`} repeatCount="indefinite" values={`${up};${mid};${down};${mid};${up}`} keyTimes="0;0.3;0.5;0.7;1" calcMode="spline" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1" />
+    </path>
+  );
+}
+
 type Life = {
   /** farfalle di giorno */
   butterflies?: number;
@@ -94,13 +110,16 @@ export function SceneLife({ scene, night, rain, dusk }: { scene: SceneId; night:
         life.birds === "aquila" ? (
           <g className="aa-life-soar">
             <g transform="translate(250 70)">
-              <path className="aa-life-flap-slow" d="M-16 2 Q-8 -6 0 1 Q8 -6 16 2 Q8 -2 0 4 Q-8 -2 -16 2 Z" fill="#3a2a1e" opacity="0.8" />
+              <path d="M-16 2 Q-8 -6 0 1 Q8 -6 16 2 Q8 -2 0 4 Q-8 -2 -16 2 Z" fill="#3a2a1e" opacity="0.8">
+                {/* l'aquila plana e ogni tanto dà due colpi d'ala */}
+                <animate attributeName="d" dur="3.2s" repeatCount="indefinite" keyTimes="0;0.55;0.65;0.75;0.85;0.95;1" values="M-16 2 Q-8 -6 0 1 Q8 -6 16 2 Q8 -2 0 4 Q-8 -2 -16 2 Z;M-16 2 Q-8 -6 0 1 Q8 -6 16 2 Q8 -2 0 4 Q-8 -2 -16 2 Z;M-15 -7 Q-8 -9 0 1 Q8 -9 15 -7 Q8 -3 0 4 Q-8 -3 -15 -7 Z;M-15 9 Q-8 0 0 1 Q8 0 15 9 Q8 2 0 4 Q-8 2 -15 9 Z;M-15 -7 Q-8 -9 0 1 Q8 -9 15 -7 Q8 -3 0 4 Q-8 -3 -15 -7 Z;M-15 9 Q-8 0 0 1 Q8 0 15 9 Q8 2 0 4 Q-8 2 -15 9 Z;M-16 2 Q-8 -6 0 1 Q8 -6 16 2 Q8 -2 0 4 Q-8 -2 -16 2 Z" />
+              </path>
             </g>
           </g>
         ) : (
           <g className="aa-life-glide" style={{ animationDuration: life.birds === "gabbiani" ? "38s" : "26s" }}>
             {[[0, 60], [18, 52], [34, 66]].map(([dx, y], i) => (
-              <path key={i} className="aa-wing" style={{ animationDuration: life.birds === "gabbiani" ? "0.5s" : "0.24s", animationDelay: `${i * 0.12}s` }} d={`M${dx - 20} ${y} q4 -4 8 0 q4 -4 8 0`} stroke={life.birds === "gabbiani" ? "#f4f1ea" : "#2a3a46"} strokeWidth="1.3" fill="none" strokeLinecap="round" />
+              <FlapBird key={i} x={dx - 20} y={y} a={4} dur={life.birds === "gabbiani" ? 0.9 : 0.45} delay={i * 0.13} stroke={life.birds === "gabbiani" ? "#f4f1ea" : "#2a3a46"} />
             ))}
           </g>
         )

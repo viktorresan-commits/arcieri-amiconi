@@ -87,7 +87,7 @@ export function RankBanner({ r, className = "" }: { r: FitastRank; className?: s
           <path d="M2 0 H98 V100 L50 87 L2 100 Z" fill="none" stroke={trim.mid} strokeWidth="3" vectorEffect="non-scaling-stroke" />
           <path d="M8 2.5 H92 V91 L50 79.5 L8 91 Z" fill="none" stroke={trim.light} strokeOpacity="0.75" strokeWidth="1.2" strokeDasharray="1.5 3" vectorEffect="non-scaling-stroke" />
         </svg>
-        <figcaption className="relative grid justify-items-center px-[9%] pb-[38%] pt-2.5 text-center text-[#fff3dc]">
+        <figcaption className="relative grid justify-items-center px-[9%] pb-[92%] pt-2.5 text-center text-[#fff3dc]">
           <span className="text-[0.56rem] font-semibold leading-none tracking-wide text-[#fff3dc]/80">Campionato</span>
           {r.place ? (
             <span className="mt-1 bg-clip-text font-display text-[2.55rem] leading-[0.95] text-transparent drop-shadow-[0_2px_1px_rgba(0,0,0,0.55)]" style={metalText}>

@@ -72,12 +72,25 @@ export function FrontFist({ x, y, r, skin, gloves, flip = 1 }: { x: number; y: n
       ))}
       {/* ombra sul lato del palmo, in ombra (la luce viene da sinistra di chi guarda) */}
       <path d={`M${f(-0.7 * r)} ${f(-0.9 * r)} C${f(-0.92 * r)} ${f(-0.3 * r)} ${f(-0.9 * r)} ${f(0.5 * r)} ${f(-0.6 * r)} ${f(0.95 * r)}`} stroke={t.lo} strokeWidth={f(0.08 * r)} fill="none" opacity="0.35" strokeLinecap="round" />
-      {/* pollice che chiude sopra l'indice, con l'unghia */}
-      <path d={`M${f(-0.98 * r)} ${f(-0.42 * r)} C${f(-0.7 * r)} ${f(-0.98 * r)} ${f(-0.1 * r)} ${f(-1.02 * r)} ${f(0.42 * r)} ${f(-0.82 * r)}`} stroke={OUT} strokeOpacity="0.54" strokeWidth={f(0.44 * r)} fill="none" strokeLinecap="round" />
-      <path d={`M${f(-0.98 * r)} ${f(-0.42 * r)} C${f(-0.7 * r)} ${f(-0.98 * r)} ${f(-0.1 * r)} ${f(-1.02 * r)} ${f(0.42 * r)} ${f(-0.82 * r)}`} stroke={t.base} strokeWidth={f(0.38 * r)} fill="none" strokeLinecap="round" />
-      <path d={`M${f(-0.86 * r)} ${f(-0.62 * r)} C${f(-0.6 * r)} ${f(-1.02 * r)} ${f(-0.1 * r)} ${f(-1.08 * r)} ${f(0.3 * r)} ${f(-0.92 * r)}`} stroke={t.hi} strokeWidth={f(0.045 * r)} fill="none" strokeLinecap="round" opacity="0.9" />
-      {gloves ? null : <ellipse cx={f(0.36 * r)} cy={f(-0.84 * r)} rx={f(0.15 * r)} ry={f(0.1 * r)} fill={t.nail} stroke={t.line} strokeWidth={f(0.03 * r)} strokeOpacity="0.6" transform={`rotate(-18 ${f(0.36 * r)} ${f(-0.84 * r)})`} />}
-      <path d={`M${f(-0.4 * r)} ${f(-0.86 * r)} q${f(0.06 * r)} ${f(0.08 * r)} ${f(0.14 * r)} ${f(0.02 * r)}`} stroke={t.line} strokeWidth={f(0.03 * r)} fill="none" opacity="0.6" />
+      {/* pollice vero: parte dal palmo vicino al polso (base larga), scende in diagonale e si chiude sopra
+          l'indice; l'unghia sta sulla punta, nella direzione del dito */}
+      {(() => {
+        // bordo visibile del pollice (sopra, punta, sotto) e base che si fonde col palmo, senza tratto
+        const edge = `M${f(-0.66 * r)} ${f(-1.1 * r)} C${f(-0.3 * r)} ${f(-1.02 * r)} ${f(0.08 * r)} ${f(-0.86 * r)} ${f(0.46 * r)} ${f(-0.62 * r)} C${f(0.66 * r)} ${f(-0.49 * r)} ${f(0.6 * r)} ${f(-0.22 * r)} ${f(0.38 * r)} ${f(-0.25 * r)} C${f(0.02 * r)} ${f(-0.31 * r)} ${f(-0.44 * r)} ${f(-0.46 * r)} ${f(-0.86 * r)} ${f(-0.46 * r)}`;
+        const thumb = `${edge} C${f(-0.98 * r)} ${f(-0.7 * r)} ${f(-0.86 * r)} ${f(-1.02 * r)} ${f(-0.66 * r)} ${f(-1.1 * r)} Z`;
+        return (
+          <g>
+            <path d={thumb} fill={`url(#${gid})`} />
+            <path d={edge} fill="none" stroke={OUT} strokeOpacity="0.5" strokeWidth="0.3" strokeLinejoin="round" strokeLinecap="round" />
+            {/* luce sul dorso del pollice e piega dove si appoggia sull'indice */}
+            <path d={`M${f(-0.7 * r)} ${f(-0.96 * r)} C${f(-0.3 * r)} ${f(-0.94 * r)} ${f(0.1 * r)} ${f(-0.78 * r)} ${f(0.4 * r)} ${f(-0.58 * r)}`} stroke={t.hi} strokeWidth={f(0.05 * r)} fill="none" strokeLinecap="round" opacity="0.85" />
+            <path d={`M${f(-0.5 * r)} ${f(-0.46 * r)} C${f(-0.12 * r)} ${f(-0.38 * r)} ${f(0.16 * r)} ${f(-0.27 * r)} ${f(0.36 * r)} ${f(-0.24 * r)}`} stroke={t.line} strokeWidth={f(0.035 * r)} fill="none" strokeLinecap="round" opacity="0.55" />
+            {/* articolazione del pollice */}
+            <path d={`M${f(-0.08 * r)} ${f(-0.86 * r)} q${f(0.04 * r)} ${f(0.12 * r)} ${f(0.02 * r)} ${f(0.24 * r)}`} stroke={t.line} strokeWidth={f(0.03 * r)} fill="none" opacity="0.5" strokeLinecap="round" />
+            {gloves ? null : <ellipse cx={f(0.43 * r)} cy={f(-0.45 * r)} rx={f(0.15 * r)} ry={f(0.1 * r)} fill={t.nail} stroke={t.line} strokeWidth={f(0.03 * r)} strokeOpacity="0.6" transform={`rotate(38 ${f(0.43 * r)} ${f(-0.45 * r)})`} />}
+          </g>
+        );
+      })()}
       {/* polsino del guanto */}
       {gloves ? (
         <g>

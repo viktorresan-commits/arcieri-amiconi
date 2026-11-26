@@ -1,4 +1,4 @@
-import { SceneLife } from "./scene-life";
+import { FlapBird, SceneLife } from "./scene-life";
 import { FOUNDER_LAYERS } from "./scene-founder";
 import { memo, type ReactNode } from "react";
 import type { Sky } from "@/lib/arcieri/sky3d";
@@ -107,7 +107,7 @@ function PaintedBackdrop({ sky, id, art, wind = 0 }: { sky: Sky; id: string; art
       {/* uccelli lontani di giorno */}
       {!night && !rain ? (
         <g className="aa-paint-birds" fill="none" stroke="#2a2a2a" strokeOpacity="0.55" strokeWidth="2.4" strokeLinecap="round">
-          {[[0, 0], [26, 12], [52, -6]].map(([dx, dy], i) => <path key={i} className="aa-wing" style={{ animationDelay: `${i * 0.15}s` }} d={`M${w * 0.18 + dx} ${art.sky * 0.55 + dy} q7 -7 14 0 q7 -7 14 0`} />)}
+          {[[0, 0], [26, 12], [52, -6]].map(([dx, dy], i) => <FlapBird key={i} x={w * 0.18 + dx} y={art.sky * 0.55 + dy} a={7} dur={0.55 + i * 0.07} delay={i * 0.17} stroke="#2a2a2a" width={2.4} opacity={0.55} />)}
         </g>
       ) : null}
       {/* di notte: torce che tremolano e lucciole sull'erba */}
@@ -315,10 +315,11 @@ function SkyLayer({ id, tod, night, rain, cloudy, desert, wind, high = false, am
               {[0, 280].map((dx) => (
                 <g key={dx} transform={`translate(${dx} 6)`}>
                   {list.map(([x, y, k, a, j], i) => <Cloud key={i} x={x * 0.7} y={y} k={k * 0.9} tint={tint} base={base} id={gid} alpha={a} shape={j + seed} />)}
-                  {layer === 1 && !night && !rain ? (
-                    <g stroke="#2a3a46" strokeWidth="1.3" fill="none" strokeLinecap="round">
-                      <path d="M84 84 q4 -4 8 0 q4 -4 8 0" />
-                      <path d="M104 76 q3 -3 6 0 q3 -3 6 0" />
+                  {/* due uccelli che battono le ali, solo in una delle due copie del nastro: non si ripetono */}
+                  {layer === 1 && !night && !rain && dx === 0 ? (
+                    <g>
+                      <FlapBird x={84} y={84} a={4} dur={0.5} />
+                      <FlapBird x={104} y={76} a={3} dur={0.42} delay={0.2} />
                     </g>
                   ) : null}
                 </g>

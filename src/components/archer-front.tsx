@@ -367,7 +367,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
           <g className={live ? "aa-front-bow" : undefined}>
             {([1, -1] as const).map((sg) => (
               <g key={sg}>
-                <path d={limbD(sg)} stroke={OUT} strokeOpacity="0.61" strokeWidth={longbow ? 8 : 7} strokeLinecap="round" fill="none" />
+                <path d={limbD(sg)} stroke={OUT} strokeOpacity="0.95" strokeWidth={longbow ? 7.2 : 6.2} strokeLinecap="round" fill="none" />
                 <path d={limbD(sg)} stroke={limbs} strokeWidth={longbow ? 5.8 : 4.8} strokeLinecap="round" fill="none" />
                 <path d={limbD(sg)} stroke={shade(limbs, wood ? 0.35 : 0.55)} strokeOpacity={wood ? 0.6 : 0.4} strokeWidth="1.4" strokeLinecap="round" fill="none" transform="translate(1.2 0)" />
                 <path d={limbD(sg)} stroke="#000" strokeOpacity="0.25" strokeWidth="1.2" strokeLinecap="round" fill="none" transform="translate(-1.4 0)" />
