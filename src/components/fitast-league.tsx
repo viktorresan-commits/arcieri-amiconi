@@ -6,13 +6,13 @@ import { Medal } from "@/components/palmares";
 import { CrestPodium } from "@/components/podium";
 import { Insignia } from "@/components/insignia";
 import { useLoad } from "@/lib/arcieri/use-load";
-import { fitastStandings, fitastTeamArchers, fitastTeamStats, type Standing, type StandingRow, type TeamArcher, type TeamStat } from "@/lib/arcieri/fitast-league.api";
+import { fitastStandingRows, fitastStandings, fitastTeamArchers, fitastTeamStats, type Standing, type StandingRow, type TeamArcher, type TeamStat } from "@/lib/arcieri/fitast-league.api";
 import { categoryGroup, cleanCategory, crestOf as drawCrest, teamKey, titleName } from "@/lib/arcieri/fitast-league";
 import { syncStandings, type SyncProgress } from "@/lib/arcieri/fitast-sync";
 
 type Crest = { name: string; logoUrl: string | null; color: string; fitastName?: string };
 
-const GROUPS = ["Messeri", "Madonne", "Juniores", "Pueri"];
+const GROUPS = ["Messeri", "Madonne", "Juniores", "Juvenis", "Pueri", "Tutti"];
 const STALE_MS = 12 * 3_600_000;
 const fmtDay = (d: string) => (d ? `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}` : "");
 const pts = (r: StandingRow) => r.camp ?? r.score;
@@ -67,8 +67,11 @@ function useSplit(items: Standing[]) {
     for (const it of items) {
       const { group, tipologia } = categoryGroup(it.category);
       const g = group || "Tutti";
+      const tip = tipologia || "Tutte";
       if (!groups.has(g)) groups.set(g, new Map());
-      groups.get(g)!.set(tipologia || "Tutte", it);
+      // la stessa categoria letta due volte (filtri in ordine diverso): resta quella più completa
+      const prev = groups.get(g)!.get(tip);
+      if (!prev || (it.total ?? it.rows.length) > (prev.total ?? prev.rows.length)) groups.get(g)!.set(tip, it);
     }
     const order = [...groups.keys()].sort((a, b) => (GROUPS.indexOf(a) + 1 || 99) - (GROUPS.indexOf(b) + 1 || 99) || a.localeCompare(b, "it"));
     return { groups, order };
@@ -97,6 +100,42 @@ function RankList({ rows, crestOf, team, limit, onTeam }: { rows: StandingRow[];
         </li>
       ))}
     </ol>
+  );
+}
+
+/** i primi della classifica e, a richiesta, tutti gli altri arcieri (letti dal server solo quando servono) */
+function FullRanking({ it, crestOf, limit, onTeam }: { it: Standing; crestOf: (t: string) => Crest | null; limit: number; onTeam?: (name: string) => void }) {
+  const [all, setAll] = useState<StandingRow[] | null>(null);
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const total = Math.max(it.total ?? 0, it.rows.length);
+  const more = total - Math.min(limit, it.rows.length);
+  const expand = async () => {
+    if (all) return setOpen(true);
+    setBusy(true);
+    setErr("");
+    try {
+      const r = await fitastStandingRows({ data: { season: it.season, category: it.category } });
+      setAll(r.rows.length ? r.rows : it.rows);
+      setOpen(true);
+    } catch {
+      setErr("Non riesco a caricare il resto della classifica. Riprova tra poco.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const rows = open && all ? all : it.rows;
+  return (
+    <div className="grid gap-2">
+      <RankList rows={rows} crestOf={crestOf} limit={open && all ? rows.length : limit} onTeam={onTeam} />
+      {more > 0 ? (
+        <button type="button" onClick={open ? () => setOpen(false) : expand} disabled={busy} className="aa-chip justify-self-center px-4 py-2 text-sm">
+          {busy ? "Carico la classifica…" : open ? `Solo i primi ${limit}` : `Mostra tutti gli arcieri (${total})`}
+        </button>
+      ) : null}
+      {err ? <p className="text-center text-xs text-[#f0a08a]">{err}</p> : null}
+    </div>
   );
 }
 
@@ -130,7 +169,7 @@ function SplitBoard({ items, crestOf, team, limit, empty }: { items: Standing[];
           <TeamPodium rows={it.rows} crestOf={crestOf} onTeam={setShown} />
           <RankList rows={it.rows.slice(3)} crestOf={crestOf} team={team} limit={limit - 3} onTeam={setShown} />
         </>
-      ) : it ? <RankList rows={it.rows} crestOf={crestOf} team={team} limit={limit} onTeam={setShown} /> : null}
+      ) : it && !team ? <FullRanking key={`${it.season}|${it.category}`} it={it} crestOf={crestOf} limit={limit} onTeam={setShown} /> : it ? <RankList rows={it.rows} crestOf={crestOf} team={team} limit={limit} onTeam={setShown} /> : null}
       {team ? <p className="px-1 text-[0.7rem] text-muted">Tocca una compagnia per vedere tutti i suoi arcieri.</p> : null}
       {shown ? <TeamArchersSheet team={shown} crest={crestOf(shown)} onClose={() => setShown(null)} /> : null}
     </div>
@@ -340,13 +379,13 @@ export function FitastTeamsBoard({ league, metric }: { league: FitastLeagueState
   );
 }
 
-/** primi dieci arcieri del campionato per categoria */
+/** arcieri del campionato per categoria: i primi dieci e, a richiesta, tutti */
 export function FitastArchersCard({ league }: { league: FitastLeagueState }) {
   return (
     <Card className="grid gap-3">
       <div>
         <h3 className="font-display text-xl">Classifica generale arcieri</h3>
-        <p className="text-xs text-muted">I primi dieci di ogni categoria del campionato: Messeri, Madonne, Juniores e Pueri.</p>
+        <p className="text-xs text-muted">I primi dieci di ogni categoria del campionato (Messeri, Madonne, Juniores, Juvenis, Pueri); sotto la lista puoi aprire tutti gli altri.</p>
       </div>
       <SplitBoard items={league.genAr} crestOf={league.crestOf} limit={10} empty={league.running ? "In lettura dal portale…" : "Ancora non letta: tocca Aggiorna dal portale."} />
     </Card>

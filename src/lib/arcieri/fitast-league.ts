@@ -174,14 +174,45 @@ export function rankingRows(page: FitastPage, kind: "arcieri" | "squadre", limit
   return [];
 }
 
-/** la categoria in parole dell'app: Messeri, Madonne, Juniores, Pueri; e la tipologia d'arco */
+/** le classi del campionato, dalla più specifica: Juvenis prima di Messeri/Madonne */
+const CLASSES: [RegExp, string][] = [
+  [/juven\p{L}*/iu, "Juvenis"],
+  [/junior\p{L}*/iu, "Juniores"],
+  [/puer\p{L}*/iu, "Pueri"],
+  [/messer\p{L}*/iu, "Messeri"],
+  [/madonn\p{L}*/iu, "Madonne"],
+];
+const BOW = /arco|bow|stor|nud|ricurv|long|compound|olimp|tradiz|istint|medieval|rinasc/i;
+/** testo pulito per confronti: niente spazi doppi, segni invisibili né differenze di maiuscole */
+const plain = (s: string) => clean(s.normalize("NFKC").replace(/[\p{Cf}]/gu, ""));
+
+/**
+ * La categoria in parole dell'app: la classe (Messeri, Madonne, Juniores, Juvenis, Pueri) e la tipologia d'arco.
+ * La classe si riconosce in qualunque posizione della categoria (il portale non mette i filtri sempre nello
+ * stesso ordine); «Tutte» non conta.
+ */
 export function categoryGroup(category: string): { group: string; tipologia: string } {
-  const parts = category.split(" · ").map(clean);
-  const find = (re: RegExp) => parts.find((p) => re.test(p)) ?? "";
-  const g = find(/messer|madonn|junior|puer/i) || parts[0] || "";
-  const group = /messer/i.test(g) ? "Messeri" : /madonn/i.test(g) ? "Madonne" : /junior/i.test(g) ? "Juniores" : /puer/i.test(g) ? "Pueri" : titleName(g);
-  const tipologia = titleName(parts.find((p) => p !== g) ?? "");
-  return { group, tipologia };
+  const parts = category.split("·").map(plain).filter((p) => p && !/^tutt/i.test(p));
+  let group = "";
+  let at = -1;
+  let extra = "";
+  for (const [re, name] of CLASSES) {
+    at = parts.findIndex((p) => re.test(p));
+    if (at >= 0) {
+      group = name;
+      // il resto del pezzo (es. «Juvenis maschile» → maschile) va con la tipologia
+      extra = clean(parts[at].replace(re, " "));
+      break;
+    }
+  }
+  if (at < 0 && parts.length) {
+    // nessuna classe riconosciuta: se il primo pezzo non è un tipo d'arco è la classe, altrimenti sono tutti
+    const first = parts.findIndex((p) => !BOW.test(p));
+    at = parts.length > 1 || first === 0 ? Math.max(first, 0) : -1;
+    group = at >= 0 ? titleName(parts[at]) : "Tutti";
+  }
+  const rest = [extra, ...parts.filter((_, i) => i !== at)].filter(Boolean).map(titleName);
+  return { group: group || "Tutti", tipologia: rest.join(" · ") };
 }
 
 // stemmi disegnati: scudo con bordo d'oro, campo partito/troncato/in banda/inquartato, arma al centro e iniziali

@@ -364,7 +364,7 @@ export const findCompanyLogos = createServerFn({ method: "POST" })
   });
 
 export type StandingRow = RankRow;
-export type Standing = { kind: StandingKind; season: string; seasonName: string; garaId: string; garaTitle: string; day: string; category: string; rows: StandingRow[]; updatedAt: string };
+export type Standing = { kind: StandingKind; season: string; seasonName: string; garaId: string; garaTitle: string; day: string; category: string; rows: StandingRow[]; /** arcieri in tutta la classifica (la pagina ne riceve solo i primi) */ total: number; updatedAt: string };
 
 /** le classifiche FITAST salvate del campionato più recente */
 export const fitastStandings = createServerFn({ method: "GET" })
@@ -388,10 +388,28 @@ export const fitastStandings = createServerFn({ method: "GET" })
       category: r.category,
       // la pagina mostra i primi: dieci della generale arcieri, tre per gara, cinque squadre per gara
       rows: Array.isArray(r.rows) ? r.rows.slice(0, r.kind === "generale-arcieri" ? 10 : r.kind === "gara-arcieri" ? 3 : r.kind === "gara-squadre" ? 5 : 40) : [],
+      total: Array.isArray(r.rows) ? r.rows.length : 0,
       updatedAt: new Date(r.updated_at).toISOString(),
     }));
     const updatedAt = items.reduce((m, x) => (x.updatedAt > m ? x.updatedAt : m), "");
     return { season: latest[0].season, seasonName: latest[0].season_name, updatedAt, items };
+  });
+
+/** tutta una classifica generale arcieri (oltre i primi dieci), quando la si apre */
+export const fitastStandingRows = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: unknown) => {
+    const r = (input ?? {}) as Record<string, unknown>;
+    return { season: clip(r.season, 24).replace(/[^\w-]/g, ""), category: clip(r.category, 90) };
+  })
+  .handler(async ({ context, data }) => {
+    const sql = await db();
+    await ensureMember(sql, context.userId);
+    const found = await sql<{ rows: StandingRow[] }>`
+      select rows from fitast_standings
+      where kind = 'generale-arcieri' and season = ${data.season} and category = ${data.category}
+      order by updated_at desc limit 1`;
+    return { rows: Array.isArray(found[0]?.rows) ? found[0].rows : [] };
   });
 
 const optNum = (v: unknown, max: number) => {
