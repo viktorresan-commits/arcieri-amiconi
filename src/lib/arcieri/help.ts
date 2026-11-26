@@ -81,6 +81,11 @@ export const PAGE_HELP: Record<string, string[]> = {
     "Certificati: basta la data di scadenza. Arancione = scade entro 30 giorni.",
     "Presenze: aggiungi la giornata e tocca chi c'era. «Esporta tabella» crea un CSV per Excel.",
   ],
+  "/storia": [
+    "Foto insieme: scegli un compagno, i due arcieri stanno uno accanto all'altro nella tua scena o nella sua.",
+    "Il mio video: undici secondi con il tuo arciere e i tuoi numeri; resta sulla pagina mentre registra.",
+    "«Condividi» apre Instagram, WhatsApp e le altre app; sul computer scarica il file.",
+  ],
   "/riepilogo": [
     "Scorri i mesi con le frecce: l'immagine si aggiorna da sola.",
     "«Condividi» apre WhatsApp, Instagram e le altre app; sul computer scarica l'immagine.",

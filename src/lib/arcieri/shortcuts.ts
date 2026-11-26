@@ -42,6 +42,7 @@ export const SHORTCUTS: Shortcut[] = [
   { id: "storico-gesto", group: "squadra", label: "Storico del gesto", hint: "Le analisi salvate, per le statistiche del corpo", icon: "archer", color: "#7652d1", to: "/gesti" },
   { id: "obiettivi", group: "squadra", label: "Obiettivi", hint: "I tuoi traguardi", icon: "flag", color: "#2a9c66", to: "/obiettivi" },
   { id: "riepilogo", group: "squadra", label: "Il mio mese", hint: "Riepilogo da condividere", icon: "share", color: "#c46b2b", to: "/riepilogo" },
+  { id: "storia", group: "squadra", label: "Storie", hint: "Foto insieme e video con i tuoi numeri", icon: "camera", color: "#b5486a", to: "/storia" },
   { id: "schede", group: "allena", label: "Le mie schede", hint: "Esercizi, classi e richieste dell'allenatore", icon: "notebook", color: "#2f6fd1", to: "/schede" },
   { id: "istruttore", group: "squadra", label: "Allenatore", hint: "Allievi, schede e progressi", icon: "team", color: "#2f6fd1", to: "/istruttore" },
   { id: "segreteria", group: "squadra", label: "Segreteria", hint: "Quote, certificati e presenze", icon: "checklist", color: "#3f8a76", to: "/segreteria" },
@@ -257,7 +258,7 @@ const NEXT: Record<string, string> = {
   unita: "spine", gare: "segnapunti", segnapunti: "classifiche", classifiche: "squadra", confronta: "squadra",
   calendario: "gare", sfide: "classifiche", squadra: "bacheca", bacheca: "mercatino", mercatino: "calendario", stima: "regole",
   regole: "glossario", glossario: "lezioni", lezioni: "quiz", quiz: "sfida-giorno", avatar: "attrezzatura", "sfida-giorno": "rapido", acquisti: "attrezzatura", profilo: "obiettivi",
-  riepilogo: "statistiche", istruttore: "segreteria", segreteria: "staff",
+  riepilogo: "statistiche", storia: "riepilogo", istruttore: "segreteria", segreteria: "staff",
 };
 
 /**

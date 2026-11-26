@@ -399,6 +399,11 @@ export const AVATAR_KEY = "aa-avatar-v1";
 export function normalizeLook(raw: unknown): AvatarLook {
   const r = raw && typeof raw === "object" ? (raw as Partial<AvatarLook>) : {};
   const out = { ...AVATAR_DEFAULT, ...r } as AvatarLook;
+  // Demone di Montelago scelto con la prima versione: la tunica era diventata il giubbetto della compagnia
+  if (out.special?.startsWith("demone-") && out.style === "medievale" && out.top === "giubbetto") {
+    out.style = "moderno";
+    out.top = "maglia";
+  }
   if (!TOPS[out.style]?.some((t) => t.id === out.top)) out.top = TOPS[out.style][0].id;
   return out;
 }

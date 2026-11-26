@@ -70,7 +70,7 @@ SPECIAL_LOOKS.push(
     label: "Demone di Montelago (Simone)",
     motto: "Maschera rossa con la lingua di fuori, barba grigia intrecciata, tunica cremisi, mantello bordeaux e bastone col teschio di cavallo",
     look: {
-      style: "medievale", top: "maglia", shirt: "#8e1b26", trim: "#b8862e", sleeves: "", pattern: "nessuno", emblem: "nessuno",
+      style: "moderno", top: "maglia", shirt: "#8e1b26", trim: "#b8862e", sleeves: "", pattern: "nessuno", emblem: "nessuno",
       bottom: "larghi", pants: "#1a1818", footwear: "sandali", shoes: "#141414",
       hat: "nessuno", cape: true, capeStyle: "liscio", capeColor: "#4e2420", capePattern: "liscio", clasp: "nessuno",
       cowl: false, fur: false, scarf: false, mask: false, sash: false, straps: false, wraps: false,
@@ -87,7 +87,7 @@ SPECIAL_LOOKS.push(
     label: "Demone di Montelago (Victor)",
     motto: "Teschio con le corna ad anelli, capelli rossi, stola di pelliccia rossa, kilt scozzese, corno per bere e bastone con la nappa rossa",
     look: {
-      style: "medievale", top: "maglia", shirt: "#161414", trim: "#2a2626", sleeves: "", pattern: "nessuno", emblem: "nessuno",
+      style: "moderno", top: "maglia", shirt: "#161414", trim: "#2a2626", sleeves: "", pattern: "nessuno", emblem: "nessuno",
       bottom: "gonna", pants: "#141212", footwear: "sandali", shoes: "#141414",
       hat: "nessuno", cape: false, cowl: false, fur: false, scarf: false, mask: false, sash: false, straps: false, wraps: false,
       belt: "sottile", beltColor: "#2a1a10", buckle: "semplice", pouch: false, gloves: false, bracers: "#3d2618",
