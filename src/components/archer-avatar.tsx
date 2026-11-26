@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { cloneElement, isValidElement, useEffect, useId, useMemo, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { tune, type AvatarLook, type Pose } from "@/lib/arcieri/avatar";
 import { zigQ, BowDeco, Buckle, ChestEmblem, Clasp, ClothPattern, Earring, FaceFrame, FacePaintFront, FacePaintProfile, Fletching, HairOrnament, PaintStroke, Pouch, QuiverBody } from "./avatar-extras";
 import { sceneById } from "@/lib/arcieri/scenes";
@@ -1231,6 +1231,91 @@ function Outfit({ look, cx, shoulderL, shoulderR, hipL, hipR, tunicLen, W, woman
 }
 
 /** Capelli dietro la testa e sulle spalle. */
+// ---- capelli di profilo dipinti, leggeri per il gioco: le ciocche si calcolano una volta sola
+// (stessi capelli, stesso disegno) e si ritagliano sulla forma dei capelli; niente maschere né filtri ----
+const strandCache = new Map<string, { dk: string; lt: string }>();
+const hashP = (n: number) => {
+  const v = Math.sin(n * 127.1 + 311.7) * 43758.5453;
+  return v - Math.floor(v);
+};
+type ProfileWeave = "down" | "sweep" | "curl" | "braid";
+function profileStrands(kind: ProfileWeave, box: [number, number, number, number], seed: number) {
+  const key = `${kind}|${box.join(",")}|${seed}`;
+  const hit = strandCache.get(key);
+  if (hit) return hit;
+  const [bx, by, bw, bh] = box;
+  const R = (k: number) => hashP(seed * 1000 + k);
+  let dk = "";
+  let lt = "";
+  const push = (seg: string, i: number) => {
+    if (i % 3 === 0) lt += seg;
+    else dk += seg;
+  };
+  if (kind === "curl") {
+    const n = Math.round((bw * bh) / 9);
+    for (let i = 0; i < n; i++) {
+      const x = bx + R(i) * bw;
+      const y = by + R(i + 500) * bh;
+      const r = 1.4 + R(i + 900) * 1.6;
+      push(`M${f(x - r)} ${f(y)} a${f(r)} ${f(r)} 0 1 1 ${f(r * 1.7)} ${f(r * 0.7)}`, i);
+    }
+  } else if (kind === "braid") {
+    let row = 0;
+    for (let y = by; y < by + bh; y += 2.6, row++) {
+      for (let x = bx; x < bx + bw; x += 3) push(`M${f(x)} ${f(y)} l${row % 2 ? 2 : -2} 1.8`, row % 2 ? 1 : 0);
+    }
+  } else if (kind === "sweep") {
+    // pettinati all'indietro: archi che seguono la curva del cranio, dalla fronte verso la nuca
+    const cx = bx + bw * 0.52;
+    const cy = by + bh * 0.72;
+    const n = 80;
+    const pt = (r: number, deg: number) => [cx + r * Math.cos((deg * Math.PI) / 180), cy - r * Math.sin((deg * Math.PI) / 180)];
+    for (let i = 0; i < n; i++) {
+      const r = 10 + R(i) * 24;
+      const a1 = 15 + R(i + 300) * 120;
+      const a2 = a1 + 25 + R(i + 600) * 45;
+      const [x1, y1] = pt(r, a1);
+      const [x2, y2] = pt(r * (0.96 + R(i + 700) * 0.08), a2);
+      const [mx, my] = pt(r * 1.04, (a1 + a2) / 2);
+      const qx = 2 * mx - (x1 + x2) / 2;
+      const qy = 2 * my - (y1 + y2) / 2;
+      push(`M${f(x1)} ${f(y1)} Q${f(qx)} ${f(qy)} ${f(x2)} ${f(y2)}`, i);
+    }
+  } else {
+    const n = Math.round(bw * 1.1);
+    for (let i = 0; i < n; i++) {
+      const x = bx + R(i) * bw;
+      const y0 = by + R(i + 300) * bh * 0.2;
+      const len = bh * (0.5 + R(i + 600) * 0.5);
+      const w1 = (R(i + 800) - 0.5) * 3;
+      push(`M${f(x)} ${f(y0)} c${f(w1)} ${f(len / 3)} ${f(-w1)} ${f((len * 2) / 3)} ${f(w1 * 0.4)} ${f(len)}`, i);
+    }
+  }
+  const out = { dk, lt };
+  strandCache.set(key, out);
+  return out;
+}
+function ProfileHairPaint({ uid, id, clip, kind, box, color, seed = 1 }: { uid: string; id: string; clip: ReactNode; kind: ProfileWeave; box: [number, number, number, number]; color: string; seed?: number }) {
+  const { dk, lt } = profileStrands(kind, box, seed);
+  return (
+    <g pointerEvents="none">
+      <defs>
+        <clipPath id={`${uid}${id}`}>{clip}</clipPath>
+        <linearGradient id={`${uid}${id}g`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#fff" stopOpacity="0.1" />
+          <stop offset="0.45" stopColor="#000" stopOpacity="0" />
+          <stop offset="1" stopColor="#000" stopOpacity="0.34" />
+        </linearGradient>
+      </defs>
+      <g clipPath={`url(#${uid}${id})`} fill="none" strokeLinecap="round">
+        <rect x={box[0]} y={box[1]} width={box[2]} height={box[3]} fill={`url(#${uid}${id}g)`} />
+        <path d={dk} stroke={shade(color, -0.52)} strokeOpacity="0.55" strokeWidth={kind === "braid" ? 0.8 : 0.62} />
+        <path d={lt} stroke={shade(color, 0.48)} strokeOpacity="0.45" strokeWidth={kind === "braid" ? 0.6 : 0.52} />
+      </g>
+    </g>
+  );
+}
+
 function HairBack({ look, uid, t }: { look: AvatarLook; uid: string; t: number }) {
   const sway = Math.sin(t * 1.6) * 2;
   const kid = look.body === "ragazzo" || look.body === "ragazza";
@@ -1238,12 +1323,19 @@ function HairBack({ look, uid, t }: { look: AvatarLook; uid: string; t: number }
   const fill = `url(#${uid}hair)`;
   if (look.hat === "cappuccio" || look.hat === "elmo") return null;
   let node: ReactNode = null;
+  // forme per ritagliare le ciocche dipinte (stesse forme dei capelli, senza colore)
+  let clip: ReactNode = null;
+  let kind: ProfileWeave = "down";
+  const one = (d: string) => {
+    node = <path d={d} fill={fill} />;
+    clip = <path d={d} />;
+  };
   switch (look.hair) {
     case "lunghi":
-      node = <path d={`M134 70 C120 92 118 132 ${f(126 + sway)} 160 L150 156 C142 128 140 104 144 86 Z`} fill={fill} />;
+      one(`M134 70 C120 92 118 132 ${f(126 + sway)} 160 L150 156 C142 128 140 104 144 86 Z`);
       break;
     case "coda":
-      node = <path d={`M131 78 C118 88 ${f(112 + sway)} 112 ${f(118 + sway * 1.5)} 140 C123 136 126 122 126 110 C128 98 134 90 138 84 Z`} fill={fill} />;
+      one(`M131 78 C118 88 ${f(112 + sway)} 112 ${f(118 + sway * 1.5)} 140 C123 136 126 122 126 110 C128 98 134 90 138 84 Z`);
       break;
     case "treccia":
       node = (
@@ -1253,6 +1345,8 @@ function HairBack({ look, uid, t }: { look: AvatarLook; uid: string; t: number }
           ))}
         </g>
       );
+      clip = [0, 1, 2, 3, 4, 5].map((i) => <ellipse key={i} cx={f(132 - i * 1.6 + sway * (i / 5))} cy={98 + i * 11} rx={6 - i * 0.4} ry="7" />);
+      kind = "braid";
       break;
     case "codini":
       node = (
@@ -1261,12 +1355,13 @@ function HairBack({ look, uid, t }: { look: AvatarLook; uid: string; t: number }
           <path d={`M160 66 C170 58 ${f(176 + sway)} 64 ${f(178 + sway)} 74 C172 72 166 70 162 72 Z`} opacity="0.85" />
         </g>
       );
+      clip = <path d={`M130 86 C118 92 ${f(116 + sway)} 112 ${f(120 + sway)} 128 C126 124 130 110 134 96 Z`} />;
       break;
     case "caschetto":
-      node = <path d="M128 76 C124 90 126 104 132 110 L146 108 C140 98 140 88 144 80 Z" fill={fill} />;
+      one("M128 76 C124 90 126 104 132 110 L146 108 C140 98 140 88 144 80 Z");
       break;
     case "lunghi-mossi":
-      node = <path d={`M134 68 C116 86 ${f(118 + sway)} 112 ${f(112 + sway)} 128 C${f(120 + sway)} 136 ${f(110 + sway * 1.3)} 148 ${f(120 + sway * 1.5)} 166 C130 160 138 162 148 156 C140 140 146 128 140 116 C146 102 142 90 146 82 Z`} fill={fill} />;
+      one(`M134 68 C116 86 ${f(118 + sway)} 112 ${f(112 + sway)} 128 C${f(120 + sway)} 136 ${f(110 + sway * 1.3)} 148 ${f(120 + sway * 1.5)} 166 C130 160 138 162 148 156 C140 140 146 128 140 116 C146 102 142 90 146 82 Z`);
       break;
     case "trecce":
       node = (
@@ -1275,15 +1370,21 @@ function HairBack({ look, uid, t }: { look: AvatarLook; uid: string; t: number }
           {[0, 1, 2, 3, 4].map((i) => <ellipse key={`b${i}`} cx={f(142 + i * 0.6 + sway * 0.5 * (i / 4))} cy={104 + i * 10} rx={4.6 - i * 0.3} ry="5.6" stroke={shade(look.hairColor, -0.4)} strokeWidth="0.8" opacity="0.9" />)}
         </g>
       );
+      clip = [0, 1, 2, 3, 4, 5, 6].map((i) => <ellipse key={`a${i}`} cx={f(134 - i * 1.4 + sway * (i / 6))} cy={96 + i * 10} rx={5.4 - i * 0.35} ry="6.4" />);
+      kind = "braid";
       break;
     case "afro":
       node = <circle cx="146" cy="72" r="27" fill={fill} />;
+      clip = <circle cx="146" cy="72" r="27" />;
+      kind = "curl";
       break;
     case "dread":
       node = (
         <g fill="none" stroke={fill} strokeLinecap="round">
           {[0, 1, 2, 3, 4, 5].map((i) => <path key={i} d={`M${136 - i * 1.5} ${70 + i * 3} C${f(128 - i * 2 + sway * 0.4)} ${100 + i * 3} ${f(126 - i + sway)} ${124 + i * 2} ${f(128 - i * 2 + sway * 1.3)} ${148 + i * 2}`} strokeWidth="5.2" />)}
           {[0, 1, 2, 3, 4, 5].map((i) => <path key={`l${i}`} d={`M${f(128 - i * 2 + sway * 1.3)} ${146 + i * 2} l0 3`} stroke={shade(look.hairColor, -0.45)} strokeWidth="5.4" />)}
+          {/* filo di luce lungo ogni ciocca */}
+          {[0, 1, 2, 3, 4, 5].map((i) => <path key={`h${i}`} d={`M${136 - i * 1.5 - 1} ${70 + i * 3} C${f(128 - i * 2 + sway * 0.4 - 1)} ${100 + i * 3} ${f(126 - i + sway - 1)} ${124 + i * 2} ${f(128 - i * 2 + sway * 1.3 - 1)} ${146 + i * 2}`} stroke={shade(look.hairColor, 0.4)} strokeOpacity="0.45" strokeWidth="1.1" />)}
         </g>
       );
       break;
@@ -1293,10 +1394,15 @@ function HairBack({ look, uid, t }: { look: AvatarLook; uid: string; t: number }
           {[0, 1, 2, 3, 4, 5, 6].map((i) => <ellipse key={i} cx={f(134 - i * 1.8 + sway * (i / 6))} cy={70 + i * 9.5} rx={5.4 - i * 0.35} ry="6" stroke={shade(look.hairColor, -0.4)} strokeWidth="0.8" />)}
         </g>
       );
+      clip = [0, 1, 2, 3, 4, 5, 6].map((i) => <ellipse key={i} cx={f(134 - i * 1.8 + sway * (i / 6))} cy={70 + i * 9.5} rx={5.4 - i * 0.35} ry="6" />);
+      kind = "braid";
       break;
-    case "coda-alta":
-      node = <path d={`M140 60 C126 50 ${f(110 + sway)} 66 ${f(114 + sway * 1.4)} 112 C118 106 121 92 126 82 C129 74 134 68 142 66 Z`} fill={fill} stroke={shade(look.hairColor, -0.4)} strokeWidth="0.6" />;
+    case "coda-alta": {
+      const d = `M140 60 C126 50 ${f(110 + sway)} 66 ${f(114 + sway * 1.4)} 112 C118 106 121 92 126 82 C129 74 134 68 142 66 Z`;
+      node = <path d={d} fill={fill} stroke={shade(look.hairColor, -0.4)} strokeWidth="0.6" />;
+      clip = <path d={d} />;
       break;
+    }
     case "raccolti":
       node = (
         <g>
@@ -1311,7 +1417,14 @@ function HairBack({ look, uid, t }: { look: AvatarLook; uid: string; t: number }
   // barra della lunghezza: i capelli lunghi scendono o salgono partendo dalla nuca
   const sy = 0.5 + (tune(look.hairLength, 50, 0, 100) / 100) * 1.0;
   const len = `translate(0 74) scale(1 ${sy.toFixed(3)}) translate(0 -74)`;
-  return node ? <g transform={tr}><g transform={len}>{node}</g></g> : null;
+  return node ? (
+    <g transform={tr}>
+      <g transform={len}>
+        {node}
+        {clip ? <ProfileHairPaint uid={uid} id="hbp" clip={clip} kind={kind} box={[104, 46, 74, 124]} color={look.hairColor} seed={look.hair.length} /> : null}
+      </g>
+    </g>
+  ) : null;
 }
 
 /**
@@ -1324,7 +1437,8 @@ function HairCap({ look, uid }: { look: AvatarLook; uid: string }) {
   const d = `M127.6 90 C126.2 70 137 58.6 151 57.6 C163 57.6 170.6 64 171.6 74.5 C166.2 70.8 159.2 69.8 153.2 71.8 C148.6 70.4 144.8 73.2 144.2 79 C145.2 84 146 88.6 146.6 93 C144.4 95 142 95.6 139.8 95.2 C137.4 ${f(nape + 1)} 133.4 ${f(nape + 3.5)} 130.4 ${f(nape + 2.5)} C128.6 ${f(nape - 1)} 127.6 94 127.6 90 Z`;
   return (
     <g>
-      <path d={d} fill={`url(#${uid}hair)`} stroke="#1b130d" strokeOpacity="0.65" strokeWidth="1.2" />
+      <path d={d} fill={`url(#${uid}hair)`} stroke={blend(shade(look.hairColor, -0.6), "#1b130d", 0.4)} strokeOpacity="0.7" strokeWidth="1" />
+      <ProfileHairPaint uid={uid} id="hcp" clip={<path d={d} />} kind={look.hair === "ricci" ? "curl" : "sweep"} box={[124, 56, 50, 42]} color={look.hairColor} seed={5} />
       <path d="M146.4 80 C147 86 147.4 90 147 93.4" stroke={shade(look.hairColor, -0.35)} strokeWidth="0.9" fill="none" opacity="0.7" />
     </g>
   );
@@ -1631,7 +1745,34 @@ function HairStrands({ look }: { look: AvatarLook }) {
   );
 }
 
+/** Dalle forme dei capelli (quelle col colore dei capelli) ricava le stesse forme senza colore, per ritagliarci le ciocche. */
+function hairClipOf(node: ReactNode, fill: string, inherited = false): ReactNode {
+  if (Array.isArray(node)) return node.map((n) => hairClipOf(n, fill, inherited));
+  if (!isValidElement(node)) return null;
+  const el = node as ReactElement<{ fill?: string; children?: ReactNode; opacity?: string | number }>;
+  const own = el.props.fill;
+  const isHair = own === fill || (own == null && inherited);
+  // dentro un clipPath i gruppi non contano: si restituiscono le forme in fila
+  if (el.type === "g") return hairClipOf(el.props.children, fill, isHair);
+  if ((el.type === "path" || el.type === "circle" || el.type === "ellipse") && isHair && el.props.opacity == null) return cloneElement(el, { fill: undefined, stroke: undefined, key: el.key ?? undefined } as never);
+  return null;
+}
+
 function HairFront({ look, uid, t }: { look: AvatarLook; uid: string; t: number }) {
+  const node = HairFrontShape({ look, uid, t });
+  if (!node) return null;
+  const fill = `url(#${uid}hair)`;
+  const clip = hairClipOf(node, fill);
+  const kind: ProfileWeave = look.hair === "ricci" || look.hair === "afro" ? "curl" : look.hair === "vichinga" ? "braid" : "sweep";
+  return (
+    <g>
+      {node}
+      {clip ? <ProfileHairPaint uid={uid} id="hfp" clip={clip} kind={kind} box={[124, 40, 60, 58]} color={look.hairColor} seed={9} /> : null}
+    </g>
+  );
+}
+
+function HairFrontShape({ look, uid, t }: { look: AvatarLook; uid: string; t: number }): ReactNode {
   const fill = `url(#${uid}hair)`;
   const h = look.hairColor;
   if (look.hat === "cappuccio" || look.hat === "elmo") return null;
@@ -2258,6 +2399,11 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false, part }
       {[-1, 1].flatMap((side) => [0, 1, 2, 3].map((i) => <path key={`${side}${i}`} d={`M${50 + side * (rx - 2 + i * 2)} ${fy - ry + 6 + i * 3} C${50 + side * (rx + 4 + i * 2)} ${fy + 4} ${50 + side * (rx + 2 + i * 3)} ${fy + 22} ${50 + side * (rx + 4 + i * 2)} ${fy + 40}`} />))}
     </g>
   );
+  const hairBackDreadLight = (
+    <g stroke={shade(hair, 0.4)} strokeWidth="1.1" strokeLinecap="round" fill="none">
+      {[-1, 1].flatMap((side) => [0, 1, 2, 3].map((i) => <path key={`${side}${i}`} d={`M${50 + side * (rx - 2 + i * 2)} ${fy - ry + 6 + i * 3} C${50 + side * (rx + 4 + i * 2)} ${fy + 4} ${50 + side * (rx + 2 + i * 3)} ${fy + 22} ${50 + side * (rx + 4 + i * 2)} ${fy + 40}`} />))}
+    </g>
+  );
   hairBack["coda-alta"] = <path d={`M52 ${fy - ry - 6} C70 ${fy - ry - 18} 84 ${fy - ry} 78 ${fy + 8} C74 ${fy - 6} 66 ${fy - ry - 4} 52 ${fy - ry - 2} Z`} fill={fillH} />;
   hairBack.trecce = (
     <g fill={fillH}>
@@ -2442,8 +2588,116 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false, part }
         return <path key={i} d={`M${sx.toFixed(1)} ${(fy - ry - 6 + j * 2).toFixed(1)} Q${cxq.toFixed(1)} ${cyq.toFixed(1)} ${ex.toFixed(1)} ${ey.toFixed(1)}`} stroke={lightK ? shade(hair, 0.45) : shade(hair, -0.5)} strokeOpacity={lightK ? 0.32 : 0.5} strokeWidth={i % 5 === 0 ? 0.5 : 0.28} />;
       })
     : null;
+  // ---- capelli dipinti: sopra la forma piatta, dentro una maschera della stessa forma, si stendono
+  // profondità (più scuro in basso), un lume morbido e la trama giusta per il tipo di capelli ----
+  const hairLt = shade(hair, 0.45);
+  const hairDk = shade(hair, -0.52);
+  type Weave = "down" | "curl" | "stubble" | "braid";
+  const weave = (kind: Weave, box: [number, number, number, number], seed: number) => {
+    const [bx, by, bw, bh] = box;
+    const R = (k: number) => hash(seed * 1000 + k);
+    if (kind === "curl") {
+      const n = Math.round((bw * bh) / 7);
+      let dk = "";
+      let lt = "";
+      for (let i = 0; i < n; i++) {
+        const x = bx + R(i) * bw;
+        const y = by + R(i + 500) * bh;
+        const r = 1.1 + R(i + 900) * 1.3;
+        const seg = `M${(x - r).toFixed(1)} ${y.toFixed(1)} a${r.toFixed(2)} ${r.toFixed(2)} 0 1 1 ${(r * 1.7).toFixed(2)} ${(r * 0.7).toFixed(2)}`;
+        if (i % 3 === 0) lt += seg;
+        else dk += seg;
+      }
+      return (
+        <>
+          <path d={dk} stroke={hairDk} strokeOpacity="0.55" strokeWidth="0.45" />
+          <path d={lt} stroke={hairLt} strokeOpacity="0.45" strokeWidth="0.38" />
+        </>
+      );
+    }
+    if (kind === "stubble") {
+      let d = "";
+      const n = Math.round((bw * bh) / 2.2);
+      for (let i = 0; i < n; i++) d += `M${(bx + R(i) * bw).toFixed(1)} ${(by + R(i + 700) * bh).toFixed(1)} l0.15 0.32`;
+      return <path d={d} stroke={hairDk} strokeOpacity="0.6" strokeWidth="0.42" />;
+    }
+    if (kind === "braid") {
+      // intreccio: tratti obliqui alternati, a file
+      let a = "";
+      let b2 = "";
+      for (let y = by; y < by + bh; y += 2.1) {
+        for (let x = bx; x < bx + bw; x += 2.4) {
+          const odd = Math.round((y - by) / 2.1) % 2 === 1;
+          const seg = `M${x.toFixed(1)} ${y.toFixed(1)} l${odd ? 1.6 : -1.6} 1.4`;
+          if (odd) a += seg;
+          else b2 += seg;
+        }
+      }
+      return (
+        <>
+          <path d={a} stroke={hairDk} strokeOpacity="0.55" strokeWidth="0.5" />
+          <path d={b2} stroke={hairLt} strokeOpacity="0.35" strokeWidth="0.4" />
+        </>
+      );
+    }
+    // ciocche che scendono, appena ondulate
+    const n = Math.round(bw * 1.3);
+    let dk = "";
+    let lt = "";
+    for (let i = 0; i < n; i++) {
+      const x = bx + R(i) * bw;
+      const y0 = by + R(i + 300) * bh * 0.25;
+      const len = bh * (0.45 + R(i + 600) * 0.55);
+      const w1 = (R(i + 800) - 0.5) * 2.4;
+      const seg = `M${x.toFixed(1)} ${y0.toFixed(1)} c${w1.toFixed(2)} ${(len / 3).toFixed(1)} ${(-w1).toFixed(2)} ${((len * 2) / 3).toFixed(1)} ${(w1 * 0.4).toFixed(2)} ${len.toFixed(1)}`;
+      if (i % 3 === 0) lt += seg;
+      else dk += seg;
+    }
+    return (
+      <>
+        <path d={dk} stroke={hairDk} strokeOpacity="0.5" strokeWidth="0.34" />
+        <path d={lt} stroke={hairLt} strokeOpacity="0.38" strokeWidth="0.3" />
+      </>
+    );
+  };
+  const paintOver = (shape: ReactNode, id: string, kind: Weave, box: [number, number, number, number], seed: number, sheen = true) => (
+    <>
+      <mask id={`${uid}${id}`} maskUnits="userSpaceOnUse" x="-40" y="-80" width="180" height="240"><g filter={`url(#${uid}wh)`}>{shape}</g></mask>
+      <g mask={`url(#${uid}${id})`} fill="none" strokeLinecap="round" pointerEvents="none">
+        <rect x={box[0]} y={box[1]} width={box[2]} height={box[3]} fill={`url(#${uid}hdp)`} />
+        {weave(kind, box, seed)}
+        {sheen ? <ellipse cx={box[0] + box[2] * 0.36} cy={box[1] + box[3] * 0.2} rx={box[2] * 0.26} ry={Math.min(5, box[3] * 0.1)} fill={`url(#${uid}sl)`} opacity="0.4" /> : null}
+      </g>
+    </>
+  );
+  const backKind: Weave = look.hair === "afro" ? "curl" : look.hair === "trecce" || look.hair === "treccia" ? "braid" : "down";
+  const hairDefs = (
+    <>
+      <filter id={`${uid}wh`} x="-20%" y="-20%" width="140%" height="140%">
+        <feColorMatrix type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 1 0" />
+      </filter>
+      <linearGradient id={`${uid}hdp`} x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stopColor="#000" stopOpacity="0" />
+        <stop offset="0.55" stopColor="#000" stopOpacity="0.08" />
+        <stop offset="1" stopColor="#000" stopOpacity="0.4" />
+      </linearGradient>
+      <radialGradient id={`${uid}sl`} cx="50%" cy="50%" r="50%">
+        <stop offset="0" stopColor="#fff" stopOpacity="0.6" />
+        <stop offset="1" stopColor="#fff" stopOpacity="0" />
+      </radialGradient>
+    </>
+  );
   const hoodNode = capOn ? <path d={look.hat === "elmo" ? "M18 100 C16 60 26 22 50 20 C74 22 84 60 82 100 Z" : `M14 100 C10 58 22 ${fy - ry - 14} 50 ${fy - ry - 16} C78 ${fy - ry - 14} 90 58 86 100 Z`} fill={look.hat === "elmo" ? "#9aa3ad" : shade(look.hatColor, -0.35)} /> : null;
-  const backNode = !capOn && hairBack[look.hair] ? <g transform={`translate(0 ${fy - 6}) scale(1 ${(0.5 + tune(look.hairLength, 50, 0, 100) / 100).toFixed(3)}) translate(0 ${-(fy - 6)})`}>{hairBack[look.hair]}</g> : null;
+  const backNode = !capOn && hairBack[look.hair] ? (
+    <g transform={`translate(0 ${fy - 6}) scale(1 ${(0.5 + tune(look.hairLength, 50, 0, 100) / 100).toFixed(3)}) translate(0 ${-(fy - 6)})`}>
+      {hairBack[look.hair]}
+      {look.hair === "dread" ? (
+        // ciocche di dread: un filo di luce lungo ognuna
+        <g transform="translate(-0.5 -0.3)" opacity="0.5">{hairBackDreadLight}</g>
+      ) : null}
+      {paintOver(hairBack[look.hair], "hbm", backKind, [8, fy - ry - 30, 84, 120], 3)}
+    </g>
+  ) : null;
   if (part === "back") {
     // capelli lunghi e cappuccio stanno dietro il corpo, non sopra il petto
     return (
@@ -2453,6 +2707,7 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false, part }
             <stop offset="0" stopColor={shade(hair, 0.2)} />
             <stop offset="1" stopColor={shade(hair, -0.38)} />
           </linearGradient>
+          {hairDefs}
         </defs>
         {hoodNode}
         {backNode}
@@ -2503,9 +2758,19 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false, part }
           <stop offset="0" stopColor="#d4574a" stopOpacity="0.5" />
           <stop offset="1" stopColor="#d4574a" stopOpacity="0" />
         </radialGradient>
-        {/* maschera "tutto bianco": i peli dei capelli seguono la forma della pettinatura, qualunque sia */}
+        {/* maschera "tutto bianco", profondità e lume dei capelli (anche il lume "sl" sta qui) */}
         <filter id={`${uid}wh`} x="-20%" y="-20%" width="140%" height="140%">
           <feColorMatrix type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 1 0" />
+        </filter>
+        <linearGradient id={`${uid}hdp`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#000" stopOpacity="0" />
+          <stop offset="0.55" stopColor="#000" stopOpacity="0.08" />
+          <stop offset="1" stopColor="#000" stopOpacity="0.4" />
+        </linearGradient>
+        {/* ombra che i capelli fanno sulla fronte */}
+        <filter id={`${uid}hsh`} x="-20%" y="-20%" width="140%" height="140%">
+          <feColorMatrix type="matrix" values="0 0 0 0 0.12  0 0 0 0 0.05  0 0 0 0 0.02  0 0 0 0.5 0" />
+          <feGaussianBlur stdDeviation="0.9" />
         </filter>
         <linearGradient id={`${uid}h`} x1="0" x2="1" y1="0" y2="1">
           <stop offset="0" stopColor={shade(hair, 0.2)} />
@@ -2596,6 +2861,10 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false, part }
           {/* pieghe naso-labbro, più segnate con l'età */}
           <path d={`M44.2 ${fy + 7.2} C42.8 ${fy + 9.6} 42.6 ${fy + 12} 43.4 ${fy + 14.2} M55.8 ${fy + 7.2} C57.2 ${fy + 9.6} 57.4 ${fy + 12} 56.6 ${fy + 14.2}`} stroke={shade(skin, -0.42)} strokeWidth="0.6" fill="none" strokeLinecap="round" opacity={look.age === "anziano" ? 0.55 : look.age === "maturo" ? 0.4 : woman || kid ? 0.12 : 0.24} />
           <path d={`M${50 - rx + 1.4} ${fy - 12} Q${50 - rx - 0.6} ${fy + 4} ${50 - rx + 5} ${fy + ry - 5}`} stroke={shade(skin, 0.5)} strokeWidth="1" fill="none" opacity="0.28" strokeLinecap="round" />
+          {/* ombra dei capelli sulla fronte e sulle tempie */}
+          {!capOn && top && look.hair !== "rasati" ? (
+            <g transform={`translate(0 1.5) translate(50 ${fy - ry + 4}) scale(${hv.toFixed(3)}) translate(-50 ${-(fy - ry + 4)})`} filter={`url(#${uid}hsh)`}>{top}</g>
+          ) : null}
         </g>
         {[38, 62].map((cxb) => <ellipse key={cxb} cx={cxb} cy={fy + 6.4} rx="6.2" ry="3.6" fill={`url(#${uid}blf)`} opacity={look.blush === "nessuno" ? 0 : look.blush === "rosato" ? 0.5 : look.blush === "abbronzato" ? 0.38 : 0.28} />)}
         {look.age === "maturo" || look.age === "anziano" ? (
@@ -2629,12 +2898,30 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false, part }
             <>
               <mask id={`${uid}hm`} maskUnits="userSpaceOnUse" x="-20" y="-40" width="140" height="180"><g filter={`url(#${uid}wh)`}>{top}</g></mask>
               <g mask={`url(#${uid}hm)`} fill="none" strokeLinecap="round" pointerEvents="none">
-                {/* riflesso lucido largo e ciocche fini dalla scriminatura verso i lati */}
+                {/* profondità in basso, riflesso lucido largo e ciocche fini dalla scriminatura verso i lati */}
+                <rect x={50 - rx - 8} y={fy - ry - 14} width={rx * 2 + 16} height={ry + 14} fill={`url(#${uid}hdp)`} />
                 <path d={`M${50 - rx + 2} ${fy - ry + 5} Q50 ${fy - ry - 4} ${50 + rx - 2} ${fy - ry + 5}`} stroke={shade(hair, 0.45)} strokeWidth="2.6" strokeOpacity="0.22" />
                 {hairFlow}
               </g>
             </>
           ) : null}
+          {!capOn && top && look.hair === "spettinati" ? paintOver(top, "hsp", "down", [50 - rx - 10, fy - ry - 18, rx * 2 + 20, ry + 18], 11, false) : null}
+          {!capOn && (look.hair === "chignon" || look.hair === "raccolti") ? (() => {
+            // crocchia: ciocche avvolte a spirale, luce in alto e ombra sotto
+            const by = look.hair === "chignon" ? fy - ry - 6 : fy - ry - 8;
+            const br = look.hair === "chignon" ? 8 : 7;
+            return (
+              <g pointerEvents="none" fill="none" strokeLinecap="round">
+                <clipPath id={`${uid}bun`}><circle cx="50" cy={by} r={br} /></clipPath>
+                <g clipPath={`url(#${uid}bun)`}>
+                  <circle cx="50" cy={by + br * 0.5} r={br} fill="#000" opacity="0.22" />
+                  {[0.85, 0.65, 0.45, 0.25].map((k, i) => <path key={k} d={`M${50 - br * k} ${by + 0.6} A${br * k} ${br * k * 0.8} 0 1 1 ${50 + br * k * 0.7} ${by + br * k * 0.6}`} stroke={i % 2 ? hairLt : hairDk} strokeOpacity={i % 2 ? 0.4 : 0.55} strokeWidth="0.5" />)}
+                  <ellipse cx={50 - br * 0.3} cy={by - br * 0.45} rx={br * 0.45} ry={br * 0.22} fill={`url(#${uid}sl)`} opacity="0.55" />
+                </g>
+              </g>
+            );
+          })() : null}
+          {!capOn && top && (look.hair === "ricci" || look.hair === "rasati" || look.hair === "cresta" || look.hair === "vichinga") ? paintOver(top, "htx", look.hair === "ricci" ? "curl" : look.hair === "vichinga" ? "braid" : "stubble", [50 - rx - 10, fy - ry - 26, rx * 2 + 20, ry + 26], 7, look.hair === "ricci") : null}
           {flowHair ? null : strands}
         </g>
         {look.hairFeather && !capOn ? <g transform={`translate(${50 + rx + 2} ${fy - 4}) rotate(18)`}><path d="M0 0 C3 -5 4 -14 1 -22 C-2 -15 -3 -6 0 0 Z" fill="#f4f1ea" stroke="#b9ae98" strokeWidth="0.5" /><path d="M1 -22 l1 -3" stroke="#c4473d" strokeWidth="1.4" strokeLinecap="round" /></g> : null}
