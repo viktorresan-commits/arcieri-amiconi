@@ -617,6 +617,29 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
   // la manica pende quando non c'è vento e si alza quando soffia
   const droop = clamp(75 - Math.abs(wind) * 24, 4, 75);
 
+  // vento e distanza: il pannello del campo aperto, oppure il bottone piccolo all'altezza dei piedi dell'arciere
+  const fieldPanel = (
+        <div data-ui className="aa-hud aa-hud-panel pointer-events-auto relative grid rounded-2xl py-1" onPointerDown={(e) => e.stopPropagation()}>
+          <button type="button" onClick={() => { setHudOpen(false); setHudForce(false); }} aria-label="Riduci il pannello del campo" className="absolute right-1 top-1 z-[1] grid h-6 w-6 place-items-center rounded-full bg-white/10 text-white/80">
+            <Glyph name="chevron" size={12} className="rotate-90" />
+          </button>
+          <HudRow icon="target" label="Bersaglio" onClick={() => setPicker((v) => !v)} expanded={picker}>{mode.label}<span className="ml-1 font-semibold text-white/70">· {level.label} ▾</span></HudRow>
+          <HudRow icon="pin" label="Piazzola">
+            <span className="tabular-nums">{station} / {STATIONS}</span>
+            <span className="ml-1.5 inline-flex gap-0.5" aria-label={`${3 - hits.length} frecce rimaste`}>{[0, 1, 2].map((i) => <span key={i} className={`inline-block h-2.5 w-1 rounded-full ${i < hits.length ? "bg-white/25" : "aa-hud-pip"}`} />)}</span>
+          </HudRow>
+          <HudRow icon="wind" label="Vento">{indoor ? "al chiuso" : <>{Math.abs(wind).toFixed(1).replace(".", ",")} m/s {wind === 0 ? "" : (wind > 0) !== lefty ? "→" : "←"}</>}</HudRow>
+          <HudRow icon="arrow" label="Distanza" last>{dist} m{box ? ` · ${animal.label}` : ""}</HudRow>
+        </div>
+  );
+  const fieldChip = (
+        <button data-ui type="button" onPointerDown={(e) => e.stopPropagation()} onClick={() => { setHudOpen(true); setHudForce(true); }} aria-label="Apri il pannello del campo" className="aa-hud pointer-events-auto flex items-center justify-between gap-1.5 rounded-full px-2.5 py-1.5 text-[0.7rem] font-semibold">
+          <span className="flex items-center gap-1"><Glyph name="wind" size={14} className="aa-hud-ico" />{indoor ? "—" : `${Math.abs(wind).toFixed(1).replace(".", ",")}`}</span>
+          <span className="tabular-nums">{dist} m</span>
+          <Glyph name="chevron" size={12} className="-rotate-90 text-white/70" />
+        </button>
+  );
+
   const game = (
     <div
       ref={stage}
@@ -780,8 +803,8 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
         </span>
       ) : null}
 
-      {/* HUD: a sinistra il blocco di oggi; a destra il record e un solo pannello del campo
-          (bersaglio, piazzola, vento, distanza), in vetro scuro, riducibile a un bottone */}
+      {/* HUD: a sinistra il blocco di oggi (o la prossima gara), a destra il record; il pannello del campo
+          (bersaglio, piazzola, vento, distanza), in vetro scuro e riducibile a un bottone, sta in basso a destra */}
       {/* sfumatura: l'intestazione scende morbida nel cielo, senza uno stacco netto */}
       <div aria-hidden className="aa-game-topfade pointer-events-none absolute inset-x-0 z-[3] h-[26%]" style={{ top: crop }} />
       <div className={`aa-game-hud pointer-events-none absolute inset-x-0 top-0 z-[4] flex items-start justify-between gap-2 p-3 ${lefty ? "flex-row-reverse" : ""} ${tight ? "aa-hud-tight" : ""}`} style={crop ? { top: crop } : undefined}>
@@ -794,28 +817,15 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
             <b className="aa-game-score text-center text-[2rem] leading-none tabular-nums">{playing ? total : bestHere}</b>
             <span className="text-center text-[0.56rem] font-semibold uppercase tracking-[0.2em] text-white/75">{playing ? `punti · record ${bestHere}` : "record"}</span>
           </div>
-          {hudShown ? (
-            <div data-ui className="aa-hud aa-hud-panel pointer-events-auto relative grid rounded-2xl py-1" onPointerDown={(e) => e.stopPropagation()}>
-              <button type="button" onClick={() => { setHudOpen(false); setHudForce(false); }} aria-label="Riduci il pannello del campo" className="absolute right-1 top-1 z-[1] grid h-6 w-6 place-items-center rounded-full bg-white/10 text-white/80">
-                <Glyph name="chevron" size={12} className="-rotate-90" />
-              </button>
-              <HudRow icon="target" label="Bersaglio" onClick={() => setPicker((v) => !v)} expanded={picker}>{mode.label}<span className="ml-1 font-semibold text-white/70">· {level.label} ▾</span></HudRow>
-              <HudRow icon="pin" label="Piazzola">
-                <span className="tabular-nums">{station} / {STATIONS}</span>
-                <span className="ml-1.5 inline-flex gap-0.5" aria-label={`${3 - hits.length} frecce rimaste`}>{[0, 1, 2].map((i) => <span key={i} className={`inline-block h-2.5 w-1 rounded-full ${i < hits.length ? "bg-white/25" : "aa-hud-pip"}`} />)}</span>
-              </HudRow>
-              <HudRow icon="wind" label="Vento">{indoor ? "al chiuso" : <>{Math.abs(wind).toFixed(1).replace(".", ",")} m/s {wind === 0 ? "" : (wind > 0) !== lefty ? "→" : "←"}</>}</HudRow>
-              <HudRow icon="arrow" label="Distanza" last>{dist} m{box ? ` · ${animal.label}` : ""}</HudRow>
-            </div>
-          ) : (
-            <button data-ui type="button" onPointerDown={(e) => e.stopPropagation()} onClick={() => { setHudOpen(true); setHudForce(true); }} aria-label="Apri il pannello del campo" className="aa-hud pointer-events-auto flex items-center justify-between gap-1.5 rounded-full px-2.5 py-1.5 text-[0.7rem] font-semibold">
-              <span className="flex items-center gap-1"><Glyph name="wind" size={14} className="aa-hud-ico" />{indoor ? "—" : `${Math.abs(wind).toFixed(1).replace(".", ",")}`}</span>
-              <span className="tabular-nums">{dist} m</span>
-              <Glyph name="chevron" size={12} className="rotate-90 text-white/70" />
-            </button>
-          )}
         </div>
       </div>
+      {/* il pannello del campo aperto: in basso a destra, appena sopra i piedi dell'arciere (da mancino a sinistra).
+          Chiuso, vento e distanza stanno nella fila dei piedi, sotto il gioco */}
+      {hudShown || !apron ? (
+        <div className={`pointer-events-none absolute z-[4] grid w-[8.4rem] justify-items-stretch text-white ${apron ? "bottom-1" : "bottom-[2.5%]"} ${lefty ? "left-3" : "right-3"}`}>
+          {hudShown ? fieldPanel : fieldChip}
+        </div>
+      ) : null}
       {children}
       {picker ? (
         <div data-ui className="aa-rise absolute inset-x-3 top-[18%] z-10 grid gap-3 rounded-3xl bg-[#101814]/90 p-3 text-white backdrop-blur-md" style={crop ? { top: `calc(18% + ${crop}px)` } : undefined} onPointerDown={(e) => e.stopPropagation()}>
@@ -892,7 +902,7 @@ export function HomeGame({ look, children, info, className = "", form, perks = [
       <div ref={wrap} className="aa-game-wrap relative z-[1]" style={crop ? { marginTop: 0 } : undefined}>
         <div style={crop ? { marginTop: -crop } : undefined}>{game}</div>
       </div>
-      <GameApron sky={sky} scene={scene} lefty={lefty}>{apron}</GameApron>
+      <GameApron sky={sky} scene={scene} lefty={lefty} corner={hudShown ? null : fieldChip}>{apron}</GameApron>
     </div>
   );
 }

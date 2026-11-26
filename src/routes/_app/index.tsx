@@ -124,6 +124,21 @@ function Home() {
   // nella Home le uscite con almeno una freccia (quelle vuote restano nello storico)
   const recent = data.recent.filter((x) => x.arrows > 0).slice(0, 3);
   const rankFill = data.rank && data.rank.of > 1 ? ((data.rank.of - data.rank.position) / (data.rank.of - 1)) * 100 : data.rank ? 100 : 0;
+  // la prossima cosa a cui hai detto di partecipare: la gara con «Ci vado», altrimenti la sfida in cui sei dentro (scade prima)
+  const sfida = data.nextComp ? null : data.challenges.find((c) => c.state === "accepted") ?? null;
+  const upcoming: { to: string; hash?: string; icon: IconName; kicker: string; title: string; when: string } | null = data.nextComp
+    ? {
+        to: "/gare",
+        hash: `gara-${data.nextComp.id}`,
+        icon: "flag",
+        kicker: `Prossima gara · ${countdownText(data.nextComp.startsOn)}`,
+        title: data.nextComp.name,
+        when: `${fmtDay(data.nextComp.startsOn)}${data.nextComp.place ? ` · ${data.nextComp.place}` : ""}`,
+      }
+    : sfida
+      ? { to: "/sfide", icon: "trophy", kicker: "La tua sfida", title: sfida.title, when: `scade ${fmtDay(sfida.endsOn)}` }
+      : null;
+  const otherChallenges = data.challenges.filter((c) => c.id !== sfida?.id);
   return (
     <div className="aa-home aa-arrive grid gap-3">
       <Rise i={0}>
@@ -173,7 +188,25 @@ function Home() {
             perks={activePerks}
             banner={duel.data?.company.color}
             info={
-              /* blocco di oggi: data, il tuo campo e l'ultimo tiro (uscite, frecce e media del mese sono già sotto, in Statistiche) */
+              /* in alto a sinistra la prossima gara a cui hai detto «Ci vado» (o la sfida in cui sei dentro); senza, il blocco di oggi */
+              upcoming ? (
+                <Link
+                  data-ui
+                  to={upcoming.to as "/"}
+                  hash={upcoming.hash}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  className="aa-hud aa-day aa-press pointer-events-auto grid max-w-[13.5rem] justify-items-start gap-0.5 rounded-2xl px-3 py-2"
+                >
+                  <p className="aa-day-date flex items-center gap-1.5 text-[0.66rem] font-semibold text-white/80"><Glyph name={upcoming.icon} size={12} className="aa-hud-ico shrink-0" />{upcoming.kicker}</p>
+                  <h1 className="aa-day-title line-clamp-2 font-display text-[1.32rem] leading-[1.05] tracking-tight">{upcoming.title}</h1>
+                  <p className="aa-day-last flex items-center gap-1.5 text-[0.7rem] leading-snug text-white/85"><Glyph name="calendar" size={12} className="aa-hud-ico shrink-0" /><span className="truncate">{upcoming.when}</span></p>
+                  {activePerks.includes("corona") ? (
+                    <p className="aa-day-extra mt-0.5 flex flex-wrap gap-1">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-[#ffcf5a] px-2 py-0.5 text-[0.62rem] font-bold text-[#1a1408]"><Glyph name="trophy" size={11} /> Corona</span>
+                    </p>
+                  ) : null}
+                </Link>
+              ) : (
               <div className="aa-hud aa-day grid justify-items-start gap-0.5 rounded-2xl px-3 py-2">
                 <p className="aa-day-date flex items-center gap-1.5 text-[0.68rem] font-semibold capitalize text-white/80"><Glyph name="calendar" size={12} className="aa-hud-ico" />{new Date().toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" })}</p>
                 <h1 className="aa-day-title font-display text-[1.6rem] leading-none tracking-tight">Il tuo campo</h1>
@@ -184,6 +217,7 @@ function Home() {
                   </p>
                 ) : null}
               </div>
+              )
             }
           >
           </HomeGame>
@@ -198,22 +232,10 @@ function Home() {
       <Rise i={1}>
         <section className="aa-home-group">
           <header><h2>Oggi</h2></header>
-          {data.nextComp ? (
-            <Link to="/gare" hash={`gara-${data.nextComp.id}`} className="block">
-              <Card className="aa-tile flex items-center gap-3 p-3">
-                <CountdownBadge day={data.nextComp.startsOn} />
-                <div className="min-w-0 flex-1">
-                  <p className="aa-home-label">Prossima gara · {countdownText(data.nextComp.startsOn)}</p>
-                  <p className="truncate font-display text-[1.45rem] leading-tight">{data.nextComp.name}</p>
-                  <p className="truncate text-xs text-muted">{fmtDay(data.nextComp.startsOn)}{data.nextComp.place ? ` · ${data.nextComp.place}` : ""}{data.nextComp.signupDeadline ? ` · iscrizioni entro ${fmtDay(data.nextComp.signupDeadline)}` : ""}</p>
-                </div>
-                <Glyph name="chevron" size={16} className="shrink-0 text-muted" />
-              </Card>
-            </Link>
-          ) : (data as { upcomingComps?: number }).upcomingComps ? (
+          {data.nextComp ? null : (data as { upcomingComps?: number }).upcomingComps ? (
             <Link to="/gare" className="aa-press flex items-center gap-3 rounded-2xl border border-dashed border-line px-3 py-2.5 text-sm">
               <Glyph name="flag" size={18} className="shrink-0 text-muted" />
-              <span className="min-w-0 flex-1">Ci sono gare in calendario: tocca «Ci vado» su quella a cui vai e qui conto i giorni.</span>
+              <span className="min-w-0 flex-1">Ci sono gare in calendario: tocca «Ci vado» su quella a cui vai e la vedi in alto, con i giorni che mancano.</span>
               <Glyph name="chevron" size={14} className="shrink-0 text-muted" />
             </Link>
           ) : null}
@@ -325,16 +347,16 @@ function Home() {
           </section>
         </Rise>
       ) : null}
-      {data.challenges.length || data.goals.length ? (
+      {otherChallenges.length || data.goals.length ? (
         <Rise i={5}>
           <section className="aa-home-group">
             <header><h2>Con la compagnia</h2></header>
-            {data.challenges.length ? (
+            {otherChallenges.length ? (
               <Link to="/sfide" className="block">
                 <Card>
                   <p className="aa-home-label">Sfide aperte</p>
                   <ul className="mt-2 grid gap-2">
-                    {data.challenges.map((c) => (
+                    {otherChallenges.map((c) => (
                       <li key={c.id} className="flex items-center justify-between gap-2 text-sm">
                         <span className="min-w-0 truncate">{c.title}</span>
                         <span className="shrink-0 text-xs text-muted">{c.state === "accepted" ? "dentro" : c.state === "invited" ? "invito" : "aperta"} · scade {fmtDay(c.endsOn)}</span>
@@ -397,15 +419,3 @@ function countdownText(day: string) {
   return n <= 0 ? "oggi" : n === 1 ? "domani" : `mancano ${n} giorni`;
 }
 
-/** Il conto alla rovescia della prossima gara: −3 vuol dire tre giorni alla gara. */
-function CountdownBadge({ day }: { day: string }) {
-  const n = daysTo(day);
-  const label = n == null ? "—" : n <= 0 ? "Oggi" : `−${n}`;
-  const urgent = n != null && n <= 3;
-  return (
-    <div className={`grid h-16 w-16 shrink-0 content-center justify-items-center rounded-2xl text-center leading-none ${urgent ? "bg-[#ffd27a] text-[#2a1d0c]" : "bg-white/[0.07]"}`}>
-      <span className={`font-display tabular-nums ${label.length > 3 ? "text-lg" : "text-3xl"}`}>{label}</span>
-      {n != null && n > 0 ? <span className="mt-0.5 text-[0.56rem] font-semibold uppercase tracking-wider opacity-75">{n === 1 ? "giorno" : "giorni"}</span> : null}
-    </div>
-  );
-}

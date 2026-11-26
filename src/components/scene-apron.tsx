@@ -1248,7 +1248,8 @@ export const SceneApron = memo(function SceneApron({ sky, scene, V, top, bottom 
  * misura sé stesso e i pulsanti, così il disegno ha la stessa scala della scena e gli animali stanno
  * dove si vedono (sopra e sotto i pulsanti).
  */
-export function GameApron({ sky, scene, lefty, children }: { sky: Sky; scene: string; lefty: boolean; children: ReactNode }) {
+/** `corner`: un comando del gioco nella prima fila (quella dei piedi dell'arciere), dal lato opposto all'arciere; si apre verso l'alto */
+export function GameApron({ sky, scene, lefty, children, corner }: { sky: Sky; scene: string; lefty: boolean; children: ReactNode; corner?: ReactNode }) {
   const box = useRef<HTMLDivElement>(null);
   const inner = useRef<HTMLDivElement>(null);
   const [m, setM] = useState({ w: 390, h: 250, t: 76, c: 140 });
@@ -1273,6 +1274,11 @@ export function GameApron({ sky, scene, lefty, children }: { sky: Sky; scene: st
       </div>
       <div ref={inner} className="aa-apron-inner relative z-[2] mx-3 mb-[3.75rem] mt-[calc(13.33%_+_0.25rem)] grid gap-2">
         {children}
+        {corner ? (
+          <div className={`aa-apron-corner pointer-events-none absolute top-0 z-[3] h-8 w-[8.4rem] ${lefty ? "left-12" : "right-0"}`}>
+            <div className="absolute inset-x-0 bottom-0 grid justify-items-stretch text-white">{corner}</div>
+          </div>
+        ) : null}
       </div>
     </div>
   );

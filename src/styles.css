@@ -1762,7 +1762,7 @@ html .aa-cat-page .aa-short.is-here span { color: color-mix(in srgb, var(--cat) 
 .aa-member-bg::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, rgb(0 0 0 / 0.35), transparent 55%), linear-gradient(0deg, rgb(0 0 0 / 0.25), transparent 60%); }
 /* schermi bassi: pulsanti della Home un po' più compatti, così stanno tutti sopra la barra */
 @media (max-height: 820px) {
-  .aa-home .aa-home-palette { height: 1.6rem; }
+  .aa-home .aa-home-palette, .aa-home .aa-apron-corner { height: 1.6rem; }
   .aa-home .aa-cta { min-height: 50px; }
   .aa-home .aa-cta-ico { height: 2.4rem; width: 2.4rem; }
   .aa-home .aa-apron-inner .aa-plaque { min-height: 42px; }
