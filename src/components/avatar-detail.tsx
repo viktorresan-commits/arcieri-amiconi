@@ -8,6 +8,14 @@
 
 type P = { x: number; y: number };
 const f = (n: number) => n.toFixed(1);
+/** mescola due colori #rrggbb (t = quanto del secondo) */
+function blend(a: string, b: string, t: number) {
+  const pa = parseInt(a.replace("#", "").slice(0, 6), 16);
+  const pb = parseInt(b.replace("#", "").slice(0, 6), 16);
+  if (Number.isNaN(pa) || Number.isNaN(pb)) return a;
+  const ch = (sh: number) => Math.round(((pa >> sh) & 255) * (1 - t) + ((pb >> sh) & 255) * t);
+  return `#${((ch(16) << 16) | (ch(8) << 8) | ch(0)).toString(16).padStart(6, "0")}`;
+}
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const at = (a: P, b: P, t: number): P => ({ x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t) });
 /** direzione e normale di un segmento */
@@ -239,6 +247,11 @@ export function FaceShade({ uid, headPath, skin, skinDeep, chinY, ear, earRx, ea
         <clipPath id={`${uid}hc`}>
           <path d={headPath} />
         </clipPath>
+        <filter id={`${uid}fsb`} x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="1.2" /></filter>
+        <filter id={`${uid}fsg`} x="126" y="60" width="50" height={f(chinY - 56)} filterUnits="userSpaceOnUse">
+          <feTurbulence type="fractalNoise" baseFrequency="2.1" numOctaves="2" seed="5" />
+          <feColorMatrix type="matrix" values="0 0 0 0 0.3  0 0 0 0 0.14  0 0 0 0 0.09  0 0 0 1.5 -0.66" />
+        </filter>
       </defs>
       <g clipPath={`url(#${uid}hc)`}>
         {/* guancia incavata e mascella in ombra, tempia, orbita */}
@@ -252,6 +265,18 @@ export function FaceShade({ uid, headPath, skin, skinDeep, chinY, ear, earRx, ea
         <ellipse cx="160" cy="87" rx="6.5" ry="3.2" fill={`url(#${uid}sl)`} opacity="0.4" />
         <ellipse cx={f(166 + 2)} cy={f(chinY - 2.6)} rx="4.4" ry="2.4" fill={`url(#${uid}sl)`} opacity="0.18" />
         <ellipse cx="170" cy="99.2" rx="2.6" ry="1.1" fill={`url(#${uid}sl)`} opacity="0.3" />
+        {/* piani dipinti sfumati: arcata e orbita, incavo sotto lo zigomo, mascella; il rosso sotto la pelle
+            su naso, guancia e mento; una grana finissima di pori */}
+        <g filter={`url(#${uid}fsb)`}>
+          <path d="M156 76.6 Q162 74.6 168.6 77" stroke={skinDeep} strokeWidth="1.8" fill="none" opacity="0.3" />
+          <ellipse cx="158.6" cy="82" rx="2" ry="2.6" fill={skinDeep} opacity="0.32" />
+          <path d="M152 92 Q158 97 162.4 100.8" stroke={skinDeep} strokeWidth="2.6" fill="none" opacity="0.28" />
+          <path d={`M142 ${f(chinY - 10)} Q150 ${f(chinY + 0.6)} 164 ${f(chinY + 0.4)}`} stroke={skinDeep} strokeWidth="3.4" fill="none" opacity="0.3" />
+          <ellipse cx={f(173 + 1.2 * nk)} cy="92.6" rx="2.4" ry="2" fill={blend(skin, "#c4473f", 0.55)} opacity="0.3" />
+          <ellipse cx="160.6" cy="91.6" rx="5.6" ry="3.4" fill={blend(skin, "#c4473f", 0.5)} opacity="0.12" />
+          <ellipse cx={f(166)} cy={f(chinY - 3.4)} rx="3.4" ry="2" fill={blend(skin, "#c4473f", 0.5)} opacity="0.1" />
+        </g>
+        <rect x="126" y="60" width="50" height={f(chinY - 56)} filter={`url(#${uid}fsg)`} opacity="0.13" />
       </g>
       {/* piega naso-labbro */}
       <path d={`M${f(171.4 - 1.6 * nk)} 96.6 Q167 99 165.6 101.8`} stroke={skinDeep} strokeOpacity="0.18" strokeWidth="0.7" fill="none" strokeLinecap="round" />
@@ -306,19 +331,53 @@ export function EyeDetail({ uid, eyes, skinDeep, lid }: { uid: string; eyes: str
 
 /** Sopracciglio a peli: tanti tratti corti lungo l'arco, più fitti verso la radice del naso. */
 export function BrowHairs({ d, color, width }: { d: string; color: string; width: number }) {
-  // l'arco è "M x0 y0 Q cx cy x1 y1": lo campiono
+  // l'arco è "M x0 y0 Q cx cy x1 y1": lo campiono. Peli veri: verso l'alto all'attacco vicino al naso,
+  // poi sempre più coricati lungo l'arco; posizione, lunghezza e inclinazione variano un poco
   const n = d.match(/-?\d+(\.\d+)?/g)?.map(Number) ?? [];
   if (n.length < 6) return null;
   const [x0, y0, qx, qy, x1, y1] = n;
   const pt = (t: number) => ({ x: (1 - t) * (1 - t) * x0 + 2 * (1 - t) * t * qx + t * t * x1, y: (1 - t) * (1 - t) * y0 + 2 * (1 - t) * t * qy + t * t * y1 });
-  let hairs = "";
-  for (let i = 0; i < 16; i++) {
-    const t = i / 15;
+  const rnd = (k: number) => {
+    const v = Math.sin(k * 91.7 + x0 * 13.1) * 43758.5453;
+    return v - Math.floor(v);
+  };
+  // il punto 1 è l'attacco (verso il naso): la testa del sopracciglio
+  let dark = "";
+  let light = "";
+  const N = 30;
+  for (let i = 0; i < N; i++) {
+    const t = Math.min(1, Math.max(0, i / (N - 1) + (rnd(i) - 0.5) * 0.04));
+    const a = pt(Math.max(0, t - 0.03));
+    const b = pt(Math.min(1, t + 0.03));
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const l = Math.hypot(dx, dy) || 1;
+    const ux = dx / l;
+    const uy = dy / l;
+    // normale verso l'alto
+    const nx = uy > 0 ? -uy : uy;
+    const ny = -Math.abs(ux);
     const c = pt(t);
-    const len = width * (0.9 + (1 - Math.abs(t - 0.35)) * 0.6);
-    hairs += `M${f(c.x - len * 0.3)} ${f(c.y + width * 0.4)} l${f(len * 0.85)} ${f(-len * 0.55 + t * len * 0.65)}`;
+    const head = t; // 1 = attacco vicino al naso
+    const off = (rnd(i + 40) - 0.5) * width * 0.9;
+    const len = width * (0.9 + rnd(i + 80) * 0.7) * (0.75 + head * 0.45);
+    // all'attacco i peli salgono, verso la coda si coricano lungo l'arco (verso la tempia)
+    const up = 0.25 + head * 0.9;
+    const hx = -ux * (1 - head * 0.5) + nx * up;
+    const hy = -uy * (1 - head * 0.5) + ny * up;
+    const hl = Math.hypot(hx, hy) || 1;
+    const sx = c.x + nx * off * 0.6 - (nx * width * 0.25);
+    const sy = c.y + ny * off * 0.6 - (ny * width * 0.25);
+    const seg = `M${f(sx)} ${f(sy)} l${(hx / hl * len).toFixed(2)} ${(hy / hl * len).toFixed(2)}`;
+    if (i % 4 === 0) light += seg;
+    else dark += seg;
   }
-  return <path d={hairs} stroke={color} strokeWidth="0.45" strokeLinecap="round" opacity="0.85" fill="none" pointerEvents="none" />;
+  return (
+    <g fill="none" strokeLinecap="round" pointerEvents="none">
+      <path d={dark} stroke={color} strokeWidth="0.32" opacity="0.8" />
+      <path d={light} stroke={color} strokeWidth="0.26" opacity="0.5" />
+    </g>
+  );
 }
 
 /** Labbra: arco del labbro superiore, ombra sotto il labbro inferiore e luce sopra. */
