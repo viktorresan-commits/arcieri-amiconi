@@ -1960,7 +1960,7 @@ svg .aa-banner-shine { animation: aa-banner-shine 5.5s ease-in-out infinite; }
 /* nel Menu: l'ultima voce toccata di ogni sezione, raggi che girano e un alone che pulsa */
 .aa-appicon-hot { isolation: isolate; }
 .aa-appicon-hot .aa-ins-rays { animation-duration: 12s; }
-.aa-appicon-hot::before { content: ""; position: absolute; inset: -16%; z-index: -1; border-radius: 9999px; background: radial-gradient(closest-side, rgb(255 222 140 / 0.55), rgb(255 200 90 / 0.18) 60%, transparent); animation: aa-hot-pulse 2.6s ease-in-out infinite; pointer-events: none; }
+.aa-appicon-hot::before { content: ""; position: absolute; inset: -16%; z-index: -1; border-radius: 9999px; background: radial-gradient(closest-side, color-mix(in srgb, var(--ray-hi, #ffde8c) 55%, transparent), color-mix(in srgb, var(--ray, #ffc85a) 18%, transparent) 60%, transparent); animation: aa-hot-pulse 2.6s ease-in-out infinite; pointer-events: none; }
 @keyframes aa-hot-pulse { 0%, 100% { opacity: 0.45; transform: scale(0.92); } 50% { opacity: 1; transform: scale(1.06); } }
 @media (prefers-reduced-motion: reduce) {
   .aa-appicon-hot::before { animation: none; opacity: 0.7; }
@@ -2041,6 +2041,14 @@ svg .aa-fall { stroke-dasharray: 4 3; animation: aa-fall 0.8s linear infinite; }
    (lo stesso della barra in basso). Il colore scelto nel profilo resta per Casa e lo sfondo.
    Il colore pieno è scurito il giusto per leggersi sia come fondo dei pulsanti sia come testo. */
 .aa-main.has-sec {
+  /* anche schede, placche e pulsanti chiari prendono la tinta della sezione (prima restavano nel colore del profilo) */
+  --card-a: color-mix(in srgb, color-mix(in srgb, var(--sec) 13%, #15181c) 95%, transparent);
+  --card-b: color-mix(in srgb, color-mix(in srgb, var(--sec) 4%, #0b0d10) 97%, transparent);
+  --plate-a: color-mix(in srgb, var(--sec) 24%, #16140f);
+  --plate-b: color-mix(in srgb, var(--sec) 7%, #0a0b0d);
+  --surface: color-mix(in srgb, var(--sec) 9%, #161a1f);
+  --accent: color-mix(in srgb, var(--sec) 34%, #fff);
+  --accent-fg: color-mix(in srgb, var(--sec) 14%, #04070a);
   --tone: color-mix(in srgb, var(--sec) 88%, #fff);
   --tone-hi: color-mix(in srgb, var(--sec) 52%, #fff);
   --tone-lo: color-mix(in srgb, var(--sec) 58%, #000);
@@ -2094,19 +2102,34 @@ svg .aa-fall { stroke-dasharray: 4 3; animation: aa-fall 0.8s linear infinite; }
 @media (prefers-reduced-motion: reduce) { .aa-turn-in { animation: none; } }
 html[data-motion="ridotta"] .aa-turn-in { animation: none; }
 
-/* Casa nella barra in basso: non è una categoria, quindi niente placca chiara né trattino;
-   quando è aperta la riconosci dai raggi che girano attorno alla moneta */
-.aa-secbar-item[data-st="casa"].is-on::after,
-.aa-secbar-item[data-st="casa"].is-on::before { display: none; }
-.aa-secbar-item[data-st="casa"].is-on .aa-appicon-ins { transform: none; }
-.aa-secbar-item[data-st="casa"].is-on { color: #f6e7bf; }
+/* barra in basso: la sezione aperta non ha placca né trattino, la riconosci dai raggi che girano
+   attorno alla sua moneta, nel suo colore (Casa in oro e avorio) */
+.aa-secbar-item { --ray: var(--acc); --ray-hi: color-mix(in srgb, var(--acc) 45%, #fff); }
+.aa-secbar-item.is-on::after,
+.aa-secbar-item.is-on::before { display: none; }
+.aa-secbar-item.is-on .aa-appicon-ins { transform: none; }
+.aa-secbar-item.is-on > span:last-child { color: color-mix(in srgb, var(--acc) 45%, #fff); }
 
-/* le schede della Home sono nei colori di Casa (oro e avorio), non in quelli di una categoria */
-.aa-home :is(.aa-cta, .aa-plaque) {
+/* la Home, sopra e sotto il gioco, è nei colori di Casa (oro e avorio), non in quelli di una categoria */
+.aa-home, .aa-appheader.aa-homehead {
   --tone: #e2bf78;
   --tone-hi: #f6e3b4;
   --tone-lo: #a8792d;
   --tone-ink: #1e1505;
   --plate-a: #3a2c17;
   --plate-b: #15100a;
+  --card-a: rgb(36 29 20 / 0.95);
+  --card-b: rgb(15 12 9 / 0.97);
+  --surface: #1d1811;
+  --primary: #b8862f;
+  --primary-fg: #fbf6ea;
+  --accent: #f0d9a0;
+  --accent-fg: #1e1505;
+  --glow: #5a4218;
 }
+/* l'intestazione della Home è piena: scorrendo, le schede non si vedono più sotto il nome */
+.aa-appheader.aa-homehead.aa-bar {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bg) 70%, #1c2430) 0%, color-mix(in srgb, var(--bg) 90%, #000) 100%);
+}
+
+.aa-tray { --ray: var(--cat); --ray-hi: color-mix(in srgb, var(--cat) 45%, #fff); }

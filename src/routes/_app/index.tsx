@@ -261,10 +261,10 @@ function Home() {
           </Card>
           {prefs.home.numbers ? (
             <div className="grid grid-cols-2 gap-2">
-              <Link to="/statistiche" className="block"><Meter label="Precisione" value={data.all.precisePct} digits={1} suffix="%" color="#3d8f5f" /></Link>
-              <Link to="/statistiche" className="block"><Meter label="Miglior media" value={data.all.bestAvg || null} digits={2} color="#c4a2f2" /></Link>
-              <Link to="/statistiche" className="block"><Meter label="Frecce in tutto" value={data.all.arrows} color="#5aa6e8" /></Link>
-              <Link to="/statistiche" className="block"><Meter label="Distanza più lunga" value={data.bestDistance} suffix=" m" color="#e07a72" /></Link>
+              <Link to="/statistiche" className="block"><Meter label="Precisione" value={data.all.precisePct} digits={1} suffix="%" /></Link>
+              <Link to="/statistiche" className="block"><Meter label="Miglior media" value={data.all.bestAvg || null} digits={2} /></Link>
+              <Link to="/statistiche" className="block"><Meter label="Frecce in tutto" value={data.all.arrows} /></Link>
+              <Link to="/statistiche" className="block"><Meter label="Distanza più lunga" value={data.bestDistance} suffix=" m" /></Link>
             </div>
           ) : null}
           {prefs.home.arrows && data.lastShots.length ? (

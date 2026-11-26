@@ -443,9 +443,10 @@ export function Insignia({ symbol = "star", art, metal = "gold", enamel = "night
             <stop offset="1" stopColor="#fff" stopOpacity="0" />
           </linearGradient>
           <radialGradient id={`${id}ray`} cx="0.5" cy="0.5" r="0.5">
-            <stop offset="0.3" stopColor={lux} stopOpacity="0.95" />
-            <stop offset="0.6" stopColor={hi} stopOpacity="0.5" />
-            <stop offset="1" stopColor={hi} stopOpacity="0" />
+            {/* --ray: i raggi possono prendere il colore della sezione (barra in basso) */}
+            <stop offset="0.3" stopColor={lux} stopOpacity="0.95" style={{ stopColor: `var(--ray-hi, ${lux})` }} />
+            <stop offset="0.6" stopColor={hi} stopOpacity="0.5" style={{ stopColor: `var(--ray, ${hi})` }} />
+            <stop offset="1" stopColor={hi} stopOpacity="0" style={{ stopColor: `var(--ray, ${hi})` }} />
           </radialGradient>
           <linearGradient id={`${id}sh`} x1="0" y1="0" x2="1" y2="0">
             <stop offset="0" stopColor="#fff" stopOpacity="0" />

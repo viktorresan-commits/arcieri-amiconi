@@ -15,11 +15,10 @@ const LONG_SLEEVES = ["felpa", "giacca", "camicia", "tunica", "tunica-lunga", "f
  * il peso su una gamba, respira, ondeggia appena, il mantello si muove. Stessi colori, abiti,
  * accessori e arco della figura di profilo.
  */
-export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false }: { look: AvatarLook; className?: string; /** riquadro da mostrare (viewBox), per le miniature di un dettaglio */ crop?: string; /** ritratto: ragazzi e arcieri bassi riempiono il riquadro come gli altri (niente vuoto sopra la testa) */ fit?: boolean }) {
+export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false, armsOut }: { look: AvatarLook; className?: string; /** riquadro da mostrare (viewBox), per le miniature di un dettaglio */ crop?: string; /** ritratto: ragazzi e arcieri bassi riempiono il riquadro come gli altri (niente vuoto sopra la testa) */ fit?: boolean; /** braccia aperte a T (per misurare l'apertura): distanza dal centro alla punta delle dita, senza arco */ armsOut?: number }) {
   const live = !crop;
   const uid = (useId().replace(/[^a-zA-Z0-9]/g, "") + "_");
   const woman = look.body === "donna" || look.body === "ragazza";
-  const kid = look.body === "ragazzo" || look.body === "ragazza";
   const W = bodyWidth(look);
   const tw = (woman ? 0.9 : 1) * W;
   const cx = 100;
@@ -71,10 +70,12 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
   const handR = 7.4 * W;
   const handFill = look.gloves ? "#4a2c16" : skin;
   const arm = (side: -1 | 1) => {
-    const bowArm = side === bowSide;
+    const open = armsOut != null;
+    const bowArm = side === bowSide && !open;
     const s0 = { x: side < 0 ? sh.l + 7 : sh.r - 7, y: 108 };
-    const elbow = bowArm ? { x: s0.x + side * 11, y: 158 } : { x: s0.x + side * 7, y: 160 };
-    const hand = bowArm ? { x: grip.x - bowSide * 1, y: grip.y } : { x: s0.x + side * 1, y: 214 };
+    // braccia aperte: la punta del dito medio a armsOut dal centro, la mano finisce lì
+    const hand = open ? { x: cx + side * (armsOut - handR * 0.9), y: 110 } : bowArm ? { x: grip.x - bowSide * 1, y: grip.y } : { x: s0.x + side * 1, y: 214 };
+    const elbow = open ? { x: lerp(s0.x, hand.x, 0.47), y: 109 } : bowArm ? { x: s0.x + side * 11, y: 158 } : { x: s0.x + side * 7, y: 160 };
     const upW = 16.5 * W;
     const foreW = 13 * W;
     const segs = `M${f(s0.x)} ${f(s0.y)} L${f(elbow.x)} ${f(elbow.y)}`;
@@ -88,7 +89,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
         {sleeve !== skin ? <path d={segs} stroke={`url(#${uid}linen)`} strokeWidth={upW} strokeLinecap="round" fill="none" /> : null}
         <path d={`M${f(elbow.x)} ${f(elbow.y)} L${f(sleeveLong ? cuff.x : hand.x)} ${f(sleeveLong ? cuff.y : hand.y)}`} stroke={sleeveLong ? sleeve : skin} strokeWidth={foreW + (sleeveLong ? 1.5 : 0)} strokeLinecap="round" fill="none" />
         {sleeveLong ? <path d={`M${f(cuff.x)} ${f(cuff.y)} L${f(hand.x)} ${f(hand.y)}`} stroke={skin} strokeWidth={foreW - 1} strokeLinecap="round" /> : null}
-        {LONG_SLEEVES.includes(look.top) || look.top === "canotta" ? null : <path d={`M${f(s0.x)} ${f(s0.y)} L${f(s0.x + side * 4)} 130`} stroke={look.top === "gilet" || look.top === "corpetto" ? look.sleeves || look.trim : shirt} strokeWidth={19 * W} strokeLinecap="round" />}
+        {LONG_SLEEVES.includes(look.top) || look.top === "canotta" ? null : <path d={open ? `M${f(s0.x)} ${f(s0.y)} L${f(s0.x + side * 20)} ${f(s0.y + 1)}` : `M${f(s0.x)} ${f(s0.y)} L${f(s0.x + side * 4)} 130`} stroke={look.top === "gilet" || look.top === "corpetto" ? look.sleeves || look.trim : shirt} strokeWidth={19 * W} strokeLinecap="round" />}
         {look.top === "canotta" ? null : <SleeveDetail s={s0} e={elbow} h={hand} w={upW} color={seamOf(sleeve)} long={sleeveLong} />}
         <path d={`M${f(s0.x - side * upW * 0.18)} ${f(s0.y + 4)} L${f(elbow.x - side * upW * 0.18)} ${f(elbow.y)}`} stroke="#fff" strokeOpacity="0.14" strokeWidth={upW * 0.26} strokeLinecap="round" />
         {/* ombra sul lato in ombra del braccio (la luce viene da sinistra) */}
@@ -108,7 +109,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
             <LeatherBand uid={`${uid}${side}`} a={lerpP(elbow, hand, 0.36)} b={lerpP(elbow, hand, 0.82)} w={foreW + 4} color={shade(look.bracers, 0.6)} />
           </g>
         ) : null}
-        {/* mano */}
+        {/* mano (con le braccia aperte, tutte e due) */}
         {bowArm ? null : (
           <g>
             <ellipse cx={f(hand.x)} cy={f(hand.y + 1)} rx={f(handR * 0.9 + 1.2)} ry={f(handR + 1.4)} fill={OUT} opacity="0.5" />
@@ -182,7 +183,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
         <DetailDefs uid={`${uid}-1`} />
         <clipPath id={`${uid}tcl`}><path d={torsoD} />{longTop ? <path d={tunicD} /> : null}</clipPath>
       </defs>
-      <g transform={`translate(100 360) scale(${(fit ? 1 : (kid ? 0.84 : 1) * (0.9 + (tune(look.stature, 50, 0, 100) / 100) * 0.2)).toFixed(3)}) translate(-100 -360)`}>
+      <g transform={`translate(100 360) scale(${(fit ? 1 : frontScale(look)).toFixed(3)}) translate(-100 -360)`}>
         <ellipse cx="100" cy="356" rx="62" ry="7" fill="#000" opacity="0.3" />
         <g className={live ? "aa-front-sway" : undefined}>
         {/* dietro: mantello e faretra sulla schiena */}
@@ -378,10 +379,11 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
         ) : look.necklace ? <path d={`M${cx - 10} 100 Q${cx} 114 ${cx + 10} 100`} stroke="#d9b45a" strokeWidth="1.4" fill="none" /> : null}
 
         {/* faretra al fianco sopra la veste, sotto il braccio */}
-        {heldArrow}
+        {armsOut != null ? null : heldArrow}
         {arm(bowSide === 1 ? -1 : 1)}
         {arm(bowSide)}
         {/* arco nella mano: flettenti, riser con impugnatura, corda con serving e punto d'incocco, pugno chiuso */}
+        {armsOut != null ? null : (
         <g transform={`translate(${f(grip.x)} ${f(grip.y)}) scale(${bowSide} 1) rotate(5)`}>
           <g className={live ? "aa-front-bow" : undefined}>
             {([1, -1] as const).map((sg) => (
@@ -432,6 +434,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
             </g>
           </g>
         </g>
+        )}
 
         {/* testa di fronte, la stessa della foto profilo */}
         <g className={live ? "aa-front-head" : undefined}>
@@ -444,6 +447,12 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
       </g>
     </svg>
   );
+}
+
+/** quanto è alto l'arciere di fronte (ragazzi più bassi, statura scelta): scala attorno ai piedi (100, 360) */
+export function frontScale(look: AvatarLook) {
+  const kid = look.body === "ragazzo" || look.body === "ragazza";
+  return (kid ? 0.84 : 1) * (0.9 + (tune(look.stature, 50, 0, 100) / 100) * 0.2);
 }
 
 function lerp(a: number, b: number, t: number) {

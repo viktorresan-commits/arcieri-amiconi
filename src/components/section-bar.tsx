@@ -138,7 +138,7 @@ export function SectionBar({ path, search, hide = [], onSearch }: { path: string
             className={cx("aa-secbar-item relative grid min-w-[3rem] flex-1 snap-start justify-items-center gap-0.5 pb-1.5 pt-2", path === "/" && !open && "is-on")}
             style={{ ["--acc" as string]: "#f2e6c4" }}
           >
-            {/* Casa non è una categoria: niente placca, quando è aperta girano i raggi */}
+            {/* come le sezioni: niente placca, quando è aperta girano i raggi */}
             <AppIcon name="home" size={30} enamel="ivory" glow={path === "/" && !open} />
             <span className="text-[0.6rem] font-semibold leading-none tracking-tight">Casa</span>
           </Link>
@@ -154,7 +154,8 @@ export function SectionBar({ path, search, hide = [], onSearch }: { path: string
                 className={cx("aa-secbar-item relative grid min-w-[3rem] flex-1 snap-start justify-items-center gap-0.5 pb-1.5 pt-2", on && "is-on")}
                 style={{ ["--acc" as string]: x.color }}
               >
-                <AppIcon name={x.icon} size={30} enamel={x.enamel} />
+                {/* sezione aperta: niente placca, girano i raggi del suo colore */}
+                <AppIcon name={x.icon} size={30} enamel={x.enamel} glow={on} />
                 <span className="text-[0.6rem] font-semibold leading-none tracking-tight">{x.short}</span>
               </button>
             );

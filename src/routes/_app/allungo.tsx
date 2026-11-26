@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Card, Chips, PageHead, Segmented } from "@/components/kit";
-import { AvatarFace, shade } from "@/components/archer-avatar";
+import { ArcherFront, frontScale } from "@/components/archer-front";
 import { useAvatar } from "@/components/avatar-hero";
 import { useEntryState } from "@/lib/arcieri/back-restore";
 import type { AvatarLook } from "@/lib/arcieri/avatar";
@@ -24,53 +24,39 @@ function Page() {
 }
 
 /**
- * Il tuo arciere a braccia aperte contro il muro: stessi colori di pelle, maglia, maniche e pantaloni
- * scelti nell'avatar; la quota sotto segue l'apertura scritta.
+ * Il tuo arciere a braccia aperte contro il muro: è lo stesso avatar di fronte (viso, abiti, statura),
+ * con le proporzioni vere: l'apertura delle braccia è circa quanto l'altezza. Le braccia si allungano
+ * o si accorciano con l'apertura scritta; la quota va dal muro alla punta del dito medio.
  */
 function SpanFigure({ look, cm, ok }: { look: AvatarLook; cm: number; ok: boolean }) {
-  const skin = look.skin;
-  const shirt = look.shirt;
-  const sleeve = look.sleeves || look.shirt;
-  const pants = look.pants;
-  const out = "#1b130d";
-  // braccia più o meno lunghe con l'apertura (fra 140 e 210 cm)
-  const reach = ok ? Math.max(96, Math.min(128, 96 + ((cm - 140) / 70) * 32)) : 112;
-  const L = 160 - reach;
-  const R = 160 + reach;
+  // figura alta ~350 unità per ~175 cm: mezza apertura in unità ≈ apertura in cm
+  const half = ok ? Math.max(140, Math.min(215, cm)) : 175;
+  const k = frontScale(look);
+  const at = (x: number, y: number) => ({ x: 100 + (x - 100) * k, y: 360 + (y - 360) * k });
+  const left = at(100 - half, 110);
+  const right = at(100 + half, 110);
+  const top = at(100, -10).y;
+  const x0 = left.x - 30;
+  const x1 = Math.max(right.x + 14, 100 + 130);
+  const vb = `${x0.toFixed(1)} ${(top - 6).toFixed(1)} ${(x1 - x0).toFixed(1)} ${(374 - top).toFixed(1)}`;
+  const lineY = at(100, 132).y;
+  // il numero sotto il braccio destro, sul fondo: non copre la maglia
+  const labelX = at(100 + half * 0.62, 0).x;
   return (
     <figure className="overflow-hidden rounded-2xl border border-line bg-[#101a15]">
       <div className="relative">
-      <svg viewBox="0 0 320 170" className="block w-full" role="img" aria-label="Il tuo arciere a braccia aperte, con la misura dell'apertura">
-        <line x1={L - 6} y1="10" x2={L - 6} y2="160" stroke="#6f7f76" strokeWidth="3" />
-        <text x={L - 2} y="20" fill="#9fb3a8" fontSize="9">muro</text>
-        {/* gambe e scarpe */}
-        <path d="M150 118 L146 150 M170 118 L174 150" stroke={out} strokeWidth="13" strokeLinecap="round" />
-        <path d="M150 118 L146 150 M170 118 L174 150" stroke={pants} strokeWidth="10.6" strokeLinecap="round" />
-        <ellipse cx="143" cy="153" rx="8" ry="3.6" fill={look.shoes} stroke={out} strokeWidth="0.9" />
-        <ellipse cx="177" cy="153" rx="8" ry="3.6" fill={look.shoes} stroke={out} strokeWidth="0.9" />
-        {/* braccia aperte: maniche e mani */}
-        <path d={`M${L + 4} 66 L${R - 4} 66`} stroke={out} strokeWidth="11.4" strokeLinecap="round" />
-        <path d={`M${L + 4} 66 L${R - 4} 66`} stroke={skin} strokeWidth="9" strokeLinecap="round" />
-        <path d={`M${160 - reach * 0.55} 66 L${160 + reach * 0.55} 66`} stroke={sleeve} strokeWidth="10.4" strokeLinecap="butt" />
-        <path d={`M${160 - reach * 0.55} 61 V71 M${160 + reach * 0.55} 61 V71`} stroke={look.trim} strokeWidth="1.6" />
-        <circle cx={L + 3} cy="66" r="5" fill={skin} stroke={out} strokeWidth="1" />
-        <circle cx={R - 3} cy="66" r="5" fill={skin} stroke={out} strokeWidth="1" />
-        {/* busto */}
-        <path d="M144 60 C146 58 174 58 176 60 L174 120 L146 120 Z" fill={shirt} stroke={out} strokeWidth="1.4" strokeLinejoin="round" />
-        <path d="M152 60 Q160 70 168 60" stroke={look.trim} strokeWidth="2" fill="none" />
-        <rect x="145" y="104" width="30" height="5" rx="1.5" fill={look.beltColor || shade(pants, -0.3)} stroke={out} strokeWidth="0.8" />
-        {/* collo */}
-        <rect x="155" y="50" width="10" height="10" fill={shade(skin, -0.15)} />
-        {/* quota dell'apertura */}
-        <path d={`M${L - 6} 86 H${R + 2} M${L - 6} 80 V92 M${R + 2} 80 V92`} stroke="#7cf0a8" strokeWidth="1.6" />
-        <text x="160" y="100" textAnchor="middle" fontSize="12" fontWeight="700" fill="#7cf0a8">{ok ? `${fmt(cm, 0)} cm` : "—"}</text>
-        <text x="160" y="167" textAnchor="middle" fontSize="9.5" fontWeight="700" fill="#e0b15a">allungo ≈ apertura ÷ 2,5 (in pollici)</text>
-      </svg>
-      {/* la testa è quella dell'avatar */}
-      <div className="pointer-events-none absolute" style={{ left: "43.5%", width: "13%", top: "12.6%" }}>
-        <AvatarFace look={look} bare className="h-auto w-full" />
+        <ArcherFront look={look} armsOut={half} crop={vb} className="block h-auto w-full" />
+        <svg viewBox={vb} className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden>
+          {/* muro dietro la schiena: le dita toccano il muro */}
+          <line x1={left.x - 4} y1={top} x2={left.x - 4} y2="362" stroke="#6f7f76" strokeWidth="5" />
+          <text x={left.x + 4} y={top + 16} fill="#9fb3a8" fontSize="14">muro</text>
+          {/* quota dell'apertura, dal muro alla punta del dito medio */}
+          <path d={`M${left.x - 4} ${lineY} H${right.x} M${left.x - 4} ${lineY - 9} V${lineY + 9} M${right.x} ${lineY - 9} V${lineY + 9}`} stroke="#7cf0a8" strokeWidth="2.4" />
+          <rect x={labelX - 36} y={lineY + 6} width="72" height="24" rx="6" fill="#101a15" opacity="0.85" />
+          <text x={labelX} y={lineY + 23.5} textAnchor="middle" fontSize="18" fontWeight="700" fill="#7cf0a8">{ok ? `${fmt(cm, 0)} cm` : "—"}</text>
+        </svg>
       </div>
-      </div>
+      <p className="px-3 pt-1.5 text-center text-[0.78rem] font-bold text-[#e0b15a]">allungo ≈ apertura ÷ 2,5 (in pollici)</p>
       <figcaption className="px-3 pb-2.5 text-[0.72rem] leading-snug text-muted">Il tuo arciere, braccia aperte e schiena al muro: si misura da punta a punta del dito medio. La stima si conferma all'arco con una freccia lunga segnata.</figcaption>
     </figure>
   );
