@@ -138,7 +138,8 @@ export function SectionBar({ path, search, hide = [], onSearch }: { path: string
             className={cx("aa-secbar-item relative grid min-w-[3rem] flex-1 snap-start justify-items-center gap-0.5 pb-1.5 pt-2", path === "/" && !open && "is-on")}
             style={{ ["--acc" as string]: "#f2e6c4" }}
           >
-            <AppIcon name="home" size={30} enamel="ivory" />
+            {/* Casa non è una categoria: niente placca, quando è aperta girano i raggi */}
+            <AppIcon name="home" size={30} enamel="ivory" glow={path === "/" && !open} />
             <span className="text-[0.6rem] font-semibold leading-none tracking-tight">Casa</span>
           </Link>
           {STATIONS.map((x) => {

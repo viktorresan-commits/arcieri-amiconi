@@ -40,7 +40,7 @@ function MiniStat({ icon, value, label }: { icon: IconName; value: string; label
 function Plaque({ to, search, icon, label, sub }: { to: string; search?: Record<string, string>; icon: IconName; label: string; sub?: string }) {
   return (
     <Link to={to as "/"} search={search as never} className="aa-plaque aa-press flex min-h-[52px] min-w-0 items-center gap-2 rounded-2xl px-2 text-left">
-      <AppIcon name={icon} size={36} />
+      <AppIcon name={icon} size={36} enamel="ivory" />
       <span className="min-w-0 flex-1">
         <b className="aa-plaque-title block truncate font-display text-[1.05rem] leading-tight">{label}</b>
         {sub ? <span className="aa-plaque-sub block truncate text-[0.68rem]">{sub}</span> : null}
@@ -146,7 +146,7 @@ function Home() {
             </div>
             {/* azione principale: lo stesso avvio di sempre del tiro rapido */}
             <Link to="/allenamento" search={{ avvia: "rapido" }} className="aa-cta aa-press flex min-h-[58px] items-center gap-3 rounded-2xl px-3 text-left">
-              <AppIcon name="bolt" size={44} />
+              <AppIcon name="bolt" size={44} enamel="ivory" />
               <span className="min-w-0 flex-1"><b className="block truncate font-display text-[1.45rem] uppercase leading-none tracking-wide">Tiro rapido</b><span className="block truncate text-[0.74rem] font-semibold opacity-85">Registra le frecce di oggi</span></span>
               <Glyph name="chevron" size={18} className="shrink-0 opacity-80" />
             </Link>
@@ -156,7 +156,7 @@ function Home() {
             </div>
             {/* statistiche con l'attività del mese: uscite, frecce, media (dati reali) */}
             <Link to="/statistiche" className="aa-plaque aa-stats-bar aa-press flex min-h-[52px] items-center gap-2 rounded-2xl px-2.5 text-left">
-              <AppIcon name="chart" size={32} />
+              <AppIcon name="chart" size={32} enamel="ivory" />
               <span className="min-w-0 shrink-0">
                 <b className="aa-plaque-title block font-display text-[1.02rem] leading-none">Statistiche</b>
                 <span className="aa-plaque-sub block text-[0.62rem]">questo mese</span>

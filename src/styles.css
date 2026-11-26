@@ -2093,3 +2093,20 @@ svg .aa-fall { stroke-dasharray: 4 3; animation: aa-fall 0.8s linear infinite; }
 @keyframes aa-turn-in { from { opacity: 0.2; transform: perspective(700px) rotateY(var(--from, 18deg)) scaleX(0.55); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .aa-turn-in { animation: none; } }
 html[data-motion="ridotta"] .aa-turn-in { animation: none; }
+
+/* Casa nella barra in basso: non è una categoria, quindi niente placca chiara né trattino;
+   quando è aperta la riconosci dai raggi che girano attorno alla moneta */
+.aa-secbar-item[data-st="casa"].is-on::after,
+.aa-secbar-item[data-st="casa"].is-on::before { display: none; }
+.aa-secbar-item[data-st="casa"].is-on .aa-appicon-ins { transform: none; }
+.aa-secbar-item[data-st="casa"].is-on { color: #f6e7bf; }
+
+/* le schede della Home sono nei colori di Casa (oro e avorio), non in quelli di una categoria */
+.aa-home :is(.aa-cta, .aa-plaque) {
+  --tone: #e2bf78;
+  --tone-hi: #f6e3b4;
+  --tone-lo: #a8792d;
+  --tone-ink: #1e1505;
+  --plate-a: #3a2c17;
+  --plate-b: #15100a;
+}
