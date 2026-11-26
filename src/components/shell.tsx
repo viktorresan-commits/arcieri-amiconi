@@ -9,6 +9,7 @@ import { memberLabel, initials } from "@/lib/arcieri/labels";
 import { Avatar, LevelHalo, Loading, Mark, cx } from "./kit";
 import { SHORTCUTS, STATIONS, currentShortcut, sectionOf, stationOf } from "@/lib/arcieri/shortcuts";
 import { NextCard, PathMap, ShortcutEditor, TipCard, rememberPage } from "./shortcuts";
+import { LevelCrest } from "./level-crest";
 import { SectionBar } from "./section-bar";
 import { CompanyWelcome } from "./compagnia";
 import { PercorsoWelcome } from "./percorso-welcome";
@@ -369,6 +370,10 @@ export function Shell({ children }: { children: ReactNode }) {
                   <span className="shrink-0 text-[0.62rem] tabular-nums text-white/70">{lvl.into.toLocaleString("it-IT")}/{lvl.need.toLocaleString("it-IT")} XP</span>
                 </span>
               </Link>
+              {/* lo stemma del livello, lo stesso del Profilo: un tocco apre obiettivi e punti */}
+              <Link to="/obiettivi" aria-label={`Livello ${lvl.level}`} className="aa-press relative h-12 w-[2.7rem] shrink-0 drop-shadow-[0_4px_8px_rgba(0,0,0,0.5)]">
+                <LevelCrest xp={xp.xp} compact className="h-full w-full" />
+              </Link>
               <Link to="/bacheca" aria-label={unread > 0 ? `Avvisi, ${unread} da leggere` : "Avvisi"} className="aa-bell relative grid h-10 w-10 shrink-0 place-items-center rounded-full">
                 <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15Z" /><path d="M10 20a2 2 0 0 0 4 0" /></svg>
                 {unread > 0 ? <span className="absolute -right-0.5 -top-0.5 grid h-5 min-w-5 place-items-center rounded-full bg-[#d6402f] px-1 text-[0.66rem] font-bold text-white">{unread > 9 ? "9+" : unread}</span> : null}
@@ -385,7 +390,7 @@ export function Shell({ children }: { children: ReactNode }) {
               </div>
             <div className="flex shrink-0 items-center gap-1.5">
               <Link to="/obiettivi" className="flex h-9 items-center gap-1.5 rounded-full bg-white/[0.06] px-2.5 text-[0.72rem] font-semibold" aria-label={`Livello ${lvl.level}`}>
-                <span className="grid h-6 w-6 place-items-center rounded-full bg-[#ffd27a] font-display text-[0.8rem] text-[#1a1408]">{lvl.level}</span>
+                <LevelCrest xp={xp.xp} compact className="h-7 w-6" />
                 <span className="h-1.5 w-9 overflow-hidden rounded-full bg-white/15"><span className="block h-full rounded-full bg-[#ffd27a]" style={{ width: `${Math.round((lvl.into / Math.max(1, lvl.need)) * 100)}%` }} /></span>
               </Link>
               <button type="button" onClick={openHelp} className={cx("aa-helpbtn grid h-9 w-9 place-items-center rounded-full bg-white/[0.06]", helpSeen ? "" : "is-new")} aria-label="Aiuto su questa pagina">
