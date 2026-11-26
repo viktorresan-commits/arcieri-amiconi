@@ -1,5 +1,5 @@
 import { asNum } from "./access";
-import { specialLooksFor } from "./special-looks";
+import { MONTELAGO_GIFT, specialLooksFor } from "./special-looks";
 import type { getSql } from "@/lib/db";
 
 type Sql = Awaited<ReturnType<typeof getSql>>;
@@ -11,13 +11,14 @@ function weekKey(date = new Date()) {
 
 export async function publishNews(sql: Sql, userId: string) {
   // abiti su misura regalati: un avviso in Bacheca per il titolare, una volta sola
-  const me = await sql<{ given_name: string | null; family_name: string | null }>`select given_name, family_name from members where user_id = ${userId} limit 1`;
-  const all = me[0] ? specialLooksFor(me[0].given_name ?? "", me[0].family_name ?? "") : [];
-  // il Demone di Montelago ha il suo avviso (chi aveva già avuto abiti in regalo lo riceve lo stesso)
-  if (all.some((g) => g.id.startsWith("demone-"))) {
+  const me = await sql<{ given_name: string | null; family_name: string | null; is_super: boolean | null; role: string | null }>`select given_name, family_name, is_super, role from members where user_id = ${userId} limit 1`;
+  const founder = Boolean(me[0]?.is_super) && me[0]?.role === "admin";
+  const all = me[0] ? specialLooksFor(me[0].given_name ?? "", me[0].family_name ?? "", founder) : [];
+  // il Demone di Montelago ha il suo avviso, a Simone e al fondatore (anche a chi aveva già avuto abiti in regalo)
+  if (MONTELAGO_GIFT && all.some((g) => g.id.startsWith("demone-"))) {
     await sql`
       insert into notifications (user_id, title, body, href, dedupe)
-      values (${userId}, ${"Il tuo costume da Demone di Montelago è arrivato"}, ${"Il fondatore ha disegnato i due costumi del Montelago Celtic Festival: corna, maschera, bastone e lo sfondo dell'Arpa di notte con i fuochi. Solo voi due li potete indossare: li trovi in Avatar, tra i tuoi abiti su misura, con il nome «Demone di Montelago»."}, ${"/avatar"}, ${`demone-montelago-${userId}`})
+      values (${userId}, ${"È arrivato il costume da Demone di Montelago"}, ${"I due costumi del Montelago Celtic Festival sono nel tuo Avatar: maschera, corna, bastone e lo sfondo dell'Arpa di notte con i fuochi. Li potete indossare solo voi due, Simone e Victor: li trovi tra i tuoi abiti su misura, con il nome «Demone di Montelago»."}, ${"/avatar"}, ${`demone-montelago-${userId}`})
       on conflict (dedupe) do nothing`;
   }
   const gifts = all.filter((g) => !g.id.startsWith("demone-"));

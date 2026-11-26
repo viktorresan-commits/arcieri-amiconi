@@ -56,9 +56,9 @@ export const SPECIAL_LOOKS: SpecialLook[] = [
 /**
  * Demone di Montelago: i due costumi del Montelago Celtic Festival, disegnati dalle foto. Sono di Simone e del
  * fondatore insieme: ognuno dei due può indossare l'uno o l'altro, nessun altro li vede. Simone li riceve
- * quando il fondatore li conferma (MONTELAGO_GIFT): fino ad allora li vede e li prova solo il fondatore.
+ * quando il fondatore li conferma (MONTELAGO_GIFT, confermato il 26 novembre 2026), con un avviso in Bacheca a tutti e due.
  */
-export const MONTELAGO_GIFT = false;
+export const MONTELAGO_GIFT = true;
 const MONTELAGO_OWNERS: Owner[] = MONTELAGO_GIFT ? [{ given: "Simone", family: "Salimbeni" }] : [];
 const MONTELAGO_SCENE = "montelago";
 SPECIAL_LOOKS.push(
