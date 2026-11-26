@@ -95,7 +95,11 @@ function Page() {
   }
   const spec = (k: string) => form.specs[k] ?? "";
   const setSpec = (k: string, v: string) => setForm((f) => ({ ...f, specs: { ...f.specs, [k]: v } }));
-  const items = (gear.data ?? []).filter((g) => filter === "tutto" || g.category === filter);
+  const shown = (gear.data ?? []).filter((g) => filter === "tutto" || g.category === filter);
+  // le mie attrezzature; i pezzi che i compagni mettono nell'inventario del gruppo stanno a parte
+  const items = shown.filter((g) => g.mine);
+  const [sharedOpen, setSharedOpen] = useState(false);
+  const shared = shown.filter((g) => !g.mine);
 
   function edit(item: NonNullable<typeof gear.data>[number]) {
     setForm({
@@ -266,7 +270,7 @@ function Page() {
           <option value="replace">Da sostituire</option>
           <option value="unused">Non usato</option>
         </Select>
-        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.visibility === "group"} onChange={(e) => setForm({ ...form, visibility: e.target.checked ? "group" : "personal" })} /> Inventario del gruppo</label>
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.visibility === "group"} onChange={(e) => setForm({ ...form, visibility: e.target.checked ? "group" : "personal" })} /> Inventario del gruppo (lo vedono i compagni della tua compagnia)</label>
         {form.category === "arco" || form.category === "freccia" ? (
           <Advice lines={form.category === "arco" ? bowAdvice(form.specs) : arrowAdvice(form.specs, mainBow?.specs)} />
         ) : null}
@@ -284,8 +288,11 @@ function Page() {
       </div>
       {gear.loading ? <Loading /> : null}
       {items.length === 0 && !gear.loading ? <Empty title="Inventario vuoto" text="Aggiungi almeno l'arco che usi di solito." /> : null}
+      {[items, ...(sharedOpen ? [shared] : [])].map((list, part) => (
+      <div key={part} className="grid gap-2">
+      {part === 1 ? <p className="px-1 text-xs font-semibold uppercase tracking-wider text-muted">Inventario della compagnia · pezzi dei compagni</p> : null}
       <div className="grid gap-2 sm:grid-cols-2">
-        {items.map((item) => {
+        {list.map((item) => {
           const sp = item.specs;
           const isArrow = item.category === "freccia";
           const from = Number(sp.numFrom || 1);
@@ -306,7 +313,7 @@ function Page() {
                   <p className="text-xs text-muted">
                     {item.status === "in_use" ? "in uso" : item.status === "replace" ? "da sostituire" : "fermo"}
                     {item.priceCents != null ? ` · ${euro(item.priceCents)}` : ""}
-                    {item.visibility === "group" ? " · gruppo" : ""}
+                    {item.visibility === "group" ? (item.mine ? " · nell'inventario del gruppo" : ` · di ${item.owner}`) : ""}
                   </p>
                 </div>
               </div>
@@ -377,6 +384,13 @@ function Page() {
           );
         })}
       </div>
+      </div>
+      ))}
+      {shared.length ? (
+        <button type="button" onClick={() => setSharedOpen((v) => !v)} className="aa-press flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-line text-sm font-semibold">
+          {sharedOpen ? "Nascondi i pezzi dei compagni" : `Inventario della compagnia · ${shared.length} ${shared.length === 1 ? "pezzo" : "pezzi"} dei compagni`}
+        </button>
+      ) : null}
       <Card className="grid gap-2">
         <h2 className="font-display text-2xl">Configurazione</h2>
         <TextInput value={setup.name} onChange={(e) => setSetup({ ...setup, name: e.target.value })} placeholder="Nome, es. Indoor 18" />

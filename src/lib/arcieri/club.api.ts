@@ -50,19 +50,23 @@ export const listEquipment = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const sql = await db();
     await ensureMember(sql, context.userId);
+    // i pezzi dell'inventario del gruppo: solo quelli dei compagni della propria compagnia
+    const peers = new Set(await companyPeers(sql, context.userId));
     const rows = await sql<{
       id: number; user_id: string; visibility: string; category: string; name: string; brand: string; model: string;
       photo_url: string | null; purchased_on: string | null; price_cents: number | null; shop: string; notes: string;
-      status: string; specs: string;
+      status: string; specs: string; given_name: string | null; family_name: string | null; nickname: string | null;
     }>`
-      select id, user_id, visibility, category, name, brand, model, photo_url, purchased_on::text as purchased_on,
-        price_cents, shop, notes, status, specs
-      from equipment
-      where user_id = ${context.userId} or visibility = 'group'
-      order by category, name`;
-    return rows.map((r) => ({
+      select e.id, e.user_id, e.visibility, e.category, e.name, e.brand, e.model, e.photo_url, e.purchased_on::text as purchased_on,
+        e.price_cents, e.shop, e.notes, e.status, e.specs, m.given_name, m.family_name, m.nickname
+      from equipment e left join members m on m.user_id = e.user_id
+      where e.user_id = ${context.userId} or e.visibility = 'group'
+      order by e.category, e.name`;
+    return rows.filter((r) => r.user_id === context.userId || peers.has(r.user_id)).map((r) => ({
       id: asNum(r.id),
       mine: r.user_id === context.userId,
+      /** di chi è il pezzo (per l'inventario del gruppo) */
+      owner: r.user_id === context.userId ? "" : r.nickname || [r.given_name, r.family_name].filter(Boolean).join(" ") || "un compagno",
       visibility: r.visibility,
       category: r.category,
       name: r.name,
