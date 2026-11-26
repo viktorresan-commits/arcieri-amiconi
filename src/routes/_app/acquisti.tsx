@@ -8,6 +8,7 @@ import { Button, Card, Empty, ErrorNote, Field, Loading, PageHead, TextInput } f
 import { CategoryIcon } from "@/components/gear-icons";
 import { Glyph } from "@/components/icons";
 import { ReceiptsCard } from "@/components/receipt-import";
+import { ClubSpend } from "@/components/club-spend";
 
 export const Route = createFileRoute("/_app/acquisti")({ component: Page });
 
@@ -196,6 +197,9 @@ function Page() {
           </Card>
         );
       })}
+
+      {/* quello che si compra insieme in compagnia */}
+      <ClubSpend />
     </div>
   );
 }

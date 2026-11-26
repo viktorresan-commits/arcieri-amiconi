@@ -14,7 +14,7 @@ import { useLocalState } from "@/lib/arcieri/local-store";
 import { Podium } from "@/components/podium";
 import { useTeamAvatars } from "@/components/avatar-hero";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { listClubOrders, listGadgets, saveClubOrder, setClubOrder, skillBoard, squadBoard } from "@/lib/arcieri/club.api";
+import { listGadgets, skillBoard, squadBoard } from "@/lib/arcieri/club.api";
 import { bowLabel, memberLabel, DIVISIONS } from "@/lib/arcieri/labels";
 import type { AvatarLook } from "@/lib/arcieri/avatar";
 import { SceneBackdrop } from "@/components/scene-2d";
@@ -32,7 +32,7 @@ import { faceById } from "@/lib/arcieri/scoring";
 
 const TEAM_FACE = faceById("wa10");
 import { GroupBestPosture } from "@/components/gesture-gallery";
-import { Avatar, Button, Card, Empty, ErrorNote, Field, HoldDelete, Loading, PageHead, Segmented, Select, TextInput } from "@/components/kit";
+import { Avatar, Button, Card, Empty, ErrorNote, HoldDelete, Loading, PageHead, Segmented } from "@/components/kit";
 import { useMember } from "@/components/shell";
 import { PrizeMark, prizeTier } from "@/components/prize-mark";
 
@@ -46,8 +46,8 @@ type Section = "arcieri" | "gare" | "bersaglio" | "bacheca" | "compagnie";
 const SECTIONS: { id: Section; label: string; icon: IconName; lede: string }[] = [
   { id: "arcieri", label: "Arcieri", icon: "team", lede: "Chi tira con noi e i podi per divisione: tocca un nome per la scheda, confronta fino a tre arcieri." },
   { id: "gare", label: "Gare", icon: "flag", lede: "Segni solo quelle a cui hai partecipato. Il punteggio degli altri si vede, ma si cambia solo il tuo." },
-  { id: "bersaglio", label: "Bersaglio", icon: "target", lede: "Dove arrivano le frecce della compagnia, sul paglione e sulle sagome 3D." },
-  { id: "bacheca", label: "Trofei", icon: "trophy", lede: "Il palmarès della compagnia, i premi e la spesa comune." },
+  { id: "bersaglio", label: "Bersaglio", icon: "target", lede: "Dove arrivano le frecce: le tue, di tutta la compagnia o di chi scegli, in allenamento e in gara." },
+  { id: "bacheca", label: "Trofei", icon: "trophy", lede: "La bacheca della compagnia: podi degli arcieri, piazzamenti di squadra, trofei e premi." },
   { id: "compagnie", label: "Compagnie", icon: "shield", lede: "Classifica delle compagnie e campionato FITAST letto dal portale: arcieri, gare, squadre. Qui entri in un'altra compagnia o ne fondi una." },
 ];
 /** le schede salvate dalla versione di prima */
@@ -398,7 +398,6 @@ export function CompagniaPage({ initial }: { initial?: Section } = {}) {
         <>
           {company ? <CompanyTrophies companyId={company.id} companyName={company.name} /> : <Card><p className="text-sm text-muted">Entra in una compagnia (scheda Compagnie) per vedere il suo palmarès.</p></Card>}
           <GadgetShelf />
-          <ClubSpend />
         </>
       ) : null}
 
@@ -425,63 +424,67 @@ export function CompagniaPage({ initial }: { initial?: Section } = {}) {
 
       {section === "bersaglio" ? (
         <>
-          <Card>
-            <h2 className="font-display text-2xl">Bersaglio della compagnia</h2>
-            <div className="mt-2 grid grid-cols-2 gap-2">
-              <button type="button" onClick={() => setBoard("padiglione")} className={`min-h-11 rounded-xl text-sm font-semibold ${board === "padiglione" ? "bg-primary text-primary-fg" : "border border-line"}`}>Padiglione</button>
-              <button type="button" onClick={() => setBoard("sagoma")} className={`min-h-11 rounded-xl text-sm font-semibold ${board === "sagoma" ? "bg-primary text-primary-fg" : "border border-line"}`}>Sagome 3D</button>
+          {/* un solo pannello: che bersaglio, di chi, come guardarlo; sotto i numeri e chi va meglio */}
+          <Card className="grid gap-3">
+            <div className="grid grid-cols-2 gap-1 rounded-2xl bg-white/[0.05] p-1">
+              {([["padiglione", "Padiglione", "target"], ["sagoma", "Sagome 3D", "crosshair"]] as const).map(([id, label, icon]) => (
+                <button key={id} type="button" aria-pressed={board === id} onClick={() => setBoard(id)} className={`flex min-h-11 items-center justify-center gap-2 rounded-xl text-sm font-semibold ${board === id ? "bg-primary text-primary-fg shadow" : "text-muted"}`}>
+                  <Glyph name={icon} size={17} /> {label}
+                </button>
+              ))}
             </div>
-            <p className="mb-3 mt-2 text-sm text-muted">Prima i tuoi tiri, poi tutti, oppure solo chi scegli. Ci sono gli allenamenti e le gare.</p>
-            <div className="mb-3 flex flex-wrap gap-2">
-              {([["io", "I miei"], ["tutti", "Tutti"], ["scelta", "Scegli"]] as const).map(([key, label]) => (
-                <button key={key} type="button" onClick={() => setFace(key)} className={`min-h-11 rounded-full px-3 text-sm font-semibold ${face === key ? "bg-primary text-primary-fg" : "border border-line"}`}>{label}</button>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {([["io", "I miei"], ["tutti", "Tutta la compagnia"], ["scelta", "Scegli"]] as const).map(([key, label]) => (
+                <button key={key} type="button" aria-pressed={face === key} onClick={() => setFace(key)} className={`aa-chip ${face === key ? "border-transparent bg-accent text-accent-fg" : ""}`}>{label}</button>
               ))}
             </div>
             {face === "scelta" ? (
-              <div className="mb-3 flex flex-wrap gap-2">
-                {people.map((row) => {
+              <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none]">
+                {people.filter((row) => (board === "sagoma" ? row.sagoma.length : row.shots.length)).map((row) => {
                   const on = picked.includes(row.userId);
                   return (
-                    <button key={row.userId} type="button" onClick={() => setPicked((current) => on ? current.filter((id) => id !== row.userId) : [...current, row.userId])} className={`min-h-11 rounded-full px-3 text-sm font-semibold ${on ? "bg-accent text-accent-fg" : "border border-line"}`}>
+                    <button key={row.userId} type="button" aria-pressed={on} onClick={() => setPicked((current) => on ? current.filter((id) => id !== row.userId) : [...current, row.userId])} className={`flex min-h-10 shrink-0 items-center gap-1.5 rounded-full border px-3 text-sm ${on ? "border-transparent bg-white/15 font-semibold" : "border-line text-muted"}`}>
+                      <span className="h-2.5 w-2.5 rounded-full" style={{ background: row.userId === me.userId ? "#e07a2f" : row.color }} />
                       {row.userId === me.userId ? "Io" : row.name}
-                      <span className="ml-1 tabular-nums opacity-70">{board === "sagoma" ? row.sagoma.length : row.shots.length}</span>
                     </button>
                   );
                 })}
               </div>
             ) : null}
             {board === "sagoma" ? (
-              sagomaShots.length ? <SagomaLab animal="sagome-3d" shots={sagomaShots} initial="tre" /> : <p className="text-sm text-muted">Nessun tiro di sagoma, per ora.</p>
+              sagomaShots.length ? <SagomaLab animal="sagome-3d" shots={sagomaShots} initial="tre" /> : <Empty title="Nessun tiro su sagoma" text="Arrivano dalle piazzole delle gare e dagli allenamenti sulle sagome." />
             ) : dots.length ? (
               <div className="grid gap-2">
-                <Segmented value={look} onChange={setLook} options={[{ id: "tre", label: "3D animato" }, { id: "calore", label: "Mappa termica" }, { id: "mappa", label: "Punti" }]} />
-                {look === "tre" ? <TargetGL face={TEAM_FACE} shots={dots.slice(-180).map((d) => ({ x: d.nx, y: d.ny, color: d.color }))} bare /> : null}
+                <Segmented value={look} onChange={setLook} options={[{ id: "tre", label: "Vista 3D" }, { id: "calore", label: "Termica" }, { id: "mappa", label: "Piana" }]} />
+                {look === "tre" ? <TargetGL face={TEAM_FACE} shots={dots.slice(-120).map((d) => ({ x: d.nx, y: d.ny, color: d.color }))} bare /> : null}
                 {look === "calore" ? <Heat face={TEAM_FACE} shots={dots.map((d) => ({ x: d.nx, y: d.ny }))} /> : null}
                 {look === "mappa" ? (
-                  <svg viewBox="-1.12 -1.12 2.24 2.24" className="mx-auto aspect-square w-full max-w-sm" role="img" aria-label="Minimappa dei tiri">
+                  <svg viewBox="-1.12 -1.12 2.24 2.24" className="mx-auto aspect-square w-full max-w-sm" role="img" aria-label="I tiri sul padiglione">
                     <circle cx="0" cy="0" r="1.08" fill="var(--elev)" />
                     {RINGS.map((ring) => <circle key={ring.r} cx="0" cy="0" r={ring.r} fill={ring.fill} />)}
                     <circle cx="0" cy="0" r="0.04" fill="#14181c" />
                     {dots.map((shot, index) => <circle key={index} cx={shot.nx} cy={shot.ny} r="0.03" fill={shot.color} stroke="#14181c" strokeWidth="0.008" />)}
                   </svg>
                 ) : null}
+                <FaceStats dots={dots} />
               </div>
             ) : (
-              <p className="mt-2 text-sm text-muted">Nessun punto sul bersaglio, per ora.</p>
+              <Empty title="Nessun tiro sul padiglione" text="Arrivano dagli allenamenti con le frecce segnate sul bersaglio." />
             )}
-            <ul className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs">
-              {shown.map((row) => (
-                <li key={row.userId} className="flex items-center gap-1.5">
-                  <span className="h-2.5 w-2.5 rounded-full" style={{ background: row.userId === me.userId ? "#e07a2f" : row.color }} />
-                  {row.name}
-                  <span className="text-muted">{board === "sagoma" ? row.sagoma.length : row.shots.length}</span>
-                </li>
-              ))}
-            </ul>
+            {face !== "io" && shown.length ? (
+              <ul className="flex flex-wrap gap-x-3 gap-y-1 border-t border-white/[0.06] pt-2 text-xs">
+                {shown.map((row) => (
+                  <li key={row.userId} className="flex items-center gap-1.5">
+                    {board === "padiglione" ? <span className="h-2.5 w-2.5 rounded-full" style={{ background: row.userId === me.userId ? "#e07a2f" : row.color }} /> : null}
+                    {row.userId === me.userId ? "Tu" : row.name}
+                    <span className="tabular-nums text-muted">{board === "sagoma" ? row.sagoma.length : row.shots.length}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
           </Card>
 
-          <SquadAnimals peers={people} looks={looks} meId={me.userId ?? ""} />
-
+          {board === "sagoma" ? <SquadAnimals peers={people} looks={looks} meId={me.userId ?? ""} /> : null}
         </>
       ) : null}
     </div>
@@ -514,14 +517,23 @@ function GareTab({ companies }: { companies: Awaited<ReturnType<typeof listCompa
   return <GareBody embedded league={league} />;
 }
 
-const ORDER_LABEL: Record<string, string> = {
-  penne: "Penne",
-  aste: "Aste",
-  punte: "Punte",
-  cocche: "Cocche",
-  flettenti: "Flettenti",
-  altro: "Altro",
-};
+
+/** i numeri del padiglione: frecce, media stimata dai cerchi e quante nell'oro (9 e 10) */
+function FaceStats({ dots }: { dots: { nx: number; ny: number }[] }) {
+  const scores = dots.map((d) => Math.max(0, 10 - Math.floor(Math.hypot(d.nx, d.ny) * 10)));
+  const avg = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
+  const gold = scores.filter((v) => v >= 9).length;
+  return (
+    <div className="grid grid-cols-3 gap-2 text-center">
+      {([["Frecce", String(dots.length)], ["Media", avg.toFixed(1).replace(".", ",")], ["Nell'oro", dots.length ? `${Math.round((gold / dots.length) * 100)}%` : "—"]] as const).map(([k, v]) => (
+        <div key={k} className="aa-kpi rounded-xl border px-2 py-2">
+          <p className="text-[11px] text-muted">{k}</p>
+          <p className="font-display text-xl leading-none tabular-nums">{v}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function SquadAnimals({ peers, looks, meId }: { peers: { userId: string; name: string; photoUrl: string | null; color: string }[]; looks: Record<string, AvatarLook>; meId: string }) {
   const board = useLoad("skill-board", () => skillBoard());
@@ -543,12 +555,12 @@ function SquadAnimals({ peers, looks, meId }: { peers: { userId: string; name: s
     <Card className="relative grid gap-3 overflow-hidden">
       <span aria-hidden className="pointer-events-none absolute -right-10 -top-12 h-36 w-36 rounded-full bg-[#a3496f] opacity-25 blur-2xl" />
       <div>
-        <h2 className="font-display text-2xl">Sagome 3D</h2>
-        <p className="text-sm text-muted">Media per freccia sulle sagome, tra piazzole di gara e allenamenti.</p>
+        <h2 className="font-display text-2xl">Chi va meglio sulle sagome</h2>
+        <p className="text-sm text-muted">Media a freccia tra piazzole di gara e allenamenti; sotto, l'animale che scegli.</p>
       </div>
       <RankBars rows={sagoma} tint="#a3496f" empty="Nessun tiro di sagoma, per ora." />
       <label className="grid gap-1 text-sm">
-        <span className="text-muted">Chi è più bravo su un animale</span>
+        <span className="text-muted">Animale</span>
         <select value={animal} onChange={(e) => setAnimal(e.target.value)} className="min-h-11 rounded-xl border border-line bg-transparent px-3">
           {ANIMALS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
         </select>
@@ -566,61 +578,25 @@ function SquadAnimals({ peers, looks, meId }: { peers: { userId: string; name: s
 function GadgetShelf() {
   const board = useLoad("gadgets", () => listGadgets());
   const prizes = (board.data?.prizes ?? []).filter((prize) => prize.holders.length > 0);
+  if (!prizes.length) return null;
   return (
-    <Card>
-      <h2 className="mb-2 font-display text-2xl">Premi</h2>
-      <p className="mb-3 text-sm text-muted">Solo quelli già conquistati da qualcuno della squadra.</p>
-      {prizes.length === 0 ? <p className="text-sm text-muted">Nessuno sbloccato, per ora.</p> : (
-        <div className="grid grid-cols-2 gap-2">
-          {prizes.map((prize) => (
-            <div key={prize.code} className="rounded-xl border border-accent p-2">
-              <div className="flex items-center gap-2">
-                <PrizeMark code={prize.code} />
-                <p className="min-w-0 truncate text-sm font-semibold">{prize.title}</p>
-              </div>
-              <p className="mt-1 truncate text-[11px] text-muted">{prizeTier(prize.code).label}</p>
-              <p className="mt-1 truncate text-xs">{prize.holders.map((holder) => holder.nickname || holder.givenName).join(", ")}</p>
-            </div>
-          ))}
-        </div>
-      )}
+    <Card className="grid gap-2">
+      <div className="flex items-baseline justify-between gap-2">
+        <h2 className="font-display text-2xl">Premi dell'app</h2>
+        <span className="text-xs text-muted">{prizes.length} sbloccati in compagnia</span>
+      </div>
+      {/* una vetrina che scorre: la medaglia, il premio e chi l'ha preso */}
+      <div className="-mx-1 flex snap-x gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none]">
+        {prizes.map((prize) => (
+          <div key={prize.code} className="grid w-[7.5rem] shrink-0 snap-start justify-items-center gap-1 rounded-2xl bg-white/[0.04] px-2 py-2.5 text-center">
+            <PrizeMark code={prize.code} size="lg" />
+            <p className="line-clamp-2 text-xs font-semibold leading-tight">{prize.title}</p>
+            <p className="text-[0.62rem] text-muted">{prizeTier(prize.code).label}</p>
+            <p className="line-clamp-2 text-[0.68rem] leading-tight">{prize.holders.map((holder) => holder.nickname || holder.givenName).join(", ")}</p>
+          </div>
+        ))}
+      </div>
     </Card>
   );
 }
 
-function ClubSpend() {
-  const [nonce, setNonce] = useState(0);
-  const orders = useLoad(`orders-${nonce}`, () => listClubOrders());
-  const [item, setItem] = useState("penne");
-  const [qty, setQty] = useState("1");
-  const [note, setNote] = useState("");
-  const [err, setErr] = useState("");
-  return (
-    <Card className="grid gap-3">
-      <h2 className="font-display text-2xl">Spesa comune</h2>
-      <p className="text-sm text-muted">Penne, aste, punte: si scrive qui e si ordina insieme.</p>
-      <div className="grid grid-cols-2 gap-2">
-        <Select value={item} onChange={(e) => setItem(e.target.value)}>
-          {Object.entries(ORDER_LABEL).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
-        </Select>
-        <TextInput inputMode="numeric" value={qty} onChange={(e) => setQty(e.target.value)} placeholder="Quantità" />
-      </div>
-      <Field label="Nota"><TextInput value={note} onChange={(e) => setNote(e.target.value)} placeholder="Marca, misura, colore" /></Field>
-      {err ? <ErrorNote text={err} /> : null}
-      <Button onClick={() => saveClubOrder({ data: { item, qty: Number(qty) || 1, note } }).then(() => { setNote(""); setNonce((n) => n + 1); }).catch((e: unknown) => setErr(e instanceof Error ? e.message : "Errore"))}>Aggiungi all'ordine</Button>
-      {(orders.data ?? []).length === 0 ? <Empty title="Nessun ordine" text="Quando manca qualcosa, mettilo qui." /> : null}
-      {(orders.data ?? []).map((row) => (
-        <div key={row.id} className="rounded-xl border border-line p-2">
-          <p className="font-semibold">{ORDER_LABEL[row.item] ?? row.item} × {row.qty}</p>
-          <p className="text-xs text-muted">{memberLabel(row, orders.data ?? [])} · {row.status}{row.note ? ` · ${row.note}` : ""}</p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {([["aperto", "Aperto"], ["ordinato", "Ordinato"], ["arrivato", "Arrivato"]] as const).map(([status, label]) => (
-              <button key={status} type="button" className="min-h-10 rounded-full border border-line px-3 text-xs" onClick={() => setClubOrder({ data: { id: row.id, status } }).then(() => setNonce((n) => n + 1))}>{label}</button>
-            ))}
-            {row.mine ? <button type="button" className="text-xs text-danger" onClick={() => setClubOrder({ data: { id: row.id, remove: true } }).then(() => setNonce((n) => n + 1))}>Togli</button> : null}
-          </div>
-        </div>
-      ))}
-    </Card>
-  );
-}

@@ -71,10 +71,12 @@ export function SagomaLab({ animal, shots, title, initial = "mappa" }: { animal:
     return { canvas: c, key: `ring-${heatKey}` };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [summary, view, heatKey]);
+  // in 3D al massimo le ultime 90 frecce: con tutta la compagnia il bersaglio diventerebbe un istrice (la termica le conta tutte)
+  const recent = placed.slice(-90);
   const shots3d = summary
-    ? placed.map((s) => ({ ...toRing(s), end: s.end, score: s.score, miss: s.miss }))
+    ? recent.map((s) => ({ ...toRing(s), end: s.end, score: s.score, miss: s.miss }))
     : picture
-      ? placed.map((s) => ({ x: s.nx * picture.halfW, y: s.ny * picture.halfH, end: s.end, score: s.score, miss: s.miss }))
+      ? recent.map((s) => ({ x: s.nx * picture.halfW, y: s.ny * picture.halfH, end: s.end, score: s.score, miss: s.miss }))
       : [];
 
   const total = shots.reduce((sum, s) => sum + (s.miss ? 0 : s.score), 0);

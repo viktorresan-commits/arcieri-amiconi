@@ -148,11 +148,13 @@ export function CompanyTrophies({ companyId, companyName }: { companyId: number;
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [all, setAll] = useState(false);
+  const [view, setView] = useState<"podi" | "squadra" | "trofei">("podi");
   if (error) return <ErrorNote text={error} />;
   if (!data) return null;
   const awards = data.awards;
   const pods = data.podiums;
   const results = data.results ?? [];
+  const teamRows = [...results.filter((r) => r.fitastId.startsWith("camp-")).slice(0, 4), ...results.filter((r) => !r.fitastId.startsWith("camp-"))];
   const counts = countOf([...awards, ...pods, ...results]);
   const save = async () => {
     if (!draft) return;
@@ -178,12 +180,25 @@ export function CompanyTrophies({ companyId, companyName }: { companyId: number;
     }
   };
   return (
-    <Card className="grid gap-3">
-      <div>
-        <h2 className="font-display text-2xl leading-tight">Bacheca dei trofei</h2>
-        <p className="text-xs text-muted">{companyName}: premi di squadra e podi dei suoi arcieri.</p>
+    <Card className="relative grid gap-3 overflow-hidden">
+      {/* la vetrina: un'occhiata e si vede quanto ha vinto la compagnia */}
+      <span aria-hidden className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-[#e0b15a] opacity-[0.14] blur-3xl" />
+      <div className="flex items-center gap-3">
+        <Cup place={1} size={52} />
+        <div className="min-w-0">
+          <h2 className="font-display text-[1.7rem] leading-tight">Bacheca di {companyName}</h2>
+          <p className="text-xs text-muted">{awards.length + teamRows.length + pods.length ? `${counts[0] + counts[1] + counts[2]} podi · ${awards.length} ${awards.length === 1 ? "trofeo" : "trofei"} di squadra` : "Ancora vuota: i podi arrivano dalle gare"}</p>
+        </div>
       </div>
       <Shelf counts={counts} extra={{ n: awards.length, label: "Trofei" }} />
+      <div className="grid grid-cols-3 gap-1 rounded-2xl bg-white/[0.05] p-1">
+        {([["podi", "Podi", pods.length], ["squadra", "Squadra", teamRows.length], ["trofei", "Trofei", awards.length]] as const).map(([id, label, n]) => (
+          <button key={id} type="button" aria-pressed={view === id} onClick={() => setView(id)} className={cx("min-h-10 rounded-xl text-[0.78rem] font-semibold", view === id ? "bg-primary text-primary-fg shadow" : "text-muted")}>
+            {label} <span className="tabular-nums opacity-70">{n}</span>
+          </button>
+        ))}
+      </div>
+      {view === "trofei" ? (
       <div className="grid gap-1.5">
         <div className="flex items-center justify-between gap-2">
           <p className="text-sm font-semibold">Trofei di squadra{data.canEdit && awards.length ? <span className="ml-1 text-xs font-normal text-muted">(tocca per modificare)</span> : null}</p>
@@ -259,42 +274,36 @@ export function CompanyTrophies({ companyId, companyName }: { companyId: number;
           </div>
         ) : null}
       </div>
-      <div className="grid gap-1.5">
-        {/* il campionato in corso (classifica generale squadre dal portale), poi le gare */}
-        {results.some((r) => r.fitastId.startsWith("camp-")) ? (
-          <>
-            <p className="text-sm font-semibold">Campionato</p>
-            <ul className="grid gap-1.5">
-              {results.filter((r) => r.fitastId.startsWith("camp-")).slice(0, 4).map((r) => <TeamResultRow key={r.id} r={r} />)}
-            </ul>
-          </>
-        ) : null}
-        <p className="text-sm font-semibold">Classifiche di squadra</p>
-        {results.some((r) => !r.fitastId.startsWith("camp-")) ? (
+      ) : null}
+      {view === "squadra" ? (
+        /* un solo elenco: prima il campionato in corso (generale squadre dal portale), poi le gare */
+        teamRows.length ? (
           <ul className="grid gap-1.5">
-            {results.filter((r) => !r.fitastId.startsWith("camp-")).slice(0, 12).map((r) => <TeamResultRow key={r.id} r={r} />)}
+            {(all ? teamRows : teamRows.slice(0, 8)).map((r) => <TeamResultRow key={r.id} r={r} />)}
+            {teamRows.length > 8 ? (
+              <button type="button" className="aa-chip justify-self-start" onClick={() => setAll((v) => !v)}>{all ? "Mostra meno" : `Mostra tutti (${teamRows.length})`}</button>
+            ) : null}
           </ul>
         ) : (
-          <p className="text-sm text-muted">Arrivano da sole quando un arciere della compagnia cerca il suo nome sul portale FITAST (sezione Gare).</p>
-        )}
-      </div>
-      <div className="grid gap-1.5">
-        <p className="text-sm font-semibold">Podi degli arcieri</p>
-        {pods.length ? (
+          <p className="text-sm text-muted">Arrivano da sole quando qualcuno della compagnia cerca il suo nome sul portale FITAST (scheda Gare).</p>
+        )
+      ) : null}
+      {view === "podi" ? (
+        pods.length ? (
           <>
             <ul className="grid gap-1.5">
-              {(all ? pods : pods.slice(0, 6)).map((p, i) => <PodiumRow key={`${p.userId}-${p.competition}-${p.day}-${i}`} p={p} withName />)}
+              {(all ? pods : pods.slice(0, 8)).map((p, i) => <PodiumRow key={`${p.userId}-${p.competition}-${p.day}-${i}`} p={p} withName />)}
             </ul>
-            {pods.length > 6 ? (
+            {pods.length > 8 ? (
               <button type="button" className="aa-chip justify-self-start" onClick={() => setAll((v) => !v)}>
                 {all ? "Mostra meno" : `Mostra tutti (${pods.length})`}
               </button>
             ) : null}
           </>
         ) : (
-          <p className="text-sm text-muted">Nessun podio ancora. Le posizioni in classifica arrivano dalle gare del calendario.</p>
-        )}
-      </div>
+          <p className="text-sm text-muted">Nessun podio ancora: i piazzamenti arrivano dalle gare.</p>
+        )
+      ) : null}
     </Card>
   );
 }
