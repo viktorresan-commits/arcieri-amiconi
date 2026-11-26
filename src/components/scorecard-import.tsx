@@ -43,7 +43,7 @@ async function loadPhoto(url: string): Promise<Loaded> {
   return { gray: toGray(data, w, h), w, h, url: c.toDataURL("image/jpeg", 0.85) };
 }
 
-export function ScorecardImport({ onClose, onSaved }: { onClose: () => void; onSaved?: () => void }) {
+export function ScorecardImport({ onClose, onSaved, compId }: { onClose: () => void; onSaved?: () => void; /** gara già scelta (dalla scheda della gara) */ compId?: number }) {
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [active, setActive] = useState<number | null>(null);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
@@ -160,6 +160,7 @@ export function ScorecardImport({ onClose, onSaved }: { onClose: () => void; onS
           onRealign={() => setRead(null)}
           onNext={nextColumn}
           onSaved={onSaved}
+          compId={compId}
         />
       ) : null}
     </Card>
@@ -285,7 +286,7 @@ function RowStrip({ read, row }: { read: BlockRead; row: number }) {
   return <canvas ref={ref} className="h-9 w-full rounded-md object-fill" />;
 }
 
-function Review({ read, vals, touched, onSet, onFit, onRealign, onNext, onSaved }: { read: BlockRead; vals: ArrowValue[][]; touched: boolean[][]; onSet: (r: number, c: number, v: ArrowValue) => void; onFit: (v: ArrowValue[][]) => void; onRealign: () => void; onNext: () => void; onSaved?: () => void }) {
+function Review({ read, vals, touched, onSet, onFit, onRealign, onNext, onSaved, compId: initialComp = 0 }: { read: BlockRead; vals: ArrowValue[][]; touched: boolean[][]; onSet: (r: number, c: number, v: ArrowValue) => void; onFit: (v: ArrowValue[][]) => void; onRealign: () => void; onNext: () => void; onSaved?: () => void; compId?: number }) {
   const { me } = useMember();
   const [start, setStart] = useState(() => {
     try {
@@ -306,7 +307,7 @@ function Review({ read, vals, touched, onSet, onFit, onRealign, onNext, onSaved 
   const comps = useLoad("cartellino-gare", () => listCompetitions());
   const today = romeDayKey(new Date().toISOString());
   const list = ((comps.data?.competitions ?? []) as Comp[]).filter((c) => c.id > 0 && c.startsOn <= today).sort((a, b) => b.startsOn.localeCompare(a.startsOn));
-  const [compId, setCompId] = useState(0);
+  const [compId, setCompId] = useState(initialComp);
   const comp = list.find((c) => c.id === compId) ?? list[0] ?? null;
   const garaId = comp?.fitast?.garaId ?? "";
   const board = useLoad(`cartellino-classifica-${garaId}`, () => (garaId ? fitastGaraBoard({ data: { garaId } }) : Promise.resolve({ arcieri: [], squadre: [] })));
@@ -356,7 +357,7 @@ function Review({ read, vals, touched, onSet, onFit, onRealign, onNext, onSaved 
             championshipPoints: old?.championshipPoints ?? null,
             targetKind: "sagoma",
             sagomaMax: 8,
-            piazzole: lanes.map((l) => ({ n: l.p, score: l.arrows.reduce((a, b) => a + b, 0), arrows: l.arrows, label: "", distanceM: null, note: "", aimAngle: "" })),
+            piazzole: lanes.map((l) => ({ n: l.p, score: l.arrows.reduce((a: number, b) => a + b, 0), arrows: l.arrows, label: "", distanceM: null, note: "", aimAngle: "" })),
           },
         });
         const myName = myPortal?.name || [me.givenName, me.familyName].filter(Boolean).join(" ") || me.nickname || "Io";

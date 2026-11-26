@@ -9,6 +9,7 @@ import { useLoad } from "@/lib/arcieri/use-load";
 import { useMember } from "@/components/shell";
 import { romeDayKey } from "@/lib/arcieri/time";
 import { refreshActivity } from "@/lib/arcieri/xp";
+import { ScorecardImport } from "@/components/scorecard-import";
 
 export const Route = createFileRoute("/_app/segnapunti")({ component: Page });
 
@@ -37,6 +38,8 @@ function Page() {
   // la piazzola a cui stai dando bersaglio e distanza resta ferma finché non segni la freccia dopo
   const [pin, setPin] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  // lettura del cartellino di gara dalla foto
+  const [photo, setPhoto] = useState(false);
   // persona da togliere (si chiede conferma: i suoi punti si perdono)
   const [removing, setRemoving] = useState<number | null>(null);
   const sag = st.mode === "sagome";
@@ -155,6 +158,18 @@ function Page() {
   return (
     <div className="grid gap-3">
       <PageHead kicker="Gareggia" title="Segnapunti" lede="Padiglione o sagome. Aggiungi gli amici, poi tocca i punti: a fine volée passa da solo al prossimo." />
+      {photo ? (
+        <ScorecardImport onClose={() => setPhoto(false)} />
+      ) : (
+        <button type="button" onClick={() => setPhoto(true)} className="aa-press flex w-full items-center gap-3 rounded-[var(--radius-card)] border border-[#e0b15a]/30 bg-[#e0b15a]/[0.07] p-3 text-left">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#e0b15a]/25"><Glyph name="camera" size={22} /></span>
+          <span className="min-w-0 flex-1">
+            <b className="block">Cartellino di gara dalla foto</b>
+            <span className="block text-xs text-muted">Fotografa il cartellino della piazzola: leggo le frecce, le controlli e le porti nella gara del campionato</span>
+          </span>
+          <Glyph name="chevron" size={16} className="text-muted" />
+        </button>
+      )}
       <div className="grid grid-cols-2 gap-2">
         {([["padiglione", "Padiglione", "X, 10 … 1, M"], ["sagome", "Sagome", "8 · 5 · 0, 20 piazzole"]] as const).map(([id, label, hint]) => (
           <button key={id} type="button" aria-pressed={st.mode === id} onClick={() => st.mode !== id && fresh({ mode: id, per: id === "sagome" ? 2 : 3 })} className={`grid gap-0.5 rounded-2xl border p-3 text-left ${st.mode === id ? "border-[#7cf0a8] bg-white/[0.07]" : "border-hair"}`}>

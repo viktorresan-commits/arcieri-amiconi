@@ -19,6 +19,7 @@ import { KindEmblem } from "@/components/kind-emblem";
 import type { TeamResult } from "@/lib/arcieri/palmares.api";
 import { CrestMark, GaraBoard, type Crest, type FitastLeagueState, type OurArcher } from "@/components/fitast-league";
 import { FitastLinkCard } from "@/components/fitast-link";
+import { ScorecardImport } from "@/components/scorecard-import";
 import { categoryGroup } from "@/lib/arcieri/fitast-league";
 
 
@@ -63,7 +64,10 @@ type Comp = {
   fitast?: { garaId: string; step: number; champ: string; total: number; read: boolean; ours: OurArcher[] } | null;
   /** solo dal portale: nell'app la gara non c'è (niente presenza né punteggio da segnare) */
   virtual?: boolean;
+  /** con chi si era in piazzola: dai cartellini letti dalla foto e dall'elenco delle piazzole del portale */
+  group?: { piazzola: number; mates: Mate[] } | null;
 };
+type Mate = { name: string; team: string; lanes: { p: number; arrows: number[] }[] | null; total: number | null; spots: number | null; place: number | null; category: string; camp: number | null; size: number };
 
 function hasResult(entry: Entry) {
   return entry.score != null || entry.spot != null || entry.championshipPoints != null || entry.laneCount != null || entry.piazzole.length > 0;
@@ -75,6 +79,7 @@ export function GareBody({ embedded = false, league }: { embedded?: boolean; /**
   const { me } = useMember();
   const crestOf = league?.crestOf ?? noCrest;
   const [board, setBoard] = useState<number | null>(null);
+  const [photoFor, setPhotoFor] = useState<number | null>(null);
   const today = romeDayKey(new Date().toISOString());
   const [nonce, setNonce] = useState(0);
   const [tab, setTab] = useEntryState<"past" | "next">("gare-tab", "past");
@@ -220,6 +225,7 @@ export function GareBody({ embedded = false, league }: { embedded?: boolean; /**
                 </div>
               ) : null}
               {comp.teamResults?.length ? <TeamLine results={comp.teamResults} /> : null}
+              {comp.group?.mates.length ? <PiazzolaMates group={comp.group} past={tab === "past"} /> : null}
               <Roster tab={tab} people={tab === "past" ? others : comp.roster ?? []} also={scored.length > 0} />
               {f?.read && tab === "past" ? (
                 board === comp.id ? (
@@ -252,10 +258,23 @@ export function GareBody({ embedded = false, league }: { embedded?: boolean; /**
                   ) : null}
                   {portalCode && open !== comp.id ? (
                     <Button className="w-full text-sm" variant="ghost" onClick={() => { setPortal({ code: portalCode }); window.setTimeout(() => document.getElementById("fitast")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60); }}>
-                      {tab === "next" ? "Piazzole e iscritti" : "Compagni di piazzola"}
+                      {tab === "next" ? "Piazzole e iscritti" : "Cerca sul portale"}
                     </Button>
                   ) : null}
                 </div>
+              ) : null}
+              {tab === "past" && !comp.virtual && me.role !== "viewer" ? (
+                photoFor === comp.id ? (
+                  <ScorecardImport compId={comp.id} onClose={() => setPhotoFor(null)} onSaved={() => setNonce((n) => n + 1)} />
+                ) : (
+                  <button type="button" onClick={() => setPhotoFor(comp.id)} className="aa-press flex items-center gap-3 rounded-2xl border border-line px-3 py-2.5 text-left">
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/[0.06]"><Glyph name="camera" size={18} /></span>
+                    <span className="min-w-0 flex-1">
+                      <b className="block text-sm">Cartellino dalla foto</b>
+                      <span className="block text-xs text-muted">le tue piazzole e quelle dei compagni di piazzola</span>
+                    </span>
+                  </button>
+                )
               ) : null}
               {scope === "rest" && !comp.virtual ? (
                 <div className="grid grid-cols-2 gap-2">
@@ -397,6 +416,56 @@ function Roster({ tab, people, also = false }: { tab: "past" | "next"; people: C
 }
 
 const noCrest = (): Crest | null => null;
+
+/** con chi si era in piazzola: il loro risultato e, se c'è il cartellino, le piazzole una per una */
+function PiazzolaMates({ group, past }: { group: { piazzola: number; mates: Mate[] }; past: boolean }) {
+  const [open, setOpen] = useState<string | null>(null);
+  return (
+    <div className="grid gap-1.5">
+      <p className="flex items-baseline justify-between gap-2 text-sm font-semibold">
+        <span>{past ? "In piazzola con te" : "Tirerai con"}</span>
+        {group.piazzola ? <span className="text-[0.7rem] font-normal text-muted">piazzola {group.piazzola}</span> : null}
+      </p>
+      <ul className="grid gap-1.5">
+        {group.mates.map((m) => {
+          const cat = categoryText(m.category);
+          const lanes = m.lanes ?? [];
+          return (
+            <li key={m.name} className="grid gap-2 rounded-2xl bg-white/[0.035] px-2.5 py-2">
+              <button type="button" disabled={!lanes.length} onClick={() => setOpen(open === m.name ? null : m.name)} className="flex min-w-0 items-center gap-2.5 text-left">
+                <span className="min-w-0 flex-1">
+                  <b className="block truncate text-sm">{m.name}</b>
+                  <span className="block truncate text-xs text-muted">{[m.team, m.place ? `${m.place}° ${cat}`.trim() : cat].filter(Boolean).join(" · ")}</span>
+                </span>
+                {m.place && m.place <= 3 ? <Medal place={m.place} size={24} /> : null}
+                {m.total != null ? (
+                  <span className="shrink-0 text-right">
+                    <b className="block font-display text-xl leading-none tabular-nums">{m.total}</b>
+                    <span className="text-[0.56rem] uppercase tracking-wider text-muted">{m.camp != null ? `${m.camp} pt camp.` : m.spots != null ? `${m.spots} spot` : "punti"}</span>
+                  </span>
+                ) : null}
+                {lanes.length ? <Glyph name="chevron" size={14} className={`shrink-0 text-muted ${open === m.name ? "-rotate-90" : "rotate-90"}`} /> : null}
+              </button>
+              {open === m.name && lanes.length ? (
+                <div className="grid grid-cols-10 gap-1">
+                  {lanes.map((l) => {
+                    const v = l.arrows.reduce((a, b) => a + b, 0);
+                    return (
+                      <span key={l.p} className="grid place-items-center rounded-md py-1 text-[0.62rem] leading-tight tabular-nums" style={{ background: v >= 18 ? "#a8323a" : v >= 13 ? "#2a6294" : v > 0 ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.05)" }}>
+                        <span className="text-white/60">{l.p}</span>
+                        <b className="text-[0.78rem]">{v}</b>
+                      </span>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
 
 /** giorno della gara per esteso: «domenica 15 novembre» */
 function longDay(day: string) {
