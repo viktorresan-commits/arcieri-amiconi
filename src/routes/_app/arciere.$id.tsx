@@ -41,7 +41,7 @@ function Page() {
       <ArcherStage data={data} look={looks[data.userId] ?? null} />
       {/* una foto dei due arcieri insieme, da condividere come storia */}
       {!data.viewer.self && data.userId && looks[data.userId] ? (
-        <Link to="/storia" search={{ con: data.userId }} className="aa-press flex min-h-12 items-center gap-3 rounded-2xl border border-[#e0b15a]/35 bg-[#e0b15a]/[0.08] px-3">
+        <Link to="/riepilogo" search={{ vista: "foto", con: data.userId }} className="aa-press flex min-h-12 items-center gap-3 rounded-2xl border border-[#e0b15a]/35 bg-[#e0b15a]/[0.08] px-3">
           <Glyph name="camera" size={20} className="shrink-0 text-[#f1cf8a]" />
           <span className="min-w-0 flex-1 text-sm font-semibold">Fai una foto insieme a {name.split(" ")[0]}</span>
           <Glyph name="chevron" size={16} className="shrink-0 text-muted" />

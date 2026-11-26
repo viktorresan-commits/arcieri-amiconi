@@ -1,13 +1,48 @@
 import { useEffect, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Button, Card, Empty, ErrorNote, Loading, PageHead } from "@/components/kit";
+import { Button, Card, Empty, ErrorNote, Loading, PageHead, cx } from "@/components/kit";
+import { StoryMaker } from "@/components/storie";
 import { Glyph } from "@/components/icons";
 import { useLoad } from "@/lib/arcieri/use-load";
 import { useEntryState } from "@/lib/arcieri/back-restore";
 import { SITE_URL, isNativeApp, saveFile } from "@/lib/arcieri/native";
 import { monthSummary } from "@/lib/arcieri/riepilogo.api";
 
-export const Route = createFileRoute("/_app/riepilogo")({ component: Page });
+type Vista = "mese" | "foto" | "video";
+
+export const Route = createFileRoute("/_app/riepilogo")({
+  validateSearch: (search: Record<string, unknown>): { vista?: Vista; con?: string } => ({
+    ...(search.vista === "mese" || search.vista === "foto" || search.vista === "video" ? { vista: search.vista } : {}),
+    ...(typeof search.con === "string" && search.con ? { con: search.con } : {}),
+  }),
+  component: Page,
+});
+
+/** le tre storie da condividere: l'immagine del mese, la foto con un compagno, il video con i propri numeri */
+const VISTE: { id: Vista; label: string; icon: "share" | "camera" | "play"; lede: string }[] = [
+  { id: "mese", label: "Il mese", icon: "share", lede: "I numeri del mese in un'immagine verticale, pronta per Instagram e WhatsApp." },
+  { id: "foto", label: "Foto insieme", icon: "camera", lede: "Il tuo arciere accanto a quello di un compagno, nella tua scena o nella sua." },
+  { id: "video", label: "Il mio video", icon: "play", lede: "Undici secondi con il tuo arciere e i tuoi numeri che salgono uno alla volta." },
+];
+
+function Page() {
+  const search = Route.useSearch();
+  const [vista, setVista] = useState<Vista>(search.vista ?? "mese");
+  const lede = VISTE.find((v) => v.id === vista)?.lede ?? "";
+  return (
+    <div className="grid gap-3">
+      <PageHead kicker="Profilo" title="Il mio mese" lede={lede} />
+      <div className="grid grid-cols-3 gap-1 rounded-2xl bg-white/[0.05] p-1" role="group" aria-label="Cosa condividere">
+        {VISTE.map((v) => (
+          <button key={v.id} type="button" aria-pressed={vista === v.id} onClick={() => setVista(v.id)} className={cx("flex min-h-11 items-center justify-center gap-1.5 rounded-xl px-1 text-[0.8rem] font-semibold", vista === v.id ? "bg-primary text-primary-fg shadow" : "text-muted")}>
+            <Glyph name={v.icon} size={15} /> {v.label}
+          </button>
+        ))}
+      </div>
+      {vista === "mese" ? <MonthStory /> : <StoryMaker mode={vista} con={search.con} />}
+    </div>
+  );
+}
 
 type Summary = Awaited<ReturnType<typeof monthSummary>>;
 
@@ -143,7 +178,7 @@ function drawStory(ctx: CanvasRenderingContext2D, s: Summary) {
 }
 
 /** Il mio mese: i numeri del mese in un'immagine verticale da condividere. */
-function Page() {
+function MonthStory() {
   const [month, setMonth] = useEntryState("riepilogo-mese", monthKey(new Date()));
   const { data, error, loading } = useLoad(`month-${month}`, () => monthSummary({ data: { month } }));
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -186,8 +221,7 @@ function Page() {
     }
   }
   return (
-    <div className="grid gap-3">
-      <PageHead kicker="Profilo" title="Il mio mese" lede="I numeri del mese in un'immagine verticale, pronta per Instagram e WhatsApp." />
+    <>
       <div className="flex items-center justify-between gap-2">
         <button type="button" onClick={() => setMonth(shift(month, -1))} className="grid h-11 w-11 place-items-center rounded-full bg-white/[0.06]" aria-label="Mese prima">
           <Glyph name="chevron" size={18} className="rotate-180" />
@@ -210,6 +244,6 @@ function Page() {
           {msg ? <p className="text-center text-sm text-muted">{msg}</p> : null}
         </>
       )}
-    </div>
+    </>
   );
 }
