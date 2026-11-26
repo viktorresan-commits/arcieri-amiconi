@@ -147,3 +147,24 @@ export function stepsOf(tables: GaraTable[]): Map<string, { n: number; champ: st
   }
   return out;
 }
+
+/**
+ * Gli elenchi delle piazzole del portale per una gara: con il suo numero, se il giorno torna (un collegamento
+ * sbagliato a un'altra tappa non deve dare l'elenco di quella); altrimenti quelli letti lo stesso giorno, e fra
+ * più gare dello stesso giorno quella che `prefer` riconosce (per esempio quella in cui ci sono io).
+ */
+export function pzTablesFor(all: GaraTable[], garaId: string, day: string, prefer?: (list: GaraTable[]) => boolean): GaraTable[] {
+  const d = (day || "").slice(0, 10);
+  const near = (a: string, b: string) => !a || !b || Math.abs(Date.parse(a) - Date.parse(b)) <= 3 * 86_400_000;
+  const exact = garaId ? all.filter((t) => t.gara_id === garaId && near(String(t.held_on ?? "").slice(0, 10), d)) : [];
+  if (exact.length) return exact;
+  if (!d) return [];
+  const sameDay = all.filter((t) => String(t.held_on ?? "").slice(0, 10) === d);
+  const ids = [...new Set(sameDay.map((t) => t.gara_id))];
+  if (ids.length <= 1) return sameDay;
+  for (const id of ids) {
+    const list = sameDay.filter((t) => t.gara_id === id);
+    if (prefer?.(list)) return list;
+  }
+  return [];
+}

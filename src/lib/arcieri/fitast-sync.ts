@@ -9,7 +9,7 @@ import type { FitastPage } from "./fitast-parse";
 import { classificaUrl, cleanTitle, titleScore, findGare, garaDateOf, garaIdOf, garaTitleOf, rowFields, seasonRange, seasonSelect, type Gara } from "./fitast-gare";
 import { currentTexts, FILTER_BUTTON, filterCombos, pressReq, type Req } from "./fitast-nav";
 import { namesOnly, piazzoleRows, pzName as cleanPz, smartPiazzoleRows, rankingRows, SQUADRE_PAGES, type RankRow } from "./fitast-league";
-import { saveFitastStandings, type StandingKind } from "./fitast-league.api";
+import { fitastStandings, saveFitastStandings, type StandingKind } from "./fitast-league.api";
 import { listCompetitions } from "./club.api";
 
 export type SyncProgress = { step: string; pages: number; saved: number; diag?: string[]; done?: boolean; error?: string; /** a fine giro: cosa si è letto delle piazzole */ note?: string };
@@ -50,7 +50,44 @@ function learnedIds(): Record<string, string> {
   }
 }
 
-export async function syncStandings(opts: { onProgress: (p: SyncProgress) => void; stop: () => boolean }) {
+/** tentativi andati a vuoto (piazzole o squadre che il portale non dà): per gara, quando; si riprova dopo qualche giorno */
+function missLog(key: string) {
+  let map: Record<string, string> = {};
+  try {
+    map = JSON.parse(localStorage.getItem(key) ?? "{}") as Record<string, string>;
+  } catch {
+    map = {};
+  }
+  return {
+    recent: (id: string, days: number) => Boolean(map[id]) && Date.now() - Date.parse(map[id]) < days * 86_400_000,
+    mark: (id: string) => {
+      map[id] = new Date().toISOString();
+      try {
+        localStorage.setItem(key, JSON.stringify(map));
+      } catch {
+        /* niente */
+      }
+    },
+    clear: (id: string) => {
+      delete map[id];
+      try {
+        localStorage.setItem(key, JSON.stringify(map));
+      } catch {
+        /* niente */
+      }
+    },
+  };
+}
+
+/** una classifica di gara letta più di due giorni dopo la gara: i risultati sono quelli definitivi */
+const settled = (at: string, day: string) => Boolean(at && day) && Date.parse(at) - Date.parse(day) > 2 * 86_400_000;
+
+/**
+ * `full`: rilegge tutto da capo. Altrimenti si legge solo quello che manca o che può essere cambiato: le gare
+ * nuove, quelle lette prima che i risultati fossero definitivi, le piazzole delle prossime gare (una volta al
+ * giorno) e le generali solo se è arrivata una gara nuova.
+ */
+export async function syncStandings(opts: { onProgress: (p: SyncProgress) => void; stop: () => boolean; full?: boolean }) {
   let cookie = "";
   let pages = 0;
   let saved = 0;
@@ -396,6 +433,33 @@ export async function syncStandings(opts: { onProgress: (p: SyncProgress) => voi
     if (other.size && pzStats.seen.length < 3) pzStats.seen.push(`gara ${id}: il portale ha aperto ${[...other].join(", ")} (scartata)`);
   };
 
+  // quello che è già salvato: per gara, quando sono state lette classifica arcieri, squadre e piazzole (la più vecchia)
+  type Have = { arcieri: string; squadre: string; pz: string };
+  const have = new Map<string, Have>();
+  const genAt = { sq: "", ar: "" };
+  if (!opts.full) {
+    try {
+      const st = await fitastStandings();
+      for (const it of st.items) {
+        if (it.kind === "generale-squadre" || it.kind === "generale-arcieri") {
+          const k = it.kind === "generale-squadre" ? "sq" : "ar";
+          if (it.total && (!genAt[k] || it.updatedAt < genAt[k])) genAt[k] = it.updatedAt;
+          continue;
+        }
+        if (!it.garaId || !it.total) continue;
+        const h = have.get(it.garaId) ?? { arcieri: "", squadre: "", pz: "" };
+        const k = it.kind === "gara-arcieri" ? "arcieri" : it.kind === "gara-squadre" ? "squadre" : "pz";
+        if (!h[k] || it.updatedAt < h[k]) h[k] = it.updatedAt;
+        have.set(it.garaId, h);
+      }
+    } catch {
+      /* senza l'indice si rilegge tutto */
+    }
+  }
+  let skipped = 0;
+  const pzMiss = missLog("aa-fitast-pz-miss");
+  const sqMiss = missLog("aa-fitast-sq-miss");
+
   // le gare del campionato già fatte (dalla più recente) e quelle delle prossime tre settimane
   const range = now ? seasonRange(now.text) ?? seasonRange(now.value) : null;
   const learned = learnedIds();
@@ -421,12 +485,22 @@ export async function syncStandings(opts: { onProgress: (p: SyncProgress) => voi
     /* senza l'elenco delle gare dell'app si va per data */
   }
   // ogni gara fatta: il suo numero confermato dalla sua classifica (serve anche dopo, per le classifiche intere)
-  type Done = { g: Gara; id: string; p0: FitastPage | null; r0: Req | null; gara: { id: string; title: string; day: string } };
+  type Done = { g: Gara; id: string; p0: FitastPage | null; r0: Req | null; gara: { id: string; title: string; day: string }; squadreOnly?: boolean };
   const done: Done[] = [];
   for (const g of gare) {
     if (opts.stop() || pages >= MAX_PAGES) break;
     // il numero della gara: dall'elenco, dalla chiave della riga o dalle gare già viste nelle ricerche (stessa data)
     const candidates = [g.id, g.key ?? "", ...Object.entries(learned).filter(([, d]) => d === g.date).map(([id]) => id)].filter((x, i, a) => /^\d{3,6}$/.test(x) && a.indexOf(x) === i);
+    // già letta con i risultati definitivi: non si riapre (le piazzole mancanti si cercano lo stesso, più sotto)
+    const knownId = candidates.find((id) => settled(have.get(id)?.arcieri ?? "", g.date ?? ""));
+    if (knownId) {
+      const h = have.get(knownId) as Have;
+      skipped++;
+      const trySq = !h.squadre && (opts.full || !sqMiss.recent(knownId, 7));
+      const tryPz = !h.pz && (opts.full || !pzMiss.recent(knownId, 3));
+      if (trySq || tryPz) done.push({ g, id: knownId, p0: null, r0: null, gara: { id: knownId, title: cleanTitle(g.title) || g.title, day: g.date ?? "" }, squadreOnly: trySq });
+      continue;
+    }
     let hit: Done | null = null;
     for (const id of candidates.slice(0, 4)) {
       if (done.some((d) => d.id === id) || opts.stop()) continue;
@@ -445,12 +519,24 @@ export async function syncStandings(opts: { onProgress: (p: SyncProgress) => voi
     if (!id || done.some((d) => d.id === id)) continue;
     done.push(hit ?? { g, id, p0: null, r0: null, gara: { id, title: cleanTitle(g.title) || g.title, day: g.date ?? "" } });
   }
+  // piazzole già salvate: delle gare fatte non cambiano più; delle prossime si rileggono una volta al giorno
   const pzSeen = new Set<string>();
+  for (const [id, h] of have) {
+    if (!h.pz) continue;
+    const next = nextGare.some((x) => idOfRow(x) === id);
+    if (!next || Date.now() - Date.parse(h.pz) < 86_400_000) pzSeen.add(id);
+  }
   const pzOf = async (id: string, gara: { id: string; title: string; day: string }, g?: Gara, p0?: FitastPage | null) => {
     if (!id || pzSeen.has(id) || opts.stop() || pages >= MAX_PAGES) return;
     pzSeen.add(id);
+    // una gara fatta il cui elenco il portale non ha dato: si riprova solo dopo qualche giorno
+    const past = Boolean(gara.day) && gara.day < today;
+    if (past && !opts.full && pzMiss.recent(id, 3)) return;
     step = `${gara.title || "Gara"} · ${gara.day ? gara.day.split("-").reverse().join("/") : ""} · piazzole`;
+    const before = pzStats.read;
     await piazzole(id, gara, p0?.url ?? FITAST_HOME, g, p0 ?? null);
+    if (pzStats.read > before) pzMiss.clear(id);
+    else if (past && !opts.stop()) pzMiss.mark(id);
   };
   for (const [id, w] of wanted) {
     const d = done.find((x) => x.id === id);
@@ -464,12 +550,17 @@ export async function syncStandings(opts: { onProgress: (p: SyncProgress) => voi
   const btns = base.form?.buttons ?? [];
   const genSq = btns.find((b) => /general/i.test(b.label) && /squadr|compagn|societ/i.test(b.label));
   const genAr = btns.find((b) => /general/i.test(b.label) && /arcier/i.test(b.label));
-  if (genSq && !opts.stop()) {
+  // le generali cambiano solo dopo una gara: si rileggono se è arrivata una gara nuova o se sono più vecchie dei risultati dell'ultima
+  const newGare = done.filter((d) => d.p0).length;
+  const lastDay = gare[0]?.date ?? "";
+  const genOld = (at: string) => !at || (Boolean(lastDay) && !settled(at, lastDay));
+  const needGen = { sq: opts.full || newGare > 0 || genOld(genAt.sq), ar: opts.full || newGare > 0 || genOld(genAt.ar) };
+  if (genSq && needGen.sq && !opts.stop()) {
     step = `Classifica generale compagnie · ${seasonName}`;
     const r0 = pressReq(base, genSq, choose, step);
     await allCombos(await read(r0), r0, "generale-squadre", 40, 8);
   }
-  if (genAr && !opts.stop()) {
+  if (genAr && needGen.ar && !opts.stop()) {
     step = `Classifica generale arcieri · ${seasonName}`;
     const r0 = pressReq(base, genAr, choose, step);
     // tutta la classifica (non solo i primi dieci): serve la media di tutti gli arcieri di ogni compagnia
@@ -483,16 +574,17 @@ export async function syncStandings(opts: { onProgress: (p: SyncProgress) => voi
   } catch {
     sqName = "";
   }
-  for (const { id, p0, r0, gara } of done) {
+  for (const { id, p0, r0, gara, squadreOnly } of done) {
     if (opts.stop() || pages >= MAX_PAGES) break;
-    if (!p0 || !r0) continue;
+    if ((!p0 || !r0) && !squadreOnly) continue;
+    let sqOk = false;
     step = `${gara.title || "Gara"} · ${gara.day ? gara.day.split("-").reverse().join("/") : ""}`;
     // tutti gli arcieri della gara (la pagina ne mostra i primi tre): servono iscritti e gare di ogni compagnia
-    await allCombos(p0, r0, "gara-arcieri", 400, 24, gara);
+    if (p0 && r0) await allCombos(p0, r0, "gara-arcieri", 400, 24, gara);
     // classifica squadre della gara: l'indirizzo che ha funzionato l'ultima volta, poi i nomi simili
     for (const name of [...new Set([sqName, ...(home.awp ?? []).filter((x) => /squadr|compagn|societ/i.test(x) && !/general/i.test(x)), ...SQUADRE_PAGES].filter(Boolean))].slice(0, 5)) {
       if (opts.stop()) break;
-      const r1: Req = { url: new URL(`${name}?P1=${id}`, FITAST_HOME).toString(), referer: p0.url, label: `${step} · squadre` };
+      const r1: Req = { url: new URL(`${name}?P1=${id}`, FITAST_HOME).toString(), referer: p0?.url ?? classificaUrl(id, FITAST_HOME), label: `${step} · squadre` };
       const p1 = await read(r1);
       if (!p1 || (garaIdOf(p1) && garaIdOf(p1) !== id)) continue;
       if (!rankingRows(p1, "squadre", 1).length && !garaIdOf(p1)) continue;
@@ -503,8 +595,12 @@ export async function syncStandings(opts: { onProgress: (p: SyncProgress) => voi
         /* niente */
       }
       await allCombos(p1, r1, "gara-squadre", 200, 4, gara);
+      sqOk = true;
       break;
     }
+    // classifica squadre che il portale non dà per questa gara: si riprova fra una settimana
+    if (sqOk) sqMiss.clear(id);
+    else if (!opts.stop()) sqMiss.mark(id);
   }
   await flush();
   step = "Fatto";
@@ -513,11 +609,15 @@ export async function syncStandings(opts: { onProgress: (p: SyncProgress) => voi
       ? `Piazzole lette per ${pzStats.read} ${pzStats.read === 1 ? "gara" : "gare"} su ${pzStats.tried} (${pzStats.people} arcieri): ${pzStats.gare.join(", ")}.${pzStats.unsaved ? ` Non salvate (${saveError || "errore"}).` : ""}`
       : `Piazzole non trovate sul portale per ${pzStats.tried} ${pzStats.tried === 1 ? "gara" : "gare"}.${pzStats.seen.length ? ` Pagine viste: ${pzStats.seen.join(" | ")}` : ""}`
     : "";
+  // cosa c'era di nuovo: le gare già complete non si sono riaperte
+  const fresh = newGare ? `${newGare} ${newGare === 1 ? "gara nuova o aggiornata" : "gare nuove o aggiornate"}` : "nessuna gara nuova";
+  const summary = opts.full ? "" : `Solo le novità: ${fresh}${skipped ? `, ${skipped} ${skipped === 1 ? "gara già letta" : "gare già lette"} non riaperte` : ""}${needGen.sq || needGen.ar ? ", generali rilette" : ", generali già aggiornate"}.`;
   // l'ultimo esito delle piazzole resta: la gara lo mostra quando «Con te in piazzola» è vuoto
   try {
     if (note) localStorage.setItem("aa-fitast-pz-note", JSON.stringify({ at: new Date().toISOString(), note, pzBtn: Boolean(pzBtn), rowSel: rowSel ?? null }));
   } catch {
     /* niente */
   }
-  report({ done: true, ...(note ? { note } : {}) });
+  const all = [summary, note].filter(Boolean).join(" ");
+  report({ done: true, ...(all ? { note: all } : {}) });
 }

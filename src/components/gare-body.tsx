@@ -533,7 +533,7 @@ function pzWhy(comp: Comp) {
     const known = pz?.known?.length ? ` Elenchi già letti: ${pz.known.map((k) => `gara ${k.id} del ${dd(k.day)} (${k.n} arcieri)`).join(", ")}; questa gara è la ${comp.fitast?.garaId || "—"} del ${dd(comp.startsOn)}.` : "";
     return `L'elenco delle piazzole di questa gara non è ancora arrivato dal portale. In Campionato premi «Aggiorna dal portale». Intanto puoi fotografare il cartellino qui sotto.${known}${last}`;
   }
-  if (pz.mine == null && !mine) return `Elenco delle piazzole letto (${pz.people} arcieri, ${pz.lanes} piazzole), ma non trovo il tuo nome: collega il tuo nome FITAST nel Profilo.`;
+  if (pz.mine == null && !mine) return `Elenco delle piazzole letto (${pz.people} arcieri, ${pz.lanes} piazzole), ma non trovo il tuo nome. Se hai tirato da ospite scegli qui sotto un compagno della tua piazzola: ti metto nella sua. Altrimenti collega il tuo nome FITAST nel Profilo.`;
   return `Elenco delle piazzole letto (${pz.people} arcieri, ${pz.lanes} piazzole): nella piazzola ${pz.mine ?? mine} non risulta nessun altro.${pz.mine != null && mine && pz.mine !== mine ? ` Sul cartellino hai la ${mine}, sul portale la ${pz.mine}.` : ""}`;
 }
 

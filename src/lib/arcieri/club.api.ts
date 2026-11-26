@@ -12,7 +12,7 @@ import { accountWriter, writerFor } from "./acting.api";
 import { activityXp } from "./xp.api";
 import { fitastRankOf, loadGenerale, type GenTable } from "./fitast-rank";
 import { garaLoads, sumLoads } from "./gara-volume";
-import { archersIn, championshipName, matchPerson, oursInGara, peopleOf, resultOf, stepsOf, type GaraTable, type PortalResult, type Who } from "./fitast-ours";
+import { archersIn, championshipName, matchPerson, oursInGara, peopleOf, pzTablesFor, resultOf, stepsOf, type GaraTable, type PortalResult, type Who } from "./fitast-ours";
 import { nameKey } from "./fitast-rank";
 import { categoryGroup, teamKey as teamKeyOf, titleName } from "./fitast-league";
 import type { TallyShot } from "./scoring";
@@ -568,22 +568,7 @@ export const listCompetitions = createServerFn({ method: "GET" })
      * (la pagina delle piazzole e la classifica non sempre coincidono), quelle lette per lo stesso giorno,
      * e fra più gare dello stesso giorno quella in cui ci sono io
      */
-    const near = (a: string, b: string) => !a || !b || Math.abs(Date.parse(a) - Date.parse(b)) <= 3 * 86_400_000;
-    const pzFor = (garaId: string, day: string): GaraTable[] => {
-      const d = (day || "").slice(0, 10);
-      // con il suo numero, se il giorno torna (un collegamento sbagliato a un'altra tappa non deve dare l'elenco di quella)
-      const exact = garaId ? pzTables.filter((t) => t.gara_id === garaId && near(String(t.held_on ?? "").slice(0, 10), d)) : [];
-      if (exact.length) return exact;
-      if (!d) return [];
-      const sameDay = pzTables.filter((t) => String(t.held_on ?? "").slice(0, 10) === d);
-      const ids = [...new Set(sameDay.map((t) => t.gara_id))];
-      if (ids.length <= 1) return sameDay;
-      for (const id of ids) {
-        const list = sameDay.filter((t) => t.gara_id === id);
-        if (meWho && matchPerson(peopleOf(list), meWho)) return list;
-      }
-      return [];
-    };
+    const pzFor = (garaId: string, day: string): GaraTable[] => pzTablesFor(pzTables, garaId, day, (list) => Boolean(meWho && matchPerson(peopleOf(list), meWho)));
     const groupOf = (compId: number, garaId: string, day = "") => {
       const mineKeys = new Set([nameKey(meWho?.fitastName ?? ""), nameKey(meWho?.fullName ?? "")].filter(Boolean));
       const here = cards.filter((c) => asNum(c.competition_id) === compId);

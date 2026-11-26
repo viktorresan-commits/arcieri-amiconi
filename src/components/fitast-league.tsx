@@ -251,13 +251,15 @@ export function useFitastLeague(companies: Crest[]) {
   const stop = useRef(false);
   const running = Boolean(sync && !sync.done);
 
-  async function refresh() {
+  /** `full`: rilegge tutto da capo; altrimenti solo le novità (gare nuove, risultati non ancora definitivi, prossime piazzole) */
+  async function refresh(full = false) {
     stop.current = false;
-    setSync({ step: "Apro il portale", pages: 0, saved: 0 });
+    setSync({ step: full ? "Apro il portale · rileggo tutto" : "Apro il portale · cerco le novità", pages: 0, saved: 0 });
     try {
       await syncStandings({
         onProgress: (p) => setSync({ ...p }),
         stop: () => stop.current,
+        full,
       });
     } catch (e) {
       setSync((s) => ({ ...(s ?? { step: "", pages: 0, saved: 0 }), done: true, error: e instanceof Error ? e.message : "Aggiornamento non riuscito." }));
@@ -321,9 +323,12 @@ export function FitastHeader({ league }: { league: FitastLeagueState }) {
         {running ? (
           <button type="button" className="aa-chip" onClick={league.stop}>Ferma</button>
         ) : (
-          <button type="button" className="aa-chip border-[#e0b15a]/50 text-[#f1cf8a]" onClick={() => void league.refresh()}>Aggiorna dal portale</button>
+          <>
+            <button type="button" className="aa-chip border-[#e0b15a]/50 text-[#f1cf8a]" onClick={() => void league.refresh()}>Aggiorna dal portale</button>
+            <button type="button" className="text-xs text-muted underline underline-offset-2" onClick={() => void league.refresh(true)}>Rileggi tutto</button>
+          </>
         )}
-        {sync ? <span className="text-xs text-muted">{running ? `${sync.step} · ${sync.pages} pagine lette` : sync.error ? sync.error : `Aggiornate ${sync.saved} classifiche in ${sync.pages} pagine.`}</span> : null}
+        {sync ? <span className="text-xs text-muted">{running ? `${sync.step} · ${sync.pages} pagine lette` : sync.error ? sync.error : sync.saved ? `Aggiornate ${sync.saved} classifiche in ${sync.pages} pagine.` : `Nessuna novità sul portale (${sync.pages} pagine controllate).`}</span> : null}
       </div>
       {sync?.done && sync.note ? <p className="break-words text-xs text-muted">{sync.note}</p> : null}
       {sync?.done && sync.diag?.length && !sync.saved ? (
