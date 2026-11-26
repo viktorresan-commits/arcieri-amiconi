@@ -579,9 +579,13 @@ export const listCompetitions = createServerFn({ method: "GET" })
           mates.set(c.name_key, { name: titleName(c.name), team: r?.team ? titleName(r.team) : "", lanes: Array.isArray(c.lanes) ? c.lanes : null, total: c.total ?? r?.score ?? null, spots: c.spots ?? null, place: r?.place ?? null, category: r?.category ?? "", camp: r?.camp ?? null, size: r?.size ?? 0 });
         }
       }
-      if (meOnPortal) {
+      // il portale: chi aveva la stessa piazzola (la mia dal portale, o quella scritta sul mio cartellino)
+      const pzMine = portalPz ?? (myCard?.piazzola || null);
+      // nomi miei per non mettermi fra i compagni: quello collegato, quello del profilo e quello del cartellino
+      if (myCard?.name_key) mineKeys.add(myCard.name_key);
+      if (pzMine != null && pzPeople.length) {
         for (const p of pzPeople) {
-          if (p === meOnPortal.p || (p.entries[0]?.place ?? null) !== portalPz || mates.has(p.key) || mineKeys.has(p.key)) continue;
+          if (p === meOnPortal?.p || (p.entries[0]?.place ?? null) !== pzMine || mates.has(p.key) || mineKeys.has(p.key)) continue;
           const card = here.find((c) => c.name_key === p.key);
           const r = resultFor(p.key, p.team);
           mates.set(p.key, { name: titleName(p.name), team: titleName(p.team), lanes: card && Array.isArray(card.lanes) ? card.lanes : null, total: card?.total ?? r?.score ?? null, spots: card?.spots ?? null, place: r?.place ?? null, category: r?.category ?? "", camp: r?.camp ?? null, size: r?.size ?? 0 });

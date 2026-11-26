@@ -11,7 +11,7 @@ import { teamKey } from "@/lib/arcieri/fitast-league";
 import { Avatar, Button, Card, ErrorNote, Field, Segmented, TextInput } from "./kit";
 import { RankBars } from "./rank-bars";
 import { CrestPodium } from "./podium";
-import { TeamArchersSheet } from "./fitast-league";
+import { JoinLinkSheet, TeamArchersInline, TeamArchersSheet } from "./fitast-league";
 import { crestOf as drawnCrest } from "@/lib/arcieri/fitast-league";
 
 type Board = Awaited<ReturnType<typeof listCompanies>>;
@@ -447,7 +447,14 @@ export function CompanyLeague({ board, onJoin, busy, onSynced, part, fitastBoard
                     <span className="block truncate font-semibold">{co.name}</span>
                     <span className="block truncate text-xs text-muted">{(() => {
                       const st = statOf(co);
-                      return [co.city, st ? `${st.archers} arcieri · ${st.gare} ${st.gare === 1 ? "gara" : "gare"}` : `${co.members} arcieri`, co.fitastPoints != null ? `FITAST ${co.fitastPlace ? `${co.fitastPlace}ª · ` : ""}${co.fitastPoints.toLocaleString("it-IT")} pt` : st ? "" : `${co.arrows.toLocaleString("it-IT")} frecce`].filter(Boolean).join(" · ");
+                      // gli arcieri del portale (classifiche del campionato) contano più degli iscritti all'app
+                      return [
+                        co.city,
+                        st ? `${st.archers} arcieri FITAST · ${st.gare} ${st.gare === 1 ? "gara" : "gare"}` : "",
+                        co.members ? `${co.members} nell'app` : "",
+                        co.fitastPoints != null ? `${co.fitastPlace ? `${co.fitastPlace}ª · ` : ""}${co.fitastPoints.toLocaleString("it-IT")} pt` : "",
+                        !st && !co.members ? "nessun arciere in classifica" : "",
+                      ].filter(Boolean).join(" · ");
                     })()}</span>
                   </span>
                 </button>
@@ -495,8 +502,9 @@ export function CompanyLeague({ board, onJoin, busy, onSynced, part, fitastBoard
                     </div>
                   ) : co.members > 0 && co.id !== board.mine ? <p className="text-xs text-muted">Gli iscritti li vedono il presidente e il fondatore.</p> : null}
                   <CompanyTrophies companyId={co.id} companyName={co.name} />
+                  <TeamArchersInline team={co.fitastName || co.name} canClaim={co.id === board.mine} />
                   <button type="button" onClick={() => setTeamOf({ team: co.fitastName || co.name, crest: { name: co.name, logoUrl: co.logoUrl, color: co.color, fitastName: co.fitastName } })} className="aa-chip justify-self-start">
-                    Tutti gli arcieri nel campionato
+                    Classifica dei suoi arcieri
                   </button>
                   {board.isAdmin ? (
                     editCo === co.id ? (
@@ -704,6 +712,8 @@ export function CompanyWelcome() {
   const [err, setErr] = useState("");
   const [find, setFind] = useState("");
   const [showAll, setShowAll] = useState(false);
+  // appena entrato: il collegamento al nome FITAST fra gli arcieri della compagnia
+  const [linkFor, setLinkFor] = useState<{ team: string; name: string } | null>(null);
   // arrivano loghi veri: si rilegge l'elenco (solo se la scelta è ancora aperta)
   const open = useRef(false);
   open.current = Boolean(w && !w.chosen);
@@ -748,12 +758,15 @@ export function CompanyWelcome() {
     }
     setW(null);
   };
+  if (linkFor) return <JoinLinkSheet team={linkFor.team} companyName={linkFor.name} onClose={() => { setLinkFor(null); done(); }} />;
   async function join(id: number) {
     setBusy(id);
     setErr("");
     try {
       await joinCompany({ data: { id } });
-      done();
+      const c = w?.companies.find((x) => x.id === id);
+      if (c) setLinkFor({ team: c.fitastName || c.name, name: c.name });
+      else done();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Non riuscito");
     } finally {

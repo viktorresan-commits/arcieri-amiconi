@@ -11,7 +11,7 @@ import { currentTexts, filterCombos, pressReq, type Req } from "./fitast-nav";
 import { piazzoleRows, rankingRows, SQUADRE_PAGES, type RankRow } from "./fitast-league";
 import { saveFitastStandings, type StandingKind } from "./fitast-league.api";
 
-export type SyncProgress = { step: string; pages: number; saved: number; diag?: string[]; done?: boolean; error?: string };
+export type SyncProgress = { step: string; pages: number; saved: number; diag?: string[]; done?: boolean; error?: string; /** a fine giro: cosa si è letto delle piazzole */ note?: string };
 type Item = { kind: StandingKind; season: string; seasonName: string; garaId: string; garaTitle: string; day: string; category: string; rows: RankRow[] };
 
 const isoDay = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -101,13 +101,31 @@ export async function syncStandings(opts: { onProgress: (p: SyncProgress) => voi
    * Dalla pagina delle piazzole per numero, se il portale la nomina; altrimenti scegliendo la gara
    * nell'elenco e premendo PIAZZOLE, come si fa a mano.
    */
-  const pzName = (home.awp ?? []).find((x) => /piazz/i.test(x)) ?? "";
   const pzBtn = (base.form?.buttons ?? []).find((b) => /piazzol/i.test(b.label)) ?? null;
-  const piazzole = async (id: string, gara: { id: string; title: string; day: string }, referer: string, g?: Gara) => {
+  let pzName = "";
+  try {
+    pzName = localStorage.getItem("aa-fitast-piazzole") ?? "";
+  } catch {
+    pzName = "";
+  }
+  const pzStats = { tried: 0, read: 0, people: 0, seen: [] as string[] };
+  const piazzole = async (id: string, gara: { id: string; title: string; day: string }, referer: string, g?: Gara, page?: FitastPage | null) => {
     if (opts.stop()) return;
     step = `${gara.title || "Gara"} · piazzole`;
+    pzStats.tried++;
     const reqs: Req[] = [];
-    if (pzName) reqs.push({ url: new URL(`${pzName}?P1=${id}`, FITAST_HOME).toString(), referer, label: step });
+    // la pagina delle piazzole: quella che ha funzionato l'ultima volta, poi quelle nominate dal portale
+    // (pagina iniziale, campionato, pagina della gara) e i link della gara con il numero dentro
+    const names = [...new Set([pzName, ...(home.awp ?? []), ...(base.awp ?? []), ...(page?.awp ?? [])].filter((x) => x && /piazz/i.test(x)))];
+    for (const name of names.slice(0, 4)) reqs.push({ url: new URL(`${name}?P1=${id}`, FITAST_HOME).toString(), referer, label: step });
+    for (const ref of (page?.refs ?? []).filter((x) => /piazz/i.test(x)).slice(0, 2)) reqs.push({ url: ref, referer, label: step });
+    for (const l of (page?.links ?? []).filter((x) => /piazz/i.test(`${x.text} ${x.href}`) && x.href).slice(0, 2)) reqs.push({ url: l.href, referer, label: step });
+    // il pulsante PIAZZOLE della pagina della gara (si preme lì, la gara è già scelta)
+    const garaBtn = (page?.form?.buttons ?? []).find((b) => /piazzol/i.test(b.label));
+    if (page && garaBtn) {
+      const r = pressReq(page, garaBtn, {}, step);
+      if (r) reqs.push(r);
+    }
     if (pzBtn && g) {
       const how = g.alts.find((a) => a.kind === "option" || a.kind === "input");
       if (how) {
@@ -117,12 +135,31 @@ export async function syncStandings(opts: { onProgress: (p: SyncProgress) => voi
         if (r) reqs.push(r);
       }
     }
+    const done = new Set<string>();
     for (const r of reqs) {
       if (opts.stop()) return;
+      const k = `${r.url}|${JSON.stringify(r.post ?? "")}`;
+      if (done.has(k)) continue;
+      done.add(k);
       const p = await read(r);
       if (!p || (garaIdOf(p) && garaIdOf(p) !== id)) continue;
       const rows = piazzoleRows(p);
-      if (!rows.length) continue;
+      if (!rows.length) {
+        // com'è fatta la pagina (solo titoli delle colonne e conteggi), per capire cosa manca
+        const heads = p.tables.slice(0, 3).map((t) => `${t.rows.length}r:${t.rows[0]?.map((c) => c.text.slice(0, 14)).join("/") ?? ""}`).join(" ; ");
+        if (pzStats.seen.length < 4) pzStats.seen.push(`${p.url.split("/").pop()?.slice(0, 40)} → ${heads || "nessuna tabella"}`);
+        continue;
+      }
+      const name = /\/([\w-]+\.awp)/i.exec(r.url)?.[1] ?? "";
+      if (name && /piazz/i.test(name)) {
+        try {
+          localStorage.setItem("aa-fitast-piazzole", name);
+        } catch {
+          /* niente */
+        }
+      }
+      pzStats.read++;
+      pzStats.people += rows.length;
       pending.push({ kind: "gara-piazzole", season, seasonName, garaId: gara.id, garaTitle: gara.title, day: gara.day, category: "Piazzole", rows });
       return;
     }
@@ -147,7 +184,10 @@ export async function syncStandings(opts: { onProgress: (p: SyncProgress) => voi
   // gare del campionato già fatte: classifica arcieri (primi 3 per categoria) e squadre
   const range = now ? seasonRange(now.text) ?? seasonRange(now.value) : null;
   const learned = learnedIds();
-  const gare = findGare(base).filter((g) => g.date && g.date <= today && (!range || (g.date >= range.from && g.date <= range.to)));
+  // dalla più recente: le piazzole delle ultime gare servono prima (le pagine lette hanno un limite)
+  const gare = findGare(base)
+    .filter((g) => g.date && g.date <= today && (!range || (g.date >= range.from && g.date <= range.to)))
+    .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
   const seen = new Set<string>();
   let sqName = "";
   try {
@@ -170,6 +210,8 @@ export async function syncStandings(opts: { onProgress: (p: SyncProgress) => voi
       if (candidates.length > 1 && titleScore(g.title, title) < 1 && candidates.indexOf(id) < candidates.length - 1) continue;
       seen.add(id);
       const gara = { id, title, day: garaDateOf(p0) ?? g.date ?? "" };
+      // prima chi era in piazzola con chi (poche pagine), poi le classifiche intere
+      await piazzole(id, gara, p0.url, g, p0);
       // tutti gli arcieri della gara (la pagina ne mostra i primi tre): servono iscritti e gare di ogni compagnia
       await allCombos(p0, r0, "gara-arcieri", 400, 24, gara);
       // classifica squadre della gara: l'indirizzo che ha funzionato l'ultima volta, poi i nomi simili
@@ -188,7 +230,6 @@ export async function syncStandings(opts: { onProgress: (p: SyncProgress) => voi
         await allCombos(p1, r1, "gara-squadre", 200, 4, gara);
         break;
       }
-      await piazzole(id, gara, p0.url, g);
       break;
     }
   }
@@ -204,5 +245,10 @@ export async function syncStandings(opts: { onProgress: (p: SyncProgress) => voi
   }
   await flush();
   step = "Fatto";
-  report({ done: true });
+  const note = pzStats.tried
+    ? pzStats.read
+      ? `Piazzole lette per ${pzStats.read} ${pzStats.read === 1 ? "gara" : "gare"} su ${pzStats.tried} (${pzStats.people} arcieri).`
+      : `Piazzole non trovate sul portale per ${pzStats.tried} ${pzStats.tried === 1 ? "gara" : "gare"}.${pzStats.seen.length ? ` Pagine viste: ${pzStats.seen.join(" | ")}` : ""}`
+    : "";
+  report({ done: true, ...(note ? { note } : {}) });
 }

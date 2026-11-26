@@ -19,6 +19,10 @@ export const DISCIPLINES = [
 export const CATEGORIES = [
   { id: "arco", label: "Archi" },
   { id: "freccia", label: "Frecce" },
+  { id: "aste", label: "Aste" },
+  { id: "punte", label: "Punte" },
+  { id: "alette", label: "Alette e penne" },
+  { id: "cocche", label: "Cocche" },
   { id: "corda", label: "Corde" },
   { id: "mirino", label: "Mirini" },
   { id: "rest", label: "Rest" },

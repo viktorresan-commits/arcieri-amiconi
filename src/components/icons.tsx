@@ -28,7 +28,8 @@ export type IconName =
   | "steps" | "lungs" | "scorecard" | "spine" | "windsock" | "energy" | "span" | "bareshaft" | "caliper" | "ruler"
   | "daily" | "quiz" | "binoculars" | "book" | "rules" | "lock" | "expand" | "search" | "help"
   | "footprints" | "trend"
-  | "bowstring" | "rest" | "stabilizer" | "armguard" | "release" | "chestguard" | "bowcase" | "bowstand" | "shirt" | "shoe";
+  | "bowstring" | "rest" | "stabilizer" | "armguard" | "release" | "chestguard" | "bowcase" | "bowstand" | "shirt" | "shoe"
+  | "shaft" | "point" | "fletch" | "nock";
 
 const A = 0.32; // opacità del secondo tono
 
@@ -44,6 +45,11 @@ const ICONS: Partial<Record<IconName, ReactNode>> = {
   bowcase: (<><rect x="2.5" y="7" width="19" height="12" rx="2.4" fill="currentColor" fillOpacity={A} /><path d="M9 7V5h6v2M2.5 12h19M11 12v2h2v-2" /></>),
   bowstand: (<><path d="M12 3v10M12 13l-6 8M12 13l6 8M12 13v8" /><path d="M9 4c2-1 4-1 6 0" /><circle cx="12" cy="13" r="1.6" fill="currentColor" fillOpacity={A} /></>),
   shirt: (<><path d="M8 3 3 6l2 4 2-1v12h10V9l2 1 2-4-5-3c-.6 1.6-2 2.4-4 2.4S8.6 4.6 8 3z" fill="currentColor" fillOpacity={A} /><path d="M10 12h4" /></>),
+  // pezzi delle frecce: asta, punta, aletta, cocca
+  shaft: (<><path d="M3 18 18 3" strokeWidth={2.2} /><path d="M3 18 18 3" strokeOpacity={0.4} strokeWidth={0.8} stroke="#000" /><path d="M5.5 15.5l1.5 1.5M14 7l1.5 1.5" /><circle cx="19" cy="2.8" r="1" fill="currentColor" fillOpacity={A} /></>),
+  point: (<><path d="M3 12h7" /><path d="M10 9h4l7 3-7 3h-4z" fill="currentColor" fillOpacity={A} /><path d="M10 9v6M14 9v6" /></>),
+  fletch: (<><path d="M4 16c3-7 9-11 16-12-2 5-6 10-12 12z" fill="currentColor" fillOpacity={A} /><path d="M2 20 20 4" /><path d="M8 16c1-3 3-6 6-8" strokeOpacity={0.6} /></>),
+  nock: (<><path d="M4 12h6" /><path d="M10 8.5h5.5c2 0 2 7 0 7H10z" fill="currentColor" fillOpacity={A} /><path d="M15.5 9.5 20 6M15.5 14.5 20 18" /><path d="M16.5 12h4" strokeOpacity={0.5} /></>),
   shoe: (<><path d="M3 9c3 0 5-1 6-4h3l1 5c3 1 6 2 8 4v3H3z" fill="currentColor" fillOpacity={A} /><path d="M3 17h18M10 8h2M10.5 10.5h2.5" /></>),
   expand: (<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />),
   lock: (<><rect x="5" y="11" width="14" height="10" rx="2" fill="currentColor" fillOpacity={A} /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></>),
@@ -861,6 +867,7 @@ const COIN: Partial<Record<IconName, Coin>> = {
   bowstring: ["bronze", "sapphire"], rest: ["silver", "emerald"], stabilizer: ["silver", "night"], armguard: ["bronze", "ruby"],
   release: ["gold", "night"], chestguard: ["bronze", "teal"], bowcase: ["bronze", "emerald"], bowstand: ["silver", "amethyst"],
   shirt: ["silver", "ruby"], shoe: ["bronze", "sapphire"],
+  shaft: ["bronze", "emerald"], point: ["silver", "ruby"], fletch: ["gold", "teal"], nock: ["silver", "amethyst"],
 };
 const COIN_FALLBACK: Coin[] = [["gold", "sapphire"], ["silver", "ruby"], ["gold", "emerald"], ["silver", "amethyst"], ["bronze", "teal"], ["gold", "night"]];
 function coinOf(name: string): Coin {

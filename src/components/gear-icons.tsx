@@ -194,6 +194,10 @@ export function ArrowIcon({
 const CATEGORY_GLYPH: Record<string, IconName> = {
   arco: "bow",
   freccia: "arrow",
+  aste: "shaft",
+  punte: "point",
+  alette: "fletch",
+  cocche: "nock",
   corda: "bowstring",
   mirino: "sight",
   rest: "rest",

@@ -9,10 +9,56 @@ import type { Sql } from "@/lib/db";
 import { asNum, clip, db, ensureMember, staffLevel } from "./access";
 import { readFitastPage } from "./fitast.api";
 import { realCrest } from "./stemmi-veri";
-import { COMPAGNIE_URL, crestOf, parseCompanies, teamKey, titleName, type PortalCompany, type RankRow } from "./fitast-league";
+import { nameKey } from "./fitast-rank";
+import { COMPAGNIE_URL, crestOf, goodCompanyName, parseCompanies, parseCompanyText, teamKey, titleName, type PortalCompany, type RankRow } from "./fitast-league";
 import { imageInfo, logoCandidates, siteFromEmail, usableLogo } from "./company-logo";
 
 const DAY = 86_400_000;
+/** versione della lettura dell'elenco: quando cambia, l'elenco si rilegge subito (nomi e stemmi corretti) */
+const COMPANIES_V = 3;
+/** nome salvato con pezzi della scheda dentro («Idimm Regione: Tel e Fax:», «06/024 A.s.d. …») */
+const GARBLED = /\bID\s*_?IMM|\bRegione\b|\bTel\s*e\s*Fax\b|\bE-?mail\b|^\s*\d{2}\s?\/\s?\d{3}\s/i;
+
+/**
+ * Compagnie dell'elenco salvate con il nome rotto (letture vecchie): si rileggono dal testo salvato e si
+ * correggono; se la stessa compagnia c'è già con il nome giusto e quella rotta è vuota, quella rotta sparisce.
+ */
+async function repairGarbled(sql: Sql) {
+  const rows = await sql<{ id: number; name: string; fitast_name: string; address: string; phone: string; email: string; website: string; fitast_code: string }>`
+    select id, name, fitast_name, address, phone, email, website, fitast_code from companies where source = 'fitast'`;
+  const keyOf = new Map<string, number>();
+  for (const r of rows) if (!GARBLED.test(r.fitast_name || r.name)) for (const k of [teamKey(r.fitast_name), teamKey(r.name)]) if (k && !keyOf.has(k)) keyOf.set(k, asNum(r.id));
+  let fixed = 0;
+  let removed = 0;
+  for (const r of rows) {
+    const raw = r.fitast_name || r.name;
+    if (!GARBLED.test(raw)) continue;
+    const p = parseCompanyText(raw);
+    const members = await sql<{ n: number }>`select count(*)::int as n from company_members where company_id = ${asNum(r.id)}`;
+    const empty = asNum(members[0]?.n) === 0;
+    const key = goodCompanyName(p.name) ? teamKey(p.name) : "";
+    const twin = key ? keyOf.get(key) : undefined;
+    if ((!key || (twin != null && twin !== asNum(r.id))) && empty) {
+      await sql`delete from companies where id = ${asNum(r.id)}`;
+      removed++;
+      continue;
+    }
+    if (!key) continue;
+    const name = clip(titleName(p.name), 70);
+    await sql`
+      update companies set
+        name = ${name}, fitast_name = ${p.name},
+        address = case when address = '' or address ~* '(regione|tel e fax|idimm)' then ${clip(p.address, 160)} else address end,
+        phone = case when phone = '' then ${p.phone.slice(0, 20)} else phone end,
+        email = case when email = '' then ${/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p.email) ? p.email.slice(0, 120) : ""} else email end,
+        website = case when website = '' then ${p.website ? clip(/^https?:\/\//i.test(p.website) ? p.website : /^fb\s*@/i.test(p.website) ? `https://www.facebook.com/${p.website.replace(/^fb\s*@\s*/i, "")}` : `https://${p.website}`, 160) : ""} else website end,
+        fitast_code = case when fitast_code = '' then ${clip(p.code, 20)} else fitast_code end
+      where id = ${asNum(r.id)}`;
+    keyOf.set(key, asNum(r.id));
+    fixed++;
+  }
+  return { fixed, removed };
+}
 export const STANDING_KINDS = ["generale-squadre", "generale-arcieri", "gara-arcieri", "gara-squadre", "gara-piazzole"] as const;
 export type StandingKind = (typeof STANDING_KINDS)[number];
 
@@ -49,12 +95,15 @@ export const syncFitastCompanies = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const sql = await db();
     const me = await ensureMember(sql, context.userId);
-    const last = await sql<{ at: string; info: { total?: number; ok?: boolean } }>`select at, info from fitast_sync where key = 'compagnie' limit 1`;
+    const last = await sql<{ at: string; info: { total?: number; ok?: boolean; v?: number } }>`select at, info from fitast_sync where key = 'compagnie' limit 1`;
     const age = last[0] ? Date.now() - new Date(last[0].at).getTime() : Infinity;
     const ok = Boolean(last[0]?.info?.ok);
+    // lettura nuova dell'elenco: si rilegge subito, una volta
+    const stale = asNum(last[0]?.info?.v) !== COMPANIES_V;
     // riuscita: si rilegge dopo una settimana; non riuscita: dopo un'ora
-    if (!(data.force && staffLevel(me)) && age < (ok ? 7 * DAY : DAY / 24)) return { added: 0, linked: 0, total: asNum(last[0]?.info?.total), skipped: true, diag: [] as string[] };
-    await sql`insert into fitast_sync (key, at, info) values ('compagnie', now(), '{"ok":false}'::jsonb) on conflict (key) do update set at = now()`;
+    if (!(data.force && staffLevel(me)) && !stale && age < (ok ? 7 * DAY : DAY / 24)) return { added: 0, linked: 0, total: asNum(last[0]?.info?.total), skipped: true, diag: [] as string[] };
+    await sql`insert into fitast_sync (key, at, info) values ('compagnie', now(), ${JSON.stringify({ ok: false, v: COMPANIES_V })}::jsonb) on conflict (key) do update set at = now(), info = excluded.info`;
+    const repaired = await repairGarbled(sql);
     let list: ReturnType<typeof parseCompanies> = [];
     let diag: string[] = [];
     try {
@@ -75,8 +124,18 @@ export const syncFitastCompanies = createServerFn({ method: "POST" })
       const key = teamKey(c.name);
       // Fabriano c'è già: si collega soltanto
       const found = byKey.get(key) ?? (/\bFABRIANO\b/.test(key) ? existing.find((x) => x.slug === "fabriano")?.id : undefined);
+      const hint = c.logo || c.detail ? JSON.stringify({ logo: c.logo || undefined, detail: c.detail || undefined }) : "";
       if (found != null) {
-        await sql`update companies set fitast_name = case when fitast_name = '' then ${c.name} else fitast_name end, fitast_code = case when fitast_code = '' then ${clip(c.code, 20)} else fitast_code end where id = ${asNum(found)}`;
+        await sql`
+          update companies set
+            fitast_name = case when fitast_name = '' then ${c.name} else fitast_name end,
+            fitast_code = case when fitast_code = '' then ${clip(c.code, 20)} else fitast_code end,
+            logo_hint = case when ${hint} <> '' then ${hint} else logo_hint end,
+            address = case when address = '' and source = 'fitast' then ${clip(c.address, 160)} else address end,
+            phone = case when phone = '' and source = 'fitast' then ${c.phone.replace(/[^\d+]/g, "").slice(0, 20)} else phone end
+          where id = ${asNum(found)}`;
+        // stemma del portale appena trovato: la ricerca del logo riparte per questa compagnia
+        if (c.logo) await sql`update companies set logo_checked_at = null where id = ${asNum(found)} and source = 'fitast' and (logo_url is null or logo_url = '' or logo_url like 'data:image/svg+xml%')`;
         linked++;
         continue;
       }
@@ -90,11 +149,11 @@ export const syncFitastCompanies = createServerFn({ method: "POST" })
       );
       const email = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c.email) ? c.email.toLowerCase().slice(0, 120) : "";
       const phone = c.phone.replace(/[^\d+]/g, "").slice(0, 20);
-      const website = c.website ? clip(/^https?:\/\//i.test(c.website) ? c.website.replace(/^http:/i, "https:") : `https://${c.website.replace(/^\/+/, "")}`, 160) : "";
+      const website = c.website ? clip(/^https?:\/\//i.test(c.website) ? c.website.replace(/^http:/i, "https:") : /^fb\s*@/i.test(c.website) ? `https://www.facebook.com/${c.website.replace(/^fb\s*@\s*/i, "")}` : `https://${c.website.replace(/^\/+/, "")}`, 160) : "";
       const slug = await freeSlug(sql, name);
       const made = await sql<{ id: number }>`
-        insert into companies (slug, name, city, bio, logo_url, color, phone, email, website, address, source, fitast_name, fitast_code)
-        values (${slug}, ${name}, ${city}, ${bio}, ${crest.logo}, ${crest.color}, ${phone}, ${email}, ${website}, ${clip(c.address, 160)}, 'fitast', ${c.name}, ${clip(c.code, 20)})
+        insert into companies (slug, name, city, bio, logo_url, color, phone, email, website, address, source, fitast_name, fitast_code, logo_hint)
+        values (${slug}, ${name}, ${city}, ${bio}, ${crest.logo}, ${crest.color}, ${phone}, ${email}, ${website}, ${clip(c.address, 160)}, 'fitast', ${c.name}, ${clip(c.code, 20)}, ${hint})
         on conflict (slug) do nothing
         returning id`;
       if (made[0]) {
@@ -103,7 +162,10 @@ export const syncFitastCompanies = createServerFn({ method: "POST" })
       }
     }
     const good = list.length >= 3;
-    await sql`update fitast_sync set info = ${JSON.stringify({ ok: good, total: list.length, added, linked })}::jsonb where key = 'compagnie'`;
+    const logos = list.filter((c) => c.logo).length;
+    await sql`update fitast_sync set info = ${JSON.stringify({ ok: good, total: list.length, added, linked, logos, ...repaired, v: COMPANIES_V })}::jsonb where key = 'compagnie'`;
+    // stemmi del portale: la ricerca dei loghi li prende per primi
+    if (logos) await sql`delete from fitast_sync where key = 'compagnie-loghi'`;
     return { added, linked, total: list.length, skipped: false, diag: good ? [] : diag };
   });
 
@@ -568,7 +630,9 @@ export const fitastTeamStats = createServerFn({ method: "POST" })
     return { season: latest[0].season_name, teams };
   });
 
-export type TeamArcher = { name: string; points: number | null; category: string; place: number | null; categories: { category: string; place: number | null }[] };
+/** l'arciere del portale già collegato a un profilo dell'app (per un collegamento riservato: solo «preso») */
+export type TeamArcherMember = { memberId: number; label: string; photoUrl: string | null; color: string; userId: string; me: boolean } | { taken: true; me: boolean };
+export type TeamArcher = { name: string; points: number | null; category: string; place: number | null; categories: { category: string; place: number | null }[]; member?: TeamArcherMember | null };
 
 /** tutti gli arcieri di una compagnia nella classifica generale arcieri del campionato (dal migliore) */
 export const fitastTeamArchers = createServerFn({ method: "POST" })
@@ -576,10 +640,11 @@ export const fitastTeamArchers = createServerFn({ method: "POST" })
   .validator((input: unknown) => ({ team: clip((input as { team?: unknown } | null)?.team, 120) }))
   .handler(async ({ context, data }) => {
     const sql = await db();
-    await ensureMember(sql, context.userId);
+    const me = await ensureMember(sql, context.userId);
     const key = teamKey(data.team);
+    const myLink = String((me as { fitast_name?: string }).fitast_name ?? "");
     const latest = await sql<{ season: string; season_name: string }>`select season, season_name from fitast_standings where kind in ('generale-arcieri', 'gara-arcieri') order by updated_at desc limit 1`;
-    if (!key || !latest[0]) return { season: latest[0]?.season_name ?? "", archers: [] as TeamArcher[] };
+    if (!key || !latest[0]) return { season: latest[0]?.season_name ?? "", archers: [] as TeamArcher[], myLink };
     const rows = await sql<{ kind: string; category: string; rows: StandingRow[] }>`
       select kind, category, rows from fitast_standings where kind in ('generale-arcieri', 'gara-arcieri') and season = ${latest[0].season}
       order by kind desc`;
@@ -608,7 +673,21 @@ export const fitastTeamArchers = createServerFn({ method: "POST" })
         return { name: a.name, points: a.points, category: specific?.category ?? "", place: specific?.place ?? null, categories: a.entries };
       })
       .sort((a, b) => (b.points ?? -1) - (a.points ?? -1) || a.name.localeCompare(b.name, "it"));
-    return { season: latest[0].season_name, archers };
+    // chi di loro è già nell'app (nome FITAST collegato al profilo)
+    const linked = await sql<{ id: number; user_id: string; given_name: string; family_name: string; nickname: string; photo_url: string | null; avatar_color: string; fitast_name: string; fitast_team: string; fitast_hidden: boolean }>`
+      select id, user_id, given_name, family_name, nickname, photo_url, avatar_color, fitast_name, coalesce(fitast_team, '') as fitast_team, coalesce(fitast_hidden, false) as fitast_hidden
+      from members where coalesce(fitast_name, '') <> ''`.catch(() => []);
+    const founder = staffLevel(me) != null;
+    for (const a of archers) {
+      const k = nameKey(a.name);
+      const m = linked.find((x) => nameKey(x.fitast_name) === k && (!x.fitast_team || teamKey(x.fitast_team) === key));
+      if (!m) continue;
+      const mine = m.user_id === context.userId;
+      a.member = m.fitast_hidden && !founder && !mine
+        ? { taken: true, me: false }
+        : { memberId: asNum(m.id), userId: m.user_id, label: m.nickname || [m.given_name, m.family_name].filter(Boolean).join(" ") || "Arciere", photoUrl: m.photo_url && m.photo_url.length < 200_000 ? m.photo_url : null, color: m.avatar_color || "#1f5c38", me: mine };
+    }
+    return { season: latest[0].season_name, archers, myLink };
   });
 
 /**

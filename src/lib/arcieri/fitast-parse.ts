@@ -52,6 +52,8 @@ export type FitastPage = {
   awp?: string[];
   /** come è fatta la pagina (per capire perché una tabella resta vuota): conteggi e nomi, mai il contenuto */
   diag?: string[];
+  /** immagini della pagina, in ordine, con la riga di testo a cui stanno accanto (at = indice in lines) */
+  pics?: { src: string; at: number }[];
 };
 
 const ENT: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ", agrave: "à", egrave: "è", eacute: "é", igrave: "ì", ograve: "ò", ugrave: "ù", Agrave: "À", Egrave: "È", Eacute: "É", Igrave: "Ì", Ograve: "Ò", Ugrave: "Ù", deg: "°", laquo: "«", raquo: "»", rsquo: "’", lsquo: "‘", ldquo: "“", rdquo: "”", ndash: "–", mdash: "—", euro: "€", ordm: "º", ordf: "ª" };
@@ -190,6 +192,7 @@ export function parseHtml(html: string, url: string): Omit<FitastPage, "fetchedA
   // elementi cliccabili aperti (div, tr, span… con onclick WEBDEV): il testo che contengono è la loro etichetta
   const open: { tag: string; depth: number; text: string; press: string }[] = [];
   const blocks: FitastBlock[] = [];
+  const pics: { src: string; at: number }[] = [];
   let scripts = "";
   const addButton = (code: string, label: string, set: Record<string, string>) => {
     const l = label.replace(/\s+/g, " ").trim();
@@ -273,9 +276,21 @@ export function parseHtml(html: string, url: string): Omit<FitastPage, "fetchedA
           if (t.row?.length) t.rows.push(t.row);
           const rows = t.rows.map((r) => r.map((c) => ({ ...c, text: c.text.replace(/\s+/g, " ").trim() }))).filter((r) => r.some((c) => c.text));
           if (rows.length >= 2 && rows.some((r) => r.length >= 2)) tables.push({ rows });
-          // il testo di una tabella interna resta anche nella cella che la contiene
+          // il testo di una tabella interna resta anche nella cella che la contiene (e così l'immagine e il link:
+          // WEBDEV mette spesso lo stemma in una tabellina dentro la cella della riga)
           const parent = stack[stack.length - 1];
-          if (parent?.cell) parent.cell.text += " " + rows.map((r) => r.map((c) => c.text).join(" ")).join(" ");
+          if (parent?.cell) {
+            parent.cell.text += " " + rows.map((r) => r.map((c) => c.text).join(" ")).join(" ");
+            const inner = [...t.rows.flat(), ...(t.row ?? [])];
+            if (!parent.cell.img) {
+              const im = inner.find((c) => c.img)?.img;
+              if (im) parent.cell.img = im;
+            }
+            if (!parent.cell.href) {
+              const hr = inner.find((c) => c.href)?.href;
+              if (hr) parent.cell.href = hr;
+            }
+          }
         }
       }
       flush();
@@ -386,10 +401,15 @@ export function parseHtml(html: string, url: string): Omit<FitastPage, "fetchedA
       continue;
     }
     if (tag === "img" && link && attrs.alt) link.text += ` ${attrs.alt} `;
-    if (tag === "img" && top?.cell && !top.cell.img) {
-      const src = attrs.src ?? attrs["data-src"] ?? "";
+    if (tag === "img" || (tag === "input" && (attrs.type ?? "").toLowerCase() === "image")) {
+      // l'indirizzo vero anche quando la pagina carica l'immagine dopo (data-src, srcset)
+      const raw = [attrs["data-src"], attrs["data-original"], attrs["data-lazy-src"], attrs.src, (attrs.srcset ?? "").split(/\s+/)[0]].find((v) => v && !/^data:/i.test(v) && !/^(about:|javascript:)/i.test(v)) ?? "";
+      const small = [attrs.width, attrs.height].some((v) => v != null && /^\d+$/.test(v) && Number(v) < 24);
+      const real = raw && !small && !/spacer|pixel|blank|vide|puce|fleche|arrow|btn|bouton|loupe|picto/i.test(raw);
+      const abs = real ? absolute(raw, url) : "";
       // la prima immagine "vera" della cella (non pallini, frecce o spazi del portale)
-      if (src && !/^data:/i.test(src) && !/spacer|pixel|blank|vide|puce|fleche|arrow|btn|bouton|loupe|picto/i.test(src)) top.cell.img = absolute(src, url);
+      if (abs && top?.cell && !top.cell.img) top.cell.img = abs;
+      if (abs && pics.length < 3000) pics.push({ src: abs, at: lines.length });
     }
     if (BLOCK.has(tag)) flush();
   }
@@ -418,13 +438,19 @@ export function parseHtml(html: string, url: string): Omit<FitastPage, "fetchedA
   // niente doppioni fra i link
   const seen = new Set<string>();
   const uniq = links.filter((l) => (seen.has(l.href + l.text) ? false : (seen.add(l.href + l.text), true)));
-  // niente righe ripetute di seguito (menu ripetuti, intestazioni)
-  const tidy = lines.filter((l, i) => l !== lines[i - 1]);
+  // niente righe ripetute di seguito (menu ripetuti, intestazioni); le immagini seguono le righe tenute
+  const keptBefore: number[] = [];
+  const tidy: string[] = [];
+  lines.forEach((l, i) => {
+    keptBefore[i] = tidy.length;
+    if (l !== lines[i - 1]) tidy.push(l);
+  });
+  const picsAt = pics.map((x) => ({ src: x.src, at: x.at < lines.length ? keptBefore[x.at] : tidy.length }));
   const refs = awpRefs(html, url);
   const diag = pageDiag(html, (form as FitastForm | null) ?? null, tables);
   const awp = [...new Set([...html.matchAll(/[\w-]+\.awp\b/gi)].map((m) => m[0]))].slice(0, 80);
   const redirect = redirectOf(html, url, tables.length === 0 && tidy.length < 15 && !(form as FitastForm | null)?.buttons.length);
-  return { url, title: clean(title), tables, lines: tidy.slice(0, 2000), links: uniq.slice(0, 400), form, blocks, wdAliases, ...(refs.length ? { refs } : {}), ...(awp.length ? { awp } : {}), ...(redirect ? { redirect } : {}), diag };
+  return { url, title: clean(title), tables, lines: tidy.slice(0, 6000), links: uniq.slice(0, 400), form, blocks, ...(picsAt.length ? { pics: picsAt.filter((x) => x.at <= 6000) } : {}), wdAliases, ...(refs.length ? { refs } : {}), ...(awp.length ? { awp } : {}), ...(redirect ? { redirect } : {}), diag };
 }
 
 /** testo con gli escape più comuni sciolti (\\x3c, \\u003c, \\074, &lt;, %3C): per trovare XML nascosto */

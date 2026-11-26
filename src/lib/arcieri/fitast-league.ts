@@ -81,26 +81,155 @@ const HEAD = {
 };
 const LOOKS_COMPANY = /arcier|compagn|a\.?s\.?d|societ|gruppo|club|sagittar|balestr|arco|frecc|tiro/i;
 
-/** le compagnie dell'elenco del portale: dalla tabella con la colonna del nome, se no dalle righe di testo */
+const REGIONS = [
+  "ABRUZZO", "BASILICATA", "CALABRIA", "CAMPANIA", "EMILIA[- ]ROMAGNA", "FRIULI[- ]VENEZIA GIULIA", "LAZIO", "LIGURIA", "LOMBARDIA", "MARCHE", "MOLISE",
+  "PIEMONTE", "PUGLIA", "SARDEGNA", "SICILIA", "TOSCANA", "TRENTINO[- ]ALTO ADIGE", "UMBRIA", "VALLE D'AOSTA", "VENETO", "SAN MARINO",
+];
+const REGION_RE = new RegExp(`\\b(${REGIONS.join("|")})\\b`, "i");
+/** etichette della scheda della compagnia sul portale (Regione:, Tel e Fax:, E-mail:, Web) */
+const LABEL_RE = /\b(?:Regione|Tel(?:\.|efono)?\s*(?:e|\/)\s*Fax|Telefono|Cellulare|Fax|E-?mail|Posta|Web|Sito(?:\s*web)?|Indirizzo|Presidente|Referente)\s*:?(?=\s|$)/gi;
+const LABEL_ONE = new RegExp(LABEL_RE.source, "i");
+/** campi di servizio del portale che finiscono nel testo (il nome del campo dell'immagine) */
+const JUNK_RE = /\bID\s*_?IMM\w*\b|\bIMG_?\w*\b/gi;
+const ADDRESS_RE = /\b(via|viale|v\.le|piazza|piazzale|p\.zza|p\.za|corso|c\.so|frazione|fraz\.|loc\.|località|localita|contrada|c\.da|strada|str\.|vocabolo|voc\.|borgo|largo|vicolo|lungomare|lungotevere|zona|quartiere|casella postale|c\.p\.)\s+\S/i;
+const CODE_RE = /\b\d{2}\s?\/\s?\d{3}\b/;
+
+export type CompanyText = { name: string; address: string; city: string; region: string; phone: string; email: string; website: string; code: string };
+
+/**
+ * La scheda di una compagnia del portale letta come testo unico («A.S.D SAGITTAS FELIX TERRAE MONTEGIORGIO via
+ * Del Sole 1 Regione: MARCHE Tel e Fax: 3396371229 E-mail: … Web Fb @…»): si tolgono etichette e campi di
+ * servizio, si prendono e-mail, sito, telefono, regione e codice dove stanno, e quel che resta è nome e indirizzo.
+ * `lines` (le righe della pagina) dice dove finisce il nome quando nome e indirizzo stanno su righe diverse.
+ */
+export function parseCompanyText(raw: string, lines?: Set<string>): CompanyText {
+  let t = clean(raw).replace(JUNK_RE, " \u0001 ");
+  const out: CompanyText = { name: "", address: "", city: "", region: "", phone: "", email: "", website: "", code: "" };
+  const cut = (re: RegExp) => {
+    const m = re.exec(t);
+    if (!m) return "";
+    t = `${t.slice(0, m.index)} \u0001 ${t.slice(m.index + m[0].length)}`;
+    return m[0];
+  };
+  out.email = cut(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/).toLowerCase();
+  out.website = cut(/\b(?:https?:[/\\]{2}|www\.)\S+|\bfb\s*@\s*[\w.]+|\bfacebook\.com\/\S+/i).replace(/^http:\\\\/i, "http://");
+  const reg = /Regione\s*:?\s*([A-Z' -]{4,30}?)(?=\s+(?:Tel|E-?mail|Web|Fax|$)|$)/i.exec(t);
+  if (reg && REGION_RE.test(reg[1])) {
+    out.region = REGION_RE.exec(reg[1])?.[1] ?? "";
+    t = `${t.slice(0, reg.index)} \u0001 ${t.slice(reg.index + reg[0].length)}`;
+  }
+  out.code = cut(CODE_RE).replace(/\s/g, "");
+  // telefono: solo quello dopo «Tel» (un CAP seguito dal numero civico non è un telefono)
+  const tel = /\bTel(?:\.|efono)?\s*(?:(?:e|\/)\s*Fax)?\s*:?\s*((?:\+39\s?)?\d(?:[\s./-]?\d){5,12})\b/i.exec(t);
+  if (tel) {
+    out.phone = tel[1].replace(/[^\d+]/g, "");
+    t = `${t.slice(0, tel.index)} \u0001 ${t.slice(tel.index + tel[0].length)}`;
+  }
+  t = t.replace(LABEL_RE, " \u0001 ");
+  if (!out.region) {
+    const m = REGION_RE.exec(t);
+    // regione rimasta senza etichetta: solo se sta da sola fra due campi, non dentro il nome
+    if (m && new RegExp(`\u0001\\s*${m[1]}\\s*(\u0001|$)`, "i").test(t)) {
+      out.region = m[1];
+      t = t.replace(new RegExp(`\u0001\\s*${m[1]}`, "i"), "\u0001");
+    }
+  }
+  const parts = t
+    .split("\u0001")
+    .map((x) => x.replace(/^[\s,;:·|–-]+|[\s,;:·|–-]+$/g, "").replace(/\s+/g, " "))
+    .filter((x) => (x.match(/\p{L}/gu) ?? []).length >= 2);
+  let head = parts[0] ?? "";
+  // nome e indirizzo su righe diverse della pagina: il nome è la riga con cui comincia la scheda
+  if (lines && head) {
+    let best = "";
+    for (const l of lines) if (l.length >= 6 && l.length < head.length && head.startsWith(l) && l.length > best.length && !ADDRESS_RE.test(l) && goodCompanyName(l)) best = l;
+    const rest = best ? head.slice(best.length).trim() : "";
+    if (best && /\s/.test(head.slice(best.length, best.length + 1)) && (ADDRESS_RE.test(rest) || /\d/.test(rest))) {
+      out.name = best;
+      head = head.slice(best.length).trim();
+      out.address = head;
+    }
+  }
+  if (!out.name) {
+    const a = ADDRESS_RE.exec(head);
+    if (a && a.index > 0) {
+      let name = head.slice(0, a.index).trim();
+      let addr = head.slice(a.index).trim();
+      // «… TERRAE MONTEGIORGIO via Del Sole 1»: la parola in maiuscolo prima di «via» minuscolo è il paese
+      const words = name.split(" ");
+      if (/^[a-z]/.test(a[1]) && words.length >= 3 && /^\p{Lu}{3,}$/u.test(words[words.length - 1])) {
+        out.city = words.pop() ?? "";
+        name = words.join(" ");
+        addr = `${out.city} ${addr}`;
+      }
+      out.name = name;
+      out.address = addr;
+    } else out.name = head;
+  }
+  if (!out.address) out.address = parts.slice(1).find((x) => ADDRESS_RE.test(x) || /\d/.test(x)) ?? "";
+  out.name = out.name.replace(/[\s.,;:-]+$/, "").replace(/\s+/g, " ").trim().slice(0, 90);
+  out.address = out.address.replace(/\s+/g, " ").trim().slice(0, 160);
+  return out;
+}
+
+/** un nome di compagnia vero: lettere, non un'etichetta, un indirizzo o un contatto */
+export function goodCompanyName(name: string) {
+  const n = clean(name);
+  if (n.length < 3 || n.length > 90 || (n.match(/\p{L}/gu) ?? []).length < 3) return false;
+  if (/@|https?:|www\.|^\d+$|^(regione|tel|e-?mail|web|fax|sito|elenco|compagnie|cerca)\b/i.test(n)) return false;
+  if (ADDRESS_RE.test(n) && ADDRESS_RE.exec(n)?.index === 0) return false;
+  if (REGION_RE.test(n) && REGION_RE.exec(n)?.[0].length === n.length) return false;
+  return true;
+}
+
+/** testo con campi della scheda dentro (etichette, campo dell'immagine, codice davanti): va letto per pezzi */
+const isCard = (t: string) => /\bRegione\b|\bTel\s*e\s*Fax\b|\bE-?mail\b|\bID\s*_?IMM/i.test(t) || /^\s*\d{2}\s?\/\s?\d{3}\s/.test(t);
+
+/** le compagnie dell'elenco del portale: dalla tabella con la colonna del nome, se no dalle schede scritte riga per riga */
 export function parseCompanies(page: FitastPage): PortalCompany[] {
   const out = new Map<string, PortalCompany>();
+  const pageLines = new Set(page.lines.map(clean));
   const add = (c: PortalCompany) => {
+    if (!goodCompanyName(c.name)) return;
     const k = teamKey(c.name);
-    if (!k || k.length < 3 || out.has(k)) return;
-    out.set(k, c);
+    if (!k || k.length < 3) return;
+    const had = out.get(k);
+    if (!had) {
+      out.set(k, c);
+      return;
+    }
+    // la stessa compagnia trovata due volte: si tengono i campi che mancavano
+    for (const f of ["city", "province", "region", "code", "president", "phone", "email", "website", "address", "logo", "detail"] as const) if (!had[f] && c[f]) had[f] = c[f];
+  };
+  const fromCard = (text: string, base: Partial<PortalCompany> = {}): PortalCompany => {
+    const p = parseCompanyText(text, pageLines);
+    return {
+      name: p.name,
+      city: base.city || p.city,
+      province: base.province ?? "",
+      region: base.region || (p.region ? p.region.toUpperCase() : ""),
+      code: base.code || p.code,
+      president: base.president ?? "",
+      phone: base.phone || p.phone,
+      email: base.email || p.email,
+      website: base.website || p.website,
+      address: base.address || p.address,
+      logo: base.logo,
+      detail: base.detail,
+    };
   };
   for (const t of [...page.tables].sort((a, b) => b.rows.length - a.rows.length)) {
     if (t.rows.length < 3) continue;
     const head = t.rows[0].map((c) => clean(c.text));
     const col = (re: RegExp) => head.findIndex((h) => re.test(h));
     let nameCol = col(HEAD.name);
-    // senza titoli: la colonna dove le righe sembrano nomi di compagnie
+    // senza titoli: la colonna dove le righe sembrano nomi di compagnie (o schede con «Regione:»)
     if (nameCol < 0) {
       const width = Math.max(...t.rows.map((r) => r.length));
       let best = -1;
       let score = 0;
       for (let k = 0; k < width; k++) {
-        const n = t.rows.slice(1).filter((r) => LOOKS_COMPANY.test(r[k]?.text ?? "")).length;
+        const n = t.rows.slice(1).filter((r) => LOOKS_COMPANY.test(r[k]?.text ?? "") || isCard(r[k]?.text ?? "")).length;
         if (n > score) [best, score] = [k, n];
       }
       if (score < 2) continue;
@@ -110,9 +239,10 @@ export function parseCompanies(page: FitastPage): PortalCompany[] {
       const k = col(re);
       return k >= 0 ? clean(r[k]?.text ?? "") : "";
     };
+    const before = out.size;
     for (const r of t.rows.slice(1)) {
-      const name = clean(r[nameCol]?.text ?? "");
-      if (name.length < 3 || /^\d+$/.test(name)) continue;
+      const cellText = clean(r[nameCol]?.text ?? "");
+      if (cellText.length < 3 || /^\d+$/.test(cellText)) continue;
       const email = at(r, HEAD.email) || (r.map((c) => c.text).join(" ").match(/[\w.+-]+@[\w-]+\.[\w.]+/)?.[0] ?? "");
       // stemma: un'immagine nella riga, oppure (righe WEBDEV) il percorso di un'immagine scritto in una colonna
       const imgCell = r.find((c) => c.img && !NOT_LOGO.test(c.img))?.img ?? "";
@@ -126,11 +256,17 @@ export function parseCompanies(page: FitastPage): PortalCompany[] {
         }
       }
       const detail = r.map((c) => c.href ?? "").find((h) => /\.awp\b/i.test(h) && !/COMPAGNIE\.awp/i.test(h)) ?? "";
-      add({ name, city: at(r, HEAD.city), province: at(r, HEAD.province), region: at(r, HEAD.region), code: at(r, HEAD.code), president: at(r, HEAD.president), phone: at(r, HEAD.phone), email, website: at(r, HEAD.website), address: at(r, HEAD.address), logo, detail });
+      const base = { city: at(r, HEAD.city), province: at(r, HEAD.province), region: at(r, HEAD.region), code: at(r, HEAD.code), president: at(r, HEAD.president), phone: at(r, HEAD.phone), email, website: at(r, HEAD.website), address: at(r, HEAD.address), logo, detail };
+      // la cella è la scheda intera (nome, indirizzo, Regione:, Tel e Fax:…): si legge per pezzi
+      if (isCard(cellText)) add(fromCard(r.map((c) => clean(c.text)).filter((x, i, all) => x && all.indexOf(x) === i).join(" "), base));
+      else add({ name: cellText, ...base });
     }
-    if (out.size >= 3) break;
+    if (out.size - before >= 3) break;
   }
-  // elenco senza tabella (zona ripetuta): le righe che sembrano nomi di compagnie
+  // schede scritte riga per riga (nome, indirizzo, «Regione:», «Tel e Fax:»…): una per ogni «Regione»
+  const cards = cardsFromLines(page);
+  for (const c of cards) add(c);
+  // elenco senza tabella né schede: le righe che sembrano nomi di compagnie
   if (out.size < 3) {
     for (const l of page.lines) {
       const t = clean(l);
@@ -139,6 +275,58 @@ export function parseCompanies(page: FitastPage): PortalCompany[] {
     }
   }
   return [...out.values()].slice(0, 400);
+}
+
+/**
+ * Le schede dell'elenco lette dalle righe della pagina. Ogni scheda ha una riga «Regione»: il nome sta una
+ * o due righe sopra (sopra c'è l'indirizzo), i contatti sotto. Lo stemma è l'immagine che il portale mette
+ * accanto al nome: quella fra la scheda di prima e il nome (o fra il nome e la scheda dopo), se ogni scheda
+ * ne ha al massimo una.
+ */
+export function cardsFromLines(page: FitastPage): PortalCompany[] {
+  const lines = page.lines.map(clean);
+  const regionAt = lines.map((l, i) => (/^Regione\b/i.test(l) ? i : -1)).filter((i) => i >= 0);
+  if (regionAt.length < 3) return [];
+  type Card = { c: PortalCompany; nameAt: number; end: number };
+  const cards: Card[] = [];
+  let prevEnd = -1;
+  for (const [n, r] of regionAt.entries()) {
+    const next = regionAt[n + 1] ?? lines.length;
+    // il nome: risalendo, la prima riga che non è indirizzo, campo di servizio o contatto
+    let nameAt = -1;
+    for (let k = r - 1; k > prevEnd && k >= r - 4; k -= 1) {
+      const l = lines[k].replace(JUNK_RE, "").trim();
+      if (!l || ADDRESS_RE.test(l) || /^\d/.test(l) || /@|https?:|www\./i.test(l) || LABEL_ONE.test(l) || !goodCompanyName(l)) continue;
+      nameAt = k;
+      break;
+    }
+    // fine della scheda: prima del nome della scheda dopo (che sta 1-3 righe sopra la sua «Regione»)
+    let end = Math.min(lines.length - 1, r + 8);
+    if (next < lines.length) end = Math.min(end, next - 3);
+    if (nameAt < 0) {
+      prevEnd = end;
+      continue;
+    }
+    const text = lines.slice(nameAt, end + 1).join(" ");
+    const p = parseCompanyText(text, new Set([lines[nameAt].replace(JUNK_RE, "").trim()]));
+    const address = p.address || (nameAt + 1 < r ? lines.slice(nameAt + 1, r).join(" ").replace(JUNK_RE, "").trim() : "");
+    cards.push({ c: { name: p.name || lines[nameAt], city: p.city, province: "", region: p.region.toUpperCase(), code: p.code, president: "", phone: p.phone, email: p.email, website: p.website, address: address.slice(0, 160) }, nameAt, end });
+    prevEnd = end;
+  }
+  // stemmi: le immagini della pagina con la loro posizione fra le righe
+  const pics = (page.pics ?? []).filter((x) => !NOT_LOGO.test(x.src));
+  if (pics.length && cards.length) {
+    const before = cards.map((cd, i) => pics.filter((x) => x.at > (i ? cards[i - 1].end : -1) && x.at <= cd.nameAt));
+    const after = cards.map((cd, i) => pics.filter((x) => x.at > cd.nameAt && x.at <= (cards[i + 1]?.nameAt ?? Infinity) - 1));
+    const good = (list: { src: string }[][]) => list.filter((l) => l.length === 1).length;
+    const many = (list: { src: string }[][]) => list.filter((l) => l.length > 1).length;
+    const pick = good(before) >= good(after) ? before : after;
+    // si usano solo se quasi nessuna scheda ha due immagini (allora l'abbinamento è sicuro)
+    if (good(pick) >= 2 && many(pick) <= Math.max(1, cards.length * 0.1)) cards.forEach((cd, i) => {
+      if (pick[i].length === 1) cd.c.logo = pick[i][0].src;
+    });
+  }
+  return cards.map((x) => x.c);
 }
 
 export type RankRow = { place: number | null; name: string; team: string; score: number | null; camp: number | null };
@@ -178,19 +366,32 @@ export function rankingRows(page: FitastPage, kind: "arcieri" | "squadre", limit
  * L'elenco delle piazzole di una gara (chi tira insieme): per ogni arciere la piazzola (o il gruppo) di
  * partenza, il nome e la compagnia. La piazzola va nel posto («place») della riga.
  */
+/** «PIAZZOLA 11», «Piazzola n° 11», «Gruppo 11», «Pagl. 11»: l'inizio di un gruppo nell'elenco */
+const GROUP_RE = /^(?:piazzola|piazz\.?|pagl\w*\.?|paglione|gruppo|bersaglio|turno)\s*(?:n[°.º]?\s*)?(\d{1,3})\b/i;
+const NAME_LIKE = (t: string) => /^[\p{L}'’.\- ]{5,60}$/u.test(t) && t.trim().split(/\s+/).length >= 2 && !LOOKS_COMPANY.test(t) && !GROUP_RE.test(t);
+
+/**
+ * L'elenco delle piazzole di una gara: chi tira in quale piazzola. Va bene la tabella con le colonne
+ * (Piazzola · Arciere · Compagnia, anche Cognome e Nome separati) e l'elenco a gruppi («PIAZZOLA 11»
+ * e sotto gli arcieri), in tabella o in righe di testo.
+ */
 export function piazzoleRows(page: FitastPage, limit = 600): RankRow[] {
-  for (const t of [...page.tables].sort((a, b) => b.rows.length - a.rows.length)) {
+  const tables = [...page.tables].sort((a, b) => b.rows.length - a.rows.length);
+  for (const t of tables) {
     if (t.rows.length < 3) continue;
     const head = t.rows[0].map((c) => clean(c.text));
     const col = (re: RegExp) => head.findIndex((h) => re.test(h));
     const pzCol = col(/piazz|grupp|paglion|bersagl|turn|linea/i);
+    const surCol = col(/^cognome$/i);
+    const firstCol = col(/^nome$/i);
     const nameCol = col(/arcier|atleta|cognome|nominativ|^nome/i);
     const teamCol = col(/compagn|societ|squadr/i);
     if (pzCol < 0 || nameCol < 0) continue;
     const rows: RankRow[] = [];
     let last: number | null = null;
     for (const r of t.rows.slice(1)) {
-      const name = clean(r[nameCol]?.text ?? "");
+      // cognome e nome in due colonne: si rimettono insieme
+      const name = surCol >= 0 && firstCol >= 0 && surCol !== firstCol ? clean(`${r[surCol]?.text ?? ""} ${r[firstCol]?.text ?? ""}`) : clean(r[nameCol]?.text ?? "");
       // la piazzola a volte è scritta solo sulla prima riga del gruppo
       const pz = numIt(r[pzCol]?.text ?? "");
       if (pz != null && Number.isFinite(pz)) last = Math.round(pz);
@@ -200,7 +401,50 @@ export function piazzoleRows(page: FitastPage, limit = 600): RankRow[] {
     }
     if (rows.length >= 2) return rows;
   }
-  return [];
+  // elenco a gruppi in tabella: una riga «PIAZZOLA 11», sotto una riga per arciere
+  for (const t of tables) {
+    if (t.rows.length < 4) continue;
+    const rows: RankRow[] = [];
+    let cur: number | null = null;
+    for (const r of t.rows) {
+      const cells = r.map((c) => clean(c.text)).filter(Boolean);
+      const joined = cells.join(" ");
+      const g = GROUP_RE.exec(joined) ?? GROUP_RE.exec(cells[0] ?? "");
+      if (g) {
+        cur = Number(g[1]);
+        // «Piazzola 11 | ROSSI MARIO | ARCIERI …» sulla stessa riga
+        const rest = cells.filter((c) => !GROUP_RE.test(c));
+        const nm = rest.find(NAME_LIKE);
+        if (nm) rows.push({ place: cur, name: nm, team: rest.find((c) => c !== nm && LOOKS_COMPANY.test(c)) ?? "", score: null, camp: null });
+        continue;
+      }
+      if (cur == null) continue;
+      const nm = cells.find(NAME_LIKE);
+      if (!nm) continue;
+      rows.push({ place: cur, name: nm, team: cells.find((c) => c !== nm && LOOKS_COMPANY.test(c)) ?? "", score: null, camp: null });
+      if (rows.length >= limit) break;
+    }
+    if (rows.length >= 2 && new Set(rows.map((x) => x.place)).size >= 2) return rows;
+  }
+  // elenco a gruppi in righe di testo
+  const rows: RankRow[] = [];
+  let cur: number | null = null;
+  for (const raw of page.lines) {
+    const l = clean(raw);
+    const g = GROUP_RE.exec(l);
+    if (g) {
+      cur = Number(g[1]);
+      continue;
+    }
+    if (cur == null) continue;
+    // «ROSSI MARIO - ARCIERI DI FABRIANO» o solo il nome
+    const parts = l.split(/\s+[-–|·]\s+|\t/).map((x) => x.trim());
+    const nm = parts.find(NAME_LIKE);
+    if (!nm) continue;
+    rows.push({ place: cur, name: nm, team: parts.find((x) => x !== nm && LOOKS_COMPANY.test(x)) ?? "", score: null, camp: null });
+    if (rows.length >= limit) break;
+  }
+  return rows.length >= 2 && new Set(rows.map((x) => x.place)).size >= 2 ? rows : [];
 }
 
 /** le classi del campionato, dalla più specifica: Juvenis prima di Messeri/Madonne */

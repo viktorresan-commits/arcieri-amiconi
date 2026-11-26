@@ -13,6 +13,8 @@ type Row = Omit<ReceiptItem, "priceCents"> & { price: string };
 const cents = (raw: string) => (raw.trim() ? parseEuro(raw) : null);
 const toPrice = (c: number | null | undefined) => (c == null ? "" : (c / 100).toFixed(2).replace(".", ","));
 const today = () => new Date().toISOString().slice(0, 10);
+/** pezzi delle frecce: in attrezzatura conta quanti ne hai */
+const PIECES = new Set(["aste", "punte", "alette", "cocche"]);
 
 /**
  * Scontrini e fatture: una foto e il telefono legge negozio, data, totale e righe. Si controlla,
@@ -35,6 +37,8 @@ export function ReceiptsCard({ onSaved }: { onSaved: () => void }) {
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState("");
   const [zoom, setZoom] = useState<string | null>(null);
+  // righe segnate a mano: quelle degli altri restano chiuse finché non si chiedono
+  const [others, setOthers] = useState(false);
 
   const reset = () => {
     setImg(null);
@@ -47,6 +51,7 @@ export function ReceiptsCard({ onSaved }: { onSaved: () => void }) {
     setTotal("");
     setRows([]);
     setErr("");
+    setOthers(false);
   };
 
   const pick = (f: File | undefined) => {
@@ -99,11 +104,16 @@ export function ReceiptsCard({ onSaved }: { onSaved: () => void }) {
             name: r.name.trim(),
             status: "in_use",
             visibility: "personal",
-            priceCents: cents(r.price),
-            notes: store.trim() ? `Comprato da ${store.trim()}` : "",
+            priceCents: cents(r.price) != null ? (cents(r.price) ?? 0) * (r.qty || 1) : null,
+            notes: [store.trim() ? `Comprato da ${store.trim()}` : "", (r.qty || 1) > 1 && cents(r.price) != null ? `${r.qty} pezzi da ${euro(cents(r.price) ?? 0)}` : ""].filter(Boolean).join(" · "),
             purchasedOn: day,
             // frecce: i pezzi scritti nel nome («6 pz», «12 frecce») contano più della quantità della riga
-            specs: r.category === "freccia" ? { qty: String(Math.max(1, Math.min(200, (Number(/(\d{1,3})\s*(?:pz|pezzi|pcs|frecce)\b/i.exec(r.name)?.[1]) || 1) * (r.qty || 1)))) } : {},
+            specs:
+              r.category === "freccia"
+                ? { qty: String(Math.max(1, Math.min(200, (Number(/(\d{1,3})\s*(?:pz|pezzi|pcs|frecce)\b/i.exec(r.name)?.[1]) || 1) * (r.qty || 1)))) }
+                : PIECES.has(r.category)
+                  ? { qty: String(Math.max(1, Math.min(999, r.qty || 1))) }
+                  : {},
           },
         });
       }
@@ -162,7 +172,7 @@ export function ReceiptsCard({ onSaved }: { onSaved: () => void }) {
           {busy ? null : (
             <>
               <div className="grid gap-2">
-                {rows.map((r, i) => (
+                {rows.map((r, i) => (!others && !r.mine && rows.some((x) => x.hand) ? null : (
                   <div key={i} className={`grid gap-2 rounded-2xl bg-white/[0.04] p-2 ${r.mine ? "" : "opacity-55"}`}>
                     <div className="flex items-center gap-2">
                       <CategoryIcon category={r.category} className="h-10 w-10 shrink-0" />
@@ -173,9 +183,15 @@ export function ReceiptsCard({ onSaved }: { onSaved: () => void }) {
                       <select value={r.category} onChange={(e) => set(i, { category: e.target.value })} className="min-h-10 rounded-xl border border-line bg-bg px-2 text-sm" aria-label="Categoria">
                         {CATEGORIES.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
                       </select>
-                      <TextInput inputMode="numeric" value={String(r.qty)} onChange={(e) => set(i, { qty: Math.max(1, Math.min(99, Number(e.target.value.replace(/\D/g, "")) || 1)) })} aria-label="Quantità" />
+                      <TextInput inputMode="numeric" value={String(r.qty)} onChange={(e) => set(i, { qty: Math.max(1, Math.min(999, Number(e.target.value.replace(/\D/g, "")) || 1)) })} aria-label="Quantità" />
                       <TextInput inputMode="decimal" value={r.price} onChange={(e) => set(i, { price: e.target.value })} placeholder="€ cad." aria-label="Prezzo di un pezzo" />
                     </div>
+                    <p className="flex flex-wrap items-center gap-x-2 gap-y-1 px-1 text-xs text-muted">
+                      <span className="font-semibold text-fg">{categoryLabel(r.category)}</span>
+                      <span className="tabular-nums">{r.qty} × {euro(cents(r.price) ?? 0) || "0 €"} = <b className="text-fg">{euro((cents(r.price) ?? 0) * (r.qty || 1)) || "0 €"}</b></span>
+                      {r.hand ? <span className="rounded-full bg-accent/15 px-2 py-0.5 font-semibold text-accent">segnata a mano</span> : null}
+                      {r.lineCents != null && r.hand && r.lineCents !== (cents(r.price) ?? 0) * (r.qty || 1) ? <span>sul foglio la riga è {euro(r.lineCents)}</span> : null}
+                    </p>
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs">
                       <label className="flex items-center gap-2 font-semibold">
                         <input type="checkbox" checked={r.mine} onChange={(e) => set(i, { mine: e.target.checked, toGear: e.target.checked ? r.toGear || r.category !== "altro" : false })} className="h-4 w-4 accent-[var(--accent)]" />
@@ -189,7 +205,12 @@ export function ReceiptsCard({ onSaved }: { onSaved: () => void }) {
                       ) : null}
                     </div>
                   </div>
-                ))}
+                )))}
+                {!others && rows.some((x) => x.hand) && rows.some((x) => !x.mine) ? (
+                  <button type="button" onClick={() => setOthers(true)} className="aa-press inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl bg-white/[0.04] text-sm">
+                    <Glyph name="chevron" size={15} /> Le altre {rows.filter((x) => !x.mine).length} righe del foglio (non tue)
+                  </button>
+                ) : null}
                 <button type="button" onClick={() => setRows((rs) => [...rs, { name: "", qty: 1, price: "", category: "accessorio", toGear: true, mine: true }])} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl border border-dashed border-line text-sm">
                   <Glyph name="plus" size={15} /> Aggiungi una riga
                 </button>

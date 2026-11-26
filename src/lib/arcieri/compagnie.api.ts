@@ -331,13 +331,13 @@ export const companyWelcome = createServerFn({ method: "GET" })
     const sql = await db();
     await ensureMember(sql, context.userId);
     const mine = await myMembership(sql, context.userId);
-    if (mine.chosen) return { chosen: true as const, companies: [] as { id: number; name: string; city: string; logoUrl: string | null; color: string; members: number }[], homeId: mine.companyId };
+    if (mine.chosen) return { chosen: true as const, companies: [] as { id: number; name: string; city: string; logoUrl: string | null; color: string; members: number; fitastName: string }[], homeId: mine.companyId };
     const home = await homeId(sql);
     const rows = await sql<{ id: number; name: string; city: string; logo_url: string | null; fitast_name: string | null; color: string; members: number }>`
       select c.id, c.name, c.city, c.logo_url, c.fitast_name, c.color, count(cm.user_id)::int as members
       from companies c left join company_members cm on cm.company_id = c.id
       group by c.id order by (c.id = ${home}) desc, count(cm.user_id) desc, c.name`;
-    return { chosen: false as const, companies: rows.map((r) => ({ id: asNum(r.id), name: r.name, city: r.city, logoUrl: withRealCrest(r.logo_url, r.fitast_name, r.name), color: r.color, members: asNum(r.members) })), homeId: home };
+    return { chosen: false as const, companies: rows.map((r) => ({ id: asNum(r.id), name: r.name, city: r.city, logoUrl: withRealCrest(r.logo_url, r.fitast_name, r.name), color: r.color, members: asNum(r.members), fitastName: r.fitast_name ?? "" })), homeId: home };
   });
 
 /**

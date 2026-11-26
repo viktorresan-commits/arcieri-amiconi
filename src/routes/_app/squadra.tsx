@@ -7,7 +7,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { listCompanies } from "@/lib/arcieri/compagnie.api";
 import { CompanyForm, CompanyHero, CompanyLeague, joinAndReload } from "@/components/compagnia";
 import { CompanyTrophies } from "@/components/palmares";
-import { FitastArchersCard, FitastCompanyBoard, FitastHeader, FitastTeamsBoard, useFitastLeague } from "@/components/fitast-league";
+import { FitastArchersCard, FitastCompanyBoard, FitastHeader, FitastTeamsBoard, JoinLinkSheet, useFitastLeague } from "@/components/fitast-league";
 import { RankBars } from "@/components/rank-bars";
 import { Heat } from "@/components/shot-lab";
 import { useLocalState } from "@/lib/arcieri/local-store";
@@ -174,6 +174,7 @@ export function CompagniaPage({ initial }: { initial?: Section } = {}) {
   const section: Section = opened ?? stored;
   const [editing, setEditing] = useState<"none" | "edit" | "new">("none");
   const [busy, setBusy] = useState<number | null>(null);
+  const [linkFor, setLinkFor] = useState<{ team: string; name: string } | null>(null);
   const looks = useTeamAvatars();
   const [removed, setRemoved] = useState<number[]>([]);
   const [board, setBoard] = useEntryState<"padiglione" | "sagoma">("squadra-board", "padiglione");
@@ -250,6 +251,9 @@ export function CompagniaPage({ initial }: { initial?: Section } = {}) {
     try {
       await joinAndReload(id, () => setNonce((n) => n + 1));
       setSection("arcieri");
+      // appena entrato: «Sei uno di loro?» con gli arcieri FITAST della compagnia
+      const co = companies.data?.companies.find((c) => c.id === id);
+      if (co) setLinkFor({ team: co.fitastName || co.name, name: co.name });
     } finally {
       setBusy(null);
     }
@@ -257,6 +261,7 @@ export function CompagniaPage({ initial }: { initial?: Section } = {}) {
 
   return (
     <div className="grid gap-4">
+      {linkFor ? <JoinLinkSheet team={linkFor.team} companyName={linkFor.name} onClose={() => { setLinkFor(null); setNonce((n) => n + 1); }} /> : null}
       {company ? (
         <CompanyHero co={company} canEdit={Boolean(companies.data?.canEdit)} onEdit={() => setEditing("edit")} />
       ) : (

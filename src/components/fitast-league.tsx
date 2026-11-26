@@ -11,6 +11,7 @@ import { categoryGroup, cleanCategory, crestOf as drawCrest, teamKey, titleName 
 import { realCrest, withRealCrest } from "@/lib/arcieri/stemmi-veri";
 import { syncStandings, type SyncProgress } from "@/lib/arcieri/fitast-sync";
 import { nameKey } from "@/lib/arcieri/fitast-rank";
+import { setFitastLink } from "@/lib/arcieri/fitast-link.api";
 
 export type Crest = { name: string; logoUrl: string | null; color: string; fitastName?: string };
 
@@ -324,6 +325,7 @@ export function FitastHeader({ league }: { league: FitastLeagueState }) {
         )}
         {sync ? <span className="text-xs text-muted">{running ? `${sync.step} · ${sync.pages} pagine lette` : sync.error ? sync.error : `Aggiornate ${sync.saved} classifiche in ${sync.pages} pagine.`}</span> : null}
       </div>
+      {sync?.done && sync.note ? <p className="break-words text-xs text-muted">{sync.note}</p> : null}
       {sync?.done && sync.diag?.length && !sync.saved ? (
         <details className="rounded-2xl bg-white/[0.03] p-3 text-xs text-muted">
           <summary className="cursor-pointer">Dettagli tecnici (classifiche senza righe)</summary>
@@ -546,4 +548,99 @@ export function FitastLeague({ companies }: { companies: Crest[] }) {
 /** il logo vero della F.IT.A.ST. (Formazione Italiana Arcieri Storici), dal suo sito */
 export function FitastLogo({ size = 40, className }: { size?: number; className?: string }) {
   return <img src="/fitast-logo.webp" alt="F.IT.A.ST." width={size} height={size} className={["shrink-0 object-contain drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]", className].filter(Boolean).join(" ")} loading="lazy" decoding="async" />;
+}
+
+/**
+ * Gli arcieri di una compagnia nel campionato FITAST, dentro la scheda della compagnia: li vede chiunque.
+ * Chi è già nell'app ha il suo avatar; chi è nella compagnia e non si è ancora collegato tocca «Sono io».
+ */
+export function TeamArchersInline({ team, canClaim = false, first = 8, onClaimed }: { team: string; canClaim?: boolean; first?: number; onClaimed?: () => void }) {
+  const [nonce, setNonce] = useState(0);
+  const { data, error, loading } = useLoad(`fitast-team-inline-${team}-${nonce}`, () => fitastTeamArchers({ data: { team } }));
+  const [all, setAll] = useState(false);
+  const [busy, setBusy] = useState("");
+  const [err, setErr] = useState("");
+  const list: TeamArcher[] = data?.archers ?? [];
+  const linkedMe = Boolean(data?.myLink);
+  async function claim(a: TeamArcher) {
+    setBusy(a.name);
+    setErr("");
+    try {
+      await setFitastLink({ data: { name: a.name, team } });
+      setNonce((n) => n + 1);
+      onClaimed?.();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Non riuscito");
+    } finally {
+      setBusy("");
+    }
+  }
+  if (loading) return <p className="text-xs text-muted">Leggo gli arcieri del campionato…</p>;
+  if (error) return <ErrorNote text={error} />;
+  if (!list.length) return <p className="text-xs text-muted">Nessun arciere di questa compagnia nelle classifiche del campionato salvate. Si riempie con «Aggiorna dal portale».</p>;
+  const shown = all ? list : list.slice(0, first);
+  const inApp = list.filter((a) => a.member && "memberId" in a.member).length;
+  return (
+    <div className="grid gap-1.5">
+      <p className="text-xs font-semibold uppercase tracking-wider text-muted">
+        Arcieri nel campionato · {list.length}{inApp ? ` · ${inApp} nell'app` : ""}{data?.season ? ` · ${data.season}` : ""}
+      </p>
+      <ol className="grid gap-1">
+        {shown.map((a, i) => {
+          const m = a.member;
+          const face = m && "memberId" in m ? m : null;
+          return (
+            <li key={`${a.name}-${i}`} className="flex items-center gap-2.5 rounded-xl bg-black/15 px-2.5 py-1.5">
+              {face ? (
+                face.photoUrl ? <img src={face.photoUrl} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" /> : <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs font-bold text-white" style={{ background: face.color }}>{face.label.slice(0, 1).toUpperCase()}</span>
+              ) : (
+                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/[0.06] text-xs font-semibold tabular-nums text-muted">{i + 1}</span>
+              )}
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-semibold">{titleName(a.name)}</span>
+                <span className="block truncate text-[0.7rem] text-muted">{[titleName(cleanCategory(a.category)), a.place ? `${a.place}° in categoria` : "", face ? (face.me ? "sei tu" : `nell'app: ${face.label}`) : m ? "già collegato" : ""].filter(Boolean).join(" · ")}</span>
+              </span>
+              {a.points != null ? <b className="shrink-0 font-display text-base tabular-nums">{num(a.points)}</b> : null}
+              {canClaim && !linkedMe && !m ? (
+                <button type="button" disabled={Boolean(busy)} onClick={() => void claim(a)} className="aa-press min-h-8 shrink-0 rounded-full bg-accent px-2.5 text-[0.7rem] font-semibold text-accent-fg disabled:opacity-50">
+                  {busy === a.name ? "Collego…" : "Sono io"}
+                </button>
+              ) : null}
+            </li>
+          );
+        })}
+      </ol>
+      {list.length > first ? (
+        <button type="button" onClick={() => setAll((v) => !v)} className="aa-chip justify-self-start">{all ? "Mostra meno" : `Vedi tutti i ${list.length}`}</button>
+      ) : null}
+      {err ? <ErrorNote text={err} /> : null}
+    </div>
+  );
+}
+
+/**
+ * Appena entrato in una compagnia: «Sei uno di loro?». Toccando il proprio nome il profilo (e l'avatar)
+ * si collega al nome FITAST: le gare del campionato si riempiono da sole.
+ */
+export function JoinLinkSheet({ team, companyName, onClose }: { team: string; companyName: string; onClose: () => void }) {
+  const [done, setDone] = useState(false);
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/60 backdrop-blur-[3px] md:items-center" role="dialog" aria-modal="true" aria-label="Collega il tuo nome FITAST">
+      <div className="aa-sheet grid max-h-[88dvh] w-full max-w-lg grid-rows-[auto_minmax(0,1fr)_auto] gap-3 overflow-hidden rounded-t-3xl border-t border-hair bg-elev p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] md:rounded-3xl md:border">
+        <header className="flex items-center gap-3">
+          <FitastLogo size={40} />
+          <div className="min-w-0 flex-1">
+            <h2 className="font-display text-2xl leading-tight">{done ? "Collegato" : "Sei uno di loro?"}</h2>
+            <p className="text-xs text-muted">{done ? "Profilo e avatar sono uniti al tuo nome FITAST: posti, punti e gare arrivano da soli." : `Gli arcieri di ${companyName} nel campionato FITAST. Tocca «Sono io» sul tuo nome.`}</p>
+          </div>
+        </header>
+        <div className="-mx-1 overflow-y-auto px-1">
+          <TeamArchersInline team={team} canClaim first={60} onClaimed={() => setDone(true)} />
+        </div>
+        <button type="button" onClick={onClose} className="aa-press min-h-11 rounded-2xl border border-line text-sm font-semibold">{done ? "Fatto" : "Non sono in elenco · più tardi"}</button>
+      </div>
+    </div>,
+    document.body,
+  );
 }

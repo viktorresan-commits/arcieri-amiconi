@@ -572,4 +572,43 @@ export const DETAILED_MORE: Partial<Record<IconName, ReactNode>> = {
       <path d="M5 13.2h.01M7.2 13.2h.01" strokeWidth={1.6} />
     </>
   ),
+  shaft: (
+    <>
+      <path d="M3.4 20.6 19.8 4.2" strokeWidth={3.2} strokeOpacity={L2} />
+      <path d="M3.4 20.6 19.8 4.2" strokeWidth={1.6} />
+      <path d="m5.6 16.2 2.2 2.2M15.8 6l2.2 2.2" {...FINE} />
+      <path d="m10 13.6.9.9M12.2 11.4l.9.9" {...FINE} strokeOpacity={0.7} />
+      <circle cx="20.4" cy="3.6" r="1.3" fill="currentColor" fillOpacity={L3} />
+      <circle cx="3" cy="21" r="0.9" {...DOT} />
+    </>
+  ),
+  point: (
+    <>
+      <path d="M2.4 12h7.2" strokeWidth={2.2} />
+      <path d="M9.4 8.4h4.4l7.8 3.6-7.8 3.6H9.4Z" fill="currentColor" fillOpacity={L1} />
+      <path d="M13.8 8.4 21.6 12l-7.8 3.6Z" fill="currentColor" fillOpacity={L2} />
+      <path d="M9.4 8.4h4.4l7.8 3.6-7.8 3.6H9.4Z" />
+      <path d="M11.6 8.4v7.2" {...FINE} />
+      <path d="M14.6 10.4 18.4 12" {...FINE} strokeOpacity={0.8} />
+    </>
+  ),
+  fletch: (
+    <>
+      <path d="M4.6 15.8c2.6-6.8 8.6-11 15.8-12.2-1.8 5.4-6.4 10.6-12.6 12.6Z" fill="currentColor" fillOpacity={L1} />
+      <path d="M4.6 15.8c2.6-6.8 8.6-11 15.8-12.2-1.8 5.4-6.4 10.6-12.6 12.6Z" />
+      <path d="M7.8 16.2c1.6-3.8 4.6-7.4 8.8-10" fill="none" strokeWidth={2.4} strokeOpacity={L2} />
+      <path d="M2 21.6 20.4 3.6" {...FINE} />
+      <path d="M9.4 12.2 11 13.8M12.2 9.4l1.6 1.6M15 6.8l1.4 1.4" {...FINE} strokeOpacity={0.7} />
+    </>
+  ),
+  nock: (
+    <>
+      <path d="M2.4 12h7.4" strokeWidth={2.2} />
+      <path d="M9.6 8.4h5.6c2.4 0 2.4 7.2 0 7.2H9.6Z" fill="currentColor" fillOpacity={L2} />
+      <path d="M9.6 8.4h5.6c2.4 0 2.4 7.2 0 7.2H9.6Z" />
+      <path d="M15.8 9.4 20.8 6M15.8 14.6l5 3.4" strokeWidth={1.8} />
+      <path d="M16.8 12h4.6" {...FINE} strokeOpacity={0.6} />
+      <path d="M11.8 8.4v7.2" {...FINE} />
+    </>
+  ),
 };
