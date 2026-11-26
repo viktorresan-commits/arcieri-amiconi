@@ -50,17 +50,17 @@ export type MarketDraft = {
 
 export const emptyDraft = (): MarketDraft => ({ category: "accessorio", title: "", description: "", qty: 1, price: "", condition: "buono", place: "", lat: null, lng: null, contact: "", phone: "", whatsapp: "", email: "", everyone: true, videoUrl: "", photos: [] });
 
-/** contatti scritti nell'annuncio: telefono (con WhatsApp) o e-mail */
-function contactLinks(raw: string) {
+/** contatti scritti nell'annuncio: telefono (con WhatsApp) o e-mail; con `text` il messaggio parte già scritto */
+function contactLinks(raw: string, text = "", subject = "") {
   const out: { href: string; label: string }[] = [];
   const mail = /[\w.+-]+@[\w-]+\.[\w.-]+/.exec(raw)?.[0];
   const digits = raw.replace(/[^\d+]/g, "");
   if (digits.replace(/\D/g, "").length >= 8) {
     const intl = digits.startsWith("+") ? digits.slice(1) : digits.startsWith("00") ? digits.slice(2) : `39${digits}`;
-    out.push({ href: `https://wa.me/${intl.replace(/\D/g, "")}`, label: "WhatsApp" });
+    out.push({ href: `https://wa.me/${intl.replace(/\D/g, "")}${text ? `?text=${encodeURIComponent(text)}` : ""}`, label: "WhatsApp" });
     out.push({ href: `tel:${digits}`, label: "Chiama" });
   }
-  if (mail) out.push({ href: `mailto:${mail}`, label: "E-mail" });
+  if (mail) out.push({ href: `mailto:${mail}${text ? `?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(text)}` : ""}`, label: "E-mail" });
   return out;
 }
 
@@ -78,17 +78,23 @@ const waOf = (raw: string) => {
 function SellerContact({ item }: { item: MarketItem }) {
   const member = useMemberMaybe();
   const [open, setOpen] = useState(false);
-  const [text, setText] = useState(`Ciao, mi interessa «${item.title}». È ancora disponibile?`);
+  // il messaggio già scritto: saluto per nome, l'annuncio visto sull'app, la domanda e come averlo (ritiro o spedizione)
+  const first = item.seller.split(" ")[0] || item.seller;
+  const price = item.priceCents != null ? euro(item.priceCents) : "";
+  const [text, setText] = useState(
+    `Ciao ${first}, ho visto il tuo annuncio «${item.title}»${price ? ` a ${price}` : ""} nel mercatino dell'app Arcieri Amiconi. Mi interessa: è ancora disponibile? Vorrei qualche informazione in più e, se va tutto bene, comprarlo. Preferisci che passi a ritirarlo${item.place ? ` a ${item.place}` : ""} o me lo puoi spedire?`,
+  );
+  const subject = `Annuncio «${item.title}» su Arcieri Amiconi`;
   const [saved] = useLocalState<{ phone: string; whatsapp: string; email: string }>("aa-market-contacts", { phone: "", whatsapp: "", email: "" });
   const [reply, setReply] = useState(saved.whatsapp || saved.phone || member?.me.email || "");
   const [state, setState] = useState<"" | "busy" | "sent">("");
   const [err, setErr] = useState("");
-  const old = item.phone || item.whatsapp || item.email ? [] : contactLinks(item.contact);
+  const old = item.phone || item.whatsapp || item.email ? [] : contactLinks(item.contact, text, subject);
   const wa = waOf(item.whatsapp || item.phone);
   const rows: { label: string; value: string; href: string; ext?: boolean }[] = [
     ...(item.phone ? [{ label: "Telefono", value: item.phone, href: `tel:${item.phone.replace(/[^\d+]/g, "")}` }] : []),
     ...(wa ? [{ label: "WhatsApp", value: item.whatsapp || item.phone, href: `https://wa.me/${wa}?text=${encodeURIComponent(text)}`, ext: true }] : []),
-    ...(item.email ? [{ label: "E-mail", value: item.email, href: `mailto:${item.email}?subject=${encodeURIComponent(`Mercatino: ${item.title}`)}&body=${encodeURIComponent(text)}` }] : []),
+    ...(item.email ? [{ label: "E-mail", value: item.email, href: `mailto:${item.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(text)}` }] : []),
   ];
   async function send() {
     setErr("");
@@ -123,11 +129,11 @@ function SellerContact({ item }: { item: MarketItem }) {
           ))}
         </div>
       ) : item.contact ? <p className="text-sm">Contatto: {item.contact}</p> : <p className="text-xs text-muted">Nell'annuncio non ci sono telefono né e-mail: scrivigli in Bacheca.</p>}
+      <Field label="Messaggio (parte già scritto su WhatsApp, e-mail e Bacheca)"><TextArea value={text} onChange={(e) => setText(e.target.value)} rows={4} /></Field>
       {state === "sent" ? (
         <p className="rounded-xl bg-[#2fbf71]/15 px-3 py-2 text-sm">Messaggio arrivato nella Bacheca di {item.seller}.</p>
       ) : open ? (
         <div className="grid gap-2">
-          <TextArea value={text} onChange={(e) => setText(e.target.value)} rows={3} />
           <Field label="Come ti risponde (telefono, WhatsApp o e-mail)"><TextInput value={reply} onChange={(e) => setReply(e.target.value)} /></Field>
           {err ? <ErrorNote text={err} /> : null}
           <Button onClick={() => void send()} disabled={state === "busy" || text.trim().length < 2}>{state === "busy" ? "Invio…" : "Manda nella sua Bacheca"}</Button>
@@ -266,6 +272,7 @@ function MarketDetail({ id, onClose, onChanged, onEdit }: { id: number; onClose:
   const [sure, setSure] = useState(false);
   const it = got.data?.item ?? null;
   const photos = got.data?.photos ?? [];
+  const [zoomAt, setZoomAt] = useState<number | null>(null);
 
   async function play() {
     setBusy("video");
@@ -306,8 +313,11 @@ function MarketDetail({ id, onClose, onChanged, onEdit }: { id: number; onClose:
         <>
           {photos.length ? (
             <div className="-mx-4 flex snap-x snap-mandatory gap-2 overflow-x-auto px-4 [scrollbar-width:none]">
-              {photos.map((p) => (
-                <img key={p.id} src={p.src} alt="" className="h-64 w-auto max-w-[85%] shrink-0 snap-center rounded-2xl object-cover" />
+              {photos.map((p, i) => (
+                <button key={p.id} type="button" onClick={() => setZoomAt(i)} aria-label={`Apri la foto ${i + 1} a tutto schermo`} className="aa-press relative shrink-0 snap-center">
+                  <img src={p.src} alt="" className="h-64 w-auto max-w-[85vw] rounded-2xl object-cover" />
+                  <span className="absolute bottom-2 right-2 grid h-8 w-8 place-items-center rounded-full bg-black/55 text-white"><Glyph name="search" size={15} /></span>
+                </button>
               ))}
             </div>
           ) : (
@@ -371,7 +381,135 @@ function MarketDetail({ id, onClose, onChanged, onEdit }: { id: number; onClose:
         </>
       ) : null}
       {err ? <p className="text-sm text-muted">{err}</p> : null}
+      {zoomAt != null && photos.length ? <PhotoViewer photos={photos.map((p) => p.src)} start={zoomAt} onClose={() => setZoomAt(null)} /> : null}
     </Sheet>
+  );
+}
+
+/**
+ * Foto a tutto schermo: si scorre da una all'altra, si ingrandisce con due dita o con un doppio tocco,
+ * e ingrandita si sposta con un dito.
+ */
+function PhotoViewer({ photos, start, onClose }: { photos: string[]; start: number; onClose: () => void }) {
+  const [at, setAt] = useState(start);
+  const strip = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = strip.current;
+    if (el) el.scrollLeft = start * el.clientWidth;
+    const esc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+    // solo all'apertura
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const [zoomed, setZoomed] = useState(false);
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div className="fixed inset-0 z-[90] bg-black" role="dialog" aria-modal="true" aria-label="Foto dell'annuncio">
+      <div
+        ref={strip}
+        onScroll={(e) => setAt(Math.round(e.currentTarget.scrollLeft / Math.max(1, e.currentTarget.clientWidth)))}
+        className={`flex h-full w-full snap-x snap-mandatory [scrollbar-width:none] ${zoomed ? "overflow-hidden" : "overflow-x-auto"}`}
+      >
+        {photos.map((src, i) => (
+          <div key={i} className="relative h-full w-full shrink-0 snap-center overflow-hidden">
+            <ZoomImage src={src} active={i === at} onZoom={setZoomed} />
+          </div>
+        ))}
+      </div>
+      <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between p-3 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
+        <span className="rounded-full bg-black/55 px-3 py-1 text-sm font-semibold text-white tabular-nums">{at + 1} / {photos.length}</span>
+        <button type="button" onClick={onClose} aria-label="Chiudi le foto" className="pointer-events-auto grid h-11 w-11 place-items-center rounded-full bg-black/55 text-white"><Glyph name="close" size={18} /></button>
+      </div>
+      {!zoomed ? <p className="pointer-events-none absolute inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+1rem)] text-center text-xs text-white/70">Due dita o doppio tocco per ingrandire</p> : null}
+    </div>,
+    document.body,
+  );
+}
+
+/** una foto che si ingrandisce (pizzico o doppio tocco, fino a 5 volte) e si sposta quando è ingrandita */
+function ZoomImage({ src, active, onZoom }: { src: string; active: boolean; onZoom: (z: boolean) => void }) {
+  const [v, setV] = useState({ s: 1, x: 0, y: 0 });
+  const pts = useRef(new Map<number, { x: number; y: number }>());
+  const pinch = useRef<{ d: number; s: number; cx: number; cy: number; x: number; y: number } | null>(null);
+  const pan = useRef<{ px: number; py: number; x: number; y: number } | null>(null);
+  const lastTap = useRef(0);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!active) setV({ s: 1, x: 0, y: 0 });
+  }, [active]);
+  useEffect(() => {
+    if (active) onZoom(v.s > 1.02);
+  }, [v.s, active, onZoom]);
+  // tiene la foto dentro lo schermo quando è ingrandita
+  const clampV = (s: number, x: number, y: number) => {
+    const el = box.current;
+    const w = el?.clientWidth ?? 0;
+    const h = el?.clientHeight ?? 0;
+    const mx = (w * (s - 1)) / 2;
+    const my = (h * (s - 1)) / 2;
+    return { s, x: Math.max(-mx, Math.min(mx, x)), y: Math.max(-my, Math.min(my, y)) };
+  };
+  const rel = (e: { clientX: number; clientY: number }) => {
+    const r = box.current?.getBoundingClientRect();
+    return { x: e.clientX - (r ? r.left + r.width / 2 : 0), y: e.clientY - (r ? r.top + r.height / 2 : 0) };
+  };
+  return (
+    <div
+      ref={box}
+      className="grid h-full w-full place-items-center"
+      style={{ touchAction: v.s > 1.02 ? "none" : "pan-x" }}
+      onPointerDown={(e) => {
+        pts.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (pts.current.size === 2) {
+          const [a, b] = [...pts.current.values()];
+          const c = rel({ clientX: (a.x + b.x) / 2, clientY: (a.y + b.y) / 2 });
+          pinch.current = { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, s: v.s, cx: c.x, cy: c.y, x: v.x, y: v.y };
+          pan.current = null;
+        } else if (pts.current.size === 1) {
+          const now = Date.now();
+          if (now - lastTap.current < 300) {
+            // doppio tocco: ingrandisce dove si tocca, o torna intera
+            const c = rel(e);
+            setV(v.s > 1.02 ? { s: 1, x: 0, y: 0 } : clampV(2.5, -c.x * 1.5, -c.y * 1.5));
+            lastTap.current = 0;
+          } else lastTap.current = now;
+          if (v.s > 1.02) {
+            (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+            pan.current = { px: e.clientX, py: e.clientY, x: v.x, y: v.y };
+          }
+        }
+      }}
+      onPointerMove={(e) => {
+        if (!pts.current.has(e.pointerId)) return;
+        pts.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (pinch.current && pts.current.size >= 2) {
+          const [a, b] = [...pts.current.values()];
+          const k = Math.hypot(a.x - b.x, a.y - b.y) / pinch.current.d;
+          const s = Math.max(1, Math.min(5, pinch.current.s * k));
+          const p = pinch.current;
+          // il punto fra le due dita resta sotto le dita
+          setV(clampV(s, p.cx - (p.cx - p.x) * (s / p.s), p.cy - (p.cy - p.y) * (s / p.s)));
+        } else if (pan.current) {
+          setV(clampV(v.s, pan.current.x + e.clientX - pan.current.px, pan.current.y + e.clientY - pan.current.py));
+        }
+      }}
+      onPointerUp={(e) => {
+        pts.current.delete(e.pointerId);
+        if (pts.current.size < 2) pinch.current = null;
+        if (!pts.current.size) pan.current = null;
+        if (v.s < 1.05) setV({ s: 1, x: 0, y: 0 });
+      }}
+      onPointerCancel={(e) => {
+        pts.current.delete(e.pointerId);
+        pinch.current = null;
+        pan.current = null;
+      }}
+    >
+      <img src={src} alt="" draggable={false} className="max-h-full max-w-full select-none object-contain" style={{ transform: `translate(${v.x}px, ${v.y}px) scale(${v.s})`, transition: pinch.current || pan.current ? "none" : "transform 160ms ease-out" }} />
+    </div>
   );
 }
 
