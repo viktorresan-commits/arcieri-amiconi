@@ -11,7 +11,9 @@ import { divisionOf } from "./labels";
 import { accountWriter, writerFor } from "./acting.api";
 import { activityXp } from "./xp.api";
 import { fitastRankOf, loadGenerale, type GenTable } from "./fitast-rank";
-import { garaLoads, sumLoads } from "./gara-volume";
+import { garaLoads, sumLoads, type GaraLoad } from "./gara-volume";
+import { champSeasonOf, seasonTag } from "./stagioni";
+import { namePattern, pastTables, trustedPast } from "./fitast-past";
 import { archersIn, championshipName, matchPerson, oursInGara, peopleOf, pzTablesFor, resultOf, stepsOf, type GaraTable, type PortalResult, type Who } from "./fitast-ours";
 import { nameKey } from "./fitast-rank";
 import { categoryGroup, teamKey as teamKeyOf, titleName } from "./fitast-league";
@@ -994,17 +996,67 @@ export const deleteEntry = createServerFn({ method: "POST" })
     return { ok: true as const };
   });
 
-/** la stagione di campionato di un giorno: invernale da ottobre ad aprile, estiva da maggio a settembre */
-export function champSeasonOf(day: string) {
-  const y = Number(day.slice(0, 4));
-  const m = Number(day.slice(5, 7));
-  if (m >= 10) return { from: `${y}-10-01`, to: `${y + 1}-04-30`, name: `Campionato invernale ${y}/${y + 1}` };
-  if (m <= 4) return { from: `${y - 1}-10-01`, to: `${y}-04-30`, name: `Campionato invernale ${y - 1}/${y}` };
-  return { from: `${y}-05-01`, to: `${y}-09-30`, name: `Campionato estivo ${y}` };
+/** i numeri di un arciere che si vedono sul profilo e nel confronto: gare, campionato, allenamenti, avatar */
+/** il posto nella classifica generale arcieri di una stagione */
+type SeasonGeneral = { category: string; place: number | null; size: number; points: number | null };
+
+/** una stagione di un arciere: le sue gare (app e portale) e il posto nella generale FITAST */
+export type ArcherSeason = {
+  label: string;
+  from: string;
+  current: boolean;
+  gare: number;
+  wins: number;
+  podiums: number;
+  best: number | null;
+  avg: number | null;
+  champ: number;
+  general: SeasonGeneral | null;
+  races: { name: string; day: string; rank: number | null; score: number | null; category: string; champ: number | null }[];
+};
+
+/**
+ * Le stagioni di un arciere, dalla più recente: le gare raggruppate per campionato e, per le stagioni chiuse,
+ * il posto nella classifica generale salvata con «Scansiona tutto dal 2019».
+ */
+async function seasonsOf(sql: Awaited<ReturnType<typeof db>>, done: GaraLoad[], who: Who, currentLabel: string, currentGeneral: SeasonGeneral | null): Promise<ArcherSeason[]> {
+  const groups = new Map<string, ArcherSeason>();
+  const groupOf = (label: string, from: string) => {
+    const g = groups.get(label) ?? { label, from, current: label === currentLabel, gare: 0, wins: 0, podiums: 0, best: null, avg: null, champ: 0, general: null, races: [] };
+    if (from && (!g.from || from < g.from)) g.from = from;
+    groups.set(label, g);
+    return g;
+  };
+  for (const l of done) {
+    const g = groupOf(l.season, l.seasonFrom || l.day);
+    g.gare += 1;
+    if (l.rank === 1) g.wins += 1;
+    if (l.rank != null && l.rank <= 3) g.podiums += 1;
+    g.champ += l.champ ?? 0;
+    g.races.push({ name: l.name, day: l.day, rank: l.rank, score: l.points, category: divisionOf(l.category ?? "") || l.category || "", champ: l.champ });
+  }
+  // le classifiche generali delle stagioni chiuse
+  const general = await pastTables(sql, "generale-arcieri", namePattern([who])).catch(() => []);
+  const bySeason = new Map<string, typeof general>();
+  for (const t of general) bySeason.set(t.season, [...(bySeason.get(t.season) ?? []), t]);
+  for (const list of bySeason.values()) {
+    const r = oursInGara(list, [who]).get(who.userId);
+    if (!r || !trustedPast(r, who)) continue;
+    const tag = seasonTag(list.find((t) => t.season_name)?.season_name ?? "", "");
+    if (tag.label === currentLabel) continue;
+    groupOf(tag.label, tag.from).general = { category: r.category, place: r.place, size: r.size, points: r.camp ?? r.score };
+  }
+  if (currentGeneral) groupOf(currentLabel, "").general = currentGeneral;
+  for (const g of groups.values()) {
+    const scores = g.races.map((x) => x.score).filter((v): v is number => v != null);
+    g.best = scores.length ? Math.max(...scores) : null;
+    g.avg = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : null;
+    g.races.sort((a, b) => b.day.localeCompare(a.day));
+  }
+  return [...groups.values()].sort((a, b) => Number(b.current) - Number(a.current) || b.from.localeCompare(a.from) || b.label.localeCompare(a.label));
 }
 
-/** i numeri di un arciere che si vedono sul profilo e nel confronto: gare, campionato, allenamenti, avatar */
-async function archerStats(sql: Awaited<ReturnType<typeof db>>, userId: string, who: { fullName: string; givenName: string; nickname: string; fitastName: string; team: string }, xp: number, gen: GenTable[]) {
+async function archerStats(sql: Awaited<ReturnType<typeof db>>, userId: string, who: { fullName: string; givenName: string; nickname: string; fitastName: string; fitastTeam: string; team: string }, xp: number, gen: GenTable[]) {
   // le gare fatte: risultati segnati nell'app, classifiche del portale FITAST e gare con «Ho partecipato»
   const loads = ((await garaLoads(sql, userId)).get(userId) ?? []).sort((a, b) => a.day.localeCompare(b.day));
   const today = new Date().toISOString().slice(0, 10);
@@ -1020,6 +1072,7 @@ async function archerStats(sql: Awaited<ReturnType<typeof db>>, userId: string, 
   }));
   const done = gare.filter((g) => g.day <= today);
   const inSeason = done.filter((g) => g.day >= season.from && g.day <= season.to);
+  const inSeasonPodiums = inSeason.filter((g) => g.rank != null && g.rank <= 3).length;
   const scores = done.map((g) => g.score).filter((v): v is number => v != null);
   const sessions = await sql<{ arrows: number; points: number }>`
     select count(sh.id)::int as arrows, coalesce(sum(sh.score), 0)::int as points
@@ -1038,10 +1091,25 @@ async function archerStats(sql: Awaited<ReturnType<typeof db>>, userId: string, 
   // il posto vero nel campionato FITAST: in categoria, assoluto, nella divisione e in compagnia
   const fitast = fitastRankOf(gen, who);
   const last = [...done].reverse()[0] ?? null;
+  // le stagioni: quella in corso con il posto vero nella generale, le altre dall'archivio del portale
+  const currentTag = seasonTag(fitast?.season ?? "", today);
+  const seasons = await seasonsOf(
+    sql,
+    loads.filter((l) => l.day <= today),
+    { userId, fitastName: who.fitastName, fitastTeam: who.fitastTeam, fullName: who.fullName, givenName: who.givenName, nickname: who.nickname, team: who.team },
+    currentTag.label,
+    fitast ? { category: fitast.category, place: fitast.place, size: fitast.size, points: fitast.points } : null,
+  );
+  const firstDay = done[0]?.day ?? "";
   return {
     seasonName: season.name,
     champSeason: inSeason.reduce((sum, g) => sum + (g.champ ?? 0), 0),
     gareSeason: inSeason.length,
+    winsSeason: inSeason.filter((g) => g.rank === 1).length,
+    podiumsSeason: inSeasonPodiums,
+    /** anno della prima gara conosciuta (app o archivio del portale) */
+    since: firstDay.slice(0, 4),
+    seasons,
     gare: done.length,
     wins: done.filter((g) => g.rank === 1).length,
     podiums: done.filter((g) => g.rank != null && g.rank <= 3).length,
@@ -1087,6 +1155,7 @@ export const archerBoard = createServerFn({ method: "POST" })
       givenName: m.given_name,
       nickname: m.nickname,
       fitastName: String((m as MemberRow & { fitast_name?: string }).fitast_name ?? ""),
+      fitastTeam: String((m as MemberRow & { fitast_team?: string }).fitast_team ?? ""),
       team: co?.fitast_name || co?.name || "",
     });
     // punti dell'avatar: quelli del telefono (minigioco, quiz, esercizi) più allenamenti e gare registrati

@@ -1,5 +1,7 @@
 import type { db } from "./access";
 import { championshipName, oursInGara, type GaraTable, type PortalResult, type Who } from "./fitast-ours";
+import { namePattern, pastTables, trustedPast } from "./fitast-past";
+import { seasonTag } from "./stagioni";
 
 type Sql = Awaited<ReturnType<typeof db>>;
 
@@ -21,6 +23,10 @@ export type GaraLoad = {
   spot: number | null;
   /** da dove si sa che c'era: risultato nell'app, classifica del portale o solo «Ho partecipato» */
   source: "app" | "portale" | "presenza";
+  /** la stagione di campionato (quella del portale, se la gara è sul portale) */
+  season: string;
+  /** primo giorno della stagione, per metterle in ordine */
+  seasonFrom: string;
   piazzole: number;
   arrows: number;
   /** punti della gara; null se si sa solo il posto */
@@ -59,15 +65,17 @@ type CompRow = { id: number; name: string; starts_on: string; lanes: number | nu
 
 const fitastIdOf = (notes: string | null | undefined) => /^fitast:(\d+)/.exec(notes ?? "")?.[1] ?? "";
 
+type PortalHit = { r: PortalResult; title: string; day: string; season: string; seasonFrom: string };
+
 /**
- * I risultati del portale FITAST (classifiche di gara salvate) di ogni arciere dell'app, gara per gara:
- * con il nome FITAST collegato o, se non c'è, con nome e cognome del profilo.
+ * I risultati del portale FITAST di ogni arciere dell'app, gara per gara: le classifiche della stagione in corso
+ * e quelle dell'archivio dal 2019. Con il nome FITAST collegato o, se non c'è, con nome e cognome del profilo
+ * (negli anni passati anche con la stessa compagnia, per non prendere un omonimo).
  */
-async function portalResults(sql: Sql): Promise<Map<string, { r: PortalResult; title: string; day: string }>[]> {
-  const tables = await sql<GaraTable>`
-    select gara_id, gara_title, held_on::text as held_on, season, category, rows from fitast_standings
+async function portalResults(sql: Sql): Promise<Map<string, PortalHit>[]> {
+  const current = await sql<GaraTable>`
+    select gara_id, gara_title, held_on::text as held_on, season, season_name, category, rows from fitast_standings
     where kind = 'gara-arcieri' and gara_id <> ''`.catch(() => [] as GaraTable[]);
-  if (!tables.length) return [];
   const members = await sql<{ user_id: string; given_name: string; family_name: string; nickname: string; fitast_name: string | null; fitast_team: string | null }>`
     select user_id, given_name, family_name, nickname, fitast_name, fitast_team from members where user_id is not null`.catch(() => []);
   const homes = await sql<{ user_id: string; name: string; fitast_name: string | null }>`
@@ -82,17 +90,27 @@ async function portalResults(sql: Sql): Promise<Map<string, { r: PortalResult; t
     nickname: m.nickname ?? "",
     team: homeOf.get(m.user_id) ?? "",
   }));
+  // l'archivio: solo le gare che non sono già fra quelle della stagione in corso
+  const inCurrent = new Set(current.map((t) => t.gara_id));
+  const past = (await pastTables(sql, "gara-arcieri", namePattern(who)).catch(() => [])).filter((t) => t.gara_id && !inCurrent.has(t.gara_id));
+  const pastIds = new Set(past.map((t) => t.gara_id));
   const byGara = new Map<string, GaraTable[]>();
-  for (const t of tables) byGara.set(t.gara_id, [...(byGara.get(t.gara_id) ?? []), t]);
-  const out: Map<string, { r: PortalResult; title: string; day: string }>[] = [];
+  for (const t of [...current, ...past]) byGara.set(t.gara_id, [...(byGara.get(t.gara_id) ?? []), t]);
+  const whoOf = new Map(who.map((w) => [w.userId, w]));
+  const out: Map<string, PortalHit>[] = [];
   for (const [garaId, list] of byGara) {
     const found = oursInGara(list, who);
     if (!found.size) continue;
     const title = list.find((t) => t.gara_title)?.gara_title ?? "";
     const day = String(list.find((t) => t.held_on)?.held_on ?? "").slice(0, 10);
-    const m = new Map<string, { r: PortalResult; title: string; day: string }>();
-    for (const [userId, r] of found) m.set(`${userId}|${garaId}`, { r, title, day });
-    out.push(m);
+    const tag = seasonTag(list.find((t) => t.season_name)?.season_name ?? "", day);
+    const m = new Map<string, PortalHit>();
+    for (const [userId, r] of found) {
+      const w = whoOf.get(userId);
+      if (pastIds.has(garaId) && (!w || !trustedPast(r, w))) continue;
+      m.set(`${userId}|${garaId}`, { r, title, day, season: tag.label, seasonFrom: tag.from });
+    }
+    if (m.size) out.push(m);
   }
   return out;
 }
@@ -129,8 +147,8 @@ export async function garaLoads(sql: Sql, userId: string | null = null): Promise
     const g = fitastIdOf(c.notes);
     if (g && !compByGara.has(g)) compByGara.set(g, c);
   }
-  const portal = await portalResults(sql).catch(() => [] as Map<string, { r: PortalResult; title: string; day: string }>[]);
-  type Merged = EntryRow & { source: GaraLoad["source"]; garaId: string };
+  const portal = await portalResults(sql).catch(() => [] as Map<string, PortalHit>[]);
+  type Merged = EntryRow & { source: GaraLoad["source"]; garaId: string; season?: string; seasonFrom?: string };
   const merged = new Map<string, Merged>();
   for (const e of entryRows) merged.set(`${e.user_id}|${Number(e.competition_id)}`, { ...e, source: "app", garaId: fitastIdOf(e.notes) });
   for (const map of portal) {
@@ -150,12 +168,14 @@ export async function garaLoads(sql: Sql, userId: string | null = null): Promise
         had.championship_points ??= x.r.camp;
         if (!had.category) had.category = x.r.category;
         had.garaId ||= garaId;
+        had.season ||= x.season;
+        had.seasonFrom ||= x.seasonFrom;
         continue;
       }
       merged.set(k, {
         user_id: uid, competition_id: compId, score: x.r.score, rank: x.r.place, championship_points: x.r.camp, lane_count: null,
         starts_on: day, lanes: comp?.lanes ?? null, name: comp?.name || championshipName(x.title) || `Gara ${garaId}`, notes: comp?.notes ?? `fitast:${garaId}`,
-        category: x.r.category, spot: null, source: "portale", garaId,
+        category: x.r.category, spot: null, source: "portale", garaId, season: x.season, seasonFrom: x.seasonFrom,
       });
     }
   }
@@ -203,7 +223,8 @@ export async function garaLoads(sql: Sql, userId: string | null = null): Promise
     // c'era: un risultato, piazzole o cartellino, la classifica del portale o «Ho partecipato»
     const done = score != null || num(e.rank) != null || num(e.championship_points) != null || !!card || !!rows?.length || e.source !== "app";
     if (!done) continue;
-    const info = { garaId: e.garaId, name: e.name ?? "", rank: num(e.rank), champ: num(e.championship_points), category: e.category ?? "", spot: num(e.spot), source: e.source };
+    const tag = e.season ? { label: e.season, from: e.seasonFrom ?? "" } : seasonTag("", e.starts_on.slice(0, 10));
+    const info = { garaId: e.garaId, name: e.name ?? "", rank: num(e.rank), champ: num(e.championship_points), category: e.category ?? "", spot: num(e.spot), source: e.source, season: tag.label, seasonFrom: tag.from };
     const garaLanes = num(e.lane_count) ?? num(e.lanes) ?? cardLanes.get(id) ?? LANES_DEFAULT;
     let load: GaraLoad;
     if (card) {

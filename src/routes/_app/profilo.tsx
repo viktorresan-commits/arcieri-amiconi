@@ -248,7 +248,7 @@ function Page() {
         </Link>
         <Link to="/squadra" className="aa-press grid rounded-2xl border border-hair bg-white/[0.04] px-3 py-2.5">
           <span className="text-[0.62rem] text-muted">Gare</span>
-          <b className="font-display text-2xl leading-tight tabular-nums">{comps.loading ? "…" : gareDone}</b>
+          <b className="font-display text-2xl leading-tight tabular-nums">{board.data ? board.data.stats.gare : comps.loading ? "…" : gareDone}</b>
         </Link>
         <Link to="/obiettivi" className="aa-press grid rounded-2xl border border-hair bg-white/[0.04] px-3 py-2.5">
           <span className="text-[0.62rem] text-muted">Premi</span>

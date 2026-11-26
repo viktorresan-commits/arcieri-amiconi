@@ -18,6 +18,7 @@ import { levelOf } from "@/lib/arcieri/xp";
 import { Glyph } from "@/components/icons";
 import { ArcherPalmares, Medal } from "@/components/palmares";
 import { titleName } from "@/lib/arcieri/fitast-league";
+import { Chips } from "@/components/fitast-league";
 
 type Board = Awaited<ReturnType<typeof archerBoard>>;
 
@@ -50,6 +51,7 @@ function Page() {
       <ChampionshipCard st={data.stats} />
       {data.stats.last ? <LastGara g={data.stats.last} /> : null}
       <StatsGrid st={data.stats} />
+      <SeasonsCard st={data.stats} firstName={name.split(" ")[0]} />
       <RolesCard data={data} />
       {data.viewer.level === "super" && !data.viewer.self ? <InsertFor memberId={data.id} name={name} hasAccount={Boolean(data.userId)} /> : null}
       {data.viewer.level === "super" && !data.viewer.self ? (
@@ -105,12 +107,12 @@ function ChampionshipCard({ st }: { st: Stats }) {
           <p className="mt-1 text-[0.68rem] text-muted">punti campionato</p>
         </div>
         <div className="rounded-2xl bg-white/[0.05] p-2.5">
-          <p className="font-display text-4xl leading-none tabular-nums">{st.wins}</p>
-          <p className="mt-1 text-[0.68rem] text-muted">{st.wins === 1 ? "gara vinta" : "gare vinte"}</p>
+          <p className="font-display text-4xl leading-none tabular-nums">{st.winsSeason}</p>
+          <p className="mt-1 text-[0.68rem] text-muted">{st.winsSeason === 1 ? "gara vinta" : "gare vinte"}</p>
         </div>
         <div className="rounded-2xl bg-white/[0.05] p-2.5">
-          <p className="font-display text-4xl leading-none tabular-nums">{st.podiums}</p>
-          <p className="mt-1 text-[0.68rem] text-muted">{st.podiums === 1 ? "podio" : "podi"}</p>
+          <p className="font-display text-4xl leading-none tabular-nums">{st.podiumsSeason}</p>
+          <p className="mt-1 text-[0.68rem] text-muted">{st.podiumsSeason === 1 ? "podio" : "podi"}</p>
         </div>
       </div>
       {st.fitast ? <FitastPlaces r={st.fitast} /> : null}
@@ -193,7 +195,10 @@ function StatsGrid({ st }: { st: Stats }) {
   ];
   return (
     <Card className="grid gap-2.5">
-      <h2 className="font-display text-2xl">Statistiche</h2>
+      <div>
+        <h2 className="font-display text-2xl">Statistiche</h2>
+        {st.since ? <p className="text-xs text-muted">Gare e podi di tutte le stagioni, dal {st.since}</p> : null}
+      </div>
       <div className="grid grid-cols-4 gap-1.5 text-center">
         {items.map((it) => (
           <div key={it.label} className="grid content-start justify-items-center gap-1 rounded-2xl bg-white/[0.04] px-1 py-2" style={{ boxShadow: `inset 0 -2px 0 ${KINDS[it.kind].color}55` }}>
@@ -207,6 +212,85 @@ function StatsGrid({ st }: { st: Stats }) {
           {st.estimatedGare === 1 ? "Per una gara" : `Per ${st.estimatedGare} gare`} manca il cartellino: piazzole e frecce sono contate sulle piazzole della gara (di solito 20, 3 frecce a piazzola). Si correggono da Gare, con la foto del cartellino o a mano.
         </p>
       ) : null}
+    </Card>
+  );
+}
+
+/** «Campionato invernale 2024/2025» → «Invernale 2024/25» */
+const shortSeason = (label: string) => {
+  const t = label.replace(/^campionato\s+/i, "").replace(/\b(20\d{2})\s*\/\s*20(\d{2})\b/, "$1/$2");
+  return t.charAt(0).toUpperCase() + t.slice(1);
+};
+
+/** Stagione per stagione: le gare di ogni campionato (dall'app e dall'archivio FITAST) e il posto nella generale */
+function SeasonsCard({ st, firstName }: { st: Stats; firstName: string }) {
+  const seasons = st.seasons;
+  const [pick, setPick] = useState("");
+  const [all, setAll] = useState(false);
+  if (!seasons.length || (seasons.length === 1 && seasons[0].current)) return null;
+  const names = seasons.map((x) => shortSeason(x.label));
+  const index = Math.max(0, names.indexOf(pick));
+  const s = seasons[index];
+  const g = s.general;
+  const races = all ? s.races : s.races.slice(0, 6);
+  const tiles: [string, string][] = [
+    ["Gare", String(s.gare)],
+    ["Podi", String(s.podiums)],
+    ["Vinte", String(s.wins)],
+    ["Miglior gara", fmtNum(s.best)],
+  ];
+  return (
+    <Card className="grid gap-3" style={{ boxShadow: `inset 0 -3px 0 ${KINDS.campionato.color}55` }}>
+      <KindHeading kind="campionato" title="Stagione per stagione" sub={`${seasons.length} ${seasons.length === 1 ? "stagione" : "stagioni"} di ${firstName}${st.since ? `, dal ${st.since}` : ""}`} />
+      <Chips value={names[index]} options={names} onChange={(v) => { setPick(v); setAll(false); }} />
+      <div className="grid grid-cols-4 gap-1.5 text-center">
+        {tiles.map(([k, v]) => (
+          <div key={k} className="rounded-xl bg-white/[0.05] py-2">
+            <p className="font-display text-xl leading-none tabular-nums">{v}</p>
+            <p className="mt-1 text-[0.62rem] text-muted">{k}</p>
+          </div>
+        ))}
+      </div>
+      {g ? (
+        <div className="flex items-center gap-3 rounded-2xl px-3 py-2.5" style={{ background: "linear-gradient(110deg, rgb(156 30 49 / 0.45), rgb(66 9 18 / 0.4))" }}>
+          {g.place != null && g.place <= 3 ? <Medal place={g.place} size={34} /> : <p className="font-display text-3xl leading-none tabular-nums">{g.place != null ? `${g.place}°` : "—"}</p>}
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold leading-tight">
+              {g.place != null ? `${g.place}° nella classifica generale` : "Nella classifica generale"}
+              {g.size ? <span className="font-normal text-muted"> su {g.size}</span> : null}
+            </p>
+            <p className="truncate text-xs text-white/80">{[titleName(g.category), g.points != null ? `${fmtNum(g.points)} punti` : ""].filter(Boolean).join(", ")}</p>
+          </div>
+        </div>
+      ) : (
+        <p className="text-xs text-muted">{s.current ? "La classifica generale di questa stagione arriva con la prossima lettura del portale." : "Classifica generale di questa stagione non salvata: si aggiunge con «Scansiona tutto dal 2019» nell'Albo d'oro."}</p>
+      )}
+      {s.races.length ? (
+        <div className="grid gap-1">
+          {races.map((r) => {
+            const [y, m, d] = r.day.split("-");
+            return (
+              <div key={`${r.day}-${r.name}`} className="flex items-center gap-2.5 rounded-xl bg-white/[0.04] px-2.5 py-2">
+                <span className="grid w-9 shrink-0 place-items-center">
+                  {r.rank != null && r.rank <= 3 ? <Medal place={r.rank} size={24} /> : <span className="font-display text-lg leading-none tabular-nums text-white/85">{r.rank != null ? `${r.rank}°` : "—"}</span>}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-semibold leading-tight">{r.name || "Gara"}</span>
+                  <span className="block truncate text-[0.68rem] text-muted">{[`${d}/${m}/${y}`, r.category].filter(Boolean).join(", ")}</span>
+                </span>
+                {r.score != null ? <span className="shrink-0 font-display text-lg tabular-nums">{fmtNum(r.score)}</span> : null}
+              </div>
+            );
+          })}
+          {s.races.length > 6 ? (
+            <button type="button" onClick={() => setAll((v) => !v)} className="aa-press min-h-11 rounded-xl text-sm font-semibold text-[#f1cf8a]">
+              {all ? "Mostra meno" : `Mostra tutte le ${s.races.length} gare`}
+            </button>
+          ) : null}
+        </div>
+      ) : (
+        <p className="text-sm text-muted">Nessuna gara trovata in questa stagione.</p>
+      )}
     </Card>
   );
 }

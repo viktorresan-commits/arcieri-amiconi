@@ -6,7 +6,18 @@
 import { cleanCategory, teamKey, titleName, type RankRow } from "./fitast-league";
 import { nameKey } from "./fitast-rank";
 
-export type GaraTable = { gara_id: string; gara_title: string; held_on: string | null; season: string; category: string; rows: RankRow[] };
+export type GaraTable = {
+  gara_id: string;
+  gara_title: string;
+  held_on: string | null;
+  season: string;
+  /** nome della stagione sul portale, se letto */
+  season_name?: string;
+  category: string;
+  rows: RankRow[];
+  /** righe della classifica intera, quando qui ci sono solo quelle dei nostri */
+  total?: number;
+};
 
 export type Who = {
   userId: string;
@@ -49,7 +60,7 @@ export function peopleOf(tables: GaraTable[]): Person[] {
       const teamK = teamKey(r.team ?? "");
       const id = `${key}|${teamK}`;
       const p = people.get(id) ?? { name: r.name, team: r.team ?? "", teamK, key, words: new Set(key.split(" ")), entries: [] };
-      if (!p.entries.some((e) => e.category === t.category)) p.entries.push({ category: t.category, place: r.place ?? null, size: rows.length, score: r.score ?? null, camp: r.camp ?? null });
+      if (!p.entries.some((e) => e.category === t.category)) p.entries.push({ category: t.category, place: r.place ?? null, size: t.total ?? rows.length, score: r.score ?? null, camp: r.camp ?? null });
       people.set(id, p);
     }
   }
