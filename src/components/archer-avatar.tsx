@@ -7,7 +7,8 @@ import { tune, type AvatarLook, type Pose } from "@/lib/arcieri/avatar";
 import { zigQ, BowDeco, Buckle, ChestEmblem, Clasp, ClothPattern, Earring, FaceFrame, FacePaintFront, FacePaintProfile, Fletching, HairOrnament, PaintStroke, Pouch, QuiverBody } from "./avatar-extras";
 import { sceneById } from "@/lib/arcieri/scenes";
 import { SideShoe } from "./avatar-shoes";
-import { seamOf, ClothButton, BeardTexture, BeltDetail, BrowHairs, ClothDetail, DetailDefs, EyeDetail, FaceShade, HairFineStrands, HandDetail, LeatherBand, LipDetail, SleeveDetail } from "./avatar-detail";
+import { SideHand } from "./avatar-hands";
+import { seamOf, ClothButton, BeardTexture, BeltDetail, BrowHairs, ClothDetail, DetailDefs, EyeDetail, FaceShade, HairFineStrands, LeatherBand, LipDetail, SleeveDetail } from "./avatar-detail";
 
 /**
  * L'arciere disegnato, in stile gioco: busto rivolto a chi guarda, testa girata verso il bersaglio
@@ -481,10 +482,7 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4, cssBlink = fals
             <LeatherBand uid={uid} a={lerpP(e, h, 0.34)} b={lerpP(e, h, 0.84)} w={foreW + 4} color={shade(look.bracers, 0.6)} />
           </g>
         ) : null}
-        <circle cx={f(h.x)} cy={f(h.y)} r={7.4 * W + 1.3} fill={OUT} opacity="0.5" />
-        <circle cx={f(h.x)} cy={f(h.y)} r={7.4 * W} fill={look.gloves ? "#4a2c16" : skin} />
-        <circle cx={f(h.x - 1.5)} cy={f(h.y + 1.5)} r={7.4 * W} fill={look.gloves ? "#2a180c" : skinD} opacity="0.25" />
-        <HandDetail h={h} r={7.4 * W} gloved={Boolean(look.gloves)} skinD={shade(skin, -0.4)} draw={which === "draw"} />
+        <SideHand h={h} e={e} r={7.4 * W} skin={skin} gloves={Boolean(look.gloves)} kind={which === "bow" ? "bow" : hook > 0.5 ? "draw" : "free"} />
         {which === "draw" && hook > 0.5 ? <path d={`M${f(h.x + 2)} ${f(h.y - 5)} q4 1 4 4 M${f(h.x + 2)} ${f(h.y - 1)} q4 1 4 4 M${f(h.x + 2)} ${f(h.y + 3)} q4 1 4 4`} stroke={look.gloves ? "#1a0e06" : skinD} strokeWidth="1.1" fill="none" /> : null}
         {which === "draw" ? (
           <g>

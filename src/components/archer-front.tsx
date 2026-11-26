@@ -5,6 +5,7 @@ import { PATTERN2_IDS } from "@/lib/arcieri/avatar-more";
 import { Pendant } from "./avatar-more";
 import { SpecialFrontLeg, SpecialFrontTorso } from "./special-details";
 import { FrontShoe, frontBootTop } from "./avatar-shoes";
+import { FrontFist } from "./avatar-hands";
 import { Buckle, ChestEmblem, Clasp, ClothPattern, Fletching, Pouch, QuiverBody, zigQ } from "./avatar-extras";
 import { seamOf, BeltDetail, ClothButton, ClothDetail, DetailDefs, LeatherBand, SleeveDetail } from "./avatar-detail";
 import { BUTTON_TOPS } from "./archer-avatar";
@@ -72,7 +73,6 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
   const medievalTop = ["tunica", "tunica-lunga", "farsetto", "ranger", "incrociata", "cappotto", "giubba", "cappotto-lungo", "cotta"].includes(look.top);
   const sleeveLong = LONG_SLEEVES.includes(look.top) || look.top === "corpetto" || look.top === "gilet";
   const handR = 7.4 * W;
-  const handFill = look.gloves ? "#4a2c16" : skin;
   const arm = (side: -1 | 1) => {
     const open = armsOut != null;
     const bowArm = side === bowSide && !open;
@@ -114,14 +114,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
           </g>
         ) : null}
         {/* mano (con le braccia aperte, tutte e due) */}
-        {bowArm ? null : (
-          <g>
-            <ellipse cx={f(hand.x)} cy={f(hand.y + 1)} rx={f(handR * 0.9 + 1.2)} ry={f(handR + 1.4)} fill={OUT} opacity="0.5" />
-            <ellipse cx={f(hand.x)} cy={f(hand.y + 1)} rx={f(handR * 0.9)} ry={f(handR)} fill={handFill} />
-            <path d={`M${f(hand.x - handR * 0.6)} ${f(hand.y + 2)} h${f(handR * 1.2)} M${f(hand.x - handR * 0.6)} ${f(hand.y + 4.6)} h${f(handR * 1.2)}`} stroke={look.gloves ? "#1a0e06" : shade(skin, -0.35)} strokeWidth="0.7" strokeLinecap="round" />
-            <ellipse cx={f(hand.x - handR * 0.3)} cy={f(hand.y - handR * 0.4)} rx={f(handR * 0.4)} ry={f(handR * 0.28)} fill="#fff" opacity="0.16" />
-          </g>
-        )}
+        {bowArm ? null : <FrontFist x={hand.x} y={hand.y + 1} r={handR} skin={skin} gloves={Boolean(look.gloves)} flip={side < 0 ? -1 : 1} />}
       </g>
     );
   };
@@ -405,15 +398,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
               </g>
             )}
             {/* pugno chiuso sull'impugnatura: nocche, dita che avvolgono, pollice */}
-            <g>
-              <ellipse cx="2" cy="1" rx={f(handR * 0.95 + 1.2)} ry={f(handR + 1.6)} fill={OUT} opacity="0.5" />
-              <ellipse cx="2" cy="1" rx={f(handR * 0.95)} ry={f(handR)} fill={handFill} />
-              {[-4.6, -1.4, 1.8, 5].map((y) => <path key={y} d={`M${f(2 - handR * 0.8)} ${y} Q2 ${y + 1.2} ${f(2 + handR * 0.85)} ${y - 0.4}`} stroke={look.gloves ? "#1a0e06" : shade(skin, -0.35)} strokeWidth="0.75" fill="none" strokeLinecap="round" />)}
-              {[-4.6, -1.4, 1.8, 5].map((y) => <circle key={`k${y}`} cx={f(2 + handR * 0.82)} cy={y - 0.6} r="1.3" fill={look.gloves ? "#5a3a20" : shade(skin, 0.08)} stroke={look.gloves ? "#1a0e06" : shade(skin, -0.3)} strokeWidth="0.4" />)}
-              <path d={`M${f(2 - handR * 0.7)} -6 C-1 -10 6 -10 8 -7`} stroke={handFill} strokeWidth="3.2" strokeLinecap="round" fill="none" />
-              <path d={`M${f(2 - handR * 0.7)} -6 C-1 -10 6 -10 8 -7`} stroke={look.gloves ? "#1a0e06" : shade(skin, -0.35)} strokeWidth="0.6" strokeLinecap="round" fill="none" transform="translate(0 1.6)" />
-              <ellipse cx="0" cy="-3" rx={f(handR * 0.35)} ry={f(handR * 0.26)} fill="#fff" opacity="0.18" />
-            </g>
+            <FrontFist x={2} y={1} r={handR} skin={skin} gloves={Boolean(look.gloves)} />
           </g>
         </g>
         )}
