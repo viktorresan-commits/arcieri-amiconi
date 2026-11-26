@@ -34,6 +34,7 @@ export const SHORTCUTS: Shortcut[] = [
   { id: "classifiche", group: "gareggia", label: "Classifiche", hint: "Chi è davanti", icon: "podium", color: "#c27d1c", to: "/classifiche" },
   { id: "sfide", group: "gareggia", label: "Sfide", hint: "Sfida i compagni", icon: "duel", color: "#c4475a", to: "/sfide" },
   { id: "bacheca", group: "squadra", label: "Bacheca", hint: "News del gruppo", icon: "megaphone", color: "#b8508a", to: "/bacheca" },
+  { id: "mercatino", group: "squadra", label: "Mercatino", hint: "Usato in vendita fra arcieri", icon: "bag", color: "#946f42", to: "/squadra", hash: "mercatino" },
   { id: "confronta", group: "gareggia", label: "Confronta", hint: "Tu contro un compagno", icon: "compare", color: "#5568c2", to: "/confronta" },
   { id: "acquisti", group: "prepara", label: "Acquisti", hint: "Lista della spesa", icon: "bag", color: "#946f42", to: "/acquisti" },
   { id: "profilo", group: "squadra", label: "Profilo", hint: "Dati, colori dell'app, impostazioni", icon: "user", color: "#646c7a", to: "/profilo" },
@@ -163,7 +164,7 @@ const NEXT: Record<string, string> = {
   spine: "tuning", tuning: "assetto", assetto: "manutenzione", manutenzione: "borsa", borsa: "timer", timer: "respiro",
   respiro: "routine", routine: "tempi", tempi: "secco", secco: "gesto", allungo: "spine", vento: "balistica", energia: "balistica",
   unita: "spine", gare: "segnapunti", segnapunti: "classifiche", classifiche: "confronta", confronta: "squadra",
-  calendario: "gare", sfide: "classifiche", squadra: "bacheca", bacheca: "calendario", stima: "regole",
+  calendario: "gare", sfide: "classifiche", squadra: "bacheca", bacheca: "mercatino", mercatino: "calendario", stima: "regole",
   regole: "glossario", glossario: "lezioni", lezioni: "quiz", quiz: "sfida-giorno", avatar: "attrezzatura", "sfida-giorno": "rapido", acquisti: "attrezzatura", profilo: "obiettivi",
   riepilogo: "statistiche", istruttore: "segreteria", segreteria: "staff",
 };
@@ -173,7 +174,7 @@ const NEXT: Record<string, string> = {
  * (su /allenamento: Tiro rapido, Da foto, Analisi gesto, Già fatto, Storico): con i parametri dell'indirizzo
  * vince quella che corrisponde, altrimenti la voce "pulita" senza parametri. Così se ne accende una sola.
  */
-export function currentShortcut(path: string, search?: unknown) {
+export function currentShortcut(path: string, search?: unknown, hash?: string) {
   const q = search && typeof search === "object" ? (search as Record<string, unknown>) : null;
   const onPath = SHORTCUTS.filter((s) => s.to !== "/" && path.startsWith(s.to));
   if (!onPath.length) return null;
@@ -181,7 +182,10 @@ export function currentShortcut(path: string, search?: unknown) {
   const same = onPath.filter((s) => s.to.length === longest);
   const fits = (s: Shortcut) => !!s.search && !!q && Object.entries(s.search).every(([k, v]) => String(q[k] ?? "") === v);
   const byParams = same.filter(fits).sort((a, b) => Object.keys(b.search ?? {}).length - Object.keys(a.search ?? {}).length)[0];
-  return byParams ?? same.find((s) => !s.search && !s.hash) ?? same.find((s) => !s.search) ?? same[0];
+  // una voce che apre una scheda della pagina (es. Compagnia › Mercatino) si accende con il suo #
+  const h = (hash ?? "").replace(/^#/, "");
+  const byHash = h ? same.find((s) => !!s.hash && (h === s.hash || h.startsWith(`${s.hash}-`))) : undefined;
+  return byParams ?? byHash ?? same.find((s) => !s.search && !s.hash) ?? same.find((s) => !s.search) ?? same[0];
 }
 
 /** La sezione della pagina aperta (null in Casa). Profilo e schede degli arcieri stanno nella Compagnia. */

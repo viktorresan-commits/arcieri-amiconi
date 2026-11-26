@@ -3,7 +3,7 @@ import { haloOfXp } from "@/components/level-crest";
 import { GareBody } from "@/components/gare-body";
 import { removeTeamMember } from "@/lib/arcieri/account.api";
 import { TargetGL } from "@/components/target-gl";
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { listCompanies } from "@/lib/arcieri/compagnie.api";
 import { CompanyForm, CompanyHero, CompanyLeague, joinAndReload } from "@/components/compagnia";
 import { CompanyTrophies } from "@/components/palmares";
@@ -14,7 +14,7 @@ import { Heat } from "@/components/shot-lab";
 import { useLocalState } from "@/lib/arcieri/local-store";
 import { Podium } from "@/components/podium";
 import { useTeamAvatars } from "@/components/avatar-hero";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useRouterState } from "@tanstack/react-router";
 import { listGadgets, skillBoard, squadBoard } from "@/lib/arcieri/club.api";
 import { bowLabel, memberLabel, DIVISIONS } from "@/lib/arcieri/labels";
 import type { AvatarLook } from "@/lib/arcieri/avatar";
@@ -168,6 +168,20 @@ export function CompagniaPage({ initial }: { initial?: Section } = {}) {
   // aperta da /gare si parte da Gare; un tocco sulle schede sceglie e ricorda
   // da un avviso del mercatino in Bacheca (#mercatino-12) si apre il Mercatino con l'annuncio
   const [opened, setOpened] = useState<Section | undefined>(() => (typeof window !== "undefined" && /^#mercatino(-\d+)?$/.test(window.location.hash) ? "mercatino" : initial));
+  // dal Menu (Compagnia › Mercatino) o da un avviso, anche con la pagina già aperta: si apre il Mercatino e ci si arriva
+  const hash = useRouterState({ select: (st) => st.location.hash });
+  const wasMarket = useRef(false);
+  useEffect(() => {
+    const isMarket = /^#?mercatino(-\d+)?$/.test(hash ?? "");
+    if (isMarket) {
+      setOpened("mercatino");
+      const t = window.setTimeout(() => document.getElementById("mercatino")?.scrollIntoView({ block: "start", behavior: "smooth" }), 120);
+      wasMarket.current = true;
+      return () => window.clearTimeout(t);
+    }
+    if (wasMarket.current) setOpened(undefined);
+    wasMarket.current = false;
+  }, [hash]);
   const setSection = (x: Section) => {
     setOpened(undefined);
     setStored(x);
@@ -419,7 +433,11 @@ export function CompagniaPage({ initial }: { initial?: Section } = {}) {
         </>
       ) : null}
 
-      {section === "mercatino" ? <MarketTab /> : null}
+      {section === "mercatino" ? (
+        <div id="mercatino" className="scroll-mt-[calc(env(safe-area-inset-top)+8.5rem)]">
+          <MarketTab />
+        </div>
+      ) : null}
 
 
       {section === "gare" ? (

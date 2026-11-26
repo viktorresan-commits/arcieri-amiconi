@@ -148,6 +148,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const href = useRouterState({ select: (s) => s.location.href });
   const search = useRouterState({ select: (s) => s.location.search });
+  const hash = useRouterState({ select: (s) => s.location.hash });
   // indietro = esattamente dove si era: scorrimento della pagina e, se si era partiti dal Menu, il Menu aperto allo stesso punto
   const menuBox = useRef<HTMLDivElement>(null);
   const menuTop = useRef<number | null>(null);
@@ -182,7 +183,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const { prefs } = usePrefs();
   const navigate = useNavigate();
   // la voce e la sezione della pagina aperta: la pagina prende il colore della sua sezione
-  const here = currentShortcut(path, search);
+  const here = currentShortcut(path, search, hash);
   const station = stationOf(sectionOf(path, search));
   useEffect(() => {
     rememberPage(path);

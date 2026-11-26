@@ -4,7 +4,7 @@
  * Se il telefono è stretto la barra scorre di lato, con la sezione della pagina sempre in vista.
  */
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
 import { SHORTCUTS, STATIONS, currentShortcut, sectionOf, type Shortcut, type StationId } from "@/lib/arcieri/shortcuts";
 import { useLocalState } from "@/lib/arcieri/local-store";
 import { onBack } from "@/lib/arcieri/native";
@@ -19,7 +19,8 @@ export function SectionBar({ path, search, hide = [], onSearch }: { path: string
   const scroller = useRef<HTMLDivElement>(null);
   const here = sectionOf(path, search);
   // una sola voce accesa: quella della pagina aperta, parametri compresi
-  const hereItem = path === "/" ? null : currentShortcut(path, search);
+  const hash = useRouterState({ select: (st) => st.location.hash });
+  const hereItem = path === "/" ? null : currentShortcut(path, search, hash);
   const [lastTouched, setLastTouched] = useLocalState<Record<string, string>>(MENU_LAST_KEY, {});
   // sfumatura ai lati solo se la barra scorre davvero (telefono stretto)
   const [scrolls, setScrolls] = useState(false);
@@ -113,6 +114,7 @@ export function SectionBar({ path, search, hide = [], onSearch }: { path: string
                       key={s.id}
                       to={s.to as "/"}
                       search={(s.search ?? {}) as never}
+                      hash={s.hash}
                       onClick={() => pick(s)}
                       aria-current={isHere(s) ? "page" : undefined}
                       className="aa-tray-item aa-short grid min-w-0 justify-items-center gap-1.5 rounded-2xl px-1 py-1 text-center"
