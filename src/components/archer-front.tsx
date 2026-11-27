@@ -75,8 +75,8 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
   const strap = 22 * tw;
   const lowerR = sideD(1).split(" C").slice(1).map((c) => ` C${c}`).join("");
   const upperL = revSide(-1).split(" C").slice(0, 2).join(" C");
-  const tankD = `M${cx - nk} 96.6 Q${cx} 98.2 ${cx + nk} 96.6 L${cx + strap} 98.4 C${cx + strap + 2} 112 ${sh.r - 7} 124 ${sh.r - pit} 130${lowerR} L${hip.r} 208 Q${cx} 209.6 ${hip.l} 208 L${hip.l} ${woman ? 202 : 200} ${upperL} C${sh.l + 7} 124 ${cx - strap - 2} 112 ${cx - strap} 98.4 Z`;
-  const bodyD = `M${cx - nk} 96.6 Q${cx} 98.2 ${cx + nk} 96.6 C${cx + nk + 8} 99 ${sh.r - 14} 102.5 ${sh.r - 5} 106.5 C${sh.r - 1} 108 ${sh.r} 113 ${sh.r - 3} 119 ${sideD(1)} L${hip.r} 208 Q${cx} 209.6 ${hip.l} 208 L${hip.l} ${woman ? 202 : 200} ${revSide(-1)} C${sh.l} 113 ${sh.l + 1} 108 ${sh.l + 5} 106.5 C${sh.l + 14} 102.5 ${cx - nk - 8} 99 ${cx - nk} 96.6 Z`;
+  const tankD = `M${cx - nk} 96.6 Q${cx} 98.2 ${cx + nk} 96.6 L${cx + strap} 98.4 C${cx + strap + 2} 112 ${sh.r - 7} 124 ${sh.r - pit} 130${lowerR} C${hip.r} 205 ${hip.r - 0.5} 208 ${hip.r - 3.5} 208.6 Q${cx} 210.2 ${hip.l + 3.5} 208.6 C${hip.l + 0.5} 208 ${hip.l} 205 ${hip.l} ${woman ? 202 : 200} ${upperL} C${sh.l + 7} 124 ${cx - strap - 2} 112 ${cx - strap} 98.4 Z`;
+  const bodyD = `M${cx - nk} 96.6 Q${cx} 98.2 ${cx + nk} 96.6 C${cx + nk + 8} 99 ${sh.r - 14} 102.5 ${sh.r - 5} 106.5 C${sh.r - 1} 108 ${sh.r} 113 ${sh.r - 3} 119 ${sideD(1)} C${hip.r} 205 ${hip.r - 0.5} 208 ${hip.r - 3.5} 208.6 Q${cx} 210.2 ${hip.l + 3.5} 208.6 C${hip.l + 0.5} 208 ${hip.l} 205 ${hip.l} ${woman ? 202 : 200} ${revSide(-1)} C${sh.l} 113 ${sh.l + 1} 108 ${sh.l + 5} 106.5 C${sh.l + 14} 102.5 ${cx - nk - 8} 99 ${cx - nk} 96.6 Z`;
   const torsoD = tank ? tankD : bodyD;
   const tight = look.bottom === "calzamaglia";
   const wide = look.bottom === "larghi" || look.bottom === "brache";
@@ -140,8 +140,8 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
     const bowArm = side === bowSide && !open;
     const s0 = { x: side < 0 ? sh.l + 5 : sh.r - 5, y: 110 };
     // braccia aperte: la punta del dito medio a armsOut dal centro, la mano finisce lì
-    const hand = open ? { x: cx + side * (armsOut - handR * 0.9), y: 110 } : bowArm ? { x: grip.x - bowSide * 1, y: grip.y } : { x: s0.x + side * 2.5, y: 214 };
-    const elbow = open ? { x: lerp(s0.x, hand.x, 0.47), y: 109 } : bowArm ? { x: s0.x + side * 11, y: 158 } : { x: s0.x + side * 4.5, y: 160 };
+    const hand = open ? { x: cx + side * (armsOut - handR * 0.9), y: 110 } : bowArm ? { x: grip.x - bowSide * 1, y: grip.y } : { x: s0.x + side * 1.5, y: 214 };
+    const elbow = open ? { x: lerp(s0.x, hand.x, 0.47), y: 109 } : bowArm ? { x: s0.x + side * 11, y: 158 } : { x: s0.x + side * 6, y: 160 };
     const upW = 16.5 * W;
     const foreW = 13 * W;
     const cuff = lerpP(elbow, hand, 0.84);
@@ -181,7 +181,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
           const capAxis = [...axis.slice(0, 3), lerpP(s0, elbow, 0.5)];
           const add = (open ? [1.2, 1.2, 1.4, 1.8] : [1.2, 1.3, 1.7, 2.1]).map((v) => v * W);
           const cw = LR(aw.o.slice(0, 4).map((v, n) => v + add[n]), aw.i.slice(0, 4).map((v, n) => v + add[n]));
-          return armLimb(capAxis, cw.l, cw.r, side, { x: peak.x - side * 0.6, y: peak.y - 0.8 }, 0.08);
+          return armLimb(capAxis, cw.l, cw.r, side, { x: peak.x - side * 0.6, y: peak.y - 0.8 }, 0.3);
         })()
       : null;
     const at2 = (k: number) => axis[k];
@@ -283,7 +283,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
     );
   };
   // freccia nella mano libera: punta in giù lungo la gamba, penne sopra la mano
-  const freeHand = { x: (bowSide > 0 ? sh.l + 5 : sh.r - 5) - bowSide * 2.5, y: 214 };
+  const freeHand = { x: (bowSide > 0 ? sh.l + 5 : sh.r - 5) - bowSide * 1.5, y: 214 };
   const heldArrow = (
     <g className={live ? "aa-front-arm" : undefined} style={live ? { transformOrigin: `${f(freeHand.x)}px 110px` } : undefined}>
     <g transform={`translate(${f(freeHand.x)} ${f(freeHand.y)}) rotate(${-bowSide * 4})`}>
@@ -523,10 +523,10 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
                 {shorts || tight ? (
                   <g fill="none" stroke={shorts ? shade(skin, -0.42) : shade(look.pants, -0.5)} strokeLinecap="round">
                     {/* rotula, muscoli della coscia sopra il ginocchio, il polpaccio interno e la tibia in luce */}
-                    <path d={`M${L(knee - 5, -4.4)} ${knee - 4} Q${L(knee + 1, 0)} ${knee - 8.5} ${L(knee - 5, 4.4)} ${knee - 4}`} strokeOpacity="0.26" strokeWidth="0.7" />
-                    <path d={`M${L(knee + 4, -3.6)} ${knee + 5} Q${L(knee + 6, 0)} ${knee + 8} ${L(knee + 4, 3.6)} ${knee + 5}`} strokeOpacity="0.22" strokeWidth="0.6" />
-                    <path d={`M${L(244, (i === 0 ? 1 : -1) * 3)} 240 Q${L(256, (i === 0 ? 1 : -1) * 6)} 254 ${L(262, (i === 0 ? 1 : -1) * 4.6)} 262`} strokeOpacity="0.18" strokeWidth="0.7" />
-                    <path d={`M${L(284, (i === 0 ? 1 : -1) * 4.8)} 282 Q${L(296, (i === 0 ? 1 : -1) * 9)} 296 ${L(308, (i === 0 ? 1 : -1) * 4)} 310`} strokeOpacity="0.22" strokeWidth="0.8" />
+                    <path d={`M${L(knee - 5, -4.4)} ${knee - 4} Q${L(knee + 1, 0)} ${knee - 8.5} ${L(knee - 5, 4.4)} ${knee - 4}`} strokeOpacity="0.12" strokeWidth="0.6" />
+                    <path d={`M${L(knee + 4, -3.6)} ${knee + 5} Q${L(knee + 6, 0)} ${knee + 8} ${L(knee + 4, 3.6)} ${knee + 5}`} strokeOpacity="0.1" strokeWidth="0.5" />
+                    <path d={`M${L(244, (i === 0 ? 1 : -1) * 3)} 240 Q${L(256, (i === 0 ? 1 : -1) * 6)} 254 ${L(262, (i === 0 ? 1 : -1) * 4.6)} 262`} strokeOpacity="0.08" strokeWidth="0.6" />
+                    <path d={`M${L(284, (i === 0 ? 1 : -1) * 4.8)} 282 Q${L(296, (i === 0 ? 1 : -1) * 9)} 296 ${L(308, (i === 0 ? 1 : -1) * 4)} 310`} strokeOpacity="0.1" strokeWidth="0.7" />
                     <path d={`M${L(282, -1.4)} 282 L${L(318, -1)} 318`} stroke="#fff" strokeOpacity="0.16" strokeWidth="2" />
                   </g>
                 ) : null}
@@ -545,13 +545,13 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
                 const sAxis = sy.map((y) => ({ x: lx(y), y }));
                 const add = [0.8, 1.2, 1.6, 2];
                 const so = LRl(bareW.o.slice(0, 4).map((v, n) => v + add[n]), bareW.i.slice(0, 4).map((v, n) => v + add[n]));
-                const sh2 = limb(sAxis, so.l, so.r, 0.1, 0.05);
+                const sh2 = limb(sAxis, so.l, so.r, 0.1, 0.32);
                 return (
                   <g>
                     <path d={sh2.d} fill={`url(#${uid}pa)`} stroke={OUT} strokeOpacity="0.54" strokeWidth="0.72" strokeLinejoin="round" />
                     <path d={sh2.d} fill={`url(#${uid}lv)`} pointerEvents="none" />
-                    <path d={`M${f(sh2.L[3].x)} ${f(sh2.L[3].y)} L${f(sh2.R[3].x)} ${f(sh2.R[3].y)}`} stroke={shade(look.pants, -0.45)} strokeWidth="1" />
-                    <path d={`M${f(bareLeg.L[3].x + 0.5)} 254.5 L${f(bareLeg.R[3].x - 0.5)} 254.5`} stroke="#000" strokeOpacity="0.16" strokeWidth="2" />
+                    <path d={`M${f(sh2.L[3].x + 0.6)} ${f(sh2.L[3].y - 1.2)} Q${f(sAxis[3].x)} ${f(sAxis[3].y + 2.6)} ${f(sh2.R[3].x - 0.6)} ${f(sh2.R[3].y - 1.2)}`} stroke={shade(look.pants, -0.45)} strokeWidth="0.9" fill="none" strokeLinecap="round" />
+                    <path d={`M${f(bareLeg.L[3].x + 1)} 255 Q${f(sAxis[3].x)} 258.5 ${f(bareLeg.R[3].x - 1)} 255`} stroke="#000" strokeOpacity="0.16" strokeWidth="2" fill="none" strokeLinecap="round" />
                   </g>
                 );
               })() : null}
@@ -678,7 +678,14 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
         {look.sash ? <path d={`M${waist.l - 2} 182 Q${cx} 192 ${waist.r + 2} 182 L${waist.r + 2} 194 Q${cx} 204 ${waist.l - 2} 194 Z M${waist.l + 6} 192 l-6 34 l10 -4 Z`} fill={look.sashColor} /> : null}
         {look.belt !== "nessuna" ? (
           <g>
-            <path d={`M${waist.l - 1} ${look.belt === "larga" ? 184 : 187} L${waist.r + 1} ${look.belt === "larga" ? 184 : 187} L${waist.r + 1} 194 L${waist.l - 1} 194 Z`} fill={look.beltColor} stroke={OUT} strokeOpacity="0.5" strokeWidth="0.6" />
+            {(() => {
+              // la cintura gira intorno al corpo: bordo appena curvo e capi arrotondati, niente angoli
+              const y0 = look.belt === "larga" ? 184 : 187;
+              const y1 = 194;
+              const l = waist.l - 0.6;
+              const r = waist.r + 0.6;
+              return <path d={`M${l} ${y0} Q${cx} ${y0 + 1.8} ${r} ${y0} C${r + 1.6} ${y0 + 0.8} ${r + 1.6} ${y1 - 0.8} ${r} ${y1} Q${cx} ${y1 + 1.8} ${l} ${y1} C${l - 1.6} ${y1 - 0.8} ${l - 1.6} ${y0 + 0.8} ${l} ${y0} Z`} fill={look.beltColor} stroke={OUT} strokeOpacity="0.5" strokeWidth="0.6" />;
+            })()}
             <BeltDetail uid={uid} x={waist.l - 1} y={look.belt === "larga" ? 184 : 187} w={waist.r - waist.l + 2} h={look.belt === "larga" ? 10 : 7} cx={cx} />
             {/* borchie d'ottone ai lati della fibbia */}
             {[-17, -11, 11, 17].map((dx) => (
