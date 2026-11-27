@@ -94,7 +94,7 @@ export function SagomaLab({ animal, shots, title, initial = "mappa", view: fixed
         <button type="button" onClick={() => setView("piana")} className={`min-h-10 rounded-full px-3 text-sm ${view === "piana" ? "bg-primary text-primary-fg" : "border border-line"}`}>Piana</button>
       </div>}
       {summary ? (
-        view === "piana" ? <RingPlan rings={ringFace.rings} shots={placed.map((s) => ({ ...toRing(s), score: s.score, miss: s.miss }))} /> : <TargetGL face={ringFace} shots={shots3d} faceCanvas={view === "mappa" ? ringCanvas : null} />
+        view === "piana" ? <RingPlan rings={ringFace.rings} shots={placed.map((s) => ({ ...toRing(s), score: s.score, miss: s.miss }))} /> : <TargetGL face={ringFace} shots={view === "mappa" ? [] : shots3d} faceCanvas={view === "mappa" ? ringCanvas : null} />
       ) : view === "piana" ? (
         <SagomaHeat skin={skin} shots={placed} />
       ) : picture ? (
@@ -254,7 +254,7 @@ export function paintRingFace(canvas: HTMLCanvasElement, rings: { outer: number;
     ctx.stroke();
   }
   if (mode === "volume") {
-    ctx.fillStyle = "rgba(10,16,24,0.38)";
+    ctx.fillStyle = "rgba(10,16,24,0.5)";
     ctx.fillRect(0, 0, S, S);
   }
   if (!shots.length) return;

@@ -694,5 +694,6 @@ function PadTarget({ dots, heat }: { dots: { nx: number; ny: number; color: stri
     return { canvas: c, key: `pad-${key.length}-${key.slice(0, 60)}` };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
-  return <TargetGL face={TEAM_FACE} shots={dots.slice(-120).map((d) => ({ x: d.nx, y: d.ny, color: d.color }))} faceCanvas={canvas} bare />;
+  // con la termica le frecce non coprono i colori: si vede solo dove arrivano
+  return <TargetGL face={TEAM_FACE} shots={heat ? [] : dots.slice(-120).map((d) => ({ x: d.nx, y: d.ny, color: d.color }))} faceCanvas={canvas} bare />;
 }
