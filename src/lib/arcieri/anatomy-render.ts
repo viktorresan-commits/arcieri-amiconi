@@ -127,6 +127,8 @@ void main(){
 const BFS = `${PREC}
 varying vec3 vW; varying vec3 vN; varying vec2 vF; varying float vAct; varying float vFoc; varying float vTend; varying float vStr; varying float vGrp;
 uniform vec3 uEye; uniform float uLayer; uniform float uAlpha; uniform float uDim; uniform float uTime; uniform float uStyle;
+// dettaglio del muscolo (immagine ripetuta lungo le fibre): R rilievo dei fasci, G chiaroscuro del tessuto, B fasce connettivali
+uniform sampler2D uFib; uniform float uFibOn;
 // luce calcolata come in fotografia (valori lineari), poi la curva "da pellicola" e lo schermo (sRGB):
 // volumi morbidi e colori veri come nelle tavole anatomiche fotografiche, niente rosso piatto
 vec3 tone(vec3 c){ c = clamp((c * (2.51 * c + 0.03)) / (c * (2.43 * c + 0.59) + 0.14), 0.0, 1.0); return pow(c, vec3(1.0 / 2.2)); }
@@ -170,8 +172,9 @@ void main(){
     // fasci appena accennati e la lucentezza a seta lungo le fibre (come nei preparati anatomici),
     // tendini e aponeurosi bianco perla e lucidi
     float h = hash(vGrp);
-    // rosso cremisi del muscolo vero (alla luce piena circa #b9342d), appena diverso da un gruppo all'altro
-    vec3 alb = vec3(0.20, 0.025, 0.019) * (0.93 + 0.14 * h) * vec3(1.0, 1.0 + (hash(vGrp + 3.0) - 0.5) * 0.25, 1.0 + (hash(vGrp + 7.0) - 0.5) * 0.25);
+    // rosso del muscolo dei preparati e delle tavole anatomiche (rosa mattone, non cremisi saturo),
+    // appena diverso da un gruppo all'altro
+    vec3 alb = vec3(0.17, 0.053, 0.044) * (0.93 + 0.14 * h) * vec3(1.0, 1.0 + (hash(vGrp + 3.0) - 0.5) * 0.2, 1.0 + (hash(vGrp + 7.0) - 0.5) * 0.2);
     alb *= 0.88 + 0.14 * sin(3.14159 * vF.x);
     float fy = vF.y * 34.0 + 0.18 * sin(vF.x * 9.0) + 0.22 * sin(vF.x * 2.7 + vF.y * 4.1);
     float id = floor(fy);
@@ -189,6 +192,31 @@ void main(){
     float crown = sin(fr * 3.14159);
     // solchi appena accennati: la grana del muscolo, non righe di legno
     float fib = 1.0 - amp * (0.07 * groove - 0.025 * crown + (hh - 0.5) * 0.05);
+    // con l'immagine dei fasci: rilievo vero dei fasci lungo le fibre (luce che scorre sui fasci) e il
+    // chiaroscuro del tessuto; le fasce connettivali tra i fasci appena più chiare
+    float fascia = 0.0;
+#ifdef HAS_DERIV
+    if (uFibOn > 0.5 && vTend < 0.95) {
+      vec2 uv = vec2(vF.x * 1.6 + hash(vGrp + 11.0) * 7.0, vF.y * 2.0 + hash(vGrp + 5.0));
+      vec2 du = dFdx(uv); vec2 dv = dFdy(uv);
+      // vicino molti dettagli, lontano spariscono piano (niente sfarfallio)
+      float far = max(length(du), length(dv)) * 1024.0;
+      float near = 1.0 - smoothstep(3.0, 14.0, far);
+      vec3 tx = texture2D(uFib, uv).rgb;
+      float hx = texture2D(uFib, uv + du).r - tx.r;
+      float hy = texture2D(uFib, uv + dv).r - tx.r;
+      vec3 sp = vW * 100.0;
+      vec3 sx = dFdx(sp); vec3 sy = dFdy(sp);
+      vec3 r1 = cross(sy, N); vec3 r2 = cross(N, sx);
+      float det = dot(sx, r1);
+      vec3 grad = sign(det) * (hx * r1 + hy * r2) * (0.09 * near * (1.0 - vTend));
+      N = normalize(abs(det) * N - grad);
+      // il chiaroscuro del tessuto appena accennato (la trama a celle, forte, sembrava una rete);
+      // restano le righe sottili delle fibre e il rilievo dei fasci
+      fib *= mix(1.0, 0.9 + 0.2 * tx.g, 0.35 * near) * (1.0 - 0.06 * near * (0.5 - tx.r));
+      fascia = tx.b * 0.05 * near * (1.0 - vTend);
+    }
+#endif
     float act = clamp(vAct, 0.0, 1.0);
     float on = smoothstep(0.32, 0.8, act);
     // muscolo che lavora: rosso acceso tendente all'arancio, ben distinto ma non giallo
@@ -197,10 +225,12 @@ void main(){
     alb = mix(alb, work, on * 0.85);
     if (vFoc > 0.5) { alb = vec3(0.44, 0.06, 0.02); on = 1.0; }
     else if (vFoc < -0.5) { alb = mix(alb, vec3(0.12, 0.09, 0.09), 0.5); on = 0.0; }
-    // tendini e fasce: bianco madreperla, appena freddo
-    vec3 tend = vec3(0.50, 0.50, 0.48);
-    alb = mix(alb * fib, tend, vTend * 0.9);
+    // tendini e fasce: bianco avorio caldo (come nei preparati), lucidi
+    vec3 tend = vec3(0.47, 0.39, 0.35);
+    alb = mix(alb * fib, vec3(0.42, 0.24, 0.21), fascia);
+    alb = mix(alb, tend, vTend * 0.9);
     // luce morbida (la carne lascia passare un po' di luce), bordi che si scuriscono tra un muscolo e l'altro
+    ndv = clamp(dot(N, V), 0.0, 1.0);
     vec3 light = C1 * wrapL(N, L1, 0.45) + C2 * wrapL(N, L2, 0.5) + amb;
     float edge = mix(1.0, 0.32, pow(1.0 - ndv, 1.6));
     col = alb * light * edge;
@@ -604,7 +634,39 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     uCurl: gl.getUniformLocation(bprog, "uCurl"),
     uFa: gl.getUniformLocation(bprog, "uFa"),
     uDita: gl.getUniformLocation(bprog, "uDita"),
+    uFib: gl.getUniformLocation(bprog, "uFib"),
+    uFibOn: gl.getUniformLocation(bprog, "uFibOn"),
   };
+  // dettaglio dei fasci muscolari: un'immagine ripetuta lungo le fibre (arriva dopo il corpo, non lo blocca)
+  const fibTex = gl.createTexture();
+  let fibReady = false;
+  let disposedFib = false;
+  let fibDone: () => void = () => {};
+  /** l'immagine dei fasci è arrivata (o non arriverà): le foto e il play preparato la aspettano */
+  const fibLoaded = new Promise<void>((res) => {
+    fibDone = res;
+  });
+  if (typeof Image === "undefined") fibDone();
+  else {
+    const im = new Image();
+    im.crossOrigin = "anonymous";
+    im.onload = () => {
+      if (disposedFib) return;
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, fibTex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, im);
+      gl.generateMipmap(gl.TEXTURE_2D);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.activeTexture(gl.TEXTURE0);
+      fibReady = true;
+      fibDone();
+    };
+    im.onerror = () => fibDone();
+    im.src = "/anatomia/fibre.jpg";
+  }
   type GpuBody = { meta: BodyMeta; flex: FlexInfo; batches: { layer: BodyBatch["layer"]; vb: WebGLBuffer; ib: WebGLBuffer; count: number }[] };
   const bodies: Partial<Record<BodyLevel, GpuBody>> = {};
   /** il corpo usato per il disegno in corso */
@@ -769,6 +831,11 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     gl.uniform3fv(bl.uEye, eye);
     gl.uniform1f(bl.uDim, L.muscolo ? 1 : 0);
     gl.uniform1f(bl.uStyle, style);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, fibTex);
+    gl.uniform1i(bl.uFib, 1);
+    gl.uniform1f(bl.uFibOn, fibReady && deriv ? 1 : 0);
+    gl.activeTexture(gl.TEXTURE0);
     // le superfici del corpo sono chiuse e orientate verso l'esterno: le facce interne non si disegnano
     // (niente pieghe luccicanti dentro la pelle)
     gl.enable(gl.CULL_FACE);
@@ -838,11 +905,11 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     },
     /** l'arco e la freccia veri sono pronti (la vista ferma si ridisegna quando arrivano) */
     gearReady() {
-      return gearReady;
+      return gearReady && fibReady;
     },
-    /** aspetta l'arco e la freccia veri (per le foto: un disegno solo, deve già averli) */
+    /** aspetta l'arco e la freccia veri e il dettaglio dei muscoli (per le foto: un disegno solo, deve già averli) */
     async gearLoaded() {
-      await loadGear();
+      await Promise.all([loadGear(), Promise.race([fibLoaded, new Promise((r) => setTimeout(r, 4000))])]);
       return gearReady;
     },
     hasBody() {
@@ -921,6 +988,7 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     },
     dispose() {
       disposed = true;
+      disposedFib = true;
       gl.getExtension("WEBGL_lose_context")?.loseContext();
     },
   };
