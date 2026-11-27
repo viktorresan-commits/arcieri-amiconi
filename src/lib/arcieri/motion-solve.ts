@@ -160,6 +160,10 @@ function fixSwaps(lms: (Landmark[] | null)[], aspect: number): (Landmark[] | nul
   return out;
 }
 
+/** omero e avambraccio del corpo anatomico (BodyParts3D) rispetto al busto (spalle-anche) */
+const MESH_UA = 0.535;
+const MESH_FA = 0.469;
+
 /** gruppi di punti con il loro filtro: [indici, rispetto a quale punto, taglio x/y Hz, taglio profondità Hz] */
 type Group = { ids: number[]; rel?: number; fxy: number; fz: number; floor: number };
 
@@ -279,9 +283,22 @@ export function solveMotion(frames: SolveFrame[], aspect: number, hand: Hand, ca
 
   dbg?.("smooth", J);
   // ---- braccia con la lunghezza vera: profondità di gomito e polso con il verso scelto sull'intera sequenza ----
+  // Omero e avambraccio con le proporzioni del corpo anatomico disegnato, scalate sul busto dell'arciere:
+  // con lunghezze diverse da quelle del modello le braccia venivano stirate (e i muscoli assottigliati)
+  const torsoL = (() => {
+    const v: number[] = [];
+    for (const Jf of J) {
+      if (!Jf[11] || !Jf[12] || !Jf[23] || !Jf[24]) continue;
+      v.push(v3.len(v3.sub(v3.lerp(Jf[11], Jf[12], 0.5), v3.lerp(Jf[23], Jf[24], 0.5))));
+    }
+    v.sort((x, y) => x - y);
+    return v.length ? v[Math.floor(v.length / 2)] : 0;
+  })();
+  const UA = torsoL > 0.25 ? torsoL * MESH_UA : boneLen(cal, "omeroS");
+  const FA = torsoL > 0.25 ? torsoL * MESH_FA : boneLen(cal, "avambraccioS");
   const arms = [
-    { sh: 11, el: 13, wr: 15, ua: boneLen(cal, "omeroS"), fa: boneLen(cal, "avambraccioS"), hand: [17, 19, 21], hb: 33 },
-    { sh: 12, el: 14, wr: 16, ua: boneLen(cal, "omeroD"), fa: boneLen(cal, "avambraccioD"), hand: [18, 20, 22], hb: 54 },
+    { sh: 11, el: 13, wr: 15, ua: UA, fa: FA, hand: [17, 19, 21], hb: 33 },
+    { sh: 12, el: 14, wr: 16, ua: UA, fa: FA, hand: [18, 20, 22], hb: 54 },
   ];
   const moveHand = (Jf: Record<number, V3>, a: (typeof arms)[number], dz: number) => {
     for (const f of a.hand) if (Jf[f]) Jf[f] = [Jf[f][0], Jf[f][1], Jf[f][2] + dz];
@@ -321,6 +338,28 @@ export function solveMotion(frames: SolveFrame[], aspect: number, hand: Hand, ca
   };
   // le ossa filtrate (il bersaglio), prima di toccarle: conta il loro verso (quanto va verso la camera
   // rispetto alla lunghezza vista), non la profondità assoluta, che dal video esce sempre troppo piatta
+  // profondità assolute filtrate (servono dove la mano tocca il viso o il collo: lì conta dove sta, non il verso)
+  const absZ: Record<number, (number | null)[]> = {};
+  for (const a of arms) for (const id of [a.el, a.wr]) absZ[id] = J.map((Jf) => Jf[id]?.[2] ?? null);
+  /** la mano tocca viso o collo (all'ancoraggio): 0..1, come nella posa del singolo fotogramma */
+  const contact = arms.map((a) =>
+    J.map((Jf) => {
+      if (!Jf[9] || !Jf[10] || !Jf[11] || !Jf[12] || !Jf[a.wr]) return 0;
+      const mouth = v3.lerp(Jf[9], Jf[10], 0.5);
+      const neck = v3.lerp(Jf[11], Jf[12], 0.5);
+      const pts = [Jf[a.wr], Jf[a.hb + 9], Jf[a.hb + 5], Jf[a.hb + 12], Jf[a.hand[1]]].filter(Boolean) as V3[];
+      let d = 9;
+      for (const p of pts) {
+        d = Math.min(d, Math.hypot(p[0] - mouth[0], p[1] - mouth[1]));
+        // sul segmento bocca-collo
+        const ax = neck[0] - mouth[0];
+        const ay = neck[1] - mouth[1];
+        const t = Math.max(0, Math.min(1, ((p[0] - mouth[0]) * ax + (p[1] - mouth[1]) * ay) / (ax * ax + ay * ay || 1)));
+        d = Math.min(d, Math.hypot(p[0] - mouth[0] - ax * t, p[1] - mouth[1] - ay * t) + 0.02);
+      }
+      return Math.max(0, Math.min(1, (0.15 - d) / 0.06));
+    }),
+  );
   const rawBone: Record<number, (V3 | null)[]> = {};
   for (const a of arms) {
     rawBone[a.el] = J.map((Jf) => (Jf[a.sh] && Jf[a.el] ? v3.sub(Jf[a.el], Jf[a.sh]) : null));
@@ -355,6 +394,10 @@ export function solveMotion(frames: SolveFrame[], aspect: number, hand: Hand, ca
       const de = boneDz(rawBone[a.el][i], a.ua);
       const dw = boneDz(rawBone[a.wr][i], a.fa);
       let c = (de == null ? 0 : (st.e - Jf[a.sh][2] - de) ** 2) + (dw == null ? 0 : (st.w - st.e - dw) ** 2);
+      // mano al viso: deve restare lì
+      const ct = contact[arms.indexOf(a)][i];
+      const zw = absZ[a.wr][i];
+      if (ct > 0 && zw != null) c += 40 * ct * (st.w - zw) ** 2;
       // a parità di video, il gomito meno piegato: un braccio che nel video è dritto non si piega in profondità
       const u: V3 = [Jf[a.el][0] - Jf[a.sh][0], Jf[a.el][1] - Jf[a.sh][1], st.e - Jf[a.sh][2]];
       const f: V3 = [Jf[a.wr][0] - Jf[a.el][0], Jf[a.wr][1] - Jf[a.el][1], st.w - st.e];
@@ -529,6 +572,28 @@ export function solveMotion(frames: SolveFrame[], aspect: number, hand: Hand, ca
           i = j;
         }
       }
+      // gomito e polso dalla stessa parte del busto dove lo coprono tutti e due: l'avambraccio non lo attraversa
+      for (let k = 0; k < n; k++) {
+        const se = sides[k][a.el];
+        if (se != null && sides[k][a.wr] != null && sides[k][a.wr] !== se) sides[k][a.wr] = se;
+      }
+    }
+  }
+  // All'ancoraggio la mano tocca il viso (o il collo): la profondità della mano è quella del contatto e il
+  // gomito si mette dietro, con l'avambraccio intero (l'omero si adatta di quel poco che serve)
+  for (const [ai, a] of arms.entries()) {
+    for (let i = 0; i < n; i++) {
+      const ct = contact[ai][i];
+      const zw = absZ[a.wr][i];
+      const Jf = J[i];
+      if (ct <= 0 || zw == null || !Jf[a.el] || !Jf[a.wr]) continue;
+      const wz = Jf[a.wr][2] + (zw - Jf[a.wr][2]) * ct;
+      const dzw = wz - Jf[a.wr][2];
+      Jf[a.wr] = [Jf[a.wr][0], Jf[a.wr][1], wz];
+      moveHand(Jf, a, dzw);
+      const r = roots(Jf[a.wr], Jf[a.el], a.fa);
+      const ez = Math.abs(r[0] - Jf[a.el][2]) < Math.abs(r[1] - Jf[a.el][2]) ? r[0] : r[1];
+      Jf[a.el] = [Jf[a.el][0], Jf[a.el][1], Jf[a.el][2] + (ez - Jf[a.el][2]) * ct];
     }
   }
   dbg?.("viterbi", J);
