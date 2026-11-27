@@ -98,14 +98,17 @@ export async function syncBadges(sql: Sql, userId: string, loadsIn?: GaraLoad[])
 
   // solo quelli che mancano: una lettura sola, poi gli inserimenti nuovi
   const have = new Set((await sql<{ code: string }>`select code from user_achievements where user_id = ${userId}`).map((r) => r.code));
+  const missing = codes.filter((code) => !have.has(code));
   const fresh: string[] = [];
-  for (const code of codes) {
-    if (have.has(code)) continue;
+  if (missing.length) {
+    // tutti quelli nuovi con un solo inserimento
     const ins = await sql<{ code: string }>`
-      insert into user_achievements (user_id, code) values (${userId}, ${code})
+      insert into user_achievements (user_id, code)
+      select ${userId}, c from unnest(${missing}::text[]) as c
       on conflict (user_id, code) do nothing
       returning code`;
-    if (ins[0]) fresh.push(ins[0].code);
+    const got = new Set(ins.map((r) => r.code));
+    for (const code of missing) if (got.has(code)) fresh.push(code);
   }
   if (!fresh.length) return [];
   const flags = await sql<{ notify_goals: boolean }>`select notify_goals from members where user_id = ${userId} limit 1`;

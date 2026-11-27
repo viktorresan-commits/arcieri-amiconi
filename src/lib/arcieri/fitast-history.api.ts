@@ -59,14 +59,26 @@ export const saveFitastHistory = createServerFn({ method: "POST" })
     const sql = await db();
     await ensureMember(sql, context.userId);
     for (const x of data.items) {
-      await sql`
+      const json = JSON.stringify(x.rows);
+      const saved = await sql<{ id: number }>`
         insert into fitast_history (kind, season, season_name, gara_id, gara_title, held_on, category, rows, v, updated_by, updated_at)
-        values (${x.kind}, ${x.season}, ${x.seasonName}, ${x.garaId}, ${x.garaTitle}, ${x.day}::date, ${x.category}, ${JSON.stringify(x.rows)}::jsonb, ${x.v}, ${context.userId}, now())
+        values (${x.kind}, ${x.season}, ${x.seasonName}, ${x.garaId}, ${x.garaTitle}, ${x.day}::date, ${x.category}, ${json}::jsonb, ${x.v}, ${context.userId}, now())
         on conflict (kind, season, gara_id, category) do update set
           season_name = excluded.season_name,
           gara_title = case when excluded.gara_title <> '' then excluded.gara_title else fitast_history.gara_title end,
           held_on = coalesce(excluded.held_on, fitast_history.held_on), rows = excluded.rows, v = excluded.v,
-          updated_by = excluded.updated_by, updated_at = now()`;
+          updated_by = excluded.updated_by, updated_at = now()
+        returning id`;
+      const id = saved[0]?.id;
+      if (id == null) continue;
+      // le righe con le parole dei nomi: i profili le cercano con l'indice
+      await sql`delete from fitast_history_rows where history_id = ${id}`.catch(() => []);
+      await sql`
+        insert into fitast_history_rows (history_id, kind, season, gara_id, pos, total, words, row)
+        select ${id}, ${x.kind}, ${x.season}, ${x.garaId}, x.n::int, ${x.rows.length},
+          array(select w from unnest(regexp_split_to_array(upper(translate(coalesce(x.v->>'name', ''), 'ÀÁÂÃÄÅÈÉÊËÌÍÎÏÒÓÔÕÖÙÚÛÜÇÑàáâãäåèéêëìíîïòóôõöùúûüçñ', 'AAAAAAEEEEIIIIOOOOOUUUUCNaaaaaaeeeeiiiiooooouuuucn')), '[^A-Z]+')) w where length(w) > 1),
+          x.v
+        from jsonb_array_elements(${json}::jsonb) with ordinality as x(v, n)`.catch(() => []);
     }
     return { saved: data.items.length };
   });
@@ -77,6 +89,15 @@ export const fitastHistoryIndex = createServerFn({ method: "POST" })
   .handler(async ({ context }) => {
     const sql = await db();
     await ensureMember(sql, context.userId);
+    // le classifiche salvate senza le righe dei nomi (per esempio durante un aggiornamento dell'app): si completano
+    await sql`
+      insert into fitast_history_rows (history_id, kind, season, gara_id, pos, total, words, row)
+      select h.id, h.kind, h.season, h.gara_id, x.n::int, jsonb_array_length(h.rows)::int,
+        array(select w from unnest(regexp_split_to_array(upper(translate(coalesce(x.v->>'name', ''), 'ÀÁÂÃÄÅÈÉÊËÌÍÎÏÒÓÔÕÖÙÚÛÜÇÑàáâãäåèéêëìíîïòóôõöùúûüçñ', 'AAAAAAEEEEIIIIOOOOOUUUUCNaaaaaaeeeeiiiiooooouuuucn')), '[^A-Z]+')) w where length(w) > 1),
+        x.v
+      from fitast_history h
+      cross join lateral jsonb_array_elements(h.rows) with ordinality as x(v, n)
+      where not exists (select 1 from fitast_history_rows r where r.history_id = h.id)`.catch(() => []);
     try {
       const rows = await sql<{ kind: string; season: string; gara_id: string }>`select distinct kind, season, gara_id from fitast_history where v >= 2`;
       const done = await sql<{ key: string; info: { id?: number; done?: boolean } | null }>`select key, info from fitast_sync where key like ${`${DONE_KEY}%`}`;
