@@ -100,7 +100,7 @@ async function pdfJsLines(bytes: Uint8Array) {
   return lines;
 }
 
-const BOW_IDS = ["tradizionale", "storico", "foggia storica", "lungo", "nudo", "olimpico", "compound", "altro"];
+const BOW_IDS = ["tradizionale", "storico", "foggia storica", "senza tipologia", "lungo", "nudo", "olimpico", "compound", "altro"];
 
 function reportRows(lines: string[]): ReportRow[] {
   const out: ReportRow[] = [];

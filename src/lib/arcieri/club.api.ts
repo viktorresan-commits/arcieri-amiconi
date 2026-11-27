@@ -1681,6 +1681,7 @@ function portalDivision(category: string) {
 function bowIdOf(tip: string) {
   const t = tip.trim();
   if (!t || /^tutt/i.test(t)) return "";
+  if (/senza|nessun/i.test(t)) return "senza tipologia";
   if (/tradiz/i.test(t)) return "tradizionale";
   if (/foggia/i.test(t)) return "foggia storica";
   if (/storic|medieval|rinasc/i.test(t)) return "storico";

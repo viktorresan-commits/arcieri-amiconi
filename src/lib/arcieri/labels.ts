@@ -1,15 +1,15 @@
-/** archi delle gare e degli allenamenti: prima quelli della compagnia (tradizionale, storico, foggia storica), poi gli altri */
+/** archi delle gare e degli allenamenti: prima le categorie FITAST (storico, tradizionale, foggia storica, senza tipologia), poi gli altri */
 export const BOWS = [
-  { id: "tradizionale", label: "Arco tradizionale" },
   { id: "storico", label: "Arco storico" },
+  { id: "tradizionale", label: "Arco tradizionale" },
   { id: "foggia storica", label: "Foggia storica" },
-  { id: "lungo", label: "Arco lungo" },
+  { id: "senza tipologia", label: "Senza tipologia" },
   { id: "nudo", label: "Arco nudo" },
   { id: "olimpico", label: "Arco olimpico" },
   { id: "compound", label: "Arco compound" },
   { id: "altro", label: "Altro" },
 ] as const;
-export const MAIN_BOWS = ["tradizionale", "storico", "foggia storica"];
+export const MAIN_BOWS = ["storico", "tradizionale", "foggia storica", "senza tipologia"];
 
 export const DISCIPLINES = [
   { id: "indoor", label: "Indoor" },
@@ -54,7 +54,7 @@ export function bowLabel(id: string, custom = "") {
 }
 
 /** archi scelti nell'avatar o scritti a mano, detti per bene */
-const BOW_ALIASES: Record<string, string> = { longbow: "Arco lungo", ricurvo: "Arco ricurvo", flatbow: "Flatbow", storico: "Arco storico", "foggia storica": "Foggia storica", asiatico: "Arco asiatico", barebow: "Arco nudo" };
+const BOW_ALIASES: Record<string, string> = { lungo: "Arco lungo", longbow: "Arco lungo", ricurvo: "Arco ricurvo", flatbow: "Flatbow", storico: "Arco storico", "foggia storica": "Foggia storica", asiatico: "Arco asiatico", barebow: "Arco nudo" };
 
 export function disciplineLabel(id: string) {
   return DISCIPLINES.find((d) => d.id === id)?.label ?? id;
