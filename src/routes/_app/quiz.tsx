@@ -1,38 +1,43 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Card, PageHead } from "@/components/kit";
 import { Glyph } from "@/components/icons";
 import { useLocalState } from "@/lib/arcieri/local-store";
-import { QUIZ } from "@/lib/arcieri/learn";
+import { pickQuiz, QUIZ_TOPICS, type QuizTopic } from "@/lib/arcieri/quiz-bank";
 import { award } from "@/lib/arcieri/xp";
 
 export const Route = createFileRoute("/_app/quiz")({ component: Page });
 
-/** Quiz da 5 domande: risposta giusta = punti, spiegazione sempre. */
-function pickFive(seed: number) {
-  const idx = QUIZ.map((_, i) => i);
-  let s = seed;
-  for (let i = idx.length - 1; i > 0; i--) {
-    s = (s * 9301 + 49297) % 233280;
-    const j = Math.floor((s / 233280) * (i + 1));
-    [idx[i], idx[j]] = [idx[j], idx[i]];
-  }
-  return idx.slice(0, 5);
-}
+/** Quiz da 5 domande: risposta giusta = punti, spiegazione sempre. Le domande viste di recente non tornano subito. */
+const SEEN_MAX = 60;
 
 /** il contenuto della pagina, anche dentro un'altra pagina (senza intestazione) */
 export function QuizBody({ embedded = false }: { embedded?: boolean }) {
   const [st, setSt] = useLocalState<{ best: number; games: number }>("aa-quiz-v1", { best: 0, games: 0 });
+  const [seen, setSeen] = useLocalState<string[]>("aa-quiz-seen-v1", []);
+  const [topic, setTopic] = useLocalState<QuizTopic | "misto">("aa-quiz-topic-v1", "misto");
   const [seed, setSeed] = useState(() => Date.now() % 233280);
-  const set = useMemo(() => pickFive(seed), [seed]);
+  // la partita si sceglie per seme e argomento (e di nuovo appena letto il telefono): rispondere non la cambia
+  const [ready, setReady] = useState(false);
+  useEffect(() => setReady(true), []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const set = useMemo(() => pickQuiz(seed, topic, seen), [seed, topic, ready]);
   const [i, setI] = useState(0);
   const [chosen, setChosen] = useState<number | null>(null);
   const [score, setScore] = useState(0);
-  const q = QUIZ[set[i]];
+  const q = set[i];
   const end = i >= set.length;
+  const restart = (t = topic) => {
+    setTopic(t);
+    setSeed((x) => (x * 7 + 13) % 233280);
+    setI(0);
+    setScore(0);
+    setChosen(null);
+  };
   const answer = (k: number) => {
     if (chosen != null) return;
     setChosen(k);
+    setSeen([...seen.filter((x) => x !== q.id), q.id].slice(-SEEN_MAX));
     if (k === q.correct) {
       setScore((x) => x + 1);
       award(5, "Risposta giusta al quiz");
@@ -50,7 +55,12 @@ export function QuizBody({ embedded = false }: { embedded?: boolean }) {
   };
   return (
     <div className="grid gap-3">
-      {embedded ? null : <PageHead kicker="Impara" title="Quiz" lede="Cinque domande su regole, tecnica e attrezzatura." />}
+      {embedded ? null : <PageHead kicker="Impara" title="Quiz" lede="Cinque domande sulle gare FITAST, il tiro istintivo, la storia dell'arco, l'attrezzatura e la sicurezza." />}
+      <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
+        {QUIZ_TOPICS.map((t) => (
+          <button key={t.id} type="button" onClick={() => restart(t.id)} aria-pressed={topic === t.id} className={`aa-press shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ${topic === t.id ? "bg-primary text-primary-fg" : "bg-white/[0.06] text-muted"}`}>{t.label}</button>
+        ))}
+      </div>
       {!end ? (
         <Card className="grid gap-3">
           <div className="flex items-center gap-1.5">
@@ -81,7 +91,7 @@ export function QuizBody({ embedded = false }: { embedded?: boolean }) {
           <p className="font-display text-6xl">{score}/5</p>
           <p className="text-sm">{score === 5 ? "Perfetto! +15 punti bonus." : score >= 3 ? "Bene: ripassa le spiegazioni e riprova." : "Si impara così: riprova con domande nuove."}</p>
           <p className="text-xs text-muted">Record {Math.max(st.best, score)}/5 · partite {st.games}</p>
-          <button type="button" className="aa-press min-h-12 rounded-2xl bg-primary px-8 font-semibold text-primary-fg" onClick={() => { setSeed((x) => (x * 7 + 13) % 233280); setI(0); setScore(0); setChosen(null); }}>Nuova partita</button>
+          <button type="button" className="aa-press min-h-12 rounded-2xl bg-primary px-8 font-semibold text-primary-fg" onClick={() => restart()}>Nuova partita</button>
         </Card>
       )}
     </div>
