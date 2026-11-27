@@ -34,6 +34,33 @@ const loading: Partial<Record<BodyLevel, Promise<BodyData | null>>> = {};
 const loaded: Partial<Record<BodyLevel, BodyData>> = {};
 
 /** il file compresso pesa un terzo in meno: si apre nel telefono; senza questa funzione si scarica quello intero */
+/**
+ * Il corpo scaricato resta sul telefono (memoria della pagina): la seconda volta si apre subito, senza
+ * scaricare di nuovo diversi MB. La versione è l'impronta della sua descrizione: un corpo nuovo si riscarica.
+ */
+async function cachedBody(name: string, ver: string, get: () => Promise<ArrayBuffer>): Promise<ArrayBuffer> {
+  const key = `/anatomia/${name}.bin?v=${ver}`;
+  let store: Cache | null = null;
+  try {
+    store = typeof caches !== "undefined" ? await caches.open("anatomia") : null;
+    const hit = await store?.match(key);
+    if (hit) return await hit.arrayBuffer();
+  } catch {
+    store = null;
+  }
+  const buf = await get();
+  if (store) {
+    try {
+      // le versioni vecchie dello stesso corpo si tolgono
+      for (const req of await store.keys()) if (req.url.includes(`/anatomia/${name}.bin?v=`) && !req.url.endsWith(`v=${ver}`)) await store.delete(req);
+      await store.put(key, new Response(buf.slice(0)));
+    } catch {
+      /* memoria piena o non permessa: va bene lo stesso */
+    }
+  }
+  return buf;
+}
+
 async function fetchBody(name: string, gzOnly = false): Promise<ArrayBuffer> {
   const DS = (globalThis as { DecompressionStream?: new (f: string) => TransformStream<Uint8Array, Uint8Array> }).DecompressionStream;
   if (DS) {
@@ -69,8 +96,11 @@ export function loadBody(level: BodyLevel = "pieno"): Promise<BodyData | null> {
       try {
         const m = await fetch(`/anatomia/${FILES[level]}.json`);
         if (!m.ok) return null;
-        const meta = (await m.json()) as BodyMeta;
-        const buf = await fetchBody(FILES[level], level === "hd");
+        const text = await m.text();
+        const meta = JSON.parse(text) as BodyMeta;
+        let h = 0;
+        for (let i = 0; i < text.length; i++) h = (h * 31 + text.charCodeAt(i)) | 0;
+        const buf = await cachedBody(FILES[level], `${meta.bytes}-${(h >>> 0).toString(36)}`, () => fetchBody(FILES[level], level === "hd"));
         if (buf.byteLength < meta.bytes) return null;
         rigFingers(meta, buf);
         loaded[level] = { meta, buf };
@@ -245,7 +275,7 @@ function frames(P: Pts, hands: { L: [number, number, number] | null; R: [number,
 export type Grips = {
   /** lato (sinistro/destro della persona) e quanto è in presa, 0..1 */
   hook?: { side: "L" | "R"; k: number; toward: V3 };
-  wrap?: { side: "L" | "R"; k: number; toward: V3 };
+  wrap?: { side: "L" | "R"; k: number; toward: V3; /** asse dell'arco all'impugnatura (verso il flettente alto) */ axis?: V3; /** verso il bersaglio */ dir?: V3 };
 };
 
 export function bodyMatrices(meta: BodyMeta, J: Record<number, V3>, look?: V3, grips?: Grips, /** 32 numeri: la piega delle dita in presa per la scheda grafica (mano S, poi D) */ curl?: Float32Array, /** 16 numeri: piega di ogni dito dai punti della mano (nocca e falangi; mano S, poi D) */ fing?: Float32Array, /** corporatura dall'aura dell'arciere: spessore di busto, braccia, gambe e testa */ build?: Build): Float32Array {
@@ -352,9 +382,39 @@ export function bodyMatrices(meta: BodyMeta, J: Record<number, V3>, look?: V3, g
     const s = g.side;
     const k = Math.min(1, g.k);
     curlK[s] = wrap
-      ? { k, a1: (62 * Math.PI) / 180, a2: (92 * Math.PI) / 180, spread: 0 }
+      ? // mano dell'arco: le falangi come corde di un cerchio attorno all'impugnatura (3,6 × 3,4 cm più
+        // la carne delle dita): nocca 52°, seconda falange 82° (la terza segue), il buco resta largo 5 cm
+        { k, a1: (52 * Math.PI) / 180, a2: (82 * Math.PI) / 180, spread: 0 }
       : { k, a1: (14 * Math.PI) / 180, a2: (100 * Math.PI) / 180, spread: (9 * Math.PI) / 180 };
-    if (wrap) continue;
+    if (wrap) {
+      // mano dell'arco: le nocche in fila lungo l'impugnatura (indice in alto, sotto la freccia, mignolo in
+      // basso) e la mano verso il bersaglio: così le dita, piegandosi, girano attorno all'impugnatura invece
+      // di attraversarla. L'orientamento letto dal video conta solo quando la presa è leggera
+      const axIn = grips?.wrap?.axis;
+      const base = s === "L" ? 33 : 54;
+      const hasH = hasHand(base);
+      const W = hasH ? J[base] : J[s === "L" ? 15 : 16];
+      const IX = hasH ? J[base + 5] : J[s === "L" ? 19 : 20];
+      const PK = hasH ? J[base + 17] : J[s === "L" ? 17 : 18];
+      if (!W || !IX || !PK || !axIn) continue;
+      const ax = norm(axIn);
+      const mid = lerp(IX, PK, 0.5);
+      const hLen = Math.max(0.07, Math.min(0.11, len(sub(mid, W)) || 0.09));
+      const wid = Math.max(0.06, Math.min(0.09, len(sub(IX, PK)) || 0.075));
+      const flat = (v: V3) => sub(v, mul(ax, dot(v, ax)));
+      const e1v = flat(sub(mid, W));
+      // verso il bersaglio, non verso il punto della presa: spostando la mano sull'impugnatura la direzione
+      // non deve cambiare (altrimenti il buco delle dita si sposta di nuovo)
+      const dirIn = grips?.wrap?.dir;
+      const e1d = flat(dirIn ?? sub(g.toward, W));
+      const e1 = norm(len(e1d) > 0.01 ? add(mul(len(e1v) > 1e-4 ? norm(e1v) : norm(e1d), 1 - k), mul(norm(e1d), k)) : e1v);
+      const X = perpTo(e1, ax, ax);
+      const IXn = add(add(W, mul(e1, hLen)), mul(X, wid / 2));
+      const PKn = add(add(W, mul(e1, hLen)), mul(X, -wid / 2));
+      const fwd = norm(cross(norm(sub(J[11], J[12])), torsoUp));
+      Fc[`mano_${s}`] = frame(W, lerp(IXn, PKn, 0.5), cross(sub(IXn, W), sub(PKn, W)), fwd);
+      continue;
+    }
     // mano della corda: dal polso verso la cocca, indice in alto (sopra la freccia)
     const base = s === "L" ? 33 : 54;
     const hasH = hasHand(base);

@@ -147,11 +147,11 @@ void main(){
     // pelle: un velo appena accennato che disegna il contorno del corpo, neutro (non più azzurro)
     float rim = pow(1.0 - ndv, 2.4);
     if (uStyle > 0.5) {
-      col = vec3(0.30, 0.33, 0.37);
-      a = uAlpha * (0.03 + rim * 0.42) * (1.0 - vStr);
+      col = vec3(0.34, 0.37, 0.41);
+      a = uAlpha * rim * 0.4 * (1.0 - vStr);
     } else {
-      col = vec3(0.62, 0.68, 0.76) * (0.12 + rim * 1.4);
-      a = uAlpha * (0.05 + rim * 0.5) * (1.0 - 0.85 * vStr);
+      col = vec3(0.62, 0.68, 0.76) * (0.08 + rim * 1.3);
+      a = uAlpha * (0.02 + rim * 0.48) * (1.0 - 0.85 * vStr);
     }
     gl_FragColor = vec4(tone(col), a);
     return;
@@ -169,7 +169,8 @@ void main(){
     // fasci appena accennati e la lucentezza a seta lungo le fibre (come nei preparati anatomici),
     // tendini e aponeurosi bianco perla e lucidi
     float h = hash(vGrp);
-    vec3 alb = vec3(0.31, 0.036, 0.028) * vec3(1.0 + (h - 0.5) * 0.22, 1.0 + (h - 0.5) * 0.45, 1.0 + (hash(vGrp + 7.0) - 0.5) * 0.3);
+    // rosso cremisi del muscolo vero (alla luce piena circa #b9342d), appena diverso da un gruppo all'altro
+    vec3 alb = vec3(0.20, 0.025, 0.019) * (0.93 + 0.14 * h) * vec3(1.0, 1.0 + (hash(vGrp + 3.0) - 0.5) * 0.25, 1.0 + (hash(vGrp + 7.0) - 0.5) * 0.25);
     alb *= 0.88 + 0.14 * sin(3.14159 * vF.x);
     float fy = vF.y * 34.0 + 0.18 * sin(vF.x * 9.0) + 0.22 * sin(vF.x * 2.7 + vF.y * 4.1);
     float id = floor(fy);
@@ -190,11 +191,13 @@ void main(){
     float act = clamp(vAct, 0.0, 1.0);
     float on = smoothstep(0.32, 0.8, act);
     // muscolo che lavora: rosso acceso tendente all'arancio, ben distinto ma non giallo
-    vec3 work = vec3(0.70, 0.11, 0.02);
-    alb = mix(alb, work, on * 0.8);
-    if (vFoc > 0.5) { alb = vec3(0.78, 0.20, 0.03); on = 1.0; }
-    else if (vFoc < -0.5) { alb = mix(alb, vec3(0.20, 0.15, 0.15), 0.5); on = 0.0; }
-    vec3 tend = vec3(0.52, 0.50, 0.45);
+    // muscolo che lavora: rosso vivo (stessa famiglia di colore, solo più acceso), non arancio
+    vec3 work = vec3(0.40, 0.038, 0.022);
+    alb = mix(alb, work, on * 0.85);
+    if (vFoc > 0.5) { alb = vec3(0.44, 0.06, 0.02); on = 1.0; }
+    else if (vFoc < -0.5) { alb = mix(alb, vec3(0.12, 0.09, 0.09), 0.5); on = 0.0; }
+    // tendini e fasce: bianco madreperla, appena freddo
+    vec3 tend = vec3(0.50, 0.50, 0.48);
     alb = mix(alb * fib, tend, vTend * 0.9);
     // luce morbida (la carne lascia passare un po' di luce), bordi che si scuriscono tra un muscolo e l'altro
     vec3 light = C1 * wrapL(N, L1, 0.45) + C2 * wrapL(N, L2, 0.5) + amb;
@@ -222,7 +225,7 @@ void main(){
     col += C3 * pow(1.0 - ndv, 3.0) * max(0.0, dot(N, L3) + 0.2) * 0.22;
     // muscolo che lavora: si accende dall'interno, piano
     float pulse = 0.85 + 0.15 * sin(uTime * 4.4);
-    col += vec3(0.8, 0.16, 0.03) * on * (0.05 + 0.14 * pow(ndv, 2.0)) * pulse * (1.0 - vTend);
+    col += vec3(0.55, 0.05, 0.02) * on * (0.04 + 0.12 * pow(ndv, 2.0)) * pulse * (1.0 - vTend);
     // superficie stirata dove due segmenti tirano: più scura e senza luce (niente schegge luccicanti)
     col *= 1.0 - 0.4 * vStr;
   }
@@ -542,7 +545,7 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     const aim = v3.sub(pts.bowWr, pts.drawWr);
     const grips = model.grip ? {
       hook: { side: side(sd.draw[2]), k: model.grip.draw, toward: pts.nock },
-      wrap: { side: side(sd.bow[2]), k: model.grip.bow, toward: v3.add(pts.grip, v3.mul(v3.norm(aim), 0.05)) },
+      wrap: { side: side(sd.bow[2]), k: model.grip.bow, toward: v3.add(pts.grip, v3.mul(v3.norm(aim), 0.05)), axis: model.bowAxis, dir: v3.norm(aim) },
     } : undefined;
     // le mani in presa si mettono sull'attrezzo: il pugno chiuso attorno all'impugnatura dell'arco e la piega
     // delle dita sulla corda alla cocca. Prima si guarda dove cade il «buco» delle dita piegate, poi si sposta
@@ -788,7 +791,8 @@ function seatHands(meta: BodyMeta, J: Record<number, V3>, mats: Float32Array, ha
     const ixR = meta.rest[h.side === "L" ? "19" : "20"];
     const pkR = meta.rest[h.side === "L" ? "17" : "18"];
     const toIndex: V3 = ixR && pkR ? v3.mul(v3.sub(ixR, pkR), 0.25) : [0, 0, 0];
-    const holeRest: V3 = h.hole === "wrap" ? v3.add(v3.add(k0, [0, 0, 0.024]), v3.mul(F, 0.012)) : v3.add(v3.add(v3.add(k0, v3.mul(F, L * 0.42)), [0, 0, 0.012]), toIndex);
+    // mano dell'arco: il centro del cerchio delle dita piegate, 2,7 cm davanti alle nocche (vedi la piega in anatomy-body)
+    const holeRest: V3 = h.hole === "wrap" ? v3.add(v3.add(k0, [0, 0, 0.027]), v3.mul(F, 0.002)) : v3.add(v3.add(v3.add(k0, v3.mul(F, L * 0.42)), [0, 0, 0.012]), toIndex);
     const hole = xf(mats, m, holeRest);
     let d = v3.sub(h.at, hole);
     const dl = v3.len(d);

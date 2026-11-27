@@ -271,6 +271,7 @@ export async function sagomaPainter(W: number, H: number) {
         : sceneCamera(o.at ? { c: o.at(model), h: camSm.h } : camSm, view, W, H);
       R.clear(W, H);
       R.draw(model, VP, eye, o.time, view.layers, null, false);
+      paintStage(ctx, model, VP, W, H, st);
       ctx.drawImage(gl, 0, 0);
       paintHud(ctx, model, VP, W, H, dpr, view.layers, o.time, st);
       // crediti dell'atlante (licenze CC BY e CC BY-SA): restano sull'immagine
@@ -278,7 +279,7 @@ export async function sagomaPainter(W: number, H: number) {
       ctx.font = `500 ${Math.round(9 * dpr)}px system-ui, sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "alphabetic";
-      ctx.fillStyle = "rgba(255,255,255,0.55)";
+      ctx.fillStyle = st ? "rgba(0,0,0,0.45)" : "rgba(255,255,255,0.55)";
       ctx.fillText(BODY_CREDIT, W / 2, H - 8 * dpr);
       return true;
     },
@@ -327,6 +328,8 @@ export function Anatomy3D({
 }) {
   const glCanvas = useRef<HTMLCanvasElement>(null);
   const hudCanvas = useRef<HTMLCanvasElement>(null);
+  /** sotto il corpo: fondo da studio, luce e ombre a terra */
+  const stageCanvas = useRef<HTMLCanvasElement>(null);
   const [layers, setLayers] = useState<Record<Layer, boolean>>({ pelle: true, muscolo: true, osso: true, punti: true, quote: true });
   const layersRef = useRef(layers);
   layersRef.current = layers;
@@ -391,6 +394,8 @@ export function Anatomy3D({
     void boxRef.current?.requestFullscreen?.({ navigationUI: "hide" }).catch(() => {});
   }
   const [failed, setFailed] = useState(false);
+  /** il corpo anatomico vero è pronto (prima di allora non si mostra la sagoma semplice a tubi) */
+  const [bodyReady, setBodyReady] = useState(false);
   const [empty, setEmpty] = useState(false);
   const emptyRef = useRef(false);
   // analisi salvate prima della correzione: se il gesto dice che sinistra e destra sono scambiate
@@ -470,16 +475,33 @@ export function Anatomy3D({
     // corpo anatomico vero (muscoli e ossa da atlante): si scarica la prima volta, poi resta in memoria
     let bodyTick = 0;
     let alive = true;
+    // il corpo pieno si scarica subito insieme a quello leggero (che arriva prima): si mostra il primo pronto.
+    // Se nessuno arriva entro 15 secondi (rete assente) si mostra la sagoma semplice, meglio di niente
+    let ready = false;
+    const markReady = () => {
+      if (ready || !alive) return;
+      ready = true;
+      setBodyReady(true);
+    };
+    const fallback = window.setTimeout(markReady, 15000);
     void loadBody("leggero").then((b) => {
       if (!alive || !b) return;
       R.setBody(b, "leggero");
       bodyTick += 1;
-      return loadBody("pieno").then((f) => {
-        if (!alive || !f) return;
+      markReady();
+    });
+    void loadBody("pieno").then((f) => {
+      if (!alive) return;
+      if (f) {
         R.setBody(f, "pieno");
         bodyTick += 1;
-      });
+      }
+      markReady();
     });
+    // in movimento si usa il corpo pieno se il telefono ce la fa (almeno ~24 immagini al secondo);
+    // se no quello leggero solo mentre si muove
+    let slowDevice = false;
+    const moveDts: number[] = [];
     let smooth: Landmark[] | null = null;
     let model: Model | null = null;
     // profondità che insegue piano: niente braccia che scattano avanti e indietro
@@ -558,7 +580,7 @@ export function Anatomy3D({
         turnedRef.current = off;
         setTurned(off);
       }
-      const key = `${styleRef.current}|${c.yaw.toFixed(4)}|${c.pitch.toFixed(4)}|${c.zoom.toFixed(3)}|${v2 ? `${v2.z},${v2.x},${v2.y}` : ""}|${L0.pelle}${L0.muscolo}${L0.osso}${L0.punti}${L0.quote}|${canvas.clientWidth}x${canvas.clientHeight}|${scale}|${bodyTick}|${R.gearReady()}`;
+      const key = `${ready}|${styleRef.current}|${c.yaw.toFixed(4)}|${c.pitch.toFixed(4)}|${c.zoom.toFixed(3)}|${v2 ? `${v2.z},${v2.x},${v2.y}` : ""}|${L0.pelle}${L0.muscolo}${L0.osso}${L0.punti}${L0.quote}|${canvas.clientWidth}x${canvas.clientHeight}|${scale}|${bodyTick}|${R.gearReady()}`;
       // dopo un movimento si disegna ancora un attimo con il corpo leggero, poi una volta con quello pieno
       const fast = now - lastChange < 450 || dragging.current;
       if (!moving && key === lastKey && !playing && fast === lastFast) return;
@@ -599,6 +621,12 @@ export function Anatomy3D({
         hud.width = W;
         hud.height = H;
       }
+      const stage = stageCanvas.current;
+      const sctx = stage?.getContext("2d") ?? null;
+      if (stage && (stage.width !== W || stage.height !== H)) {
+        stage.width = W;
+        stage.height = H;
+      }
       R.clear(W, H);
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, W, H);
@@ -632,8 +660,21 @@ export function Anatomy3D({
       sagomaView.style = styleRef.current;
       R.setStyle(styleRef.current);
       lastShot.current = { lm: smooth, aspect: asp, hand: hd, gear: gr?.current ?? null, cal: fc ?? live.current.cal, time };
-      R.draw(model, VP, eye, time, L, null, fast);
+      if (!ready && !R.hasBody()) return;
+      if (fast && !slowDevice && R.hasBody()) {
+        moveDts.push(dt);
+        if (moveDts.length >= 40) {
+          const sorted = [...moveDts].sort((x, y) => x - y);
+          if (sorted[Math.floor(sorted.length / 2)] > 0.042) slowDevice = true;
+          moveDts.length = 0;
+        }
+      }
+      R.draw(model, VP, eye, time, L, null, fast && slowDevice);
 
+      if (sctx) {
+        sctx.setTransform(1, 0, 0, 1, 0, 0);
+        paintStage(sctx, model, VP, W, H, styleRef.current);
+      }
       paintHud(ctx, model, VP, W, H, dpr, L, time, styleRef.current);
     };
     raf = requestAnimationFrame(frame);
@@ -679,6 +720,7 @@ export function Anatomy3D({
     canvas.addEventListener("wheel", wheel, { passive: false });
     return () => {
       alive = false;
+      window.clearTimeout(fallback);
       cancelAnimationFrame(raf);
       canvas.removeEventListener("pointerdown", down);
       canvas.removeEventListener("pointermove", move);
@@ -697,9 +739,11 @@ export function Anatomy3D({
   const chipOff = style ? "bg-black/10 text-[#22303a]/70" : "bg-black/40 text-white/60";
   return (
     <div ref={boxRef} className={cx("overflow-hidden", full ? "fixed inset-0 z-[90] h-[100dvh] w-screen" : cx("relative w-full", inBox ? "" : "rounded-2xl", className))} style={{ background: bgCss(style) }}>
+      <canvas ref={stageCanvas} className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden />
       <canvas ref={glCanvas} className={cx("absolute inset-0 h-full w-full", inBox && !full ? "touch-pan-y" : "touch-none")} aria-label="Analisi del gesto in 3D: corpo, scheletro e muscoli, da girare con il dito" />
       <canvas ref={hudCanvas} className="pointer-events-none absolute inset-0 h-full w-full" />
       <p className={cx("pointer-events-none absolute inset-x-0 bottom-0 truncate px-2 text-center text-[0.45rem] leading-[0.7rem]", style ? "text-black/45" : "text-white/50")}>{BODY_CREDIT}</p>
+      {!bodyReady && !empty ? <p className={cx("pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 text-center text-sm", style ? "text-black/60" : "text-white/75")}>Preparo il corpo anatomico…</p> : null}
       {empty ? <p className={cx("absolute inset-x-0 top-1/2 -translate-y-1/2 text-center text-sm", style ? "text-black/70" : "text-white/80")}>In attesa della posa: avvia il video o scegli un fotogramma.</p> : null}
       {/* in alto: Gira e la foto in alta definizione; in basso cosa si vede (corpo, muscoli, scheletro…) */}
       <div className={cx("absolute flex flex-wrap gap-1", full ? "left-2 top-[max(0.5rem,env(safe-area-inset-top))]" : cx("top-2 w-[10.5rem]", inBox ? "left-2" : "right-2"))}>
@@ -787,6 +831,68 @@ export function Anatomy3D({
   );
 }
 
+/**
+ * Studio "infinito": sfondo senza orizzonte (pavimento e parete si fondono), una pozza di luce a terra
+ * sotto l'arciere e le ombre morbide di piedi e corpo, che lo appoggiano al suolo. Disegnato sotto il corpo.
+ */
+function paintStage(ctx: CanvasRenderingContext2D, model: Model, VP: Float32Array, W: number, H: number, style: SagomaStyle) {
+  const proj = (p: V3): [number, number] => {
+    const x = VP[0] * p[0] + VP[4] * p[1] + VP[8] * p[2] + VP[12];
+    const y = VP[1] * p[0] + VP[5] * p[1] + VP[9] * p[2] + VP[13];
+    const w = VP[3] * p[0] + VP[7] * p[1] + VP[11] * p[2] + VP[15];
+    return [((x / w) * 0.5 + 0.5) * W, (1 - ((y / w) * 0.5 + 0.5)) * H];
+  };
+  // fondo: luce più chiara dietro il corpo, che sfuma nei bordi (nessuna linea dell'orizzonte)
+  const ctr = proj(model.center);
+  const g = ctx.createRadialGradient(ctr[0], ctr[1], 0, ctr[0], ctr[1] + H * 0.1, Math.max(W, H) * 0.95);
+  for (const [k, c] of BG[style]) g.addColorStop(k, c);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+  // un cerchio a terra (raggio r attorno a c) visto dalla camera: centro e semiassi sullo schermo
+  const disc = (c: V3, r: number) => {
+    const o = proj([c[0], 0, c[2]]);
+    let rx = 1;
+    let ry = 1;
+    for (let i = 0; i < 16; i++) {
+      const a = (i / 16) * Math.PI * 2;
+      const q = proj([c[0] + Math.cos(a) * r, 0, c[2] + Math.sin(a) * r]);
+      rx = Math.max(rx, Math.abs(q[0] - o[0]));
+      ry = Math.max(ry, Math.abs(q[1] - o[1]));
+    }
+    // camera all'altezza del pavimento: il cerchio sarebbe una riga, si tiene un filo di spessore
+    ry = Math.max(ry, rx * 0.14);
+    return { o, rx, ry };
+  };
+  const blob = (c: V3, r: number, stops: [number, string][]) => {
+    const d = disc(c, r);
+    if (!Number.isFinite(d.o[0] + d.o[1] + d.rx + d.ry)) return;
+    ctx.save();
+    ctx.translate(d.o[0], d.o[1]);
+    ctx.scale(d.rx, d.ry);
+    const rg = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
+    for (const [k, col] of stops) rg.addColorStop(k, col);
+    ctx.fillStyle = rg;
+    ctx.beginPath();
+    ctx.arc(0, 0, 1, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  };
+  const feet = model.hud.feet;
+  // pozza di luce: il pavimento sotto l'arciere un po' più chiaro, che si perde nel fondo
+  blob(feet, 1.6, style ? [[0, "rgba(255,255,255,0.75)"], [0.5, "rgba(255,255,255,0.25)"], [1, "rgba(255,255,255,0)"]] : [[0, "rgba(255,255,255,0.10)"], [0.55, "rgba(255,255,255,0.035)"], [1, "rgba(255,255,255,0)"]]);
+  // ombra del corpo e dei piedi: morbide, più scure dove il corpo tocca terra
+  const sh = style ? 0.2 : 0.42;
+  blob(feet, 0.42, [[0, `rgba(0,0,0,${sh * 0.55})`], [0.6, `rgba(0,0,0,${sh * 0.2})`], [1, "rgba(0,0,0,0)"]]);
+  const J = model.J;
+  if (J) {
+    for (const [ank, toe] of [[27, 31], [28, 32]] as const) {
+      if (!J[ank] || !J[toe]) continue;
+      const m: V3 = [(J[ank][0] + J[toe][0]) / 2, 0, (J[ank][2] + J[toe][2]) / 2];
+      blob(m, 0.13, [[0, `rgba(0,0,0,${sh})`], [0.55, `rgba(0,0,0,${sh * 0.35})`], [1, "rgba(0,0,0,0)"]]);
+    }
+  }
+}
+
 /** quote, punti e anelli a terra disegnati sopra la scena (2D), per lo schermo e per le immagini HD */
 function paintHud(ctx: CanvasRenderingContext2D, model: Model, VP: Float32Array, W: number, H: number, dpr: number, L: Record<Layer, boolean>, time: number, style: SagomaStyle = 0) {
   const ink = INK[style];
@@ -798,30 +904,6 @@ function paintHud(ctx: CanvasRenderingContext2D, model: Model, VP: Float32Array,
   };
   const hudD = model.hud;
   ctx.lineWidth = 0.55 * dpr;
-  // anelli a terra
-  for (const [r, a] of [[0.45, 0.4], [0.62, 0.2], [0.8, 0.1]] as const) {
-    ctx.strokeStyle = `rgba(${ink.ring},${a * 0.7})`;
-    ctx.setLineDash(r > 0.5 ? [3 * dpr, 5 * dpr] : []);
-    ctx.beginPath();
-    for (let i = 0; i <= 64; i++) {
-      const an = (i / 64) * Math.PI * 2;
-      const q = proj([hudD.feet[0] + Math.cos(an) * r, 0.002, hudD.feet[2] + Math.sin(an) * r]);
-      if (i) ctx.lineTo(q[0], q[1]);
-      else ctx.moveTo(q[0], q[1]);
-    }
-    ctx.stroke();
-  }
-  ctx.setLineDash([]);
-  for (let i = 0; i < 16; i++) {
-    const an = (i / 16) * Math.PI * 2 + time * 0.2;
-    const a = proj([hudD.feet[0] + Math.cos(an) * 0.45, 0.002, hudD.feet[2] + Math.sin(an) * 0.45]);
-    const b = proj([hudD.feet[0] + Math.cos(an) * 0.48, 0.002, hudD.feet[2] + Math.sin(an) * 0.48]);
-    ctx.strokeStyle = `rgba(${ink.ring},0.25)`;
-    ctx.beginPath();
-    ctx.moveTo(a[0], a[1]);
-    ctx.lineTo(b[0], b[1]);
-    ctx.stroke();
-  }
   if (L.punti && model.J) drawJoints(ctx, model.J, proj, dpr, ink);
   if (!L.quote) return;
   // archi degli angoli ai gomiti

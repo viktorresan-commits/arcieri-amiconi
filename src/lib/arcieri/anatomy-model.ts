@@ -38,7 +38,7 @@ export type Hud = {
   feet: V3;
 };
 /** J e hand servono al corpo anatomico vero (anatomy-body): ogni segmento segue questi punti */
-export type Model = { parts: Part[]; hud: Hud; center: V3; height: number; J?: Record<number, V3>; hand?: Hand; /** dove guarda il viso (orizzontale): segue il bersaglio durante il tiro */ headF?: V3; /** testa in giù (+) o in su (-), radianti: dal naso rispetto alle orecchie nel fotogramma */ headPitch?: number; /** quanto la mano della corda è in presa sulla corda (0..1) e quanto quella dell'arco stringe l'impugnatura */ grip?: { draw: number; bow: number }; /** il fotogramma del video nel piano del corpo (z = 0), in metri: sinistra, destra, sopra, sotto */ frame?: ImageFrame; /** corporatura trovata con l'aura (silhouette) dell'arciere */ build?: Build };
+export type Model = { parts: Part[]; hud: Hud; center: V3; height: number; J?: Record<number, V3>; hand?: Hand; /** dove guarda il viso (orizzontale): segue il bersaglio durante il tiro */ headF?: V3; /** testa in giù (+) o in su (-), radianti: dal naso rispetto alle orecchie nel fotogramma */ headPitch?: number; /** quanto la mano della corda è in presa sulla corda (0..1) e quanto quella dell'arco stringe l'impugnatura */ grip?: { draw: number; bow: number }; /** il fotogramma del video nel piano del corpo (z = 0), in metri: sinistra, destra, sopra, sotto */ frame?: ImageFrame; /** corporatura trovata con l'aura (silhouette) dell'arciere */ build?: Build; /** asse dell'arco all'impugnatura (verso il flettente alto): la mano dell'arco ci si chiude attorno */ bowAxis?: V3 };
 /** dove sta il fotogramma del video nello spazio della sagoma: serve a guardarla "come il video", punto su punto */
 export type ImageFrame = { x0: number; x1: number; yTop: number; yBot: number };
 
@@ -206,7 +206,94 @@ export function bodyPoints(lm: Landmark[], aspect: number, cal: BoneCal | null =
     memo.z.set(i, z);
     out[i] = [out[i][0], out[i][1], z];
   }
+  // la profondità che insegue piano può riportare per un attimo il braccio dentro il busto: si ricontrolla
+  keepArmsOut(out, cal);
   return out;
+}
+
+/**
+ * Braccia fuori dal corpo: un braccio non può passare dentro il busto. Larghezza e altezza vengono dal
+ * video (esatte), quindi se il braccio nel video copre il busto sta davanti o dietro: si sposta solo in
+ * profondità, dalla parte più vicina, quanto basta a stare fuori (con lo spessore del braccio). Il busto
+ * è un cilindro ellittico tra anche e spalle, largo come le spalle e profondo come un torace.
+ */
+function keepArmsOut(out: Record<number, V3>, cal: BoneCal | null) {
+  const shL = out[11];
+  const shR = out[12];
+  if (!shL || !shR) return;
+  const hipL = out[23] ?? add(shL, [0, -0.5, 0]);
+  const hipR = out[24] ?? add(shR, [0, -0.5, 0]);
+  const shM = lerp(shL, shR, 0.5);
+  const hipM = lerp(hipL, hipR, 0.5);
+  const axis = sub(shM, hipM);
+  const hgt = len(axis);
+  if (hgt < 0.2) return;
+  const up = mul(axis, 1 / hgt);
+  const rgt = norm(sub(sub(shR, shL), mul(up, dot(sub(shR, shL), up))));
+  let fwd = norm(cross(rgt, up));
+  if (out[0] && dot(sub(out[0], shM), fwd) < 0) fwd = mul(fwd, -1);
+  const shW = len(sub(shR, shL));
+  const hipW = len(sub(hipR, hipL));
+  const g = cal?.build?.torso ?? 1;
+  /** quanto spostare in profondità p perché stia fuori dal busto (0 se è già fuori) */
+  const push = (p: V3, r: number): number => {
+    const v = sub(p, hipM);
+    const h = dot(v, up) / hgt;
+    // sopra le spalle c'è il collo, sotto le anche le gambe: lì il busto non c'è
+    if (h < -0.05 || h > 0.97) return 0;
+    const t = Math.max(0, Math.min(1, h));
+    const A = (hipW * 0.62 + (shW * 0.4 - hipW * 0.62) * t) * Math.max(1, g * 0.95) + r;
+    const B = (0.1 + 0.025 * Math.sin(Math.PI * Math.min(1, t * 1.1))) * g + r;
+    const u = dot(v, rgt);
+    const w = dot(v, fwd);
+    if ((u / A) ** 2 + (w / B) ** 2 >= 1) return 0;
+    // ellisse lungo la direzione di profondità (0,0,1): ((u + k du)/A)^2 + ((w + k dw)/B)^2 = 1
+    const du = rgt[2];
+    const dw = fwd[2];
+    const qa = (du / A) ** 2 + (dw / B) ** 2;
+    if (qa < 1e-6) return 0;
+    const qb = 2 * ((u * du) / (A * A) + (w * dw) / (B * B));
+    const qc = (u / A) ** 2 + (w / B) ** 2 - 1;
+    const disc = Math.sqrt(Math.max(0, qb * qb - 4 * qa * qc));
+    const k1 = (-qb + disc) / (2 * qa);
+    const k2 = (-qb - disc) / (2 * qa);
+    // dalla parte dove il punto già sta (davanti o dietro al centro del busto): niente salti da un lato all'altro
+    const side = p[2] - (hipM[2] + up[2] * h * hgt) >= 0 ? 1 : -1;
+    const k = side > 0 ? Math.max(k1, k2) : Math.min(k1, k2);
+    return k + side * 0.005;
+  };
+  for (const [sh, el, wr, fingers, hb] of [[11, 13, 15, [17, 19, 21], 33], [12, 14, 16, [18, 20, 22], 54]] as const) {
+    if (!out[el] || !out[wr]) continue;
+    for (let it = 0; it < 3; it++) {
+      let dEl = 0;
+      let dWr = 0;
+      // gomito e polso, e i punti lungo omero e avambraccio
+      const pe = push(out[el], 0.05);
+      if (Math.abs(pe) > Math.abs(dEl)) dEl = pe;
+      const pw = push(out[wr], 0.04);
+      if (Math.abs(pw) > Math.abs(dWr)) dWr = pw;
+      for (const f of [0.6, 0.8]) {
+        const q = push(lerp(out[sh], out[el], f), 0.055);
+        if (Math.abs(q / f) > Math.abs(dEl)) dEl = q / f;
+      }
+      for (const f of [0.25, 0.5, 0.75]) {
+        const q = push(lerp(out[el], out[wr], f), 0.045);
+        if (q && Math.abs(q) > Math.abs(dEl) * (1 - f) && Math.abs(q) > Math.abs(dWr) * f) {
+          dEl = Math.abs(q) > Math.abs(dEl) ? q : dEl;
+          dWr = Math.abs(q) > Math.abs(dWr) ? q : dWr;
+        }
+      }
+      if (!dEl && !dWr) break;
+      dEl = Math.max(-0.6, Math.min(0.6, dEl));
+      dWr = Math.max(-0.6, Math.min(0.6, dWr));
+      // il polso segue il gomito (l'avambraccio resta intero), la mano segue il polso
+      const wShift = Math.abs(dWr) > Math.abs(dEl) ? dWr : dEl;
+      out[el] = [out[el][0], out[el][1], out[el][2] + dEl];
+      out[wr] = [out[wr][0], out[wr][1], out[wr][2] + wShift];
+      for (const f of fingers) if (out[f]) out[f] = [out[f][0], out[f][1], out[f][2] + wShift];
+      for (let k = 0; k < 21; k++) if (out[hb + k]) out[hb + k] = [out[hb + k][0], out[hb + k][1], out[hb + k][2] + wShift];
+    }
+  }
 }
 
 function bodyPointsRaw(lm: Landmark[], aspect: number, cal: BoneCal | null = null): Record<number, V3> | null {
@@ -374,6 +461,8 @@ function bodyPointsRaw(lm: Landmark[], aspect: number, cal: BoneCal | null = nul
     out[wr][2] = wNew;
     for (const f of wr === 15 ? [17, 19, 21] : [18, 20, 22]) if (out[f]) out[f][2] += dWr;
   }
+  // un braccio non passa dentro il busto (prima delle mani, che seguono il polso)
+  keepArmsOut(out, cal);
   // (i punti in metri del modello di posa non danno più la forma del corpo: con l'arciere di fronte
   // alla camera la loro profondità piegava il busto all'indietro e portava il gomito dietro la testa.
   // Servono solo a dire se un osso va avanti o indietro)
@@ -905,6 +994,7 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gea
     grip: { draw: loose ? 0 : aimed.drawing, bow: Math.max(0.85, aimed.raised) },
     frame: imageFrame(lm, aspect) ?? undefined,
     build: cal?.build,
+    bowAxis: n,
   };
 }
 
