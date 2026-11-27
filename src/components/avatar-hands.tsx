@@ -164,10 +164,28 @@ export function SideHand({ h, e, r, skin, gloves, kind }: { h: P; e: P; r: numbe
           ))}
         </g>
       )}
-      {/* pollice: dal polso lungo il fianco della mano, con l'unghia */}
-      <path d={open ? `M${f(-0.5 * r)} ${f(0.3 * r)} C${f(-0.1 * r)} ${f(0.7 * r)} ${f(0.3 * r)} ${f(0.86 * r)} ${f(0.56 * r)} ${f(0.8 * r)}` : `M${f(-0.55 * r)} ${f(-0.42 * r)} C${f(-0.1 * r)} ${f(-0.86 * r)} ${f(0.4 * r)} ${f(-0.86 * r)} ${f(0.66 * r)} ${f(-0.66 * r)}`} stroke={OUT} strokeOpacity="0.54" strokeWidth={f(0.38 * r)} fill="none" strokeLinecap="round" />
-      <path d={open ? `M${f(-0.5 * r)} ${f(0.3 * r)} C${f(-0.1 * r)} ${f(0.7 * r)} ${f(0.3 * r)} ${f(0.86 * r)} ${f(0.56 * r)} ${f(0.8 * r)}` : `M${f(-0.55 * r)} ${f(-0.42 * r)} C${f(-0.1 * r)} ${f(-0.86 * r)} ${f(0.4 * r)} ${f(-0.86 * r)} ${f(0.66 * r)} ${f(-0.66 * r)}`} stroke={t.base} strokeWidth={f(0.32 * r)} fill="none" strokeLinecap="round" />
-      {gloves ? null : <ellipse cx={f(open ? 0.56 * r : 0.64 * r)} cy={f(open ? 0.8 * r : -0.66 * r)} rx={f(0.13 * r)} ry={f(0.09 * r)} fill={t.nail} opacity="0.95" />}
+      {/* pollice: attaccato al palmo, dalla parte interna della mano. Nel pugno parte dalla base del palmo e si
+          chiude davanti alle dita piegate; sulla mano della corda resta disteso sotto il palmo, verso il collo. */}
+      {(() => {
+        const R = (v: number) => f(v * r);
+        const fill = open
+          ? `M${R(-0.5)} ${R(0.5)} C${R(-0.2)} ${R(0.74)} ${R(0.12)} ${R(0.98)} ${R(0.42)} ${R(1.0)} C${R(0.58)} ${R(1.0)} ${R(0.62)} ${R(0.82)} ${R(0.5)} ${R(0.72)} C${R(0.3)} ${R(0.6)} ${R(-0.1)} ${R(0.5)} ${R(-0.36)} ${R(0.34)} Z`
+          : `M${R(-0.42)} ${R(0.74)} C${R(-0.1)} ${R(0.9)} ${R(0.36)} ${R(0.98)} ${R(0.68)} ${R(0.7)} C${R(0.8)} ${R(0.56)} ${R(0.74)} ${R(0.34)} ${R(0.58)} ${R(0.36)} C${R(0.36)} ${R(0.42)} ${R(0.04)} ${R(0.56)} ${R(-0.36)} ${R(0.5)} Z`;
+        // bordo solo sul lato libero e in punta: la base si fonde con il palmo
+        const edge = open
+          ? `M${R(-0.2)} ${R(0.74)} C${R(0.12)} ${R(0.98)} ${R(0.42)} ${R(1.0)} ${R(0.42)} ${R(1.0)} C${R(0.58)} ${R(1.0)} ${R(0.62)} ${R(0.82)} ${R(0.5)} ${R(0.72)} C${R(0.3)} ${R(0.6)} ${R(-0.1)} ${R(0.5)} ${R(-0.3)} ${R(0.38)}`
+          : `M${R(-0.3)} ${R(0.82)} C${R(-0.02)} ${R(0.94)} ${R(0.4)} ${R(0.96)} ${R(0.68)} ${R(0.7)} C${R(0.8)} ${R(0.56)} ${R(0.74)} ${R(0.34)} ${R(0.58)} ${R(0.36)} C${R(0.36)} ${R(0.42)} ${R(0.04)} ${R(0.58)} ${R(-0.26)} ${R(0.57)}`;
+        const nail = open ? { x: 0.47, y: 0.88, a: 70 } : { x: 0.64, y: 0.5, a: -62 };
+        return (
+          <g>
+            <path d={fill} fill={`url(#${gid})`} />
+            <path d={edge} stroke={OUT} strokeOpacity="0.58" strokeWidth="0.3" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+            {/* piega dove il pollice si appoggia al palmo */}
+            <path d={open ? `M${R(-0.34)} ${R(0.4)} C${R(-0.1)} ${R(0.52)} ${R(0.2)} ${R(0.62)} ${R(0.42)} ${R(0.7)}` : `M${R(-0.3)} ${R(0.6)} C${R(0.02)} ${R(0.62)} ${R(0.32)} ${R(0.5)} ${R(0.52)} ${R(0.4)}`} stroke={t.line} strokeWidth={R(0.035)} fill="none" strokeLinecap="round" opacity="0.6" />
+            {gloves ? null : <ellipse cx={R(nail.x)} cy={R(nail.y)} rx={R(0.12)} ry={R(0.08)} transform={`rotate(${nail.a} ${R(nail.x)} ${R(nail.y)})`} fill={t.nail} opacity="0.95" />}
+          </g>
+        );
+      })()}
       {/* polso: l'attacco all'avambraccio, con il polsino se c'è il guanto */}
       {gloves ? (
         <g>

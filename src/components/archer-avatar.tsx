@@ -79,10 +79,12 @@ const POSES: Record<string, PoseDef> = {
   allungo: { grip: p(250, 124), bowAngle: 0, hand: null, pull: 1, hooked: true, arrow: true, fore: 82, face: "concentrato" },
   mira: { grip: p(250, 124), bowAngle: 0, hand: null, pull: 1.03, hooked: true, arrow: true, fore: 83, face: "concentrato" },
   rilascio: { grip: p(250, 124), bowAngle: 2, hand: p(132, 104), pull: 0, hooked: false, arrow: false, fore: 82, face: "concentrato" },
-  accompagna: { grip: p(251, 127), bowAngle: 9, hand: p(126, 106), pull: 0, hooked: false, arrow: false, fore: 80 },
+  // accompagnamento: la mano è scivolata dietro il collo, il gomito resta alto dietro come a trazione piena
+  accompagna: { grip: p(251, 127), bowAngle: 9, hand: p(126, 106), pull: 0, hooked: false, arrow: false, fore: 44, bend: -1 },
   rilassa: { grip: p(214, 186), bowAngle: 22, hand: p(114, 198), pull: 0, hooked: false, arrow: false, fore: 46, bend: 1 },
   // pesca: la mano della corda va a prendere la freccia nella faretra, dietro la spalla o al fianco
-  "pesca-schiena": { grip: p(204, 196), bowAngle: 10, hand: p(116, 70), pull: 0, hooked: false, arrow: false, fore: 46, bend: 1, holding: true },
+  // dalla faretra sulla schiena: il gomito sale dietro la testa e la mano prende le cocche sopra la spalla
+  "pesca-schiena": { grip: p(204, 196), bowAngle: 10, hand: p(116, 70), pull: 0, hooked: false, arrow: false, fore: 46, bend: -1, holding: true },
   "pesca-fianco": { grip: p(204, 196), bowAngle: 10, hand: p(110, 192), pull: 0, hooked: false, arrow: false, fore: 42, bend: 1, holding: true },
   // vittoria: l'arco alzato in alto davanti, il pugno chiuso accanto al viso (non più dietro la testa)
   vittoria: { grip: p(236, 50), bowAngle: -26, hand: p(150, 114), pull: 0, hooked: false, arrow: false, fore: 40, face: "felice", bend: 1 },
@@ -134,7 +136,8 @@ export function routinePlan(look: Pick<AvatarLook, "routine" | "hold" | "volley"
     kind === "rapida"
       ? [[pesca, 0.55], ["aggancio", 0.5], ["predraw", 0.45], ["allungo", 0.75], ["mira", hold * 0.6], ["rilascio", 0.12], ["accompagna", 0.7]]
       : [[pesca, 0.8], ["incocco", 0.9], ["aggancio", 0.7], ["predraw", 0.8], ["trazione", 0.7], ["allungo", 0.5], ["mira", kind === "gara" ? hold + 1.2 : hold], ["rilascio", 0.12], ["accompagna", kind === "gara" ? 1.4 : 1.1]];
-  const steps: Step[] = [["riposo", kind === "rapida" ? 0.7 : 1.3]];
+  // in attesa prima della volée: respira, cambia appoggio e fa un gesto (mano sul fianco, controlla la corda, pensa)
+  const steps: Step[] = [["riposo", kind === "rapida" ? 2.6 : 3.4]];
   for (let i = 0; i < n; i += 1) {
     if (i > 0) steps.push(["rilassa", 0.6]);
     steps.push(...one);
@@ -151,7 +154,34 @@ export function routinePlan(look: Pick<AvatarLook, "routine" | "hold" | "volley"
 
 const easeIO = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
 
-function poseAt(plan: Plan, t: number): { def: PoseDef; release: number | null; phase: string } {
+/** come aspetta il proprio turno: respiro dell'animazione vera e, se c'è, un gesto (posa e quanto ci arriva) */
+type Wait = { sway: boolean; gesture: [PoseDef, number] | null };
+
+/**
+ * Attesa vera: piccolo ondeggiare di arco e mani preso dall'animazione d'arco catturata (Kevin Iglesias,
+ * BowIdle), rallentato a un respiro calmo. Secondi, mano dell'arco (x, y), inclinazione, mano libera (x, y).
+ */
+const REAL_IDLE: number[][] = [[0, 0, 0, 0, 0, 0], [0.13, -1.6, -0.7, 0.3, -1.6, -0.8], [0.27, -2.3, -1.0, 0.9, -2.2, -1.7], [0.4, -1.6, -1.0, 1.9, -1.4, -2.3], [0.53, 0.0, -0.3, 2.6, 0.4, -2.3], [0.67, 1.9, 0.4, 2.9, 2.3, -1.9], [0.8, 3.2, 1.1, 2.5, 3.7, -1.1], [0.93, 3.8, 1.4, 1.7, 4.3, -0.2], [1.07, 3.2, 1.3, 0.9, 3.6, 0.4], [1.2, 1.7, 0.8, 0.2, 1.9, 0.5], [1.33, 0, 0, 0, 0, 0]];
+const IDLE_PERIOD = 2.2;
+
+function waitPose(local: number, span: number, wait: Wait): PoseDef {
+  let def = POSES.riposo;
+  if (wait.sway) {
+    const [, gx, gy, a, hx, hy] = track(REAL_IDLE, ((local % IDLE_PERIOD) / IDLE_PERIOD) * 1.33);
+    const h = def.hand ?? p(108, 204);
+    def = { ...def, grip: p(def.grip.x + gx * 1.2, def.grip.y + gy * 1.2), bowAngle: def.bowAngle + a * 1.2, hand: p(h.x + hx * 1.2, h.y + hy * 1.2) };
+  }
+  if (wait.gesture && span > 2) {
+    // il gesto arriva dopo un attimo, resta e torna giù prima di prendere la freccia
+    const g0 = 0.5;
+    const g1 = span - 0.6;
+    const env = easeIO(Math.max(0, Math.min(1, (local - g0) / 0.7))) * easeIO(Math.max(0, Math.min(1, (g1 - local) / 0.7)));
+    if (env > 0) def = mix(def, wait.gesture[0], env * wait.gesture[1]);
+  }
+  return def;
+}
+
+function poseAt(plan: Plan, t: number, wait?: Wait): { def: PoseDef; release: number | null; phase: string } {
   const { steps, releases } = plan;
   let acc = 0;
   let release: number | null = null;
@@ -176,6 +206,9 @@ function poseAt(plan: Plan, t: number): { def: PoseDef; release: number | null; 
       }
       const prev = POSES[prevName];
       const cur = POSES[name];
+      if (prevName === "accompagna") return { def: lowerTo(prev, cur, easeIO(raw)), release, phase: PHASE_NAMES[name] ?? name };
+      if (i === 0 && name === "riposo" && wait) return { def: waitPose(t - acc, d, wait), release, phase: PHASE_NAMES[name] ?? name };
+      if (name === "pesca-schiena") return { def: raiseTo(prev, cur, easeIO(raw)), release, phase: PHASE_NAMES[name] ?? name };
       // il rilascio è uno scatto; il resto scorre morbido; nella mira resta un filo di espansione
       const k = name === "rilascio" ? Math.min(1, raw * 1.6) : easeIO(raw);
       return { def: mix(prev, cur, k), release, phase: PHASE_NAMES[name] ?? name };
@@ -293,14 +326,47 @@ function realHold(t: number): PoseDef {
 
 const RELEASE_END = REAL_RELEASE[REAL_RELEASE.length - 1][0];
 /** rilascio vero: la mano della corda scatta indietro lungo il viso, l'arco reagisce e si inclina appena; poi l'accompagnamento */
+/**
+ * Gomito a trazione piena (spalla della corda, braccio lungo 40, mano all'ancoraggio). Nel rilascio e
+ * nell'accompagnamento il gomito resta lì e la mano scorre indietro lungo il collo: l'avambraccio si accorcia
+ * in scorcio invece di far cadere il gomito sul fianco (il braccio sembrava rotto).
+ */
+const DRAW_ELBOW = ik(DRAW_SHOULDER, ANCHOR, 40, POSES.allungo.fore, -1).elbow;
+const foreTo = (h: P) => Math.hypot(h.x - DRAW_ELBOW.x, h.y - DRAW_ELBOW.y);
+
 function realRelease(dt: number): PoseDef {
   const at = (x: number): PoseDef => {
     const [, gx, gy, a, hx, hy] = track(REAL_RELEASE, x);
     const m = POSES.allungo;
-    return { ...m, grip: p(m.grip.x + gx, m.grip.y + gy), bowAngle: m.bowAngle + a, hand: p(ANCHOR.x + hx, ANCHOR.y + hy), pull: 0, hooked: false, hookW: 0, arrow: false };
+    const hand = p(ANCHOR.x + hx, ANCHOR.y + hy);
+    return { ...m, grip: p(m.grip.x + gx, m.grip.y + gy), bowAngle: m.bowAngle + a, hand, pull: 0, hooked: false, hookW: 0, arrow: false, fore: foreTo(hand), bend: -1 };
   };
   if (dt < RELEASE_END) return at(dt);
   return mix(at(RELEASE_END), POSES.accompagna, easeIO(Math.min(1, (dt - RELEASE_END) / 0.5)));
+}
+
+/** salendo alla faretra sulla schiena: la mano passa davanti alla spalla mentre il gomito si alza */
+const RAISE_HAND = p(150, 128);
+
+/** dal fianco alla faretra sulla schiena senza passare dietro la spalla (il braccio si stendeva all'indietro) */
+function raiseTo(a: PoseDef, b: PoseDef, k: number): PoseDef {
+  if (!a.hand || a.hand.y < 140) return mix(a, b, k);
+  const mid: PoseDef = { ...mix(a, b, 0.5), hand: RAISE_HAND, fore: 50, bend: 0 };
+  return k < 0.5 ? mix(a, mid, k * 2) : mix(mid, b, (k - 0.5) * 2);
+}
+
+/** a metà della discesa: la mano passa davanti al petto, il gomito scende dietro il fianco */
+const LOWER_HAND = p(150, 150);
+
+/**
+ * Dopo l'accompagnamento la mano torna giù (a riposo o a prendere la freccia) seguendo il verso del braccio:
+ * prima scende davanti al petto mentre il gomito cala dietro, poi va al fianco. Prima tagliava dritta per la
+ * spalla e il braccio si stendeva all'indietro come rovesciato.
+ */
+function lowerTo(a: PoseDef, b: PoseDef, k: number): PoseDef {
+  if (!b.hand || b.hand.y < 140) return mix(a, b, k);
+  const mid: PoseDef = { ...mix(a, b, 0.5), hand: LOWER_HAND, fore: 56, bend: 1 };
+  return k < 0.5 ? mix(a, mid, k * 2) : mix(mid, b, (k - 0.5) * 2);
 }
 
 /** Due ossa: dalla spalla verso la mano, con il gomito dalla parte giusta. */
@@ -2259,6 +2325,9 @@ function Defs({ look, uid }: { look: AvatarLook; uid: string }) {
 export const CAPE_CLOTH: Record<string, string> = { righe: "righe-verticali", scacchi: "quadri", bordato: "bordure", zigzag: "zigzag", onde: "onde", diagonali: "diagonali", gigli: "gigli", foglie: "foglie", scaglie: "scaglie", fenice: "fenice" };
 
 /** gesti da fermo: ogni quanti secondi, quanto dura, verso quale posa e quanto */
+/** gesti a giro mentre aspetta di tirare (come le pose d'attesa dell'animazione catturata: mano sul fianco, sguardo all'attrezzatura) */
+const WAIT_GESTURES: [PoseDef, number][] = [[POSES.fiero, 1], [CHECK_STRING, 0.75], [POSES.pensa, 0.85]];
+
 const IDLE_MOVES: Record<string, [number, number, PoseDef, number]> = {
   guarda: [7, 1.8, POSES.fiero, 0.7],
   corda: [6, 1.6, CHECK_STRING, 1],
@@ -2381,18 +2450,24 @@ export function ArcherAvatar({ look, className = "h-72 w-auto", interactive = tr
     if (drive.released != null) {
       const dt = drive.released;
       // dopo il rilascio: accompagnamento e ritorno in posizione; la freccia nuova si prende prima del tiro dopo
-      def = dt < 1.0 ? realRelease(dt) : mix(POSES.accompagna, POSES.riposo, easeIO(Math.min(1, (dt - 1.0) / 0.9)));
+      def = dt < 1.0 ? realRelease(dt) : lowerTo(POSES.accompagna, POSES.riposo, easeIO(Math.min(1, (dt - 1.0) / 0.9)));
       const fade = dt > 1.0 ? 1 - easeIO(Math.min(1, (dt - 1.0) / 0.9)) : 1;
       def = { ...def, grip: p(def.grip.x, def.grip.y - lift * fade) };
     }
     if (!phase) phase = drive.released != null ? (drive.released > 1.1 ? PHASE_NAMES.riposo : PHASE_NAMES.accompagna) : k > 0.9 ? PHASE_NAMES.mira : k > 0.05 ? PHASE_NAMES.trazione : PHASE_NAMES.predraw;
   } else if (mode === "animata") {
     const tc = t % plan.cycle;
-    const at = poseAt(plan, tc);
+    const cycleN = Math.floor(t / plan.cycle);
+    // in attesa: il gesto scelto in «Movimento da fermo», oppure a giro mano sul fianco, controllo della corda e pensiero
+    const chosen = look.idle && look.idle !== "respiro" && look.idle !== "fermo" ? IDLE_MOVES[look.idle] : null;
+    const wait: Wait = {
+      sway: look.idle !== "fermo" && !still,
+      gesture: look.idle === "fermo" || still ? null : chosen ? [chosen[2], chosen[3]] : WAIT_GESTURES[cycleN % WAIT_GESTURES.length],
+    };
+    const at = poseAt(plan, tc, wait);
     def = at.def;
     phase = at.phase;
     if (at.release != null && at.release < 1) flying = at.release;
-    const cycleN = Math.floor(t / plan.cycle);
     plan.releases.forEach((r, i) => {
       const key = `${cycleN}-${i}`;
       if (tc >= r && tc - r < 0.3 && lastRelease.current !== key) {
@@ -2414,7 +2489,7 @@ export function ArcherAvatar({ look, className = "h-72 w-auto", interactive = tr
     if (tapShot != null) {
       const dt = t - tapShot;
       if (dt < 1.3) {
-        def = dt < 0.25 ? mix(POSES[name], POSES.predraw, easeIO(dt / 0.25)) : dt < 0.6 ? realDraw((dt - 0.25) / 0.35) : dt < 0.9 ? realRelease(dt - 0.6) : mix(realRelease(0.3), POSES[name], easeIO((dt - 0.9) / 0.4));
+        def = dt < 0.25 ? mix(POSES[name], POSES.predraw, easeIO(dt / 0.25)) : dt < 0.6 ? realDraw((dt - 0.25) / 0.35) : dt < 0.9 ? realRelease(dt - 0.6) : lowerTo(realRelease(0.3), POSES[name], easeIO((dt - 0.9) / 0.4));
         if (dt >= 0.6) flying = dt - 0.6;
       }
     }
