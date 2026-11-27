@@ -9,7 +9,7 @@ import { kindOf } from "./kinds";
 import { romeMidnightUtc, ymdAdd } from "./time";
 import { divisionOf } from "./labels";
 import { accountWriter, writerFor } from "./acting.api";
-import { activityXp } from "./xp.api";
+import { activityXp, allActivityXp } from "./xp.api";
 import { fitastRankOf, loadGenerale, type GenTable } from "./fitast-rank";
 import { garaLoads, sumLoads, type GaraLoad } from "./gara-volume";
 import { champSeasonOf, seasonTag } from "./stagioni";
@@ -1468,8 +1468,12 @@ export const squadBoard = createServerFn({ method: "GET" })
       bowOf.set(row.user_id, bowIdOf(tip) || row.bow_type);
     }
     // livello di ognuno: punti del telefono più allenamenti e gare registrati
-    const xpOf = new Map<string, number>();
-    await Promise.all(people.map(async (row) => xpOf.set(row.user_id, asNum(row.xp) + (await activityXp(sql, row.user_id)))));
+    // le gare di ognuno come sul suo profilo: app, classifiche del portale e archivio FITAST dal 2019
+    const loadsOf = await garaLoads(sql).catch(() => new Map<string, GaraLoad[]>());
+    const today = new Date().toISOString().slice(0, 10);
+    const season = champSeasonOf(today);
+    const act = await allActivityXp(sql, loadsOf).catch(() => new Map<string, number>());
+    const xpOf = new Map<string, number>(people.map((row) => [row.user_id, asNum(row.xp) + (act.get(row.user_id) ?? 0)]));
 
     const train = await sql<{ user_id: string; sessions: number; arrows: number; points: number }>`
       select s.user_id,
@@ -1505,10 +1509,6 @@ export const squadBoard = createServerFn({ method: "GET" })
       from piazzole p
       left join competition_entries e on e.competition_id = p.competition_id and e.user_id = p.user_id`;
 
-    // le gare di ognuno come sul suo profilo: app, classifiche del portale e archivio FITAST dal 2019
-    const loadsOf = await garaLoads(sql).catch(() => new Map<string, GaraLoad[]>());
-    const today = new Date().toISOString().slice(0, 10);
-    const season = champSeasonOf(today);
     const trainOf = new Map(train.map((row) => [row.user_id, row]));
     const gareOf = new Map<string, Set<number>>();
     const champOf = new Map<string, number>();

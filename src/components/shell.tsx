@@ -141,7 +141,7 @@ export function Shell({ children }: { children: ReactNode }) {
       syncXp({ data: { xp: xp.own } })
         .then((r) => {
           adoptXp(r.xp);
-          setActivity(r.activity);
+          setActivity(r.activity, r.parts);
         })
         .catch(() => {
           /* senza rete: si riprova al prossimo guadagno */

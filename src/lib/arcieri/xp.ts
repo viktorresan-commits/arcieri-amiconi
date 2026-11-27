@@ -64,17 +64,37 @@ export function readActivity(): number | null {
   }
 }
 
+const PARTS_KEY = "aa-xp-voci";
+
+/** i punti delle attività voce per voce (ultimo valore ricevuto dal server) */
+export function readActivityParts(): XpParts | null {
+  try {
+    const raw = JSON.parse(localStorage.getItem(PARTS_KEY) || "null") as XpParts | null;
+    return raw && typeof raw === "object" ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
 /** nuovo valore dal server: se cresce si vede il "+N", come per gli altri punti */
-export function setActivity(n: number) {
+export function setActivity(n: number, parts?: XpParts) {
   if (typeof localStorage === "undefined" || !Number.isFinite(n)) return;
   const prev = readActivity();
-  if (prev === n) return;
+  try {
+    if (parts) localStorage.setItem(PARTS_KEY, JSON.stringify(parts));
+  } catch {
+    /* memoria piena */
+  }
+  if (prev === n) {
+    if (parts) window.dispatchEvent(new CustomEvent(EVENT, { detail: null }));
+    return;
+  }
   try {
     localStorage.setItem(ACT_KEY, String(n));
   } catch {
     /* memoria piena */
   }
-  window.dispatchEvent(new CustomEvent(EVENT, { detail: prev != null && n > prev ? { n: n - prev, why: "Allenamenti e gare registrati" } : null }));
+  window.dispatchEvent(new CustomEvent(EVENT, { detail: prev != null && n > prev ? { n: n - prev, why: "Allenamenti, gare e podi" } : null }));
 }
 
 /** dopo aver salvato un allenamento o una gara: si richiedono i punti al server */
@@ -86,6 +106,28 @@ export function onActivityRefresh(fn: () => void) {
   window.addEventListener(REFRESH, fn);
   return () => window.removeEventListener(REFRESH, fn);
 }
+
+/**
+ * Quanto vale ogni attività registrata (allenamenti, gare, podi, classifiche, analisi del gesto, corsi).
+ * Il server ricalcola sempre tutto dai dati: vale anche per il passato e per le gare importate dal portale FITAST.
+ */
+export const XP_RULES = {
+  training: 8,
+  trainingPer10Arrows: 1,
+  trainingArrowsMax: 12,
+  gara: 25,
+  garaFitast: 10,
+  podium: { 1: 40, 2: 30, 3: 20 } as Record<number, number>,
+  season: { 1: 150, 2: 100, 3: 75 } as Record<number, number>,
+  seasonTop10: 30,
+  gesture: 5,
+  gesturesPerDay: 2,
+  course: 5,
+};
+
+/** i punti delle attività, voce per voce */
+export type XpParts = { allenamenti: number; gare: number; podi: number; classifiche: number; gesti: number; corsi: number };
+export const xpTotal = (p: XpParts) => p.allenamenti + p.gare + p.podi + p.classifiche + p.gesti + p.corsi;
 
 /** Livello: 1 → 100 punti, poi ogni livello chiede 25 punti in più. */
 export function levelOf(xp: number) {
@@ -105,12 +147,12 @@ export function levelOf(xp: number) {
  * `own` sono solo quelli del telefono, che si mandano al server.
  */
 export function useXp() {
-  const [st, setSt] = useState<XpState & { own: number; activity: number }>({ xp: 0, own: 0, activity: 0, log: [], days: [] });
+  const [st, setSt] = useState<XpState & { own: number; activity: number; parts: XpParts | null }>({ xp: 0, own: 0, activity: 0, parts: null, log: [], days: [] });
   useEffect(() => {
     const sync = () => {
       const local = readXp();
       const activity = readActivity() ?? 0;
-      setSt({ ...local, own: local.xp, activity, xp: local.xp + activity });
+      setSt({ ...local, own: local.xp, activity, parts: readActivityParts(), xp: local.xp + activity });
     };
     sync();
     window.addEventListener(EVENT, sync);

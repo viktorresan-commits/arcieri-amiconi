@@ -13,7 +13,7 @@ import { KindChip } from "@/components/kind-emblem";
 import { Confetti, Sparkle } from "@/components/celebrate";
 import { Glyph } from "@/components/icons";
 import { LevelCrest, levelHalo } from "@/components/level-crest";
-import { levelOf, useXp } from "@/lib/arcieri/xp";
+import { XP_RULES, levelOf, useXp } from "@/lib/arcieri/xp";
 
 export const Route = createFileRoute("/_app/obiettivi")({ component: Page });
 
@@ -144,12 +144,29 @@ function Levels() {
     { from: 10, to: 19, name: "Oro" },
     { from: 20, to: null as number | null, name: "Oro reale" },
   ];
+  const R = XP_RULES;
   const ways: [string, string][] = [
-    ["Allenamento salvato (almeno 6 frecce)", "8 punti, più 1 ogni 10 frecce (fino a 12)"],
-    ["Gara con il punteggio", "25 punti; +10 se è FITAST"],
-    ["Podio in gara", "+30 primo, +20 secondo, +10 terzo"],
-    ["Lezioni, quiz, sfida del giorno, esercizi", "da 3 a 15 punti l'uno"],
+    ["Allenamento salvato (almeno 6 frecce)", `${R.training} punti, più ${R.trainingPer10Arrows} ogni 10 frecce (fino a ${R.trainingArrowsMax})`],
+    ["Gara fatta (app, portale FITAST, archivio dal 2019)", `${R.gara} punti; +${R.garaFitast} se è sul portale FITAST`],
+    ["Podio in gara", `+${R.podium[1]} primo, +${R.podium[2]} secondo, +${R.podium[3]} terzo`],
+    ["Classifica generale a fine stagione", `+${R.season[1]} primo, +${R.season[2]} secondo, +${R.season[3]} terzo, +${R.seasonTop10} nei primi dieci`],
+    ["Analisi del gesto salvata", `${R.gesture} punti (al massimo ${R.gesturesPerDay} al giorno)`],
+    ["Presenza al corso", `${R.course} punti`],
+    ["Lezioni, quiz, sfida del giorno, esercizi, minigioco", "da 3 a 15 punti l'uno"],
   ];
+  // i propri punti voce per voce (quelli delle attività li ricalcola il server dai dati, anche del portale)
+  const p = xp.parts;
+  const mine: [string, number][] = p
+    ? ([
+        ["Allenamenti", p.allenamenti],
+        ["Gare", p.gare],
+        ["Podi di gara", p.podi],
+        ["Classifiche di stagione", p.classifiche],
+        ["Analisi del gesto", p.gesti],
+        ["Corsi", p.corsi],
+        ["Quiz, giochi ed esercizi", xp.own],
+      ] as [string, number][]).filter(([, n]) => n > 0)
+    : [];
   return (
     <div id="livelli" className="scroll-mt-20">
     <Card className="grid gap-3">
@@ -180,10 +197,27 @@ function Levels() {
           );
         })}
       </ul>
+      {mine.length ? (
+        <div className="grid gap-1.5">
+          <p className="text-xs font-semibold">I tuoi punti</p>
+          <div className="grid grid-cols-2 gap-1.5">
+            {mine.map(([k, n]) => (
+              <div key={k} className="flex items-baseline justify-between gap-2 rounded-xl bg-white/[0.05] px-2.5 py-2">
+                <span className="truncate text-[0.72rem] text-muted">{k}</span>
+                <b className="shrink-0 font-display text-lg leading-none tabular-nums">{n.toLocaleString("it-IT")}</b>
+              </div>
+            ))}
+          </div>
+          <p className="text-[0.68rem] leading-snug text-muted">Si ricalcolano da soli quando salvi un allenamento o una gara, e quando arrivano dati nuovi dal portale FITAST.</p>
+        </div>
+      ) : null}
       <div className="grid gap-1">
         <p className="text-xs font-semibold">Come si guadagnano i punti</p>
         {ways.map(([k, v]) => (
-          <p key={k} className="flex justify-between gap-2 text-xs"><span className="text-muted">{k}</span><span className="shrink-0 text-right">{v}</span></p>
+          <div key={k} className="rounded-lg bg-white/[0.03] px-2.5 py-1.5">
+            <p className="text-xs font-semibold leading-snug">{k}</p>
+            <p className="text-[0.7rem] leading-snug text-muted">{v}</p>
+          </div>
         ))}
       </div>
     </Card>

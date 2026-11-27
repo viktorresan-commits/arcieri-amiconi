@@ -4,6 +4,7 @@
  * campionato i primi arcieri di ogni categoria e la classifica squadre. Gira nel browser di chi apre
  * la scheda Compagnie FITAST (le pagine passano dal server dell'app), un passo alla volta.
  */
+import { pointsChanged } from "./points-refresh";
 import { FITAST_HOME, fitastRead } from "./fitast.api";
 import type { FitastPage } from "./fitast-parse";
 import { classificaUrl, cleanTitle, titleScore, findGare, garaDateOf, garaIdOf, garaTitleOf, rowFields, seasonRange, seasonSelect, type Gara } from "./fitast-gare";
@@ -93,7 +94,11 @@ export async function syncStandings(opts: { onProgress: (p: SyncProgress) => voi
   let saved = 0;
   let diag: string[] | undefined;
   let step = "Apro il portale";
-  const report = (extra: Partial<SyncProgress> = {}) => opts.onProgress({ step, pages, saved, diag, ...extra });
+  const report = (extra: Partial<SyncProgress> = {}) => {
+    // dati nuovi dal portale: punti dell'avatar e livelli si ricalcolano
+    if (extra.done && saved > 0) pointsChanged();
+    opts.onProgress({ step, pages, saved, diag, ...extra });
+  };
   const read = async (r: Req | null): Promise<FitastPage | null> => {
     if (!r || opts.stop() || pages >= MAX_PAGES) return null;
     pages++;

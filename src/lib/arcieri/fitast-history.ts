@@ -13,6 +13,7 @@
  * Va avanti finché non ha finito (anche un'ora o più): si può fermare e riprende da dove era. Alla fine lascia
  * un riassunto tecnico di cosa ha trovato, per capire cosa non va se qualcosa manca.
  */
+import { pointsChanged } from "./points-refresh";
 import { FITAST_HOME, fitastRead } from "./fitast.api";
 import type { FitastPage } from "./fitast-parse";
 import { classificaUrl, cleanTitle, findGare, garaDateOf, garaIdOf, garaTitleOf, seasonRange, seasonSelect } from "./fitast-gare";
@@ -85,7 +86,11 @@ export async function syncHistory(opts: { onProgress: (p: HistoryProgress) => vo
   let seasonsDone = 0;
   let gareRead = 0;
   let pctNow = 0;
-  const report = (extra: Partial<HistoryProgress> = {}) => opts.onProgress({ step, pages, saved, pct: pctNow, seasons: seasonsTotal, seasonsDone, gare: gareRead, startedAt, diag: diag.slice(-40), ...extra });
+  const report = (extra: Partial<HistoryProgress> = {}) => {
+    // dati nuovi dal portale: punti dell'avatar e livelli si ricalcolano
+    if (extra.done && saved > 0) pointsChanged();
+    opts.onProgress({ step, pages, saved, pct: pctNow, seasons: seasonsTotal, seasonsDone, gare: gareRead, startedAt, diag: diag.slice(-40), ...extra });
+  };
   const halted = () => opts.stop() || broken || pages >= SAFETY_PAGES;
 
   /** una pagina del portale; se non arriva si riprova una volta, e dopo troppe perse di fila ci si ferma */
