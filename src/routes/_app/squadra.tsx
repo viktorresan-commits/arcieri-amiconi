@@ -80,28 +80,51 @@ function bySkill(a: Archer, b: Archer) {
 
 const DIVISION_TINT: Record<string, string> = { Madonne: "#d46a9a", Messeri: "#4f8fd9", Pueri: "#4fb07a", Juniores: "#e08a3c" };
 
-/** Scheda di un arciere: mezzo busto che esce dalla nicchia con la sua ambientazione, livello, divisione e numeri */
+/** linea piccola dell'andamento delle ultime gare, verde se l'ultima è sopra le precedenti, rossa se sotto */
+function TrendLine({ values, pct }: { values: number[]; pct: number | null }) {
+  if (values.length < 2 || pct == null) return <span className="w-[3.4rem] shrink-0" aria-hidden />;
+  const up = pct >= 0;
+  const color = up ? "#4fd08a" : "#ef6b6b";
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const W = 54;
+  const H = 20;
+  const pts = values.map((v, i) => `${((i / (values.length - 1)) * (W - 4) + 2).toFixed(1)},${(max === min ? H / 2 : H - 2 - ((v - min) / (max - min)) * (H - 4)).toFixed(1)}`);
+  const last = pts[pts.length - 1].split(",");
+  return (
+    <span className="grid w-[3.4rem] shrink-0 justify-items-center gap-0.5" aria-label={`Ultima gara ${up ? "+" : ""}${pct}% rispetto alle precedenti`}>
+      <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} aria-hidden>
+        <polyline points={pts.join(" ")} fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        <circle cx={last[0]} cy={last[1]} r="2.4" fill={color} />
+      </svg>
+      <b className="font-display text-[0.85rem] leading-none tabular-nums" style={{ color }}>{up ? "+" : "−"}{Math.abs(pct)}%</b>
+    </span>
+  );
+}
+
+/** Scheda compatta di un arciere: mezzo busto nella nicchia con il livello, nome, gare, podi, allenamenti, frecce e andamento */
 function ArcherCard({ row, look, index, me }: {
-  row: { id: number; userId: string; name: string; division: string; bowType: string; xp?: number; sessions: number; arrows: number; gare: number; bestDistance: number | null; avatarColor: string; photoUrl: string | null; admin: boolean };
+  row: { id: number; userId: string; name: string; division: string; bowType: string; xp?: number; sessions: number; arrows: number; gare: number; podi?: number; trend?: number[]; trendPct?: number | null; bestDistance: number | null; avatarColor: string; photoUrl: string | null; admin: boolean };
   look?: AvatarLook;
   index: number;
   me: boolean;
 }) {
   const lv = levelOf(Math.max(0, row.xp ?? 0));
   const tint = DIVISION_TINT[row.division] ?? "#9aa39c";
-  const stats: [string, string][] = [
-    [row.sessions.toLocaleString("it-IT"), row.sessions === 1 ? "allenamento" : "allenamenti"],
-    [row.arrows.toLocaleString("it-IT"), "frecce"],
-    [String(row.gare), row.gare === 1 ? "gara" : "gare"],
+  const n = (v: number) => (v >= 10000 ? `${Math.round(v / 1000)}k` : v.toLocaleString("it-IT"));
+  const stats: { icon: IconName; v: number; label: string; color: string }[] = [
+    { icon: "flag", v: row.gare, label: "gare", color: "#e6b325" },
+    { icon: "podium", v: row.podi ?? 0, label: "podi", color: "#f1cf8a" },
+    { icon: "target", v: row.sessions, label: "allenamenti", color: "#4fd08a" },
+    { icon: "arrow", v: row.arrows, label: "frecce", color: "#e07a2f" },
   ];
   return (
-    <Link to="/arciere/$id" params={{ id: String(row.id) }} className="block pt-4">
-      <div className={`aa-menu-row aa-archer-card relative flex items-stretch gap-3 rounded-[1.4rem] p-2 pr-2.5 ${me ? "is-me" : ""}`} style={{ animationDelay: `${Math.min(index, 10) * 40}ms`, ["--div" as string]: tint }}>
-        {/* nicchia: l'ambientazione dietro, il mezzo busto che sporge in alto */}
-        <div className="relative w-[5.6rem] shrink-0 self-stretch">
-          {/* alone del colore del livello attorno alla nicchia: anello che gira e luce che respira */}
-          <span aria-hidden className="aa-niche-halo pointer-events-none absolute -inset-[3px] rounded-[1.25rem]" style={{ ["--halo-a" as string]: haloOfXp(row.xp ?? 0).a, ["--halo-b" as string]: haloOfXp(row.xp ?? 0).b, ["--halo-c" as string]: haloOfXp(row.xp ?? 0).c }} />
-          <div className="absolute inset-0 overflow-hidden rounded-[1.05rem] bg-[#16201b]">
+    <Link to="/arciere/$id" params={{ id: String(row.id) }} className="block pt-2.5">
+      <div className={`aa-menu-row aa-archer-card relative flex items-center gap-2.5 rounded-[1.15rem] p-1.5 pr-2 ${me ? "is-me" : ""}`} style={{ animationDelay: `${Math.min(index, 10) * 30}ms`, ["--div" as string]: tint }}>
+        {/* nicchia piccola: l'ambientazione dietro, il mezzo busto che sporge in alto, lo stemma del livello */}
+        <div className="relative h-[3.9rem] w-[3.4rem] shrink-0">
+          <span aria-hidden className="aa-niche-halo pointer-events-none absolute -inset-[2px] rounded-[0.95rem]" style={{ ["--halo-a" as string]: haloOfXp(row.xp ?? 0).a, ["--halo-b" as string]: haloOfXp(row.xp ?? 0).b, ["--halo-c" as string]: haloOfXp(row.xp ?? 0).c }} />
+          <div className="absolute inset-0 overflow-hidden rounded-[0.8rem] bg-[#16201b]">
             {look?.scene ? (
               <span className="absolute inset-x-[-60%] -bottom-[10%] top-[-60%] opacity-90">
                 <SceneBackdrop sky={MEMBER_SKY} scene={look.scene} id={`mb${row.id}`} />
@@ -110,37 +133,34 @@ function ArcherCard({ row, look, index, me }: {
             <span className="absolute inset-0 bg-[radial-gradient(90%_70%_at_50%_30%,transparent,rgba(0,0,0,0.45))]" />
           </div>
           {look ? (
-            <div className="absolute inset-x-0 bottom-0 h-[128%] overflow-hidden rounded-b-[1.05rem]">
-              <ArcherFront look={{ ...look, lefty: false }} fit crop="28 2 144 150" className="aa-bust h-full w-full drop-shadow-[0_4px_6px_rgba(0,0,0,0.45)]" />
+            <div className="absolute inset-x-0 bottom-0 h-[122%] overflow-hidden rounded-b-[0.8rem]">
+              <ArcherFront look={{ ...look, lefty: false }} fit crop="28 2 144 150" className="aa-bust h-full w-full drop-shadow-[0_3px_5px_rgba(0,0,0,0.45)]" />
             </div>
           ) : (
             <div className="absolute inset-0 grid place-items-center">
-              <Avatar size="lg" label={row.name} color={row.avatarColor} photo={row.photoUrl} admin={row.admin} xp={row.xp ?? null} />
+              <Avatar size="md" label={row.name} color={row.avatarColor} photo={row.photoUrl} admin={row.admin} xp={row.xp ?? null} />
             </div>
           )}
-          {/* livello: lo stemma in un angolo della nicchia */}
-          <span className="absolute -bottom-1.5 -right-2 z-[2] h-9 w-8 drop-shadow-[0_3px_4px_rgba(0,0,0,0.6)]"><LevelCrest xp={row.xp ?? 0} compact className="h-full w-full" /></span>
+          <span className="absolute -bottom-1 -right-1.5 z-[2] h-6 w-[1.35rem] drop-shadow-[0_2px_3px_rgba(0,0,0,0.6)]"><LevelCrest xp={row.xp ?? 0} compact className="h-full w-full" /></span>
         </div>
-        <div className="min-w-0 flex-1 py-1">
-          <div className="flex items-center gap-2">
-            <p className="min-w-0 truncate font-display text-[1.55rem] leading-none">{row.name}</p>
-            {me ? <span className="shrink-0 rounded-full bg-primary/25 px-2 py-0.5 text-[0.6rem] font-bold uppercase tracking-wider text-primary">Tu</span> : null}
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-center gap-1.5">
+            <p className="min-w-0 truncate font-display text-[1.2rem] leading-none">{row.name}</p>
+            {me ? <span className="shrink-0 rounded-full bg-primary/25 px-1.5 py-px text-[0.55rem] font-bold uppercase tracking-wider text-primary">Tu</span> : null}
+            {row.division ? <span className="shrink-0 rounded-full px-1.5 py-px text-[0.55rem] font-bold uppercase tracking-wider" style={{ background: `color-mix(in srgb, ${tint} 26%, transparent)`, color: `color-mix(in srgb, ${tint} 70%, white)` }}>{row.division}</span> : null}
+            <span className="sr-only">Livello {lv.level}</span>
           </div>
-          <div className="mt-1.5 flex flex-wrap items-center gap-1">
-            {row.division ? <span className="rounded-full px-2 py-0.5 text-[0.62rem] font-bold uppercase tracking-wider" style={{ background: `color-mix(in srgb, ${tint} 26%, transparent)`, color: `color-mix(in srgb, ${tint} 70%, white)` }}>{row.division}</span> : null}
-            <span className="rounded-full bg-[#e0b15a]/15 px-2 py-0.5 text-[0.62rem] font-bold uppercase tracking-wider text-[#f1cf8a]">Liv. {lv.level}</span>
-            {row.bowType ? <span className="truncate text-[0.68rem] text-muted">{bowLabel(row.bowType)}</span> : null}
-          </div>
-          <div className="mt-2 grid grid-cols-3 gap-1">
-            {stats.map(([v, k]) => (
-              <span key={k} className="rounded-xl bg-white/[0.05] px-1.5 py-1 text-center">
-                <b className="block font-display text-[1.05rem] leading-none tabular-nums">{v}</b>
-                <span className="block truncate text-[0.6rem] text-muted">{k}</span>
+          {/* gare, podi, allenamenti, frecce: solo numeri con il loro simbolo */}
+          <div className="mt-1.5 grid grid-cols-4 gap-1">
+            {stats.map((x) => (
+              <span key={x.label} className="flex min-w-0 items-center gap-1 rounded-lg bg-white/[0.05] px-1.5 py-1" title={x.label} aria-label={`${x.v} ${x.label}`}>
+                <span className="shrink-0" style={{ color: x.color }}><Glyph name={x.icon} size={12} /></span>
+                <b className="min-w-0 truncate font-display text-[0.95rem] leading-none tabular-nums">{n(x.v)}</b>
               </span>
             ))}
           </div>
         </div>
-        <span className="aa-bell grid h-8 w-8 shrink-0 self-center place-items-center rounded-full"><Glyph name="chevron" size={15} /></span>
+        <TrendLine values={row.trend ?? []} pct={row.trendPct ?? null} />
       </div>
     </Link>
   );

@@ -1622,6 +1622,17 @@ export const squadBoard = createServerFn({ method: "GET" })
         const inSeason = done.filter((l) => l.day >= season.from && l.day <= season.to);
         const champ = done.length ? inSeason.reduce((sum, l) => sum + (l.champ ?? 0), 0) : champOf.get(row.user_id) ?? 0;
         const lastDivision = [...done].reverse().map((l) => portalDivision(l.category ?? "")).find(Boolean) ?? "";
+        // l'andamento delle ultime gare: punti per freccia (le gare hanno piazzole diverse), dalla più vecchia
+        const perArrow = [...done]
+          .sort((a, b) => a.day.localeCompare(b.day))
+          .filter((l) => l.points != null && l.arrows > 0)
+          .map((l) => (l.points as number) / l.arrows);
+        const trend = perArrow.slice(-8).map((v) => Math.round(v * 100) / 100);
+        const before = perArrow.slice(-4, -1);
+        const lastAvg = perArrow[perArrow.length - 1];
+        const prevAvg = before.length ? before.reduce((a, b) => a + b, 0) / before.length : null;
+        const trendPct = lastAvg != null && prevAvg ? Math.round(((lastAvg - prevAvg) / prevAvg) * 100) : null;
+        const podi = done.filter((l) => l.rank != null && l.rank <= 3).length;
         const remote = row.user_image && /^https:\/\//.test(row.user_image) ? row.user_image : null;
         const bestDistance = bestDistanceOf.get(row.user_id) ?? null;
         return {
@@ -1642,6 +1653,9 @@ export const squadBoard = createServerFn({ method: "GET" })
           garaArrows,
           avg: arrows > 0 ? points / arrows : null,
           gare: Math.max(done.length, gareOf.get(row.user_id)?.size ?? 0),
+          podi,
+          trend,
+          trendPct,
           champ,
           compAvg: comp && comp.n > 0 ? comp.points / comp.n : null,
           bestDistance,
