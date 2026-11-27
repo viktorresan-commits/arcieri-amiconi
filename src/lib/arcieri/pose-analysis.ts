@@ -912,6 +912,30 @@ export function sideEvidence(lm: Landmark[], hand: Hand, aspect: number): number
   return 0;
 }
 
+/**
+ * Lati letti al contrario. Una persona con il viso verso la camera ha la spalla sinistra (11) a destra
+ * nell'immagine. Si contano i fotogrammi con il viso ben visibile e le spalle ben separate: se di solito
+ * è il contrario, il modello legge l'arciere come se fosse di spalle (mirror = true: il 3D va raddrizzato).
+ * I pochi fotogrammi in cui i lati si invertono rispetto agli altri si raddrizzano qui (flip).
+ */
+export function sideConsistency(samples: { lm: Landmark[] | null }[], aspect: number): { mirror: boolean; flip: boolean[] } {
+  const dx = samples.map((s) => (s.lm && s.lm[11] && s.lm[12] ? (s.lm[11].x - s.lm[12].x) * aspect : 0));
+  const widths = dx.map(Math.abs).filter((v) => v > 0).sort((a, b) => a - b);
+  const big = widths[Math.floor(widths.length * 0.9)] ?? 0;
+  const faceOn = (lm: Landmark[]) => vis(lm[0]) > 0.8 && vis(lm[2]) > 0.8 && vis(lm[5]) > 0.8;
+  let ok = 0;
+  let bad = 0;
+  samples.forEach((s, i) => {
+    if (!s.lm || !faceOn(s.lm) || Math.abs(dx[i]) < 0.35 * big) return;
+    if (dx[i] > 0) ok++;
+    else bad++;
+  });
+  const mirror = bad > ok * 1.5 && bad >= 5;
+  const usual = mirror ? -1 : 1;
+  const flip = samples.map((s, i) => Boolean(s.lm && faceOn(s.lm) && Math.abs(dx[i]) >= 0.35 * big && Math.sign(dx[i]) === -usual && ok + bad >= 8));
+  return { mirror, flip };
+}
+
 export function withExtras(body: Landmark[], left: Landmark[] | null, right: Landmark[] | null, face: Landmark[] | null): Landmark[] {
   const out = body.slice(0, 33);
   const fill = (src: Landmark[] | null, n: number, anchor: Landmark) => {

@@ -38,7 +38,7 @@ export type Hud = {
   feet: V3;
 };
 /** J e hand servono al corpo anatomico vero (anatomy-body): ogni segmento segue questi punti */
-export type Model = { parts: Part[]; hud: Hud; center: V3; height: number; J?: Record<number, V3>; hand?: Hand; /** dove guarda il viso (orizzontale): segue il bersaglio durante il tiro */ headF?: V3; /** quanto la mano della corda è in presa sulla corda (0..1) e quanto quella dell'arco stringe l'impugnatura */ grip?: { draw: number; bow: number } };
+export type Model = { parts: Part[]; hud: Hud; center: V3; height: number; J?: Record<number, V3>; hand?: Hand; /** dove guarda il viso (orizzontale): segue il bersaglio durante il tiro */ headF?: V3; /** testa in giù (+) o in su (-), radianti: dal naso rispetto alle orecchie nel fotogramma */ headPitch?: number; /** quanto la mano della corda è in presa sulla corda (0..1) e quanto quella dell'arco stringe l'impugnatura */ grip?: { draw: number; bow: number } };
 
 const add = (a: V3, b: V3): V3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
 const sub = (a: V3, b: V3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
@@ -460,6 +460,7 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gea
   const headC = add(earM, mul(up, 0.025));
   const aimed = headAim(J, bow, drw, up, fwd);
   const headF = aimed.f;
+  const headPitch = aimed.pitch;
   const headR = norm(cross(up, headF));
   const neckTop = add(headC, mul(up, -0.085));
   const bowIdx = J[hand === "destro" ? 19 : 20] ?? bow.wr;
@@ -885,6 +886,7 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gea
     J,
     hand,
     headF,
+    headPitch,
     // la mano dell'arco lo tiene sempre (anche con il braccio giù); la mano della corda si apre al rilascio
     grip: { draw: loose ? 0 : aimed.drawing, bow: Math.max(0.85, aimed.raised) },
   };
@@ -912,8 +914,14 @@ function headAim(J: Record<number, V3>, bow: { sh: V3; el: V3; wr: V3 }, drw: { 
   // mano della corda al viso: si guarda lungo la freccia
   const toFace = len(sub(drw.wr, mouth));
   const drawing = raised * Math.max(0, Math.min(1, (0.24 - toFace) / 0.1));
+  // testa in giù (incocco, sguardo alle mani) o in su: il naso scende rispetto alle orecchie. A testa
+  // dritta la punta del naso sta poco sotto le orecchie; chinando la testa scende in fretta.
+  // In mira la testa resta dritta: lì conta poco (il tremolio dei punti non deve farla annuire)
+  const drop = earM[1] - J[0][1];
+  // (provato sui video: a testa dritta circa 2,2 cm, guardando le mani nell'incocco 5 cm e oltre)
+  const pitch = Math.asin(Math.max(-0.4, Math.min(0.8, (drop - 0.022) / 0.05))) * (1 - 0.7 * drawing);
   const aim = flat(sub(bow.wr, drawing > 0.2 ? drw.wr : bow.sh));
-  if (!aim || raised < 0.05) return { f: look, raised, drawing };
+  if (!aim || raised < 0.05) return { f: look, raised, drawing, pitch };
   // il viso segue il video (naso e orecchie); in trazione solo una spinta leggera verso la freccia,
   // quanto basta a togliere il tremolio dei punti del viso (prima la testa girava più del vero)
   const w = Math.min(0.3, 0.12 * raised + 0.18 * drawing);
@@ -930,5 +938,5 @@ function headAim(J: Record<number, V3>, bow: { sh: V3; el: V3; wr: V3 }, drw: { 
       f = norm(add(mul(fw, lim), mul(side, Math.sqrt(1 - lim * lim))));
     }
   }
-  return { f, raised, drawing };
+  return { f, raised, drawing, pitch };
 }

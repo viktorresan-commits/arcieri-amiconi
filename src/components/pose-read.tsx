@@ -27,6 +27,8 @@ import {
   sides,
   smoothLm,
   mixLm,
+  sideConsistency,
+  swapSides,
   withExtras,
   FACE_IDS,
   HAND_L,
@@ -121,7 +123,7 @@ function partEngine(kind: "hand" | "face"): Promise<PartMarker> {
       const files = await vision.FilesetResolver.forVisionTasks(`${VISION}/wasm`);
       const make = (delegate: "GPU" | "CPU") =>
         (kind === "hand"
-          ? vision.HandLandmarker.createFromOptions(files, { baseOptions: { modelAssetPath: PART_MODELS.hand, delegate }, runningMode: "IMAGE", numHands: 1, minHandDetectionConfidence: 0.35, minHandPresenceConfidence: 0.35 })
+          ? vision.HandLandmarker.createFromOptions(files, { baseOptions: { modelAssetPath: PART_MODELS.hand, delegate }, runningMode: "IMAGE", numHands: 1, minHandDetectionConfidence: 0.3, minHandPresenceConfidence: 0.3 })
           : vision.FaceLandmarker.createFromOptions(files, { baseOptions: { modelAssetPath: PART_MODELS.face, delegate }, runningMode: "IMAGE", numFaces: 1, minFaceDetectionConfidence: 0.35 })) as Promise<PartMarker>;
       try {
         return await make("GPU");
@@ -139,20 +141,46 @@ function partEngine(kind: "hand" | "face"): Promise<PartMarker> {
 
 const partCanvas: { c: HTMLCanvasElement | null } = { c: null };
 /** rileva una mano o il viso in un riquadro quadrato attorno a (cx, cy) e riporta i punti nel fotogramma */
-async function detectPart(kind: "hand" | "face", source: CanvasImageSource, W: number, H: number, cx: number, cy: number, side: number): Promise<Landmark[] | null> {
+async function detectPart(kind: "hand" | "face", source: CanvasImageSource, W: number, H: number, cx: number, cy: number, side: number, opts: { rot?: number; kMax?: number } = {}): Promise<Landmark[] | null> {
   const marker = await partEngine(kind);
-  const sz = Math.max(48, Math.min(Math.max(W, H), side));
-  const x0 = Math.max(0, Math.min(W - sz, cx - sz / 2));
-  const y0 = Math.max(0, Math.min(H - sz, cy - sz / 2));
-  const sw = Math.min(sz, W);
-  const sh = Math.min(sz, H);
   const c = partCanvas.c ?? (partCanvas.c = document.createElement("canvas"));
-  const k = Math.min(2.5, 320 / Math.max(sw, sh));
-  c.width = Math.round(sw * k);
-  c.height = Math.round(sh * k);
-  const ctx = c.getContext("2d");
-  if (!ctx) return null;
-  ctx.drawImage(source, x0, y0, sw, sh, 0, 0, c.width, c.height);
+  const rot = opts.rot ?? 0;
+  let map: (p: Landmark) => Landmark;
+  if (rot) {
+    // riquadro ruotato attorno al suo centro (mano girata in un altro verso: il rilevatore la vede meglio)
+    const sz = Math.max(48, Math.min(Math.max(W, H), side));
+    const k = Math.min(opts.kMax ?? 2.5, 320 / sz);
+    c.width = Math.round(sz * k);
+    c.height = Math.round(sz * k);
+    const ctx = c.getContext("2d");
+    if (!ctx) return null;
+    ctx.setTransform(k, 0, 0, k, c.width / 2, c.height / 2);
+    ctx.rotate(rot);
+    ctx.fillStyle = "#000";
+    ctx.fillRect(-sz, -sz, sz * 2, sz * 2);
+    ctx.drawImage(source, -cx, -cy);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    const cos = Math.cos(rot);
+    const sin = Math.sin(rot);
+    map = (p) => {
+      const u = (p.x * c.width - c.width / 2) / k;
+      const v = (p.y * c.height - c.height / 2) / k;
+      return { x: (cx + u * cos + v * sin) / W, y: (cy - u * sin + v * cos) / H, z: p.z != null ? (p.z * sz) / W : undefined, visibility: 0.9 };
+    };
+  } else {
+    const sz = Math.max(48, Math.min(Math.max(W, H), side));
+    const x0 = Math.max(0, Math.min(W - sz, cx - sz / 2));
+    const y0 = Math.max(0, Math.min(H - sz, cy - sz / 2));
+    const sw = Math.min(sz, W);
+    const sh = Math.min(sz, H);
+    const k = Math.min(opts.kMax ?? 2.5, 320 / Math.max(sw, sh));
+    c.width = Math.round(sw * k);
+    c.height = Math.round(sh * k);
+    const ctx = c.getContext("2d");
+    if (!ctx) return null;
+    ctx.drawImage(source, x0, y0, sw, sh, 0, 0, c.width, c.height);
+    map = (p) => ({ x: (x0 + p.x * sw) / W, y: (y0 + p.y * sh) / H, z: p.z != null ? (p.z * sw) / W : undefined, visibility: 0.9 });
+  }
   let res: ReturnType<PartMarker["detect"]>;
   try {
     res = marker.detect(c);
@@ -161,7 +189,6 @@ async function detectPart(kind: "hand" | "face", source: CanvasImageSource, W: n
   }
   const pts = kind === "hand" ? res.landmarks?.[0] : res.faceLandmarks?.[0];
   if (!pts?.length) return null;
-  const map = (p: Landmark) => ({ x: (x0 + p.x * sw) / W, y: (y0 + p.y * sh) / H, z: p.z != null ? (p.z * sw) / W : undefined, visibility: 0.9 });
   const out = kind === "hand" ? pts.map(map) : FACE_IDS.map((id) => map(pts[id] ?? pts[0]));
   // punti fuori dal fotogramma (lettura sbagliata): meglio nessun punto che misure assurde
   if (out.some((p) => !Number.isFinite(p.x) || !Number.isFinite(p.y) || p.x < -0.3 || p.x > 1.3 || p.y < -0.3 || p.y > 1.3)) return null;
@@ -180,10 +207,19 @@ async function detectExtras(source: CanvasImageSource, W: number, H: number, bod
     // un po' oltre il polso, dove ci sono le dita
     const cx = w.x + (w.x - e.x) * 0.35;
     const cy = w.y + (w.y - e.y) * 0.35;
-    const pts = await detectPart("hand", source, W, H, cx, cy, Math.max(shoulders * 1.1, dist(wrist, elbow) * 1.6));
+    const side = Math.max(shoulders * 1.1, dist(wrist, elbow) * 1.6);
+    // l'avambraccio in verticale nel riquadro ruotato
+    const turn = Math.atan2(w.x - e.x, -(w.y - e.y));
     // la mano trovata deve partire dal polso giusto
-    if (pts && Math.hypot(pts[0].x * W - w.x, pts[0].y * H - w.y) > Math.max(shoulders * 0.5, 40)) return null;
-    return pts;
+    const near = (pts: Landmark[] | null) => Boolean(pts && Math.hypot(pts[0].x * W - w.x, pts[0].y * H - w.y) <= Math.max(shoulders * 0.5, 40));
+    // più tentativi (provati sui video veri: da circa metà dei fotogrammi a due terzi o più con le dita):
+    // il riquadro solito, ruotato, stretto e ingrandito, largo e ruotato
+    const tries: [number, { rot?: number; kMax?: number }][] = [[side, {}], [side, { rot: turn }], [side * 0.7, { kMax: 4 }], [side * 1.3, { rot: turn, kMax: 4 }]];
+    for (const [sd, o] of tries) {
+      const pts = await detectPart("hand", source, W, H, cx, cy, sd, o);
+      if (near(pts)) return pts;
+    }
+    return null;
   };
   const face = async () => {
     if ((body[0].visibility ?? 1) < 0.3) return null;
@@ -343,6 +379,8 @@ export function PoseRead() {
 
   // lo schiocco della corda nel suono del video: rende sicuro il momento del rilascio
   const [cues, setCues] = useState<Cues>({});
+  // il modello ha letto i lati al contrario (arciere di fronte letto come di spalle): il 3D si raddrizza
+  const [mirror3d, setMirror3d] = useState(false);
   const cuesFor = useRef<{ src: string; job: Promise<Cues> } | null>(null);
   function soundCues(url: string): Promise<Cues> {
     if (cuesFor.current?.src === url) return cuesFor.current.job;
@@ -659,6 +697,7 @@ export function PoseRead() {
     setError("");
     setSamples([]);
     setCues({});
+    setMirror3d(false);
     setNow(null);
     setGear(null);
     gearRef.current = null;
@@ -794,6 +833,14 @@ export function PoseRead() {
         }
       }
       if (!cancel.current) {
+        // fotogrammi con sinistra e destra invertite rispetto agli altri: si raddrizzano prima di pulire
+        const sidesOk = sideConsistency(out, W / H);
+        out.forEach((sm, i) => {
+          if (!sidesOk.flip[i] || !sm.lm) return;
+          const lm = swapSides(sm.lm);
+          out[i] = { ...sm, lm, m: metricsOf(lm, handRef.current, W / H, H) };
+        });
+        setMirror3d(sidesOk.mirror);
         // punti ripuliti lungo il tempo: niente salti, niente arco o freccia inventati
         const clean = cleanSequence(out, handRef.current, W / H, H);
         out.splice(0, out.length, ...clean);
@@ -1253,7 +1300,7 @@ export function PoseRead() {
             {/* una volta aperta la vista 3D resta pronta (nascosta): cambiare vista non la ricrea, niente scatti */}
             {used3d ? (
               <div className={`absolute inset-0 z-[1] ${look === "sagoma" ? "" : "hidden"}`}>
-                <Anatomy3D lmRef={lastLm} gearRef={gearRef} calFrames={calFrames} aspect={size.w / Math.max(1, size.h)} hand={effHand} inBox className="h-full" />
+                <Anatomy3D lmRef={lastLm} gearRef={gearRef} calFrames={calFrames} aspect={size.w / Math.max(1, size.h)} hand={effHand} mirror={mirror3d} transport={{ playing, time, duration, onToggle: toggle, onSeek: seek, step: frameStep }} inBox className="h-full" />
               </div>
             ) : null}
             {zoomOn ? (

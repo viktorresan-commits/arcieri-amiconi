@@ -2,10 +2,22 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { boneCal, buildModel, depthMemo, v3, type BoneCal, type Model, type V3 } from "@/lib/arcieri/anatomy-model";
 import { createAnatomyRenderer, lookAt, mul4, perspective } from "@/lib/arcieri/anatomy-render";
 import { BODY_CREDIT, loadBody } from "@/lib/arcieri/anatomy-body";
-import { mixLm, sideEvidence, type Gear, type Hand, type Landmark } from "@/lib/arcieri/pose-analysis";
+import { mixLm, sideEvidence, swapSides, type Gear, type Hand, type Landmark } from "@/lib/arcieri/pose-analysis";
 import { unpackLm, type PackedLm } from "@/lib/arcieri/gesture-record";
 import { saveFile } from "@/lib/arcieri/native";
 import { cx } from "./kit";
+import { Glyph } from "./icons";
+
+/** punti con sinistra e destra scambiate, una volta sola per fotogramma (la stessa posa resta la stessa) */
+const mirrored = new WeakMap<Landmark[], Landmark[]>();
+function mirrorCache(lm: Landmark[]) {
+  let m = mirrored.get(lm);
+  if (!m) {
+    m = swapSides(lm);
+    mirrored.set(lm, m);
+  }
+  return m;
+}
 
 /**
  * Analisi del gesto in 3D: corpo traslucido con scheletro e muscoli al lavoro, arco e freccia,
@@ -132,7 +144,13 @@ export function Anatomy3D({
   hand,
   className = "h-[26rem]",
   inBox = false,
+  mirror = false,
+  transport,
 }: {
+  /** sinistra e destra del modello scambiate rispetto al video (lette al contrario): si raddrizzano per il 3D */
+  mirror?: boolean;
+  /** comandi del video, per guardarlo anche a schermo intero */
+  transport?: { playing: boolean; time: number; duration: number; onToggle: () => void; onSeek: (t: number) => void; step?: number };
   /** arco e freccia trovati nel video (quando è fermo): il 3D li usa al posto di quelli stimati */
   gearRef?: { current: Gear | null };
   /** dentro il riquadro del video: i comandi vanno in basso, in alto a destra c'è la scelta della vista */
@@ -201,14 +219,15 @@ export function Anatomy3D({
     return score < 0;
   }, [seq, lm, lmRef, hand, aspect]);
   // i punti restano come nel video; cambia solo quale braccio tiene l'arco
-  const effHand: Hand = swap ? (hand === "destro" ? "mancino" : "destro") : hand;
+  const flipHand = swap !== mirror;
+  const effHand: Hand = flipHand ? (hand === "destro" ? "mancino" : "destro") : hand;
   // lunghezze vere delle ossa: dalla sequenza salvata o dai fotogrammi dell'analisi; dal vivo si
   // imparano dai fotogrammi che passano
   const fixedCal = useMemo<BoneCal | null>(() => {
-    if (calFrames && calFrames.length >= 8) return boneCal(calFrames, aspect);
+    if (calFrames && calFrames.length >= 8) return boneCal(mirror ? calFrames.map((f) => (f ? swapSides(f) : f)) : calFrames, aspect);
     if (seq && seq.length >= 8) return boneCal(seq.map((f) => unpackLm(f.lm)), aspect);
     return null;
-  }, [calFrames, seq, aspect]);
+  }, [calFrames, seq, aspect, mirror]);
   const live = useRef<{ frames: Landmark[][]; cal: BoneCal | null; n: number }>({ frames: [], cal: null, n: 0 });
   useEffect(() => {
     live.current = { frames: [], cal: null, n: 0 };
@@ -247,8 +266,8 @@ export function Anatomy3D({
       window.setTimeout(() => setShotMsg(""), 3500);
     }
   }
-  const input = useRef({ lm, lmRef, seq, aspect, hand: effHand, gearRef, cal: fixedCal });
-  input.current = { lm, lmRef, seq, aspect, hand: effHand, gearRef, cal: fixedCal };
+  const input = useRef({ lm, lmRef, seq, aspect, hand: effHand, gearRef, cal: fixedCal, mirror });
+  input.current = { lm, lmRef, seq, aspect, hand: effHand, gearRef, cal: fixedCal, mirror };
 
   useEffect(() => {
     const canvas = glCanvas.current;
@@ -298,7 +317,7 @@ export function Anatomy3D({
       const time = (now - t0) / 1000;
       // nascosto (vista non attiva o fuori schermo): non lavora
       if (!canvas.clientWidth || !canvas.clientHeight) return;
-      const { lm: still, lmRef: ref, seq: sq, aspect: asp, hand: hd, gearRef: gr, cal: fc } = input.current;
+      const { lm: still, lmRef: ref, seq: sq, aspect: asp, hand: hd, gearRef: gr, cal: fc, mirror: mir } = input.current;
       // punti da mostrare: sequenza salvata (in ciclo), poi quelli dal vivo, poi quelli fissi
       let target: Landmark[] | null = null;
       const playing = Boolean(sq && sq.length > 1);
@@ -306,6 +325,7 @@ export function Anatomy3D({
         const end = sq[sq.length - 1].t + 0.9;
         target = seqAt(sq, time % end);
       } else target = ref?.current ?? still;
+      if (target && mir) target = mirrorCache(target);
       if (target && target !== lastTarget) {
         lastTarget = target;
         moving = true;
@@ -470,7 +490,7 @@ export function Anatomy3D({
       <p className="pointer-events-none absolute inset-x-0 bottom-0 truncate px-2 text-center text-[0.45rem] leading-[0.7rem] text-white/50">{BODY_CREDIT}</p>
       {empty ? <p className="absolute inset-x-0 top-1/2 -translate-y-1/2 text-center text-sm text-white/80">In attesa della posa: avvia il video o scegli un fotogramma.</p> : null}
       {/* in alto: Gira e la foto in alta definizione; in basso cosa si vede (corpo, muscoli, scheletro…) */}
-      <div className={cx("absolute flex gap-1", full ? "left-2 top-[max(0.5rem,env(safe-area-inset-top))]" : cx("top-2", inBox ? "left-2" : "right-2"))}>
+      <div className={cx("absolute flex flex-wrap gap-1", full ? "left-2 top-[max(0.5rem,env(safe-area-inset-top))]" : cx("top-2 w-[10.5rem]", inBox ? "left-2" : "right-2"))}>
         <button
           type="button"
           aria-pressed={auto}
@@ -493,16 +513,29 @@ export function Anatomy3D({
         >
           {shooting ? "Foto…" : "Foto HD"}
         </button>
-        <button
-          type="button"
-          onClick={toggleFull}
-          aria-pressed={full}
-          aria-label={full ? "Esci dallo schermo intero" : "Guarda a schermo intero"}
-          className={cx("min-h-9 rounded-full px-3 text-xs font-semibold backdrop-blur", full ? "bg-[#5fd4ff]/35 text-white ring-1 ring-[#5fd4ff]/70" : "bg-black/45 text-white")}
-        >
-          {full ? "Chiudi" : "Schermo intero"}
-        </button>
+        {full ? (
+          <button type="button" onClick={toggleFull} aria-pressed aria-label="Esci dallo schermo intero" className="min-h-9 rounded-full bg-[#5fd4ff]/35 px-3 text-xs font-semibold text-white ring-1 ring-[#5fd4ff]/70 backdrop-blur">
+            Chiudi
+          </button>
+        ) : (
+          // nell'anteprima solo l'icona, sotto «Gira»: in alto a destra c'è la scelta Scheletro / Sagoma
+          <button type="button" onClick={toggleFull} aria-label="Guarda a schermo intero" title="Schermo intero" className="grid h-9 w-9 basis-full place-items-start">
+            <span className="grid h-9 w-9 place-items-center rounded-full bg-black/45 text-white backdrop-blur">
+              <Glyph name="expand" size={17} />
+            </span>
+          </button>
+        )}
       </div>
+      {full && transport ? (
+        // a schermo intero anche il video: play, pausa, fotogramma per fotogramma e la linea del tempo
+        <div className="absolute inset-x-2 bottom-[calc(max(1rem,env(safe-area-inset-bottom))+2.6rem)] flex items-center gap-1.5 rounded-full bg-black/45 px-2 py-1 text-white backdrop-blur">
+          <button type="button" onClick={() => transport.onSeek(transport.time - (transport.step ?? 1 / 30))} aria-label="Fotogramma indietro" className="grid h-9 w-9 shrink-0 place-items-center rounded-full"><TrIcon k="prev" /></button>
+          <button type="button" onClick={transport.onToggle} aria-label={transport.playing ? "Pausa" : "Play"} className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#5fd4ff]/35 text-base ring-1 ring-[#5fd4ff]/70"><TrIcon k={transport.playing ? "pause" : "play"} /></button>
+          <button type="button" onClick={() => transport.onSeek(transport.time + (transport.step ?? 1 / 30))} aria-label="Fotogramma avanti" className="grid h-9 w-9 shrink-0 place-items-center rounded-full"><TrIcon k="next" /></button>
+          <input type="range" min={0} max={Math.max(0.01, transport.duration)} step={0.01} value={Math.min(transport.time, transport.duration)} onChange={(e) => transport.onSeek(Number(e.currentTarget.value))} aria-label="Tempo del video" className="min-w-0 flex-1 accent-[#5fd4ff]" />
+          <span className="shrink-0 text-[0.7rem] tabular-nums text-white/80">{transport.time.toFixed(1)} s</span>
+        </div>
+      ) : null}
       <div className={cx("absolute inset-x-2 flex flex-wrap justify-center gap-1", full ? "bottom-[max(1rem,env(safe-area-inset-bottom))]" : "bottom-4")}>
         {([["pelle", "Corpo"], ["muscolo", "Muscoli"], ["osso", "Scheletro"], ["punti", "Punti"], ["quote", "Misure"]] as const).map(([k, label]) => (
           <button key={k} type="button" aria-pressed={layers[k]} onClick={() => toggle(k)} className={cx("min-h-8 rounded-full px-2.5 text-[0.7rem] font-semibold backdrop-blur", layers[k] ? "bg-[#5fd4ff]/25 text-white ring-1 ring-[#5fd4ff]/60" : "bg-black/40 text-white/60")}>
@@ -729,4 +762,16 @@ function tag(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, 
   ctx.textBaseline = "middle";
   ctx.textAlign = "left";
   ctx.fillText(text, bx + 4 * dpr, y + 0.5 * dpr);
+}
+
+// icone del lettore disegnate a linee: i caratteri ▶ ⏸ su Android diventano emoji colorate
+function TrIcon({ k }: { k: "play" | "pause" | "prev" | "next" }) {
+  return (
+    <svg viewBox="0 0 24 24" width={18} height={18} fill="currentColor" aria-hidden>
+      {k === "play" ? <path d="M8 5.5v13l10.5-6.5z" /> : null}
+      {k === "pause" ? <path d="M7 5h3.6v14H7zM13.4 5H17v14h-3.6z" /> : null}
+      {k === "prev" ? <path d="M6 5h2v14H6zM19 5.5v13L9.5 12z" /> : null}
+      {k === "next" ? <path d="M16 5h2v14h-2zM5 5.5v13L14.5 12z" /> : null}
+    </svg>
+  );
 }

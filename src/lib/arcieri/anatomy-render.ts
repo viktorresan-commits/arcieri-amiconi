@@ -67,26 +67,32 @@ const BVS = `
 attribute vec3 aP; attribute vec3 aN; attribute vec2 aJ; attribute vec4 aM; attribute float aT;
 uniform mat4 uVP; uniform vec4 uSeg[63]; uniform vec3 uLo; uniform vec3 uHi;
 uniform vec4 uAct[16]; uniform vec4 uBul[16]; uniform float uLayerV;
-uniform vec4 uCurl[8]; uniform vec2 uDita;
+uniform vec4 uCurl[8]; uniform vec2 uDita; uniform vec4 uFa[4];
 varying vec3 vW; varying vec3 vN; varying vec2 vF; varying float vAct; varying float vFoc; varying float vTend; varying float vStr;
 float pick(vec4 v, int k){ return k == 0 ? v.x : k == 1 ? v.y : k == 2 ? v.z : v.w; }
 vec3 rotA(vec3 v, vec3 ax, float a){ float c = cos(a); float s = sin(a); return v * c + cross(ax, v) * s + ax * dot(ax, v) * (1.0 - c); }
 // dita piegate in presa (prima di seguire i segmenti): terza falange, seconda, allargamento dell'indice, nocca
 void curl(int h, inout vec3 p, inout vec3 n){
   vec4 c0 = uCurl[h * 4]; vec4 c1 = uCurl[h * 4 + 1]; vec4 c2 = uCurl[h * 4 + 2]; vec4 c3 = uCurl[h * 4 + 3];
-  if (c1.w == 0.0 && c2.w == 0.0) return;
+  vec4 f1 = uFa[h * 2]; vec4 f2 = uFa[h * 2 + 1];
+  if (c0.w == 0.0) return;
   vec3 K = c0.xyz; float L = c0.w; vec3 F = c1.xyz; vec3 S = c2.xyz; vec3 X = c3.xyz;
   vec3 d = p - K; float t = dot(d, F) / L; float u = dot(d, X);
   float little = smoothstep(-0.012, -0.022, u);
   float index = smoothstep(0.012, 0.02, u);
-  float a2 = c2.w * (1.0 + 0.3 * little); float a3 = c2.w * 0.55 * (1.0 + 0.3 * little);
+  // ogni dito con la sua piega (dai 21 punti della mano): indice, medio, anulare, mignolo da un lato all'altro
+  vec4 wf = exp(-pow((vec4(u) - vec4(0.026, 0.009, -0.009, -0.026)) / 0.009, vec4(2.0)));
+  wf /= max(1e-4, wf.x + wf.y + wf.z + wf.w);
+  float g1 = dot(wf, f1); float g2 = dot(wf, f2);
+  float a2 = c2.w * (1.0 + 0.3 * little) + g2; float a3 = c2.w * 0.55 * (1.0 + 0.3 * little) + g2 * 0.55;
   vec3 J2 = K + F * (L * 0.47); vec3 J3 = K + F * (L * 0.76);
   float s1 = smoothstep(-0.05, 0.08, t); float s2 = smoothstep(0.40, 0.54, t); float s3 = smoothstep(0.70, 0.82, t);
   p = J3 + rotA(p - J3, S, a3 * s3); n = rotA(n, S, a3 * s3);
   p = J2 + rotA(p - J2, S, a2 * s2); n = rotA(n, S, a2 * s2);
   vec3 Pn = cross(S, F); float sp = c3.w * index * s1;
   p = K + rotA(p - K, Pn, sp); n = rotA(n, Pn, sp);
-  p = K + rotA(p - K, S, c1.w * s1 * (1.0 + 0.25 * little)); n = rotA(n, S, c1.w * s1 * (1.0 + 0.25 * little));
+  float a1 = c1.w * (1.0 + 0.25 * little) + g1;
+  p = K + rotA(p - K, S, a1 * s1); n = rotA(n, S, a1 * s1);
 }
 void main(){
   int g = int(aM.y + 0.5); int gi = g / 4; int gk = g - gi * 4;
@@ -447,6 +453,7 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     uLayerV: gl.getUniformLocation(bprog, "uLayerV"),
     uTime: gl.getUniformLocation(bprog, "uTime"),
     uCurl: gl.getUniformLocation(bprog, "uCurl"),
+    uFa: gl.getUniformLocation(bprog, "uFa"),
     uDita: gl.getUniformLocation(bprog, "uDita"),
   };
   type GpuBody = { meta: BodyMeta; flex: FlexInfo; batches: { layer: BodyBatch["layer"]; vb: WebGLBuffer; ib: WebGLBuffer; count: number }[] };
@@ -509,6 +516,7 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
   const bul = new Float32Array(64);
   const segRows = new Float32Array(63 * 4);
   const curlBuf = new Float32Array(32);
+  const fingBuf = new Float32Array(16);
   const drawBody = (model: Model, VP: Float32Array, eye: V3, L: Layers, focus: Set<string> | null | undefined, time: number) => {
     if (!body || !model.J || !model.hand) return;
     const meta = body.meta;
@@ -523,15 +531,18 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     // le mani in presa si mettono sull'attrezzo: il pugno chiuso attorno all'impugnatura dell'arco e la piega
     // delle dita sulla corda alla cocca. Prima si guarda dove cade il «buco» delle dita piegate, poi si sposta
     // la mano (solo lei: l'avambraccio si allunga di pochi centimetri) perché cada proprio lì
+    // dove guarda la testa, con l'inclinazione in su o in giù
+    const pitch = model.headPitch ?? 0;
+    const look: V3 | undefined = model.headF ? [model.headF[0] * Math.cos(pitch), -Math.sin(pitch), model.headF[2] * Math.cos(pitch)] : undefined;
     let J = model.J;
     if (grips) {
-      const first = bodyMatrices(meta, J, model.headF, grips, curlBuf);
+      const first = bodyMatrices(meta, J, look, grips, curlBuf, fingBuf);
       J = seatHands(meta, J, first, [
         grips.wrap.k > 0.3 ? { side: grips.wrap.side, base: grips.wrap.side === "L" ? 33 : 54, at: pts.grip, hole: "wrap" as const } : null,
         grips.hook.k > 0.3 ? { side: grips.hook.side, base: grips.hook.side === "L" ? 33 : 54, at: pts.nock, hole: "hook" as const } : null,
       ]);
     }
-    const mats = bodyMatrices(meta, J, model.headF, grips, curlBuf);
+    const mats = bodyMatrices(meta, J, look, grips, curlBuf, fingBuf);
     // matrici dei segmenti come tre righe ciascuna (la quarta è sempre 0 0 0 1)
     const nSeg = Math.min(21, meta.segments.length);
     for (let i = 0; i < nSeg; i++) for (let r = 0; r < 3; r++) for (let c = 0; c < 4; c++) segRows[(i * 3 + r) * 4 + c] = mats[i * 16 + c * 4 + r];
@@ -553,6 +564,7 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     gl.uniformMatrix4fv(bl.uVP, false, VP);
     gl.uniform4fv(bl.uSeg, segRows);
     gl.uniform4fv(bl.uCurl, curlBuf);
+    gl.uniform4fv(bl.uFa, fingBuf);
     gl.uniform2f(bl.uDita, meta.segments.indexOf("dita_L"), meta.segments.indexOf("dita_R"));
     gl.uniform3fv(bl.uLo, meta.lo);
     gl.uniform3fv(bl.uHi, meta.hi);

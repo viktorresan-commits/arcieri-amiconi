@@ -197,7 +197,19 @@ function frames(P: Pts, hands: { L: [number, number, number] | null; R: [number,
   const F: Record<string, Frame> = {};
   F.bacino = frame(hipM, shM, lrH, lrS);
   F.torace = frame(hipM, shM, lrS, lrH);
-  F.testa = frame(shM, earM, look ?? sub(get(0), earM), fwd);
+  // testa: segue il collo; se lo sguardo va in giù (o in su) il collo si piega in avanti (o indietro)
+  let headTop = earM;
+  let lookH = look;
+  if (look) {
+    const lv = dot(look, up);
+    if (Math.abs(lv) > 0.01 && Math.abs(lv) < 0.99) {
+      lookH = norm(sub(look, mul(up, lv)));
+      const tilt = -Math.asin(Math.max(-1, Math.min(1, lv))) * 0.7;
+      const ax = sub(earM, shM);
+      headTop = add(shM, mul(norm(add(mul(norm(ax), Math.cos(tilt)), mul(lookH, Math.sin(tilt)))), len(ax)));
+    }
+  }
+  F.testa = frame(shM, headTop, lookH ?? sub(get(0), earM), fwd);
   const notch = P("notch") ?? add(shM, mul(fwd, 0.04));
   for (const s of ["L", "R"] as const) {
     const [sh, el, wr, pk, ix, hip, kn, an, he, to] = s === "L" ? [11, 13, 15, 17, 19, 23, 25, 27, 29, 31] : [12, 14, 16, 18, 20, 24, 26, 28, 30, 32];
@@ -236,7 +248,7 @@ export type Grips = {
   wrap?: { side: "L" | "R"; k: number; toward: V3 };
 };
 
-export function bodyMatrices(meta: BodyMeta, J: Record<number, V3>, look?: V3, grips?: Grips, /** 32 numeri: la piega delle dita in presa per la scheda grafica (mano S, poi D) */ curl?: Float32Array): Float32Array {
+export function bodyMatrices(meta: BodyMeta, J: Record<number, V3>, look?: V3, grips?: Grips, /** 32 numeri: la piega delle dita in presa per la scheda grafica (mano S, poi D) */ curl?: Float32Array, /** 16 numeri: piega di ogni dito dai punti della mano (nocca e falangi; mano S, poi D) */ fing?: Float32Array): Float32Array {
   const rest = (i: number | string) => meta.rest[String(i)];
   const hasHand = (base: number) => Boolean(J[base] && J[base + 5] && J[base + 17]);
   // le mani da 21 punti hanno nocche vere: con quelle si usano le teste dei metacarpi del modello
@@ -254,7 +266,9 @@ export function bodyMatrices(meta: BodyMeta, J: Record<number, V3>, look?: V3, g
     const pb = flat(b.e2);
     const pt = flat(t.e2);
     const ang = Math.atan2(dot(cross(pb, pt), ax), dot(pb, pt));
-    const lim = (25 * Math.PI) / 180;
+    // il modello del corpo mette quasi sempre anche ad arciere fermo 15-20° tra anche e spalle (profondità
+    // delle anche sbagliata): l'addome storto. Si tiene al massimo una torsione leggera
+    const lim = (8 * Math.PI) / 180;
     if (Math.abs(ang) > lim) {
       const turn = ang - Math.sign(ang) * lim;
       const c = Math.cos(turn);
@@ -282,6 +296,7 @@ export function bodyMatrices(meta: BodyMeta, J: Record<number, V3>, look?: V3, g
   // testa: segue collo, orecchie e naso (stabile). I punti del viso non la girano più: la loro
   // profondità stimata la piegava in avanti o all'indietro in modo innaturale
   // dita (quattro insieme) e pollice: con i 21 punti della mano si piegano; senza, seguono la mano
+  const perFinger: Record<"L" | "R", number[][] | null> = { L: null, R: null };
   for (const s of ["L", "R"] as const) {
     const base = s === "L" ? 33 : 54;
     const has = hasHand(base) && J[base + 8] && J[base + 20] && J[base + 2] && J[base + 4];
@@ -299,8 +314,32 @@ export function bodyMatrices(meta: BodyMeta, J: Record<number, V3>, look?: V3, g
       const Lk = r.L * kT;
       return frame(a, l > 1e-5 ? add(a, mul(v, Math.min(1.15, Math.max(0.35, l / Lk)) * (Lk / l))) : add(a, mul(r.e1, Lk)), palmC, [0, 0, 1]);
     };
-    Fc[`dita_${s}`] = fingers(avg([5, 9, 13, 17]), avg([8, 12, 16, 20]), Fr[`dita_${s}`]);
     Fc[`pollice_${s}`] = fingers(J[base + 2], J[base + 4], Fr[`pollice_${s}`]);
+    // ogni dito con la sua piega (indice alzato e le altre chiuse, mano aperta, pugno): le dita partono
+    // dritte dal palmo e la scheda grafica le piega una per una. Senza i quattro diti letti bene, come prima
+    const W0 = J[base];
+    const hAxis = norm(sub(J[base + 9], W0));
+    let pn = cross(sub(J[base + 5], W0), sub(J[base + 17], W0));
+    // per la mano destra questo prodotto guarda il palmo, per la sinistra il dorso
+    if (s === "L") pn = mul(pn, -1);
+    const palmN = perpTo(hAxis, pn, [0, 0, 1]);
+    const per: number[][] = [];
+    for (const [m, p, tp] of [[5, 6, 8], [9, 10, 12], [13, 14, 16], [17, 18, 20]] as const) {
+      const a = J[base + m];
+      const b = J[base + p];
+      const c = J[base + tp];
+      if (!a || !b || !c) break;
+      // falangi troppo corte: punti della mano schiacciati o mancanti, non si usano
+      if (len(sub(b, a)) < 0.012 || len(sub(c, b)) < 0.015) break;
+      const v1 = norm(sub(b, a));
+      const v2 = norm(sub(c, b));
+      const k1 = Math.atan2(dot(v1, palmN), dot(v1, hAxis));
+      const k2 = Math.acos(Math.max(-1, Math.min(1, dot(v1, v2))));
+      if (!Number.isFinite(k1) || !Number.isFinite(k2)) break;
+      per.push([Math.max(-0.3, Math.min(1.6, k1)), Math.max(0, Math.min(1.9, k2)) / 1.55]);
+    }
+    if (per.length === 4) perFinger[s] = per;
+    else Fc[`dita_${s}`] = fingers(avg([5, 9, 13, 17]), avg([8, 12, 16, 20]), Fr[`dita_${s}`]);
   }
   // Dita in presa: si piegano davvero (nocca, seconda e terza falange) nella scheda grafica, con la
   // mano che le porta. Mano della corda: presa mediterranea, l'indice sopra la freccia, medio e anulare
@@ -374,16 +413,28 @@ export function bodyMatrices(meta: BodyMeta, J: Record<number, V3>, look?: V3, g
   // dita in presa: seguono la mano (la piega la fa la scheda grafica con curl)
   const cv = curl ?? null;
   if (cv) cv.fill(0);
+  if (fing) fing.fill(0);
   for (const s of ["L", "R"] as const) {
-    const c = curlK[s];
+    const c0 = curlK[s];
+    const pf = perFinger[s];
     const m = idx(`mano_${s}`);
     const d = idx(`dita_${s}`);
     const pl = idx(`pollice_${s}`);
-    if (!c || m < 0 || d < 0) continue;
+    if ((!c0 && !pf) || m < 0 || d < 0) continue;
+    const c = c0 ?? { k: 0, a1: 0, a2: 0, spread: 0 };
     for (const f of [d, pl]) {
       if (f < 0) continue;
       const kk = f === pl ? c.k * 0.6 : c.k;
       for (let i = 0; i < 16; i++) out[f * 16 + i] = out[f * 16 + i] * (1 - kk) + out[m * 16 + i] * kk;
+    }
+    // piega di ogni dito: conta tanto meno quanto più la mano è in presa (lì i punti sono coperti)
+    if (fing && pf) {
+      const w = 1 - c.k;
+      const o = s === "L" ? 0 : 8;
+      for (let i = 0; i < 4; i++) {
+        fing[o + i] = pf[i][0] * w;
+        fing[o + 4 + i] = pf[i][1] * w;
+      }
     }
     if (!cv) continue;
     const k0 = rest(`dita0_${s}`);
