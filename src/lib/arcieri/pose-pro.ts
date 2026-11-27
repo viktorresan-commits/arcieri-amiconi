@@ -339,7 +339,9 @@ export function proSteadiness(list: ProMetrics[]) {
 
 export type AreaId = "testa" | "spalle" | "braccioArco" | "polsoArco" | "gomito" | "polsoCorda" | "ancoraggio" | "busto" | "gambe" | "attrezzatura";
 export type Area = { id: AreaId; label: string; score: number | null };
-export type Gauge = { area: AreaId; label: string; value: number | null; unit: string; lo: number; hi: number; min: number; max: number; digits?: number };
+export type Gauge = { area: AreaId; label: string; value: number | null; unit: string; lo: number; hi: number; min: number; max: number; digits?: number; /** quanto fuori dalla fascia si arriva a zero punti (stretto: la fascia è già la tecnica giusta) */ tol?: number };
+/** una voce del confronto con la tecnica di riferimento, come nelle schede dei distintivi FITA: acquisita o no */
+export type RefCheck = { area: AreaId; label: string; ref: string; value: number | null; unit: string; digits?: number; ok: boolean | null };
 export type Issue = { area: AreaId; weight: number; title: string; why: string; fix: string; drill?: { label: string; to: string } };
 
 export const AREA_LABEL: Record<AreaId, string> = {
@@ -371,34 +373,40 @@ const avg = (xs: (number | null)[]) => {
 export function anchorTarget(bowType: string): { lo: number; hi: number; text: string } {
   if (bowType === "olimpico") return { lo: 0.7, hi: 1.5, text: "sotto il mento, corda sul mento e sul naso" };
   if (bowType === "compound") return { lo: 0.3, hi: 1.4, text: "lungo la mandibola, con lo sgancio" };
-  return { lo: -0.6, hi: 0.5, text: "all'angolo della bocca o allo zigomo" };
+  // arco nudo, ricurvo, longbow, storico: aggancio alla bocca con la pinza mediterranea (indice all'angolo della bocca)
+  return { lo: -0.3, hi: 0.35, text: "alla bocca: punta dell'indice all'angolo della bocca, pinza mediterranea" };
 }
 
 export function evaluate(m: ProMetrics, setup: ProSetup, steady?: ReturnType<typeof proSteadiness> | null) {
   const at = anchorTarget(setup.bowType);
   const gauges: Gauge[] = [
-    { area: "testa", label: "Testa inclinata", value: m.headTilt == null ? null : Math.abs(m.headTilt), unit: "°", lo: 0, hi: 5, min: 0, max: 25 },
-    { area: "testa", label: "Testa girata al bersaglio", value: m.headTurn, unit: " sp", lo: 0.12, hi: 0.6, min: -0.3, max: 0.8, digits: 2 },
-    { area: "spalle", label: "Spalle in piano", value: Math.abs(m.shoulderLevel), unit: "°", lo: 0, hi: 4, min: 0, max: 20 },
-    { area: "spalle", label: "Spalla dell'arco bassa", value: m.shrug, unit: "×", lo: 0.85, hi: 1.25, min: 0.3, max: 1.6, digits: 2 },
-    { area: "braccioArco", label: "Braccio dell'arco disteso", value: m.bowArm, unit: "°", lo: 165, hi: 182, min: 120, max: 182 },
-    { area: "braccioArco", label: "Braccio all'altezza della spalla", value: m.bowArmHeight, unit: " sp", lo: -0.15, hi: 0.2, min: -0.8, max: 0.8, digits: 2 },
-    { area: "polsoArco", label: "Polso dell'arco dritto", value: m.bowWrist, unit: "°", lo: 0, hi: 18, min: 0, max: 60 },
-    { area: "gomito", label: "Gomito in linea con la freccia", value: m.elbowLine, unit: "°", lo: 168, hi: 182, min: 130, max: 182 },
-    { area: "gomito", label: "Gomito all'altezza della freccia", value: m.elbowHeight, unit: " sp", lo: -0.05, hi: 0.3, min: -0.5, max: 0.6, digits: 2 },
-    { area: "polsoCorda", label: "Polso della corda rilassato", value: m.drawWrist, unit: "°", lo: 0, hi: 20, min: 0, max: 60 },
-    { area: "ancoraggio", label: "Altezza dell'ancoraggio", value: m.anchorV, unit: "", lo: at.lo, hi: at.hi, min: -1.5, max: 2.5, digits: 2 },
-    { area: "ancoraggio", label: "Mano vicina al viso", value: m.anchorDist, unit: " sp", lo: 0, hi: 0.45, min: 0, max: 1.5, digits: 2 },
-    { area: "busto", label: "Busto verticale", value: m.trunk == null ? null : Math.abs(m.trunk), unit: "°", lo: 0, hi: 5, min: 0, max: 20 },
-    { area: "busto", label: "Spalle sopra le anche", value: m.sideLean == null ? null : Math.abs(m.sideLean), unit: " sp", lo: 0, hi: 0.12, min: 0, max: 0.6, digits: 2 },
-    { area: "gambe", label: "Piedi larghi come le spalle", value: m.stance, unit: " sp", lo: 0.85, hi: 1.4, min: 0.3, max: 2.2, digits: 2 },
-    { area: "gambe", label: "Peso al centro", value: m.weight == null ? null : Math.abs(m.weight), unit: " sp", lo: 0, hi: 0.15, min: 0, max: 0.6, digits: 2 },
-    { area: "gambe", label: "Ginocchia distese", value: m.kneeBow != null && m.kneeDraw != null ? Math.min(m.kneeBow, m.kneeDraw) : (m.kneeBow ?? m.kneeDraw), unit: "°", lo: 165, hi: 182, min: 120, max: 182 },
+    { area: "testa", label: "Testa inclinata", value: m.headTilt == null ? null : Math.abs(m.headTilt), unit: "°", lo: 0, hi: 5, min: 0, max: 25, tol: 8 },
+    { area: "testa", label: "Testa girata al bersaglio", value: m.headTurn, unit: " sp", lo: 0.15, hi: 0.6, min: -0.3, max: 0.8, digits: 2, tol: 0.15 },
+    { area: "spalle", label: "Spalle in piano", value: Math.abs(m.shoulderLevel), unit: "°", lo: 0, hi: 4, min: 0, max: 20, tol: 6 },
+    { area: "spalle", label: "Spalla dell'arco bassa", value: m.shrug, unit: "×", lo: 0.88, hi: 1.25, min: 0.3, max: 1.6, digits: 2, tol: 0.2 },
+    { area: "braccioArco", label: "Braccio dell'arco disteso", value: m.bowArm, unit: "°", lo: 167, hi: 182, min: 120, max: 182, tol: 12 },
+    { area: "braccioArco", label: "Braccio all'altezza della spalla", value: m.bowArmHeight, unit: " sp", lo: -0.12, hi: 0.18, min: -0.8, max: 0.8, digits: 2, tol: 0.2 },
+    { area: "polsoArco", label: "Polso dell'arco dritto", value: m.bowWrist, unit: "°", lo: 0, hi: 15, min: 0, max: 60, tol: 15 },
+    { area: "gomito", label: "Gomito in linea con la freccia", value: m.elbowLine, unit: "°", lo: 170, hi: 182, min: 130, max: 182, tol: 12 },
+    { area: "gomito", label: "Gomito all'altezza della freccia", value: m.elbowHeight, unit: " sp", lo: -0.05, hi: 0.25, min: -0.5, max: 0.6, digits: 2, tol: 0.15 },
+    { area: "polsoCorda", label: "Polso della corda rilassato", value: m.drawWrist, unit: "°", lo: 0, hi: 18, min: 0, max: 60, tol: 15 },
+    { area: "ancoraggio", label: "Altezza dell'ancoraggio", value: m.anchorV, unit: "", lo: at.lo, hi: at.hi, min: -1.5, max: 2.5, digits: 2, tol: 0.35 },
+    { area: "ancoraggio", label: "Mano vicina al viso", value: m.anchorDist, unit: " sp", lo: 0, hi: 0.3, min: 0, max: 1.5, digits: 2, tol: 0.25 },
+    { area: "busto", label: "Busto verticale", value: m.trunk == null ? null : Math.abs(m.trunk), unit: "°", lo: 0, hi: 5, min: 0, max: 20, tol: 7 },
+    { area: "busto", label: "Spalle sopra le anche", value: m.sideLean == null ? null : Math.abs(m.sideLean), unit: " sp", lo: 0, hi: 0.1, min: 0, max: 0.6, digits: 2, tol: 0.15 },
+    { area: "gambe", label: "Piedi larghi come le spalle", value: m.stance, unit: " sp", lo: 0.85, hi: 1.3, min: 0.3, max: 2.2, digits: 2, tol: 0.3 },
+    { area: "gambe", label: "Peso al centro", value: m.weight == null ? null : Math.abs(m.weight), unit: " sp", lo: 0, hi: 0.12, min: 0, max: 0.6, digits: 2, tol: 0.15 },
+    { area: "gambe", label: "Ginocchia distese", value: m.kneeBow != null && m.kneeDraw != null ? Math.min(m.kneeBow, m.kneeDraw) : (m.kneeBow ?? m.kneeDraw), unit: "°", lo: 165, hi: 182, min: 120, max: 182, tol: 15 },
   ];
   const arrowCm = setup.arrowIn > 0 ? setup.arrowIn * 2.54 : 0;
-  if (m.drawLenCm != null) gauges.push({ area: "attrezzatura", label: "Allungo stimato", value: m.drawLenCm, unit: " cm", lo: arrowCm ? arrowCm - 7 : 55, hi: arrowCm ? arrowCm - 1 : 80, min: 45, max: 90 });
+  if (m.drawLenCm != null) gauges.push({ area: "attrezzatura", label: "Allungo stimato", value: m.drawLenCm, unit: " cm", lo: arrowCm ? arrowCm - 7 : 55, hi: arrowCm ? arrowCm - 1 : 80, min: 45, max: 90, tol: 6 });
+  // dita: pinza mediterranea (tre dita sulla corda) e mano dell'arco che non stringe, se la mano si vede
+  if (m.fingersOnString != null && m.fingersOnString > 0) gauges.push({ area: "polsoCorda", label: "Tre dita sulla corda (pinza mediterranea)", value: m.fingersOnString, unit: "", lo: 3, hi: 3, min: 0, max: 3, tol: 2 });
+  if (m.bowGrip != null) gauges.push({ area: "polsoArco", label: "Mano dell'arco che non stringe", value: m.bowGrip, unit: "°", lo: 0, hi: 70, min: 0, max: 140, tol: 40 });
 
-  const scoreOf = (g: Gauge) => band(g.value, g.lo, g.hi, Math.max(1e-3, (g.max - g.min) * 0.35));
+  // Punteggio stretto: dentro la fascia della tecnica giusta 100, fuori si scende in fretta (a zero a «tol»
+  // dalla fascia). Prima si scendeva su un terzo dell'intera scala: quasi ogni tiro prendeva un voto alto
+  const scoreOf = (g: Gauge) => band(g.value, g.lo, g.hi, Math.max(1e-3, g.tol ?? (g.max - g.min) * 0.15));
   const areas: Area[] = (Object.keys(AREA_LABEL) as AreaId[]).map((id) => ({ id, label: AREA_LABEL[id], score: avg(gauges.filter((g) => g.area === id).map(scoreOf)) }));
   // stabilità all'ancoraggio: abbassa testa e gomito se tremano
   if (steady) {
@@ -408,7 +416,30 @@ export function evaluate(m: ProMetrics, setup: ProSetup, steady?: ReturnType<typ
     if (g?.score != null && steady.elbow != null && steady.elbow > 3) g.score = Math.max(0, g.score - Math.round((steady.elbow - 3) * 6));
   }
   const measured = areas.filter((a) => a.score != null) as { id: AreaId; label: string; score: number }[];
-  const total = measured.length ? Math.round(measured.reduce((x, a) => x + a.score, 0) / measured.length) : 0;
+  // Confronto con la tecnica di riferimento, voce per voce (come le schede dei distintivi FITA): una voce
+  // è acquisita se la misura sta nella fascia giusta, con un piccolo margine per l'errore della ripresa
+  const fmtRef = (g: Gauge) => {
+    const d = g.digits ?? 0;
+    const f = (v: number) => v.toFixed(d).replace(".", ",");
+    if (g.lo <= g.min) return `fino a ${f(g.hi)}${g.unit}`;
+    if (g.hi >= g.max) return `almeno ${f(g.lo)}${g.unit}`;
+    return g.lo === g.hi ? `${f(g.lo)}${g.unit}` : `${f(g.lo)}–${f(g.hi)}${g.unit}`;
+  };
+  const checks: RefCheck[] = gauges.map((g) => {
+    const sc = scoreOf(g);
+    return { area: g.area, label: g.label, ref: fmtRef(g), value: g.value, unit: g.unit, digits: g.digits, ok: sc == null ? null : sc >= 80 };
+  });
+  if (steady?.head != null) checks.push({ area: "testa", label: "Testa ferma in mira", ref: "fino a ±2,5°", value: steady.head, unit: "°", digits: 1, ok: steady.head <= 2.5 });
+  if (steady?.elbow != null) checks.push({ area: "gomito", label: "Gomito fermo in mira", ref: "fino a ±3°", value: steady.elbow, unit: "°", digits: 1, ok: steady.elbow <= 3 });
+  const judged = checks.filter((c) => c.ok != null);
+  const acquired = judged.filter((c) => c.ok).length;
+  // minimo richiesto: quattro voci su cinque, come un distintivo che si conferisce solo con quasi tutto a posto
+  const required = Math.ceil(judged.length * 0.8);
+  const verdict = judged.length < 5 ? "parziale" : acquired >= required ? "acquisita" : "non acquisita";
+  // Il voto viene dal confronto: metà dalle voci acquisite, metà da quanto le misure sono vicine alla
+  // tecnica giusta. Una voce mancata pesa: con metà voci non acquisite il voto resta sotto la sufficienza
+  const closeness = measured.length ? measured.reduce((x, a) => x + a.score, 0) / measured.length : 0;
+  const total = judged.length ? Math.round(0.5 * ((acquired / judged.length) * 100) + 0.5 * closeness) : 0;
 
   const issues: Issue[] = [];
   const add = (cond: boolean, i: Issue) => cond && issues.push(i);
@@ -519,6 +550,18 @@ export function evaluate(m: ProMetrics, setup: ProSetup, steady?: ReturnType<typ
     why: "Ginocchia piegate tolgono stabilità e abbassano il tiro senza che te ne accorga.",
     fix: "Gambe distese ma non bloccate.",
   });
+  add(m.fingersOnString != null && m.fingersOnString > 0 && m.fingersOnString < 3, {
+    area: "polsoCorda", weight: 1.2,
+    title: `Solo ${m.fingersOnString ?? 0} ${m.fingersOnString === 1 ? "dito" : "dita"} sulla corda`,
+    why: "Nella pinza mediterranea la corda sta su tre dita: indice sopra la cocca, medio e anulare sotto. Con meno dita la pressione si concentra e il rilascio devia.",
+    fix: "Aggancia con tre dita nella piega della prima falange, la stessa pressione su tutte e tre; la cocca tra indice e medio.",
+  });
+  add(m.bowGrip != null && m.bowGrip > 95, {
+    area: "polsoArco", weight: 1,
+    title: "Mano dell'arco che stringe l'impugnatura",
+    why: "Stringendo, al rilascio la mano fa girare l'arco: la freccia va di lato.",
+    fix: "Spingi con il cuscinetto del pollice, la V tra pollice e indice al centro; dita rilassate appena attorno all'impugnatura.",
+  });
   if (m.drawLenCm != null && arrowCm) {
     const room = arrowCm - m.drawLenCm;
     add(room < 0, {
@@ -540,7 +583,7 @@ export function evaluate(m: ProMetrics, setup: ProSetup, steady?: ReturnType<typ
     issues.push({ area: "testa", weight: 1, title: "La testa si muove in ancoraggio", why: `Varia di ±${steady.head.toFixed(1)}° mentre miri.`, fix: "Ancora, poi blocca la testa: in mira si muovono solo la schiena e l'occhio.", drill: { label: "Respiro", to: "/respiro" } });
   }
   issues.sort((a, b) => b.weight - a.weight);
-  return { total, areas, gauges, issues, scoreOf };
+  return { total, areas, gauges, issues, scoreOf, checks, acquired, required, judgedCount: judged.length, verdict };
 }
 
 /** Lunghezza d'arco consigliata (AMO) dall'allungo in pollici, per archi ricurvi. */

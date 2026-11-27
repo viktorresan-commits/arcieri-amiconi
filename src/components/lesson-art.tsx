@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { ArcherAvatar } from "./archer-avatar";
 import { ToolArt } from "./tool-art";
 import type { AvatarLook, Pose } from "@/lib/arcieri/avatar";
@@ -77,7 +77,33 @@ function Frame({ children, caption }: { children: ReactNode; caption?: string })
   );
 }
 
+/**
+ * La visuale dell'arciere (Analisi gesto › «Mira»), da un tiro vero a 18 m con l'ancoraggio alla bocca:
+ * nel tiro istintivo si guarda il centro, nella mira con la punta si mette la punta sul punto del gap.
+ */
+function MiraPaglione() {
+  const [k, setK] = useState<"istintivo" | "punta">("istintivo");
+  const pics = {
+    istintivo: { src: "/lezioni/mira-istintivo.webp", text: "Tiro istintivo a 18 m: guardi il centro del bersaglio. La punta della freccia resta di lato, in basso: non la guardi." },
+    punta: { src: "/lezioni/mira-punta.webp", text: "Mira con la punta a 18 m: la punta va circa 1,2 m sotto l'oro (il gap di questa distanza). L'asta intanto punta 67 cm sopra: la freccia sale e ricade sul centro." },
+  } as const;
+  return (
+    <figure className="overflow-hidden rounded-2xl border border-line bg-[#101a15]">
+      <div className="flex gap-1 p-2" role="group" aria-label="Come si mira">
+        {([["istintivo", "Tiro istintivo"], ["punta", "Con la punta"]] as const).map(([id, label]) => (
+          <button key={id} type="button" aria-pressed={k === id} onClick={() => setK(id)} className={`min-h-9 rounded-full px-3 text-xs font-semibold ${k === id ? "bg-[#f4f1ea] text-[#14181c]" : "bg-white/10 text-[#f4f1ea]"}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+      <img src={pics[k].src} alt={pics[k].text} width={540} height={750} loading="lazy" className="block h-auto w-full" />
+      <figcaption className="border-t border-line px-3 py-2 text-xs text-muted">{pics[k].text} Arco da 30 lb e frecce da 330 grani: con il tuo arco i numeri cambiano, li vedi in Analisi gesto con «Mira».</figcaption>
+    </figure>
+  );
+}
+
 const CUSTOM: Record<string, ReactNode> = {
+  "mira-paglione": <MiraPaglione />,
   sicurezza: (
     <Frame caption="Linea di tiro, linea d'attesa e fischi del direttore di tiro.">
       <rect x="0" y="0" width="320" height="160" fill="#4f7340" />

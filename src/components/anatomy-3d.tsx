@@ -210,6 +210,7 @@ function paintAimHud(ctx: CanvasRenderingContext2D, VP: Float32Array, info: AimI
   /** etichetta su fondo scuro, accanto a un punto, a destra se c'è posto */
   const label = (q: [number, number], text: string, col: string, dy = 0) => {
     ctx.font = `600 ${Math.round(11 * dpr)}px system-ui, sans-serif`;
+    ctx.textAlign = "left";
     const w = ctx.measureText(text).width + 12 * dpr;
     const h = 18 * dpr;
     let x = q[0] + 12 * dpr;

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { type Gear, type Hand, type Landmark, type Sample, type Shot, sides } from "@/lib/arcieri/pose-analysis";
-import { AREA_LABEL, type Area, type ProMetrics, type ProSetup, anchorTarget, bowLengthFor, evaluate, gearSizes, proMedian, proMetrics, proSteadiness } from "@/lib/arcieri/pose-pro";
+import { AREA_LABEL, type Area, type ProMetrics, type RefCheck, type ProSetup, anchorTarget, bowLengthFor, evaluate, gearSizes, proMedian, proMetrics, proSteadiness } from "@/lib/arcieri/pose-pro";
 import { listGestures } from "@/lib/arcieri/gesture.api";
 import { useLocalState } from "@/lib/arcieri/local-store";
 import { BOW_TYPES } from "./gear-icons";
@@ -96,6 +96,8 @@ export function ProPanel({
           ))}
         </div>
       </div>
+
+      <RefChecks ev={ev} bowType={setup.bowType} />
 
       <MuscleAreas lm={lastFrame ?? lm} hand={hand} aspect={aspect} areas={ev.areas} />
 
@@ -730,6 +732,50 @@ function MuscleAreas({ lm, hand, aspect, areas }: { lm: Landmark[] | null; hand:
         })}
       </div>
       <p className="text-[0.68rem] text-muted">In giallo i muscoli della zona, sul tuo corpo nella posa del video. I punteggi più bassi sono in alto.</p>
+    </div>
+  );
+}
+
+/**
+ * Confronto con la tecnica di riferimento, come nelle schede dei distintivi FITA: ogni voce è acquisita o
+ * da rivedere, si contano le acquisite e si confrontano con il minimo richiesto. Il voto nasce da qui.
+ */
+function RefChecks({ ev, bowType }: { ev: { checks: RefCheck[]; acquired: number; required: number; judgedCount: number; verdict: string }; bowType: string }) {
+  const [all, setAll] = useState(false);
+  const fmt = (c: RefCheck) => (c.value == null ? "—" : `${c.value.toFixed(c.digits ?? 0).replace(".", ",")}${c.unit}`);
+  const judged = ev.checks.filter((c) => c.ok != null);
+  // prima quelle da rivedere
+  const list = [...judged].sort((a, b) => Number(a.ok) - Number(b.ok));
+  const shown = all ? list : list.slice(0, 6);
+  const trad = bowType !== "olimpico" && bowType !== "compound";
+  const tone = ev.verdict === "acquisita" ? "bg-emerald-500/15 text-emerald-100" : ev.verdict === "parziale" ? "bg-white/[0.06] text-[#f4f1ea]" : "bg-rose-500/15 text-rose-100";
+  return (
+    <div className="grid gap-2">
+      <p className="text-sm font-semibold">Confronto con la tecnica di riferimento</p>
+      <p className={`rounded-2xl p-3 text-sm ${tone}`}>
+        {ev.verdict === "parziale"
+          ? `Si vedono solo ${ev.judgedCount} voci: riprendi l'arciere intero, di fronte, per un confronto completo.`
+          : `${ev.acquired} voci acquisite su ${ev.judgedCount} (minimo ${ev.required}): tecnica ${ev.verdict === "acquisita" ? "acquisita" : "non ancora acquisita"}.`}
+        <span className="mt-1 block text-xs opacity-80">Riferimento: {trad ? "aggancio alla bocca con la pinza mediterranea, " : ""}posizione, impugnatura e ancoraggio come nelle schede dei distintivi FITA.</span>
+      </p>
+      <div className="grid gap-1">
+        {shown.map((c) => (
+          <div key={c.label} className="grid grid-cols-[1fr_auto] items-center gap-2 rounded-xl bg-white/[0.04] px-3 py-2 text-xs">
+            <span>
+              <span className="block font-semibold">{c.label}</span>
+              <span className="text-muted">
+                tuo {fmt(c)}, riferimento {c.ref}
+              </span>
+            </span>
+            <span className={`rounded-full px-2 py-0.5 text-[0.68rem] font-semibold ${c.ok ? "bg-emerald-500/20 text-emerald-200" : "bg-rose-500/20 text-rose-200"}`}>{c.ok ? "Acquisita" : "Da rivedere"}</span>
+          </div>
+        ))}
+      </div>
+      {list.length > 6 ? (
+        <button type="button" className="justify-self-start text-xs font-semibold text-muted" onClick={() => setAll(!all)}>
+          {all ? "Mostra meno" : `Tutte le ${list.length} voci`}
+        </button>
+      ) : null}
     </div>
   );
 }
