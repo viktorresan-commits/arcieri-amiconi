@@ -48,7 +48,9 @@ export type BowPose = { n: V3; u: V3; half: number; nocked: boolean };
  * Posa già risolta sull'intero video (motion-solve): punti del corpo con ossa di lunghezza costante,
  * niente scatti né compenetrazioni, e arco rigido filtrato. Se c'è, il fotogramma non si ricalcola da solo.
  */
-export type PrePose = { J: Record<number, V3>; bow?: BowPose | null; /** verso del palmo per mano (sinistra, destra della persona), continuo nel tempo */ palms?: { L?: V3; R?: V3 } };
+export type PrePose = { J: Record<number, V3>; bow?: BowPose | null; /** verso del palmo per mano (sinistra, destra della persona), continuo nel tempo */ palms?: { L?: V3; R?: V3 }; /** il fotogramma nello spazio della sagoma con la scala e il pavimento dell'intero video */ frame?: ImageFrame };
+/** scala (unità d'immagine per metro) e pavimento decisi sull'intero video: valgono per ogni fotogramma */
+export type PlanarFix = { s: number; floorY: number };
 export type Model = { parts: Part[]; /** posa dell'arco usata (per il filtro sull'intero video) */ bowPose?: BowPose; hud: Hud; center: V3; height: number; J?: Record<number, V3>; hand?: Hand; /** dove guarda il viso (orizzontale): segue il bersaglio durante il tiro */ headF?: V3; /** testa in giù (+) o in su (-), radianti: dal naso rispetto alle orecchie nel fotogramma */ headPitch?: number; /** quanto la mano della corda è in presa sulla corda (0..1) e quanto quella dell'arco stringe l'impugnatura */ grip?: { draw: number; bow: number }; /** il fotogramma del video nel piano del corpo (z = 0), in metri: sinistra, destra, sopra, sotto */ frame?: ImageFrame; /** corporatura trovata con l'aura (silhouette) dell'arciere */ build?: Build; /** asse dell'arco all'impugnatura (verso il flettente alto): la mano dell'arco ci si chiude attorno */ bowAxis?: V3; /** verso del palmo filtrato sull'intero video (vedi PrePose) */ palms?: { L?: V3; R?: V3 }; /** la freccia incoccata: cocca, direzione e lunghezza (per la visuale dell'arciere) */ arrow?: { nock: V3; dir: V3; len: number } };
 /** dove sta il fotogramma del video nello spazio della sagoma: serve a guardarla "come il video", punto su punto */
 export type ImageFrame = { x0: number; x1: number; yTop: number; yBot: number };
@@ -120,7 +122,7 @@ export type BoneCal = Partial<Record<BoneName, number>> & { build?: Build };
 const PAIRS: [BoneName, BoneName][] = [["omeroS", "omeroD"], ["avambraccioS", "avambraccioD"], ["femoreS", "femoreD"], ["tibiaS", "tibiaD"]];
 
 /** posizione nel piano dell'immagine, in metri, piedi a terra: è il video, senza stime */
-function planar(lm: Landmark[], aspect: number) {
+function planar(lm: Landmark[], aspect: number, fix?: PlanarFix | null) {
   if (!lm || lm.length < 25) return null;
   if (![11, 12, 13, 14, 15, 16].every((i) => vis(lm[i]) > 0.2)) return null;
   const P = (i: number) => ({ x: lm[i].x * aspect, y: lm[i].y, z: (lm[i].z ?? 0) * aspect });
@@ -133,18 +135,26 @@ function planar(lm: Landmark[], aspect: number) {
   // accorcia girandosi e faceva "saltare" la grandezza del corpo) solo se non c'è altro
   const torsoS = hipsOk ? d2(shM, { x: (P(23).x + P(24).x) / 2, y: (P(23).y + P(24).y) / 2 }) / 0.5 : 0;
   const fullS = hipsOk && anklesOk ? (Math.max(P(27).y, P(28).y) - shM.y) / 1.36 : 0;
-  const s = (fullS > 0 && torsoS > 0 ? fullS * 0.7 + torsoS * 0.3 : torsoS || fullS || d2(P(11), P(12)) / 0.36) || 1;
-  const hipY = hipsOk ? (P(23).y + P(24).y) / 2 : shM.y + 0.5 * s;
-  const floorY = anklesOk ? Math.max(P(27).y, P(28).y) + 0.075 * s : hipY + 0.93 * s;
+  const s0 = (fullS > 0 && torsoS > 0 ? fullS * 0.7 + torsoS * 0.3 : torsoS || fullS || d2(P(11), P(12)) / 0.36) || 1;
+  const hipY = hipsOk ? (P(23).y + P(24).y) / 2 : shM.y + 0.5 * s0;
+  const floor0 = anklesOk ? Math.max(P(27).y, P(28).y) + 0.075 * s0 : hipY + 0.93 * s0;
+  const s = fix && fix.s > 0 ? fix.s : s0;
+  const floorY = fix ? fix.floorY : floor0;
   const cx = shM.x;
   const XY = (i: number): V3 => [(P(i).x - cx) / s, (floorY - P(i).y) / s, 0];
   const frame: ImageFrame = { x0: -cx / s, x1: (aspect - cx) / s, yTop: floorY / s, yBot: (floorY - 1) / s };
-  return { P, s, XY, hipsOk, anklesOk, frame };
+  return { P, s, XY, hipsOk, anklesOk, frame, s0, floor0, full: fullS > 0 };
+}
+
+/** scala e pavimento di un fotogramma (con quanto ci si può fidare): l'intero video li filtra insieme */
+export function planarScale(lm: Landmark[], aspect: number) {
+  const pl = planar(lm, aspect);
+  return pl ? { s: pl.s0, floorY: pl.floor0, anklesOk: pl.anklesOk, hipsOk: pl.hipsOk, full: pl.full } : null;
 }
 
 /** il fotogramma intero nello spazio della sagoma (vedi planar) */
-export function imageFrame(lm: Landmark[], aspect: number): ImageFrame | null {
-  return planar(lm, aspect)?.frame ?? null;
+export function imageFrame(lm: Landmark[], aspect: number, fix?: PlanarFix | null): ImageFrame | null {
+  return planar(lm, aspect, fix)?.frame ?? null;
 }
 
 /**
@@ -202,8 +212,8 @@ export function boneCal(frames: (Landmark[] | null | undefined)[], aspect: numbe
 export type DepthMemo = { z: Map<number, number>; t: number };
 export const depthMemo = (): DepthMemo => ({ z: new Map(), t: -1 });
 
-export function bodyPoints(lm: Landmark[], aspect: number, cal: BoneCal | null = null, memo?: DepthMemo | null, time?: number): Record<number, V3> | null {
-  const out = bodyPointsRaw(lm, aspect, cal);
+export function bodyPoints(lm: Landmark[], aspect: number, cal: BoneCal | null = null, memo?: DepthMemo | null, time?: number, fix?: PlanarFix | null): Record<number, V3> | null {
+  const out = bodyPointsRaw(lm, aspect, cal, fix);
   if (!out || !memo || time == null) return out;
   const dt = memo.t < 0 ? -1 : time - memo.t;
   memo.t = time;
@@ -366,8 +376,8 @@ export function keepArmsOut(out: Record<number, V3>, cal: BoneCal | null, /** la
   }
 }
 
-function bodyPointsRaw(lm: Landmark[], aspect: number, cal: BoneCal | null = null): Record<number, V3> | null {
-  const pl = planar(lm, aspect);
+function bodyPointsRaw(lm: Landmark[], aspect: number, cal: BoneCal | null = null, fix?: PlanarFix | null): Record<number, V3> | null {
+  const pl = planar(lm, aspect, fix);
   if (!pl) return null;
   const { P, s, XY, hipsOk, anklesOk } = pl;
   const L = (name: BoneName) => cal?.[name] ?? BONES[name][2];
@@ -1096,7 +1106,7 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gea
     headPitch,
     // la mano dell'arco lo tiene sempre (anche con il braccio giù); la mano della corda si apre al rilascio
     grip: { draw: loose ? 0 : aimed.drawing, bow: Math.max(0.85, aimed.raised) },
-    frame: imageFrame(lm, aspect) ?? undefined,
+    frame: pre?.frame ?? imageFrame(lm, aspect) ?? undefined,
     build: cal?.build,
     bowAxis: n,
     bowPose: rawBow,

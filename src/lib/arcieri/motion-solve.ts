@@ -11,24 +11,11 @@
 //    (verso la camera o via) scelto sull'intera sequenza, senza salti;
 //  - braccia e mani fuori da busto e testa;
 //  - arco come corpo rigido: asse, direzione e lunghezza filtrati, freccia incoccata senza sfarfallio.
-import { boneLen, bodyPoints, buildModel, keepArmsOut, torsoSpan, v3, type BoneCal, type BowPose, type PrePose, type V3 } from "./anatomy-model";
+import { boneLen, bodyPoints, buildModel, imageFrame, keepArmsOut, planarScale, torsoSpan, v3, type BoneCal, type BowPose, type PlanarFix, type PrePose, type V3 } from "./anatomy-model";
 import type { Gear, Hand, Landmark } from "./pose-analysis";
 
 export type SolveFrame = { t: number; lm: Landmark[] | null; gear: Gear | null; /** dentro un tiro (dall'alzata al rilascio): la freccia è sulla corda */ armed?: boolean };
 
-const SWAP_PAIRS: [number, number][] = [
-  [13, 14],
-  [15, 16],
-  [17, 18],
-  [19, 20],
-  [21, 22],
-];
-const LEG_PAIRS: [number, number][] = [
-  [25, 26],
-  [27, 28],
-  [29, 30],
-  [31, 32],
-];
 
 /** λ del filtro di Whittaker (differenze seconde) per una frequenza di taglio fc a fs fotogrammi al secondo */
 const lamFor = (fc: number, fs: number) => {
@@ -106,58 +93,232 @@ const visW = (lm: Landmark[] | null, i: number) => {
   return Math.max(0.02, Math.min(1, (v - 0.2) / 0.6));
 };
 
-/** scambia i lati (braccio sinistro con destro, con la sua mano) in un fotogramma */
-function swapArms(lm: Landmark[]): Landmark[] {
-  const o = lm.slice();
-  for (const [a, b] of SWAP_PAIRS) {
-    o[a] = lm[b];
-    o[b] = lm[a];
-  }
-  if (lm.length >= 75) for (let k = 0; k < 21; k++) {
-    o[33 + k] = lm[54 + k];
-    o[54 + k] = lm[33 + k];
-  }
-  return o;
-}
-function swapLegs(lm: Landmark[]): Landmark[] {
-  const o = lm.slice();
-  for (const [a, b] of LEG_PAIRS) {
-    o[a] = lm[b];
-    o[b] = lm[a];
-  }
-  return o;
-}
-
 /**
- * Lati scambiati dal rilevatore: un fotogramma in cui gomiti e polsi sono molto più vicini a quelli del
- * fotogramma prima presi al contrario si rimette a posto (e così i seguenti, finché il rilevatore non torna).
+ * Lati scambiati dal rilevatore (destra presa per sinistra). Per ogni gruppo di punti si sceglie, sull'intero
+ * video, in quali fotogrammi rimetterli a posto: la scelta che rende il movimento più continuo, con un
+ * piccolo costo per ogni scambio (di solito il rilevatore ha ragione) e, per le gambe, la regola che il
+ * ginocchio e il piede stanno dal lato della loro anca. Prima si confrontava solo con il fotogramma
+ * prima: un primo fotogramma sbagliato si portava dietro tutti gli altri (gambe incrociate per tutto il video).
  */
 function fixSwaps(lms: (Landmark[] | null)[], aspect: number): (Landmark[] | null)[] {
   const out = lms.slice();
   const P = (lm: Landmark[], i: number) => (lm[i] ? [lm[i].x * aspect, lm[i].y] : null);
   const dist = (a: number[] | null, b: number[] | null) => (a && b ? Math.hypot(a[0] - b[0], a[1] - b[1]) : 0);
   const scale = (lm: Landmark[]) => Math.max(0.05, dist(P(lm, 11), P(lm, 12)));
-  const fix = (pairs: [number, number][], sw: (lm: Landmark[]) => Landmark[]) => {
-    let prev: Landmark[] | null = null;
-    for (let i = 0; i < out.length; i++) {
-      const lm = out[i];
-      if (!lm || lm.length < 29) continue;
-      if (prev) {
-        let same = 0;
-        let cross = 0;
+  const swapPairs = (lm: Landmark[], pairs: [number, number][], hands: boolean) => {
+    const o = lm.slice();
+    for (const [a, b] of pairs) {
+      o[a] = lm[b];
+      o[b] = lm[a];
+    }
+    if (hands && lm.length >= 75) for (let k = 0; k < 21; k++) {
+      o[33 + k] = lm[54 + k];
+      o[54 + k] = lm[33 + k];
+    }
+    return o;
+  };
+  /** un gruppo: coppie da scambiare insieme, mani comprese o no, e (per le gambe) le anche di riferimento */
+  const fix = (pairs: [number, number][], hands: boolean, side: boolean) => {
+    const idx: number[] = [];
+    out.forEach((lm, i) => {
+      if (lm && lm.length >= 29) idx.push(i);
+    });
+    if (idx.length < 2) return;
+    const lab = (lm: Landmark[], st: number) => (st ? swapPairs(lm, pairs, false) : lm);
+    // costo di un fotogramma: scambiare costa poco; per le gambe, ginocchia e piedi dal lato sbagliato costano
+    const unary = (lm: Landmark[], st: number) => {
+      const s = scale(lm);
+      let c = st ? 0.12 : 0;
+      if (side && lm[23] && lm[24]) {
+        const L = lab(lm, st);
+        const hs = Math.sign((L[23].x - L[24].x) * aspect) || 1;
         for (const [a, b] of pairs) {
-          same += dist(P(lm, a), P(prev, a)) + dist(P(lm, b), P(prev, b));
-          cross += dist(P(lm, a), P(prev, b)) + dist(P(lm, b), P(prev, a));
+          if (!L[a] || !L[b]) continue;
+          const d = ((L[a].x - L[b].x) * aspect * hs) / s;
+          // incrociati (oltre un quinto di spalla): improbabile in piedi
+          if (d < -0.2) c += Math.min(2, (-d - 0.2) * 3);
         }
-        const s = scale(lm);
-        if (cross < same * 0.45 && same > 0.5 * s) out[i] = sw(lm);
       }
-      prev = out[i];
+      return c;
+    };
+    const trans = (a: Landmark[], sa: number, b: Landmark[], sb: number) => {
+      const A = lab(a, sa);
+      const B = lab(b, sb);
+      let d = 0;
+      for (const [x, y] of pairs) d += dist(P(A, x), P(B, x)) + dist(P(A, y), P(B, y));
+      return d / scale(b);
+    };
+    const m = idx.length;
+    const cost: [number, number][] = [];
+    const from: [number, number][] = [];
+    const first = out[idx[0]]!;
+    cost.push([unary(first, 0), unary(first, 1)]);
+    from.push([0, 0]);
+    for (let k = 1; k < m; k++) {
+      const a = out[idx[k - 1]]!;
+      const b = out[idx[k]]!;
+      const row: [number, number] = [0, 0];
+      const arg: [number, number] = [0, 0];
+      for (const sb of [0, 1]) {
+        const c0 = cost[k - 1][0] + trans(a, 0, b, sb);
+        const c1 = cost[k - 1][1] + trans(a, 1, b, sb);
+        row[sb] = Math.min(c0, c1) + unary(b, sb);
+        arg[sb] = c0 <= c1 ? 0 : 1;
+      }
+      cost.push(row);
+      from.push(arg);
+    }
+    let st = cost[m - 1][0] <= cost[m - 1][1] ? 0 : 1;
+    for (let k = m - 1; k >= 0; k--) {
+      if (st) out[idx[k]] = swapPairs(out[idx[k]]!, pairs, hands);
+      st = from[k][st];
     }
   };
-  fix([[13, 14], [15, 16]], swapArms);
-  fix([[25, 26], [27, 28]], swapLegs);
+  fix([[13, 14], [15, 16], [17, 18], [19, 20], [21, 22]], true, false);
+  fix([[25, 26]], false, true);
+  fix([[27, 28], [29, 30], [31, 32]], false, true);
   return out;
+}
+
+/** riempie i buchi (peso 0) con il valore più vicino, così il filtro parte da qualcosa di sensato */
+function fillGaps(y: Float64Array, w: Float64Array) {
+  let last = -1;
+  for (let i = 0; i < y.length; i++) {
+    if (w[i] <= 0) continue;
+    if (last < 0) for (let k = 0; k < i; k++) y[k] = y[i];
+    else for (let k = last + 1; k < i; k++) y[k] = y[last] + ((y[i] - y[last]) * (k - last)) / (i - last);
+    last = i;
+  }
+  if (last >= 0) for (let k = last + 1; k < y.length; k++) y[k] = y[last];
+}
+
+/**
+ * Scala (unità d'immagine per metro) e pavimento sull'intero video. In un fotogramma in cui caviglie o anche
+ * non si vedono bene la scala si ricava da un'altra misura e il pavimento si indovina: la sagoma
+ * cambiava grandezza e saltava su e giù (fino a «volare»). L'arciere sta fermo davanti alla camera:
+ * scala e pavimento cambiano piano, e contano soprattutto i fotogrammi con il corpo intero.
+ */
+function sequenceScale(info: (ReturnType<typeof planarScale> | null)[], fs: number): (PlanarFix | null)[] {
+  const n = info.length;
+  const s = new Float64Array(n);
+  const f = new Float64Array(n);
+  const ws = new Float64Array(n);
+  const wf = new Float64Array(n);
+  let seen = 0;
+  for (let i = 0; i < n; i++) {
+    const p = info[i];
+    if (!p || !(p.s > 0) || !Number.isFinite(p.floorY)) continue;
+    s[i] = p.s;
+    f[i] = p.floorY;
+    ws[i] = p.full ? 1 : 0.2;
+    wf[i] = p.anklesOk ? 1 : 0.03;
+    seen++;
+  }
+  if (seen < 3) return info.map((p) => (p ? { s: p.s, floorY: p.floorY } : null));
+  fillGaps(s, ws);
+  fillGaps(f, wf);
+  const S = robustSmooth(s, ws, lamFor(0.5, fs), 0.004);
+  const F = robustSmooth(f, wf, lamFor(0.5, fs), 0.004);
+  return info.map((p, i) => (p ? { s: S[i] > 0.05 ? S[i] : p.s, floorY: Number.isFinite(F[i]) ? F[i] : p.floorY } : null));
+}
+
+/**
+ * Gambe e busto di chi tira: i piedi restano dove sono, le gambe quasi dritte sotto il bacino e il busto
+ * al massimo un po' inclinato. Le gambe vengono spesso male dal video (pantaloni scuri, ombre, punti
+ * scambiati tra destra e sinistra): dove non sono credibili si prende la posizione dei fotogrammi buoni.
+ */
+function standUpright(J: Record<number, V3>[], lms: (Landmark[] | null)[], fs: number): number[] {
+  const n = J.length;
+  const shifts = new Array<number>(n).fill(0);
+  const hipM = (Jf: Record<number, V3>) => (Jf[23] && Jf[24] ? v3.lerp(Jf[23], Jf[24], 0.5) : null);
+  const lenOf = (Jf: Record<number, V3>, a: number, b: number) => (Jf[a] && Jf[b] ? v3.len(v3.sub(Jf[a], Jf[b])) : 0);
+  const med = (v: number[]) => {
+    const a = v.filter((x) => x > 0.05).sort((x, y) => x - y);
+    return a.length ? a[Math.floor(a.length / 2)] : 0;
+  };
+  const thigh = med(J.flatMap((Jf) => [lenOf(Jf, 23, 25), lenOf(Jf, 24, 26)]));
+  const shin = med(J.flatMap((Jf) => [lenOf(Jf, 25, 27), lenOf(Jf, 26, 28)]));
+  const angleAt = (a: V3, b: V3, c: V3) => {
+    const u = v3.norm(v3.sub(a, b));
+    const w = v3.norm(v3.sub(c, b));
+    return (Math.acos(Math.max(-1, Math.min(1, v3.dot(u, w)))) * 180) / Math.PI;
+  };
+  const good = J.map((Jf, i) => {
+    const lm = lms[i];
+    if (!lm || !hipM(Jf)) return 0;
+    let g = 1;
+    for (const k of [25, 26, 27, 28]) g = Math.min(g, visW(lm, k));
+    for (const [h, k, a] of [[23, 25, 27], [24, 26, 28]] as const) {
+      if (!Jf[k] || !Jf[a]) return 0;
+      // in piedi: caviglia sotto il ginocchio, ginocchio sotto l'anca
+      if (!(Jf[a][1] < Jf[k][1] - 0.12 && Jf[k][1] < Jf[h][1] - 0.12)) return 0.002;
+      if (angleAt(Jf[h], Jf[k], Jf[a]) < 145) g *= 0.05;
+      if (thigh && Math.abs(lenOf(Jf, h, k) / thigh - 1) > 0.3) g *= 0.05;
+      if (shin && Math.abs(lenOf(Jf, k, a) / shin - 1) > 0.3) g *= 0.05;
+    }
+    return Math.max(0.002, g);
+  });
+  // le gambe rispetto al bacino: cambiano piano (si sposta un piede ogni tanto, non a ogni fotogramma)
+  const w = Float64Array.from(good);
+  const lam = lamFor(0.35, fs);
+  for (const id of [25, 26, 27, 28, 29, 30, 31, 32]) {
+    const cx = new Float64Array(n);
+    const cy = new Float64Array(n);
+    const cz = new Float64Array(n);
+    const wi = new Float64Array(n);
+    for (let i = 0; i < n; i++) {
+      const h = hipM(J[i]);
+      const p = J[i][id];
+      if (!h || !p) continue;
+      cx[i] = p[0] - h[0];
+      cy[i] = p[1] - h[1];
+      cz[i] = p[2] - h[2];
+      wi[i] = w[i];
+    }
+    if (!wi.some((x) => x > 0)) continue;
+    fillGaps(cx, wi);
+    fillGaps(cy, wi);
+    fillGaps(cz, wi);
+    const sx = robustSmooth(cx, wi, lam, 0.01);
+    const sy = robustSmooth(cy, wi, lam, 0.01);
+    const sz = robustSmooth(cz, wi, lam, 0.01);
+    for (let i = 0; i < n; i++) {
+      const h = hipM(J[i]);
+      if (!h || !J[i][id]) continue;
+      J[i][id] = [h[0] + sx[i], h[1] + sy[i], h[2] + sz[i]];
+    }
+  }
+  // busto: al massimo 15° dalla verticale; se è di più si porta il bacino (con le gambe) sotto le spalle
+  const MAX = Math.tan((15 * Math.PI) / 180);
+  for (let i = 0; i < n; i++) {
+    const Jf = J[i];
+    const h = hipM(Jf);
+    if (!h || !Jf[11] || !Jf[12]) continue;
+    const sh = v3.lerp(Jf[11], Jf[12], 0.5);
+    const up = sh[1] - h[1];
+    const dx = sh[0] - h[0];
+    const dz = sh[2] - h[2];
+    const side = Math.hypot(dx, dz);
+    const lim = Math.max(0.05, up) * MAX;
+    if (side <= lim || side < 1e-6) continue;
+    const k = 1 - lim / side;
+    const d: V3 = [dx * k, 0, dz * k];
+    for (const id of [23, 24, 25, 26, 27, 28, 29, 30, 31, 32]) if (Jf[id]) Jf[id] = v3.add(Jf[id], d);
+  }
+  // piedi a terra: la caviglia più bassa all'altezza della caviglia (7,5 cm), mai sotto il pavimento né in aria
+  for (let i = 0; i < n; i++) {
+    const Jf = J[i];
+    if (!Jf[27] || !Jf[28]) continue;
+    const low = Math.min(Jf[27][1], Jf[28][1]);
+    const dy = 0.075 - low;
+    if (Math.abs(dy) < 0.01) continue;
+    for (const k of Object.keys(Jf)) {
+      const p = Jf[Number(k)];
+      Jf[Number(k)] = [p[0], p[1] + dy, p[2]];
+    }
+    shifts[i] = dy;
+  }
+  return shifts;
 }
 
 /** omero e avambraccio del corpo anatomico (BodyParts3D) rispetto al busto (spalle-anche) */
@@ -176,7 +337,9 @@ export function solveMotion(frames: SolveFrame[], aspect: number, hand: Hand, ca
     frames.map((f) => f.lm),
     aspect,
   );
-  const raw = lms.map((lm) => (lm ? bodyPoints(lm, aspect, cal) : null));
+  // scala e pavimento uguali per tutto il video (filtrati): la sagoma non cambia grandezza né salta
+  const fixes = sequenceScale(lms.map((lm) => (lm ? planarScale(lm, aspect) : null)), fs);
+  const raw = lms.map((lm, i) => (lm ? bodyPoints(lm, aspect, cal, null, undefined, fixes[i]) : null));
   const valid = raw.map(Boolean);
   // fotogrammi senza arciere: si ricuciono solo i buchi brevi (fino a 0,4 s), altrimenti restano vuoti
   const keep = valid.slice();
@@ -281,6 +444,8 @@ export function solveMotion(frames: SolveFrame[], aspect: number, hand: Hand, ca
     if (!ok) for (let k = 0; k < 21; k++) delete J[i][base + k];
   }
 
+  // gambe credibili, busto in piedi, piedi a terra
+  const shiftOf = standUpright(J, lms, fs);
   dbg?.("smooth", J);
   // ---- braccia con la lunghezza vera: profondità di gomito e polso con il verso scelto sull'intera sequenza ----
   // Omero e avambraccio con le proporzioni del corpo anatomico disegnato, scalate sul busto dell'arciere:
@@ -793,6 +958,10 @@ export function solveMotion(frames: SolveFrame[], aspect: number, hand: Hand, ca
       if (!Number.isFinite(u[0]) || !Number.isFinite(nn[0])) u = [1, 0, 0];
       bow = { n: nn, u, half, nocked: nocked[i] };
     }
-    return { J: J[i], bow, palms: palms[i] };
+    const lm = lms[i];
+    const fr = lm ? imageFrame(lm, aspect, fixes[i]) : null;
+    // il fotogramma segue lo spostamento dei piedi a terra: "come il video" resta allineato
+    const frame = fr ? { ...fr, yTop: fr.yTop + shiftOf[i], yBot: fr.yBot + shiftOf[i] } : undefined;
+    return { J: J[i], bow, palms: palms[i], frame };
   });
 }

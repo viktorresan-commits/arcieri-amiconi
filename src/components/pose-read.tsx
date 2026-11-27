@@ -1043,6 +1043,22 @@ export function PoseRead() {
     void saveFile(new Blob([[head, ...rows].join("\n")], { type: "text/csv" }), "analisi-gesto.csv");
   }
 
+  /** tutti i punti letti nel video (con lato, specchio e corporatura): per ricostruire un'analisi uguale altrove */
+  function exportPoints() {
+    const r = (v: number | undefined) => (typeof v === "number" && Number.isFinite(v) ? Math.round(v * 1e5) / 1e5 : undefined);
+    const data = {
+      v: 1,
+      aspect: size.w / Math.max(1, size.h),
+      w: size.w,
+      h: size.h,
+      hand: handRef.current,
+      mirror: mirror3d,
+      build: auraRes?.build ?? null,
+      samples: samples.map((sm) => ({ t: r(sm.t), lm: sm.lm ? sm.lm.map((p) => ({ x: r(p.x), y: r(p.y), z: r(p.z), visibility: r(p.visibility), xw: r(p.xw), yw: r(p.yw), zw: r(p.zw) })) : null, g: sm.g ?? null })),
+    };
+    void saveFile(new Blob([JSON.stringify(data)], { type: "application/json" }), "analisi-punti.json");
+  }
+
   async function recordAnnotated() {
     const video = videoRef.current;
     if (!video || recRef.current) return;
@@ -1472,6 +1488,7 @@ export function PoseRead() {
                 <button type="button" onClick={snapshot} className="min-h-11 rounded-xl border border-line px-3 text-sm font-semibold"><IconLabel icon="download" size={15}>Salva fotogramma</IconLabel></button>
                 <button type="button" disabled={recording || progress != null} onClick={() => void recordAnnotated()} className="min-h-11 rounded-xl border border-line px-3 text-sm font-semibold disabled:opacity-60">{recording ? "● Registro…" : look === "scheletro" ? "⏺ Salva video con scheletro" : look === "sagoma" ? "⏺ Salva video 3D in HD" : "⏺ Salva video con sagoma"}</button>
                 <button type="button" disabled={!samples.length} onClick={exportCsv} className="min-h-11 rounded-xl border border-line px-3 text-sm font-semibold disabled:opacity-60"><IconLabel icon="download" size={15}>Dati CSV</IconLabel></button>
+                <button type="button" disabled={!samples.length} onClick={exportPoints} className="min-h-11 rounded-xl border border-line px-3 text-sm font-semibold disabled:opacity-60"><IconLabel icon="download" size={15}>Punti del video</IconLabel></button>
               </div>
             </div>
           ) : (
