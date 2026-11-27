@@ -323,7 +323,8 @@ export function FlightSim() {
       {view3d ? (
         <>
           <Expand title="Tiro in 3D" onReplay={() => setReplay((r) => r + 1)}>
-            {plain3d ? (
+            {/* con il bersaglio in movimento resta il tiro disegnato, che sposta il paglione mentre la freccia vola */}
+            {plain3d || (flightInput.targetSpeed ?? 0) !== 0 ? (
               <Flight3D key={`f3-${replay}`} input={flightInput} round={primary} sighted={setup.sighted} look={arrowLook} height="h-[30rem] sm:h-80" />
             ) : (
               <Tiro3D cfg={tiroCfg} replay={replay} onFail={() => setPlain3d(true)} className="h-[30rem] sm:h-96" />
