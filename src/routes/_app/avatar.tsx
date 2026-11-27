@@ -2,7 +2,7 @@ import { useEntryState } from "@/lib/arcieri/back-restore";
 import { useEffect, useState, type ReactNode } from "react";
 import { useCrests } from "@/lib/arcieri/crest";
 import { useMemberMaybe } from "@/components/shell";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { AvatarScene, useAvatar } from "@/components/avatar-hero";
 import { Archer3D } from "@/components/archer-3d";
 import { ArcherAvatar, AvatarFace } from "@/components/archer-avatar";
@@ -515,6 +515,10 @@ export function AvatarEditor() {
         </div>
       </div>
       <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 [scrollbar-width:none]">
+        {/* la prova del nuovo arciere 3D: pagina nascosta, solo per il Fondatore */}
+        {founder ? (
+          <Link to="/prova-3d" className="aa-chip shrink-0 border-[#7cf0a8]/60 bg-[#7cf0a8]/15 text-[#bff7d6]"><Glyph name="sparkle" size={14} /> Prova 3D nuova</Link>
+        ) : null}
         {mine.map((sp) => (
           <button key={sp.id} type="button" className="aa-chip shrink-0 border-[#7cf0a8]/60 bg-[#7cf0a8]/15 text-[#bff7d6]" onClick={() => setLook((l) => presetLook(l, sp.look))}><Glyph name="sparkle" size={14} /> {sp.label.replace(/^[^·]*·\s*/, "")}</button>
         ))}
