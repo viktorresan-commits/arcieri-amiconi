@@ -129,6 +129,8 @@ varying vec3 vW; varying vec3 vN; varying vec2 vF; varying float vAct; varying f
 uniform vec3 uEye; uniform float uLayer; uniform float uAlpha; uniform float uDim; uniform float uTime; uniform float uStyle;
 // dettaglio del muscolo (immagine ripetuta lungo le fibre): R rilievo dei fasci, G chiaroscuro del tessuto, B fasce connettivali
 uniform sampler2D uFib; uniform float uFibOn;
+// visuale dall'occhio: la testa attorno alla camera non si disegna
+uniform vec4 uCut;
 // luce calcolata come in fotografia (valori lineari), poi la curva "da pellicola" e lo schermo (sRGB):
 // volumi morbidi e colori veri come nelle tavole anatomiche fotografiche, niente rosso piatto
 vec3 tone(vec3 c){ c = clamp((c * (2.51 * c + 0.03)) / (c * (2.43 * c + 0.59) + 0.14), 0.0, 1.0); return pow(c, vec3(1.0 / 2.2)); }
@@ -142,6 +144,7 @@ float vnoise(vec3 x){
              mix(mix(hash3(i + vec3(0.0, 0.0, 1.0)), hash3(i + vec3(1.0, 0.0, 1.0)), f.x), mix(hash3(i + vec3(0.0, 1.0, 1.0)), hash3(i + vec3(1.0, 1.0, 1.0)), f.x), f.y), f.z);
 }
 void main(){
+  if (uCut.w > 0.0 && distance(vW, uCut.xyz) < uCut.w) discard;
   vec3 N = normalize(vN); vec3 V = normalize(uEye - vW);
   float ndv = clamp(dot(N, V), 0.0, 1.0);
   // le luci girano con chi guarda (studio fotografico): da ogni lato il corpo è illuminato allo stesso modo.
@@ -504,6 +507,10 @@ void main(){
   vec3 amb = mix(vec3(0.12, 0.10, 0.09), vec3(0.24, 0.26, 0.30), 0.5 + 0.5 * N.y);
   vec3 H = normalize(L1 + V);
   vec3 alb = uColor; float spec = 0.08; float gloss = 24.0;
+  // foschia dell'aria aperta: il prato lontano e il paglione a 70 m sbiadiscono un poco
+  float dEye = distance(vW, uEye);
+  float fog = smoothstep(25.0, 150.0, dEye) * 0.4;
+  float rimK = 1.0;
   if (uKind < 0.5) {
     // tinta unita (impugnatura di cuoio)
     spec = 0.05;
@@ -524,6 +531,18 @@ void main(){
   } else if (uKind < 4.5) {
     // punta d'acciaio
     alb = vec3(0.40, 0.41, 0.43); spec = 0.75; gloss = 90.0;
+  } else if (uKind > 6.5 && uKind < 7.5) {
+    // prato: verde d'erba con chiazze, falciato a strisce ogni 5 m (danno la distanza)
+    float st = step(0.5, fract(vO.x * 0.1));
+    float nz = sin(vO.x * 3.1 + sin(vO.z * 2.3) * 1.7) * sin(vO.z * 2.9 + vO.x * 0.7);
+    float fine = sin(vO.x * 41.0 + sin(vO.z * 37.0) * 2.0) * sin(vO.z * 43.0 - vO.x * 13.0);
+    alb = mix(vec3(0.038, 0.085, 0.018), vec3(0.062, 0.125, 0.026), st) * (0.88 + 0.14 * nz + 0.06 * fine);
+    spec = 0.0; rimK = 0.0;
+    fog = smoothstep(18.0, 140.0, dEye) * 0.85;
+  } else if (uKind > 7.5) {
+    // carta della visuale: opaca, colori pieni
+    alb = pow(texture2D(uTex, vUV).rgb, vec3(2.2));
+    spec = 0.03; gloss = 8.0;
   } else if (uKind < 5.5) {
     // legature di filo rosso
     alb = vec3(0.42, 0.025, 0.03) * (0.78 + 0.22 * sin(vO.y * 2400.0));
@@ -534,11 +553,11 @@ void main(){
   }
   vec3 light = C1 * wrapL(N, L1, 0.15) + C2 * wrapL(N, L2, 0.25) + amb;
   float fres = 0.04 + 0.96 * pow(1.0 - ndv, 5.0);
-  vec3 col = alb * light + C1 * (pow(max(dot(N, H), 0.0), gloss) * spec + fres * spec * 0.25) + vec3(0.95, 0.97, 1.0) * pow(1.0 - ndv, 3.0) * max(0.0, dot(N, L3) + 0.2) * 0.25;
-  gl_FragColor = vec4(tone(col), 1.0);
+  vec3 col = alb * light + C1 * (pow(max(dot(N, H), 0.0), gloss) * spec + fres * spec * 0.25) + rimK * vec3(0.95, 0.97, 1.0) * pow(1.0 - ndv, 3.0) * max(0.0, dot(N, L3) + 0.2) * 0.25;
+  gl_FragColor = vec4(mix(tone(col), vec3(0.70, 0.76, 0.78), fog), 1.0);
 }`;
 /** materiale di ogni pezzo dell'attrezzatura vera: 0 tinta, 1 foto, 2 legno, 3 penne, 4 acciaio, 5 filo, 6 vernice nera */
-const GEAR_KIND: Partial<Record<GearMesh, number>> = { sbRiser: 1, sbDark: 6, sbLight: 2, lbWood: 2, lbGrip: 0, arTrim: 2, arShaft: 5, arFletch: 3, arPoint: 4 };
+const GEAR_KIND: Partial<Record<GearMesh, number>> = { sbRiser: 1, sbDark: 6, sbLight: 2, lbWood: 2, lbGrip: 0, arTrim: 2, arShaft: 5, arFletch: 3, arPoint: 4, tgStraw: 8, tgWood: 8, tgMetal: 8, tgFlag: 0, tgFace: 8, ground: 7 };
 
 export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
   const gl = canvas.getContext("webgl", { antialias: true, premultipliedAlpha: false, alpha: true, preserveDrawingBuffer: keep });
@@ -603,11 +622,11 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     uTex: gl.getUniformLocation(gprog, "uTex"),
   };
   const gmeshes: Partial<Record<GearMesh, { p: WebGLBuffer; n: WebGLBuffer; t: WebGLBuffer; i: WebGLBuffer; count: number; tex: WebGLTexture | null }>> = {};
-  const texOf = (img: ImageBitmap | HTMLImageElement) => {
+  const texOf = (img: ImageBitmap | HTMLImageElement | HTMLCanvasElement, w = 1024, h = 256) => {
     // la foto si porta a misure potenza di due (1024×256): così si può filtrare bene anche da lontano
     const cv = document.createElement("canvas");
-    cv.width = 1024;
-    cv.height = 256;
+    cv.width = w;
+    cv.height = h;
     const c2 = cv.getContext("2d");
     if (!c2) return null;
     c2.drawImage(img, 0, 0, cv.width, cv.height);
@@ -637,6 +656,85 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
       gearReady = true;
     })
     .catch(() => {});
+  // ---- paglione, visuale di carta e prato per la visuale dell'arciere (si caricano solo se servono) ----
+  let targetJob: Promise<boolean> | null = null;
+  const loadTarget = () =>
+    (targetJob ??= (async () => {
+      if (!gearOk) return false;
+      const parts = await loadGlb("/prova3d/assets/archery/target.glb");
+      const groups: Partial<Record<GearMesh, { pos: number[]; nor: number[]; uv: number[]; idx: number[]; image: ImageBitmap | HTMLImageElement | null }>> = {};
+      for (const p of parts) {
+        const key: GearMesh = /straw/i.test(p.material) ? "tgStraw" : /wood/i.test(p.material) ? "tgWood" : /metal/i.test(p.material) ? "tgMetal" : "tgFlag";
+        const g = (groups[key] ??= { pos: [], nor: [], uv: [], idx: [], image: null });
+        const base = g.pos.length / 3;
+        if (base + p.geo.pos.length / 3 >= 65536) continue;
+        g.pos.push(...p.geo.pos);
+        g.nor.push(...p.geo.nor);
+        g.uv.push(...(p.geo.uv ?? new Float32Array((p.geo.pos.length / 3) * 2)));
+        for (const i of p.geo.idx) g.idx.push(i + base);
+        if (p.image) g.image = p.image;
+      }
+      const put = (name: GearMesh, pos: Float32Array, nor: Float32Array, uv: Float32Array, idx: Uint16Array, tex: WebGLTexture | null) => {
+        const m = upload({ pos, nor, idx });
+        const t = gl.createBuffer()!;
+        gl.bindBuffer(gl.ARRAY_BUFFER, t);
+        gl.bufferData(gl.ARRAY_BUFFER, uv, gl.STATIC_DRAW);
+        gmeshes[name] = { p: m.p, n: m.n, t, i: m.i, count: m.count, tex };
+      };
+      for (const [name, g] of Object.entries(groups) as [GearMesh, NonNullable<(typeof groups)[GearMesh]>][]) {
+        if (!g.idx.length) continue;
+        put(name, new Float32Array(g.pos), new Float32Array(g.nor), new Float32Array(g.uv), new Uint16Array(g.idx), g.image ? texOf(g.image, 1024, 1024) : null);
+      }
+      // visuale FITA a dieci zone: due bianche, due nere, due blu, due rosse, due gialle (oro), con la crocetta
+      const cv = document.createElement("canvas");
+      cv.width = cv.height = 512;
+      const g2 = cv.getContext("2d");
+      if (g2) {
+        g2.fillStyle = "#cfc6ae";
+        g2.fillRect(0, 0, 512, 512);
+        const cols = ["#f4f1ea", "#f4f1ea", "#1b1b1d", "#1b1b1d", "#2a7bc4", "#2a7bc4", "#d63a2f", "#d63a2f", "#f2c42c", "#f2c42c"];
+        for (let i = 0; i < 10; i++) {
+          g2.beginPath();
+          g2.arc(256, 256, 254 - i * 25.4, 0, Math.PI * 2);
+          g2.fillStyle = cols[i];
+          g2.fill();
+          g2.lineWidth = 1.6;
+          g2.strokeStyle = i === 2 || i === 3 ? "#e9e6de" : "#1b1b1d";
+          g2.stroke();
+        }
+        g2.beginPath();
+        g2.arc(256, 256, 12.7, 0, Math.PI * 2);
+        g2.lineWidth = 1;
+        g2.strokeStyle = "#1b1b1d";
+        g2.stroke();
+        g2.beginPath();
+        g2.moveTo(250, 256);
+        g2.lineTo(262, 256);
+        g2.moveTo(256, 250);
+        g2.lineTo(256, 262);
+        g2.stroke();
+      }
+      // disco: normale +x, raggio 1 nel piano y-z
+      const N = 64;
+      const pos: number[] = [0, 0, 0];
+      const nor: number[] = [1, 0, 0];
+      const uv: number[] = [0.5, 0.5];
+      const idx: number[] = [];
+      for (let i = 0; i <= N; i++) {
+        const t = (i / N) * Math.PI * 2;
+        const y = Math.cos(t);
+        const z = Math.sin(t);
+        pos.push(0, y, z);
+        nor.push(1, 0, 0);
+        uv.push(0.5 + 0.5 * z, 0.5 - 0.5 * y);
+        if (i > 0) idx.push(0, i, i + 1);
+      }
+      put("tgFace", new Float32Array(pos), new Float32Array(nor), new Float32Array(uv), new Uint16Array(idx), texOf(cv, 512, 512));
+      // prato in metri: x lungo la linea di tiro (0 = linea dei piedi), z di lato; le strisce vengono da x
+      const gp = new Float32Array([-15, 0, -45, 190, 0, -45, 190, 0, 45, -15, 0, 45]);
+      put("ground", gp, new Float32Array([0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0]), new Float32Array(8), new Uint16Array([0, 2, 1, 0, 3, 2]), null);
+      return true;
+    })().catch(() => false));
   // ---- corpo anatomico vero ----
   const bprog = gl.createProgram()!;
   gl.attachShader(bprog, sh(gl.VERTEX_SHADER, BVS));
@@ -667,9 +765,11 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     uFa: gl.getUniformLocation(bprog, "uFa"),
     uDita: gl.getUniformLocation(bprog, "uDita"),
     uFib: gl.getUniformLocation(bprog, "uFib"),
+    uCut: gl.getUniformLocation(bprog, "uCut"),
     uFibOn: gl.getUniformLocation(bprog, "uFibOn"),
   };
   // dettaglio dei fasci muscolari: un'immagine ripetuta lungo le fibre (arriva dopo il corpo, non lo blocca)
+  const cutNow = new Float32Array(4);
   const fibTex = gl.createTexture();
   let fibReady = false;
   let disposedFib = false;
@@ -791,8 +891,20 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     gl.uniform3fv(loc.uEye, eye);
     gl.uniform1f(loc.uTime, time);
     bound = "";
-    for (const p of parts) if (!(p.alt === "real" && gearOk && gmeshes[p.mesh as GearMesh])) one(p);
+    // i pezzi quasi trasparenti (la corda davanti all'occhio nella visuale dell'arciere) dopo, senza
+    // scrivere la profondità: non devono nascondere quello che c'è dietro
+    const late: Part[] = [];
+    for (const p of parts) {
+      if (p.alt === "real" && gearOk && gmeshes[p.mesh as GearMesh]) continue;
+      if (p.alpha < 0.5) late.push(p);
+      else one(p);
+    }
     drawGear(parts, VP, eye);
+    if (late.length) {
+      gl.depthMask(false);
+      for (const p of late) one(p);
+      gl.depthMask(true);
+    }
   };
   let style: 0 | 1 = 0;
   const bul = new Float32Array(64);
@@ -867,6 +979,7 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     gl.bindTexture(gl.TEXTURE_2D, fibTex);
     gl.uniform1i(bl.uFib, 1);
     gl.uniform1f(bl.uFibOn, fibReady && deriv ? 1 : 0);
+    gl.uniform4fv(bl.uCut, cutNow);
     gl.activeTexture(gl.TEXTURE0);
     // le superfici del corpo sono chiuse e orientate verso l'esterno: le facce interne non si disegnano
     // (niente pieghe luccicanti dentro la pelle)
@@ -939,6 +1052,11 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     gearReady() {
       return gearReady && fibReady;
     },
+    /** paglione, visuale e prato per la visuale dell'arciere */
+    loadTarget,
+    targetReady() {
+      return Boolean(gmeshes.tgStraw && gmeshes.tgFace && gmeshes.ground);
+    },
     /** aspetta l'arco e la freccia veri e il dettaglio dei muscoli (per le foto: un disegno solo, deve già averli) */
     async gearLoaded() {
       await Promise.all([loadGear(), Promise.race([fibLoaded, new Promise((r) => setTimeout(r, 4000))])]);
@@ -973,7 +1091,11 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     },
     /** focus: id dei muscoli da mettere in evidenza (gli altri si spengono) */
-    draw(model: Model, VP: Float32Array, eye: V3, time: number, L: Layers, focus?: Set<string> | null, fast = false) {
+    draw(model: Model, VP: Float32Array, eye: V3, time: number, L: Layers, focus?: Set<string> | null, fast = false, /** sfera attorno all'occhio da non disegnare (visuale dell'arciere) */ cut?: [number, number, number, number] | null) {
+      cutNow[0] = cut?.[0] ?? 0;
+      cutNow[1] = cut?.[1] ?? 0;
+      cutNow[2] = cut?.[2] ?? 0;
+      cutNow[3] = cut?.[3] ?? 0;
       // in movimento il corpo leggero (scorre senza scatti), fermo quello pieno
       body = (fast ? (bodies.leggero ?? bodies.pieno) : (bodies.pieno ?? bodies.leggero)) ?? null;
       if (body && model.J && model.hand) {

@@ -10,7 +10,7 @@ import { archeryKit } from "./pose-kit";
 export type V3 = [number, number, number];
 export type Mode = 0 | 1 | 2 | 3; // 0 pelle (bordo luminoso), 1 osso, 2 muscolo, 3 materiale semplice
 /** mesh vere dell'arco lungo e della freccia di legno (public/models/arco-legno.bin) */
-export type GearMesh = "lbWood" | "lbGrip" | "arFletch" | "arShaft" | "arPoint" | "arTrim" | "sbRiser" | "sbDark" | "sbLight";
+export type GearMesh = "lbWood" | "lbGrip" | "arFletch" | "arShaft" | "arPoint" | "arTrim" | "sbRiser" | "sbDark" | "sbLight" | "tgStraw" | "tgWood" | "tgMetal" | "tgFlag" | "tgFace" | "ground";
 export type Part = {
   mesh: "sphere" | "torus" | "spindle" | "tube" | GearMesh;
   m: Float32Array;
@@ -49,7 +49,7 @@ export type BowPose = { n: V3; u: V3; half: number; nocked: boolean };
  * niente scatti né compenetrazioni, e arco rigido filtrato. Se c'è, il fotogramma non si ricalcola da solo.
  */
 export type PrePose = { J: Record<number, V3>; bow?: BowPose | null; /** verso del palmo per mano (sinistra, destra della persona), continuo nel tempo */ palms?: { L?: V3; R?: V3 } };
-export type Model = { parts: Part[]; /** posa dell'arco usata (per il filtro sull'intero video) */ bowPose?: BowPose; hud: Hud; center: V3; height: number; J?: Record<number, V3>; hand?: Hand; /** dove guarda il viso (orizzontale): segue il bersaglio durante il tiro */ headF?: V3; /** testa in giù (+) o in su (-), radianti: dal naso rispetto alle orecchie nel fotogramma */ headPitch?: number; /** quanto la mano della corda è in presa sulla corda (0..1) e quanto quella dell'arco stringe l'impugnatura */ grip?: { draw: number; bow: number }; /** il fotogramma del video nel piano del corpo (z = 0), in metri: sinistra, destra, sopra, sotto */ frame?: ImageFrame; /** corporatura trovata con l'aura (silhouette) dell'arciere */ build?: Build; /** asse dell'arco all'impugnatura (verso il flettente alto): la mano dell'arco ci si chiude attorno */ bowAxis?: V3; /** verso del palmo filtrato sull'intero video (vedi PrePose) */ palms?: { L?: V3; R?: V3 } };
+export type Model = { parts: Part[]; /** posa dell'arco usata (per il filtro sull'intero video) */ bowPose?: BowPose; hud: Hud; center: V3; height: number; J?: Record<number, V3>; hand?: Hand; /** dove guarda il viso (orizzontale): segue il bersaglio durante il tiro */ headF?: V3; /** testa in giù (+) o in su (-), radianti: dal naso rispetto alle orecchie nel fotogramma */ headPitch?: number; /** quanto la mano della corda è in presa sulla corda (0..1) e quanto quella dell'arco stringe l'impugnatura */ grip?: { draw: number; bow: number }; /** il fotogramma del video nel piano del corpo (z = 0), in metri: sinistra, destra, sopra, sotto */ frame?: ImageFrame; /** corporatura trovata con l'aura (silhouette) dell'arciere */ build?: Build; /** asse dell'arco all'impugnatura (verso il flettente alto): la mano dell'arco ci si chiude attorno */ bowAxis?: V3; /** verso del palmo filtrato sull'intero video (vedi PrePose) */ palms?: { L?: V3; R?: V3 }; /** la freccia incoccata: cocca, direzione e lunghezza (per la visuale dell'arciere) */ arrow?: { nock: V3; dir: V3; len: number } };
 /** dove sta il fotogramma del video nello spazio della sagoma: serve a guardarla "come il video", punto su punto */
 export type ImageFrame = { x0: number; x1: number; yTop: number; yBot: number };
 
@@ -1000,8 +1000,10 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gea
   const tipD = curve(-1);
   push("tube", seg(tipU, nock, 0.0022, 0.0022, 1.0), [0.95, 0.95, 0.9], 3, 0.9, "arco");
   parts[parts.length - 1].alt = "proc";
+  parts[parts.length - 1].id = "corda";
   push("tube", seg(tipD, nock, 0.0022, 0.0022, 1.0), [0.95, 0.95, 0.9], 3, 0.9, "arco");
   parts[parts.length - 1].alt = "proc";
+  parts[parts.length - 1].id = "corda";
   // arco vero: il ricurvo tradizionale Samik Sage (riser di legno, flettenti laminati), con la presa nel
   // pugno della mano dell'arco e la corda dai suoi puntali. Per un mancino è lo stesso arco a specchio
   const bowX = norm(cross(n, u));
@@ -1017,10 +1019,11 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gea
   realPart("sbDark", bowPl, [0.02, 0.02, 0.02]);
   const onBow = (q: V3): V3 => add(bowO, add(mul(bowXm, q[0]), add(mul(n, q[1] * sBow), mul(u, q[2]))));
   for (const tq of [SAMIK.tipA, SAMIK.tipB]) {
-    parts.push({ ...seg(onBow(tq), nock, 0.0022, 0.0022, 1.0), mesh: "tube", color: [0.95, 0.95, 0.9], mode: 3, alpha: 0.9, act: 0, layer: "arco", alt: "real" });
+    parts.push({ ...seg(onBow(tq), nock, 0.0022, 0.0022, 1.0), mesh: "tube", color: [0.95, 0.95, 0.9], mode: 3, alpha: 0.9, act: 0, layer: "arco", alt: "real", id: "corda" });
   }
   // freccia: incoccata quando le dita sono sulla corda (in trazione o pronte a tirare)
   const nocked = bowPre ? !loose && bowPre.nocked : rawBow.nocked;
+  let arrowOut: Model["arrow"];
   // appena scoccata: per un istante la freccia vola via davanti all'arco (55 m/s), poi non c'è più
   if (loose && (gear?.loose ?? 1) < 0.2) {
     const fly = 55 * (gear?.loose ?? 0) + 0.05;
@@ -1042,6 +1045,7 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gea
       const along = dot(sub(arrowSeen.tip, nock), ua);
       if (along > gn * 0.8 && along < gn + 0.45) arrowTip = add(nock, mul(ua, along));
     }
+    arrowOut = { nock, dir: ua, len: len(sub(arrowTip, nock)) };
     push("tube", seg(nock, arrowTip, 0.004, 0.004, 1.0), [0.98, 0.82, 0.35], 3, 1, "arco");
     parts[parts.length - 1].alt = "proc";
     push("sphere", seg(nock, add(nock, mul(ua, 0.09)), 0.012, 0.003, 1.0, n), [0.95, 0.35, 0.3], 3, 0.9, "arco"); // alette
@@ -1097,6 +1101,7 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gea
     bowAxis: n,
     bowPose: rawBow,
     palms: pre?.palms,
+    arrow: arrowOut ?? { nock, dir: u, len: WOOD_ARROW_LEN },
   };
 }
 
