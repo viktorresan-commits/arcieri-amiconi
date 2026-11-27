@@ -447,6 +447,33 @@ export function bodyMatrices(meta: BodyMeta, J: Record<number, V3>, look?: V3, g
     // l'avambraccio gira con la mano (niente polso attorcigliato)
     Fc[`avambr_${s}`] = frame(el, W, palm, fwd);
   }
+  // Rotazione dell'avambraccio (pronazione e supinazione): nel corpo vero il gomito non gira, gira il radio
+  // attorno all'ulna e la torsione si vede verso il polso. Con un avambraccio rigido che seguiva tutto il
+  // palmo i muscoli del gomito si attorcigliavano. Qui l'avambraccio prende solo una parte della rotazione
+  // rispetto alla cerniera del gomito, entro i gradi anatomici; il resto lo fa la mano
+  for (const s of ["L", "R"] as const) {
+    const fr = Fr[`avambr_${s}`];
+    const fc = Fc[`avambr_${s}`];
+    const orR = Fr[`omero_${s}`];
+    const orC = Fc[`omero_${s}`];
+    if (!fr || !fc || !orR || !orC) continue;
+    const twist = (f: Frame, om: Frame) => {
+      const h = perpTo(f.e1, om.e2, om.e3);
+      return { h, th: Math.atan2(dot(cross(h, f.e2), f.e1), dot(h, f.e2)) };
+    };
+    const r = twist(fr, orR);
+    const c = twist(fc, orC);
+    let d = c.th - r.th;
+    while (d > Math.PI) d -= 2 * Math.PI;
+    while (d < -Math.PI) d += 2 * Math.PI;
+    d = Math.max(-1.75, Math.min(1.75, d));
+    const ang = r.th + 0.4 * d;
+    const ca = Math.cos(ang);
+    const sa = Math.sin(ang);
+    const ax = c.h;
+    const e2 = norm(add(add(mul(ax, ca), mul(cross(fc.e1, ax), sa)), mul(fc.e1, dot(fc.e1, ax) * (1 - ca))));
+    Fc[`avambr_${s}`] = { o: fc.o, e1: fc.e1, e2, e3: cross(fc.e1, e2), L: fc.L };
+  }
   const out = new Float32Array(meta.segments.length * 16);
   const idx = (name: string) => meta.segments.indexOf(name);
   meta.segments.forEach((name, i) => {
