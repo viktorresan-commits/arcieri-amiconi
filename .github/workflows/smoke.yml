@@ -1,0 +1,15 @@
+name: Prova di apertura
+on:
+  push:
+    branches: [main]
+    paths: [".github/smoke/**", ".github/workflows/smoke.yml"]
+  workflow_dispatch:
+jobs:
+  open:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm i --no-save --prefix /tmp/sm puppeteer-core@23
+      - run: NODE_PATH=/tmp/sm/node_modules node --input-type=module -e "import('/tmp/sm/node_modules/puppeteer-core/lib/esm/puppeteer/puppeteer-core.js').then(()=>console.log('ok'))" || true
+      - run: cp .github/smoke/open.mjs /tmp/sm/open.mjs && cd /tmp/sm && node open.mjs
