@@ -9,9 +9,10 @@ import { FrontShoe, frontBootTop } from "./avatar-shoes";
 import { FrontFist } from "./avatar-hands";
 import { RimLightDefs } from "./avatar-light";
 import { Buckle, ChestEmblem, Clasp, ClothPattern, Fletching, Pouch, QuiverBody, zigQ } from "./avatar-extras";
-import { seamOf, BeltDetail, BracerLacing, ClothButton, ClothDetail, DetailDefs, LeatherBand, SleeveDetail } from "./avatar-detail";
+import { seamOf, BeltDetail, BracerLacing, ClothButton, ClothDetail, DetailDefs, LeatherBand } from "./avatar-detail";
 import { BUTTON_TOPS } from "./archer-avatar";
 import { ArmGuard, ChestGuard, FrontLegDetail, LimbGloss, PlainBuckle, RiserGrain } from "./avatar-gear";
+import { armAxis, armLimb, armWidths, limb, LEG_Y, legWidths, pantWidths } from "./front-body";
 
 // contorno dipinto: bruno scuro morbido, non più nero a china
 const OUT = "#2a1d14";
@@ -31,7 +32,9 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
   const W = bodyWidth(look);
   const tw = (woman ? 0.9 : 1) * W;
   const cx = 100;
-  const sh = { l: cx - 38 * tw, r: cx + 38 * tw };
+  // spalle larghe quanto basta a reggere la testa: lui più largo, lei un po' meno
+  const shW = (woman ? 38.5 : 42) * tw;
+  const sh = { l: cx - shW, r: cx + shW };
   const waist = { l: cx - (woman ? 25 : 29) * W, r: cx + (woman ? 25 : 29) * W };
   const hip = { l: cx - (woman ? 33 : 30) * W, r: cx + (woman ? 33 : 30) * W };
   const skin = look.skin;
@@ -43,11 +46,31 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
   const hem = 206 + (sideLen - 206) * 1.05;
   const longTop = sideLen > 216;
   const tunicD = `M${hip.l} 196 L${hip.r} 196 C${hip.r + 6} 230 ${hip.r + 12} ${hem - 20} ${hip.r + 14} ${hem} Q${cx} ${hem + 6} ${hip.l - 14} ${hem} C${hip.l - 12} ${hem - 20} ${hip.l - 6} 230 ${hip.l} 196 Z`;
-  const torsoD = `M${sh.l} 106 C${sh.l + 10} 94 ${sh.r - 10} 94 ${sh.r} 106 C${sh.r + 2} 140 ${waist.r + 2} 170 ${waist.r} 186 C${hip.r} 194 ${hip.r} 200 ${hip.r} 208 L${hip.l} 208 C${hip.l} 200 ${hip.l} 194 ${waist.l} 186 C${waist.l - 2} 170 ${sh.l - 2} 140 ${sh.l} 106 Z`;
+  // busto: collo, trapezio che scende alla spalla tonda, petto e dorsali che stringono alla vita (lui),
+  // seno e vita stretta che si apre sui fianchi (lei)
+  const nk = 14 * tw;
+  const sideD = (s: 1 | -1) => {
+    const S = s > 0 ? sh.r : sh.l;
+    const Wt = s > 0 ? waist.r : waist.l;
+    const H = s > 0 ? hip.r : hip.l;
+    return woman
+      ? `C${S + s * 1.5} 138 ${Wt - s * 1} 160 ${Wt} 178 C${Wt + s * 1} 190 ${H + s * 1} 194 ${H} 202`
+      : `C${S} 140 ${Wt + s * 3} 164 ${Wt} 182 C${Wt - s * 0.5} 190 ${H} 192 ${H} 200`;
+  };
+  const revSide = (s: 1 | -1) => {
+    const S = s > 0 ? sh.r : sh.l;
+    const Wt = s > 0 ? waist.r : waist.l;
+    const H = s > 0 ? hip.r : hip.l;
+    return woman
+      ? `C${H + s * 1} 194 ${Wt + s * 1} 190 ${Wt} 178 C${Wt - s * 1} 160 ${S + s * 1.5} 138 ${S + s * 1} 121`
+      : `C${H} 192 ${Wt - s * 0.5} 190 ${Wt} 182 C${Wt + s * 3} 164 ${S} 140 ${S + s * 1} 121`;
+  };
+  const torsoD = `M${cx - nk} 96.6 Q${cx} 98.2 ${cx + nk} 96.6 C${cx + nk + 8} 99 ${sh.r - 14} 102.5 ${sh.r - 5} 106.5 C${sh.r + 0.5} 108.5 ${sh.r + 2.5} 113 ${sh.r + 1} 121 ${sideD(1)} L${hip.r} 208 Q${cx} 209.6 ${hip.l} 208 L${hip.l} ${woman ? 202 : 200} ${revSide(-1)} C${sh.l - 2.5} 113 ${sh.l - 0.5} 108.5 ${sh.l + 5} 106.5 C${sh.l + 14} 102.5 ${cx - nk - 8} 99 ${cx - nk} 96.6 Z`;
   const tight = look.bottom === "calzamaglia";
   const wide = look.bottom === "larghi" || look.bottom === "brache";
   const shorts = look.bottom === "pantaloncini" || look.bottom === "gonna";
   const legW = (tight ? 15 : wide ? 22 : 18) * W;
+  const legK = W * (look.body === "ragazzo" || look.body === "ragazza" ? 0.94 : 1);
   const legX = [cx - 14 * W, cx + 14 * W];
   const bootTop = frontBootTop(look.footwear, look.bootHeight);
   // l'arco sta nella mano dell'arco: la sinistra (a destra per chi guarda), o l'altra se mancino
@@ -75,34 +98,121 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
   const quiverBack = look.quiverPlace === "schiena";
   const spin = tune(look.quiverRot, 0, -180, 180);
   const medievalTop = ["tunica", "tunica-lunga", "farsetto", "ranger", "incrociata", "cappotto", "giubba", "cappotto-lungo", "cotta"].includes(look.top);
-  const sleeveLong = LONG_SLEEVES.includes(look.top) || look.top === "corpetto" || look.top === "gilet";
   const handR = 7.4 * W;
   const arm = (side: -1 | 1) => {
     const open = armsOut != null;
     const bowArm = side === bowSide && !open;
-    const s0 = { x: side < 0 ? sh.l + 7 : sh.r - 7, y: 108 };
+    const s0 = { x: side < 0 ? sh.l + 7 : sh.r - 7, y: 110 };
     // braccia aperte: la punta del dito medio a armsOut dal centro, la mano finisce lì
     const hand = open ? { x: cx + side * (armsOut - handR * 0.9), y: 110 } : bowArm ? { x: grip.x - bowSide * 1, y: grip.y } : { x: s0.x + side * 1, y: 214 };
     const elbow = open ? { x: lerp(s0.x, hand.x, 0.47), y: 109 } : bowArm ? { x: s0.x + side * 11, y: 158 } : { x: s0.x + side * 7, y: 160 };
     const upW = 16.5 * W;
     const foreW = 13 * W;
-    const segs = `M${f(s0.x)} ${f(s0.y)} L${f(elbow.x)} ${f(elbow.y)}`;
     const cuff = lerpP(elbow, hand, 0.84);
     const brA = lerpP(elbow, hand, 0.34);
     const brB = lerpP(elbow, hand, 0.84);
+    // braccio vero: deltoide, bicipite, gomito, avambraccio e polso; il lato esterno è quello lontano dal corpo
+    const foreLen = Math.hypot(hand.x - elbow.x, hand.y - elbow.y) || 1;
+    const wrist = lerpP(elbow, hand, Math.max(0.6, 1 - (handR * 0.8) / foreLen));
+    const axis = armAxis(s0, elbow, wrist);
+    const aw = armWidths(woman, W * (look.body === "ragazzo" || look.body === "ragazza" ? 0.92 : 1));
+    const LR = (o: number[], i: number[]) => (side < 0 ? { l: o, r: i } : { l: i, r: o });
+    const bare = LR(aw.o, aw.i);
+    // la cupola del deltoide parte dalla linea del trapezio, un poco verso il collo
+    const peak = { x: s0.x - side * 5.5 * W, y: 104.6 };
+    const skinArm = armLimb(axis, bare.l, bare.r, side, peak, 0.3);
+    // manica lunga: un poco più ampia del braccio, la stoffa addolcisce i muscoli, finisce al polsino
+    const cuffT = 0.94;
+    const longSleeve = sleeve !== skin;
+    const sleeveAxis = [...axis.slice(0, 10), lerpP(elbow, wrist, cuffT)];
+    const soft = (arr: number[], add: number[]) => arr.slice(0, 11).map((v, n) => v + add[n]);
+    const sleeveArm = longSleeve
+      ? (() => {
+          const add = [1.4, 1.1, 1.3, 1.4, 1.8, 2, 1.6, 1.5, 1.8, 2.3, 2.6].map((v) => v * W);
+          const sw = LR(soft(aw.o, add), soft(aw.i, add));
+          const shape = armLimb(sleeveAxis, sw.l, sw.r, side, { x: peak.x - side * 0.6, y: peak.y - 0.8 }, 0.12);
+          // polsino: una fascia che chiude la manica sul polso
+          const band = (n: number, extra: number) => (sw.l[n] + sw.r[n]) / 2 + extra;
+          const cuffBand = limb([lerpP(elbow, wrist, 0.8), lerpP(elbow, wrist, 0.88), lerpP(elbow, wrist, 0.97)], [band(9, 0.9), band(10, 1), band(10, 1)], [band(9, 0.9), band(10, 1), band(10, 1)], 0.1, 0.12);
+          return { ...shape, cuffBand };
+        })()
+      : null;
+    // manica corta (maglia, polo, divisa...): copre metà braccio e si apre appena all'orlo
+    const capColor = look.top === "gilet" || look.top === "corpetto" ? look.sleeves || look.trim : shirt;
+    const shortSleeve = !(LONG_SLEEVES.includes(look.top) || look.top === "canotta");
+    const capArm = shortSleeve
+      ? (() => {
+          const capAxis = [...axis.slice(0, 3), lerpP(s0, elbow, 0.5)];
+          const add = (open ? [1.2, 1.2, 1.4, 1.8] : [1.6, 1.8, 2.4, 3.2]).map((v) => v * W);
+          const cw = LR(aw.o.slice(0, 4).map((v, n) => v + add[n]), aw.i.slice(0, 4).map((v, n) => v + add[n]));
+          return armLimb(capAxis, cw.l, cw.r, side, { x: peak.x - side * 0.6, y: peak.y - 0.8 }, 0.08);
+        })()
+      : null;
+    const at2 = (k: number) => axis[k];
+    const outerPt = (k: number) => (side < 0 ? skinArm.L[k] : skinArm.R[k]);
+    const innerPt = (k: number) => (side < 0 ? skinArm.R[k] : skinArm.L[k]);
+    const skinLine = shade(skin, -0.42);
+    // il volume segue l'arto: in verticale le braccia lungo il corpo, in orizzontale quelle aperte
+    const vol = `url(#${uid}${open ? "lvh" : "lv"})`;
     return (
       <g key={side} className={live ? (bowArm ? "aa-front-bowarm" : "aa-front-arm") : undefined} style={live ? { transformOrigin: `${f(s0.x)}px ${f(s0.y)}px` } : undefined}>
-        <path d={`${segs} L${f(hand.x)} ${f(hand.y)}`} stroke={OUT} strokeOpacity="0.58" strokeWidth={upW + 1.3} strokeLinecap="round" strokeLinejoin="round" fill="none" />
-        <path d={segs} stroke={sleeve} strokeWidth={upW} strokeLinecap="round" fill="none" />
-        {sleeve !== skin ? <path d={segs} stroke={`url(#${uid}linen)`} strokeWidth={upW} strokeLinecap="round" fill="none" /> : null}
-        <path d={`M${f(elbow.x)} ${f(elbow.y)} L${f(sleeveLong ? cuff.x : hand.x)} ${f(sleeveLong ? cuff.y : hand.y)}`} stroke={sleeveLong ? sleeve : skin} strokeWidth={foreW + (sleeveLong ? 1.5 : 0)} strokeLinecap="round" fill="none" />
-        {sleeveLong ? <path d={`M${f(cuff.x)} ${f(cuff.y)} L${f(hand.x)} ${f(hand.y)}`} stroke={skin} strokeWidth={foreW - 1} strokeLinecap="round" /> : null}
-        {LONG_SLEEVES.includes(look.top) || look.top === "canotta" ? null : <path d={open ? `M${f(s0.x)} ${f(s0.y)} L${f(s0.x + side * 20)} ${f(s0.y + 1)}` : `M${f(s0.x)} ${f(s0.y)} L${f(s0.x + side * 4)} 130`} stroke={look.top === "gilet" || look.top === "corpetto" ? look.sleeves || look.trim : shirt} strokeWidth={19 * W} strokeLinecap="round" />}
-        {look.top === "canotta" ? null : <SleeveDetail s={s0} e={elbow} h={hand} w={upW} color={seamOf(sleeve)} long={sleeveLong} />}
-        <path d={`M${f(s0.x - side * upW * 0.18)} ${f(s0.y + 4)} L${f(elbow.x - side * upW * 0.18)} ${f(elbow.y)}`} stroke="#fff" strokeOpacity="0.14" strokeWidth={upW * 0.26} strokeLinecap="round" />
-        {/* ombra sul lato in ombra del braccio (la luce viene da sinistra) */}
-        <path d={`M${f(s0.x + upW * 0.3)} ${f(s0.y + 4)} L${f(elbow.x + upW * 0.3)} ${f(elbow.y)}${sleeveLong ? ` L${f(cuff.x + foreW * 0.3)} ${f(cuff.y)}` : ""}`} stroke="#000" strokeOpacity="0.18" strokeWidth={upW * 0.34} strokeLinecap="round" strokeLinejoin="round" fill="none" />
-        {medievalTop ? <circle cx={f(cuff.x)} cy={f(cuff.y)} r={6.8 * W} fill={look.trim} stroke={OUT} strokeOpacity="0.43" strokeWidth="0.48" /> : null}
+        {/* ombra del braccio sulla veste (la luce viene da sinistra) */}
+        {open ? null : <path d={skinArm.d} transform="translate(2.4 1.6)" fill="#000" opacity="0.16" clipPath={`url(#${uid}tcl)`} pointerEvents="none" />}
+        <path d={skinArm.d} fill={skin} />
+        <path d={skinArm.d} fill={vol} pointerEvents="none" />
+        <path d={skinArm.stroke} fill="none" stroke={OUT} strokeOpacity="0.5" strokeWidth="0.8" strokeLinejoin="round" strokeLinecap="round" />
+        {/* il bordo del deltoide sul petto, appena accennato */}
+        {open ? null : <path d={`M${f(skinArm.inner[2].x)} ${f(skinArm.inner[2].y)} Q${f(skinArm.inner[0].x + side * 1.5)} ${f(skinArm.inner[0].y - 1)} ${f(peak.x)} ${f(peak.y + 0.6)}`} fill="none" stroke={shade(skin, -0.4)} strokeOpacity="0.28" strokeWidth="0.8" strokeLinecap="round" />}
+        {/* muscoli appena segnati sulla pelle: attacco del deltoide, piega del gomito, brachioradiale */}
+        {longSleeve && !open ? null : (
+          <g fill="none" stroke={skinLine} strokeLinecap="round" pointerEvents="none">
+            {shortSleeve ? null : <path d={`M${f(outerPt(2).x)} ${f(outerPt(2).y)} Q${f(lerpP(outerPt(1), at2(1), 0.45).x)} ${f(lerpP(outerPt(1), at2(1), 0.45).y)} ${f(lerpP(at2(1), innerPt(1), 0.2).x)} ${f(at2(1).y - 3)}`} strokeOpacity="0.3" strokeWidth="0.7" />}
+            <path d={`M${f(lerpP(at2(5), innerPt(5), 0.5).x)} ${f(at2(5).y - 1.5)} q${f(side * -1.4)} 2.2 ${f(side * 0.6)} 4`} strokeOpacity="0.32" strokeWidth="0.6" />
+            <path d={`M${f(lerpP(at2(5), outerPt(5), 0.6).x)} ${f(at2(5).y + 1)} Q${f(lerpP(at2(7), outerPt(7), 0.2).x)} ${f(at2(7).y)} ${f(lerpP(at2(8), innerPt(8), 0.15).x)} ${f(at2(8).y + 2)}`} strokeOpacity="0.2" strokeWidth="0.7" />
+            <path d={`M${f(lerpP(at2(3), innerPt(3), 0.55).x)} ${f(at2(2).y)} q${f(side * 1.2)} 6 0 11`} stroke="#fff" strokeOpacity="0.14" strokeWidth="1.6" />
+          </g>
+        )}
+        {sleeveArm ? (
+          <g>
+            <path d={sleeveArm.d} fill={sleeve} />
+            <path d={sleeveArm.d} fill={`url(#${uid}linen)`} pointerEvents="none" />
+            <path d={sleeveArm.d} fill={vol} pointerEvents="none" />
+            <path d={sleeveArm.stroke} fill="none" stroke={OUT} strokeOpacity="0.5" strokeWidth="0.8" strokeLinejoin="round" strokeLinecap="round" />
+            {open ? null : <path d={`M${f(sleeveArm.inner[2].x)} ${f(sleeveArm.inner[2].y)} Q${f(sleeveArm.inner[0].x + side * 1.5)} ${f(sleeveArm.inner[0].y - 1)} ${f(peak.x - side * 0.6)} ${f(peak.y - 0.4)}`} fill="none" stroke={seamOf(sleeve)} strokeOpacity="0.55" strokeWidth="0.55" strokeDasharray="1.2 1" />}
+            {/* pieghe morbide: al gomito, dove la manica si raccoglie, e una che scende dalla spalla; cucitura alla spalla */}
+            <g fill="none" strokeLinecap="round" pointerEvents="none">
+              {[[4, -3, 1], [5, 2, 0.8], [6, 1, 0.6]].map(([n, dy, k]) => {
+                const a = lerpP(axis[n], side < 0 ? sleeveArm.R[n] : sleeveArm.L[n], 0.9);
+                const b = lerpP(axis[n], side < 0 ? sleeveArm.L[n] : sleeveArm.R[n], 0.25 * k);
+                return (
+                  <g key={n}>
+                    <path d={`M${f(a.x)} ${f(a.y + dy)} Q${f((a.x + b.x) / 2)} ${f(a.y + dy + 3)} ${f(b.x)} ${f(b.y + dy - 1)}`} stroke="#000" strokeOpacity="0.14" strokeWidth="1.8" />
+                    <path d={`M${f(a.x)} ${f(a.y + dy + 1.3)} Q${f((a.x + b.x) / 2)} ${f(a.y + dy + 4.3)} ${f(b.x)} ${f(b.y + dy + 0.3)}`} stroke="#fff" strokeOpacity="0.12" strokeWidth="0.8" />
+                  </g>
+                );
+              })}
+              <path d={`M${f(lerpP(axis[1], side < 0 ? sleeveArm.L[1] : sleeveArm.R[1], 0.3).x)} ${f(axis[1].y)} Q${f(lerpP(axis[2], side < 0 ? sleeveArm.L[2] : sleeveArm.R[2], 0.5).x)} ${f(axis[2].y + 4)} ${f(lerpP(axis[3], side < 0 ? sleeveArm.L[3] : sleeveArm.R[3], 0.2).x)} ${f(axis[3].y + 6)}`} stroke="#000" strokeOpacity="0.1" strokeWidth="1.4" />
+            </g>
+            <path d={sleeveArm.cuffBand.d} fill={medievalTop ? look.trim : shade(sleeve, -0.08)} stroke={OUT} strokeOpacity="0.45" strokeWidth="0.6" />
+            <path d={sleeveArm.cuffBand.d} fill={vol} pointerEvents="none" />
+          </g>
+        ) : null}
+        {capArm ? (
+          <g>
+            <path d={capArm.d} fill={capColor} />
+            <path d={capArm.d} fill={vol} pointerEvents="none" />
+            <path d={capArm.stroke} fill="none" stroke={OUT} strokeOpacity="0.5" strokeWidth="0.8" strokeLinejoin="round" strokeLinecap="round" />
+            {open ? null : <path d={`M${f(capArm.inner[2].x)} ${f(capArm.inner[2].y)} Q${f(capArm.inner[0].x + side * 1.5)} ${f(capArm.inner[0].y - 1)} ${f(peak.x - side * 0.6)} ${f(peak.y - 0.4)}`} fill="none" stroke={shade(capColor, -0.4)} strokeOpacity="0.4" strokeWidth="0.6" strokeDasharray="1.2 1" />}
+            {/* orlo della manica con la sua ombra sulla pelle e due pieghe che scendono dalla spalla */}
+            <path d={`M${f(capArm.L[3].x)} ${f(capArm.L[3].y)} L${f(capArm.R[3].x)} ${f(capArm.R[3].y)}`} stroke={shade(capColor, -0.4)} strokeOpacity="0.7" strokeWidth="1" />
+            <path d={`M${f(skinArm.L[3].x)} ${f(capArm.L[3].y + 1.6)} L${f(skinArm.R[3].x)} ${f(capArm.R[3].y + 1.6)}`} stroke="#000" strokeOpacity="0.16" strokeWidth="2" />
+            <g stroke={shade(capColor, -0.35)} strokeOpacity="0.45" strokeWidth="0.7" fill="none" strokeLinecap="round">
+              <path d={`M${f(lerpP(at2(1), innerPt(1), 0.4).x)} ${f(at2(1).y)} q${f(side * 1.5)} 6 ${f(side * 0.5)} 12`} />
+              <path d={`M${f(lerpP(at2(2), outerPt(2), 0.35).x)} ${f(at2(2).y - 2)} q${f(-side * 0.8)} 4 ${f(side * 0.4)} 8`} />
+            </g>
+          </g>
+        ) : null}
+        {medievalTop && !sleeveArm ? <circle cx={f(cuff.x)} cy={f(cuff.y)} r={6.8 * W} fill={look.trim} stroke={OUT} strokeOpacity="0.43" strokeWidth="0.48" /> : null}
         {look.armband && !bowArm ? <path d={`M${f(lerp(s0.x, elbow.x, 0.42))} ${f(lerp(s0.y, elbow.y, 0.42))} L${f(lerp(s0.x, elbow.x, 0.58))} ${f(lerp(s0.y, elbow.y, 0.58))}`} stroke={look.trim} strokeWidth={upW + 1.4} /> : null}
         {look.watch && !bowArm ? <g><circle cx={f(lerp(elbow.x, hand.x, 0.8))} cy={f(lerp(elbow.y, hand.y, 0.8))} r="5.4" fill="#1d2126" /><circle cx={f(lerp(elbow.x, hand.x, 0.8))} cy={f(lerp(elbow.y, hand.y, 0.8))} r="3" fill="#dfe6ee" /></g> : null}
         {bowArm && look.armguard ? <ArmGuard uid={uid} a={lerpP(elbow, hand, 0.2)} b={lerpP(elbow, hand, 0.76)} w={foreW + 3} color={look.armguard} out={OUT} /> : null}
@@ -122,7 +232,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
   // freccia nella mano libera: punta in giù lungo la gamba, penne sopra la mano
   const freeHand = { x: (bowSide > 0 ? sh.l + 7 : sh.r - 7) - bowSide * 1, y: 214 };
   const heldArrow = (
-    <g className={live ? "aa-front-arm" : undefined} style={live ? { transformOrigin: `${f(freeHand.x)}px 108px` } : undefined}>
+    <g className={live ? "aa-front-arm" : undefined} style={live ? { transformOrigin: `${f(freeHand.x)}px 110px` } : undefined}>
     <g transform={`translate(${f(freeHand.x)} ${f(freeHand.y)}) rotate(${-bowSide * 4})`}>
       <path d="M0 -30 L0 84" stroke={look.shaft || "#1d1f22"} strokeWidth="2.2" strokeLinecap="round" />
       <path d="M-2.2 84 L0 93 L2.2 84 Z" fill="#c9d0d8" />
@@ -142,6 +252,20 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
           <stop offset="0" stopColor="#fff" stopOpacity="0.16" />
           <stop offset="0.3" stopColor="#fff" stopOpacity="0.04" />
           <stop offset="0.6" stopColor="#000" stopOpacity="0" />
+          <stop offset="1" stopColor="#000" stopOpacity="0.34" />
+        </linearGradient>
+        {/* volume di braccia e gambe: cilindro con la luce da sinistra, il lato destro in ombra */}
+        <linearGradient id={`${uid}lv`} x1="0" x2="1">
+          <stop offset="0" stopColor="#000" stopOpacity="0.1" />
+          <stop offset="0.22" stopColor="#fff" stopOpacity="0.2" />
+          <stop offset="0.42" stopColor="#fff" stopOpacity="0.04" />
+          <stop offset="0.7" stopColor="#000" stopOpacity="0.1" />
+          <stop offset="1" stopColor="#000" stopOpacity="0.36" />
+        </linearGradient>
+        <linearGradient id={`${uid}lvh`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#000" stopOpacity="0.06" />
+          <stop offset="0.24" stopColor="#fff" stopOpacity="0.18" />
+          <stop offset="0.5" stopColor="#fff" stopOpacity="0.02" />
           <stop offset="1" stopColor="#000" stopOpacity="0.34" />
         </linearGradient>
         <linearGradient id={`${uid}ao`} x1="0" y1="0" x2="0" y2="1">
@@ -256,18 +380,80 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
           const sp = (i === 0 ? -1 : 1) * splay * (i === (bowSide > 0 ? 1 : 0) ? 1.4 : 0.8);
           const lx = (y: number) => x + (sp * (y - 206)) / 140;
           const L = (y: number, d: number) => f(lx(y) + d);
+          // gamba vera: coscia, ginocchio, polpaccio e caviglia; il lato esterno è quello lontano dall'altra gamba
+          const axisL = LEG_Y.map((y) => ({ x: lx(y), y }));
+          const LRl = (o: number[], n: number[]) => (i === 0 ? { l: o, r: n } : { l: n, r: o });
+          const bareW = legWidths(woman, legK);
+          const clothW = tight ? { o: bareW.o.map((v) => v + 0.5), i: bareW.i.map((v) => v + 0.5) } : pantWidths(woman, legK, wide);
+          const bw = LRl(bareW.o, bareW.i);
+          const cw = LRl(clothW.o, clothW.i);
+          const bareLeg = limb(axisL, bw.l, bw.r, 0.2, 0.35);
+          const clothLeg = limb(axisL, cw.l, cw.r, 0.2, tight ? 0.35 : 0.12);
+          const legShape = shorts ? bareLeg : clothLeg;
+          // la calzatura avvolge la caviglia (scarpe basse) o il polpaccio (stivali): larga quanto serve, non di più
+          const fromK = Math.max(0, LEG_Y.findIndex((y) => y >= Math.min(bootTop, 324)));
+          const lowShoe = bootTop >= 312;
+          const ankle = Math.max(bareW.o[8], bareW.i[8], bareW.o[9], bareW.i[9]);
+          const shaft = shorts || tight ? bareW : clothW;
+          const need = Math.max(...shaft.o.slice(fromK), ...shaft.i.slice(fromK));
+          const shoeW = 2 * ((lowShoe ? ankle + 0.9 : need + 0.5) - 1);
+          // pantaloni lunghi su scarpe basse: l'orlo ricade sopra la scarpa
+          const breakOver = !shorts && !tight && bootTop >= 300;
+          const pants = !shorts;
+          const knee = 270;
           return (
             <g key={x}>
-              <path d={`M${L(206, -legW / 2)} 206 L${L(206, legW / 2)} 206 L${L(330, legW / 2 - (tight ? 2 : 0))} 330 L${L(330, -legW / 2 + (tight ? 2 : 0))} 330 Z`} fill={shorts ? skin : `url(#${uid}pa)`} stroke={OUT} strokeOpacity="0.54" strokeWidth="0.84" />
-              {shorts ? null : <FrontLegDetail uid={uid} L={L} legW={legW} kneeY={268} bottom={Math.min(326, bootTop)} />}
-              {/* volume della gamba e ombra sotto la veste */}
-              <path d={`M${L(206, -legW / 2)} 206 L${L(206, legW / 2)} 206 L${L(330, legW / 2 - (tight ? 2 : 0))} 330 L${L(330, -legW / 2 + (tight ? 2 : 0))} 330 Z`} fill={`url(#${uid}vol)`} pointerEvents="none" />
-              <path d={`M${L(206, -legW / 2)} 206 L${L(206, legW / 2)} 206 L${L(226, legW / 2)} 226 L${L(226, -legW / 2)} 226 Z`} fill={`url(#${uid}ao)`} opacity="0.7" pointerEvents="none" />
-              {shorts ? <path d={`M${L(206, -legW / 2 - 1)} 206 h${legW + 2} l${f(sp * 0.33)} 46 h${-legW - 2} Z`} fill={`url(#${uid}pa)`} stroke={OUT} strokeOpacity="0.54" strokeWidth="0.72" /> : null}
-              {look.bottom === "jeans" ? <path d={`M${L(214, i ? -3 : 3)} 214 L${L(326, i ? -3 : 3)} 326`} stroke={shade(look.pants, 0.3)} strokeWidth="0.8" strokeDasharray="3 2" /> : null}
-              {look.wraps ? [0, 1, 2, 3, 4].map((k) => <path key={k} d={`M${L(246 + k * 12, -legW / 2)} ${246 + k * 12} L${L(240 + k * 12, legW / 2)} ${240 + k * 12}`} stroke={look.wrapsColor} strokeWidth="4" />) : null}
-              {/* calzatura */}
-              <FrontShoe look={look} L={L} legW={legW} i={i} uid={uid} skin={skin} />
+              <clipPath id={`${uid}lg${i}`}><path d={legShape.d} /></clipPath>
+              {breakOver ? (
+                <g>
+                  <FrontShoe look={look} L={L} legW={shoeW} i={i} uid={uid} skin={skin} />
+                  {/* ombra dell'orlo sulla scarpa */}
+                  <path d={`M${f(clothLeg.L[9].x + 0.5)} 337.6 Q${L(342, 0)} 342 ${f(clothLeg.R[9].x - 0.5)} 337.6`} stroke="#000" strokeOpacity="0.22" strokeWidth="2.2" fill="none" />
+                </g>
+              ) : null}
+              <path d={legShape.d} fill={shorts ? skin : `url(#${uid}pa)`} stroke={OUT} strokeOpacity="0.54" strokeWidth="0.84" strokeLinejoin="round" />
+              <g clipPath={`url(#${uid}lg${i})`} pointerEvents="none">
+                {pants && !tight ? <FrontLegDetail uid={uid} L={L} legW={legW} kneeY={knee - 2} bottom={Math.min(326, bootTop)} /> : null}
+                <path d={legShape.d} fill={`url(#${uid}lv)`} />
+                {/* ombra sotto la veste e tra le cosce */}
+                <rect x={lx(206) - 20} y="204" width="40" height="22" fill={`url(#${uid}ao)`} opacity="0.75" />
+                {shorts || tight ? (
+                  <g fill="none" stroke={shorts ? shade(skin, -0.42) : shade(look.pants, -0.5)} strokeLinecap="round">
+                    {/* rotula, muscoli della coscia sopra il ginocchio, il polpaccio interno e la tibia in luce */}
+                    <path d={`M${L(knee - 5, -4.4)} ${knee - 4} Q${L(knee + 1, 0)} ${knee - 8.5} ${L(knee - 5, 4.4)} ${knee - 4}`} strokeOpacity="0.26" strokeWidth="0.7" />
+                    <path d={`M${L(knee + 4, -3.6)} ${knee + 5} Q${L(knee + 6, 0)} ${knee + 8} ${L(knee + 4, 3.6)} ${knee + 5}`} strokeOpacity="0.22" strokeWidth="0.6" />
+                    <path d={`M${L(244, (i === 0 ? 1 : -1) * 3)} 240 Q${L(256, (i === 0 ? 1 : -1) * 6)} 254 ${L(262, (i === 0 ? 1 : -1) * 4.6)} 262`} strokeOpacity="0.18" strokeWidth="0.7" />
+                    <path d={`M${L(284, (i === 0 ? 1 : -1) * 4.8)} 282 Q${L(296, (i === 0 ? 1 : -1) * 9)} 296 ${L(308, (i === 0 ? 1 : -1) * 4)} 310`} strokeOpacity="0.22" strokeWidth="0.8" />
+                    <path d={`M${L(282, -1.4)} 282 L${L(318, -1)} 318`} stroke="#fff" strokeOpacity="0.16" strokeWidth="2" />
+                  </g>
+                ) : null}
+                {breakOver ? (
+                  <g fill="none" stroke={shade(look.pants, -0.5)} strokeLinecap="round">
+                    <path d={`M${f(clothLeg.L[8].x + 2)} 320 Q${L(324, 1)} 325 ${f(clothLeg.R[8].x - 2.5)} 319`} strokeOpacity="0.35" strokeWidth="0.8" />
+                    <path d={`M${f(clothLeg.L[9].x + 1)} 330 Q${L(334, 0)} 334 ${f(clothLeg.R[9].x - 1)} 329`} strokeOpacity="0.45" strokeWidth="0.9" />
+                  </g>
+                ) : null}
+                {look.bottom === "jeans" ? <path d={`M${L(214, i ? -3 : 3)} 214 L${L(326, i ? -3 : 3)} 326`} stroke={shade(look.pants, 0.3)} strokeWidth="0.8" strokeDasharray="3 2" fill="none" /> : null}
+                {look.wraps ? [0, 1, 2, 3, 4].map((k) => <path key={k} d={`M${L(246 + k * 12, -legW / 2 - 4)} ${246 + k * 12} L${L(240 + k * 12, legW / 2 + 4)} ${240 + k * 12}`} stroke={look.wrapsColor} strokeWidth="4" />) : null}
+              </g>
+              {shorts ? (() => {
+                // pantaloncini: seguono la coscia e si aprono appena all'orlo
+                const sy = [204, 220, 238, 252];
+                const sAxis = sy.map((y) => ({ x: lx(y), y }));
+                const add = [1, 1.8, 2.6, 3.2];
+                const so = LRl(bareW.o.slice(0, 4).map((v, n) => v + add[n]), bareW.i.slice(0, 4).map((v, n) => v + add[n]));
+                const sh2 = limb(sAxis, so.l, so.r, 0.1, 0.05);
+                return (
+                  <g>
+                    <path d={sh2.d} fill={`url(#${uid}pa)`} stroke={OUT} strokeOpacity="0.54" strokeWidth="0.72" strokeLinejoin="round" />
+                    <path d={sh2.d} fill={`url(#${uid}lv)`} pointerEvents="none" />
+                    <path d={`M${f(sh2.L[3].x)} ${f(sh2.L[3].y)} L${f(sh2.R[3].x)} ${f(sh2.R[3].y)}`} stroke={shade(look.pants, -0.45)} strokeWidth="1" />
+                    <path d={`M${f(bareLeg.L[3].x + 0.5)} 254.5 L${f(bareLeg.R[3].x - 0.5)} 254.5`} stroke="#000" strokeOpacity="0.16" strokeWidth="2" />
+                  </g>
+                );
+              })() : null}
+              {/* calzatura (sotto l'orlo dei pantaloni lunghi, se la scarpa è bassa) */}
+              {breakOver ? null : <FrontShoe look={look} L={L} legW={shoeW} i={i} uid={uid} skin={skin} />}
               {look.special && (!shorts || demon) ? <SpecialFrontLeg look={look} L={L} legW={legW} i={i} bootTop={bootTop} /> : null}
               {look.bottom === "cargo" ? <rect x={L(244, i ? 2 : -legW / 2 - 2)} y="244" width={legW / 2 + 1} height="16" rx="2" fill={shade(look.pants, -0.15)} stroke={shade(look.pants, -0.45)} strokeWidth="0.8" /> : null}
             </g>
@@ -288,7 +474,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
         {/* collo: disegnato prima della veste, così colletti e scolli lo coprono come di profilo */}
         <g className={live ? "aa-front-head" : undefined}>
           {/* collo: più stretto sotto il mento, si allarga nelle spalle; ombra del mento, muscoli appena segnati */}
-          <path d={`M${cx - 7.5} 76 L${cx + 7.5} 76 C${cx + 8} 88 ${cx + 9.5} 96 ${cx + 16} 103 L${cx - 16} 103 C${cx - 9.5} 96 ${cx - 8} 88 ${cx - 7.5} 76 Z`} fill={shade(skin, -0.2)} />
+          <path d={`M${cx - 7.5} 76 L${cx + 7.5} 76 C${cx + 8} 88 ${cx + 9.5} 96 ${cx + 16} 103 L${cx - 16} 103 C${cx - 9.5} 96 ${cx - 8} 88 ${cx - 7.5} 76 Z`} fill={shade(skin, -0.2)} transform={woman ? undefined : `translate(${cx} 76) scale(1.1 1) translate(${-cx} -76)`} />
           <path d={`M${cx - 7.5} 76 C${cx - 8} 88 ${cx - 9.5} 96 ${cx - 16} 103 L${cx - 10} 103 C${cx - 6} 96 ${cx - 5} 88 ${cx - 5} 78 Z M${cx + 7.5} 76 C${cx + 8} 88 ${cx + 9.5} 96 ${cx + 16} 103 L${cx + 10} 103 C${cx + 6} 96 ${cx + 5} 88 ${cx + 5} 78 Z`} fill={shade(skin, -0.36)} opacity="0.5" />
           <ellipse cx={cx} cy="83" rx="9" ry="5" fill={`url(#${uid}sd)`} opacity="0.75" />
           <path d={`M${cx - 6} 84 Q${cx - 4} 94 ${cx - 1.4} 101 M${cx + 6} 84 Q${cx + 4} 94 ${cx + 1.4} 101`} stroke={shade(skin, -0.4)} strokeOpacity="0.3" strokeWidth="0.7" fill="none" />
@@ -311,6 +497,31 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
             <ellipse cx={cx} cy="166" rx={(sh.r - sh.l) * 0.42} ry="14" fill="#000" opacity="0.08" />
             <rect x={sh.l - 20} y="193" width={sh.r - sh.l + 40} height="16" fill={`url(#${uid}ao)`} />
             <ellipse cx={cx - 8} cy="118" rx={(sh.r - sh.l) * 0.26} ry="9" fill="#fff" opacity="0.07" />
+            {/* forma sotto la stoffa: petto (lui) o seno (lei), pieghe che tirano dall'ascella alla vita, stoffa raccolta sopra la cintura */}
+            {woman ? (
+              <g>
+                {[-1, 1].map((s) => (
+                  <g key={s}>
+                    <ellipse cx={cx + s * 12 * tw} cy="132" rx={10.5 * tw} ry="9" fill="#fff" opacity={s < 0 ? 0.09 : 0.03} />
+                    <path d={`M${cx + s * 3 * tw} 142 Q${cx + s * 12 * tw} 147 ${cx + s * 21 * tw} 139`} stroke="#000" strokeOpacity="0.16" strokeWidth="2.2" fill="none" strokeLinecap="round" />
+                  </g>
+                ))}
+              </g>
+            ) : (
+              <g fill="none" strokeLinecap="round">
+                {[-1, 1].map((s) => <path key={s} d={`M${cx + s * 2} 138 Q${cx + s * 14 * tw} 144 ${cx + s * 26 * tw} 134`} stroke="#000" strokeOpacity="0.1" strokeWidth="2.6" />)}
+                <path d={`M${cx} 112 L${cx} 136`} stroke="#000" strokeOpacity="0.05" strokeWidth="2" />
+              </g>
+            )}
+            <g fill="none" stroke="#000" strokeLinecap="round">
+              {[-1, 1].map((s) => (
+                <g key={s}>
+                  <path d={`M${cx + s * (sh.r - cx - 5)} 122 Q${cx + s * (sh.r - cx - 14)} 150 ${cx + s * (waist.r - cx - 6)} 176`} strokeOpacity="0.09" strokeWidth="1.6" />
+                  <path d={`M${cx + s * (sh.r - cx - 3)} 132 Q${cx + s * (sh.r - cx - 9)} 152 ${cx + s * (waist.r - cx - 2)} 172`} strokeOpacity="0.07" strokeWidth="1.1" />
+                </g>
+              ))}
+              {look.belt !== "nessuna" && !longTop ? [-14, -2, 9].map((dx) => <path key={dx} d={`M${cx + dx * tw} 176 q2 4 1 9`} strokeOpacity="0.1" strokeWidth="1" />) : null}
+            </g>
           </g>
         </g>
         {look.chestguard ? <ChestGuard uid={uid} d={`M${cx + bowSide * 6} 118 C${cx + bowSide * 30} 116 ${cx + bowSide * 34} 150 ${cx + bowSide * 26} 168 L${cx + bowSide * 6} 164 Z`} c={{ x: cx + bowSide * 20, y: 142 }} color={look.chestColor} out={OUT} /> : null}
@@ -360,7 +571,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
 
         {/* faretra al fianco sopra la veste, sotto il braccio */}
         {armsOut != null ? null : demon ? (
-          <g className={live ? "aa-front-arm" : undefined} style={live ? { transformOrigin: `${f(freeHand.x)}px 108px` } : undefined}>
+          <g className={live ? "aa-front-arm" : undefined} style={live ? { transformOrigin: `${f(freeHand.x)}px 110px` } : undefined}>
             <DemonStaffFront kind={demon} x={freeHand.x} uid={uid} lean={-bowSide * 7} />
           </g>
         ) : heldArrow}
