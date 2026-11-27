@@ -3,6 +3,11 @@ Prova dell'arciere 3D (pagina riservata al Fondatore)
 three.js (vendor/): Three.js Authors, licenza MIT.
 Corpi, capelli e abiti (assets/): Quaternius, "Universal Base Characters" e
 "Modular Character Outfits - Fantasy", licenza CC0 (pubblico dominio).
+Arco e frecce (assets/archery/bow.glb, arrow.glb): "Bow and Arrows" di signguy
+(Samik Sage 60 lb), Blend Swap, licenza Creative Commons Attribuzione 3.0.
+Paglione con cavalletto e bandierina (assets/archery/target.glb): "Archery Target
+with Cycle" di elevin, Blend Swap, licenza Creative Commons Attribuzione 3.0.
+Convertiti da .blend a .glb per l'app; il visuale di carta è disegnato dall'app.
 Animazioni da arco: Kevin Iglesias, "Human Archer Animations FREE", licenza
 Standard Unity Asset Store (uso commerciale consentito, rivendita no). Non sono
 né qui né nel codice: le carica il Fondatore e restano nel database, consegnate
