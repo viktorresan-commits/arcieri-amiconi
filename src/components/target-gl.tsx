@@ -1,6 +1,6 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Face } from "@/lib/arcieri/scoring";
-import { basis, project, v3, type Vec3 } from "@/lib/arcieri/gl3d";
+import { basis, project, segment, trs, v3, type Vec3 } from "@/lib/arcieri/gl3d";
 import { drawArrow3D, drawBoss, drawTrees, drawWorld, ringsTexture, type ArrowLook as Look3D } from "@/lib/arcieri/scene3d";
 import { drawSkyOverlay, envOf, useSky, type Sky } from "@/lib/arcieri/sky3d";
 
@@ -13,6 +13,63 @@ import { SkyPicker } from "./archer-3d";
 import { useAvatar } from "./avatar-hero";
 import { drawArcher, poseAt, ROUTINE_END } from "@/lib/arcieri/mannequin";
 import { bleed, buildSagomaVolume } from "@/lib/arcieri/sagoma-mesh";
+import { loadGlb, type GlbPart } from "@/lib/arcieri/glb-geo";
+import type { GL3D } from "@/lib/arcieri/gl3d";
+
+/**
+ * Paglione vero su cavalletto («Archery Target», elevin, CC BY 4.0) e freccia di legno con le penne
+ * naturali (CC0), gli stessi della Balistica 3D. Si caricano una volta sola; finché non ci sono resta
+ * il paglione disegnato.
+ */
+type RealGear = { target: GlbPart[]; arrow: GlbPart[] };
+let realJob: Promise<RealGear | null> | null = null;
+function loadRealGear() {
+  realJob ??= Promise.all([loadGlb("/prova3d/assets/archery/target.glb"), loadGlb("/prova3d/assets/archery/wood-arrow.glb")])
+    .then(([target, arrow]) => ({ target, arrow }))
+    .catch(() => {
+      realJob = null;
+      return null;
+    });
+  return realJob;
+}
+/** paglione del file: faccia davanti a x = -0.061, centro a 1.196 m, raggio 0.63 m */
+const BOSS = { front: -0.061, cy: 1.196, r: 0.63 };
+const ARROW_LEN = 0.742;
+
+function realTarget(g: GL3D, gear: RealGear) {
+  return g.once("real-target", () => gear.target.map((p) => ({ mesh: g.mesh(p.geo), tex: p.image ? g.textureFrom(p.image, true, false) : null, color: p.color })));
+}
+function realArrow(g: GL3D, gear: RealGear) {
+  return g.once("real-arrow", () =>
+    gear.arrow
+      .map((p) => {
+        const n = p.material.toLowerCase();
+        const kind = n.includes("fletch") ? "penne" : n.includes("thread") ? "filo" : p.color[0] < 0.5 ? "punta" : "asta";
+        return { kind, mesh: g.mesh(p.geo) };
+      })
+      // le legature di filo hanno moltissimi triangoli: si disegnano come due fasce semplici
+      .filter((p) => p.kind !== "filo"),
+  );
+}
+/** freccia di legno vera: cocca in nock, punta lungo dir; le penne e le fasce prendono il colore dell'arciere */
+function drawWoodArrow(g: GL3D, gear: RealGear, nock: Vec3, dir: Vec3, len: number, spin: number, color?: string) {
+  const d = v3.norm(dir);
+  const ref: Vec3 = Math.abs(d[1]) < 0.95 ? [0, 1, 0] : [1, 0, 0];
+  const a0 = v3.norm(v3.cross(ref, d));
+  const b0 = v3.cross(d, a0);
+  const a = v3.add(v3.scale(a0, Math.cos(spin)), v3.scale(b0, Math.sin(spin)));
+  const b = v3.cross(d, a);
+  const k = len / ARROW_LEN;
+  const m = basis(nock, a, v3.scale(d, k), b);
+  for (const p of realArrow(g, gear)) {
+    const col: Vec3 | string = p.kind === "penne" ? (color ?? [0.62, 0.55, 0.47]) : p.kind === "punta" ? [0.32, 0.32, 0.34] : [0.78, 0.6, 0.38];
+    g.draw(p.mesh, m, col, { shine: p.kind === "punta" ? 0.9 : 0.2 });
+  }
+  const at = (f: number) => v3.add(nock, v3.scale(d, len * f));
+  const band = color ?? "#8c1c16";
+  g.draw("tube", segment(at(0.012), at(0.03), 0.0052), band, { shine: 0.3 });
+  g.draw("tube", segment(at(0.2), at(0.215), 0.0052), band, { shine: 0.3 });
+}
 
 type Shot = { x: number; y: number; end?: number; score?: number; miss?: boolean; color?: string; look?: ArrowLook };
 
@@ -48,6 +105,16 @@ const hash = (n: number) => {
  * quelle fuori passano oltre e finiscono nel prato dietro. Se WebGL manca, resta la versione 2D.
  */
 export function TargetGL({ face, shots, picture, look, bare, faceCanvas }: { face: Face; shots: Shot[]; picture?: Picture | null; look?: ArrowLook; /** senza ora e meteo: cielo sereno di giorno, niente comandi del cielo */ bare?: boolean; /** visuale disegnata a parte (es. con la mappa termica) al posto degli anelli */ faceCanvas?: { canvas: HTMLCanvasElement; key: string } | null }) {
+  const [gear, setGear] = useState<RealGear | null>(null);
+  useEffect(() => {
+    let on = true;
+    void loadRealGear().then((r) => {
+      if (on) setGear(r);
+    });
+    return () => {
+      on = false;
+    };
+  }, []);
   const { sky: chosenSky } = useSky();
   const sky = bare ? CLEAR_DAY : chosenSky;
   const avatar = useAvatar();
@@ -70,7 +137,10 @@ export function TargetGL({ face, shots, picture, look, bare, faceCanvas }: { fac
     }
     const t = time - started.current;
     const R = radiusOf(face);
-    const gH = picture ? 0 : 1.3;
+    // paglione vero: grande quanto serve per la visuale (almeno quello del file, 1,26 m)
+    const sBoss = Math.max(1, (R + 0.07) / BOSS.r);
+    const real = !picture && gear ? gear : null;
+    const gH = picture ? 0 : real ? BOSS.cy * sBoss : 1.3;
     const k = picture ? 0.45 : R; // unità della faccia → metri
     const p = PRESETS.find((x) => x.id === presetRef.current) ?? PRESETS[0];
     const zoom = Math.max(0.6, R / 0.4);
@@ -107,7 +177,15 @@ export function TargetGL({ face, shots, picture, look, bare, faceCanvas }: { fac
       }
     } else {
       const faceTex = faceCanvas ? g.once(`face-${faceCanvas.key}`, () => g.textureFrom(faceCanvas.canvas, true, false)) : ringsTexture(g, face.id, face.rings);
-      drawBoss(g, 0, gH, 0, R, Math.max(0.6, R * 1.6), 10, faceTex);
+      if (real) {
+        // il file guarda verso -x con le gambe dietro (+x): si gira perché guardi la linea di tiro (-z)
+        const sB = sBoss;
+        const M = basis([0, gH - BOSS.cy * sB, -BOSS.front * sB], [0, 0, sB], [0, sB, 0], [-sB, 0, 0]);
+        for (const p of realTarget(g, real)) g.draw(p.mesh, M, p.tex ? [1, 1, 1] : p.color, { tex: p.tex ?? undefined, shine: 0.06 });
+        // la visuale fissata sulla paglia
+        g.draw("disc", trs([0, gH, -0.008], 0, [R, R, 1]), [1, 1, 1], { tex: faceTex, shine: 0.08 });
+        g.shadow([0.25 * sB, 0, 0.3 * sB], 0.9 * sB, 0.75 * sB, 0.32);
+      } else drawBoss(g, 0, gH, 0, R, Math.max(0.6, R * 1.6), 10, faceTex);
     }
     // frecce
     const n = shown.length;
@@ -166,10 +244,12 @@ export function TargetGL({ face, shots, picture, look, bare, faceCanvas }: { fac
         const pos = v3.lerp(start, hit, e);
         pos[1] += Math.sin(Math.PI * e) * 0.25;
         const fdir = v3.norm(v3.sub(hit, start));
-        drawArrow3D(g, v3.sub(pos, v3.scale(fdir, len)), fdir, len, roll + time * 22, r, lk);
+        if (gear) drawWoodArrow(g, gear, v3.sub(pos, v3.scale(fdir, len)), fdir, len, roll + time * 22, shot.color);
+        else drawArrow3D(g, v3.sub(pos, v3.scale(fdir, len)), fdir, len, roll + time * 22, r, lk);
         return;
       }
-      drawArrow3D(g, v3.sub(v3.add(hit, v3.scale(dir, depthIn)), v3.scale(dir, len)), dir, len, roll, r, lk);
+      if (gear) drawWoodArrow(g, gear, v3.sub(v3.add(hit, v3.scale(dir, depthIn)), v3.scale(dir, len)), dir, len, roll, shot.color);
+      else drawArrow3D(g, v3.sub(v3.add(hit, v3.scale(dir, depthIn)), v3.scale(dir, len)), dir, len, roll, r, lk);
       if (!off && t - s0 - FLY < 0.45) flashes.push({ p: hit, k: (t - s0 - FLY) / 0.45 });
     });
     if (!bare) drawSkyOverlay(o, g, sky, w, h, time);
@@ -201,6 +281,7 @@ export function TargetGL({ face, shots, picture, look, bare, faceCanvas }: { fac
         </div>
         {bare ? null : <SkyPicker className="absolute bottom-11 left-2" />}
       </GLStage>
+      {gear && !picture ? <p className="text-[10px] text-muted">Paglione: «Archery Target» di elevin (CC BY 4.0) · Frecce di legno (CC0)</p> : null}
       <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 [scrollbar-width:none]">
         {PRESETS.map((item) => (
           <button

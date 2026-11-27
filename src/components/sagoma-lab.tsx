@@ -28,11 +28,12 @@ const toRing = (s: { nx: number; ny: number }) => ({ x: s.nx * 2, y: (s.ny + 0.1
  * Gli animali sono in schiuma dipinta e in volume; la sintesi della gara è un battifreccia con la
  * visuale tonda della sagoma (rosso, giallo, blu, nero), in vero 3D.
  */
-export function SagomaLab({ animal, shots, title, initial = "mappa" }: { animal: string; shots: SagomaShot[]; title?: string; initial?: "mappa" | "tre" }) {
+export function SagomaLab({ animal, shots, title, initial = "mappa", view: fixedView }: { animal: string; shots: SagomaShot[]; title?: string; initial?: "mappa" | "tre"; /** vista decisa da fuori (senza i bottoni delle viste) */ view?: "mappa" | "tre" | "piana" }) {
   const face = animalByLabel(animal);
   const summary = face.id === "sagome-3d";
   const ringFace = faceById("sagoma11");
-  const [view, setView] = useState<"mappa" | "tre" | "piana">(initial);
+  const [ownView, setView] = useState<"mappa" | "tre" | "piana">(initial);
+  const view = fixedView ?? ownView;
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   useEffect(() => {
     if (summary) return;
@@ -87,11 +88,11 @@ export function SagomaLab({ animal, shots, title, initial = "mappa" }: { animal:
   return (
     <div className="grid gap-2">
       {title ? <p className="text-sm font-semibold">{title}</p> : null}
-      <div className="flex gap-2">
+      {fixedView ? null : <div className="flex gap-2">
         <button type="button" onClick={() => setView("mappa")} className={`min-h-10 rounded-full px-3 text-sm ${view === "mappa" ? "bg-primary text-primary-fg" : "border border-line"}`}>Termica 3D</button>
         <button type="button" onClick={() => setView("tre")} className={`min-h-10 rounded-full px-3 text-sm ${view === "tre" ? "bg-primary text-primary-fg" : "border border-line"}`}>Vista 3D</button>
         <button type="button" onClick={() => setView("piana")} className={`min-h-10 rounded-full px-3 text-sm ${view === "piana" ? "bg-primary text-primary-fg" : "border border-line"}`}>Piana</button>
-      </div>
+      </div>}
       {summary ? (
         view === "piana" ? <RingPlan rings={ringFace.rings} shots={placed.map((s) => ({ ...toRing(s), score: s.score, miss: s.miss }))} /> : <TargetGL face={ringFace} shots={shots3d} faceCanvas={view === "mappa" ? ringCanvas : null} />
       ) : view === "piana" ? (
@@ -227,7 +228,7 @@ function paintHeat(canvas: HTMLCanvasElement, skin: HTMLCanvasElement, shots: He
 type RingShot = { x: number; y: number; score: number; miss?: boolean };
 
 /** La visuale tonda della sintesi (anelli veri della sagoma) con la mappa termica; in "piana" con fondo e punti. */
-function paintRingFace(canvas: HTMLCanvasElement, rings: { outer: number; fill: string }[], shots: RingShot[], mode: "volume" | "piana") {
+export function paintRingFace(canvas: HTMLCanvasElement, rings: { outer: number; fill: string }[], shots: RingShot[], mode: "volume" | "piana") {
   const S = 900;
   canvas.width = S;
   canvas.height = S;

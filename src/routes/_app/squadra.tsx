@@ -12,7 +12,6 @@ import { FitastArchersCard, FitastCompanyBoard, FitastHeader, FitastTeamsBoard, 
 import { FitastArchiveCard } from "@/components/fitast-archive";
 import { teamKey } from "@/lib/arcieri/fitast-league";
 import { RankBars } from "@/components/rank-bars";
-import { Heat } from "@/components/shot-lab";
 import { useLocalState } from "@/lib/arcieri/local-store";
 import { Podium } from "@/components/podium";
 import { useTeamAvatars } from "@/components/avatar-hero";
@@ -30,7 +29,7 @@ import { fmtAvg } from "@/lib/arcieri/scoring";
 import { useLoad } from "@/lib/arcieri/use-load";
 import { ANIMALS, animalByLabel } from "@/lib/arcieri/sagome";
 import { MultiBars, useThemeInk } from "@/components/charts";
-import { SagomaLab } from "@/components/sagoma-lab";
+import { SagomaLab, paintRingFace } from "@/components/sagoma-lab";
 import { faceById } from "@/lib/arcieri/scoring";
 
 const TEAM_FACE = faceById("wa10");
@@ -273,6 +272,7 @@ export function CompagniaPage({ initial }: { initial?: Section } = {}) {
   const dots = paint.flatMap((row) => row.shots.map((shot) => ({ ...shot, color: row.userId === me.userId ? "#e07a2f" : row.color })));
   const sagomaShots = paint.flatMap((row) => row.sagoma).map((shot) => ({ score: shot.score, nx: shot.nx, ny: shot.ny }));
 
+
   const company = companies.data?.companies.find((co) => co.id === companies.data?.mine) ?? null;
   const names = people.map((item) => item.name);
   const rankRow = (row: (typeof people)[number], value: number, extra?: { label?: string; sub?: string }) => ({
@@ -485,15 +485,8 @@ export function CompagniaPage({ initial }: { initial?: Section } = {}) {
 
       {section === "bersaglio" ? (
         <>
-          {/* un solo pannello: che bersaglio, di chi, come guardarlo; sotto i numeri e chi va meglio */}
+          {/* un solo pannello: di chi, poi un solo grafico che passa da padiglione a sagome, termica e piana */}
           <Card className="grid gap-3">
-            <div className="grid grid-cols-2 gap-1 rounded-2xl bg-white/[0.05] p-1">
-              {([["padiglione", "Padiglione", "target"], ["sagoma", "Sagome 3D", "crosshair"]] as const).map(([id, label, icon]) => (
-                <button key={id} type="button" aria-pressed={board === id} onClick={() => setBoard(id)} className={`flex min-h-11 items-center justify-center gap-2 rounded-xl text-sm font-semibold ${board === id ? "bg-primary text-primary-fg shadow" : "text-muted"}`}>
-                  <Glyph name={icon} size={17} /> {label}
-                </button>
-              ))}
-            </div>
             <div className="flex flex-wrap items-center gap-1.5">
               {([["io", "I miei"], ["tutti", "Tutta la compagnia"], ["scelta", "Scegli"]] as const).map(([key, label]) => (
                 <button key={key} type="button" aria-pressed={face === key} onClick={() => setFace(key)} className={`aa-chip ${face === key ? "border-transparent bg-accent text-accent-fg" : ""}`}>{label}</button>
@@ -512,13 +505,12 @@ export function CompagniaPage({ initial }: { initial?: Section } = {}) {
                 })}
               </div>
             ) : null}
+            <BoardSwitch board={board} look={look} onPick={(b, l) => { setBoard(b); setLook(l); }} />
+            {look !== "tre" ? <p className="-mt-1 text-xs text-muted">{look === "calore" ? "Termica" : "Piana"} {board === "sagoma" ? "delle sagome (rosso e giallo lo spot, blu e nero il corpo)" : "del padiglione"}</p> : null}
             {board === "sagoma" ? (
-              sagomaShots.length ? <SagomaLab animal="sagome-3d" shots={sagomaShots} initial="tre" /> : <Empty title="Nessun tiro su sagoma" text="Arrivano dalle piazzole delle gare e dagli allenamenti sulle sagome." />
+              sagomaShots.length ? <SagomaLab animal="sagome-3d" shots={sagomaShots} view={look === "calore" ? "mappa" : look === "mappa" ? "piana" : "tre"} /> : <Empty title="Nessun tiro su sagoma" text="Arrivano dalle piazzole delle gare e dagli allenamenti sulle sagome." />
             ) : dots.length ? (
               <div className="grid gap-2">
-                <Segmented value={look} onChange={setLook} options={[{ id: "tre", label: "Vista 3D" }, { id: "calore", label: "Termica" }, { id: "mappa", label: "Piana" }]} />
-                {look === "tre" ? <TargetGL face={TEAM_FACE} shots={dots.slice(-120).map((d) => ({ x: d.nx, y: d.ny, color: d.color }))} bare /> : null}
-                {look === "calore" ? <Heat face={TEAM_FACE} shots={dots.map((d) => ({ x: d.nx, y: d.ny }))} /> : null}
                 {look === "mappa" ? (
                   <svg viewBox="-1.12 -1.12 2.24 2.24" className="mx-auto aspect-square w-full max-w-sm" role="img" aria-label="I tiri sul padiglione">
                     <circle cx="0" cy="0" r="1.08" fill="var(--elev)" />
@@ -526,7 +518,9 @@ export function CompagniaPage({ initial }: { initial?: Section } = {}) {
                     <circle cx="0" cy="0" r="0.04" fill="#14181c" />
                     {dots.map((shot, index) => <circle key={index} cx={shot.nx} cy={shot.ny} r="0.03" fill={shot.color} stroke="#14181c" strokeWidth="0.008" />)}
                   </svg>
-                ) : null}
+                ) : (
+                  <PadTarget dots={dots} heat={look === "calore"} />
+                )}
                 <FaceStats dots={dots} />
               </div>
             ) : (
@@ -666,3 +660,39 @@ function GadgetShelf() {
   );
 }
 
+/**
+ * Un solo grafico per il bersaglio della compagnia: padiglione e sagome in 3D sul paglione vero,
+ * la termica (sullo stesso paglione) e la vista piana. Termica e piana valgono per il bersaglio scelto.
+ */
+function BoardSwitch({ board, look, onPick }: { board: "padiglione" | "sagoma"; look: "tre" | "calore" | "mappa"; onPick: (b: "padiglione" | "sagoma", l: "tre" | "calore" | "mappa") => void }) {
+  const items: { id: string; label: string; icon: IconName; b: "padiglione" | "sagoma"; l: "tre" | "calore" | "mappa" }[] = [
+    { id: "padiglione", label: "Padiglione", icon: "target", b: "padiglione", l: "tre" },
+    { id: "sagoma", label: "Sagome", icon: "crosshair", b: "sagoma", l: "tre" },
+    { id: "calore", label: "Termica", icon: "flame", b: board, l: "calore" },
+    { id: "mappa", label: "Piana", icon: "pin", b: board, l: "mappa" },
+  ];
+  const on = look === "tre" ? board : look;
+  return (
+    <div className="grid grid-cols-4 gap-1 rounded-2xl bg-white/[0.05] p-1" role="group" aria-label="Come vedere il bersaglio">
+      {items.map((it) => (
+        <button key={it.id} type="button" aria-pressed={on === it.id} onClick={() => onPick(it.b, it.l)} className={`flex min-h-11 flex-col items-center justify-center gap-0.5 rounded-xl px-1 text-[12px] font-semibold leading-tight ${on === it.id ? "bg-primary text-primary-fg shadow" : "text-muted"}`}>
+          <Glyph name={it.icon} size={16} />
+          {it.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** il padiglione in 3D sul paglione vero; con la termica i colori dei tiri dipinti sulla visuale */
+function PadTarget({ dots, heat }: { dots: { nx: number; ny: number; color: string }[]; heat: boolean }) {
+  const key = heat ? dots.map((d) => `${d.nx.toFixed(3)},${d.ny.toFixed(3)}`).join(";") : "";
+  const canvas = useMemo(() => {
+    if (!key || typeof document === "undefined") return null;
+    const c = document.createElement("canvas");
+    paintRingFace(c, TEAM_FACE.rings, dots.map((d) => ({ x: d.nx, y: d.ny, score: 1 })), "volume");
+    return { canvas: c, key: `pad-${key.length}-${key.slice(0, 60)}` };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  return <TargetGL face={TEAM_FACE} shots={dots.slice(-120).map((d) => ({ x: d.nx, y: d.ny, color: d.color }))} faceCanvas={canvas} bare />;
+}
