@@ -79,7 +79,7 @@ export async function sagomaPainter(W: number, H: number) {
   const ctx = out.getContext("2d");
   if (!ctx) return null;
   // il testo e le linee come sullo schermo di un telefono largo 400 punti
-  const dpr = Math.min(W, H) / 400;
+  const dpr = Math.min(W, H) / 440;
   let camSm: { c: V3; h: number } | null = null;
   let lastT = 0;
   const memo = depthMemo();
@@ -156,6 +156,38 @@ export function Anatomy3D({
   /** si sta girando o avvicinando con le dita: si usa il corpo leggero */
   const dragging = useRef(false);
   const [auto, setAuto] = useState(false);
+  /** a tutto schermo: il riquadro copre l'app (e, dove il telefono lo permette, anche le barre del sistema) */
+  const [full, setFull] = useState(false);
+  const boxRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!full) return;
+    const esc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setFull(false);
+    };
+    // uscendo dal vero schermo intero del telefono (tasto indietro) si chiude anche la vista grande
+    const out = () => {
+      if (!document.fullscreenElement) setFull(false);
+    };
+    window.addEventListener("keydown", esc);
+    document.addEventListener("fullscreenchange", out);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", esc);
+      document.removeEventListener("fullscreenchange", out);
+      document.body.style.overflow = prev;
+      if (document.fullscreenElement) void document.exitFullscreen?.().catch(() => {});
+    };
+  }, [full]);
+  function toggleFull() {
+    if (full) {
+      setFull(false);
+      return;
+    }
+    setFull(true);
+    // il vero schermo intero dove c'è; altrimenti basta il riquadro fisso sopra l'app
+    void boxRef.current?.requestFullscreen?.({ navigationUI: "hide" }).catch(() => {});
+  }
   const [failed, setFailed] = useState(false);
   const [empty, setEmpty] = useState(false);
   const emptyRef = useRef(false);
@@ -303,7 +335,7 @@ export function Anatomy3D({
         }
       }
       const L0 = layersRef.current;
-      const key = `${c.yaw.toFixed(4)}|${c.pitch.toFixed(4)}|${c.zoom.toFixed(3)}|${L0.pelle}${L0.muscolo}${L0.osso}${L0.punti}${L0.quote}|${canvas.clientWidth}x${canvas.clientHeight}|${scale}|${bodyTick}`;
+      const key = `${c.yaw.toFixed(4)}|${c.pitch.toFixed(4)}|${c.zoom.toFixed(3)}|${L0.pelle}${L0.muscolo}${L0.osso}${L0.punti}${L0.quote}|${canvas.clientWidth}x${canvas.clientHeight}|${scale}|${bodyTick}|${R.gearReady()}`;
       // dopo un movimento si disegna ancora un attimo con il corpo leggero, poi una volta con quello pieno
       const fast = now - lastChange < 450 || dragging.current;
       if (!moving && key === lastKey && !playing && fast === lastFast) return;
@@ -432,13 +464,13 @@ export function Anatomy3D({
   if (failed) return <p className="rounded-2xl bg-white/[0.04] p-3 text-sm text-muted">Il 3D non parte su questo telefono: le misure restano nell'analisi qui sopra.</p>;
   const toggle = (k: Layer) => setLayers((l) => ({ ...l, [k]: !l[k] }));
   return (
-    <div className={cx("relative w-full overflow-hidden", inBox ? "" : "rounded-2xl", className)} style={{ background: "radial-gradient(ellipse at 45% 35%, #3f9fe6 0%, #1c6fc2 42%, #0b3f82 78%, #072a5c 100%)" }}>
+    <div ref={boxRef} className={cx("overflow-hidden", full ? "fixed inset-0 z-[90] h-[100dvh] w-screen" : cx("relative w-full", inBox ? "" : "rounded-2xl", className))} style={{ background: "radial-gradient(ellipse at 45% 35%, #3f9fe6 0%, #1c6fc2 42%, #0b3f82 78%, #072a5c 100%)" }}>
       <canvas ref={glCanvas} className="absolute inset-0 h-full w-full touch-none" aria-label="Analisi del gesto in 3D: corpo, scheletro e muscoli, da girare con il dito" />
       <canvas ref={hudCanvas} className="pointer-events-none absolute inset-0 h-full w-full" />
       <p className="pointer-events-none absolute inset-x-0 bottom-0 truncate px-2 text-center text-[0.45rem] leading-[0.7rem] text-white/50">{BODY_CREDIT}</p>
       {empty ? <p className="absolute inset-x-0 top-1/2 -translate-y-1/2 text-center text-sm text-white/80">In attesa della posa: avvia il video o scegli un fotogramma.</p> : null}
       {/* in alto: Gira e la foto in alta definizione; in basso cosa si vede (corpo, muscoli, scheletro…) */}
-      <div className={cx("absolute top-2 flex gap-1", inBox ? "left-2" : "right-2")}>
+      <div className={cx("absolute flex gap-1", full ? "left-2 top-[max(0.5rem,env(safe-area-inset-top))]" : cx("top-2", inBox ? "left-2" : "right-2"))}>
         <button
           type="button"
           aria-pressed={auto}
@@ -461,8 +493,17 @@ export function Anatomy3D({
         >
           {shooting ? "Foto…" : "Foto HD"}
         </button>
+        <button
+          type="button"
+          onClick={toggleFull}
+          aria-pressed={full}
+          aria-label={full ? "Esci dallo schermo intero" : "Guarda a schermo intero"}
+          className={cx("min-h-9 rounded-full px-3 text-xs font-semibold backdrop-blur", full ? "bg-[#5fd4ff]/35 text-white ring-1 ring-[#5fd4ff]/70" : "bg-black/45 text-white")}
+        >
+          {full ? "Chiudi" : "Schermo intero"}
+        </button>
       </div>
-      <div className={cx("absolute inset-x-2 flex flex-wrap justify-center gap-1", inBox ? "bottom-4" : "bottom-4")}>
+      <div className={cx("absolute inset-x-2 flex flex-wrap justify-center gap-1", full ? "bottom-[max(1rem,env(safe-area-inset-bottom))]" : "bottom-4")}>
         {([["pelle", "Corpo"], ["muscolo", "Muscoli"], ["osso", "Scheletro"], ["punti", "Punti"], ["quote", "Misure"]] as const).map(([k, label]) => (
           <button key={k} type="button" aria-pressed={layers[k]} onClick={() => toggle(k)} className={cx("min-h-8 rounded-full px-2.5 text-[0.7rem] font-semibold backdrop-blur", layers[k] ? "bg-[#5fd4ff]/25 text-white ring-1 ring-[#5fd4ff]/60" : "bg-black/40 text-white/60")}>
             {label}
@@ -483,7 +524,7 @@ function paintHud(ctx: CanvasRenderingContext2D, model: Model, VP: Float32Array,
     return [((x / w) * 0.5 + 0.5) * W, (1 - ((y / w) * 0.5 + 0.5)) * H, w];
   };
   const hudD = model.hud;
-  ctx.lineWidth = 0.8 * dpr;
+  ctx.lineWidth = 0.55 * dpr;
   // anelli a terra
   for (const [r, a] of [[0.45, 0.4], [0.62, 0.2], [0.8, 0.1]] as const) {
     ctx.strokeStyle = `rgba(95,212,255,${a})`;
@@ -522,9 +563,9 @@ function paintHud(ctx: CanvasRenderingContext2D, model: Model, VP: Float32Array,
     while (d < -Math.PI) d += Math.PI * 2;
     a2 = a1 + d;
     ctx.strokeStyle = "rgba(255,214,120,0.85)";
-    ctx.lineWidth = 1.1 * dpr;
+    ctx.lineWidth = 0.75 * dpr;
     ctx.beginPath();
-    ctx.arc(o[0], o[1], 11 * dpr, Math.min(a1, a2), Math.max(a1, a2));
+    ctx.arc(o[0], o[1], 8.5 * dpr, Math.min(a1, a2), Math.max(a1, a2));
     ctx.stroke();
   }
   // quota dell'allungo
@@ -534,12 +575,12 @@ function paintHud(ctx: CanvasRenderingContext2D, model: Model, VP: Float32Array,
     const nx = -(b[1] - a[1]);
     const ny = b[0] - a[0];
     const nl = Math.hypot(nx, ny) || 1;
-    const off = 13 * dpr;
+    const off = 10 * dpr;
     const ox = (nx / nl) * off * (ny / nl > 0 ? -1 : 1);
     const oy = (ny / nl) * off * (ny / nl > 0 ? -1 : 1);
     ctx.strokeStyle = "rgba(255,214,120,0.8)";
-    ctx.lineWidth = 0.8 * dpr;
-    ctx.setLineDash([3 * dpr, 3 * dpr]);
+    ctx.lineWidth = 0.55 * dpr;
+    ctx.setLineDash([2.4 * dpr, 2.4 * dpr]);
     ctx.beginPath();
     ctx.moveTo(a[0] + ox, a[1] + oy);
     ctx.lineTo(b[0] + ox, b[1] + oy);
@@ -557,16 +598,16 @@ function paintHud(ctx: CanvasRenderingContext2D, model: Model, VP: Float32Array,
   const mid = proj(model.center)[0];
   const H2 = ctx.canvas.height;
   ctx.font = TAG_FONT(dpr);
-  const gap = 3 * dpr;
-  const th = 14 * dpr;
+  const gap = 2.5 * dpr;
+  const th = TAG_H * dpr;
   const items = [...hudD.labels, ...hudD.dims.map((d) => ({ at: v3.lerp(d.a, d.b, 0.55), text: d.text, tone: "gold" as const }))]
     .map((l) => {
       const p = proj(l.at);
-      const tw = ctx.measureText(l.text).width + 10 * dpr;
+      const tw = ctx.measureText(l.text).width + 8 * dpr;
       let side = p[0] < mid ? -1 : 1;
       // dal lato scelto non c'è posto: l'etichetta va dall'altra parte
-      if (side < 0 && p[0] - 52 * dpr - tw < 4 * dpr) side = 1;
-      else if (side > 0 && p[0] + 52 * dpr + tw > W - 4 * dpr) side = -1;
+      if (side < 0 && p[0] - LEAD * dpr - tw < 4 * dpr) side = 1;
+      else if (side > 0 && p[0] + LEAD * dpr + tw > W - 4 * dpr) side = -1;
       return { ...l, p, tw, side };
     })
     .filter((it) => it.p[2] > 0 && it.p[0] >= 0 && it.p[0] <= W && it.p[1] >= 0 && it.p[1] <= H2)
@@ -574,10 +615,10 @@ function paintHud(ctx: CanvasRenderingContext2D, model: Model, VP: Float32Array,
   const placed: { x0: number; x1: number; y0: number; y1: number }[] = [];
   for (const it of items) {
     // la casella resta dentro il riquadro: la linea guida arriva al suo bordo
-    const tx = it.side < 0 ? Math.max(4 * dpr + it.tw, it.p[0] - 52 * dpr) : Math.min(W - 4 * dpr - it.tw, it.p[0] + 52 * dpr);
+    const tx = it.side < 0 ? Math.max(4 * dpr + it.tw, it.p[0] - LEAD * dpr) : Math.min(W - 4 * dpr - it.tw, it.p[0] + LEAD * dpr);
     const x0 = it.side < 0 ? tx - it.tw : tx;
     const x1 = x0 + it.tw;
-    let ty = it.p[1] - 12 * dpr;
+    let ty = it.p[1] - 9 * dpr;
     for (let guard = 0; guard < 40; guard++) {
       const hit = placed.find((b) => x0 < b.x1 + gap && x1 > b.x0 - gap && ty - th / 2 < b.y1 + gap && ty + th / 2 > b.y0 - gap);
       if (!hit) break;
@@ -585,14 +626,14 @@ function paintHud(ctx: CanvasRenderingContext2D, model: Model, VP: Float32Array,
     }
     placed.push({ x0, x1, y0: ty - th / 2, y1: ty + th / 2 });
     ctx.strokeStyle = it.tone === "warn" ? "rgba(255,160,110,0.75)" : it.tone === "gold" ? "rgba(255,214,120,0.75)" : "rgba(95,212,255,0.7)";
-    ctx.lineWidth = 0.7 * dpr;
+    ctx.lineWidth = 0.5 * dpr;
     ctx.beginPath();
     ctx.moveTo(it.p[0], it.p[1]);
     ctx.lineTo(tx, ty);
     ctx.stroke();
     ctx.fillStyle = ctx.strokeStyle;
     ctx.beginPath();
-    ctx.arc(it.p[0], it.p[1], 1.6 * dpr, 0, Math.PI * 2);
+    ctx.arc(it.p[0], it.p[1], 1.1 * dpr, 0, Math.PI * 2);
     ctx.fill();
     tag(ctx, it.text, tx, ty, it.tone, dpr, false, it.side);
   }
@@ -634,42 +675,45 @@ function drawJoints(ctx: CanvasRenderingContext2D, J: Record<number, V3>, proj: 
     ctx.lineTo(q[0], q[1]);
     ctx.stroke();
   };
-  for (const [a, b] of BODY_LINKS) line(a, b, "rgba(4,20,34,0.45)", 2.6);
-  for (const [a, b] of BODY_LINKS) line(a, b, a <= 10 ? "rgba(255,255,255,0.85)" : tone(b), 1.2);
+  for (const [a, b] of BODY_LINKS) line(a, b, "rgba(4,20,34,0.45)", 1.7);
+  for (const [a, b] of BODY_LINKS) line(a, b, a <= 10 ? "rgba(255,255,255,0.85)" : tone(b), 0.8);
   for (const base of [33, 54]) {
     if (!J[base]) continue;
     const col = base === 33 ? tone(15) : tone(16);
-    for (const [a, b] of HAND_LINKS) line(base + a, base + b, col, 0.7);
+    for (const [a, b] of HAND_LINKS) line(base + a, base + b, col, 0.45);
   }
   const dot = (i: number, r: number) => {
     const p = P[i];
     if (!p || p[2] <= 0) return;
     ctx.fillStyle = "rgba(4,20,34,0.8)";
     ctx.beginPath();
-    ctx.arc(p[0], p[1], (r + 0.8) * dpr, 0, Math.PI * 2);
+    ctx.arc(p[0], p[1], (r + 0.6) * dpr, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = tone(i);
     ctx.beginPath();
     ctx.arc(p[0], p[1], r * dpr, 0, Math.PI * 2);
     ctx.fill();
   };
-  for (const i of [0, 7, 8, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32]) dot(i, i >= 15 && i <= 22 ? 1.4 : 2);
-  for (const base of [33, 54]) if (J[base]) for (let k = 1; k < 21; k++) dot(base + k, 0.9);
+  for (const i of [0, 7, 8, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32]) dot(i, i >= 15 && i <= 22 ? 1 : 1.4);
+  for (const base of [33, 54]) if (J[base]) for (let k = 1; k < 21; k++) dot(base + k, 0.6);
 }
 
-/** etichetta con fondo scuro e bordo del colore della misura */
-const TAG_FONT = (dpr: number) => `500 ${9.5 * dpr}px system-ui, sans-serif`;
+/** etichetta con fondo scuro e bordo del colore della misura: piccola, per lasciare vedere il corpo */
+const TAG_FONT = (dpr: number) => `500 ${7.6 * dpr}px system-ui, sans-serif`;
+/** altezza delle etichette e lunghezza della linea guida (in punti dello schermo) */
+const TAG_H = 11;
+const LEAD = 38;
 
 /** etichetta piccola: fondo scuro arrotondato, una sola tacca del colore della misura sul lato della linea guida */
 function tag(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, tone: "cyan" | "gold" | "warn", dpr: number, center: boolean, side = 1) {
   ctx.font = TAG_FONT(dpr);
-  const w = ctx.measureText(text).width + 10 * dpr;
-  const h = 14 * dpr;
+  const w = ctx.measureText(text).width + 8 * dpr;
+  const h = TAG_H * dpr;
   const W = ctx.canvas.width;
   const bx = Math.max(4 * dpr, Math.min(W - w - 4 * dpr, center ? x - w / 2 : side < 0 ? x - w : x));
   const by = y - h / 2;
-  const r = 3 * dpr;
-  ctx.fillStyle = "rgba(3,16,26,0.7)";
+  const r = 2.5 * dpr;
+  ctx.fillStyle = "rgba(3,16,26,0.62)";
   ctx.beginPath();
   ctx.moveTo(bx + r, by);
   ctx.arcTo(bx + w, by, bx + w, by + h, r);
@@ -679,10 +723,10 @@ function tag(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, 
   ctx.closePath();
   ctx.fill();
   ctx.fillStyle = tone === "warn" ? "#ffa06e" : tone === "gold" ? "#ffd678" : "#5fd4ff";
-  const ax = center ? bx + r : side < 0 ? bx + w - 2 * dpr : bx;
-  ctx.fillRect(ax, by + 3 * dpr, 2 * dpr, h - 6 * dpr);
+  const ax = center ? bx + r : side < 0 ? bx + w - 1.5 * dpr : bx;
+  ctx.fillRect(ax, by + 2.5 * dpr, 1.5 * dpr, h - 5 * dpr);
   ctx.fillStyle = "rgba(255,255,255,0.94)";
   ctx.textBaseline = "middle";
   ctx.textAlign = "left";
-  ctx.fillText(text, bx + 5 * dpr, y + 0.5 * dpr);
+  ctx.fillText(text, bx + 4 * dpr, y + 0.5 * dpr);
 }

@@ -605,6 +605,10 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
       bodies[level] = { meta: data.meta, flex: flexOf(data), batches };
       bound = "";
     },
+    /** l'arco e la freccia veri sono pronti (la vista ferma si ridisegna quando arrivano) */
+    gearReady() {
+      return gearReady;
+    },
     /** aspetta l'arco e la freccia veri (per le foto: un disegno solo, deve già averli) */
     async gearLoaded() {
       await loadGear();
