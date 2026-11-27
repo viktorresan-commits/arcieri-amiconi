@@ -69,7 +69,7 @@ attribute vec3 aP; attribute vec3 aN; attribute vec2 aJ; attribute vec4 aM; attr
 uniform mat4 uVP; uniform vec4 uSeg[63]; uniform vec3 uLo; uniform vec3 uHi;
 uniform vec4 uAct[16]; uniform vec4 uBul[16]; uniform float uLayerV;
 uniform vec4 uCurl[8]; uniform vec2 uDita; uniform vec4 uFa[4];
-varying vec3 vW; varying vec3 vN; varying vec2 vF; varying float vAct; varying float vFoc; varying float vTend; varying float vStr; varying float vGrp;
+varying vec3 vW; varying vec3 vN; varying vec2 vF; varying float vAct; varying float vFoc; varying float vTend; varying float vStr; varying float vGrp; varying vec3 vR;
 float pick(vec4 v, int k){ return k == 0 ? v.x : k == 1 ? v.y : k == 2 ? v.z : v.w; }
 vec3 rotA(vec3 v, vec3 ax, float a){ float c = cos(a); float s = sin(a); return v * c + cross(ax, v) * s + ax * dot(ax, v) * (1.0 - c); }
 // dita piegate in presa (prima di seguire i segmenti): terza falange, seconda, allargamento dell'indice, nocca
@@ -122,10 +122,10 @@ void main(){
   float pv = pick(uAct[gi], gk); float fc = floor(pv / 2.0) - 1.0;
   vAct = pv - (fc + 1.0) * 2.0; vFoc = fc;
   vF = vec2(aM.z, aM.w) / 255.0; vTend = aT; vGrp = float(g);
-  vW = wp.xyz; gl_Position = uVP * wp;
+  vW = wp.xyz; vR = p; gl_Position = uVP * wp;
 }`;
 const BFS = `${PREC}
-varying vec3 vW; varying vec3 vN; varying vec2 vF; varying float vAct; varying float vFoc; varying float vTend; varying float vStr; varying float vGrp;
+varying vec3 vW; varying vec3 vN; varying vec2 vF; varying float vAct; varying float vFoc; varying float vTend; varying float vStr; varying float vGrp; varying vec3 vR;
 uniform vec3 uEye; uniform float uLayer; uniform float uAlpha; uniform float uDim; uniform float uTime; uniform float uStyle;
 // dettaglio del muscolo (immagine ripetuta lungo le fibre): R rilievo dei fasci, G chiaroscuro del tessuto, B fasce connettivali
 uniform sampler2D uFib; uniform float uFibOn;
@@ -134,6 +134,13 @@ uniform sampler2D uFib; uniform float uFibOn;
 vec3 tone(vec3 c){ c = clamp((c * (2.51 * c + 0.03)) / (c * (2.43 * c + 0.59) + 0.14), 0.0, 1.0); return pow(c, vec3(1.0 / 2.2)); }
 float hash(float n){ return fract(sin(n * 12.9898 + 4.1) * 43758.5453); }
 float wrapL(vec3 N, vec3 L, float w){ return max(0.0, (dot(N, L) + w) / (1.0 + w)); }
+// rumore 3D sulla posizione a riposo (resta attaccato all'osso mentre il corpo si muove)
+float hash3(vec3 p){ p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+float vnoise(vec3 x){
+  vec3 i = floor(x); vec3 f = fract(x); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(mix(hash3(i), hash3(i + vec3(1.0, 0.0, 0.0)), f.x), mix(hash3(i + vec3(0.0, 1.0, 0.0)), hash3(i + vec3(1.0, 1.0, 0.0)), f.x), f.y),
+             mix(mix(hash3(i + vec3(0.0, 0.0, 1.0)), hash3(i + vec3(1.0, 0.0, 1.0)), f.x), mix(hash3(i + vec3(0.0, 1.0, 1.0)), hash3(i + vec3(1.0, 1.0, 1.0)), f.x), f.y), f.z);
+}
 void main(){
   vec3 N = normalize(vN); vec3 V = normalize(uEye - vW);
   float ndv = clamp(dot(N, V), 0.0, 1.0);
@@ -159,14 +166,39 @@ void main(){
     gl_FragColor = vec4(tone(col), a);
     return;
   } else if (uLayer < 1.5) {
-    // ossa: avorio, opache, con una lucentezza leggera; tra i muscoli un po' in ombra
-    vec3 alb = mix(vec3(0.66, 0.59, 0.46), vec3(0.50, 0.45, 0.35), uDim);
+    // ossa come nei preparati: avorio con macchie appena più calde, la grana fine dell'osso compatto e i
+    // pori, un rilievo leggerissimo; opache con una lucentezza morbida e un po' di luce che passa
+    // (sub-superficie) nelle parti in ombra
+    vec3 q = vR * 100.0;
+    float blot = vnoise(q * 0.35) * 0.6 + vnoise(q * 0.9) * 0.4;
+    vec3 alb = mix(vec3(0.70, 0.63, 0.50), vec3(0.55, 0.47, 0.35), smoothstep(0.35, 0.8, blot));
+    float poreA = 0.0;
+#ifdef HAS_DERIV
+    vec3 qp = q * 4.0;
+    float pf = length(fwidth(qp));
+    float nearB = 1.0 - smoothstep(0.6, 2.5, pf);
+    float grain = vnoise(qp) * 0.65 + vnoise(qp * 2.3) * 0.35;
+    poreA = smoothstep(0.66, 0.82, grain) * nearB;
+    // rilievo: la grana fa da piccola mappa di altezza
+    vec3 spB = vW * 100.0;
+    vec3 sxB = dFdx(spB); vec3 syB = dFdy(spB);
+    float hxB = dFdx(grain); float hyB = dFdy(grain);
+    vec3 r1B = cross(syB, N); vec3 r2B = cross(N, sxB);
+    float detB = dot(sxB, r1B);
+    N = normalize(abs(detB) * N - sign(detB) * (hxB * r1B + hyB * r2B) * 0.05 * nearB);
+    ndv = clamp(dot(N, V), 0.0, 1.0);
+#endif
+    alb *= 1.0 - 0.32 * poreA;
+    alb = mix(alb, alb * vec3(0.78, 0.74, 0.70), uDim * 0.6);
     if (vTend > 0.5) alb = vec3(0.03, 0.035, 0.04);
-    float dif = wrapL(N, L1, 0.2);
+    float dif = wrapL(N, L1, 0.25);
     vec3 light = C1 * dif + C2 * wrapL(N, L2, 0.3) + amb;
-    float spec = pow(max(dot(N, H), 0.0), 36.0) * 0.12;
+    // luce che passa nell'osso sottile: un tepore nelle ombre
+    vec3 sss = vec3(0.16, 0.08, 0.04) * (1.0 - dif) * (0.6 + 0.4 * blot);
+    float spec = pow(max(dot(N, H), 0.0), 28.0) * 0.09 * (1.0 - poreA);
+    float fres = pow(1.0 - ndv, 4.0) * 0.12;
     float rimL = pow(1.0 - ndv, 2.0) * max(0.0, dot(N, L3) + 0.3) * 0.35;
-    col = alb * light * mix(1.0, 0.7, pow(1.0 - ndv, 2.0)) + C1 * spec + C3 * rimL * 0.5;
+    col = alb * (light + sss) * mix(1.0, 0.62, pow(1.0 - ndv, 1.6)) + C1 * (spec + fres * dif) + C3 * rimL * 0.45;
   } else {
     // muscoli: rosso carne con piccole differenze da un muscolo all'altro, il ventre un po' più chiaro;
     // fasci appena accennati e la lucentezza a seta lungo le fibre (come nei preparati anatomici),
