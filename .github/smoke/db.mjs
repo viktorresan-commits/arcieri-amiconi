@@ -1,19 +1,11 @@
-// quanto ci mette il database a rispondere: un accesso con un utente che non esiste (nessun account creato)
+// stato del database del sito pubblicato (nessun dato personale)
 const base = "https://arcieri-amiconi.vercel.app";
-const time = async (label, url, init) => {
+for (let i = 0; i < 3; i++) {
   const t0 = Date.now();
   try {
-    const ctl = new AbortController();
-    const to = setTimeout(() => ctl.abort(), 60000);
-    const r = await fetch(url, { ...init, signal: ctl.signal });
-    clearTimeout(to);
-    const body = (await r.text()).slice(0, 200).replace(/\s+/g, " ");
-    console.log(`${label}: ${r.status} in ${Date.now() - t0} ms ${body}`);
+    const r = await fetch(`${base}/api/salute`, { signal: AbortSignal.timeout(90000) });
+    console.log(`salute ${r.status} in ${Date.now() - t0} ms ${(await r.text()).slice(0, 400)}`);
   } catch (e) {
-    console.log(`${label}: ERRORE dopo ${Date.now() - t0} ms ${e.message}`);
+    console.log(`salute ERRORE dopo ${Date.now() - t0} ms ${e.message}`);
   }
-};
-for (let i = 0; i < 3; i++) {
-  await time("get-session", `${base}/api/auth/get-session`, { headers: { origin: base } });
-  await time("sign-in (utente inesistente)", `${base}/api/auth/sign-in/username`, { method: "POST", headers: { "content-type": "application/json", origin: base }, body: JSON.stringify({ username: "prova-inesistente-zz", password: "prova-sbagliata-zz" }) });
 }
