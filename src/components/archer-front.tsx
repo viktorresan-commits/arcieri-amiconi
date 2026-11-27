@@ -81,6 +81,25 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
   const shorts = look.bottom === "pantaloncini" || look.bottom === "gonna";
   const legW = (tight ? 15 : wide ? 22 : 18) * W;
   const legK = W * (look.body === "ragazzo" || look.body === "ragazza" ? 0.94 : 1);
+  // proporzioni vere: la testa un poco più piccola rispetto al corpo (i ragazzi la tengono più grande), ancorata al mento
+  const headK = look.body === "ragazzo" || look.body === "ragazza" ? 0.92 : 0.84;
+  const headT = `translate(${cx} 86) scale(${headK}) translate(${-cx} -86)`;
+  const deepSkin = blend(shade(skin, -0.45), "#4a1c12", 0.25);
+  /** rotondità: il bordo di ogni forma scurisce piano verso l'interno, come un volume illuminato (niente sfocature) */
+  const round = (d: string, key: string, color = "#000", k = 1) => (
+    <g pointerEvents="none">
+      <clipPath id={`${uid}rd${key}`}><path d={d} /></clipPath>
+      <g clipPath={`url(#${uid}rd${key})`} fill="none" stroke={color} strokeLinejoin="round">
+        <path d={d} strokeOpacity={0.06 * k} strokeWidth="16" />
+        <path d={d} strokeOpacity={0.07 * k} strokeWidth="9" />
+        <path d={d} strokeOpacity={0.09 * k} strokeWidth="4" />
+      </g>
+    </g>
+  );
+  /** luce o ombra morbida su un muscolo: ellisse sfumata orientata */
+  const glow = (p: { x: number; y: number }, rx: number, ry: number, deg: number, kind: "gw" | "gd", o: number) => (
+    <ellipse cx={f(p.x)} cy={f(p.y)} rx={f(rx)} ry={f(ry)} fill={`url(#${uid}${kind})`} opacity={o} transform={`rotate(${f(deg)} ${f(p.x)} ${f(p.y)})`} />
+  );
   const legX = [cx - 14 * W, cx + 14 * W];
   const bootTop = frontBootTop(look.footwear, look.bootHeight);
   // l'arco sta nella mano dell'arco: la sinistra (a destra per chi guarda), o l'altra se mancino
@@ -161,7 +180,6 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
     const at2 = (k: number) => axis[k];
     const outerPt = (k: number) => (side < 0 ? skinArm.L[k] : skinArm.R[k]);
     const innerPt = (k: number) => (side < 0 ? skinArm.R[k] : skinArm.L[k]);
-    const skinLine = shade(skin, -0.42);
     // il volume segue l'arto: in verticale le braccia lungo il corpo, in orizzontale quelle aperte
     const vol = `url(#${uid}${open ? "lvh" : "lv"})`;
     return (
@@ -170,6 +188,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
         {open ? null : <path d={skinArm.d} transform="translate(2.4 1.6)" fill="#000" opacity="0.16" clipPath={`url(#${uid}tcl)`} pointerEvents="none" />}
         <path d={skinArm.d} fill={`url(#${uid}${open ? "skh" : "sk"})`} />
         <path d={skinArm.d} fill={`url(#${uid}skp)`} opacity="0.13" pointerEvents="none" />
+        {round(skinArm.d, `a${side}`, deepSkin, 1.1)}
         {/* il rosso sotto la pelle: gomito e polso */}
         <g pointerEvents="none">
           <ellipse cx={f(axis[5].x)} cy={f(axis[5].y)} rx={f(5 * W)} ry={f(4 * W)} fill={`url(#${uid}skr)`} />
@@ -178,18 +197,31 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
         <path d={skinArm.stroke} fill="none" stroke={shade(skin, -0.55)} strokeOpacity="0.62" strokeWidth="0.7" strokeLinejoin="round" strokeLinecap="round" />
         {/* il bordo del deltoide sul petto, appena accennato */}
         {open ? null : <path d={`M${f(skinArm.inner[2].x)} ${f(skinArm.inner[2].y)} Q${f(skinArm.inner[0].x + side * 1.5)} ${f(skinArm.inner[0].y - 1)} ${f(peak.x)} ${f(peak.y + 0.6)}`} fill="none" stroke={shade(skin, -0.4)} strokeOpacity="0.28" strokeWidth="0.8" strokeLinecap="round" />}
-        {/* muscoli appena segnati sulla pelle: attacco del deltoide, piega del gomito, brachioradiale */}
-        {longSleeve && !open ? null : (
-          <g fill="none" stroke={skinLine} strokeLinecap="round" pointerEvents="none">
-            {shortSleeve ? null : <path d={`M${f(outerPt(2).x)} ${f(outerPt(2).y)} Q${f(lerpP(outerPt(1), at2(1), 0.45).x)} ${f(lerpP(outerPt(1), at2(1), 0.45).y)} ${f(lerpP(at2(1), innerPt(1), 0.2).x)} ${f(at2(1).y - 3)}`} strokeOpacity="0.3" strokeWidth="0.7" />}
-            <path d={`M${f(lerpP(at2(5), innerPt(5), 0.5).x)} ${f(at2(5).y - 1.5)} q${f(side * -1.4)} 2.2 ${f(side * 0.6)} 4`} strokeOpacity="0.32" strokeWidth="0.6" />
-          </g>
-        )}
+        {/* muscoli in luce e ombra (niente linee): deltoide, il suo solco, bicipite, tricipite, brachioradiale */}
+        {longSleeve && !open ? null : (() => {
+          const ang = (k: number) => (Math.atan2(axis[k + 1].y - axis[k].y, axis[k + 1].x - axis[k].x) * 180) / Math.PI - 90;
+          const lit = side < 0 ? 1 : 0.6;
+          const g1 = lerpP(innerPt(1), outerPt(3), 0.5);
+          const gAng = (Math.atan2(outerPt(3).y - innerPt(1).y, outerPt(3).x - innerPt(1).x) * 180) / Math.PI;
+          const gLen = Math.hypot(outerPt(3).x - innerPt(1).x, outerPt(3).y - innerPt(1).y);
+          return (
+            <g pointerEvents="none">
+              {shortSleeve ? null : glow(lerpP(at2(1), outerPt(1), 0.35), 6.5 * W, 9 * W, ang(1), "gw", 0.75 * lit)}
+              {shortSleeve ? null : glow(g1, gLen * 0.5, 1.9 * W, gAng, "gd", 0.7)}
+              {glow(lerpP(at2(3), innerPt(3), 0.3), 4 * W, 10 * W, ang(3), "gw", 0.6 * lit)}
+              {glow(lerpP(at2(3), outerPt(3), 0.65), 2.6 * W, 12 * W, ang(3), "gd", 0.55)}
+              {glow(lerpP(at2(6), outerPt(6), 0.35), 3.2 * W, 8 * W, ang(6), "gw", 0.55 * lit)}
+              {glow(lerpP(at2(7), innerPt(7), 0.25), 1.8 * W, 9 * W, ang(7) + side * 10, "gd", 0.45)}
+              {glow(lerpP(at2(5), innerPt(5), 0.4), 3 * W, 2 * W, 0, "gd", 0.5)}
+            </g>
+          );
+        })()}
         {sleeveArm ? (
           <g>
             <path d={sleeveArm.d} fill={sleeve} />
             <path d={sleeveArm.d} fill={`url(#${uid}linen)`} pointerEvents="none" />
             <path d={sleeveArm.d} fill={vol} pointerEvents="none" />
+            {round(sleeveArm.d, `s${side}`)}
             <path d={sleeveArm.stroke} fill="none" stroke={OUT} strokeOpacity="0.5" strokeWidth="0.8" strokeLinejoin="round" strokeLinecap="round" />
             {open ? null : <path d={`M${f(sleeveArm.inner[2].x)} ${f(sleeveArm.inner[2].y)} Q${f(sleeveArm.inner[0].x + side * 1.5)} ${f(sleeveArm.inner[0].y - 1)} ${f(peak.x - side * 0.6)} ${f(peak.y - 0.4)}`} fill="none" stroke={seamOf(sleeve)} strokeOpacity="0.55" strokeWidth="0.55" strokeDasharray="1.2 1" />}
             {/* pieghe morbide: al gomito, dove la manica si raccoglie, e una che scende dalla spalla; cucitura alla spalla */}
@@ -214,6 +246,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
           <g>
             <path d={capArm.d} fill={capColor} />
             <path d={capArm.d} fill={vol} pointerEvents="none" />
+            {round(capArm.d, `c${side}`)}
             <path d={capArm.stroke} fill="none" stroke={OUT} strokeOpacity="0.5" strokeWidth="0.8" strokeLinejoin="round" strokeLinecap="round" />
             {open ? null : <path d={`M${f(capArm.inner[2].x)} ${f(capArm.inner[2].y)} Q${f(capArm.inner[0].x + side * 1.5)} ${f(capArm.inner[0].y - 1)} ${f(peak.x - side * 0.6)} ${f(peak.y - 0.4)}`} fill="none" stroke={shade(capColor, -0.4)} strokeOpacity="0.4" strokeWidth="0.6" strokeDasharray="1.2 1" />}
             {/* orlo della manica con la sua ombra sulla pelle e due pieghe che scendono dalla spalla */}
@@ -287,6 +320,14 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
           <stop offset="0.45" stopColor={shade(skin, -0.22)} />
           <stop offset="1" stopColor={shade(skin, -0.1)} />
         </linearGradient>
+        <radialGradient id={`${uid}gw`}>
+          <stop offset="0" stopColor="#fff" stopOpacity="0.55" />
+          <stop offset="1" stopColor="#fff" stopOpacity="0" />
+        </radialGradient>
+        <radialGradient id={`${uid}gd`}>
+          <stop offset="0" stopColor={blend(shade(skin, -0.45), "#4a1c12", 0.25)} stopOpacity="0.6" />
+          <stop offset="1" stopColor={blend(shade(skin, -0.45), "#4a1c12", 0.25)} stopOpacity="0" />
+        </radialGradient>
         <radialGradient id={`${uid}skr`}>
           <stop offset="0" stopColor={blend(skin, "#c4473f", 0.5)} stopOpacity="0.26" />
           <stop offset="1" stopColor={blend(skin, "#c4473f", 0.5)} stopOpacity="0" />
@@ -456,6 +497,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
                 </g>
               ) : null}
               <path d={legShape.d} fill={shorts ? `url(#${uid}sk)` : `url(#${uid}pa)`} stroke={shorts ? shade(skin, -0.55) : OUT} strokeOpacity={shorts ? 0.62 : 0.54} strokeWidth={shorts ? 0.7 : 0.84} strokeLinejoin="round" />
+              {round(legShape.d, `l${i}`, shorts ? deepSkin : "#000", shorts ? 1.1 : 1.2)}
               <g clipPath={`url(#${uid}lg${i})`} pointerEvents="none">
                 {pants && !tight ? <FrontLegDetail uid={uid} L={L} legW={legW} kneeY={knee - 2} bottom={Math.min(326, bootTop)} /> : null}
                 {shorts ? (
@@ -518,13 +560,15 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
         ) : null}
         <g className={live ? "aa-front-breath" : undefined}>
         {/* capelli lunghi e cappuccio: dietro il corpo */}
-        <svg x={cx - 65} y="-8" width="130" height="130" viewBox="0 0 100 100" overflow="visible">
-          <AvatarFace look={look} className="" bare part="back" />
-        </svg>
+        <g transform={headT}>
+          <svg x={cx - 65} y="-8" width="130" height="130" viewBox="0 0 100 100" overflow="visible">
+            <AvatarFace look={look} className="" bare part="back" />
+          </svg>
+        </g>
         {/* collo: disegnato prima della veste, così colletti e scolli lo coprono come di profilo */}
         <g className={live ? "aa-front-head" : undefined}>
           {/* collo: più stretto sotto il mento, si allarga nelle spalle; ombra del mento, muscoli appena segnati */}
-          <path d={`M${cx - 7.5} 76 L${cx + 7.5} 76 C${cx + 8} 88 ${cx + 9.5} 96 ${cx + 16} 103 L${cx - 16} 103 C${cx - 9.5} 96 ${cx - 8} 88 ${cx - 7.5} 76 Z`} fill={`url(#${uid}skn)`} transform={woman ? undefined : `translate(${cx} 76) scale(1.1 1) translate(${-cx} -76)`} />
+          <path d={`M${cx - 7.5} 76 L${cx + 7.5} 76 C${cx + 8} 88 ${cx + 9.5} 96 ${cx + 16} 103 L${cx - 16} 103 C${cx - 9.5} 96 ${cx - 8} 88 ${cx - 7.5} 76 Z`} fill={`url(#${uid}skn)`} stroke={shade(skin, -0.55)} strokeOpacity="0.5" strokeWidth="0.6" transform={woman ? `translate(${cx} 76) scale(1.06 1) translate(${-cx} -76)` : `translate(${cx} 76) scale(1.22 1) translate(${-cx} -76)`} />
           <path d={`M${cx - 7.5} 76 C${cx - 8} 88 ${cx - 9.5} 96 ${cx - 16} 103 L${cx - 10} 103 C${cx - 6} 96 ${cx - 5} 88 ${cx - 5} 78 Z M${cx + 7.5} 76 C${cx + 8} 88 ${cx + 9.5} 96 ${cx + 16} 103 L${cx + 10} 103 C${cx + 6} 96 ${cx + 5} 88 ${cx + 5} 78 Z`} fill={shade(skin, -0.36)} opacity="0.5" />
           <ellipse cx={cx} cy="83" rx="9" ry="5" fill={`url(#${uid}sd)`} opacity="0.75" />
           <path d={`M${cx - 6} 84 Q${cx - 4} 94 ${cx - 1.4} 101 M${cx + 6} 84 Q${cx + 4} 94 ${cx + 1.4} 101`} stroke={shade(skin, -0.4)} strokeOpacity="0.3" strokeWidth="0.7" fill="none" />
@@ -535,6 +579,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
           <g>
             <path d={bodyD} fill={`url(#${uid}sk)`} stroke={shade(skin, -0.55)} strokeOpacity="0.62" strokeWidth="0.7" />
             <path d={bodyD} fill={`url(#${uid}skp)`} opacity="0.12" pointerEvents="none" />
+            {round(bodyD, "b", deepSkin, 1.1)}
             {/* clavicole appena accennate */}
             <path d={`M${cx - 4} 101 Q${cx - 14 * tw} 99.5 ${cx - 24 * tw} 103.5 M${cx + 4} 101 Q${cx + 14 * tw} 99.5 ${cx + 24 * tw} 103.5`} fill="none" stroke={shade(skin, -0.38)} strokeOpacity="0.3" strokeWidth="0.7" strokeLinecap="round" pointerEvents="none" />
           </g>
@@ -542,6 +587,8 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
         {/* veste */}
         {longTop ? <path d={tunicD} fill={`url(#${uid}sh)`} stroke={OUT} strokeOpacity="0.54" strokeWidth="0.84" /> : null}
         <path d={torsoD} fill={`url(#${uid}sh)`} stroke={OUT} strokeOpacity="0.54" strokeWidth="0.84" />
+        {round(torsoD, "t", "#000", 1.2)}
+        {longTop ? round(tunicD, "tu", "#000", 1.1) : null}
         <ClothPattern kind={look.pattern} shapes={longTop ? [torsoD, tunicD] : [torsoD]} base={shirt} trim={look.trim} uid={`${uid}f`} box={[sh.l - 16, 94, sh.r + 16, (longTop ? hem : 208) + 6]} />
         <ClothDetail uid={`${uid}cd`} shapes={longTop ? [torsoD, tunicD] : [torsoD]} cx={cx} shoulderL={sh.l} shoulderR={sh.r} hipL={hip.l} hipR={hip.r} tunicLen={longTop ? hem : 206} longTunic={longTop} seam={seamOf(shirt)} dy={-14} belt={look.belt === "larga" ? 184 : 187} />
         <FrontTop look={look} cx={cx} sh={sh} waist={waist} hip={hip} hem={hem} sideLen={sideLen} longTop={longTop} skin={skin} shirt={shirt} sleeve={sleeve} uid={uid} tw={tw} />
@@ -584,13 +631,49 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
           </g>
         </g>
         {look.chestguard ? <ChestGuard uid={uid} d={`M${cx + bowSide * 6} 118 C${cx + bowSide * 30} 116 ${cx + bowSide * 34} 150 ${cx + bowSide * 26} 168 L${cx + bowSide * 6} 164 Z`} c={{ x: cx + bowSide * 20, y: 142 }} color={look.chestColor} out={OUT} /> : null}
-        {look.straps ? <path d={`M${sh.l + 8} 106 L${hip.r - 6} 196 M${sh.r - 8} 106 L${hip.l + 6} 196`} stroke="#3a2414" strokeWidth="4.4" /> : null}
+        {/* bretelle incrociate di cuoio: bordi cuciti, borchie d'ottone e una fibbia dove si incrociano */}
+        {look.straps ? (() => {
+          const band = (a: { x: number; y: number }, b: { x: number; y: number }, w: number) => {
+            const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+            const nx = (-(b.y - a.y) / len) * w;
+            const ny = ((b.x - a.x) / len) * w;
+            return { d: `M${f(a.x + nx)} ${f(a.y + ny)} L${f(b.x + nx)} ${f(b.y + ny)} L${f(b.x - nx)} ${f(b.y - ny)} L${f(a.x - nx)} ${f(a.y - ny)} Z`, e1: `M${f(a.x + nx * 0.6)} ${f(a.y + ny * 0.6)} L${f(b.x + nx * 0.6)} ${f(b.y + ny * 0.6)}`, e2: `M${f(a.x - nx * 0.6)} ${f(a.y - ny * 0.6)} L${f(b.x - nx * 0.6)} ${f(b.y - ny * 0.6)}` };
+          };
+          const leather = "#5a3620";
+          const straps = [band({ x: sh.l + 8, y: 104 }, { x: hip.r - 6, y: 196 }, 2.6), band({ x: sh.r - 8, y: 104 }, { x: hip.l + 6, y: 196 }, 2.6)];
+          const cross = { x: cx + (sh.l + 8 + hip.r - 6 - 2 * cx) / 2 * 0, y: 150 };
+          return (
+            <g>
+              {straps.map((st, k) => (
+                <g key={k}>
+                  <path d={st.d} fill={leather} stroke={OUT} strokeOpacity="0.6" strokeWidth="0.5" strokeLinejoin="round" />
+                  <path d={st.d} fill={`url(#${uid}vol)`} />
+                  <path d={`${st.e1} ${st.e2}`} stroke="#d9b98a" strokeOpacity="0.7" strokeWidth="0.35" strokeDasharray="1.2 1" fill="none" />
+                </g>
+              ))}
+              <rect x={cross.x - 3.6} y={cross.y - 3.6} width="7.2" height="7.2" rx="1.4" fill="none" stroke="#c9993f" strokeWidth="1.5" transform={`rotate(45 ${cross.x} ${cross.y})`} />
+              {[[sh.l + 13, 112], [sh.r - 13, 112], [hip.r - 10, 189], [hip.l + 10, 189]].map(([rx2, ry2]) => (
+                <g key={`${rx2}`}>
+                  <circle cx={rx2} cy={ry2} r="1.4" fill="#c9993f" stroke="#6a4a14" strokeWidth="0.3" />
+                  <circle cx={rx2 - 0.4} cy={ry2 - 0.45} r="0.45" fill="#fff6d0" opacity="0.8" />
+                </g>
+              ))}
+            </g>
+          );
+        })() : null}
         {look.special ? <SpecialFrontTorso look={look} cx={cx} sh={sh} hip={hip} uid={uid} /> : null}
         {look.sash ? <path d={`M${waist.l - 2} 182 Q${cx} 192 ${waist.r + 2} 182 L${waist.r + 2} 194 Q${cx} 204 ${waist.l - 2} 194 Z M${waist.l + 6} 192 l-6 34 l10 -4 Z`} fill={look.sashColor} /> : null}
         {look.belt !== "nessuna" ? (
           <g>
             <path d={`M${waist.l - 1} ${look.belt === "larga" ? 184 : 187} L${waist.r + 1} ${look.belt === "larga" ? 184 : 187} L${waist.r + 1} 194 L${waist.l - 1} 194 Z`} fill={look.beltColor} stroke={OUT} strokeOpacity="0.5" strokeWidth="0.6" />
             <BeltDetail uid={uid} x={waist.l - 1} y={look.belt === "larga" ? 184 : 187} w={waist.r - waist.l + 2} h={look.belt === "larga" ? 10 : 7} cx={cx} />
+            {/* borchie d'ottone ai lati della fibbia */}
+            {[-17, -11, 11, 17].map((dx) => (
+              <g key={dx}>
+                <circle cx={cx + dx * W} cy={look.belt === "larga" ? 189 : 190.5} r="1.25" fill="#c9993f" stroke="#6a4a14" strokeWidth="0.3" />
+                <circle cx={cx + dx * W - 0.35} cy={(look.belt === "larga" ? 189 : 190.5) - 0.4} r="0.4" fill="#fff6d0" opacity="0.8" />
+              </g>
+            ))}
             {look.buckle && look.buckle !== "semplice" ? <Buckle kind={look.buckle} x={cx} y={190} /> : <PlainBuckle x={cx} y={look.belt === "larga" ? 189 : 190.5} w={10} h={look.belt === "larga" ? 12 : 9} sw={1.8} />}
           </g>
         ) : null}
@@ -687,9 +770,11 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
 
         {/* testa di fronte, la stessa della foto profilo */}
         <g className={live ? "aa-front-head" : undefined}>
-          <svg x={cx - 65} y="-8" width="130" height="130" viewBox="0 0 100 100" overflow="visible">
-            <AvatarFace look={look} className="" bare part="front" />
-          </svg>
+          <g transform={headT}>
+            <svg x={cx - 65} y="-8" width="130" height="130" viewBox="0 0 100 100" overflow="visible">
+              <AvatarFace look={look} className="" bare part="front" />
+            </svg>
+          </g>
         </g>
         </g>
         </g>

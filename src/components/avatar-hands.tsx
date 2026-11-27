@@ -58,53 +58,64 @@ function HandGrad({ id, t }: { id: string; t: ReturnType<typeof tones> }) {
 
 /**
  * Pugno di fronte, al centro (x, y): l'impugnatura o la freccia passano in verticale. `flip` = 1 con le nocche a
- * destra di chi guarda, -1 a sinistra.
+ * destra di chi guarda, -1 a sinistra. Dorso della mano, quattro dita piegate una sotto l'altra (il mignolo più
+ * corto) e il pollice di traverso sopra l'indice con l'unghia; contorno sottile, volume dato dalla luce.
  */
 export function FrontFist({ x, y, r, skin, gloves, flip = 1, claws = false }: { x: number; y: number; r: number; skin: string; gloves: boolean; flip?: 1 | -1; /** artigli d'oro (costume del demone) */ claws?: boolean }) {
   const t = tones(skin, gloves);
-  const gid = `hf${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
-  const rows = [0, 1, 2, 3].map((k) => ({ y: -0.74 * r + k * 0.49 * r, x0: -0.78 * r + (k === 3 ? 0.14 * r : 0), x1: 0.94 * r - (k === 3 ? 0.12 * r : k === 0 ? 0.04 * r : 0) }));
-  // sagoma del pugno: le quattro nocche sul lato esterno, il palmo arrotondato dall'altra parte
-  const knuckles = rows.map((w) => `Q${f(w.x1 + 0.16 * r)} ${f(w.y)} ${f(w.x1)} ${f(w.y + 0.245 * r)}`).join(" ");
-  const silhouette = `M${f(-0.62 * r)} ${f(-1.12 * r)} L${f(0.6 * r)} ${f(-1.12 * r)} C${f(0.82 * r)} ${f(-1.1 * r)} ${f(0.98 * r)} ${f(-0.98 * r)} ${f(0.94 * r)} ${f(-0.98 * r)} ${knuckles} C${f(0.7 * r)} ${f(1.2 * r)} ${f(-0.5 * r)} ${f(1.2 * r)} ${f(-0.72 * r)} ${f(0.98 * r)} C${f(-1.02 * r)} ${f(0.5 * r)} ${f(-1.04 * r)} ${f(-0.7 * r)} ${f(-0.62 * r)} ${f(-1.12 * r)} Z`;
+  const id = useId().replace(/[^a-zA-Z0-9]/g, "");
+  const gid = `hf${id}`;
+  const vid = `hv${id}`;
+  const P = (px: number, py: number) => `${f(px * r)} ${f(py * r)}`;
+  const line = gloves ? OUT : t.line;
+  const back = `M${P(-0.6, -1.12)} C${P(-0.1, -1.18)} ${P(0.4, -1.16)} ${P(0.62, -1.1)} C${P(0.88, -0.9)} ${P(0.98, -0.4)} ${P(0.96, 0.05)} L${P(-0.86, 0.1)} C${P(-0.94, -0.4)} ${P(-0.88, -0.9)} ${P(-0.6, -1.12)} Z`;
+  const fingers = [3, 2, 1, 0].map((k) => {
+    const y0 = -0.36 + k * 0.385;
+    const h = 0.42;
+    const x0 = -0.86 + k * 0.07;
+    const x1 = 1.0 - k * 0.09;
+    const d = `M${P(x0 + 0.16, y0)} L${P(x1 - 0.18, y0)} C${P(x1 + 0.02, y0)} ${P(x1 + 0.06, y0 + h * 0.9)} ${P(x1 - 0.16, y0 + h)} L${P(x0 + 0.16, y0 + h)} C${P(x0 - 0.04, y0 + h)} ${P(x0 - 0.04, y0)} ${P(x0 + 0.16, y0)} Z`;
+    return { k, d, y0, h, x0, x1 };
+  });
+  const thumb = `M${P(-0.92, -0.8)} C${P(-0.6, -0.68)} ${P(-0.1, -0.52)} ${P(0.36, -0.42)} C${P(0.58, -0.37)} ${P(0.62, -0.12)} ${P(0.4, -0.07)} C${P(0.0, -0.1)} ${P(-0.5, -0.2)} ${P(-0.92, -0.34)} Z`;
   return (
     <g transform={`translate(${f(x)} ${f(y)}) scale(${flip} 1)`}>
-      <HandGrad id={gid} t={t} />
-      <path d={silhouette} fill={`url(#${gid})`} stroke={gloves ? OUT : t.line} strokeOpacity={gloves ? 0.56 : 0.75} strokeWidth="0.3" strokeLinejoin="round" />
-      {/* il rosso sotto la pelle sulle nocche e tra le dita */}
-      {gloves ? null : <ellipse cx={f(0.58 * r)} cy={f(0)} rx={f(0.36 * r)} ry={f(0.9 * r)} fill={t.knuckle} opacity="0.28" />}
-      {/* dita: rotoli sovrapposti, il bordo alto in luce e la piega scura sotto */}
-      {rows.map((w, k) => (
-        <g key={k}>
-          <path d={`M${f(w.x0)} ${f(w.y + 0.2 * r)} C${f(w.x0)} ${f(w.y - 0.08 * r)} ${f(w.x1 - 0.1 * r)} ${f(w.y - 0.1 * r)} ${f(w.x1)} ${f(w.y + 0.12 * r)}`} stroke={t.hi} strokeWidth={f(0.04 * r)} fill="none" strokeLinecap="round" opacity="0.5" />
-          {k < 3 ? <path d={`M${f(w.x0 + 0.04 * r)} ${f(w.y + 0.27 * r)} C${f(w.x0 + 0.3 * r)} ${f(w.y + 0.34 * r)} ${f(w.x1 - 0.2 * r)} ${f(w.y + 0.33 * r)} ${f(w.x1 + 0.02 * r)} ${f(w.y + 0.26 * r)}`} stroke={t.line} strokeWidth={f(0.032 * r)} fill="none" strokeLinecap="round" opacity="0.8" /> : null}
-          {/* nocca */}
-          <ellipse cx={f(w.x1 - 0.07 * r)} cy={f(w.y + 0.1 * r)} rx={f(0.09 * r)} ry={f(0.06 * r)} fill={t.knuckle} opacity="0.7" />
-          <circle cx={f(w.x1 - 0.1 * r)} cy={f(w.y + 0.07 * r)} r={f(0.03 * r)} fill="#fff" opacity={gloves ? 0.3 : 0.3} />
-          {gloves ? <path d={`M${f(w.x0 + 0.2 * r)} ${f(w.y + 0.02 * r)} L${f(w.x1 - 0.22 * r)} ${f(w.y)}`} stroke="#c9a46a" strokeOpacity="0.5" strokeWidth={f(0.022 * r)} strokeDasharray={`${f(0.09 * r)} ${f(0.08 * r)}`} /> : null}
+      <defs>
+        <radialGradient id={gid} cx="0.32" cy="0.3" r="0.85">
+          <stop offset="0" stopColor={t.hi} />
+          <stop offset="0.55" stopColor={t.base} />
+          <stop offset="1" stopColor={t.lo} />
+        </radialGradient>
+        <linearGradient id={vid} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor={t.hi} />
+          <stop offset="0.5" stopColor={t.base} />
+          <stop offset="1" stopColor={t.lo} />
+        </linearGradient>
+      </defs>
+      {/* dorso della mano, con le nocche arrossate sul lato esterno */}
+      <path d={back} fill={`url(#${gid})`} stroke={line} strokeOpacity="0.75" strokeWidth="0.3" strokeLinejoin="round" />
+      {gloves ? null : <ellipse cx={f(0.6 * r)} cy={f(-0.55 * r)} rx={f(0.28 * r)} ry={f(0.45 * r)} fill={t.knuckle} opacity="0.3" />}
+      {/* le quattro dita piegate */}
+      {fingers.map((g) => (
+        <g key={g.k}>
+          <path d={g.d} fill={`url(#${vid})`} stroke={line} strokeOpacity="0.75" strokeWidth="0.28" strokeLinejoin="round" />
+          <path d={`M${P(g.x0 + 0.2, g.y0 + 0.08)} L${P(g.x1 - 0.32, g.y0 + 0.08)}`} stroke={t.hi} strokeOpacity={gloves ? 0.35 : 0.6} strokeWidth={f(0.05 * r)} strokeLinecap="round" />
+          {gloves ? (
+            <path d={`M${P(g.x0 + 0.24, g.y0 + g.h * 0.55)} L${P(g.x1 - 0.3, g.y0 + g.h * 0.55)}`} stroke="#c9a46a" strokeOpacity="0.5" strokeWidth={f(0.022 * r)} strokeDasharray={`${f(0.09 * r)} ${f(0.08 * r)}`} />
+          ) : (
+            <ellipse cx={f((g.x1 - 0.17) * r)} cy={f((g.y0 + g.h * 0.45) * r)} rx={f(0.12 * r)} ry={f(0.14 * r)} fill={t.knuckle} opacity="0.5" />
+          )}
         </g>
       ))}
-      {/* ombra sul lato del palmo, in ombra (la luce viene da sinistra di chi guarda) */}
-      <path d={`M${f(-0.7 * r)} ${f(-0.9 * r)} C${f(-0.92 * r)} ${f(-0.3 * r)} ${f(-0.9 * r)} ${f(0.5 * r)} ${f(-0.6 * r)} ${f(0.95 * r)}`} stroke={t.lo} strokeWidth={f(0.08 * r)} fill="none" opacity="0.35" strokeLinecap="round" />
-      {/* pollice vero: parte dal palmo vicino al polso (base larga), scende in diagonale e si chiude sopra
-          l'indice; l'unghia sta sulla punta, nella direzione del dito */}
-      {(() => {
-        // bordo visibile del pollice (sopra, punta, sotto) e base che si fonde col palmo, senza tratto
-        const edge = `M${f(-0.66 * r)} ${f(-1.1 * r)} C${f(-0.3 * r)} ${f(-1.02 * r)} ${f(0.08 * r)} ${f(-0.86 * r)} ${f(0.46 * r)} ${f(-0.62 * r)} C${f(0.66 * r)} ${f(-0.49 * r)} ${f(0.6 * r)} ${f(-0.22 * r)} ${f(0.38 * r)} ${f(-0.25 * r)} C${f(0.02 * r)} ${f(-0.31 * r)} ${f(-0.44 * r)} ${f(-0.46 * r)} ${f(-0.86 * r)} ${f(-0.46 * r)}`;
-        const thumb = `${edge} C${f(-0.98 * r)} ${f(-0.7 * r)} ${f(-0.86 * r)} ${f(-1.02 * r)} ${f(-0.66 * r)} ${f(-1.1 * r)} Z`;
-        return (
-          <g>
-            <path d={thumb} fill={`url(#${gid})`} />
-            <path d={edge} fill="none" stroke={gloves ? OUT : t.line} strokeOpacity={gloves ? 0.5 : 0.7} strokeWidth="0.3" strokeLinejoin="round" strokeLinecap="round" />
-            {/* luce sul dorso del pollice e piega dove si appoggia sull'indice */}
-            <path d={`M${f(-0.7 * r)} ${f(-0.96 * r)} C${f(-0.3 * r)} ${f(-0.94 * r)} ${f(0.1 * r)} ${f(-0.78 * r)} ${f(0.4 * r)} ${f(-0.58 * r)}`} stroke={t.hi} strokeWidth={f(0.05 * r)} fill="none" strokeLinecap="round" opacity="0.85" />
-            <path d={`M${f(-0.5 * r)} ${f(-0.46 * r)} C${f(-0.12 * r)} ${f(-0.38 * r)} ${f(0.16 * r)} ${f(-0.27 * r)} ${f(0.36 * r)} ${f(-0.24 * r)}`} stroke={t.line} strokeWidth={f(0.035 * r)} fill="none" strokeLinecap="round" opacity="0.55" />
-            {/* articolazione del pollice */}
-            <path d={`M${f(-0.08 * r)} ${f(-0.86 * r)} q${f(0.04 * r)} ${f(0.12 * r)} ${f(0.02 * r)} ${f(0.24 * r)}`} stroke={t.line} strokeWidth={f(0.03 * r)} fill="none" opacity="0.5" strokeLinecap="round" />
-            {gloves ? null : <ellipse cx={f(0.43 * r)} cy={f(-0.45 * r)} rx={f(0.15 * r)} ry={f(0.1 * r)} fill={t.nail} stroke={t.line} strokeWidth={f(0.03 * r)} strokeOpacity="0.6" transform={`rotate(38 ${f(0.43 * r)} ${f(-0.45 * r)})`} />}
-          </g>
-        );
-      })()}
+      {/* pollice di traverso sopra l'indice, con l'unghia in punta */}
+      <path d={thumb} fill={`url(#${gid})`} stroke={line} strokeOpacity="0.75" strokeWidth="0.3" strokeLinejoin="round" />
+      <path d={`M${P(-0.84, -0.7)} C${P(-0.5, -0.6)} ${P(-0.1, -0.47)} ${P(0.3, -0.38)}`} stroke={t.hi} strokeOpacity={gloves ? 0.35 : 0.65} strokeWidth={f(0.05 * r)} fill="none" strokeLinecap="round" />
+      {gloves ? null : (
+        <g>
+          <ellipse cx={f(0.42 * r)} cy={f(-0.24 * r)} rx={f(0.15 * r)} ry={f(0.11 * r)} fill={t.nail} stroke={t.line} strokeOpacity="0.55" strokeWidth={f(0.025 * r)} transform={`rotate(14 ${f(0.42 * r)} ${f(-0.24 * r)})`} />
+          <ellipse cx={f(0.4 * r)} cy={f(-0.27 * r)} rx={f(0.06 * r)} ry={f(0.035 * r)} fill="#fff" opacity="0.6" />
+        </g>
+      )}
       {/* polsino del guanto */}
       {gloves ? (
         <g>

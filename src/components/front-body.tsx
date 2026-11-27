@@ -120,7 +120,9 @@ export const FORE_T = [0.14, 0.32, 0.56, 0.8, 1];
 export function armWidths(woman: boolean, k: number) {
   const o = woman ? [8.3, 8.7, 7.5, 6.9, 6.1, 5.6, 6.3, 6.3, 5.3, 4.4, 3.9] : [10, 10.8, 9.2, 8.2, 7.2, 6.4, 7.4, 7.5, 6.3, 5, 4.4];
   const i = woman ? [6.4, 6.8, 7, 7, 6, 5.3, 5.8, 5.8, 5, 4.2, 3.8] : [7, 7.6, 8.1, 8.3, 7, 6, 6.7, 6.7, 5.7, 4.7, 4.2];
-  return { o: o.map((v) => v * k), i: i.map((v) => v * k) };
+  // braccia piene, da arciere allenato (lui un poco più muscoloso)
+  const m = k * (woman ? 1.04 : 1.12);
+  return { o: o.map((v) => v * m), i: i.map((v) => v * m) };
 }
 
 /** asse del braccio: spalla, gomito, polso */
