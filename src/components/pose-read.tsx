@@ -415,6 +415,12 @@ export function PoseRead() {
       at: (i: number) => {
         const sm = samples[i];
         let g: Gear | null = sm.g ?? samples[i - 1]?.g ?? samples[i + 1]?.g ?? null;
+        // dentro un tiro, dall'inizio dell'alzata al rilascio, la freccia è sulla corda
+        const armed = shotsNow.some((sh) => {
+          const from = sh.phases[0]?.from;
+          const to = sh.release ?? sh.phases[sh.phases.length - 1]?.to;
+          return from != null && to != null && sm.t >= from && sm.t < to;
+        });
         for (let q = 0; q < shotsNow.length; q++) {
           const r = shotsNow[q].release;
           if (r == null || sm.t < r) continue;
@@ -424,7 +430,7 @@ export function PoseRead() {
             break;
           }
         }
-        return { lm: sm.lm, gear: g };
+        return { lm: sm.lm, gear: g, armed };
       },
     };
   }, [samples, analysis.shots]);

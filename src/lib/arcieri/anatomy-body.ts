@@ -215,7 +215,7 @@ function segMatrix(r: Frame, c: Frame, thick: number, out: Float32Array, at: num
 type Pts = (i: number | string) => V3 | undefined;
 
 /** i 17 segmenti (stesso ordine del file) costruiti con gli stessi gesti per riposo e video */
-function frames(P: Pts, hands: { L: [number, number, number] | null; R: [number, number, number] | null }, look?: V3) {
+function frames(P: Pts, hands: { L: [number, number, number] | null; R: [number, number, number] | null }, look?: V3, palms?: { L?: V3; R?: V3 } | null) {
   const get = (i: number | string) => P(i) ?? [0, 0, 0];
   const shL = get(11), shR = get(12), hipL = get(23), hipR = get(24);
   const shM = lerp(shL, shR, 0.5), hipM = lerp(hipL, hipR, 0.5);
@@ -247,7 +247,8 @@ function frames(P: Pts, hands: { L: [number, number, number] | null; R: [number,
     const W = h ? get(h[0]) : get(wr);
     const IX = h ? get(h[1]) : get(ix);
     const PK = h ? get(h[2]) : get(pk);
-    const palm = cross(sub(IX, W), sub(PK, W));
+    // verso del palmo: quello filtrato sull'intero video (continuo, senza ribaltoni) se c'è
+    const palm = palms?.[s] ?? cross(sub(IX, W), sub(PK, W));
     F[`clav_${s}`] = frame(notch, get(sh), up, fwd);
     // braccio: la torsione viene dal piano del gomito quando è piegato, altrimenti dal davanti del busto
     const ua = norm(sub(get(el), get(sh)));
@@ -278,13 +279,13 @@ export type Grips = {
   wrap?: { side: "L" | "R"; k: number; toward: V3; /** asse dell'arco all'impugnatura (verso il flettente alto) */ axis?: V3; /** verso il bersaglio */ dir?: V3 };
 };
 
-export function bodyMatrices(meta: BodyMeta, J: Record<number, V3>, look?: V3, grips?: Grips, /** 32 numeri: la piega delle dita in presa per la scheda grafica (mano S, poi D) */ curl?: Float32Array, /** 16 numeri: piega di ogni dito dai punti della mano (nocca e falangi; mano S, poi D) */ fing?: Float32Array, /** corporatura dall'aura dell'arciere: spessore di busto, braccia, gambe e testa */ build?: Build): Float32Array {
+export function bodyMatrices(meta: BodyMeta, J: Record<number, V3>, look?: V3, grips?: Grips, /** 32 numeri: la piega delle dita in presa per la scheda grafica (mano S, poi D) */ curl?: Float32Array, /** 16 numeri: piega di ogni dito dai punti della mano (nocca e falangi; mano S, poi D) */ fing?: Float32Array, /** corporatura dall'aura dell'arciere: spessore di busto, braccia, gambe e testa */ build?: Build, /** verso del palmo per mano, filtrato sull'intero video */ palms?: { L?: V3; R?: V3 } | null): Float32Array {
   const rest = (i: number | string) => meta.rest[String(i)];
   const hasHand = (base: number) => Boolean(J[base] && J[base + 5] && J[base + 17]);
   // le mani da 21 punti hanno nocche vere: con quelle si usano le teste dei metacarpi del modello
   const handsCur = { L: hasHand(33) ? ([33, 38, 50] as [number, number, number]) : null, R: hasHand(54) ? ([54, 59, 71] as [number, number, number]) : null };
   const Fr = frames(rest, { L: null, R: null });
-  const Fc = frames((i) => (typeof i === "number" ? J[i] : undefined), handsCur, look);
+  const Fc = frames((i) => (typeof i === "number" ? J[i] : undefined), handsCur, look, palms);
   // vita: il bacino gira con le anche e il busto con le spalle; oltre 25° di torsione tra i due
   // la pelle e i muscoli della vita si strozzavano (due segmenti che girano in versi diversi).
   // Il bacino segue il busto per la parte che avanza
@@ -499,20 +500,39 @@ export function bodyMatrices(meta: BodyMeta, J: Record<number, V3>, look?: V3, g
       }
     }
     if (!cv) continue;
-    const k0 = rest(`dita0_${s}`);
-    const k1 = rest(`dita1_${s}`);
-    const ix = rest(s === "L" ? 19 : 20);
-    const pk = rest(s === "L" ? 17 : 18);
-    if (!k0 || !k1 || !ix || !pk) continue;
-    const L = len(sub(k1, k0));
-    const F = norm(sub(k1, k0));
-    // a riposo i palmi guardano avanti: la piega va verso +z
-    const S = norm(cross(F, perpTo(F, [0, 0, 1], [0, 0, 1])));
-    const X = norm(sub(ix, pk));
+    const cf = curlFrame(meta, s);
+    if (!cf) continue;
+    const { K: k0, L, F, S, X } = cf;
     const o = s === "L" ? 0 : 16;
     cv.set([k0[0], k0[1], k0[2], L, F[0], F[1], F[2], c.a1 * c.k, S[0], S[1], S[2], c.a2 * c.k, X[0], X[1], X[2], c.spread * c.k * (dot(X, S) > 0 ? -1 : 1)], o);
   }
   return out;
+}
+
+/**
+ * Come si piegano le dita a riposo: nocche K, direzione delle dita F (lunghe L), verso il palmo P (dove
+ * vanno piegandosi), asse della piega S (lungo la fila delle nocche) e fila delle nocche X (indice→mignolo).
+ * Il verso del palmo viene dai punti della mano a riposo (prima si usava +z, ma nel modello le mani a
+ * riposo non hanno il palmo in avanti: le dita si piegavano di lato e attraversavano l'impugnatura).
+ */
+export function curlFrame(meta: BodyMeta, s: "L" | "R") {
+  const r = (k: string) => meta.rest[k] as V3 | undefined;
+  const k0 = r(`dita0_${s}`);
+  const k1 = r(`dita1_${s}`);
+  const ix = r(s === "L" ? "19" : "20");
+  const pk = r(s === "L" ? "17" : "18");
+  const W = r(s === "L" ? "15" : "16");
+  if (!k0 || !k1 || !ix || !pk || !W) return null;
+  const L = len(sub(k1, k0));
+  const F = norm(sub(k1, k0));
+  // per la mano destra questo prodotto guarda il palmo, per la sinistra il dorso
+  let palm = cross(sub(ix, W), sub(pk, W));
+  if (s === "L") palm = mul(palm, -1);
+  const X = norm(sub(ix, pk));
+  // verso il palmo, perpendicolare alle dita e alla fila delle nocche
+  const P = perpTo(F, sub(palm, mul(X, dot(palm, X))), [0, 0, 1]);
+  const S = norm(cross(F, P));
+  return { K: k0, L, F, P, S, X };
 }
 
 /**

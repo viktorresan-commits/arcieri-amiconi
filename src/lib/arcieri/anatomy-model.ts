@@ -42,7 +42,14 @@ export type Hud = {
   feet: V3;
 };
 /** J e hand servono al corpo anatomico vero (anatomy-body): ogni segmento segue questi punti */
-export type Model = { parts: Part[]; hud: Hud; center: V3; height: number; J?: Record<number, V3>; hand?: Hand; /** dove guarda il viso (orizzontale): segue il bersaglio durante il tiro */ headF?: V3; /** testa in giù (+) o in su (-), radianti: dal naso rispetto alle orecchie nel fotogramma */ headPitch?: number; /** quanto la mano della corda è in presa sulla corda (0..1) e quanto quella dell'arco stringe l'impugnatura */ grip?: { draw: number; bow: number }; /** il fotogramma del video nel piano del corpo (z = 0), in metri: sinistra, destra, sopra, sotto */ frame?: ImageFrame; /** corporatura trovata con l'aura (silhouette) dell'arciere */ build?: Build; /** asse dell'arco all'impugnatura (verso il flettente alto): la mano dell'arco ci si chiude attorno */ bowAxis?: V3 };
+/** posa dell'arco in un fotogramma: asse (verso il flettente alto), verso della freccia, mezza lunghezza, freccia incoccata */
+export type BowPose = { n: V3; u: V3; half: number; nocked: boolean };
+/**
+ * Posa già risolta sull'intero video (motion-solve): punti del corpo con ossa di lunghezza costante,
+ * niente scatti né compenetrazioni, e arco rigido filtrato. Se c'è, il fotogramma non si ricalcola da solo.
+ */
+export type PrePose = { J: Record<number, V3>; bow?: BowPose | null; /** verso del palmo per mano (sinistra, destra della persona), continuo nel tempo */ palms?: { L?: V3; R?: V3 } };
+export type Model = { parts: Part[]; /** posa dell'arco usata (per il filtro sull'intero video) */ bowPose?: BowPose; hud: Hud; center: V3; height: number; J?: Record<number, V3>; hand?: Hand; /** dove guarda il viso (orizzontale): segue il bersaglio durante il tiro */ headF?: V3; /** testa in giù (+) o in su (-), radianti: dal naso rispetto alle orecchie nel fotogramma */ headPitch?: number; /** quanto la mano della corda è in presa sulla corda (0..1) e quanto quella dell'arco stringe l'impugnatura */ grip?: { draw: number; bow: number }; /** il fotogramma del video nel piano del corpo (z = 0), in metri: sinistra, destra, sopra, sotto */ frame?: ImageFrame; /** corporatura trovata con l'aura (silhouette) dell'arciere */ build?: Build; /** asse dell'arco all'impugnatura (verso il flettente alto): la mano dell'arco ci si chiude attorno */ bowAxis?: V3; /** verso del palmo filtrato sull'intero video (vedi PrePose) */ palms?: { L?: V3; R?: V3 } };
 /** dove sta il fotogramma del video nello spazio della sagoma: serve a guardarla "come il video", punto su punto */
 export type ImageFrame = { x0: number; x1: number; yTop: number; yBot: number };
 
@@ -99,6 +106,10 @@ const BONES = {
   tibiaD: [26, 28, 0.42, 0.85, 1.2],
 } as const;
 type BoneName = keyof typeof BONES;
+/** lunghezza vera di un osso dell'arciere (calibrata sul video, altrimenti quella tipica) */
+export function boneLen(cal: BoneCal | null | undefined, name: BoneName): number {
+  return cal?.[name] ?? BONES[name][2];
+}
 /** lunghezze delle ossa dell'arciere, nelle stesse unità della sagoma */
 /**
  * Corporatura dall'aura: quanto la sagoma va ingrossata (o assottigliata) di traverso per coprire la
@@ -221,50 +232,73 @@ export function bodyPoints(lm: Landmark[], aspect: number, cal: BoneCal | null =
  * profondità, dalla parte più vicina, quanto basta a stare fuori (con lo spessore del braccio). Il busto
  * è un cilindro ellittico tra anche e spalle, largo come le spalle e profondo come un torace.
  */
-function keepArmsOut(out: Record<number, V3>, cal: BoneCal | null) {
+/**
+ * Il busto visto lungo la profondità: per un punto (con il suo spessore r) l'intervallo di profondità
+ * [z davanti, z dietro] che il busto occupa sulla sua linea di vista, o null se la linea non lo tocca.
+ * Il busto è un cilindro ellittico tra anche e spalle, largo come le spalle e profondo come un torace.
+ */
+export function torsoSpan(out: Record<number, V3>, cal: BoneCal | null): ((p: V3, r: number) => [number, number] | null) | null {
   const shL = out[11];
   const shR = out[12];
-  if (!shL || !shR) return;
+  if (!shL || !shR) return null;
   const hipL = out[23] ?? add(shL, [0, -0.5, 0]);
   const hipR = out[24] ?? add(shR, [0, -0.5, 0]);
   const shM = lerp(shL, shR, 0.5);
   const hipM = lerp(hipL, hipR, 0.5);
   const axis = sub(shM, hipM);
   const hgt = len(axis);
-  if (hgt < 0.2) return;
+  if (hgt < 0.2) return null;
   const up = mul(axis, 1 / hgt);
   const rgt = norm(sub(sub(shR, shL), mul(up, dot(sub(shR, shL), up))));
-  let fwd = norm(cross(rgt, up));
-  if (out[0] && dot(sub(out[0], shM), fwd) < 0) fwd = mul(fwd, -1);
+  const fwd = norm(cross(rgt, up));
   const shW = len(sub(shR, shL));
   const hipW = len(sub(hipR, hipL));
   const g = cal?.build?.torso ?? 1;
-  /** quanto spostare in profondità p perché stia fuori dal busto (0 se è già fuori) */
-  const push = (p: V3, r: number): number => {
+  return (p: V3, r: number) => {
     const v = sub(p, hipM);
     const h = dot(v, up) / hgt;
     // sopra le spalle c'è il collo, sotto le anche le gambe: lì il busto non c'è
-    if (h < -0.05 || h > 0.97) return 0;
+    if (h < -0.05 || h > 0.97) return null;
     const t = Math.max(0, Math.min(1, h));
     const A = (hipW * 0.62 + (shW * 0.4 - hipW * 0.62) * t) * Math.max(1, g * 0.95) + r;
     const B = (0.1 + 0.025 * Math.sin(Math.PI * Math.min(1, t * 1.1))) * g + r;
     const u = dot(v, rgt);
     const w = dot(v, fwd);
-    if ((u / A) ** 2 + (w / B) ** 2 >= 1) return 0;
     // ellisse lungo la direzione di profondità (0,0,1): ((u + k du)/A)^2 + ((w + k dw)/B)^2 = 1
     const du = rgt[2];
     const dw = fwd[2];
     const qa = (du / A) ** 2 + (dw / B) ** 2;
-    if (qa < 1e-6) return 0;
+    if (qa < 1e-6) return (u / A) ** 2 + (w / B) ** 2 < 1 ? [-Infinity, Infinity] : null;
     const qb = 2 * ((u * du) / (A * A) + (w * dw) / (B * B));
     const qc = (u / A) ** 2 + (w / B) ** 2 - 1;
-    const disc = Math.sqrt(Math.max(0, qb * qb - 4 * qa * qc));
-    const k1 = (-qb + disc) / (2 * qa);
-    const k2 = (-qb - disc) / (2 * qa);
-    // dalla parte dove il punto già sta (davanti o dietro al centro del busto): niente salti da un lato all'altro
-    const side = p[2] - (hipM[2] + up[2] * h * hgt) >= 0 ? 1 : -1;
-    const k = side > 0 ? Math.max(k1, k2) : Math.min(k1, k2);
-    return k + side * 0.005;
+    const disc = qb * qb - 4 * qa * qc;
+    if (disc <= 0) return null;
+    const sq = Math.sqrt(disc);
+    const k1 = (-qb - sq) / (2 * qa);
+    const k2 = (-qb + sq) / (2 * qa);
+    return [p[2] + k1, p[2] + k2];
+  };
+}
+
+/**
+ * Braccia fuori dal corpo: un braccio non può passare dentro il busto. Larghezza e altezza vengono dal
+ * video (esatte), quindi se il braccio nel video copre il busto sta davanti o dietro: si sposta solo in
+ * profondità, dalla parte più vicina (o da quella decisa sull'intero video, «side»), quanto basta a stare
+ * fuori (con lo spessore del braccio).
+ */
+export function keepArmsOut(out: Record<number, V3>, cal: BoneCal | null, /** lato fisso per gomito e polso (+1 verso la camera, -1 via) */ side?: Record<number, number>) {
+  const span = torsoSpan(out, cal);
+  if (!span) return;
+  /** quanto spostare in profondità p perché stia fuori dal busto (0 se è già fuori) */
+  const push = (p: V3, r: number, forced?: number): number => {
+    const sp = span(p, r);
+    if (!sp) return 0;
+    const [z0, z1] = sp;
+    const mid = (z0 + z1) / 2;
+    const sd = forced ?? (p[2] >= mid ? 1 : -1);
+    // dalla parte dove il punto già sta (o quella decisa): niente salti da un lato all'altro
+    if (sd > 0) return p[2] >= z1 ? 0 : z1 - p[2] + 0.005;
+    return p[2] <= z0 ? 0 : z0 - p[2] - 0.005;
   };
   for (const [sh, el, wr, fingers, hb] of [[11, 13, 15, [17, 19, 21], 33], [12, 14, 16, [18, 20, 22], 54]] as const) {
     if (!out[el] || !out[wr]) continue;
@@ -272,16 +306,22 @@ function keepArmsOut(out: Record<number, V3>, cal: BoneCal | null) {
       let dEl = 0;
       let dWr = 0;
       // gomito e polso, e i punti lungo omero e avambraccio
-      const pe = push(out[el], 0.05);
+      const pe = push(out[el], 0.05, side?.[el]);
       if (Math.abs(pe) > Math.abs(dEl)) dEl = pe;
-      const pw = push(out[wr], 0.04);
+      const pw = push(out[wr], 0.04, side?.[wr]);
       if (Math.abs(pw) > Math.abs(dWr)) dWr = pw;
+      // la mano (palmo e punta del medio, o l'indice della posa) non entra nel busto: va con il polso
+      const probes: [V3, number][] = out[hb + 9] ? [[out[hb + 9], 0.03], [out[hb + 12] ?? out[hb + 9], 0.012]] : out[fingers[1]] ? [[out[fingers[1]], 0.025]] : [];
+      for (const [q, r] of probes) {
+        const ph = push(q, r, side?.[wr]);
+        if (Math.abs(ph) > Math.abs(dWr)) dWr = ph;
+      }
       for (const f of [0.6, 0.8]) {
-        const q = push(lerp(out[sh], out[el], f), 0.055);
+        const q = push(lerp(out[sh], out[el], f), 0.055, side?.[el]);
         if (Math.abs(q / f) > Math.abs(dEl)) dEl = q / f;
       }
       for (const f of [0.25, 0.5, 0.75]) {
-        const q = push(lerp(out[el], out[wr], f), 0.045);
+        const q = push(lerp(out[el], out[wr], f), 0.045, side?.[wr] ?? side?.[el]);
         if (q && Math.abs(q) > Math.abs(dEl) * (1 - f) && Math.abs(q) > Math.abs(dWr) * f) {
           dEl = Math.abs(q) > Math.abs(dEl) ? q : dEl;
           dWr = Math.abs(q) > Math.abs(dWr) ? q : dWr;
@@ -296,6 +336,32 @@ function keepArmsOut(out: Record<number, V3>, cal: BoneCal | null) {
       out[wr] = [out[wr][0], out[wr][1], out[wr][2] + wShift];
       for (const f of fingers) if (out[f]) out[f] = [out[f][0], out[f][1], out[f][2] + wShift];
       for (let k = 0; k < 21; k++) if (out[hb + k]) out[hb + k] = [out[hb + k][0], out[hb + k][1], out[hb + k][2] + wShift];
+    }
+    // né dentro la testa: gomito, polso e mano stanno davanti o dietro al cranio (sfera tra le orecchie)
+    if (out[7] && out[8]) {
+      const hc = add(lerp(out[7], out[8], 0.5), [0, 0.025, 0]);
+      const RH = 0.088;
+      const pushHead = (p: V3, r: number) => {
+        const dx = p[0] - hc[0];
+        const dy = p[1] - hc[1];
+        const dz = p[2] - hc[2];
+        const R = RH + r;
+        if (dx * dx + dy * dy + dz * dz >= R * R) return 0;
+        const h = Math.sqrt(Math.max(0, R * R - dx * dx - dy * dy));
+        return (dz >= 0 ? h : -h) - dz + (dz >= 0 ? 0.004 : -0.004);
+      };
+      const pe = pushHead(out[el], 0.04);
+      if (pe) out[el] = [out[el][0], out[el][1], out[el][2] + pe];
+      let dh = pushHead(out[wr], 0.03);
+      for (const q of out[hb + 9] ? [out[hb + 9]] : []) {
+        const v = pushHead(q, 0.02);
+        if (Math.abs(v) > Math.abs(dh)) dh = v;
+      }
+      if (dh) {
+        out[wr] = [out[wr][0], out[wr][1], out[wr][2] + dh];
+        for (const f of fingers) if (out[f]) out[f] = [out[f][0], out[f][1], out[f][2] + dh];
+        for (let k = 0; k < 21; k++) if (out[hb + k]) out[hb + k] = [out[hb + k][0], out[hb + k][1], out[hb + k][2] + dh];
+      }
     }
   }
 }
@@ -530,8 +596,8 @@ const muscleCol = (a: number): V3 => {
   return [0.72 + 0.28 * t, 0.27 + 0.55 * t, 0.22 + 0.06 * t];
 };
 
-export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gear | null = null, cal: BoneCal | null = null, memo?: DepthMemo | null, time?: number): Model | null {
-  const J = bodyPoints(lm, aspect, cal, memo, time);
+export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gear | null = null, cal: BoneCal | null = null, memo?: DepthMemo | null, time?: number, pre?: PrePose | null): Model | null {
+  const J = pre?.J ?? bodyPoints(lm, aspect, cal, memo, time);
   if (!J) return null;
   const S = sides(hand);
   const parts: Part[] = [];
@@ -896,6 +962,14 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gea
     if (gear.bow.measured) half = Math.max(0.55, Math.min(0.9, len(sub(a, b)) / 2));
   }
   if (n[1] < 0) n = mul(n, -1);
+  // posa dell'arco filtrata sull'intero video: un corpo rigido che non trema
+  const bowPre = pre?.bow ?? null;
+  const rawBow: BowPose = { n, u, half, nocked: !loose && (Boolean(arrowSeen) || onString) };
+  if (bowPre) {
+    n = bowPre.n;
+    u = bowPre.u;
+    half = bowPre.half;
+  }
   // flettenti curvati verso il bersaglio (davanti alla presa), corda dietro
   const curve = (s: number): V3 => add(add(grip, mul(n, half * s)), mul(u, 0.02 - 0.13 * s * s));
   const steps = 44;
@@ -930,7 +1004,7 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gea
     parts.push({ ...seg(onBow(tq), nock, 0.0022, 0.0022, 1.0), mesh: "tube", color: [0.95, 0.95, 0.9], mode: 3, alpha: 0.9, act: 0, layer: "arco", alt: "real" });
   }
   // freccia: incoccata quando le dita sono sulla corda (in trazione o pronte a tirare)
-  const nocked = !loose && (Boolean(arrowSeen) || onString);
+  const nocked = bowPre ? !loose && bowPre.nocked : rawBow.nocked;
   // appena scoccata: per un istante la freccia vola via davanti all'arco (55 m/s), poi non c'è più
   if (loose && (gear?.loose ?? 1) < 0.2) {
     const fly = 55 * (gear?.loose ?? 0) + 0.05;
@@ -1005,6 +1079,8 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gea
     frame: imageFrame(lm, aspect) ?? undefined,
     build: cal?.build,
     bowAxis: n,
+    bowPose: rawBow,
+    palms: pre?.palms,
   };
 }
 

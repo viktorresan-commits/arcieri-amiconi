@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { boneCal, buildModel, depthMemo, v3, type BoneCal, type Build, type ImageFrame, type Model, type V3 } from "@/lib/arcieri/anatomy-model";
+import { boneCal, buildModel, depthMemo, v3, type BoneCal, type Build, type ImageFrame, type Model, type PrePose, type V3 } from "@/lib/arcieri/anatomy-model";
+import { solveMotion } from "@/lib/arcieri/motion-solve";
 import { bodySlices, buildFrom, overlap, rasterAura, sliceWidth, type Aura } from "@/lib/arcieri/aura";
 import { createAnatomyRenderer, lookAt, mul4, perspective } from "@/lib/arcieri/anatomy-render";
 import { BODY_CREDIT, loadBody } from "@/lib/arcieri/anatomy-body";
@@ -249,9 +250,9 @@ export async function sagomaPainter(W: number, H: number, quality: "hd" | "pieno
   return {
     canvas: out,
     /** disegna la posa; smooth: inquadratura che segue piano (video), altrimenti esatta (foto) */
-    paint(o: { lm: Landmark[]; aspect: number; hand: Hand; gear: Gear | null; cal: BoneCal | null; time: number; smooth?: boolean; view?: typeof sagomaView; /** centro dell'inquadratura scelto dal modello (es. una mano), per i dettagli */ at?: (m: Model) => V3; /** inquadratura "come il video" (con l'eventuale ingrandimento, in frazioni del riquadro) */ frameView?: { z: number; nx: number; ny: number } | null; /** crediti scritti sull'immagine (no per i fotogrammi del play: sotto c'è già la riga) */ credit?: boolean }) {
+    paint(o: { lm: Landmark[]; aspect: number; hand: Hand; gear: Gear | null; cal: BoneCal | null; time: number; smooth?: boolean; view?: typeof sagomaView; /** centro dell'inquadratura scelto dal modello (es. una mano), per i dettagli */ at?: (m: Model) => V3; /** inquadratura "come il video" (con l'eventuale ingrandimento, in frazioni del riquadro) */ frameView?: { z: number; nx: number; ny: number } | null; /** crediti scritti sull'immagine (no per i fotogrammi del play: sotto c'è già la riga) */ credit?: boolean; /** posa già risolta sull'intero video (motion-solve) */ pre?: PrePose | null }) {
       const view = o.view ?? sagomaView;
-      const model = buildModel(o.lm, o.aspect, o.hand, o.gear, o.cal, o.smooth ? memo : null, o.time);
+      const model = buildModel(o.lm, o.aspect, o.hand, o.gear, o.cal, o.pre ? null : o.smooth ? memo : null, o.time, o.pre ?? null);
       const g = ctx.createRadialGradient(W * 0.45, H * 0.35, 0, W * 0.45, H * 0.35, Math.max(W, H) * 0.8);
       const st: SagomaStyle = view.style ?? 0;
       R.setStyle(st);
@@ -313,7 +314,7 @@ export function Anatomy3D({
    * Tutti i fotogrammi dell'analisi: la sagoma si prepara una volta (immagine per immagine, come il video)
    * e durante il play si mostrano quelle, sincronizzate con il video: fluida anche sui telefoni più lenti
    */
-  track?: { t: number[]; at: (i: number) => { lm: Landmark[] | null; gear: Gear | null } } | null;
+  track?: { t: number[]; at: (i: number) => { lm: Landmark[] | null; gear: Gear | null; /** dentro un tiro (freccia sulla corda) */ armed?: boolean } } | null;
   /** il tempo del video, letto a ogni immagine dello schermo */
   clock?: () => number;
   /** corporatura presa dall'aura dell'arciere (silhouette nel video): spessore di busto, braccia, gambe, testa */
@@ -472,13 +473,49 @@ export function Anatomy3D({
   const input = useRef({ lm, lmRef, seq, aspect, hand: effHand, gearRef, cal: fixedCal, mirror, inBox, view2d: full ? null : (view2d ?? null), playing: Boolean(transport?.playing), clock, full });
   input.current = { lm, lmRef, seq, aspect, hand: effHand, gearRef, cal: fixedCal, mirror, inBox, view2d: full ? null : (view2d ?? null), playing: Boolean(transport?.playing), clock, full };
 
+  // ---- movimento ricostruito sull'intero video (ossa intere, niente scatti né compenetrazioni) ----
+  const [solved, setSolved] = useState<{ key: string; t: number[]; lm: (Landmark[] | null)[]; gear: (Gear | null)[]; pre: (PrePose | null)[] } | null>(null);
+  const solvedRef = useRef(solved);
+  solvedRef.current = solved;
+  useEffect(() => {
+    if (!track || track.t.length < 4) {
+      setSolved(null);
+      return;
+    }
+    let alive = true;
+    const id = window.setTimeout(() => {
+      const lm: (Landmark[] | null)[] = [];
+      const gear: (Gear | null)[] = [];
+      const fr = track.t.map((t, i) => {
+        const a = track.at(i);
+        const l = a.lm ? (mirror ? swapSides(a.lm) : a.lm) : null;
+        lm.push(l);
+        gear.push(a.gear);
+        return { t, lm: l, gear: a.gear, armed: a.armed };
+      });
+      let pre: (PrePose | null)[] = [];
+      try {
+        pre = solveMotion(fr, aspect, effHand, fixedCal ?? null);
+      } catch {
+        pre = fr.map(() => null);
+      }
+      if (!alive) return;
+      const key = `${mirror}|${effHand}|${aspect.toFixed(4)}|${JSON.stringify(fixedCal ?? null)}|${track.t.length}|${track.t[0]}|${track.t[track.t.length - 1]}`;
+      setSolved({ key, t: track.t, lm, gear, pre });
+    }, 30);
+    return () => {
+      alive = false;
+      window.clearTimeout(id);
+    };
+  }, [track, fixedCal, mirror, effHand, aspect]);
+
   // ---- play fluido: la sagoma di ogni fotogramma dell'analisi preparata una volta, come immagini ----
   const cacheRef = useRef<{ key: string; t: number[]; blobs: (Blob | null)[] } | null>(null);
   const cacheCanvas = useRef<HTMLCanvasElement>(null);
   const [prep, setPrep] = useState<number | null>(null);
   const layersKey = `${layers.pelle}${layers.muscolo}${layers.osso}${layers.punti}${layers.quote}`;
   useEffect(() => {
-    if (!track || !inBox || full || track.t.length < 2) return;
+    if (!track || !inBox || full || track.t.length < 2 || !solved) return;
     let alive = true;
     const run = async () => {
       const box = glCanvas.current;
@@ -486,7 +523,7 @@ export function Anatomy3D({
       const k = Math.min(1.5, window.devicePixelRatio || 1);
       const W = Math.round((box.clientWidth * k) / 2) * 2;
       const H = Math.round((box.clientHeight * k) / 2) * 2;
-      const key = `${W}x${H}|${style}|${layersKey}|${mirror}|${effHand}|${aspect.toFixed(4)}|${JSON.stringify(fixedCal ?? null)}|${track.t.length}|${track.t[0]}|${track.t[track.t.length - 1]}`;
+      const key = `${W}x${H}|${style}|${layersKey}|${solved.key}`;
       if (cacheRef.current?.key === key) return;
       cacheRef.current = null;
       const painter = await sagomaPainter(W, H, "pieno", k).catch(() => null);
@@ -500,9 +537,10 @@ export function Anatomy3D({
       const view = { yaw: 0, pitch: 0, zoom: 1, layers: { ...layers }, style };
       try {
         for (let i = 0; i < track.t.length && alive; i++) {
-          const { lm: fl, gear } = track.at(i);
+          const fl = solved.lm[i];
+          const gear = solved.gear[i];
           if (fl) {
-            painter.paint({ lm: mirror ? swapSides(fl) : fl, aspect, hand: effHand, gear, cal: fixedCal, time: track.t[i], smooth: true, view, frameView: { z: 1, nx: 0, ny: 0 }, credit: false });
+            painter.paint({ lm: fl, aspect, hand: effHand, gear, cal: fixedCal, time: track.t[i], smooth: true, view, frameView: { z: 1, nx: 0, ny: 0 }, credit: false, pre: solved.pre[i] });
             blobs[i] = await new Promise<Blob | null>((res) => painter.canvas.toBlob(res, "image/jpeg", 0.86));
           }
           if (i % 8 === 0) setPrep(i / track.t.length);
@@ -521,7 +559,7 @@ export function Anatomy3D({
       setPrep(null);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [track, fixedCal, style, layersKey, mirror, effHand, aspect, inBox, full]);
+  }, [track, solved, fixedCal, style, layersKey, mirror, effHand, aspect, inBox, full]);
 
   useEffect(() => {
     const canvas = glCanvas.current;
@@ -722,7 +760,24 @@ export function Anatomy3D({
             return mixLm(p, t[i], a, t[i].visibility);
           });
         if (far < 0.0006 && !playing) moving = false;
-        model = buildModel(smooth, asp, hd, gr?.current ?? null, fc ?? live.current.cal, memo, time) ?? model;
+        // video analizzato: la posa ricostruita sull'intero video nel fotogramma più vicino (la stessa del play)
+        const sv = solvedRef.current;
+        const clk = input.current.clock;
+        let fromSolved: Model | null = null;
+        if (sv && clk) {
+          const tNow = clk();
+          let lo = 0;
+          let hi = sv.t.length - 1;
+          while (hi - lo > 1) {
+            const mid = (lo + hi) >> 1;
+            if (sv.t[mid] <= tNow) lo = mid;
+            else hi = mid;
+          }
+          const i = Math.abs(sv.t[hi] - tNow) < Math.abs(sv.t[lo] - tNow) ? hi : lo;
+          const l = sv.lm[i];
+          if (l && sv.pre[i] && Math.abs(sv.t[i] - tNow) < 0.06) fromSolved = buildModel(l, asp, hd, sv.gear[i], fc ?? live.current.cal, null, sv.t[i], sv.pre[i]);
+        }
+        model = fromSolved ?? buildModel(smooth, asp, hd, gr?.current ?? null, fc ?? live.current.cal, memo, time) ?? model;
       }
       if (emptyRef.current !== !model) {
         emptyRef.current = !model;

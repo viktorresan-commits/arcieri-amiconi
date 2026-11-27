@@ -3,7 +3,7 @@
  * Usato dalla vista 3D dell'analisi e dalle immagini dei muscoli per le zone del corpo.
  */
 import { v3, type GearMesh, type Model, type Part, type V3 } from "./anatomy-model";
-import { bodyMatrices, groupValues, type BodyBatch, type BodyData, type BodyLevel, type BodyMeta } from "./anatomy-body";
+import { bodyMatrices, curlFrame, groupValues, type BodyBatch, type BodyData, type BodyLevel, type BodyMeta } from "./anatomy-body";
 import { flexInfo, flexValues, skinWithMuscles, type FlexInfo } from "./anatomy-flex";
 import { loadGlb } from "./glb-geo";
 import { sides } from "./pose-analysis";
@@ -724,15 +724,15 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     const look: V3 | undefined = model.headF ? [model.headF[0] * Math.cos(pitch), -Math.sin(pitch), model.headF[2] * Math.cos(pitch)] : undefined;
     let J = model.J;
     if (grips) {
-      const first = bodyMatrices(meta, J, look, grips, curlBuf, fingBuf);
+      const first = bodyMatrices(meta, J, look, grips, curlBuf, fingBuf, undefined, model.palms);
       J = seatHands(meta, J, first, [
         grips.wrap.k > 0.3 ? { side: grips.wrap.side, base: grips.wrap.side === "L" ? 33 : 54, at: pts.grip, hole: "wrap" as const } : null,
         grips.hook.k > 0.3 ? { side: grips.hook.side, base: grips.hook.side === "L" ? 33 : 54, at: pts.nock, hole: "hook" as const } : null,
       ]);
     }
     // ossa e muscoli restano quelli dell'atlante; la corporatura dell'arciere (aura: grasso, vestiti) è nella pelle
-    const mats = bodyMatrices(meta, J, look, grips, curlBuf, fingBuf);
-    const skinMats = model.build ? bodyMatrices(meta, J, look, grips, undefined, undefined, model.build) : mats;
+    const mats = bodyMatrices(meta, J, look, grips, curlBuf, fingBuf, undefined, model.palms);
+    const skinMats = model.build ? bodyMatrices(meta, J, look, grips, undefined, undefined, model.build, model.palms) : mats;
     // matrici dei segmenti come tre righe ciascuna (la quarta è sempre 0 0 0 1)
     const nSeg = Math.min(21, meta.segments.length);
     const rows = (m: Float32Array) => {
@@ -950,18 +950,16 @@ function seatHands(meta: BodyMeta, J: Record<number, V3>, mats: Float32Array, ha
   for (const h of hands) {
     if (!h) continue;
     const m = meta.segments.indexOf(`mano_${h.side}`);
-    const k0 = meta.rest[`dita0_${h.side}`];
-    const k1 = meta.rest[`dita1_${h.side}`];
-    if (m < 0 || !k0 || !k1) continue;
-    const F = v3.norm(v3.sub(k1, k0));
-    const L = v3.len(v3.sub(k1, k0));
+    const cf = curlFrame(meta, h.side);
+    if (m < 0 || !cf) continue;
+    const { K: k0, F, L, P } = cf;
     // a riposo i palmi guardano avanti (+z): le dita si piegano da quella parte
     // presa mediterranea: la cocca tra indice e medio, cioè un quarto della mano verso l'indice
     const ixR = meta.rest[h.side === "L" ? "19" : "20"];
     const pkR = meta.rest[h.side === "L" ? "17" : "18"];
     const toIndex: V3 = ixR && pkR ? v3.mul(v3.sub(ixR, pkR), 0.25) : [0, 0, 0];
     // mano dell'arco: il centro del cerchio delle dita piegate, 3,2 cm davanti alle nocche (vedi la piega in anatomy-body)
-    const holeRest: V3 = h.hole === "wrap" ? v3.add(v3.add(k0, [0, 0, 0.032]), v3.mul(F, 0.002)) : v3.add(v3.add(v3.add(k0, v3.mul(F, L * 0.42)), [0, 0, 0.012]), toIndex);
+    const holeRest: V3 = h.hole === "wrap" ? v3.add(v3.add(k0, v3.mul(P, 0.032)), v3.mul(F, 0.002)) : v3.add(v3.add(v3.add(k0, v3.mul(F, L * 0.42)), v3.mul(P, 0.012)), toIndex);
     const hole = xf(mats, m, holeRest);
     let d = v3.sub(h.at, hole);
     const dl = v3.len(d);
