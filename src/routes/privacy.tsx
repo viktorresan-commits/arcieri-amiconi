@@ -23,7 +23,7 @@ const SECTIONS: { title: string; text: string[] }[] = [
       "Profilo: nome, cognome, soprannome, foto o volto dell'avatar, arco, compagnia, note che scrivi tu.",
       "Tiro: allenamenti, frecce e punteggi, posizione delle frecce sul bersaglio, gare, obiettivi, attrezzatura, lista acquisti.",
       "Analisi del gesto: i video restano sul tuo telefono; se scegli di salvare un'analisi, conserviamo i numeri che ne ricava l'app (angoli e tempi) e una piccola immagine di anteprima.",
-      "Segreteria della compagnia: quota pagata o no, data di scadenza e tipo del certificato medico, presenze ai corsi. Nessun dato sanitario oltre alla data di scadenza.",
+      "Segreteria della compagnia: quota pagata o no, scadenza della tessera della compagnia e della tessera FITAST, data di scadenza e tipo del certificato medico, presenze ai corsi. Nessun dato sanitario oltre alla data di scadenza.",
     ],
   },
   {

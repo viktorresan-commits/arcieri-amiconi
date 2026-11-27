@@ -312,6 +312,7 @@ export const deleteMyAccount = createServerFn({ method: "POST" })
     await tidy("delete from gestures where member_id = $1", [memberId]);
     await tidy("delete from company_dues where user_id = $1", [context.userId]);
     await tidy("delete from company_certs where user_id = $1", [context.userId]);
+    await tidy("delete from company_fitast_cards where user_id = $1", [context.userId]);
     await tidy("delete from course_presence where user_id = $1", [context.userId]);
     await tidy("delete from role_requests where user_id = $1", [context.userId]);
     await tidy("delete from avatars where user_id = $1", [context.userId]);

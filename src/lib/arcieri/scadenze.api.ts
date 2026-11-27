@@ -1,5 +1,5 @@
 /**
- * Le proprie scadenze: tessera della stagione e certificato medico. Ognuno vede solo le sue, dal profilo,
+ * Le proprie scadenze: tessera della compagnia, tessera FITAST e certificato medico. Ognuno vede solo le sue, dal profilo,
  * e può scriverle se la segreteria non l'ha ancora fatto; la segreteria della compagnia vede le stesse date.
  */
 import { createServerFn } from "@tanstack/react-start";
@@ -21,15 +21,16 @@ export const myDeadlines = createServerFn({ method: "POST" })
     const sql = await db();
     await ensureMember(sql, context.userId);
     const d = await deadlinesOf(sql, context.userId);
-    return { card: d.card, cert: d.cert };
+    return { card: d.card, fitast: d.fitast, cert: d.cert };
   });
 
 export const setMyDeadlines = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((input: unknown) => {
-    const raw = (input ?? {}) as { cardUntil?: unknown; certUntil?: unknown; certKind?: unknown };
+    const raw = (input ?? {}) as { cardUntil?: unknown; fitastUntil?: unknown; certUntil?: unknown; certKind?: unknown };
     return {
       cardUntil: dateOrEmpty(raw.cardUntil),
+      fitastUntil: dateOrEmpty(raw.fitastUntil),
       certUntil: dateOrEmpty(raw.certUntil),
       certKind: raw.certKind === "non agonistico" ? "non agonistico" : "agonistico",
     };
@@ -43,6 +44,12 @@ export const setMyDeadlines = createServerFn({ method: "POST" })
         insert into company_certs (company_id, user_id, valid_until, kind, updated_at)
         values (${companyId}, ${context.userId}, ${data.certUntil || null}, ${data.certKind}, now())
         on conflict (company_id, user_id) do update set valid_until = excluded.valid_until, kind = excluded.kind, updated_at = now()`;
+    }
+    if (data.fitastUntil !== undefined) {
+      await sql`
+        insert into company_fitast_cards (company_id, user_id, valid_until, updated_at)
+        values (${companyId}, ${context.userId}, ${data.fitastUntil || null}, now())
+        on conflict (company_id, user_id) do update set valid_until = excluded.valid_until, updated_at = now()`;
     }
     if (data.cardUntil !== undefined) {
       if (data.cardUntil) {

@@ -70,6 +70,8 @@ export const secretaryBoard = createServerFn({ method: "POST" })
     const dues = await sql<{ user_id: string; paid: boolean; paid_on: unknown; amount_cents: number | null; note: string; card_until: unknown }>`
       select user_id, paid, paid_on, amount_cents, note, card_until from company_dues where company_id = ${companyId} and season = ${data.season}`;
     const certs = await sql<{ user_id: string; valid_until: unknown; kind: string }>`select user_id, valid_until, kind from company_certs where company_id = ${companyId}`;
+    const fitastCards = await sql<{ user_id: string; valid_until: unknown }>`select user_id, valid_until from company_fitast_cards where company_id = ${companyId}`.catch(() => []);
+    const fitastOf = new Map(fitastCards.map((x) => [x.user_id, dayOf(x.valid_until)]));
     const days = await sql<{ id: number; day: unknown; title: string }>`select id, day, title from course_days where company_id = ${companyId} order by day desc, id desc limit 40`;
     const presence = await sql<{ day_id: number; user_id: string }>`
       select p.day_id, p.user_id from course_presence p join course_days d on d.id = p.day_id where d.company_id = ${companyId}`;
@@ -91,6 +93,7 @@ export const secretaryBoard = createServerFn({ method: "POST" })
         amount: d?.amount_cents != null ? asNum(d.amount_cents) / 100 : null,
         cardUntil: d ? dayOf(d.card_until) : "",
         certUntil: until,
+        fitastUntil: fitastOf.get(p.userId) ?? "",
         certKind: c?.kind ?? "agonistico",
         certDays: daysLeft,
         attended,
@@ -157,6 +160,27 @@ export const setCard = createServerFn({ method: "POST" })
       insert into company_dues (company_id, user_id, season, card_until, updated_at)
       values (${companyId}, ${data.userId}, ${data.season}, ${data.cardUntil}, now())
       on conflict (company_id, user_id, season) do update set card_until = excluded.card_until, updated_at = now()`;
+    return { ok: true as const };
+  });
+
+/** scadenza della tessera FITAST */
+export const setFitastCard = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: unknown) => {
+    const raw = (input ?? {}) as { companyId?: unknown; userId?: unknown; validUntil?: unknown };
+    const until = String(raw.validUntil ?? "");
+    if (until && !/^\d{4}-\d{2}-\d{2}$/.test(until)) throw new Error("Data non valida.");
+    return { companyId: asNum(raw.companyId), userId: clip(raw.userId, 80), validUntil: until || null };
+  })
+  .handler(async ({ context, data }) => {
+    const sql = await db();
+    const me = await ensureMember(sql, context.userId);
+    const { companyId } = await access(sql, me, context.userId, data.companyId);
+    await checkPerson(sql, companyId, data.userId);
+    await sql`
+      insert into company_fitast_cards (company_id, user_id, valid_until, updated_at)
+      values (${companyId}, ${data.userId}, ${data.validUntil}, now())
+      on conflict (company_id, user_id) do update set valid_until = excluded.valid_until, updated_at = now()`;
     return { ok: true as const };
   });
 

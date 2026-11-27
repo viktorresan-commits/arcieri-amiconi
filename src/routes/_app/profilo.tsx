@@ -257,9 +257,6 @@ function Page() {
         </Link>
       </div>
 
-      {/* tessera e certificato medico: le scadenze di ognuno, sempre sotto gli occhi */}
-      <MyDeadlines />
-
       {/* storie da condividere: foto con un compagno o video con i propri numeri */}
       <Link to="/riepilogo" search={{ vista: "foto" }} className="aa-press flex min-h-14 items-center gap-3 rounded-2xl border border-[#e0b15a]/35 bg-[linear-gradient(110deg,rgba(224,177,90,0.16),rgba(181,72,106,0.12))] px-3 py-2.5">
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#e0b15a]/25"><Glyph name="camera" size={20} /></span>
@@ -327,6 +324,8 @@ function Page() {
             <p className="text-[0.7rem] text-muted">{autoState === "busy" ? "Salvo…" : autoState === "err" ? "Non salvato: controlla la rete." : ""}</p>
           </Card>
         ) : null}
+        {/* sotto i dati: certificato medico, tessera FITAST e tessera della compagnia, con i giorni che mancano */}
+        {tab === "io" ? <MyDeadlines /> : null}
         {tab === "io" ? (
           <Card className="grid gap-2">
             <IconTitle icon="trophy" color="#c9962f" sub="Con il nome collegato le gare del campionato si riempiono da sole.">Nome su FITAST</IconTitle>

@@ -4,7 +4,7 @@ import { Avatar, Button, Card, Empty, ErrorNote, HoldDelete, Loading, PageHead, 
 import { useLoad, messageOf } from "@/lib/arcieri/use-load";
 import { useEntryState } from "@/lib/arcieri/back-restore";
 import { saveFile, whatsappLink } from "@/lib/arcieri/native";
-import { addCourseDay, deleteCourseDay, secretaryBoard, setCard, setCert, setDue, setPresence } from "@/lib/arcieri/segreteria.api";
+import { addCourseDay, deleteCourseDay, secretaryBoard, setCard, setCert, setDue, setFitastCard, setPresence } from "@/lib/arcieri/segreteria.api";
 
 export const Route = createFileRoute("/_app/segreteria")({ component: Page });
 
@@ -62,8 +62,8 @@ export function SegreteriaBody({ embedded = false }: { embedded?: boolean }) {
   }
 
   function exportCsv() {
-    const head = ["Nome", `Quota ${b.season}`, "Pagata il", "Importo", "Tessera fino al", "Certificato fino al", "Tipo", "Presenze"];
-    const lines = b.people.map((p) => [p.name, p.paid ? "pagata" : "da pagare", itDate(p.paidOn), p.amount != null ? p.amount.toFixed(2).replace(".", ",") : "", itDate(p.cardUntil || (p.paid ? `${b.season}-12-31` : "")), itDate(p.certUntil), p.certUntil ? p.certKind : "", p.attended]);
+    const head = ["Nome", `Quota ${b.season}`, "Pagata il", "Importo", "Tessera fino al", "Tessera FITAST fino al", "Certificato fino al", "Tipo", "Presenze"];
+    const lines = b.people.map((p) => [p.name, p.paid ? "pagata" : "da pagare", itDate(p.paidOn), p.amount != null ? p.amount.toFixed(2).replace(".", ",") : "", itDate(p.cardUntil || (p.paid ? `${b.season}-12-31` : "")), itDate(p.fitastUntil), itDate(p.certUntil), p.certUntil ? p.certKind : "", p.attended]);
     const text = [head, ...lines].map((r) => r.map(csvCell).join(";")).join("\n");
     void saveFile(new Blob(["﻿" + text], { type: "text/csv;charset=utf-8" }), `segreteria-${b.company.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${b.season}.csv`);
   }
@@ -195,6 +195,21 @@ export function SegreteriaBody({ embedded = false }: { embedded?: boolean }) {
                     <option value="non agonistico">non agonistico</option>
                   </Select>
                 </div>
+                {/* tessera FITAST: senza non si gareggia */}
+                <label className="flex items-center gap-2 pl-11 text-xs text-muted">
+                  <span className="shrink-0">Tessera FITAST fino al</span>
+                  <TextInput
+                    type="date"
+                    aria-label={`Scadenza della tessera FITAST di ${p.name}`}
+                    value={p.fitastUntil}
+                    className="!min-h-9 flex-1"
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      patch(p.userId, { fitastUntil: v });
+                      void run(() => setFitastCard({ data: { companyId: cid, userId: p.userId, validUntil: v } }));
+                    }}
+                  />
+                </label>
               </div>
             );
           })}
