@@ -1907,7 +1907,9 @@ export const listGadgets = createServerFn({ method: "GET" })
     const sql = await db();
     await ensureMember(sql, context.userId);
     const members = await sql<{ user_id: string }>`select user_id from members where user_id is not null`;
-    for (const member of members) await syncBadges(sql, member.user_id);
+    // le gare di tutti in una lettura sola (app, portale e archivio FITAST), poi i premi di ognuno
+    const loads = await garaLoads(sql).catch(() => new Map<string, GaraLoad[]>());
+    for (const member of members) await syncBadges(sql, member.user_id, loads.get(member.user_id) ?? []);
     const rows = await sql<{ user_id: string; code: string; given_name: string; family_name: string; nickname: string; slug: string; unlocked_at: unknown }>`
       select u.user_id, u.code, m.given_name, m.family_name, m.nickname, m.slug, u.unlocked_at
       from user_achievements u

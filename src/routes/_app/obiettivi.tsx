@@ -12,7 +12,7 @@ import { Insignia, type InsSymbol } from "@/components/insignia";
 import { KindChip } from "@/components/kind-emblem";
 import { Confetti, Sparkle } from "@/components/celebrate";
 import { Glyph } from "@/components/icons";
-import { LevelCrest, levelHalo } from "@/components/level-crest";
+import { LEVEL_TIERS, LevelCrest, levelHalo } from "@/components/level-crest";
 import { levelOf, useXp } from "@/lib/arcieri/xp";
 
 export const Route = createFileRoute("/_app/obiettivi")({ component: Page });
@@ -138,12 +138,7 @@ function xpAt(level: number) {
 function Levels() {
   const xp = useXp();
   const lv = levelOf(Math.max(0, xp.xp));
-  const tiers = [
-    { from: 1, to: 4, name: "Bronzo" },
-    { from: 5, to: 9, name: "Argento" },
-    { from: 10, to: 19, name: "Oro" },
-    { from: 20, to: null as number | null, name: "Oro reale" },
-  ];
+  const tiers = LEVEL_TIERS.map((t, i) => ({ from: t.from, to: LEVEL_TIERS[i + 1] ? LEVEL_TIERS[i + 1].from - 1 : (null as number | null), name: t.name }));
   // i propri punti voce per voce (quelli delle attività li ricalcola il server dai dati, anche del portale)
   const p = xp.parts;
   const mine: [string, number][] = p

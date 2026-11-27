@@ -6,7 +6,8 @@ import { archerBoard, listGadgets } from "@/lib/arcieri/club.api";
 import { bowLabel, memberLabel } from "@/lib/arcieri/labels";
 import { useLoad } from "@/lib/arcieri/use-load";
 import { Avatar } from "@/components/kit";
-import { PrizeMark } from "@/components/prize-mark";
+import { PrizeMark, prizeTier } from "@/components/prize-mark";
+import { PiazzoleMark } from "@/components/piazzole-mark";
 import { LevelCrest, haloOfXp } from "@/components/level-crest";
 import { RankBanner } from "@/components/rank-banner";
 import { Glyph } from "@/components/icons";
@@ -62,7 +63,8 @@ export function ArcherStage({ data, look: lookIn, avatar, onArcherTap, corner }:
   // gli ultimi tre premi vinti, dal più recente
   const latest = (gadgets.data?.prizes ?? [])
     .flatMap((prize) => prize.holders.filter((h) => h.userId === data.userId).map((h) => ({ ...prize, at: h.unlockedAt })))
-    .sort((a, b) => b.at.localeCompare(a.at))
+    // dal più recente; sbloccati insieme (per esempio dopo un'importazione dal portale) prima il più prezioso
+    .sort((a, b) => b.at.slice(0, 16).localeCompare(a.at.slice(0, 16)) || prizeTier(b.code).rank - prizeTier(a.code).rank)
     .slice(0, 3);
   const look = lookIn ?? AVATAR_DEFAULT;
   const rank = data.stats.fitast;
@@ -112,7 +114,11 @@ export function ArcherStage({ data, look: lookIn, avatar, onArcherTap, corner }:
         </div>
         {corner}
       </div>
-      <div className="absolute bottom-[8%] right-4 top-28 flex w-[23%] flex-col items-center justify-center gap-3">
+      {/* le piazzole fatte, come un picchetto in basso a destra (di fronte allo stemma del livello) */}
+      <div className="aa-prize-float absolute bottom-[5%] right-4 w-[23%] grid justify-items-center" style={{ animationDelay: "0.25s" }}>
+        <PiazzoleMark n={data.stats.piazzole} id={`pz${data.id}`} />
+      </div>
+      <div className="absolute bottom-[27%] right-4 top-28 flex w-[23%] flex-col items-center justify-center gap-2">
         {latest.length ? (
           latest.map((prize, i) => (
             <div key={prize.code} className="aa-prize-float grid justify-items-center text-center" style={{ animationDelay: `${0.2 + i * 0.15}s` }}>

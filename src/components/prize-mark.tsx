@@ -1,15 +1,17 @@
 import { useId, type ReactNode } from "react";
 import { glyphArt, type IconName } from "./icons";
 import { Insignia, type InsEnamel, type InsMetal, type InsShape, type InsSymbol } from "./insignia";
+import { ladderOf, type LadderId } from "@/lib/arcieri/prize-ladders";
 
-const LADDERS = {
-  arrow: ["arrows_100", "arrows_500", "arrows_1000", "arrows_5000"],
-  bow: ["first_session", "sessions_5", "sessions_10", "sessions_50", "sessions_100"],
-  target: ["first_comp", "gare_5", "gare_10"],
-  medal: ["champ_10", "champ_50", "champ_100", "champ_150", "champ_200", "champ_300", "champ_400", "champ_500", "champ_750", "champ_1000"],
-  flame: ["streak_7", "days_30"],
-  rise: ["first_record", "improve_5"],
-} as const;
+/** famiglie dei premi (le scale e i premi singoli) */
+type Family = "arrow" | "bow" | "target" | "podium" | "crown" | "peak" | "medal" | "flame" | "rise";
+const FAMILY_OF: Record<LadderId, Family> = { frecce: "arrow", allenamenti: "bow", gare: "target", podi: "podium", vittorie: "crown", piazzole: "peak", campionato: "medal" };
+const SINGLE: Record<string, { symbol: Family; index: number; len: number }> = {
+  streak_7: { symbol: "flame", index: 0, len: 2 },
+  days_30: { symbol: "flame", index: 1, len: 2 },
+  first_record: { symbol: "rise", index: 0, len: 2 },
+  improve_5: { symbol: "rise", index: 1, len: 2 },
+};
 
 const METALS = ["bronze", "silver", "gold", "platinum"] as const;
 
@@ -21,32 +23,42 @@ const RING: Record<string, { label: string; color: string }> = {
   platinum: { label: "Platino", color: "#efeaf8" },
 };
 
-const FAMILY = ["arrow", "target", "medal", "bow", "rise", "flame"];
+/** a parità di metallo e stelle, quale premio si mostra prima */
+const FAMILY: Family[] = ["medal", "crown", "podium", "target", "peak", "arrow", "bow", "rise", "flame"];
 
 export type PrizeTier = {
-  symbol: keyof typeof LADDERS;
+  symbol: Family;
   metal: "base" | (typeof METALS)[number];
   stars: number;
   rank: number;
   label: string;
+  /** il gradino nella scala (0 = il primo) e quanti gradini ha la scala */
+  index: number;
+  len: number;
 };
 
+/**
+ * Metallo e stelle di un premio: il primo gradino è di ferro, poi bronzo, argento, oro e platino,
+ * ognuno con le sue stelle. Le scale lunghe hanno più stelle per metallo, così l'ultimo gradino è sempre platino.
+ */
 export function prizeTier(code: string): PrizeTier {
-  for (const [symbol, codes] of Object.entries(LADDERS) as Array<[keyof typeof LADDERS, readonly string[]]>) {
-    const index = codes.indexOf(code);
-    if (index < 0) continue;
-    if (index === 0) {
-      return { symbol, metal: "base", stars: 0, rank: 6 - FAMILY.indexOf(symbol), label: "" };
-    }
-    const step = index - 1;
-    const band = Math.min(METALS.length - 1, Math.floor(step / 4));
-    const stars = Math.floor(step / 4) >= METALS.length ? 3 : step % 4;
-    const metal = METALS[band];
-    const starLabel = stars === 0 ? "" : stars === 1 ? " · 1 stella" : ` · ${stars} stelle`;
-    const rank = (band + 1) * 100 + stars * 10 + (6 - FAMILY.indexOf(symbol));
-    return { symbol, metal, stars, rank, label: `${RING[metal].label}${starLabel}` };
-  }
-  return { symbol: "arrow", metal: "base", stars: 0, rank: 0, label: "" };
+  const lad = ladderOf(code);
+  const single = SINGLE[code];
+  const symbol: Family = lad ? FAMILY_OF[lad.ladder.id] : single?.symbol ?? "arrow";
+  const index = lad ? lad.index : single?.index ?? 0;
+  const len = lad ? lad.ladder.steps.length : single?.len ?? 1;
+  const fam = FAMILY.length - FAMILY.indexOf(symbol);
+  if (!lad && !single) return { symbol, metal: "base", stars: 0, rank: 0, label: "", index, len };
+  if (index === 0 && len > 2) return { symbol, metal: "base", stars: 0, rank: fam, label: "", index, len };
+  // i gradini dopo il primo si dividono in parti uguali fra i quattro metalli; i premi singoli: bronzo e argento
+  const step = len > 2 ? index - 1 : index;
+  const span = len > 2 ? len - 1 : METALS.length;
+  const band = Math.min(METALS.length - 1, Math.floor((step * METALS.length) / span));
+  const stars = Math.min(3, step - Math.ceil((band * span) / METALS.length));
+  const metal = METALS[band];
+  const starLabel = stars === 0 ? "" : stars === 1 ? " · 1 stella" : ` · ${stars} stelle`;
+  const rank = (band + 1) * 100 + stars * 10 + fam;
+  return { symbol, metal, stars, rank, label: `${RING[metal].label}${starLabel}`, index, len };
 }
 
 export function topPrizes<T extends { code: string }>(prizes: T[], limit = 3) {
@@ -211,13 +223,31 @@ export function MetalCoin({ metal, symbol, icon, size = 56, ribbon = true, locke
 }
 
 /** ogni famiglia di premi: simbolo e smalto (le gare in rubino, gli allenamenti in smeraldo…) */
-const FAMILY_ART: Record<PrizeTier["symbol"], { symbol: InsSymbol; enamel: InsEnamel }> = {
+const FAMILY_ART: Record<Family, { symbol: InsSymbol; enamel: InsEnamel }> = {
   arrow: { symbol: "arrow", enamel: "emerald" },
   bow: { symbol: "bow", enamel: "teal" },
   target: { symbol: "target", enamel: "ruby" },
+  podium: { symbol: "podium", enamel: "amber" },
+  crown: { symbol: "crown", enamel: "amethyst" },
+  peak: { symbol: "peak", enamel: "night" },
   medal: { symbol: "laurel", enamel: "ruby" },
   flame: { symbol: "flame", enamel: "amber" },
   rise: { symbol: "rise", enamel: "sapphire" },
+};
+/**
+ * I gradini alti di ogni scala hanno un'insegna tutta loro (simbolo e forma nuovi), così salendo cambia
+ * il disegno e non solo il metallo. elite: da quale gradino (contando dalla fine della scala).
+ */
+const ELITE_ART: Record<Family, { symbol: InsSymbol; enamel: InsEnamel; shape: InsShape; from: number }> = {
+  arrow: { symbol: "quiver", enamel: "emerald", shape: "hex", from: 3 },
+  bow: { symbol: "flame", enamel: "teal", shape: "hex", from: 3 },
+  target: { symbol: "trophy", enamel: "ruby", shape: "shield", from: 4 },
+  podium: { symbol: "laurel", enamel: "amber", shape: "shield", from: 3 },
+  crown: { symbol: "crown", enamel: "ruby", shape: "rosette", from: 3 },
+  peak: { symbol: "gonfalon", enamel: "night", shape: "hex", from: 3 },
+  medal: { symbol: "gonfalon", enamel: "night", shape: "rosette", from: 6 },
+  flame: { symbol: "flame", enamel: "amber", shape: "round", from: 99 },
+  rise: { symbol: "rise", enamel: "sapphire", shape: "round", from: 99 },
 };
 /** i traguardi dei punti campionato oltre i 100 hanno un'insegna tutta loro: coppa, corona, stendardo */
 const CODE_ART: Record<string, { symbol: InsSymbol; enamel: InsEnamel; shape: InsShape }> = {
@@ -228,6 +258,12 @@ const CODE_ART: Record<string, { symbol: InsSymbol; enamel: InsEnamel; shape: In
   champ_500: { symbol: "crown", enamel: "amethyst", shape: "hex" },
   champ_750: { symbol: "gonfalon", enamel: "sapphire", shape: "rosette" },
   champ_1000: { symbol: "gonfalon", enamel: "night", shape: "rosette" },
+  champ_1500: { symbol: "star", enamel: "emerald", shape: "rosette" },
+  champ_2000: { symbol: "star", enamel: "emerald", shape: "rosette" },
+  champ_2500: { symbol: "crown", enamel: "ruby", shape: "rosette" },
+  champ_3000: { symbol: "crown", enamel: "ruby", shape: "rosette" },
+  champ_4000: { symbol: "crown", enamel: "night", shape: "rosette" },
+  champ_5000: { symbol: "crown", enamel: "night", shape: "rosette" },
 };
 const TIER_METAL: Record<PrizeTier["metal"], InsMetal> = { base: "iron", bronze: "bronze", silver: "silver", gold: "gold", platinum: "platinum" };
 const TIER_SHAPE: Record<PrizeTier["metal"], InsShape> = { base: "round", bronze: "round", silver: "round", gold: "rosette", platinum: "rosette" };
@@ -237,12 +273,16 @@ export function PrizeMark({ code, locked = false, size = "md" }: { code: string;
   const tier = prizeTier(code);
   const ring = RING[tier.metal];
   const px = size === "lg" ? 80 : 60;
-  const own = CODE_ART[code];
+  const elite = ELITE_ART[tier.symbol];
+  const isElite = tier.index >= tier.len - elite.from;
+  const own = CODE_ART[code] ?? (isElite ? elite : undefined);
   const art = own ?? FAMILY_ART[tier.symbol];
   const precious = tier.metal === "gold" || tier.metal === "platinum";
+  // corona in cima all'ultimo gradino di ogni scala, alloro per il platino
+  const top = tier.len > 2 && tier.index === tier.len - 1;
   return (
     <span className={`inline-flex w-16 shrink-0 flex-col items-center ${size === "lg" ? "w-20" : ""}`}>
-      <Insignia symbol={art.symbol} enamel={art.enamel} metal={TIER_METAL[tier.metal]} shape={own?.shape ?? TIER_SHAPE[tier.metal]} ribbon laurel={tier.metal === "platinum" || code === "champ_1000"} glow={precious && !locked} locked={locked} size={px} />
+      <Insignia symbol={art.symbol} enamel={art.enamel} metal={TIER_METAL[tier.metal]} shape={own?.shape ?? TIER_SHAPE[tier.metal]} ribbon laurel={tier.metal === "platinum" || code === "champ_1000"} crown={top} glow={precious && !locked} locked={locked} size={px} />
       <span className="mt-1 flex h-3 items-center justify-center gap-px">
         {Array.from({ length: tier.stars }, (_, index) => (
           <Star key={index} color={ring.color} />

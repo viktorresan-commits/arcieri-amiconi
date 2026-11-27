@@ -1,3 +1,4 @@
+import { prizeList } from "./prize-ladders";
 import { getSql, type Sql } from "@/lib/db";
 
 export type Role = "admin" | "archer" | "viewer";
@@ -87,63 +88,10 @@ export function categorySingular(raw: string) {
   return map[key] ?? c;
 }
 
-export const PRIZES: Array<{ code: string; title: string; hint: string }> = [
-  { code: "first_session", title: "Primo allenamento", hint: "1 allenamento" },
-  { code: "sessions_5", title: "5 allenamenti", hint: "5 allenamenti" },
-  { code: "sessions_10", title: "10 allenamenti", hint: "10 allenamenti" },
-  { code: "sessions_50", title: "50 allenamenti", hint: "50 allenamenti" },
-  { code: "sessions_100", title: "100 allenamenti", hint: "100 allenamenti" },
-  { code: "arrows_100", title: "100 frecce", hint: "100 frecce" },
-  { code: "arrows_500", title: "500 frecce", hint: "500 frecce" },
-  { code: "arrows_1000", title: "1000 frecce", hint: "1000 frecce" },
-  { code: "arrows_5000", title: "5000 frecce", hint: "5000 frecce" },
-  { code: "first_comp", title: "Prima gara", hint: "1 gara segnata" },
-  { code: "gare_5", title: "5 gare", hint: "5 gare segnate" },
-  { code: "gare_10", title: "10 gare", hint: "10 gare segnate" },
-  { code: "champ_10", title: "10 punti", hint: "10 punti campionato" },
-  { code: "champ_50", title: "50 punti", hint: "50 punti campionato" },
-  { code: "champ_100", title: "100 punti", hint: "100 punti campionato" },
-  { code: "champ_150", title: "150 punti", hint: "150 punti campionato" },
-  { code: "champ_200", title: "200 punti", hint: "200 punti campionato" },
-  { code: "champ_300", title: "300 punti", hint: "300 punti campionato" },
-  { code: "champ_400", title: "400 punti", hint: "400 punti campionato" },
-  { code: "champ_500", title: "500 punti", hint: "500 punti campionato" },
-  { code: "champ_750", title: "750 punti", hint: "750 punti campionato" },
-  { code: "champ_1000", title: "1000 punti", hint: "1000 punti campionato" },
-  { code: "streak_7", title: "7 giorni di fila", hint: "7 giorni consecutivi" },
-  { code: "days_30", title: "30 giorni", hint: "30 giorni diversi" },
-  { code: "first_record", title: "Primo record", hint: "Migliori la media" },
-  { code: "improve_5", title: "Media in salita", hint: "+5% in 30 giorni" },
-];
+/** tutti i premi: le scale (allenamenti, frecce, gare, podi, vittorie, piazzole, punti campionato) e i premi singoli */
+export const PRIZES: Array<{ code: string; title: string; hint: string }> = prizeList();
 
-export const BADGE_TITLES: Record<string, string> = {
-  first_session: "Primo allenamento",
-  sessions_5: "5 allenamenti",
-  sessions_10: "Dieci allenamenti",
-  sessions_50: "50 allenamenti",
-  sessions_100: "100 allenamenti",
-  arrows_100: "Cento frecce",
-  arrows_500: "500 frecce",
-  arrows_1000: "Mille frecce",
-  arrows_5000: "5000 frecce",
-  first_record: "Primo record",
-  first_comp: "Prima gara",
-  gare_5: "5 gare",
-  gare_10: "10 gare",
-  champ_10: "10 punti campionato",
-  champ_50: "50 punti campionato",
-  champ_100: "100 punti campionato",
-  champ_150: "150 punti campionato",
-  champ_200: "200 punti campionato",
-  champ_300: "300 punti campionato",
-  champ_400: "400 punti campionato",
-  champ_500: "500 punti campionato",
-  champ_750: "750 punti campionato",
-  champ_1000: "1000 punti campionato",
-  improve_5: "Media in salita",
-  days_30: "Trenta giorni",
-  streak_7: "Sette giorni di fila",
-};
+export const BADGE_TITLES: Record<string, string> = Object.fromEntries(PRIZES.map((p) => [p.code, p.code.startsWith("champ_") ? `${p.title} campionato` : p.title]));
 
 const COLORS = ["#1f5c38", "#245c45", "#184833", "#3d8f5f", "#16382c"];
 

@@ -1,8 +1,14 @@
 import type { Sql } from "@/lib/db";
 import { BADGE_TITLES, asIso, asNum } from "./access";
 import { romeDayKey, ymdAdd } from "./time";
+import { garaLoads, sumLoads, type GaraLoad } from "./gara-volume";
+import { codesFor } from "./prize-ladders";
 
-export async function syncBadges(sql: Sql, userId: string) {
+/**
+ * I premi di un arciere, ricalcolati dai dati: allenamenti e frecce, gare (app, portale e archivio FITAST),
+ * podi, vittorie, piazzole e punti campionato. loads: le gare già lette (per non rileggerle per ognuno).
+ */
+export async function syncBadges(sql: Sql, userId: string, loadsIn?: GaraLoad[]) {
   const sessions = await sql<{
     id: number;
     started_at: unknown;
@@ -70,48 +76,53 @@ export async function syncBadges(sql: Sql, userId: string) {
   const recent = weigh(now - 30 * 86_400_000, now + 86_400_000);
   const prior = weigh(now - 60 * 86_400_000, now - 30 * 86_400_000);
   const improved = recent.arrows >= 30 && prior.arrows >= 30 && prior.avg > 0 && (recent.avg - prior.avg) / prior.avg >= 0.05;
-  const comps = await sql<{ n: number; champ: number }>`
-    select count(*)::int as n, coalesce(sum(championship_points), 0)::int as champ
-    from competition_entries where user_id = ${userId} and score is not null`;
-  const gare = asNum(comps[0]?.n);
-  const champ = asNum(comps[0]?.champ);
+  // le gare come sul profilo: app, classifiche del portale e archivio FITAST dal 2019
+  const today = new Date().toISOString().slice(0, 10);
+  const loads = (loadsIn ?? ((await garaLoads(sql, userId).catch(() => new Map<string, GaraLoad[]>())).get(userId) ?? [])).filter((l) => l.day <= today);
+  const vol = sumLoads(loads);
+  const ranks = loads.map((l) => l.rank).filter((r): r is number => r != null);
 
-  const codes: string[] = [];
-  if (mapped.length >= 1) codes.push("first_session");
-  if (mapped.length >= 5) codes.push("sessions_5");
-  if (mapped.length >= 10) codes.push("sessions_10");
-  if (mapped.length >= 50) codes.push("sessions_50");
-  if (mapped.length >= 100) codes.push("sessions_100");
-  if (totalArrows >= 100 || completeArrows >= 100) codes.push("arrows_100");
-  if (totalArrows >= 500) codes.push("arrows_500");
-  if (totalArrows >= 1000) codes.push("arrows_1000");
-  if (totalArrows >= 5000) codes.push("arrows_5000");
+  const codes = codesFor({
+    allenamenti: mapped.length,
+    frecce: Math.max(totalArrows + vol.arrows, completeArrows >= 100 ? 100 : 0),
+    gare: loads.length,
+    podi: ranks.filter((r) => r <= 3).length,
+    vittorie: ranks.filter((r) => r === 1).length,
+    piazzole: vol.piazzole,
+    campionato: loads.reduce((sum, l) => sum + (l.champ ?? 0), 0),
+  });
   if (firstRecord) codes.push("first_record");
-  if (gare > 0) codes.push("first_comp");
-  if (gare >= 5) codes.push("gare_5");
-  if (gare >= 10) codes.push("gare_10");
-  if (champ >= 10) codes.push("champ_10");
-  if (champ >= 50) codes.push("champ_50");
-  if (champ >= 100) codes.push("champ_100");
-  for (const t of [150, 200, 300, 400, 500, 750, 1000]) if (champ >= t) codes.push(`champ_${t}`);
   if (improved) codes.push("improve_5");
   if (days.length >= 30) codes.push("days_30");
   if (bestStreak >= 7) codes.push("streak_7");
 
+  // solo quelli che mancano: una lettura sola, poi gli inserimenti nuovi
+  const have = new Set((await sql<{ code: string }>`select code from user_achievements where user_id = ${userId}`).map((r) => r.code));
   const fresh: string[] = [];
   for (const code of codes) {
+    if (have.has(code)) continue;
     const ins = await sql<{ code: string }>`
       insert into user_achievements (user_id, code) values (${userId}, ${code})
       on conflict (user_id, code) do nothing
       returning code`;
     if (ins[0]) fresh.push(ins[0].code);
   }
+  if (!fresh.length) return [];
   const flags = await sql<{ notify_goals: boolean }>`select notify_goals from members where user_id = ${userId} limit 1`;
   if (flags[0]?.notify_goals !== false) {
-    for (const code of fresh) {
+    if (fresh.length <= 2) {
+      for (const code of fresh) {
+        await sql`
+          insert into notifications (user_id, title, body, href, dedupe)
+          values (${userId}, ${"Medaglia: " + (BADGE_TITLES[code] ?? code)}, ${"È nel tuo albo."}, ${"/obiettivi"}, ${"ach-" + userId + "-" + code})
+          on conflict (dedupe) do nothing`;
+      }
+    } else {
+      // tante insieme (per esempio dopo l'importazione dal portale): un solo avviso
+      const names = fresh.slice(-3).map((code) => BADGE_TITLES[code] ?? code).join(", ");
       await sql`
         insert into notifications (user_id, title, body, href, dedupe)
-        values (${userId}, ${"Medaglia: " + (BADGE_TITLES[code] ?? code)}, ${"È nel tuo albo."}, ${"/obiettivi"}, ${"ach-" + userId + "-" + code})
+        values (${userId}, ${`${fresh.length} nuove medaglie`}, ${`Fra queste: ${names}. Sono nel tuo albo.`}, ${"/obiettivi"}, ${"ach-" + userId + "-" + fresh.length + "-" + fresh[fresh.length - 1]})
         on conflict (dedupe) do nothing`;
     }
   }
