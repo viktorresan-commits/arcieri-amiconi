@@ -6,6 +6,8 @@ import { useArcherSetup } from "@/lib/arcieri/setup";
 import { bodySlices, buildFrom, overlap, rasterAura, sliceWidth, type Aura } from "@/lib/arcieri/aura";
 import { createAnatomyRenderer, lookAt, mul4, perspective } from "@/lib/arcieri/anatomy-render";
 import { BODY_CREDIT, loadBody } from "@/lib/arcieri/anatomy-body";
+import { AVATAR_KEY } from "@/lib/arcieri/avatar";
+import { useLocalState } from "@/lib/arcieri/local-store";
 import { mixLm, sideEvidence, swapSides, type Gear, type Hand, type Landmark } from "@/lib/arcieri/pose-analysis";
 import { unpackLm, type PackedLm } from "@/lib/arcieri/gesture-record";
 import { saveFile } from "@/lib/arcieri/native";
@@ -288,8 +290,18 @@ function paintAimHud(ctx: CanvasRenderingContext2D, VP: Float32Array, info: AimI
   ctx.restore();
 }
 
-/** dall'occhio la pelle traslucida velerebbe tutto: si vedono i muscoli (e lo scheletro, se acceso) */
-const aimLayers = (L: Record<Layer, boolean>): Record<Layer, boolean> => ({ pelle: false, muscolo: true, osso: L.osso, punti: false, quote: false });
+/** dall'occhio si vede il proprio corpo come è: pelle vera e opaca, niente muscoli né ossa */
+const AIM_LAYERS: Record<Layer, boolean> = { pelle: true, muscolo: false, osso: false, punti: false, quote: false };
+/** il tono di pelle scelto nell'avatar (se c'è), altrimenti quello del personaggio della prova 3D */
+function avatarSkin(): string | null {
+  try {
+    const raw = localStorage.getItem(AVATAR_KEY);
+    const v = raw ? (JSON.parse(raw) as { skin?: unknown }) : null;
+    return typeof v?.skin === "string" ? v.skin : null;
+  } catch {
+    return null;
+  }
+}
 
 /** la sagoma nella visuale dell'arciere: scena girata con l'angolo balistico, camera nell'occhio */
 function aimFrame(model: Model, setup: AimSetup, distanceM: number, hand: Hand, c: AimCam, W: number, H: number) {
@@ -458,10 +470,11 @@ export async function sagomaPainter(W: number, H: number, quality: "hd" | "pieno
         const af = model ? aimFrame(model, o.aim.setup, o.aim.distanceM, o.hand, o.aim.cam ?? { zoom: 1, yaw: 0, pitch: 0 }, W, H) : null;
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         if (!af) return false;
-        R.setStyle(0);
+        R.setStyle(2);
+        R.setSkin(avatarSkin());
         paintField(ctx, af.VP, af.eye, af.dir, W, H);
         R.clear(W, H);
-        R.draw(af.model, af.VP, af.eye, o.time, aimLayers(view.layers), null, false, af.info.cut);
+        R.draw(af.model, af.VP, af.eye, o.time, AIM_LAYERS, null, false, af.info.cut);
         ctx.drawImage(gl, 0, 0);
         paintAimHud(ctx, af.VP, af.info, W, H, dpr, o.aim.mode ?? "istintivo");
         if (o.credit === false) return true;
@@ -878,6 +891,8 @@ export function Anatomy3D({
     let aimSrcPre: PrePose | null = null;
     let targetAsked = false;
     let aimShown = "";
+    // il tono di pelle dell'avatar, letto una volta all'apertura
+    const skinTone = avatarSkin();
     let usedPre: PrePose | null = null;
     const frame = (now: number) => {
       raf = requestAnimationFrame(frame);
@@ -1145,8 +1160,9 @@ export function Anatomy3D({
           setAimInfo(af ? af.info : null);
         }
         if (!af) return;
-        R.setStyle(0);
-        R.draw(af.model, af.VP, af.eye, time, aimLayers(L), null, fast && slowDevice, af.info.cut);
+        R.setStyle(2);
+        R.setSkin(skinTone);
+        R.draw(af.model, af.VP, af.eye, time, AIM_LAYERS, null, fast && slowDevice, af.info.cut);
         paintAimHud(ctx, af.VP, af.info, W, H, dpr, am.mode);
         return;
       }
@@ -1631,15 +1647,33 @@ function tag(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, 
  * più in alto: la freccia sale e poi scende sull'oro.
  */
 function AimPanel({ info, mode, onMode, known, summary, full }: { info: AimInfo | null; mode: AimMode; onMode: (m: AimMode) => void; known: boolean; summary: string; full: boolean }) {
+  const [open, setOpen] = useLocalState<boolean>("aa-mira-spiegata-v1", false);
   const f = (n: number, d = 1) => n.toFixed(d).replace(".", ",").replace("-", "−");
   const pos = full ? "bottom-[calc(max(1rem,env(safe-area-inset-bottom))+6.2rem)]" : "bottom-14";
   if (!info)
     return <p className={cx("pointer-events-none absolute inset-x-2 mx-auto w-fit rounded-xl bg-black/55 px-3 py-1.5 text-center text-[0.72rem] text-white backdrop-blur", pos)}>Scegli un fotogramma con la freccia sulla corda: da lì si guarda il paglione.</p>;
   const gap = Math.round(info.gapCm);
   const where = (v: number) => `${Math.abs(Math.round(v))} cm ${v < 0 ? "sotto" : "sopra"} l'oro`;
+  // chiusa di base: un bottone piccolo, la visuale resta libera
+  if (!open)
+    return (
+      <button type="button" onClick={() => setOpen(true)} aria-expanded={false} className={cx("absolute left-2 flex min-h-9 items-center gap-1.5 rounded-full bg-black/50 px-3 text-[0.72rem] font-semibold text-white backdrop-blur", pos)}>
+        <svg viewBox="0 0 24 24" width={15} height={15} fill="none" stroke="currentColor" strokeWidth={1.4} aria-hidden>
+          <circle cx="12" cy="12" r="9" />
+          <circle cx="12" cy="12" r="5" />
+          <circle cx="12" cy="12" r="1.2" fill="currentColor" />
+        </svg>
+        Come si mira
+      </button>
+    );
   return (
     <div className={cx("absolute left-2 max-w-[18.5rem] rounded-xl bg-black/55 px-3 py-2 text-[0.7rem] leading-snug text-white backdrop-blur", pos)}>
-      <div className="mb-1.5 flex gap-1" role="group" aria-label="Come si mira">
+      <button type="button" onClick={() => setOpen(false)} aria-label="Chiudi la spiegazione" className="absolute right-1 top-1 grid size-8 place-items-center rounded-full text-white/80">
+        <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" aria-hidden>
+          <path d="M6 6l12 12M18 6L6 18" />
+        </svg>
+      </button>
+      <div className="mb-1.5 flex gap-1 pr-8" role="group" aria-label="Come si mira">
         {([["istintivo", "Tiro istintivo"], ["punta", "Con la punta"]] as const).map(([k, l]) => (
           <button key={k} type="button" aria-pressed={mode === k} onClick={() => onMode(k)} className={cx("min-h-8 rounded-full px-2.5 text-[0.7rem] font-semibold", mode === k ? "bg-white text-[#14181c]" : "bg-white/12 text-white/85")}>
             {l}

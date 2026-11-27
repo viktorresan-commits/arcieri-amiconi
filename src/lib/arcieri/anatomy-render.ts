@@ -127,6 +127,8 @@ void main(){
 const BFS = `${PREC}
 varying vec3 vW; varying vec3 vN; varying vec2 vF; varying float vAct; varying float vFoc; varying float vTend; varying float vStr; varying float vGrp; varying vec3 vR;
 uniform vec3 uEye; uniform float uLayer; uniform float uAlpha; uniform float uDim; uniform float uTime; uniform float uStyle;
+// tono della pelle vera (lineare): quello del personaggio della prova 3D o quello scelto nell'avatar
+uniform vec3 uSkin;
 // dettaglio del muscolo (immagine ripetuta lungo le fibre): R rilievo dei fasci, G chiaroscuro del tessuto, B fasce connettivali
 uniform sampler2D uFib; uniform float uFibOn;
 // visuale dall'occhio: la testa attorno alla camera non si disegna
@@ -159,7 +161,30 @@ void main(){
   if (uLayer < 0.5) {
     // pelle: un velo appena accennato che disegna il contorno del corpo, neutro (non più azzurro)
     float rim = pow(1.0 - ndv, 2.4);
-    if (uStyle > 0.5) {
+    if (uStyle > 1.5) {
+      // pelle vera, opaca: il tono della pelle del personaggio (prova 3D), con le sue piccole variazioni
+      // (più calda e rosata a chiazze, appena più scura nelle pieghe) e la luce che passa sotto la pelle:
+      // nelle ombre il rosso si spinge più avanti del verde e del blu, il bordo controluce si scalda
+      // anche le facce girate (pieghe del gomito e della spalla, il taglio attorno all'occhio) sono pelle
+      if (!gl_FrontFacing) { N = -N; ndv = clamp(dot(N, V), 0.0, 1.0); }
+      vec3 q = vR * 100.0;
+      float n1 = vnoise(q * 0.22) * 0.6 + vnoise(q * 0.65) * 0.4;
+      float n2 = vnoise(q * 0.09 + 3.1);
+      // un poco meno satura del colore puro: la curva della pellicola spegne il blu e la pelle virerebbe all'arancio
+      vec3 alb = mix(vec3(dot(uSkin, vec3(0.2126, 0.7152, 0.0722))), uSkin, 0.85) * mix(0.9, 1.07, n1);
+      alb = mix(alb, alb * vec3(1.1, 0.86, 0.82), smoothstep(0.5, 0.85, n2) * 0.4);
+      float d1 = dot(N, L1);
+      vec3 w = vec3(0.6, 0.32, 0.24);
+      vec3 dif = max(vec3(0.0), (vec3(d1) + w) / (1.0 + w));
+      vec3 light = C1 * dif * 0.82 + C2 * wrapL(N, L2, 0.35) + amb * 1.15;
+      light += C3 * vec3(1.0, 0.55, 0.42) * pow(1.0 - ndv, 3.0) * wrapL(N, L3, 0.3) * 0.5;
+      float nh = max(dot(N, H), 0.0);
+      float F = 0.028 + 0.972 * pow(1.0 - ndv, 5.0);
+      float sp = (pow(nh, 28.0) * 0.5 + pow(nh, 110.0) * 0.7) * F * step(0.0, d1);
+      col = alb * light + C1 * sp;
+      gl_FragColor = vec4(tone(col), 1.0);
+      return;
+    } else if (uStyle > 0.5) {
       col = vec3(0.34, 0.37, 0.41);
       a = uAlpha * rim * 0.4 * (1.0 - vStr);
     } else {
@@ -758,6 +783,7 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     uAlpha: gl.getUniformLocation(bprog, "uAlpha"),
     uDim: gl.getUniformLocation(bprog, "uDim"),
     uStyle: gl.getUniformLocation(bprog, "uStyle"),
+    uSkin: gl.getUniformLocation(bprog, "uSkin"),
     uBul: gl.getUniformLocation(bprog, "uBul"),
     uLayerV: gl.getUniformLocation(bprog, "uLayerV"),
     uTime: gl.getUniformLocation(bprog, "uTime"),
@@ -906,7 +932,9 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
       gl.depthMask(true);
     }
   };
-  let style: 0 | 1 = 0;
+  let style: 0 | 1 | 2 = 0;
+  /** pelle vera: il tono medio della pelle del personaggio Quaternius della prova 3D (sRGB 169,118,82) */
+  const skinLin = new Float32Array([0.405, 0.184, 0.082]);
   const bul = new Float32Array(64);
   const segRows = new Float32Array(63 * 4);
   const curlBuf = new Float32Array(32);
@@ -975,6 +1003,7 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     gl.uniform3fv(bl.uEye, eye);
     gl.uniform1f(bl.uDim, L.muscolo ? 1 : 0);
     gl.uniform1f(bl.uStyle, style);
+    gl.uniform3fv(bl.uSkin, skinLin);
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, fibTex);
     gl.uniform1i(bl.uFib, 1);
@@ -1007,7 +1036,15 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     }
     if (L.osso) drawBodyLayer("bone", 1, 1);
     if (L.muscolo) drawBodyLayer("muscle", 2, 1);
-    if (L.pelle) {
+    if (L.pelle && style === 2) {
+      // pelle vera: opaca, scrive la profondità come un corpo pieno
+      // senza scartare le facce girate: dove il corpo si piega non restano buchi
+      skinRows();
+      gl.disable(gl.BLEND);
+      gl.disable(gl.CULL_FACE);
+      drawBodyLayer("skin", 0, 1);
+      gl.enable(gl.BLEND);
+    } else if (L.pelle) {
       skinRows();
       // pelle in due passate: solo profondità, poi il colore sulla superficie più esterna, sommato come vetro
       gl.colorMask(false, false, false, false);
@@ -1028,9 +1065,15 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     bound = "";
   };
   return {
-    /** stile della tavola: 0 = studio scuro, 1 = tavola chiara (cambia il velo della pelle) */
-    setStyle(v: 0 | 1) {
+    /** stile della tavola: 0 = studio scuro, 1 = tavola chiara (cambia il velo della pelle), 2 = pelle vera opaca */
+    setStyle(v: 0 | 1 | 2) {
       style = v;
+    },
+    /** tono della pelle vera, "#rrggbb" (sRGB); senza colore torna quello del personaggio della prova 3D */
+    setSkin(hex?: string | null) {
+      const m = /^#?([0-9a-f]{6})$/i.exec(hex ?? "");
+      const v = m ? [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16) / 255) : [169 / 255, 118 / 255, 82 / 255];
+      for (let i = 0; i < 3; i++) skinLin[i] = v[i] <= 0.04045 ? v[i] / 12.92 : Math.pow((v[i] + 0.055) / 1.055, 2.4);
     },
     /** carica il corpo vero nella scheda grafica; da quel momento sostituisce la sagoma semplice */
     setBody(data: BodyData, level: BodyLevel = "pieno") {
