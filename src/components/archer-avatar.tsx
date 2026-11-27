@@ -11,6 +11,7 @@ import { SideShoe } from "./avatar-shoes";
 import { SideHand } from "./avatar-hands";
 import { FaceHat, MailCoif, SideHat } from "./avatar-hats";
 import { RimLightDefs } from "./avatar-light";
+import { PaintedBeard, PaintedStache } from "./beard-front";
 import { ArmGuard, ChestGuard, LegDetail, LimbGloss, PlainBuckle, RiserGrain } from "./avatar-gear";
 import { seamOf, BracerLacing, ClothButton, BeardTexture, BeltDetail, BrowHairs, ClothDetail, DetailDefs, EyeDetail, FaceShade, HairFineStrands, LeatherBand, LipDetail, SleeveDetail } from "./avatar-detail";
 
@@ -2587,7 +2588,7 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false, part }
     );
   };
   // occhi in proporzione reale (prima erano da fumetto): un po' più piccoli, la taglia scelta resta
-  const es = (0.8 + (tune(look.eyeSize, 50, 0, 100) / 100) * 0.4) * 0.76;
+  const es = (0.8 + (tune(look.eyeSize, 50, 0, 100) / 100) * 0.4) * 0.82;
   const eye = (x: number) => {
     // occhio a mandorla: angolo interno più basso, esterno leggermente sollevato, palpebra superiore piena
     const o = x < 50 ? -1 : 1;
@@ -2623,7 +2624,7 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false, part }
           <path d={`M${ix} ${iy} C${x - o * 3} ${eyeY - up} ${x + o * 2.6} ${eyeY - up - 0.2} ${ox} ${oy}`} transform="translate(0 0.95)" stroke="#2a160c" strokeOpacity="0.3" strokeWidth="1.7" fill="none" />
           <path d={`M${ix} ${iy} C${x - o * 3} ${eyeY - up} ${x + o * 2.6} ${eyeY - up - 0.2} ${ox} ${oy}`} stroke={shade(skin, -0.12)} strokeWidth="1.25" fill="none" />
         </g>
-        <circle cx={x + 1.2} cy={eyeY - 0.7} r="0.5" fill="#fff" opacity="0.82" />
+        <circle cx={x + 1.2} cy={eyeY - 0.7} r="0.62" fill="#fff" opacity="0.88" />
         {/* rima inferiore umida */}
         <path d={`M${ix + o * 1.2} ${iy + 0.5} Q${x} ${eyeY + lo + 0.8} ${ox - o * 0.8} ${oy + 0.4}`} stroke="#e0a49a" strokeWidth="0.35" opacity="0.55" fill="none" />
         <circle cx={x - 0.7} cy={eyeY + 1.1} r="0.35" fill="#fff" opacity="0.7" />
@@ -2802,8 +2803,25 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false, part }
   const beardClumps = beardAll && look.beard !== "accenno" ? (
     <Clumps id={`${uid}bcl`} clip={<path d={beardAll} />} strokes={fanStrokes(50 - rx + 3, 50 + rx - 3, fy + 9, look.beard === "lunga" ? ry + 20 : look.beard === "corta" ? ry * 0.7 : look.beard === "pizzetto" ? 8 : ry * 0.95 + 4, 50, look.beard === "pizzetto" ? 6 : 18, 3)} dark={shade(beardC, -0.5)} light={shade(beardC, 0.42)} w={0.45} />
   ) : null;
+  // barbe piene dipinte a ciocche, con i bordi sfumati e i peli che escono dal bordo (niente più punte a sega)
+  const painted = Boolean(beardD) && ["piena", "lunga", "corta", "pizzetto", "mosca"].includes(look.beard);
+  const paintedSpec: { box: [number, number, number, number]; edge: [number, number][]; len: number } | null = !painted
+    ? null
+    : look.beard === "piena"
+      ? { box: [50 - rx, fy - 1, rx * 2, ry + 10], edge: cubicPts([50 - rx + 1, fy + 2], [50 - rx + 2, fy + ry + 8], [50 + rx - 2, fy + ry + 8], [50 + rx - 1, fy + 2], 0.1, 0.9, 22), len: 1 }
+      : look.beard === "corta"
+        ? { box: [50 - rx + 3, fy + 5, rx * 2 - 6, ry + 2], edge: cubicPts([50 - rx + 4, fy + 8], [50 - rx + 6, fy + ry + 4], [50 + rx - 6, fy + ry + 4], [50 + rx - 4, fy + 8], 0.12, 0.88, 18), len: 0.8 }
+        : look.beard === "lunga"
+          ? { box: [50 - rx, fy - 1, rx * 2, ry + 28], edge: [...cubicPts([50 - rx + 1, fy + 2], [50 - rx + 1, fy + ry + 10], [44, fy + ry + 22], [50, fy + ry + 26], 0.25, 1, 12), ...cubicPts([50, fy + ry + 26], [56, fy + ry + 22], [50 + rx - 1, fy + ry + 10], [50 + rx - 1, fy + 2], 0, 0.75, 12)], len: 1.35 }
+          : look.beard === "pizzetto"
+            ? { box: [44.5, fy + 15, 11, 11], edge: [...cubicPts([45.4, fy + 16.8], [45.6, fy + 21.5], [47.2, fy + 24.6], [50, fy + 24.8], 0.4, 1, 4), ...cubicPts([50, fy + 24.8], [52.8, fy + 24.6], [54.4, fy + 21.5], [54.6, fy + 16.8], 0, 0.6, 4)], len: 0.6 }
+            : { box: [47.5, fy + 15.5, 5, 5], edge: [[49, fy + 19.2], [50, fy + 19.6], [51, fy + 19.2]], len: 0.45 };
   const beard = beardShape ? (
     <g transform={look.beard === "barbetta" || look.beard === "basette" ? undefined : `translate(0 ${fy + 6}) scale(1 ${bk.toFixed(3)}) translate(0 ${-(fy + 6)})`}>
+      {painted && paintedSpec && beardD ? (
+        <PaintedBeard uid={uid} id="pbf" d={beardD} color={beardC} dark={shade(beardC, -0.52)} light={shade(beardC, 0.42)} box={paintedSpec.box} edge={paintedSpec.edge} c={[50, fy + 4]} len={paintedSpec.len} feather={look.beard === "pizzetto" || look.beard === "mosca" ? 0.5 : 1.1} lipY={look.beard === "pizzetto" || look.beard === "mosca" ? undefined : fy + 14} />
+      ) : (
+      <>
       {/* bordo morbido: un alone dello stesso colore (i peli sul bordo sono radi e lasciano vedere la pelle) */}
       {look.beard === "accenno" || look.beard === "barbetta" ? null : <g stroke={beardC} strokeOpacity="0.22" strokeWidth="1" strokeLinejoin="round">{beardShape}</g>}
       {look.beard === "accenno" ? null : <g stroke={shade(beardC, -0.4)} strokeOpacity="0.2" strokeWidth="0.35" strokeLinejoin="round">{beardShape}</g>}
@@ -2832,9 +2850,12 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false, part }
         </g>
       ) : null}
       {beardD ? <BeardTexture uid={uid} id="fbc" d={beardD} color={beardC} light={shade(beardC, 0.35)} dark={shade(beardC, -0.38)} box={[50 - rx - 2, fy - 2, rx * 2 + 4, ry + 30]} k={0.6} band={`M${50 - rx + 2} ${fy + 9} Q50 ${fy + 18} ${50 + rx - 2} ${fy + 9}`} /> : null}
+      </>
+      )}
     </g>
   ) : null;
   const st = stacheOf(look);
+  const paintedStache = st === "sottili" || st === "classici" || st === "folti";
   const stache =
     st === "sottili" ? <path d={`M44 ${fy + 10.6} C47 ${fy + 9} 53 ${fy + 9} 56 ${fy + 10.6} C53 ${fy + 10.2} 47 ${fy + 10.2} 44 ${fy + 10.6} Z`} fill={beardC} /> :
     st === "classici" ? <path d={`M42 ${fy + 10.5} C46 ${fy + 7} 54 ${fy + 7} 58 ${fy + 10.5} C54 ${fy + 9.6} 46 ${fy + 9.6} 42 ${fy + 10.5} Z`} fill={beardC} /> :
@@ -3364,22 +3385,10 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false, part }
         {noseNode}
         {look.mask ? null : beard}
         {look.mask || !stache ? null : <ellipse cx="50" cy={fy + 12.3} rx="7.4" ry="1.5" fill={`url(#${uid}sd)`} opacity="0.5" />}
-        {look.mask || !stache ? null : <g stroke={beardC} strokeOpacity="0.3" strokeWidth="1.1" strokeLinejoin="round">{stache}</g>}
-        {look.mask ? null : <g stroke={shade(beardC, -0.4)} strokeOpacity="0.22" strokeWidth="0.35" strokeLinejoin="round">{stache}</g>}
-        {look.mask || !(st === "sottili" || st === "classici" || st === "folti") ? null : (
-          <g pointerEvents="none">
-            <clipPath id={`${uid}stcl`}><path d={(stache as { props: { d: string } }).props.d} /></clipPath>
-            <g clipPath={`url(#${uid}stcl)`}>
-              <rect x="36" y={fy + 4} width="28" height="5.2" fill={shade(beardC, -0.55)} opacity="0.32" />
-              <rect x="36" y={fy + 10.2} width="28" height="2.4" fill="#fff" opacity="0.1" />
-            </g>
-          </g>
-        )}
-        {look.mask || !stache ? null : paintOver(stache, "stx", "stache", [36, fy + 4, 28, 20], 21, false)}
-        {look.mask || !(st === "sottili" || st === "classici" || st === "folti") ? null : (
-          <Clumps id={`${uid}stk`} clip={<path d={(stache as { props: { d: string } }).props.d} />} dark={shade(beardC, -0.5)} light={shade(beardC, 0.45)} w={0.38}
-            strokes={[-1, 1].flatMap((sd) => [0, 1, 2, 3, 4, 5].map((k) => `M${(50 + sd * (0.8 + k * 1.5)).toFixed(2)} ${fy + 7.6} Q${(50 + sd * (1.6 + k * 1.7)).toFixed(2)} ${fy + 9.6} ${(50 + sd * (2.2 + k * 1.75)).toFixed(2)} ${fy + 12.2}`))} />
-        )}
+        {look.mask || !stache || paintedStache ? null : <g stroke={beardC} strokeOpacity="0.3" strokeWidth="1.1" strokeLinejoin="round">{stache}</g>}
+        {look.mask || paintedStache ? null : <g stroke={shade(beardC, -0.4)} strokeOpacity="0.22" strokeWidth="0.35" strokeLinejoin="round">{stache}</g>}
+        {look.mask || !paintedStache ? null : <PaintedStache uid={uid} id="pst" d={(stache as { props: { d: string } }).props.d} color={beardC} dark={shade(beardC, -0.52)} light={shade(beardC, 0.42)} fy={fy} spread={st === "sottili" ? 0.6 : st === "classici" ? 0.82 : 1} />}
+        {look.mask || !stache || paintedStache ? null : paintOver(stache, "stx", "stache", [36, fy + 4, 28, 20], 21, false)}
         {look.mask || !(look.beard === "barbetta" || look.beard === "basette") || !beardShape ? null : paintOver(beardShape, "bbx", "beard", [50 - rx - 3, fy - 12, rx * 2 + 6, ry + 18], 23, false)}
         {look.mask ? null : realLips}
         {look.mark === "sopracciglio" ? <path d={`M57 ${eyeY - 10.6} l1.6 2.4`} stroke={skin} strokeWidth="1.6" /> : null}

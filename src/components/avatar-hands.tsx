@@ -18,16 +18,27 @@ function shade(hex: string, k: number) {
   return `#${((ch((n >> 16) & 255) << 16) | (ch((n >> 8) & 255) << 8) | ch(n & 255)).toString(16).padStart(6, "0")}`;
 }
 
+function blend(a: string, b: string, t: number) {
+  const ma = /^#?([0-9a-f]{6})$/i.exec((a || "").trim());
+  const mb = /^#?([0-9a-f]{6})$/i.exec((b || "").trim());
+  if (!ma || !mb) return a;
+  const na = Number.parseInt(ma[1], 16);
+  const nb = Number.parseInt(mb[1], 16);
+  const ch = (sh: number) => Math.round(((na >> sh) & 255) * (1 - t) + ((nb >> sh) & 255) * t);
+  return `#${((ch(16) << 16) | (ch(8) << 8) | ch(0)).toString(16).padStart(6, "0")}`;
+}
+
 /** i colori della mano: pelle (con le nocche un po' più calde) o cuoio del guanto */
 function tones(skin: string, gloves: boolean) {
   const base = gloves ? "#4a2c16" : skin;
+  // la mano ha la stessa pelle del volto: ombra calda con il rosso sotto la pelle, nocche arrossate
   return {
     base,
-    hi: shade(base, gloves ? 0.22 : 0.16),
-    lo: shade(base, gloves ? -0.42 : -0.24),
-    line: gloves ? "#1a0e06" : shade(skin, -0.42),
-    knuckle: gloves ? "#6b4526" : shade(skin, 0.05),
-    nail: gloves ? "#5a3a20" : shade(skin, 0.42),
+    hi: shade(base, gloves ? 0.22 : 0.15),
+    lo: gloves ? shade(base, -0.42) : blend(shade(skin, -0.26), "#6a2c1c", 0.16),
+    line: gloves ? "#1a0e06" : blend(shade(skin, -0.45), "#4a1c12", 0.25),
+    knuckle: gloves ? "#6b4526" : blend(skin, "#c4473f", 0.3),
+    nail: gloves ? "#5a3a20" : blend(shade(skin, 0.3), "#e8a49a", 0.25),
   };
 }
 
@@ -59,15 +70,17 @@ export function FrontFist({ x, y, r, skin, gloves, flip = 1, claws = false }: { 
   return (
     <g transform={`translate(${f(x)} ${f(y)}) scale(${flip} 1)`}>
       <HandGrad id={gid} t={t} />
-      <path d={silhouette} fill={`url(#${gid})`} stroke={OUT} strokeOpacity="0.56" strokeWidth="0.3" strokeLinejoin="round" />
+      <path d={silhouette} fill={`url(#${gid})`} stroke={gloves ? OUT : t.line} strokeOpacity={gloves ? 0.56 : 0.75} strokeWidth="0.3" strokeLinejoin="round" />
+      {/* il rosso sotto la pelle sulle nocche e tra le dita */}
+      {gloves ? null : <ellipse cx={f(0.58 * r)} cy={f(0)} rx={f(0.36 * r)} ry={f(0.9 * r)} fill={t.knuckle} opacity="0.28" />}
       {/* dita: rotoli sovrapposti, il bordo alto in luce e la piega scura sotto */}
       {rows.map((w, k) => (
         <g key={k}>
-          <path d={`M${f(w.x0)} ${f(w.y + 0.2 * r)} C${f(w.x0)} ${f(w.y - 0.08 * r)} ${f(w.x1 - 0.1 * r)} ${f(w.y - 0.1 * r)} ${f(w.x1)} ${f(w.y + 0.12 * r)}`} stroke={t.hi} strokeWidth={f(0.045 * r)} fill="none" strokeLinecap="round" opacity="0.85" />
+          <path d={`M${f(w.x0)} ${f(w.y + 0.2 * r)} C${f(w.x0)} ${f(w.y - 0.08 * r)} ${f(w.x1 - 0.1 * r)} ${f(w.y - 0.1 * r)} ${f(w.x1)} ${f(w.y + 0.12 * r)}`} stroke={t.hi} strokeWidth={f(0.04 * r)} fill="none" strokeLinecap="round" opacity="0.5" />
           {k < 3 ? <path d={`M${f(w.x0 + 0.04 * r)} ${f(w.y + 0.27 * r)} C${f(w.x0 + 0.3 * r)} ${f(w.y + 0.34 * r)} ${f(w.x1 - 0.2 * r)} ${f(w.y + 0.33 * r)} ${f(w.x1 + 0.02 * r)} ${f(w.y + 0.26 * r)}`} stroke={t.line} strokeWidth={f(0.032 * r)} fill="none" strokeLinecap="round" opacity="0.8" /> : null}
           {/* nocca */}
           <ellipse cx={f(w.x1 - 0.07 * r)} cy={f(w.y + 0.1 * r)} rx={f(0.09 * r)} ry={f(0.06 * r)} fill={t.knuckle} opacity="0.7" />
-          <circle cx={f(w.x1 - 0.1 * r)} cy={f(w.y + 0.07 * r)} r={f(0.03 * r)} fill="#fff" opacity={gloves ? 0.3 : 0.45} />
+          <circle cx={f(w.x1 - 0.1 * r)} cy={f(w.y + 0.07 * r)} r={f(0.03 * r)} fill="#fff" opacity={gloves ? 0.3 : 0.3} />
           {gloves ? <path d={`M${f(w.x0 + 0.2 * r)} ${f(w.y + 0.02 * r)} L${f(w.x1 - 0.22 * r)} ${f(w.y)}`} stroke="#c9a46a" strokeOpacity="0.5" strokeWidth={f(0.022 * r)} strokeDasharray={`${f(0.09 * r)} ${f(0.08 * r)}`} /> : null}
         </g>
       ))}
@@ -82,7 +95,7 @@ export function FrontFist({ x, y, r, skin, gloves, flip = 1, claws = false }: { 
         return (
           <g>
             <path d={thumb} fill={`url(#${gid})`} />
-            <path d={edge} fill="none" stroke={OUT} strokeOpacity="0.5" strokeWidth="0.3" strokeLinejoin="round" strokeLinecap="round" />
+            <path d={edge} fill="none" stroke={gloves ? OUT : t.line} strokeOpacity={gloves ? 0.5 : 0.7} strokeWidth="0.3" strokeLinejoin="round" strokeLinecap="round" />
             {/* luce sul dorso del pollice e piega dove si appoggia sull'indice */}
             <path d={`M${f(-0.7 * r)} ${f(-0.96 * r)} C${f(-0.3 * r)} ${f(-0.94 * r)} ${f(0.1 * r)} ${f(-0.78 * r)} ${f(0.4 * r)} ${f(-0.58 * r)}`} stroke={t.hi} strokeWidth={f(0.05 * r)} fill="none" strokeLinecap="round" opacity="0.85" />
             <path d={`M${f(-0.5 * r)} ${f(-0.46 * r)} C${f(-0.12 * r)} ${f(-0.38 * r)} ${f(0.16 * r)} ${f(-0.27 * r)} ${f(0.36 * r)} ${f(-0.24 * r)}`} stroke={t.line} strokeWidth={f(0.035 * r)} fill="none" strokeLinecap="round" opacity="0.55" />

@@ -1,6 +1,6 @@
 import { useId } from "react";
 import { tune, type AvatarLook, nearSide, sideOf } from "@/lib/arcieri/avatar";
-import { AvatarFace, bodyWidth, CAPE_CLOTH, shade } from "./archer-avatar";
+import { AvatarFace, blend, bodyWidth, CAPE_CLOTH, shade } from "./archer-avatar";
 import { PATTERN2_IDS } from "@/lib/arcieri/avatar-more";
 import { Pendant } from "./avatar-more";
 import { SpecialFrontLeg, SpecialFrontTorso } from "./special-details";
@@ -158,9 +158,14 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
       <g key={side} className={live ? (bowArm ? "aa-front-bowarm" : "aa-front-arm") : undefined} style={live ? { transformOrigin: `${f(s0.x)}px ${f(s0.y)}px` } : undefined}>
         {/* ombra del braccio sulla veste (la luce viene da sinistra) */}
         {open ? null : <path d={skinArm.d} transform="translate(2.4 1.6)" fill="#000" opacity="0.16" clipPath={`url(#${uid}tcl)`} pointerEvents="none" />}
-        <path d={skinArm.d} fill={skin} />
-        <path d={skinArm.d} fill={vol} pointerEvents="none" />
-        <path d={skinArm.stroke} fill="none" stroke={OUT} strokeOpacity="0.5" strokeWidth="0.8" strokeLinejoin="round" strokeLinecap="round" />
+        <path d={skinArm.d} fill={`url(#${uid}${open ? "skh" : "sk"})`} />
+        <path d={skinArm.d} fill={`url(#${uid}skp)`} opacity="0.13" pointerEvents="none" />
+        {/* il rosso sotto la pelle: gomito e polso */}
+        <g pointerEvents="none">
+          <ellipse cx={f(axis[5].x)} cy={f(axis[5].y)} rx={f(5 * W)} ry={f(4 * W)} fill={`url(#${uid}skr)`} />
+          <ellipse cx={f(axis[10].x)} cy={f(axis[10].y)} rx={f(4 * W)} ry={f(3 * W)} fill={`url(#${uid}skr)`} opacity="0.7" />
+        </g>
+        <path d={skinArm.stroke} fill="none" stroke={shade(skin, -0.55)} strokeOpacity="0.62" strokeWidth="0.7" strokeLinejoin="round" strokeLinecap="round" />
         {/* il bordo del deltoide sul petto, appena accennato */}
         {open ? null : <path d={`M${f(skinArm.inner[2].x)} ${f(skinArm.inner[2].y)} Q${f(skinArm.inner[0].x + side * 1.5)} ${f(skinArm.inner[0].y - 1)} ${f(peak.x)} ${f(peak.y + 0.6)}`} fill="none" stroke={shade(skin, -0.4)} strokeOpacity="0.28" strokeWidth="0.8" strokeLinecap="round" />}
         {/* muscoli appena segnati sulla pelle: attacco del deltoide, piega del gomito, brachioradiale */}
@@ -254,6 +259,37 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
           <stop offset="0.6" stopColor="#000" stopOpacity="0" />
           <stop offset="1" stopColor="#000" stopOpacity="0.34" />
         </linearGradient>
+        {/* pelle di braccia, gambe e collo dipinta come quella del volto: luce calda da sinistra, il rosso sotto la pelle
+            nell'ombra, la stessa grana di pori */}
+        <linearGradient id={`${uid}sk`} x1="0" x2="1">
+          <stop offset="0" stopColor={blend(shade(skin, -0.16), "#7a3a26", 0.12)} />
+          <stop offset="0.24" stopColor={shade(skin, 0.15)} />
+          <stop offset="0.5" stopColor={skin} />
+          <stop offset="0.8" stopColor={blend(shade(skin, -0.16), "#7a3a26", 0.12)} />
+          <stop offset="1" stopColor={blend(shade(skin, -0.3), "#5a2618", 0.15)} />
+        </linearGradient>
+        <linearGradient id={`${uid}skh`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor={blend(shade(skin, -0.1), "#7a3a26", 0.1)} />
+          <stop offset="0.28" stopColor={shade(skin, 0.15)} />
+          <stop offset="0.55" stopColor={skin} />
+          <stop offset="1" stopColor={blend(shade(skin, -0.3), "#5a2618", 0.15)} />
+        </linearGradient>
+        <linearGradient id={`${uid}skn`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor={blend(shade(skin, -0.44), "#4a1c12", 0.2)} />
+          <stop offset="0.45" stopColor={shade(skin, -0.22)} />
+          <stop offset="1" stopColor={shade(skin, -0.1)} />
+        </linearGradient>
+        <radialGradient id={`${uid}skr`}>
+          <stop offset="0" stopColor={blend(skin, "#c4473f", 0.5)} stopOpacity="0.26" />
+          <stop offset="1" stopColor={blend(skin, "#c4473f", 0.5)} stopOpacity="0" />
+        </radialGradient>
+        <filter id={`${uid}skf`} x="0" y="0" width="40" height="40" filterUnits="userSpaceOnUse">
+          <feTurbulence type="fractalNoise" baseFrequency="1.6" numOctaves="2" seed="5" stitchTiles="stitch" />
+          <feColorMatrix type="matrix" values="0 0 0 0 0.3  0 0 0 0 0.14  0 0 0 0 0.09  0 0 0 1.5 -0.66" />
+        </filter>
+        <pattern id={`${uid}skp`} width="40" height="40" patternUnits="userSpaceOnUse">
+          <rect width="40" height="40" filter={`url(#${uid}skf)`} />
+        </pattern>
         {/* volume di braccia e gambe: cilindro con la luce da sinistra, il lato destro in ombra */}
         <linearGradient id={`${uid}lv`} x1="0" x2="1">
           <stop offset="0" stopColor="#000" stopOpacity="0.1" />
@@ -411,10 +447,16 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
                   <path d={`M${f(clothLeg.L[9].x + 0.5)} 337.6 Q${L(342, 0)} 342 ${f(clothLeg.R[9].x - 0.5)} 337.6`} stroke="#000" strokeOpacity="0.22" strokeWidth="2.2" fill="none" />
                 </g>
               ) : null}
-              <path d={legShape.d} fill={shorts ? skin : `url(#${uid}pa)`} stroke={OUT} strokeOpacity="0.54" strokeWidth="0.84" strokeLinejoin="round" />
+              <path d={legShape.d} fill={shorts ? `url(#${uid}sk)` : `url(#${uid}pa)`} stroke={shorts ? shade(skin, -0.55) : OUT} strokeOpacity={shorts ? 0.62 : 0.54} strokeWidth={shorts ? 0.7 : 0.84} strokeLinejoin="round" />
               <g clipPath={`url(#${uid}lg${i})`} pointerEvents="none">
                 {pants && !tight ? <FrontLegDetail uid={uid} L={L} legW={legW} kneeY={knee - 2} bottom={Math.min(326, bootTop)} /> : null}
-                <path d={legShape.d} fill={`url(#${uid}lv)`} />
+                {shorts ? (
+                  <g>
+                    <path d={legShape.d} fill={`url(#${uid}skp)`} opacity="0.12" />
+                    <ellipse cx={lx(knee)} cy={knee} rx={7 * W} ry={6} fill={`url(#${uid}skr)`} />
+                    <ellipse cx={lx(330)} cy={330} rx={5 * W} ry={4} fill={`url(#${uid}skr)`} opacity="0.6" />
+                  </g>
+                ) : <path d={legShape.d} fill={`url(#${uid}lv)`} />}
                 {/* ombra sotto la veste e tra le cosce */}
                 <rect x={lx(206) - 20} y="204" width="40" height="22" fill={`url(#${uid}ao)`} opacity="0.75" />
                 {shorts || tight ? (
@@ -474,7 +516,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
         {/* collo: disegnato prima della veste, così colletti e scolli lo coprono come di profilo */}
         <g className={live ? "aa-front-head" : undefined}>
           {/* collo: più stretto sotto il mento, si allarga nelle spalle; ombra del mento, muscoli appena segnati */}
-          <path d={`M${cx - 7.5} 76 L${cx + 7.5} 76 C${cx + 8} 88 ${cx + 9.5} 96 ${cx + 16} 103 L${cx - 16} 103 C${cx - 9.5} 96 ${cx - 8} 88 ${cx - 7.5} 76 Z`} fill={shade(skin, -0.2)} transform={woman ? undefined : `translate(${cx} 76) scale(1.1 1) translate(${-cx} -76)`} />
+          <path d={`M${cx - 7.5} 76 L${cx + 7.5} 76 C${cx + 8} 88 ${cx + 9.5} 96 ${cx + 16} 103 L${cx - 16} 103 C${cx - 9.5} 96 ${cx - 8} 88 ${cx - 7.5} 76 Z`} fill={`url(#${uid}skn)`} transform={woman ? undefined : `translate(${cx} 76) scale(1.1 1) translate(${-cx} -76)`} />
           <path d={`M${cx - 7.5} 76 C${cx - 8} 88 ${cx - 9.5} 96 ${cx - 16} 103 L${cx - 10} 103 C${cx - 6} 96 ${cx - 5} 88 ${cx - 5} 78 Z M${cx + 7.5} 76 C${cx + 8} 88 ${cx + 9.5} 96 ${cx + 16} 103 L${cx + 10} 103 C${cx + 6} 96 ${cx + 5} 88 ${cx + 5} 78 Z`} fill={shade(skin, -0.36)} opacity="0.5" />
           <ellipse cx={cx} cy="83" rx="9" ry="5" fill={`url(#${uid}sd)`} opacity="0.75" />
           <path d={`M${cx - 6} 84 Q${cx - 4} 94 ${cx - 1.4} 101 M${cx + 6} 84 Q${cx + 4} 94 ${cx + 1.4} 101`} stroke={shade(skin, -0.4)} strokeOpacity="0.3" strokeWidth="0.7" fill="none" />

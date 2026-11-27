@@ -111,7 +111,8 @@ function ArcherCard({ row, look, index, me }: {
 }) {
   const lv = levelOf(Math.max(0, row.xp ?? 0));
   const tint = DIVISION_TINT[row.division] ?? "#9aa39c";
-  const n = (v: number) => (v >= 10000 ? `${Math.round(v / 1000)}k` : v.toLocaleString("it-IT"));
+  // senza separatori delle migliaia (su Android «4.012» non ci stava): fino a 9999 il numero intero, poi in migliaia
+  const n = (v: number) => (v >= 10000 ? `${Math.round(v / 1000)}k` : String(Math.round(v)));
   const stats: { icon: IconName; v: number; label: string; color: string }[] = [
     { icon: "flag", v: row.gare, label: "gare", color: "#e6b325" },
     { icon: "podium", v: row.podi ?? 0, label: "podi", color: "#f1cf8a" },
