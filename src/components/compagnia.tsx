@@ -10,6 +10,7 @@ import { useLoad } from "@/lib/arcieri/use-load";
 import { teamKey } from "@/lib/arcieri/fitast-league";
 import { Avatar, Button, Card, ErrorNote, Field, Segmented, TextInput } from "./kit";
 import { Glyph } from "./icons";
+import { Insignia } from "./insignia";
 import { RankBars } from "./rank-bars";
 import { CrestPodium } from "./podium";
 import { JoinLinkSheet, TeamArchersInline, TeamArchersSheet } from "./fitast-league";
@@ -22,63 +23,79 @@ type Co = Board["companies"][number];
 
 type ContactKind = "phone" | "whatsapp" | "email" | "website" | "instagram" | "facebook" | "youtube" | "tiktok" | "address" | "board";
 
-function ContactIcon({ kind }: { kind: ContactKind }) {
-  const p = { fill: "none", stroke: "currentColor", strokeWidth: 1.9, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
-  return (
-    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden>
-      {kind === "phone" ? <path {...p} d="M6.6 3.5h2.6l1.4 4-2 1.3a11 11 0 0 0 6.6 6.6l1.3-2 4 1.4v2.6a2 2 0 0 1-2.2 2A16.5 16.5 0 0 1 4.6 5.7a2 2 0 0 1 2-2.2Z" /> : null}
-      {kind === "whatsapp" ? (
+/** il disegno a linee 24×24 di un contatto (tratti e riempimenti li decide chi lo disegna) */
+function contactArt(kind: ContactKind): ReactNode {
+  const dot = { fill: "currentColor", stroke: "none" };
+  switch (kind) {
+    case "phone":
+      return <path d="M6.6 3.5h2.6l1.4 4-2 1.3a11 11 0 0 0 6.6 6.6l1.3-2 4 1.4v2.6a2 2 0 0 1-2.2 2A16.5 16.5 0 0 1 4.6 5.7a2 2 0 0 1 2-2.2Z" />;
+    case "whatsapp":
+      return (
         <>
-          <path {...p} d="M4.5 19.5l1.2-3.6A8 8 0 1 1 8.5 18.6Z" />
-          <path {...p} d="M9.3 9.2c.2 2.3 2.8 4.9 5.2 5.3l1-1.3-1.8-.9-.8.8c-1-.4-2-1.4-2.4-2.4l.8-.8-.9-1.8Z" strokeWidth={1.4} />
+          <path d="M4.5 19.5l1.2-3.6A8 8 0 1 1 8.5 18.6Z" />
+          <path d="M9.6 9.4c.4 2.1 2.6 4.3 4.8 4.8l.9-1.2-1.6-.8-.7.7c-.9-.4-1.8-1.3-2.2-2.2l.7-.7-.8-1.6Z" {...dot} />
         </>
-      ) : null}
-      {kind === "email" ? (
+      );
+    case "email":
+      return (
         <>
-          <rect {...p} x="3.5" y="5.5" width="17" height="13" rx="2.5" />
-          <path {...p} d="m4.5 7 7.5 6 7.5-6" />
+          <rect x="3.5" y="5.5" width="17" height="13" rx="2.5" />
+          <path d="m4.5 7 7.5 6 7.5-6" />
         </>
-      ) : null}
-      {kind === "website" ? (
+      );
+    case "website":
+      return (
         <>
-          <circle {...p} cx="12" cy="12" r="8.5" />
-          <path {...p} d="M3.5 12h17M12 3.5c2.6 2.6 2.6 14.4 0 17M12 3.5c-2.6 2.6-2.6 14.4 0 17" />
+          <circle cx="12" cy="12" r="8.5" />
+          <path d="M3.5 12h17M12 3.5c2.6 2.6 2.6 14.4 0 17M12 3.5c-2.6 2.6-2.6 14.4 0 17" />
         </>
-      ) : null}
-      {kind === "instagram" ? (
+      );
+    case "instagram":
+      return (
         <>
-          <rect {...p} x="4" y="4" width="16" height="16" rx="4.5" />
-          <circle {...p} cx="12" cy="12" r="3.6" />
-          <circle cx="16.7" cy="7.3" r="1.1" fill="currentColor" />
+          <rect x="4" y="4" width="16" height="16" rx="4.5" />
+          <circle cx="12" cy="12" r="3.6" />
+          <circle cx="16.7" cy="7.3" r="1.1" {...dot} />
         </>
-      ) : null}
-      {kind === "facebook" ? (
+      );
+    case "facebook":
+      return (
         <>
-          <rect {...p} x="4" y="4" width="16" height="16" rx="4" />
-          <path {...p} d="M14.6 8.2h-1.4a1.9 1.9 0 0 0-1.9 1.9V20M9.6 12.6h4.6" />
+          <rect x="4" y="4" width="16" height="16" rx="4" />
+          <path d="M14.6 8.2h-1.4a1.9 1.9 0 0 0-1.9 1.9V20M9.6 12.6h4.6" />
         </>
-      ) : null}
-      {kind === "youtube" ? (
+      );
+    case "youtube":
+      return (
         <>
-          <rect {...p} x="3" y="6" width="18" height="12" rx="4" />
-          <path d="M10.4 9.4v5.2l4.4-2.6Z" fill="currentColor" />
+          <rect x="3" y="6" width="18" height="12" rx="4" />
+          <path d="M10.4 9.4v5.2l4.4-2.6Z" {...dot} />
         </>
-      ) : null}
-      {kind === "tiktok" ? <path {...p} d="M13.5 4v10.6a3.3 3.3 0 1 1-3.3-3.3M13.5 4c.4 2.4 2 3.9 4.6 4.1" /> : null}
-      {kind === "address" ? (
+      );
+    case "tiktok":
+      return <path d="M13.5 4v10.6a3.3 3.3 0 1 1-3.3-3.3M13.5 4c.4 2.4 2 3.9 4.6 4.1" />;
+    case "address":
+      return (
         <>
-          <path {...p} d="M12 21s-6.5-6-6.5-11a6.5 6.5 0 0 1 13 0c0 5-6.5 11-6.5 11Z" />
-          <circle {...p} cx="12" cy="10" r="2.4" />
+          <path d="M12 21s-6.5-6-6.5-11a6.5 6.5 0 0 1 13 0c0 5-6.5 11-6.5 11Z" />
+          <circle cx="12" cy="10" r="2.4" />
         </>
-      ) : null}
-      {kind === "board" ? (
+      );
+    case "board":
+      return (
         <>
-          <path {...p} d="M4.5 6.5a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H10l-4.5 3.5v-3.5h0a1 1 0 0 1-1-1Z" />
-          <path {...p} d="M8.5 9h7M8.5 12h4.5" />
+          <path d="M4.5 6.5a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H10l-4.5 3.5v-3.5h0a1 1 0 0 1-1-1Z" />
+          <path d="M8.5 9h7M8.5 12h4.5" />
         </>
-      ) : null}
-    </svg>
-  );
+      );
+    default:
+      return null;
+  }
+}
+
+/** il contatto come moneta coniata: bordo d'oro, smalto del suo colore e il disegno in rilievo (come le icone del Menu) */
+function ContactCoin({ kind, tint, size }: { kind: ContactKind; tint: string; size: number }) {
+  return <Insignia art={contactArt(kind)} metal="gold" enamel={tint} shape="round" size={size} still />;
 }
 
 const LABEL: Record<ContactKind, string> = {
@@ -124,20 +141,14 @@ function hrefOf(kind: ContactKind, value: string) {
 
 function ContactButton({ kind, href, tint, compact = false }: { kind: ContactKind; href: string; tint: string; /** solo il bottone tondo, senza scritta (nell'intestazione) */ compact?: boolean }) {
   if (compact) {
-    const dot = (
-      <span className="grid h-9 w-9 place-items-center rounded-full text-white shadow-[0_6px_14px_-8px_rgba(0,0,0,.8)] [&_svg]:h-[17px] [&_svg]:w-[17px]" style={{ background: `linear-gradient(150deg, color-mix(in srgb, ${tint} 85%, white 15%), color-mix(in srgb, ${tint} 70%, black 30%))` }}>
-        <ContactIcon kind={kind} />
-      </span>
-    );
+    const dot = <ContactCoin kind={kind} tint={tint} size={42} />;
     if (kind === "board") return <Link to="/bacheca" aria-label={LABEL[kind]} title={LABEL[kind]} className="aa-press">{dot}</Link>;
     const ext = /^https:/.test(href);
     return <a href={href} aria-label={LABEL[kind]} title={LABEL[kind]} target={ext ? "_blank" : undefined} rel={ext ? "noreferrer" : undefined} className="aa-press">{dot}</a>;
   }
   const inner = (
     <>
-      <span className="grid h-12 w-12 place-items-center rounded-2xl text-white shadow-[0_6px_18px_-8px_rgba(0,0,0,.7)]" style={{ background: `linear-gradient(150deg, color-mix(in srgb, ${tint} 85%, white 15%), color-mix(in srgb, ${tint} 70%, black 30%))` }}>
-        <ContactIcon kind={kind} />
-      </span>
+      <ContactCoin kind={kind} tint={tint} size={52} />
       <span className="text-[0.66rem] font-semibold text-muted">{LABEL[kind]}</span>
     </>
   );
@@ -214,7 +225,7 @@ export function CompanyHero({ co, canEdit, onEdit }: { co: Co; canEdit: boolean;
         </div>
         {co.bio ? <p className="line-clamp-2 text-xs text-white/80">{co.bio}</p> : null}
         {/* contatti: una fila di bottoni tondi (il nome compare tenendo premuto), poi il campo */}
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(2.25rem,1fr))] justify-items-center gap-1">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(2.75rem,1fr))] justify-items-center gap-1">
           {links.map((item) => <ContactButton key={item.kind} kind={item.kind} href={item.href} tint={CONTACT_TINT[item.kind]} compact />)}
         </div>
         {co.address ? <a className="truncate text-xs text-white/80 underline-offset-2 hover:underline" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(co.address)}`} target="_blank" rel="noreferrer">Campo: {co.address}</a> : null}

@@ -3,7 +3,7 @@
  * dei trofei di squadra (scritti dal capo compagnia o dallo staff) e i podi di tutti i suoi arcieri.
  */
 import { Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Button, Card, ErrorNote, Field, Select, TextInput, cx } from "@/components/kit";
 import { archerPodiums, companyPalmares, deleteCompanyAward, saveCompanyAward, type Award, type Podium, type TeamResult } from "@/lib/arcieri/palmares.api";
 import { useLoad } from "@/lib/arcieri/use-load";
@@ -16,38 +16,192 @@ const METAL: Record<number, { face: string; rim: string; ribbon: string; label: 
 
 const fmtDay = (d: string) => (d ? new Date(`${d}T12:00:00`).toLocaleDateString("it-IT", { day: "numeric", month: "short", year: "numeric" }) : "");
 
-/** medaglia con nastro e numero del posto */
+/** metallo coniato: luce, chiaro, medio, scuro, ombra profonda */
+const METALS: Record<"gold" | "silver" | "bronze" | "iron", [string, string, string, string, string]> = {
+  gold: ["#fff8d6", "#f7d774", "#dca733", "#9a6a12", "#4f3406"],
+  silver: ["#ffffff", "#eef2f6", "#c3ccd5", "#7f8a96", "#3b434c"],
+  bronze: ["#ffe3c4", "#eaa86b", "#bb773d", "#7c471d", "#40230d"],
+  iron: ["#e9eef2", "#aeb8c1", "#7c8893", "#4c5761", "#262d33"],
+};
+const metalOf = (place: number | null) => METALS[place === 1 ? "gold" : place === 2 ? "silver" : place === 3 ? "bronze" : place == null ? "gold" : "iron"];
+/** nastro: colore, filetto */
+const RIBBONS: Record<number, [string, string]> = { 1: ["#b3202e", "#f7d774"], 2: ["#1f4f9a", "#eef2f6"], 3: ["#1f6b44", "#eaa86b"] };
+
+/** un rametto d'alloro in rilievo lungo il bordo del campo (lato -1 sinistra, 1 destra) */
+function laurelLeaves(side: 1 | -1, fill: string, dx = 0, dy = 0) {
+  return Array.from({ length: 6 }, (_, i) => {
+    const a = ((side === 1 ? 64 - i * 19 : 116 + i * 19) * Math.PI) / 180;
+    const r = 19.5;
+    const x = 40 + Math.cos(a) * r + dx;
+    const y = 66 + Math.sin(a) * r + dy;
+    const rot = (a * 180) / Math.PI + (side === 1 ? -90 : 90) + side * 28;
+    return <ellipse key={i} cx={x.toFixed(2)} cy={y.toFixed(2)} rx="1.7" ry="3.6" transform={`rotate(${rot.toFixed(1)} ${x.toFixed(2)} ${y.toFixed(2)})`} fill={fill} />;
+  });
+}
+
+/** medaglia coniata: nastro con filetto, anello, bordo con perline, campo lucido con alloro e il posto in rilievo */
 export function Medal({ place, size = 44 }: { place: number; size?: number }) {
-  const m = METAL[place] ?? { face: "#9fb3c8", rim: "#5c6f82", ribbon: "#4b5563", label: `${place}°` };
+  const id = `md${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
+  const [lux, hi, mid, lo, deep] = metalOf(place);
+  const [rib, stripe] = RIBBONS[place] ?? ["#4b5563", "#c3ccd5"];
+  const label = METAL[place]?.label ?? `${place}°`;
+  const fine = size >= 34;
   return (
-    <svg width={size} height={size * 1.25} viewBox="0 0 40 50" aria-label={`${m.label}: ${place}° posto`} role="img">
-      <path d="M11 0h7l5 16h-7z" fill={m.ribbon} />
-      <path d="M29 0h-7l-5 16h7z" fill={m.ribbon} opacity="0.82" />
-      <circle cx="20" cy="32" r="15" fill={m.rim} />
-      <circle cx="20" cy="32" r="12" fill={m.face} />
-      <circle cx="20" cy="32" r="12" fill="none" stroke="#fff" strokeOpacity="0.35" strokeWidth="1" strokeDasharray="2 2.2" />
-      <text x="20" y="37" textAnchor="middle" fontSize="13" fontWeight="800" fill={m.rim} fontFamily="system-ui, sans-serif">
-        {place}
-      </text>
+    <svg width={size} height={size * 1.25} viewBox="0 0 80 100" aria-label={`${label}: ${place}° posto`} role="img" style={{ overflow: "visible" }}>
+      <defs>
+        <linearGradient id={`${id}r`} x1="0.1" y1="0" x2="0.9" y2="1">
+          <stop offset="0" stopColor={lux} />
+          <stop offset="0.25" stopColor={hi} />
+          <stop offset="0.52" stopColor={mid} />
+          <stop offset="0.75" stopColor={lo} />
+          <stop offset="1" stopColor={hi} />
+        </linearGradient>
+        <linearGradient id={`${id}b`} x1="0.9" y1="1" x2="0.1" y2="0">
+          <stop offset="0" stopColor={lux} />
+          <stop offset="0.5" stopColor={mid} />
+          <stop offset="1" stopColor={deep} />
+        </linearGradient>
+        <radialGradient id={`${id}f`} cx="0.36" cy="0.3" r="0.85">
+          <stop offset="0" stopColor={lux} />
+          <stop offset="0.35" stopColor={hi} />
+          <stop offset="0.75" stopColor={mid} />
+          <stop offset="1" stopColor={lo} />
+        </radialGradient>
+        <linearGradient id={`${id}n`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor={lux} />
+          <stop offset="0.45" stopColor={hi} />
+          <stop offset="1" stopColor={mid} />
+        </linearGradient>
+        <linearGradient id={`${id}rb`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor={rib} />
+          <stop offset="1" stopColor={rib} stopOpacity="0.78" />
+        </linearGradient>
+        <linearGradient id={`${id}g`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#fff" stopOpacity="0.65" />
+          <stop offset="1" stopColor="#fff" stopOpacity="0" />
+        </linearGradient>
+        <clipPath id={`${id}c`}>
+          <circle cx="40" cy="66" r="24.5" />
+        </clipPath>
+      </defs>
+      {/* nastro a V con il filetto e la piega */}
+      <path d="M50 0 H66 L48 42 H33 Z" fill={`url(#${id}rb)`} />
+      <path d="M50 0 H66 L48 42 H33 Z" fill="#000" opacity="0.22" />
+      <path d="M14 0 H30 L47 42 H32 Z" fill={`url(#${id}rb)`} />
+      <path d="M20 0 H24 L41.5 42 H37.5 Z" fill={stripe} opacity="0.9" />
+      <path d="M56 0 H60 L43.5 42 H39.5 Z" fill={stripe} opacity="0.55" />
+      <path d="M14 0 H30 L32 5 H16 Z" fill="#000" opacity="0.18" />
+      {/* anello */}
+      <circle cx="40" cy="38.5" r="4.6" fill="none" stroke={deep} strokeWidth="3.2" />
+      <circle cx="40" cy="38.5" r="4.6" fill="none" stroke={`url(#${id}r)`} strokeWidth="2.2" />
+      {/* spessore e bordo */}
+      <circle cx="40" cy="68.6" r="30" fill={deep} />
+      <circle cx="40" cy="66" r="30" fill={`url(#${id}r)`} stroke={deep} strokeWidth="0.7" strokeOpacity="0.7" />
+      <circle cx="40" cy="66" r="27.2" fill={`url(#${id}b)`} />
+      {fine ? (
+        <g fill={lux} opacity="0.9">
+          {Array.from({ length: 26 }, (_, i) => {
+            const a = (i / 26) * Math.PI * 2;
+            return <circle key={i} cx={(40 + Math.cos(a) * 28.6).toFixed(2)} cy={(66 + Math.sin(a) * 28.6).toFixed(2)} r="0.95" />;
+          })}
+        </g>
+      ) : null}
+      {/* campo lucido, alloro e numero in rilievo */}
+      <circle cx="40" cy="66" r="24.5" fill={`url(#${id}f)`} />
+      {fine ? (
+        <g>
+          {laurelLeaves(-1, deep, 0.5, 0.8)}
+          {laurelLeaves(1, deep, 0.5, 0.8)}
+          {laurelLeaves(-1, `url(#${id}n)`)}
+          {laurelLeaves(1, `url(#${id}n)`)}
+        </g>
+      ) : null}
+      {/* il posto in rilievo: ombra, contorno scuro, metallo e un filo di luce */}
+      <g style={{ fontFamily: "var(--font-disp, 'Barlow Condensed', system-ui, sans-serif)" }} fontSize={fine ? 34 : 40} fontWeight="800" textAnchor="middle">
+        <text x="41.2" y={fine ? 80.4 : 82.4} fill={deep} opacity="0.8">{place}</text>
+        <text x="40" y={fine ? 78.4 : 80.4} fill={`url(#${id}n)`} stroke={deep} strokeWidth="1.3" paintOrder="stroke">{place}</text>
+        <text x="39.5" y={fine ? 77.7 : 79.7} fill="none" stroke={lux} strokeWidth="0.6" opacity="0.75">{place}</text>
+      </g>
+      {/* riflesso */}
+      <g clipPath={`url(#${id}c)`}>
+        <ellipse cx="30" cy="50" rx="22" ry="12" transform="rotate(-28 30 50)" fill={`url(#${id}g)`} opacity="0.75" />
+      </g>
+      {place === 1 && fine ? <path d="M63 43 l1.4 3.6 3.6 1.4 -3.6 1.4 -1.4 3.6 -1.4 -3.6 -3.6 -1.4 3.6 -1.4 Z" fill="#fff" opacity="0.95" /> : null}
     </svg>
   );
 }
 
-/** coppa per i trofei di squadra */
-function Cup({ place, size = 40 }: { place: number | null; size?: number }) {
-  const m = place ? METAL[place] : null;
-  const face = m?.face ?? "#e8c770";
-  const rim = m?.rim ?? "#a47a1d";
+/** coppa per i trofei di squadra: calice di metallo con anse, emblema smaltato e base con targhetta */
+export function Cup({ place, size = 40 }: { place: number | null; size?: number }) {
+  const id = `cp${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
+  const [lux, hi, mid, lo, deep] = metalOf(place);
+  const enamel = place === 2 ? ["#7cc0ff", "#2063c8", "#091f4d"] : place === 3 ? ["#6be8a8", "#14905c", "#05331f"] : ["#ff7a8a", "#c41d3a", "#4e0614"];
+  const fine = size >= 34;
   return (
-    <svg width={size} height={size} viewBox="0 0 40 40" aria-hidden>
-      <path d="M11 5h18v9a9 9 0 0 1-18 0z" fill={face} stroke={rim} strokeWidth="1.5" />
-      <path d="M11 8H6a5 5 0 0 0 6 7M29 8h5a5 5 0 0 1-6 7" fill="none" stroke={rim} strokeWidth="2" />
-      <path d="M18 23h4v6h-4z" fill={rim} />
-      <path d="M12 29h16v5H12z" rx="1" fill={rim} />
+    <svg width={size} height={size} viewBox="0 0 80 80" aria-hidden style={{ overflow: "visible" }}>
+      <defs>
+        {/* il calice è un cilindro: luce a sinistra, ombra ai lati */}
+        <linearGradient id={`${id}k`} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stopColor={lo} />
+          <stop offset="0.22" stopColor={hi} />
+          <stop offset="0.34" stopColor={lux} />
+          <stop offset="0.5" stopColor={hi} />
+          <stop offset="0.78" stopColor={mid} />
+          <stop offset="1" stopColor={lo} />
+        </linearGradient>
+        <linearGradient id={`${id}v`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor={hi} />
+          <stop offset="1" stopColor={lo} />
+        </linearGradient>
+        <linearGradient id={`${id}w`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#4a2e1a" />
+          <stop offset="1" stopColor="#1b0f07" />
+        </linearGradient>
+        <radialGradient id={`${id}e`} cx="0.38" cy="0.32" r="0.8">
+          <stop offset="0" stopColor={enamel[0]} />
+          <stop offset="0.5" stopColor={enamel[1]} />
+          <stop offset="1" stopColor={enamel[2]} />
+        </radialGradient>
+        <clipPath id={`${id}c`}>
+          <path d="M17 11 H63 V22 C63 38 52 47 40 47 C28 47 17 38 17 22 Z" />
+        </clipPath>
+      </defs>
+      <ellipse cx="40" cy="77.5" rx="24" ry="2.6" fill="#000" opacity="0.35" />
+      {/* base di legno con la targhetta */}
+      <rect x="17" y="63" width="46" height="13" rx="2.2" fill={`url(#${id}w)`} />
+      <rect x="17" y="63" width="46" height="2" rx="1" fill="#fff" opacity="0.12" />
+      <rect x="30" y="67" width="20" height="5.4" rx="1" fill={`url(#${id}k)`} stroke={deep} strokeWidth="0.5" />
+      {/* gradino e fusto con il nodo */}
+      <rect x="22" y="57" width="36" height="7.5" rx="2" fill={`url(#${id}k)`} stroke={deep} strokeWidth="0.6" />
+      <path d="M35.5 46 H44.5 L43 57.5 H37 Z" fill={`url(#${id}k)`} stroke={deep} strokeWidth="0.6" />
+      <ellipse cx="40" cy="51.5" rx="6" ry="2.6" fill={`url(#${id}k)`} stroke={deep} strokeWidth="0.6" />
+      {/* anse */}
+      <path d="M18 16 C5 15 5 34 21 37 M62 16 C75 15 75 34 59 37" fill="none" stroke={deep} strokeWidth="5.2" strokeLinecap="round" />
+      <path d="M18 16 C5 15 5 34 21 37 M62 16 C75 15 75 34 59 37" fill="none" stroke={`url(#${id}v)`} strokeWidth="3.4" strokeLinecap="round" />
+      {/* calice */}
+      <path d="M17 11 H63 V22 C63 38 52 47 40 47 C28 47 17 38 17 22 Z" fill={`url(#${id}k)`} stroke={deep} strokeWidth="0.8" />
+      <g clipPath={`url(#${id}c)`}>
+        <rect x="24" y="8" width="5" height="42" fill="#fff" opacity="0.35" />
+        <path d="M17 34 C26 44 54 44 63 34 V48 H17 Z" fill={deep} opacity="0.18" />
+      </g>
+      <ellipse cx="40" cy="11" rx="23" ry="3.6" fill={`url(#${id}v)`} stroke={deep} strokeWidth="0.7" />
+      <ellipse cx="40" cy="11.4" rx="19.5" ry="2.2" fill={deep} opacity="0.85" />
+      {/* emblema smaltato con il posto o la stella */}
+      <circle cx="40" cy="26" r="9.2" fill={deep} />
+      <circle cx="40" cy="25.5" r="9" fill={`url(#${id}v)`} />
+      <circle cx="40" cy="25.5" r="7.2" fill={`url(#${id}e)`} />
       {place ? (
-        <text x="20" y="15.5" textAnchor="middle" fontSize="9" fontWeight="800" fill={rim} fontFamily="system-ui, sans-serif">
+        <text x="40" y="30" textAnchor="middle" fontSize="13" fontWeight="800" fill={lux} style={{ fontFamily: "var(--font-disp, 'Barlow Condensed', system-ui, sans-serif)" }}>
           {place}
         </text>
+      ) : (
+        <path d="M40 19.6 l1.8 3.8 4.1.5 -3 2.8 .8 4.1 -3.7 -2 -3.7 2 .8 -4.1 -3 -2.8 4.1 -.5 Z" fill={lux} />
+      )}
+      {fine ? (
+        <g fill="#fff">
+          <path d="M66 6 l1.1 2.9 2.9 1.1 -2.9 1.1 -1.1 2.9 -1.1 -2.9 -2.9 -1.1 2.9 -1.1 Z" opacity="0.95" />
+          <circle cx="12" cy="9" r="1" opacity="0.7" />
+        </g>
       ) : null}
     </svg>
   );

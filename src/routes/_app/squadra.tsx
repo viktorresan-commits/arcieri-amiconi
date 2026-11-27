@@ -6,7 +6,7 @@ import { TargetGL } from "@/components/target-gl";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { listCompanies } from "@/lib/arcieri/compagnie.api";
 import { CompanyForm, CompanyHero, CompanyLeague, joinAndReload } from "@/components/compagnia";
-import { CompanyTrophies } from "@/components/palmares";
+import { CompanyTrophies, Cup } from "@/components/palmares";
 import { MarketTab } from "@/components/market";
 import { FitastArchersCard, FitastCompanyBoard, FitastHeader, FitastTeamsBoard, JoinLinkSheet, useFitastLeague } from "@/components/fitast-league";
 import { FitastArchiveCard } from "@/components/fitast-archive";
@@ -286,7 +286,7 @@ export function CompagniaPage({ initial }: { initial?: Section } = {}) {
           <CompanyHero co={company} canEdit={Boolean(companies.data?.canEdit)} onEdit={() => setEditing("edit")} />
           {/* il palmarès sta nel profilo della compagnia: podi, piazzamenti di squadra e premi dell'app */}
           <button type="button" onClick={() => setShowTrophies((v) => !v)} aria-expanded={showTrophies} className="aa-press -mt-2 flex min-h-12 items-center gap-3 rounded-2xl border border-line bg-white/[0.03] px-3 text-left">
-            <Glyph name="trophy" size={20} className="shrink-0 text-[#e0b15a]" />
+            <Cup place={null} size={34} />
             <span className="min-w-0 flex-1">
               <b className="block text-sm">Podi e premi della compagnia</b>
               <span className="block text-[0.7rem] text-muted">Bacheca, piazzamenti di squadra e premi dell'app</span>
