@@ -111,7 +111,9 @@ export function metricsOf(lm: Landmark[], hand: Hand, aspect: number, heightPx =
   if (lm.length < 25) return null;
   const s = sides(hand);
   const P = (i: number) => ({ x: lm[i].x * aspect, y: lm[i].y });
-  if (![11, 12, 13, 14, 15, 16].every((i) => vis(lm[i]) > 0.3)) return null;
+  // spalle viste; gomiti e polsi anche coperti (mano della corda dietro la testa, arciere di spalle):
+  // il modello li mette comunque dove sono, con visibilità bassa
+  if (![11, 12].every((i) => vis(lm[i]) > 0.3) || ![13, 14].every((i) => vis(lm[i]) > 0.08) || ![15, 16].every((i) => vis(lm[i]) > 0.01)) return null;
   const w = Math.hypot(P(11).x - P(12).x, P(11).y - P(12).y) || 1e-3;
   const drawAngle = joint(P(s.draw[0]), P(s.draw[1]), P(s.draw[2]));
   const bowAngle = joint(P(s.bow[0]), P(s.bow[1]), P(s.bow[2]));
@@ -186,13 +188,30 @@ export function notesFor(m: Metrics): string[] {
 
 const ramp = (v: number, bad: number, good: number) => Math.max(0, Math.min(1, (v - bad) / (good - bad)));
 
+/** altri segnali del video oltre ai punti del corpo: i colpi di suono (lo schiocco della corda) */
+export type Cues = { audio?: { t: number; z: number }[] | null; /** per le prove: i segnali di ogni campione */ debug?: (t: number, parts: Record<string, number>) => void };
+
 /**
  * Trova i tiri. L'ancoraggio è la mano della corda vicina alla bocca, mani lontane, braccio
- * dell'arco su, mano quasi ferma. Il rilascio è lo scatto della mano subito dopo; prima si
- * cercano l'alzata e la trazione, dopo l'accompagnamento.
+ * dell'arco su, mano quasi ferma. Il rilascio si cerca dentro tutta la tenuta (anche quando la
+ * mano resta al viso dopo il rilascio, come con l'arco storico): è il momento in cui più segnali
+ * insieme cambiano di colpo. Prima si cercano l'alzata e la trazione, dopo l'accompagnamento.
  */
-export function analyzeShots(samples: Sample[], hand: Hand): Analysis {
-  const valid = samples.filter((s): s is Sample & { m: Metrics; lm: Landmark[] } => Boolean(s.m && s.lm));
+export function analyzeShots(samples: Sample[], hand: Hand, cues: Cues = {}): Analysis {
+  let valid = samples.filter((s): s is Sample & { m: Metrics; lm: Landmark[] } => Boolean(s.m && s.lm));
+  // fotogrammi in cui il modello ha preso un'altra persona (più piccola, sullo sfondo): il busto (spalle-anche)
+  // cambia poco anche se l'arciere ruota, quindi un busto molto diverso dal solito non è l'arciere
+  {
+    const torso = (lm: Landmark[]) => (vis(lm[23]) > 0.3 && vis(lm[24]) > 0.3 ? Math.abs((lm[11].y + lm[12].y) / 2 - (lm[23].y + lm[24].y) / 2) : null);
+    const list = valid.map((v) => torso(v.lm)).filter((x): x is number => x != null);
+    if (list.length >= 10) {
+      const mt = median(list);
+      valid = valid.filter((v) => {
+        const t = torso(v.lm);
+        return t == null || (t > mt * 0.6 && t < mt * 1.7);
+      });
+    }
+  }
   if (valid.length < 6) return { shots: [], spread: null };
   const n = valid.length;
   // una sola scala per tutto il video (larghezza spalle mediana): più stabile se l'arciere ruota
@@ -234,74 +253,248 @@ export function analyzeShots(samples: Sample[], hand: Hand): Analysis {
       }
     }
   }
-  // una tenuta subito dopo un'altra (meno di 1,5 s) è l'accompagnamento, non un nuovo tiro
+  // tenute vicine (meno di 1,5 s) sono lo stesso tiro: assestamento all'ancoraggio, oppure il rilascio
+  // con la mano che resta al viso (accompagnamento). Il rilascio si cerca in tutto il tratto.
   const kept: [number, number][] = [];
   for (const r of runs) {
     const prev = kept[kept.length - 1];
-    if (prev && valid[r[0]].t - valid[prev[1]].t < 1.5) continue;
-    kept.push(r);
+    if (prev && valid[r[0]].t - valid[prev[1]].t < 1.5) prev[1] = r[1];
+    else kept.push([r[0], r[1]]);
   }
 
-  /**
-   * Rilascio morbido (arco storico, longbow, rilascio con le dita): la mano della corda, ferma
-   * all'ancoraggio, scivola indietro di qualche centimetro e poi resta lì nell'accompagnamento.
-   * Non è uno scatto veloce e la mano resta al viso, quindi la tenuta sembrava continuare fino a
-   * quando l'arciere abbassava le braccia (rilascio segnato un secondo dopo, o mai).
-   * Si cerca dentro la tenuta: mano ferma per almeno 0,2 s, poi in 0,3 s si allontana dall'arco
-   * (mani più distanti di almeno 7 centesimi di spalla, velocità di picco sopra 0,45 spalle al
-   * secondo) e non torna avanti.
-   */
-  const softRelease = (a: number, b: number): number | null => {
-    const sp = (i: number) => valid[i].m.spread;
-    for (let i = a + 2; i <= Math.min(n - 2, b + 2); i += 1) {
-      if (valid[i].t - valid[a].t < 0.25 || !valid[i].m.bowUp) continue;
-      let j = i - 1;
-      while (j > a && speed[j] < 0.4 && valid[i].t - valid[j].t <= 0.6) j -= 1;
-      if (valid[i - 1].t - valid[j + 1].t < 0.2) continue;
-      let k = i;
-      let vmax = speed[i];
-      while (k + 1 < n && valid[k + 1].t - valid[i].t <= 0.3) {
-        k += 1;
-        vmax = Math.max(vmax, speed[k]);
-      }
-      if (sp(k) - sp(i - 1) < 0.07 || vmax < 0.45) continue;
-      // non torna avanti nel mezzo secondo dopo: era un rilascio, non un aggiustamento
-      let after = k;
-      while (after + 1 < n && valid[after + 1].t - valid[k].t <= 0.3) after += 1;
-      if (sp(after) < sp(i - 1) + 0.05) continue;
-      // il momento in cui la mano parte davvero
-      let at = i;
-      while (at < k && speed[at] < 0.4) at += 1;
-      return at;
+  /* ---------- segnali del rilascio ---------- */
+  const idxAt = (t: number) => {
+    let lo = 0;
+    let hi = n;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (valid[mid].t < t) lo = mid + 1;
+      else hi = mid;
     }
-    return null;
+    return Math.min(n - 1, lo);
+  };
+  const dist = (p: { x: number; y: number }, q: { x: number; y: number }) => Math.hypot(p.x - q.x, p.y - q.y) / scale;
+  // posizione media di pochi campioni attorno a un tempo (toglie il tremolio dei punti)
+  const avgPx = (pick: (m: Metrics) => { x: number; y: number }, t0: number, t1: number) => {
+    const a = idxAt(t0);
+    const b = Math.max(a, idxAt(t1) - (valid[idxAt(t1)].t > t1 ? 1 : 0));
+    let x = 0;
+    let y = 0;
+    for (let k = a; k <= b; k++) {
+      const p = pick(valid[k].m);
+      x += p.x;
+      y += p.y;
+    }
+    const c = b - a + 1;
+    return { x: x / c, y: y / c };
+  };
+  const drawAt = (t0: number, t1: number) => avgPx((m) => m.drawPx, t0, t1);
+  const bowAt = (t0: number, t1: number) => avgPx((m) => m.bowPx, t0, t1);
+  const spreadAt = (t0: number, t1: number) => {
+    const a = idxAt(t0);
+    const b = Math.max(a, idxAt(t1));
+    let s = 0;
+    for (let k = a; k <= b; k++) s += valid[k].m.spread;
+    return s / (b - a + 1);
+  };
+  // dita della mano della corda: piegate sulla corda (aggancio) o aperte dopo il rilascio
+  const drawWrist = sides(hand).draw[2] as 15 | 16;
+  const curlOf = (lm: Landmark[]) => {
+    const w = handPoint(lm, drawWrist, 0);
+    const m9 = handPoint(lm, drawWrist, 9);
+    if (!w || !m9) return null;
+    const L = Math.hypot(m9.x - w.x, m9.y - w.y);
+    if (L < 1e-4) return null;
+    let s = 0;
+    let c = 0;
+    for (const [mcp, tip] of [[5, 8], [9, 12], [13, 16]] as const) {
+      const a = handPoint(lm, drawWrist, mcp);
+      const b = handPoint(lm, drawWrist, tip);
+      if (!a || !b) continue;
+      s += Math.hypot(b.x - a.x, b.y - a.y) / L;
+      c++;
+    }
+    return c ? s / c : null;
+  };
+  const curlAt = (t0: number, t1: number) => {
+    const list: number[] = [];
+    for (let k = idxAt(t0); k < n && valid[k].t <= t1; k++) {
+      const v = curlOf(valid[k].lm);
+      if (v != null) list.push(v);
+    }
+    return list.length >= 2 ? median(list) : null;
+  };
+  // freccia vista nel fotogramma (dove arco e freccia sono stati cercati)
+  const anyGear = valid.some((v) => v.g !== undefined);
+  const arrowShare = (t0: number, t1: number) => {
+    let seen = 0;
+    let c = 0;
+    for (let k = idxAt(t0); k < n && valid[k].t <= t1; k++) {
+      c++;
+      if (valid[k].g?.arrow) seen++;
+    }
+    return c ? seen / c : 0;
+  };
+  // un rilascio nel suono sono due colpi: lo schiocco della corda e, circa un terzo di secondo dopo,
+  // la freccia che colpisce il paglione. Il secondo non è un rilascio: conta poco
+  const sounds = cues.audio
+    ? cues.audio.map((o) => ({ t: o.t, z: cues.audio!.some((p) => o.t - p.t >= 0.22 && o.t - p.t <= 0.5 && p.z >= 0.45 * o.z) ? o.z * 0.3 : o.z }))
+    : null;
+  const hfAt = (t0: number, t1: number) => {
+    const list: number[] = [];
+    for (let k = idxAt(t0); k < n && valid[k].t <= t1; k++) list.push(valid[k].m.handFace);
+    return list.length ? median(list) : valid[idxAt(t0)].m.handFace;
+  };
+  // mano al viso nella tenuta in corso (si misura per ogni tiro)
+  let anchorHf = 0;
+  let faceSeen = anchored;
+  let loudest = 0;
+  const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+  /**
+   * Quanto il campione i sembra il rilascio. Insieme, nell'istante: la mano della corda era ferma e
+   * scatta via (lontano dall'arco); la mano dell'arco, ferma in mira, reagisce subito dopo (l'arco
+   * cade o va avanti); le dita si aprono; la freccia non si vede più; lo schiocco della corda nel suono.
+   * Una trazione che continua non è un rilascio: la mano si muoveva già prima e l'arco resta fermo.
+   */
+  const evidence = (i: number) => {
+    const t = valid[i].t;
+    const pre = drawAt(t - 0.25, t - 0.05);
+    const pre2 = drawAt(t - 0.5, t - 0.3);
+    const post = drawAt(t + 0.12, t + 0.28);
+    const jump = dist(pre, post);
+    const before = dist(pre2, pre);
+    const away = spreadAt(t + 0.15, t + 0.35) - spreadAt(t - 0.25, t - 0.05);
+    const b0 = bowAt(t - 0.2, t - 0.02);
+    const bowAfter = Math.max(dist(b0, bowAt(t + 0.15, t + 0.3)), dist(b0, bowAt(t + 0.35, t + 0.55)));
+    const bowBefore = dist(bowAt(t - 0.6, t - 0.4), b0);
+    const bowEarly = dist(b0, bowAt(t + 0.08, t + 0.25));
+    let score = 1.1 * clamp((jump - 0.8 * before) / 0.18, 0, 1.5) + 0.5 * clamp(away / 0.12, -1, 1) + 0.6 * clamp((Math.max(bowEarly, bowAfter * 0.5) - bowBefore) / 0.1, 0, 1);
+    // la mano della corda si muoveva già (trazione che continua dopo una pausa al mento): meno probabile.
+    // Prima del rilascio la mano sta ferma all'ancoraggio per quasi un secondo
+    const longBefore = dist(drawAt(t - 0.85, t - 0.6), pre);
+    score -= 1.2 * clamp(before / 0.1 - 0.3, 0, 1) + 1.0 * clamp((longBefore - 0.12) / 0.15, 0, 1);
+    // la mano lascia il viso: prima era all'ancoraggio, subito dopo se ne va (una trazione che continua
+    // fino all'orecchio resta al viso; un arciere che abbassa l'arco dopo l'accompagnamento era già lontano)
+    if (faceSeen) {
+      const h0 = hfAt(t - 0.25, t - 0.05);
+      const h1 = hfAt(t + 0.2, t + 0.4);
+      score += 1.5 * clamp((h1 - h0 - 0.06) / 0.2, -0.3, 1);
+      score -= 1.5 * clamp((h0 - anchorHf - 0.08) / 0.12, 0, 1);
+    }
+    // braccio dell'arco giù quasi subito: l'arciere abbassa l'arco
+    let up = 0;
+    let cnt = 0;
+    for (let k = idxAt(t + 0.05); k < n && valid[k].t <= t + 0.3; k++) {
+      cnt++;
+      if (valid[k].m.bowUp) up++;
+    }
+    if (cnt && up / cnt < 0.5) score -= 1.0;
+    const c0 = curlAt(t - 0.3, t - 0.02);
+    const c1 = curlAt(t + 0.1, t + 0.4);
+    if (c0 != null && c1 != null) score += 0.4 * clamp((c1 - c0) / 0.2, -0.5, 1);
+    if (anyGear) {
+      const sb = arrowShare(t - 0.5, t - 0.02);
+      const sa = arrowShare(t + 0.1, t + 0.6);
+      if (sb >= 0.4 && sa <= 0.15) score += 1.2;
+      else if (sa >= 0.5) score -= 0.7;
+    }
+    let z = 0;
+    if (sounds) for (const o of sounds) if (Math.abs(o.t - t) <= 0.14) z = Math.max(z, o.z);
+    score += 1.6 * clamp((z - 5) / 10, 0, 1.2);
+    // nel suono c'è uno schiocco netto in questa tenuta: un momento senza suono non è il rilascio
+    if (loudest >= 10 && z < 0.6 * loudest) score -= 1.5;
+    if (cues.debug) {
+      let vmax = 0;
+      for (let k = idxAt(t - 0.05); k < n && valid[k].t <= t + 0.25; k++) vmax = Math.max(vmax, speed[k]);
+      cues.debug(t, { score, jump, before, away, bowAfter, bowEarly, z, c0: c0 ?? -1, c1: c1 ?? -1, vmax, hf0: valid[idxAt(t - 0.1)].m.handFace, hf1: valid[idxAt(t + 0.3)].m.handFace });
+    }
+    return score;
+  };
+  // il campione in cui la mano parte davvero, vicino al rilascio trovato (o lo schiocco, se c'è)
+  const refine = (i: number) => {
+    const t = valid[i].t;
+    if (sounds) {
+      let best: { t: number; z: number } | null = null;
+      for (const o of sounds) if (Math.abs(o.t - t) <= 0.14 && o.z >= 6 && (!best || o.z > best.z)) best = o;
+      if (best) return idxAt(best.t - 0.02);
+    }
+    const ref = drawAt(t - 0.3, t - 0.08);
+    let k = idxAt(t - 0.15);
+    const end = idxAt(t + 0.15);
+    while (k < end && dist(valid[k].m.drawPx, ref) < 0.05) k++;
+    return k;
   };
 
   const shots: Shot[] = [];
   let floor = 0; // le fasi di un tiro non tornano dentro il tiro precedente
-  for (const [a, b0] of kept) {
-    // rilascio morbido dentro la tenuta: la tenuta finisce lì
-    const soft = softRelease(a, b0);
-    const b = soft != null ? Math.max(a, soft - 1) : b0;
-    const endT = valid[b].t;
-    // rilascio: il morbido, oppure il primo scatto veloce entro mezzo secondo, con la mano che si allontana dall'arco
-    let rel: number | null = soft;
-    for (let i = b; rel == null && i < n && valid[i].t <= endT + 0.6; i += 1) {
-      if (speed[i] > 1.6 && i > 0 && valid[i].m.spread >= valid[i - 1].m.spread - 0.05) {
-        rel = i;
+  for (const [a0, b0] of kept) {
+    if (a0 < floor) continue;
+    // rilascio: il campione con più segnali insieme, dentro la tenuta o subito dopo
+    let rel: number | null = null;
+    let bestScore = 1.0;
+    {
+      // mano al viso nei tratti fermi della tenuta (pausa al mento, ancoraggio, accompagnamento fermo)
+      const hs = valid.slice(a0, b0 + 1).filter((_, k) => speed[a0 + k] < 0.4).map((v) => v.m.handFace);
+      anchorHf = hs.length ? median(hs) : median(valid.slice(a0, b0 + 1).map((v) => v.m.handFace));
+      faceSeen = anchored && anchorHf < 0.6;
+    }
+    // la tenuta comincia almeno 0,4 s prima del rilascio; se però lo schiocco della corda arriva appena
+    // prima (arciere perso per qualche fotogramma, di spalle o coperto), si guarda anche lì
+    let fromT = valid[a0].t + 0.4;
+    if (sounds) {
+      for (const o of sounds) {
+        if (o.z < 9 || o.t < valid[a0].t - 1 || o.t >= fromT) continue;
+        const k = idxAt(o.t);
+        if (Math.abs(valid[k].t - o.t) < 0.3 && valid[k].m.bowUp && valid[k].m.spread > 1) fromT = Math.min(fromT, o.t - 0.1);
+      }
+    }
+    const from = idxAt(Math.max(floor > 0 ? valid[Math.min(n - 1, floor)].t : 0, fromT));
+    loudest = 0;
+    if (sounds) for (const o of sounds) if (o.t >= valid[from].t - 0.1 && o.t <= valid[b0].t + 1) loudest = Math.max(loudest, o.z);
+    const to = idxAt(valid[b0].t + 0.9);
+    // più eventi forti nella stessa tenuta: la trazione che finisce (dal mento all'ancoraggio) viene prima e
+    // l'arciere poi resta fermo in mira; il rilascio è l'ultimo evento forte con la mano ancora al viso
+    // (quelli dopo, con la mano già lontana, sono accompagnamento e arco che si abbassa)
+    const scores: number[] = [];
+    for (let i = from; i <= to; i++) {
+      const sc = evidence(i);
+      // la mano era già lontana dal viso: dopo il rilascio, non il rilascio
+      const away0 = faceSeen && hfAt(valid[i].t - 0.25, valid[i].t - 0.05) > anchorHf + 0.2;
+      scores.push(away0 ? Math.min(sc, 0) : sc);
+    }
+    const top = Math.max(...scores, -Infinity);
+    if (top > bestScore) {
+      for (let j = scores.length - 1; j >= 0; j--) {
+        if (scores[j] < 0.75 * top) continue;
+        let peak = true;
+        for (let q = Math.max(0, j - 3); q <= Math.min(scores.length - 1, j + 3); q++) if (scores[q] > scores[j]) peak = false;
+        if (!peak) continue;
+        rel = from + j;
+        bestScore = scores[j];
         break;
       }
     }
+    if (rel != null) rel = Math.max(a0 + 1, refine(rel));
+    // la tenuta finisce al rilascio; l'ancoraggio comincia quando la mano si ferma al suo posto
+    const b = rel != null ? Math.max(a0, rel - 1) : b0;
+    const endT = valid[b].t;
+    let a = a0;
+    if (rel != null) {
+      const ref = drawAt(valid[rel].t - 0.45, valid[rel].t - 0.1);
+      let k = rel - 1;
+      while (k > a0 && dist(valid[k - 1].m.drawPx, ref) < 0.16) k--;
+      if (valid[rel].t - valid[k].t >= 0.3) a = k;
+    }
     const letDown = rel == null && valid.some((v) => v.t > endT && v.t < endT + 1.2 && v.m.spread < valid[b].m.spread - 0.5);
     // indietro: trazione (mani che si allontanano) e alzata (braccio su)
-    let drawFrom = a;
-    while (drawFrom > floor && valid[a].t - valid[drawFrom - 1].t < 4 && valid[drawFrom - 1].m.spread < valid[drawFrom].m.spread + 0.05 && valid[drawFrom - 1].m.spread > 0.25) drawFrom -= 1;
+    let drawFrom = a0;
+    while (drawFrom > floor && valid[a0].t - valid[drawFrom - 1].t < 4 && valid[drawFrom - 1].m.spread < valid[drawFrom].m.spread + 0.05 && valid[drawFrom - 1].m.spread > 0.25) drawFrom -= 1;
     let liftFrom = drawFrom;
     while (liftFrom > floor && valid[drawFrom].t - valid[liftFrom - 1].t < 5 && valid[liftFrom - 1].m.bowUp) liftFrom -= 1;
     // avanti: accompagnamento finché il braccio dell'arco resta su (max 2 s)
     let followTo = rel ?? b;
     if (rel != null) while (followTo + 1 < n && valid[followTo + 1].t - valid[rel].t < 2 && valid[followTo + 1].m.bowUp) followTo += 1;
-    floor = followTo + 1;
+    floor = Math.max(followTo + 1, b0 + 1);
 
     const hold = valid.slice(a, b + 1);
     const mean = (pick: (m: Metrics) => number) => hold.reduce((acc, v) => acc + pick(v.m), 0) / hold.length;
@@ -414,6 +607,8 @@ export type Gear = {
   /** measured: gli estremi sono dove la linea finisce davvero nell'immagine (non una lunghezza fissa). */
   arrow: { x1: number; y1: number; x2: number; y2: number; tilt: number; measured?: boolean } | null;
   bow: { x1: number; y1: number; x2: number; y2: number; cant: number; measured?: boolean } | null;
+  /** freccia partita: secondi dal rilascio (la corda è tornata avanti, la mano è aperta) */
+  loose?: number;
 };
 
 /**

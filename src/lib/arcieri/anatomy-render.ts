@@ -705,7 +705,11 @@ function seatHands(meta: BodyMeta, J: Record<number, V3>, mats: Float32Array, ha
     const F = v3.norm(v3.sub(k1, k0));
     const L = v3.len(v3.sub(k1, k0));
     // a riposo i palmi guardano avanti (+z): le dita si piegano da quella parte
-    const holeRest: V3 = h.hole === "wrap" ? v3.add(v3.add(k0, [0, 0, 0.024]), v3.mul(F, 0.012)) : v3.add(v3.add(k0, v3.mul(F, L * 0.42)), [0, 0, 0.012]);
+    // presa mediterranea: la cocca tra indice e medio, cioè un quarto della mano verso l'indice
+    const ixR = meta.rest[h.side === "L" ? "19" : "20"];
+    const pkR = meta.rest[h.side === "L" ? "17" : "18"];
+    const toIndex: V3 = ixR && pkR ? v3.mul(v3.sub(ixR, pkR), 0.25) : [0, 0, 0];
+    const holeRest: V3 = h.hole === "wrap" ? v3.add(v3.add(k0, [0, 0, 0.024]), v3.mul(F, 0.012)) : v3.add(v3.add(v3.add(k0, v3.mul(F, L * 0.42)), [0, 0, 0.012]), toIndex);
     const hole = xf(mats, m, holeRest);
     let d = v3.sub(h.at, hole);
     const dl = v3.len(d);

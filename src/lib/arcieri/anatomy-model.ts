@@ -760,8 +760,10 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gea
       if (len(sub(tp, nk)) > 0.3) arrowSeen = { nock: nk, tip: tp };
     }
   }
+  // freccia partita (dopo il rilascio trovato nell'analisi): la corda è tornata avanti, niente freccia
+  const loose = gear?.loose != null;
   // dita sulla corda: in trazione, oppure con la mano vicina all'arco (incocco e preparazione)
-  const onString = drawn || len(sub(fingers, grip)) < 0.35;
+  const onString = !loose && (drawn || len(sub(fingers, grip)) < 0.35);
   let nock: V3;
   if (arrowSeen) nock = arrowSeen.nock;
   else if (onString) nock = toFace(fingers);
@@ -815,7 +817,14 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gea
     parts.push({ ...seg(onBow(tq), nock, 0.0022, 0.0022, 1.0), mesh: "tube", color: [0.95, 0.95, 0.9], mode: 3, alpha: 0.9, act: 0, layer: "arco", alt: "real" });
   }
   // freccia: incoccata quando le dita sono sulla corda (in trazione o pronte a tirare)
-  const nocked = Boolean(arrowSeen) || onString;
+  const nocked = !loose && (Boolean(arrowSeen) || onString);
+  // appena scoccata: per un istante la freccia vola via davanti all'arco (55 m/s), poi non c'è più
+  if (loose && (gear?.loose ?? 1) < 0.2) {
+    const fly = 55 * (gear?.loose ?? 0) + 0.05;
+    const tail = add(grip, mul(u, fly - 0.2));
+    const head = add(grip, mul(u, fly + 0.55));
+    push("tube", seg(tail, head, 0.004, 0.004, 1.0), [0.78, 0.6, 0.38], 3, 1, "arco");
+  }
   if (nocked) {
     // la freccia appoggia sul rest: sopra la mano dell'arco e accanto al legno, a sinistra
     // dell'arco per un destro (a destra per un mancino), non in mezzo alla presa
@@ -859,8 +868,8 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gea
   if (headTilt != null) labels.push({ at: headC, text: `Testa ${headTilt.toFixed(0)}°`, tone: ok(headTilt <= 8) });
   labels.push({ at: hipM, text: `Anca ${Math.round(angleAt(shM, hipM, kneeM))}°`, tone: "cyan" });
   if (m) labels.push({ at: drw.el, text: `Linea gomito ${Math.round(m.line)}°`, tone: ok(m.line >= 165) });
-  if (drawn && kit?.anchorCm != null) labels.push({ at: nock, text: `Ancoraggio ${kit.anchorCm.toFixed(0)} cm dalla bocca`, tone: "gold" });
-  const dims: Hud["dims"] = kit && drawn ? [{ a: nock, b: grip, text: `Allungo ${kit.drawCm.toFixed(0)} cm (${(kit.drawCm / 2.54).toFixed(1)}″)` }] : [];
+  if (drawn && !loose && kit?.anchorCm != null) labels.push({ at: nock, text: `Ancoraggio ${kit.anchorCm.toFixed(0)} cm dalla bocca`, tone: "gold" });
+  const dims: Hud["dims"] = kit && drawn && !loose ? [{ a: nock, b: grip, text: `Allungo ${kit.drawCm.toFixed(0)} cm (${(kit.drawCm / 2.54).toFixed(1)}″)` }] : [];
   const arcs: Hud["arcs"] = [
     { at: drw.el, a: drw.sh, b: drw.wr, deg: drawAng },
     { at: bow.el, a: bow.sh, b: bow.wr, deg: bowAng },
@@ -876,7 +885,8 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gea
     J,
     hand,
     headF,
-    grip: { draw: aimed.drawing, bow: aimed.raised },
+    // la mano dell'arco lo tiene sempre (anche con il braccio giù); la mano della corda si apre al rilascio
+    grip: { draw: loose ? 0 : aimed.drawing, bow: Math.max(0.85, aimed.raised) },
   };
 }
 

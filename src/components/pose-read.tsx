@@ -10,6 +10,7 @@ import { ProPanel, drawPro, type ProSave } from "./pose-pro";
 import { archeryKit } from "@/lib/arcieri/pose-kit";
 import { buildRecord } from "@/lib/arcieri/gesture-record";
 import { placeLabel, resetLabels } from "@/lib/arcieri/overlay-labels";
+import { audioOnsets, videoAudio } from "@/lib/arcieri/audio-onsets";
 export { archeryKit };
 import {
   PHASE_COLORS,
@@ -33,6 +34,7 @@ import {
   HAND_LINKS,
   FACE0,
   LM_TOTAL,
+  type Cues,
   type Gear,
   type Hand,
   type Landmark,
@@ -259,6 +261,7 @@ export function PoseRead() {
   const [samples, setSamples] = useState<Sample[]>([]);
   /** riquadro dell'arciere nell'ultimo fotogramma: serve a seguire sempre la stessa persona */
   const lastPerson = useRef<Rect | null>(null);
+  const lostFor = useRef(0);
   /** ultimo aggiornamento delle letture sullo schermo (si limitano durante la riproduzione) */
   const lastReadout = useRef(0);
   const samplesRef = useRef<Sample[]>(samples);
@@ -338,7 +341,20 @@ export function PoseRead() {
 
   useEffect(() => () => { if (src) URL.revokeObjectURL(src); }, [src]);
 
-  const analysis = useMemo(() => analyzeShots(samples, effHand), [samples, effHand]);
+  // lo schiocco della corda nel suono del video: rende sicuro il momento del rilascio
+  const [cues, setCues] = useState<Cues>({});
+  const cuesFor = useRef<{ src: string; job: Promise<Cues> } | null>(null);
+  function soundCues(url: string): Promise<Cues> {
+    if (cuesFor.current?.src === url) return cuesFor.current.job;
+    const job = videoAudio(url)
+      .then((a): Cues => (a ? { audio: audioOnsets(a.x, a.sr) } : {}))
+      .catch((): Cues => ({}));
+    cuesFor.current = { src: url, job };
+    return job;
+  }
+  const analysis = useMemo(() => analyzeShots(samples, effHand, cues), [samples, effHand, cues]);
+  const shotsRef = useRef(analysis.shots);
+  shotsRef.current = analysis.shots;
   // fotogrammi dell'analisi: la sagoma ne ricava le lunghezze vere delle ossa dell'arciere
   const calFrames = useMemo(() => samples.map((s) => s.lm), [samples]);
   const shot: Shot | null = analysis.shots[Math.min(shotIndex, analysis.shots.length - 1)] ?? null;
@@ -399,6 +415,17 @@ export function PoseRead() {
     };
     const chosen = [...poses].sort((a, b) => score(b) - score(a))[0];
     const chosenBox = personBox(chosen.map((p) => ({ ...p, x: region.x + p.x * region.w, y: region.y + p.y * region.h })), 0);
+    // l'arciere coperto per un attimo (di spalle, mano dietro la testa): il modello trova solo chi sta
+    // sullo sfondo. Un salto di posto o di grandezza non è l'arciere: per mezzo secondo si scarta
+    if (prevB && chosenBox && !cropRef.current) {
+      const d = Math.hypot(chosenBox.x + chosenBox.w / 2 - (prevB.x + prevB.w / 2), chosenBox.y + chosenBox.h / 2 - (prevB.y + prevB.h / 2)) / Math.max(0.05, Math.max(prevB.w, prevB.h));
+      const r = Math.min(chosenBox.w * chosenBox.h, prevB.w * prevB.h) / Math.max(1e-6, Math.max(chosenBox.w * chosenBox.h, prevB.w * prevB.h));
+      if ((d > 0.9 || r < 0.3) && lostFor.current < 12) {
+        lostFor.current += 1;
+        return null;
+      }
+    }
+    lostFor.current = 0;
     if (chosenBox) lastPerson.current = chosenBox;
     const world = worlds[poses.indexOf(chosen)];
     const raw = chosen.map((p, i) => ({ x: region.x + p.x * region.w, y: region.y + p.y * region.h, z: p.z != null ? p.z * region.w : undefined, visibility: p.visibility, xw: world?.[i]?.x, yw: world?.[i]?.y, zw: world?.[i]?.z }));
@@ -492,7 +519,18 @@ export function PoseRead() {
     } else lm = (k < 0.5 ? a.lm : b.lm) ?? a.lm ?? b.lm;
     if (!lm) return false;
     // l'arco del fotogramma più vicino; se lì non è stato letto, quello dell'altro (niente arco che lampeggia)
-    const g = (k < 0.5 ? (a.g ?? b.g) : (b.g ?? a.g)) ?? null;
+    let g = (k < 0.5 ? (a.g ?? b.g) : (b.g ?? a.g)) ?? null;
+    // dopo il rilascio la freccia è partita (fino a quando l'arciere si prepara al tiro seguente)
+    const shots = shotsRef.current;
+    for (let q = 0; q < shots.length; q++) {
+      const r = shots[q].release;
+      if (r == null || t < r) continue;
+      const next = shots[q + 1]?.phases[0]?.from ?? Infinity;
+      if (t < next - 0.5) {
+        g = { arrow: null, bow: g?.bow ?? null, loose: t - r };
+        break;
+      }
+    }
     lastLm.current = lm;
     gearRef.current = g;
     smoothRef.current = { lm, t };
@@ -620,6 +658,7 @@ export function PoseRead() {
     setZoomV({ z: 1, x: 0, y: 0 });
     setError("");
     setSamples([]);
+    setCues({});
     setNow(null);
     setGear(null);
     gearRef.current = null;
@@ -709,6 +748,7 @@ export function PoseRead() {
     const { from, to } = span();
     let result: Sample[] | null = null;
     cancel.current = false;
+    const sound = src ? soundCues(src) : Promise.resolve<Cues>({});
     scanning.current = true;
     video.pause();
     setProgress(0);
@@ -758,9 +798,12 @@ export function PoseRead() {
         const clean = cleanSequence(out, handRef.current, W / H, H);
         out.splice(0, out.length, ...clean);
         result = out;
+        // il suono si legge mentre il modello lavora; al massimo pochi secondi in più
+        const heard = await Promise.race([sound, new Promise<Cues>((ok) => setTimeout(() => ok({}), 6000))]);
+        setCues(heard);
         setSamples(out);
         setShotIndex(0);
-        const found = analyzeShots(out, handRef.current).shots[0];
+        const found = analyzeShots(out, handRef.current, heard).shots[0];
         if (found) await seekTo(video, (found.anchorFrom + (found.release ?? found.anchorTo)) / 2);
         else if (!out.some((s) => s.m)) setError("Non vedo l'arciere nel video. Inquadralo con il riquadro «Inquadra l'arciere» e riprova.");
         else setError("Non trovo un tiro completo (mano della corda al viso e braccio dell'arco alzato). Controlla destro/mancino o inquadra l'arciere con il riquadro.");
