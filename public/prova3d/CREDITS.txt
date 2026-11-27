@@ -5,5 +5,5 @@ Corpi, capelli e abiti (assets/): Quaternius, "Universal Base Characters" e
 "Modular Character Outfits - Fantasy", licenza CC0 (pubblico dominio).
 Animazioni da arco: Kevin Iglesias, "Human Archer Animations FREE", licenza
 Standard Unity Asset Store (uso commerciale consentito, rivendita no). Non sono
-in questa cartella: stanno cifrate nel codice del server e arrivano solo alla
-pagina riservata.
+né qui né nel codice: le carica il Fondatore e restano nel database, consegnate
+solo alla pagina riservata.
