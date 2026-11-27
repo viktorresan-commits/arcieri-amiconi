@@ -13,7 +13,7 @@ import { KindChip } from "@/components/kind-emblem";
 import { Confetti, Sparkle } from "@/components/celebrate";
 import { Glyph } from "@/components/icons";
 import { LevelCrest, levelHalo } from "@/components/level-crest";
-import { XP_RULES, levelOf, useXp } from "@/lib/arcieri/xp";
+import { levelOf, useXp } from "@/lib/arcieri/xp";
 
 export const Route = createFileRoute("/_app/obiettivi")({ component: Page });
 
@@ -134,7 +134,7 @@ function xpAt(level: number) {
   return sum;
 }
 
-/** I livelli: il tuo stemma, quanto manca al prossimo, i quattro metalli e come si guadagnano i punti. */
+/** I livelli: il tuo stemma, quanto manca al prossimo, i quattro metalli e i tuoi punti voce per voce. */
 function Levels() {
   const xp = useXp();
   const lv = levelOf(Math.max(0, xp.xp));
@@ -143,16 +143,6 @@ function Levels() {
     { from: 5, to: 9, name: "Argento" },
     { from: 10, to: 19, name: "Oro" },
     { from: 20, to: null as number | null, name: "Oro reale" },
-  ];
-  const R = XP_RULES;
-  const ways: [string, string][] = [
-    ["Allenamento salvato (almeno 6 frecce)", `${R.training} punti, più ${R.trainingPer10Arrows} ogni 10 frecce (fino a ${R.trainingArrowsMax})`],
-    ["Gara fatta (app, portale FITAST, archivio dal 2019)", `${R.gara} punti; +${R.garaFitast} se è sul portale FITAST`],
-    ["Podio in gara", `+${R.podium[1]} primo, +${R.podium[2]} secondo, +${R.podium[3]} terzo`],
-    ["Classifica generale a fine stagione", `+${R.season[1]} primo, +${R.season[2]} secondo, +${R.season[3]} terzo, +${R.seasonTop10} nei primi dieci`],
-    ["Analisi del gesto salvata", `${R.gesture} punti (al massimo ${R.gesturesPerDay} al giorno)`],
-    ["Presenza al corso", `${R.course} punti`],
-    ["Lezioni, quiz, sfida del giorno, esercizi, minigioco", "da 3 a 15 punti l'uno"],
   ];
   // i propri punti voce per voce (quelli delle attività li ricalcola il server dai dati, anche del portale)
   const p = xp.parts;
@@ -208,18 +198,8 @@ function Levels() {
               </div>
             ))}
           </div>
-          <p className="text-[0.68rem] leading-snug text-muted">Si ricalcolano da soli quando salvi un allenamento o una gara, e quando arrivano dati nuovi dal portale FITAST.</p>
         </div>
       ) : null}
-      <div className="grid gap-1">
-        <p className="text-xs font-semibold">Come si guadagnano i punti</p>
-        {ways.map(([k, v]) => (
-          <div key={k} className="rounded-lg bg-white/[0.03] px-2.5 py-1.5">
-            <p className="text-xs font-semibold leading-snug">{k}</p>
-            <p className="text-[0.7rem] leading-snug text-muted">{v}</p>
-          </div>
-        ))}
-      </div>
     </Card>
     </div>
   );
