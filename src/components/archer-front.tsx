@@ -231,20 +231,23 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
             {round(sleeveArm.d, `s${side}`)}
             <path d={sleeveArm.stroke} fill="none" stroke={OUT} strokeOpacity="0.5" strokeWidth="0.8" strokeLinejoin="round" strokeLinecap="round" />
             {open ? null : <path d={`M${f(sleeveArm.inner[2].x)} ${f(sleeveArm.inner[2].y)} Q${f(sleeveArm.inner[0].x + side * 1.5)} ${f(sleeveArm.inner[0].y - 1)} ${f(peak.x - side * 0.6)} ${f(peak.y - 0.4)}`} fill="none" stroke={seamOf(sleeve)} strokeOpacity="0.55" strokeWidth="0.55" strokeDasharray="1.2 1" />}
-            {/* pieghe morbide: al gomito, dove la manica si raccoglie, e una che scende dalla spalla; cucitura alla spalla */}
-            <g fill="none" strokeLinecap="round" pointerEvents="none">
-              {[[4, -3, 1], [5, 2, 0.8], [6, 1, 0.6]].map(([n, dy, k]) => {
-                const a = lerpP(axis[n], side < 0 ? sleeveArm.R[n] : sleeveArm.L[n], 0.9);
-                const b = lerpP(axis[n], side < 0 ? sleeveArm.L[n] : sleeveArm.R[n], 0.25 * k);
-                return (
-                  <g key={n}>
-                    <path d={`M${f(a.x)} ${f(a.y + dy)} Q${f((a.x + b.x) / 2)} ${f(a.y + dy + 3)} ${f(b.x)} ${f(b.y + dy - 1)}`} stroke="#000" strokeOpacity="0.14" strokeWidth="1.8" />
-                    <path d={`M${f(a.x)} ${f(a.y + dy + 1.3)} Q${f((a.x + b.x) / 2)} ${f(a.y + dy + 4.3)} ${f(b.x)} ${f(b.y + dy + 0.3)}`} stroke="#fff" strokeOpacity="0.12" strokeWidth="0.8" />
-                  </g>
-                );
-              })}
-              <path d={`M${f(lerpP(axis[1], side < 0 ? sleeveArm.L[1] : sleeveArm.R[1], 0.3).x)} ${f(axis[1].y)} Q${f(lerpP(axis[2], side < 0 ? sleeveArm.L[2] : sleeveArm.R[2], 0.5).x)} ${f(axis[2].y + 4)} ${f(lerpP(axis[3], side < 0 ? sleeveArm.L[3] : sleeveArm.R[3], 0.2).x)} ${f(axis[3].y + 6)}`} stroke="#000" strokeOpacity="0.1" strokeWidth="1.4" />
-            </g>
+            {/* pieghe morbide al gomito, dove la stoffa si raccoglie: ombre e luci sfumate, non segni */}
+            {(() => {
+              const ang = (Math.atan2(axis[6].y - axis[4].y, axis[6].x - axis[4].x) * 180) / Math.PI;
+              return (
+                <g pointerEvents="none">
+                  {[[4, 0.15, 0.55], [5, -0.05, 0.45], [7, 0.2, 0.3]].map(([n, t, o]) => {
+                    const c = lerpP(axis[n], side < 0 ? sleeveArm.R[n] : sleeveArm.L[n], t);
+                    return (
+                      <g key={n}>
+                        <ellipse cx={f(c.x)} cy={f(c.y)} rx={f(1.3 * W)} ry={f(5.5 * W)} fill={`url(#${uid}cd0)`} opacity={o} transform={`rotate(${f(ang)} ${f(c.x)} ${f(c.y)})`} />
+                        <ellipse cx={f(c.x)} cy={f(c.y + 2.4)} rx={f(1.1 * W)} ry={f(4.5 * W)} fill={`url(#${uid}gw)`} opacity={o * 0.8} transform={`rotate(${f(ang)} ${f(c.x)} ${f(c.y + 2.4)})`} />
+                      </g>
+                    );
+                  })}
+                </g>
+              );
+            })()}
             <path d={sleeveArm.cuffBand.d} fill={medievalTop ? look.trim : shade(sleeve, -0.08)} stroke={OUT} strokeOpacity="0.45" strokeWidth="0.6" />
             <path d={sleeveArm.cuffBand.d} fill={vol} pointerEvents="none" />
           </g>
@@ -334,6 +337,10 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
         <radialGradient id={`${uid}gd`}>
           <stop offset="0" stopColor={blend(shade(skin, -0.45), "#4a1c12", 0.25)} stopOpacity="0.6" />
           <stop offset="1" stopColor={blend(shade(skin, -0.45), "#4a1c12", 0.25)} stopOpacity="0" />
+        </radialGradient>
+        <radialGradient id={`${uid}cd0`}>
+          <stop offset="0" stopColor="#000" stopOpacity="0.38" />
+          <stop offset="1" stopColor="#000" stopOpacity="0" />
         </radialGradient>
         <radialGradient id={`${uid}skr`}>
           <stop offset="0" stopColor={blend(skin, "#c4473f", 0.5)} stopOpacity="0.26" />
@@ -580,12 +587,35 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
         </g>
         {/* collo: disegnato prima della veste, così colletti e scolli lo coprono come di profilo */}
         <g className={live ? "aa-front-head" : undefined}>
-          {/* collo: più stretto sotto il mento, si allarga nelle spalle; ombra del mento, muscoli appena segnati */}
-          <path d={`M${cx - 7.5} 76 L${cx + 7.5} 76 C${cx + 8} 88 ${cx + 9.5} 96 ${cx + 16} 103 L${cx - 16} 103 C${cx - 9.5} 96 ${cx - 8} 88 ${cx - 7.5} 76 Z`} fill={`url(#${uid}skn)`} stroke={shade(skin, -0.55)} strokeOpacity="0.5" strokeWidth="0.6" transform={woman ? `translate(${cx} 76) scale(1.12 1) translate(${-cx} -76)` : `translate(${cx} 76) scale(1.36 1) translate(${-cx} -76)`} />
-          <path d={`M${cx - 7.5} 76 C${cx - 8} 88 ${cx - 9.5} 96 ${cx - 16} 103 L${cx - 10} 103 C${cx - 6} 96 ${cx - 5} 88 ${cx - 5} 78 Z M${cx + 7.5} 76 C${cx + 8} 88 ${cx + 9.5} 96 ${cx + 16} 103 L${cx + 10} 103 C${cx + 6} 96 ${cx + 5} 88 ${cx + 5} 78 Z`} fill={shade(skin, -0.36)} opacity="0.5" />
-          <ellipse cx={cx} cy="83" rx="9" ry="5" fill={`url(#${uid}sd)`} opacity="0.75" />
-          <path d={`M${cx - 6} 84 Q${cx - 4} 94 ${cx - 1.4} 101 M${cx + 6} 84 Q${cx + 4} 94 ${cx + 1.4} 101`} stroke={shade(skin, -0.4)} strokeOpacity="0.3" strokeWidth="0.7" fill="none" />
-          <path d={`M${cx - 7.5} 76 C${cx - 8} 88 ${cx - 9.5} 96 ${cx - 16} 103 M${cx + 7.5} 76 C${cx + 8} 88 ${cx + 9.5} 96 ${cx + 16} 103`} stroke={OUT} strokeOpacity="0.54" strokeWidth="0.72" fill="none" />
+          {/* collo: una colonna morbida che sotto il mento è stretta e scende allargandosi nel trapezio, senza
+              angoli né linee dentro; il volume lo fanno la luce e l'ombra (mento, muscoli del collo, fossetta) */}
+          {(() => {
+            const k = woman ? 1.02 : 1.2;
+            const X = (d: number) => f(cx + d * k);
+            const neckD = `M${X(-7.6)} 74 C${X(-7.9)} 82 ${X(-8.6)} 90 ${X(-10.4)} 95.5 C${X(-12.4)} 100.2 ${X(-17)} 102.6 ${X(-22)} 104 L${X(22)} 104 C${X(17)} 102.6 ${X(12.4)} 100.2 ${X(10.4)} 95.5 C${X(8.6)} 90 ${X(7.9)} 82 ${X(7.6)} 74 Z`;
+            const sideL = `M${X(-7.6)} 74 C${X(-7.9)} 82 ${X(-8.6)} 90 ${X(-10.4)} 95.5 C${X(-12.4)} 100.2 ${X(-17)} 102.6 ${X(-22)} 104`;
+            const sideR = `M${X(7.6)} 74 C${X(7.9)} 82 ${X(8.6)} 90 ${X(10.4)} 95.5 C${X(12.4)} 100.2 ${X(17)} 102.6 ${X(22)} 104`;
+            return (
+              <g>
+                <clipPath id={`${uid}nk`}><path d={neckD} /></clipPath>
+                <path d={neckD} fill={`url(#${uid}sk)`} />
+                <g clipPath={`url(#${uid}nk)`} pointerEvents="none">
+                  <path d={neckD} fill={`url(#${uid}skp)`} opacity="0.12" />
+                  {/* ombra sotto il mento, che scende sfumando */}
+                  <ellipse cx={cx} cy="78" rx={11 * k} ry="8.5" fill={`url(#${uid}gd)`} opacity="0.95" />
+                  {/* i due muscoli che scendono dall'orecchio alla fossetta: luce su quello di sinistra, ombra accanto */}
+                  {glow({ x: cx - 4.6 * k, y: 90 }, 2.2 * k, 9, -18, "gw", 0.5)}
+                  {glow({ x: cx + 4.6 * k, y: 90 }, 2.2 * k, 9, 18, "gw", 0.22)}
+                  {glow({ x: cx, y: 92 }, 2.4 * k, 7, 0, "gd", 0.38)}
+                  {glow({ x: cx, y: 101.5 }, 2.6 * k, 1.8, 0, "gd", 0.55)}
+                  {/* trapezi in luce sopra le spalle */}
+                  {glow({ x: cx - 15 * k, y: 102 }, 6 * k, 2.2, 14, "gw", 0.5)}
+                  {glow({ x: cx + 15 * k, y: 102 }, 6 * k, 2.2, -14, "gw", 0.2)}
+                </g>
+                <path d={`${sideL} ${sideR}`} fill="none" stroke={shade(skin, -0.55)} strokeOpacity="0.5" strokeWidth="0.6" strokeLinecap="round" />
+              </g>
+            );
+          })()}
         </g>
         {/* sotto la canotta: la pelle delle spalle e del petto, come quella del volto */}
         {tank ? (
@@ -603,7 +633,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
         {round(torsoD, "t", "#000", 1.2)}
         {longTop ? round(tunicD, "tu", "#000", 1.1) : null}
         <ClothPattern kind={look.pattern} shapes={longTop ? [torsoD, tunicD] : [torsoD]} base={shirt} trim={look.trim} uid={`${uid}f`} box={[sh.l - 16, 94, sh.r + 16, (longTop ? hem : 208) + 6]} />
-        <ClothDetail uid={`${uid}cd`} shapes={longTop ? [torsoD, tunicD] : [torsoD]} cx={cx} shoulderL={sh.l} shoulderR={sh.r} hipL={hip.l} hipR={hip.r} tunicLen={longTop ? hem : 206} longTunic={longTop} seam={seamOf(shirt)} dy={-14} belt={look.belt === "larga" ? 184 : 187} />
+        <g opacity="0.55"><ClothDetail uid={`${uid}cd`} shapes={longTop ? [torsoD, tunicD] : [torsoD]} cx={cx} shoulderL={sh.l} shoulderR={sh.r} hipL={hip.l} hipR={hip.r} tunicLen={longTop ? hem : 206} longTunic={longTop} seam={seamOf(shirt)} dy={-14} belt={look.belt === "larga" ? 184 : 187} /></g>
         <FrontTop look={look} cx={cx} sh={sh} waist={waist} hip={hip} hem={hem} sideLen={sideLen} longTop={longTop} skin={skin} shirt={shirt} sleeve={sleeve} uid={uid} tw={tw} />
         <g pointerEvents="none">
           <clipPath id={`${uid}vc`}>
@@ -633,13 +663,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
               </g>
             )}
             <g fill="none" stroke="#000" strokeLinecap="round">
-              {[-1, 1].map((s) => (
-                <g key={s}>
-                  <path d={`M${cx + s * (sh.r - cx - 5)} 122 Q${cx + s * (sh.r - cx - 14)} 150 ${cx + s * (waist.r - cx - 6)} 176`} strokeOpacity="0.09" strokeWidth="1.6" />
-                  <path d={`M${cx + s * (sh.r - cx - 3)} 132 Q${cx + s * (sh.r - cx - 9)} 152 ${cx + s * (waist.r - cx - 2)} 172`} strokeOpacity="0.07" strokeWidth="1.1" />
-                </g>
-              ))}
-              {look.belt !== "nessuna" && !longTop ? [-14, -2, 9].map((dx) => <path key={dx} d={`M${cx + dx * tw} 176 q2 4 1 9`} strokeOpacity="0.1" strokeWidth="1" />) : null}
+              {look.belt !== "nessuna" && !longTop ? [-14, -2, 9].map((dx) => <path key={dx} d={`M${cx + dx * tw} 176 q2 4 1 9`} strokeOpacity="0.07" strokeWidth="1" />) : null}
             </g>
           </g>
         </g>

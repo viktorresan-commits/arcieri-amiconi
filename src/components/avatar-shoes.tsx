@@ -301,7 +301,22 @@ export function FrontShoe({ look, L, legW, i, uid, skin }: { look: AvatarLook; L
   const sportive = fw === "sportive";
   const sandal = fw === "sandali";
   // gambale (dal bordo alla caviglia) e piede che si allarga, con la punta che viene avanti
-  const shape = `M${Pt(top, -h - flare)} L${Pt(top, h + flare)} L${Pt(337, h + 0.6)} C${Pt(340.6, h + 3.6 + o)} ${Pt(345.6, h + 5 + o)} ${Pt(349.4, h + 4.6 + o)} L${Pt(349.4, -h - 4.6 + o)} C${Pt(345.6, -h - 5 + o)} ${Pt(340.6, -h - 3.6 + o)} ${Pt(337, -h - 0.6)} Z`;
+  // gambale che segue la gamba: bordo appena curvo, si stringe piano verso la caviglia (stivali) e si apre
+  // morbido nel piede, con la punta tonda; niente lati dritti né angoli
+  const tall = top < 326;
+  const ank = tall ? h * 0.9 : h;
+  const mid = (top + 331) / 2;
+  const side = (s: 1 | -1) =>
+    tall
+      ? `C${Pt(top + (mid - top) * 0.5, s * (h + flare * 0.6))} ${Pt(mid, s * (h * 0.97))} ${Pt(331, s * ank)} C${Pt(334.5, s * ank)} ${Pt(336.5, s * (h + 1.4) + o)} ${Pt(340.4, s * (h + 3.6) + o)}`
+      : `C${Pt(top + 3, s * (h + 0.2))} ${Pt(334, s * (h + 0.2))} ${Pt(336.4, s * (h + 1.2) + o)} C${Pt(337.8, s * (h + 2) + o)} ${Pt(339, s * (h + 3) + o)} ${Pt(340.4, s * (h + 3.6) + o)}`;
+  const toe = (s: 1 | -1) => `C${Pt(343.6, s * (h + 4.8) + o)} ${Pt(347.2, s * (h + 5.2) + o)} ${Pt(349.4, s * (h + 4.6) + o)}`;
+  const rev = (s: 1 | -1) =>
+    tall
+      ? `C${Pt(336.5, s * (h + 1.4) + o)} ${Pt(334.5, s * ank)} ${Pt(331, s * ank)} C${Pt(mid, s * (h * 0.97))} ${Pt(top + (mid - top) * 0.5, s * (h + flare * 0.6))} ${Pt(top, s * (h + flare))}`
+      : `C${Pt(339, s * (h + 3) + o)} ${Pt(337.8, s * (h + 2) + o)} ${Pt(336.4, s * (h + 1.2) + o)} C${Pt(334, s * (h + 0.2))} ${Pt(top + 3, s * (h + 0.2))} ${Pt(top, s * (h + flare))}`;
+  const revToe = (s: 1 | -1) => `C${Pt(347.2, s * (h + 5.2) + o)} ${Pt(343.6, s * (h + 4.8) + o)} ${Pt(340.4, s * (h + 3.6) + o)}`;
+  const shape = `M${Pt(top, -h - flare)} Q${Pt(top - 1.3, 0)} ${Pt(top, h + flare)} ${side(1)} ${toe(1)} L${Pt(349.4, -h - 4.6 + o)} ${revToe(-1)} ${rev(-1)} Z`;
   const soleTop = hiker ? 347.6 : 348.8;
   const soleBot = hiker ? 354.2 : sportive ? 352.8 : 352.4;
   const sole = `M${Pt(soleTop, -h - 5.6 + o)} L${Pt(soleTop, h + 5.6 + o)} Q${Pt(soleTop + 1.2, h + 6.6 + o)} ${Pt(soleBot - 0.6, h + 5.4 + o)} L${Pt(soleBot, h + 4.4 + o)} L${Pt(soleBot, -h - 4.4 + o)} L${Pt(soleBot - 0.6, -h - 5.4 + o)} Q${Pt(soleTop + 1.2, -h - 6.6 + o)} ${Pt(soleTop, -h - 5.6 + o)} Z`;
