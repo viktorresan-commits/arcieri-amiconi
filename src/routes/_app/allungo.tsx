@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Card, Chips, PageHead, Segmented } from "@/components/kit";
-import { ArcherFront, frontScale } from "@/components/archer-front";
+import { ArcherFront, FRONT_LIFT, frontScale } from "@/components/archer-front";
 import { useAvatar } from "@/components/avatar-hero";
 import { useEntryState } from "@/lib/arcieri/back-restore";
 import type { AvatarLook } from "@/lib/arcieri/avatar";
@@ -33,13 +33,14 @@ function SpanFigure({ look, cm, ok }: { look: AvatarLook; cm: number; ok: boolea
   const half = ok ? Math.max(140, Math.min(215, cm)) : 175;
   const k = frontScale(look);
   const at = (x: number, y: number) => ({ x: 100 + (x - 100) * k, y: 360 + (y - 360) * k });
-  const left = at(100 - half, 110);
-  const right = at(100 + half, 110);
+  // le braccia aperte stanno all'altezza delle spalle, che salgono di FRONT_LIFT
+  const left = at(100 - half, 110 - FRONT_LIFT);
+  const right = at(100 + half, 110 - FRONT_LIFT);
   const top = at(100, -10).y;
   const x0 = left.x - 30;
   const x1 = Math.max(right.x + 14, 100 + 130);
   const vb = `${x0.toFixed(1)} ${(top - 6).toFixed(1)} ${(x1 - x0).toFixed(1)} ${(374 - top).toFixed(1)}`;
-  const lineY = at(100, 132).y;
+  const lineY = at(100, 132 - FRONT_LIFT).y;
   // il numero sotto il braccio destro, sul fondo: non copre la maglia
   const labelX = at(100 + half * 0.62, 0).x;
   return (

@@ -35,7 +35,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
   // spalle larghe quanto basta a reggere la testa: lui più largo, lei un po' meno
   const shW = (woman ? 38.5 : 42) * tw;
   const sh = { l: cx - shW, r: cx + shW };
-  const waist = { l: cx - (woman ? 25 : 29) * W, r: cx + (woman ? 25 : 29) * W };
+  const waist = { l: cx - (woman ? 24 : 27.5) * W, r: cx + (woman ? 24 : 27.5) * W };
   const hip = { l: cx - (woman ? 33 : 30) * W, r: cx + (woman ? 33 : 30) * W };
   const skin = look.skin;
   const shirt = look.shirt;
@@ -51,25 +51,27 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
   const nk = 14 * tw;
   // il busto è largo alle spalle e si stringe sotto l'ascella: lì comincia il braccio, che gli sta accanto
   // (non sopra), e tra braccio e vita resta un poco di vuoto
+  // petto pieno: il busto sotto l'ascella resta largo, poi stringe alla vita (a V lui, a clessidra lei)
+  const PIT = woman ? 7.5 : 7;
   const sideD = (s: 1 | -1) => {
     const S = s > 0 ? sh.r : sh.l;
     const Wt = s > 0 ? waist.r : waist.l;
     const H = s > 0 ? hip.r : hip.l;
     return woman
-      ? `C${S - s * 5} 124 ${S - s * 8} 125 ${S - s * 8.5} 130 C${S - s * 7.5} 142 ${Wt + s * 0.5} 160 ${Wt} 178 C${Wt + s * 1} 190 ${H + s * 1} 194 ${H} 202`
-      : `C${S - s * 6} 124 ${S - s * 9} 125 ${S - s * 9.5} 130 C${S - s * 10.5} 148 ${Wt + s * 2} 166 ${Wt} 182 C${Wt - s * 0.5} 190 ${H} 192 ${H} 200`;
+      ? `C${S - s * (PIT - 3.5)} 124 ${S - s * (PIT - 0.5)} 125 ${S - s * PIT} 130 C${S - s * (PIT - 1)} 142 ${Wt + s * 0.5} 160 ${Wt} 178 C${Wt + s * 1} 190 ${H + s * 1} 194 ${H} 202`
+      : `C${S - s * (PIT - 3.5)} 124 ${S - s * (PIT - 0.5)} 125 ${S - s * PIT} 130 C${S - s * (PIT + 0.5)} 148 ${Wt + s * 2.5} 166 ${Wt} 182 C${Wt - s * 0.5} 190 ${H} 192 ${H} 200`;
   };
   const revSide = (s: 1 | -1) => {
     const S = s > 0 ? sh.r : sh.l;
     const Wt = s > 0 ? waist.r : waist.l;
     const H = s > 0 ? hip.r : hip.l;
     return woman
-      ? `C${H + s * 1} 194 ${Wt + s * 1} 190 ${Wt} 178 C${Wt + s * 0.5} 160 ${S - s * 7.5} 142 ${S - s * 8.5} 130 C${S - s * 8} 125 ${S - s * 5} 124 ${S - s * 3} 119`
-      : `C${H} 192 ${Wt - s * 0.5} 190 ${Wt} 182 C${Wt + s * 2} 166 ${S - s * 10.5} 148 ${S - s * 9.5} 130 C${S - s * 9} 125 ${S - s * 6} 124 ${S - s * 3} 119`;
+      ? `C${H + s * 1} 194 ${Wt + s * 1} 190 ${Wt} 178 C${Wt + s * 0.5} 160 ${S - s * (PIT - 1)} 142 ${S - s * PIT} 130 C${S - s * (PIT - 0.5)} 125 ${S - s * (PIT - 3.5)} 124 ${S - s * 3} 119`
+      : `C${H} 192 ${Wt - s * 0.5} 190 ${Wt} 182 C${Wt + s * 2.5} 166 ${S - s * (PIT + 0.5)} 148 ${S - s * PIT} 130 C${S - s * (PIT - 0.5)} 125 ${S - s * (PIT - 3.5)} 124 ${S - s * 3} 119`;
   };
   // canotta: spalline strette vicino al collo e scalfo profondo; sotto si vede la pelle delle spalle
   const tank = look.top === "canotta";
-  const pit = woman ? 8.5 : 9.5;
+  const pit = PIT;
   const strap = 22 * tw;
   const lowerR = sideD(1).split(" C").slice(1).map((c) => ` C${c}`).join("");
   const upperL = revSide(-1).split(" C").slice(0, 2).join(" C");
@@ -84,6 +86,11 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
   // proporzioni vere: la testa un poco più piccola rispetto al corpo (i ragazzi la tengono più grande), ancorata al mento
   const headK = look.body === "ragazzo" || look.body === "ragazza" ? 0.92 : 0.84;
   const headT = `translate(${cx} 86) scale(${headK}) translate(${-cx} -86)`;
+  // gambe più lunghe, come in una persona vera: il busto sale di LIFT e le gambe si allungano fino a lui,
+  // con i piedi fermi a terra (y 356)
+  const LIFT = FRONT_LIFT;
+  const upT = `translate(0 ${-LIFT})`;
+  const legT = `translate(0 356) scale(1 ${((150 + LIFT) / 150).toFixed(4)}) translate(0 -356)`;
   const deepSkin = blend(shade(skin, -0.45), "#4a1c12", 0.25);
   /** rotondità: il bordo di ogni forma scurisce piano verso l'interno, come un volume illuminato (niente sfocature) */
   const round = (d: string, key: string, color = "#000", k = 1) => (
@@ -172,7 +179,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
     const capArm = shortSleeve
       ? (() => {
           const capAxis = [...axis.slice(0, 3), lerpP(s0, elbow, 0.5)];
-          const add = (open ? [1.2, 1.2, 1.4, 1.8] : [1.6, 1.8, 2.4, 3.2]).map((v) => v * W);
+          const add = (open ? [1.2, 1.2, 1.4, 1.8] : [1.2, 1.3, 1.7, 2.1]).map((v) => v * W);
           const cw = LR(aw.o.slice(0, 4).map((v, n) => v + add[n]), aw.i.slice(0, 4).map((v, n) => v + add[n]));
           return armLimb(capAxis, cw.l, cw.r, side, { x: peak.x - side * 0.6, y: peak.y - 0.8 }, 0.08);
         })()
@@ -397,7 +404,8 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
         <ellipse cx="100" cy="355" rx="34" ry="3.4" fill="#000" opacity="0.28" />
         <g>
         <g className={live ? "aa-front-sway" : undefined}>
-        {/* dietro: mantello e faretra sulla schiena */}
+        {/* dietro: mantello e faretra sulla schiena (salgono con il busto) */}
+        <g transform={upT}>
         {look.cape ? (() => {
           const hemY = look.capeStyle === "corto" ? 232 : 340;
           const frayed = look.capeStyle === "frastagliato";
@@ -460,7 +468,10 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
           </g>
         ) : null}
 
-        {/* gambe un po' aperte, il peso su quella dell'arco; calzature con suola, punta e cuciture */}
+        </g>
+        {/* gambe un po' aperte, il peso su quella dell'arco; calzature con suola, punta e cuciture.
+            Gambe più lunghe: allungate verso l'alto fino al bacino, i piedi restano a terra */}
+        <g transform={legT}>
         {legX.map((x, i) => {
           const sp = (i === 0 ? -1 : 1) * splay * (i === (bowSide > 0 ? 1 : 0) ? 1.4 : 0.8);
           const lx = (y: number) => x + (sp * (y - 206)) / 140;
@@ -532,7 +543,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
                 // pantaloncini: seguono la coscia e si aprono appena all'orlo
                 const sy = [204, 220, 238, 252];
                 const sAxis = sy.map((y) => ({ x: lx(y), y }));
-                const add = [1, 1.8, 2.6, 3.2];
+                const add = [0.8, 1.2, 1.6, 2];
                 const so = LRl(bareW.o.slice(0, 4).map((v, n) => v + add[n]), bareW.i.slice(0, 4).map((v, n) => v + add[n]));
                 const sh2 = limb(sAxis, so.l, so.r, 0.1, 0.05);
                 return (
@@ -551,7 +562,9 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
             </g>
           );
         })}
+        </g>
 
+        <g transform={upT}>
         {look.bottom === "gonna" ? (
           <g>
             <path d={`M${hip.l - 2} 200 L${hip.r + 2} 200 L${hip.r + 12} 262 Q${cx} 268 ${hip.l - 12} 262 Z`} fill={`url(#${uid}pa)`} stroke={OUT} strokeOpacity="0.58" strokeWidth="0.84" />
@@ -568,7 +581,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
         {/* collo: disegnato prima della veste, così colletti e scolli lo coprono come di profilo */}
         <g className={live ? "aa-front-head" : undefined}>
           {/* collo: più stretto sotto il mento, si allarga nelle spalle; ombra del mento, muscoli appena segnati */}
-          <path d={`M${cx - 7.5} 76 L${cx + 7.5} 76 C${cx + 8} 88 ${cx + 9.5} 96 ${cx + 16} 103 L${cx - 16} 103 C${cx - 9.5} 96 ${cx - 8} 88 ${cx - 7.5} 76 Z`} fill={`url(#${uid}skn)`} stroke={shade(skin, -0.55)} strokeOpacity="0.5" strokeWidth="0.6" transform={woman ? `translate(${cx} 76) scale(1.06 1) translate(${-cx} -76)` : `translate(${cx} 76) scale(1.22 1) translate(${-cx} -76)`} />
+          <path d={`M${cx - 7.5} 76 L${cx + 7.5} 76 C${cx + 8} 88 ${cx + 9.5} 96 ${cx + 16} 103 L${cx - 16} 103 C${cx - 9.5} 96 ${cx - 8} 88 ${cx - 7.5} 76 Z`} fill={`url(#${uid}skn)`} stroke={shade(skin, -0.55)} strokeOpacity="0.5" strokeWidth="0.6" transform={woman ? `translate(${cx} 76) scale(1.12 1) translate(${-cx} -76)` : `translate(${cx} 76) scale(1.36 1) translate(${-cx} -76)`} />
           <path d={`M${cx - 7.5} 76 C${cx - 8} 88 ${cx - 9.5} 96 ${cx - 16} 103 L${cx - 10} 103 C${cx - 6} 96 ${cx - 5} 88 ${cx - 5} 78 Z M${cx + 7.5} 76 C${cx + 8} 88 ${cx + 9.5} 96 ${cx + 16} 103 L${cx + 10} 103 C${cx + 6} 96 ${cx + 5} 88 ${cx + 5} 78 Z`} fill={shade(skin, -0.36)} opacity="0.5" />
           <ellipse cx={cx} cy="83" rx="9" ry="5" fill={`url(#${uid}sd)`} opacity="0.75" />
           <path d={`M${cx - 6} 84 Q${cx - 4} 94 ${cx - 1.4} 101 M${cx + 6} 84 Q${cx + 4} 94 ${cx + 1.4} 101`} stroke={shade(skin, -0.4)} strokeOpacity="0.3" strokeWidth="0.7" fill="none" />
@@ -779,10 +792,14 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
         </g>
         </g>
         </g>
+        </g>
       </g>
     </svg>
   );
 }
+
+/** di quanto sale il busto (spalle, braccia, testa) per dare alle gambe la lunghezza vera */
+export const FRONT_LIFT = 10;
 
 /** quanto è alto l'arciere di fronte (ragazzi più bassi, statura scelta): scala attorno ai piedi (100, 360) */
 export function frontScale(look: AvatarLook) {
@@ -978,7 +995,7 @@ function FrontTop({ look, cx, sh, waist, hip, hem, sideLen, longTop, skin, shirt
     case "canotta": {
       // bordo dello scalfo: dalla spallina, vicino al collo, giù fino all'ascella
       const strap = 22 * tw;
-      const pit = look.body === "donna" || look.body === "ragazza" ? 8.5 : 9.5;
+      const pit = look.body === "donna" || look.body === "ragazza" ? 7.5 : 7;
       return (
         <g>
           {scoop(14, 13, tr, 2)}

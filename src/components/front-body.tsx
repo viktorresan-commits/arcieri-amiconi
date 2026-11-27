@@ -83,7 +83,9 @@ export function armLimb(axis: P[], wl: number[], wr: number[], side: -1 | 1, pea
   const i0 = inner[0];
   // la spalla continua la pendenza del trapezio e si arrotonda sul deltoide fino al suo punto più largo
   const dx = o0.x - peak.x;
-  const shoulder = `M${f(peak.x)} ${f(peak.y)} C${f(peak.x + dx * 0.55)} ${f(peak.y + Math.abs(dx) * 0.12)} ${f(o0.x + dx * 0.04)} ${f(peak.y + (o0.y - peak.y) * 0.3)} ${f(o0.x)} ${f(o0.y)}`;
+  const dy = o0.y - peak.y;
+  // quarto d'ellisse che parte già in discesa: la spalla è tonda, non un angolo
+  const shoulder = `M${f(peak.x)} ${f(peak.y)} C${f(peak.x + dx * 0.5)} ${f(peak.y + dy * 0.16)} ${f(o0.x + dx * 0.02)} ${f(o0.y - dy * 0.55)} ${f(o0.x)} ${f(o0.y)}`;
   const len = Math.hypot(axis[n].x - axis[n - 1].x, axis[n].y - axis[n - 1].y) || 1;
   const d = { x: (axis[n].x - axis[n - 1].x) / len, y: (axis[n].y - axis[n - 1].y) / len };
   const w = ((wl[n] + wr[n]) / 2) * bottom * 1.3;
@@ -140,21 +142,17 @@ export const LEG_Y = [206, 224, 244, 260, 270, 282, 294, 310, 324, 334];
  * più basso e pieno dentro), caviglia sottile con i malleoli.
  */
 export function legWidths(woman: boolean, k: number) {
-  const o = woman ? [13.2, 12.4, 10.8, 8.8, 7.8, 8.2, 8.3, 6.6, 5, 5.2] : [12.6, 12, 10.8, 9, 8.1, 8.9, 8.6, 6.8, 5.3, 5.5];
-  const i = woman ? [12, 10.6, 9, 7.6, 7.3, 7.4, 8.2, 6.4, 4.8, 5.2] : [11.6, 10.4, 9.2, 7.8, 7.6, 7.6, 8.7, 6.6, 5.1, 5.5];
+  const o = woman ? [13.8, 13, 11.4, 9, 7.8, 8.6, 8.6, 6.8, 4.9, 5.1] : [13.2, 12.8, 11.6, 9.6, 8.2, 9.6, 9.4, 7.2, 5.2, 5.4];
+  const i = woman ? [12.6, 11.2, 9.6, 7.8, 7.3, 7.6, 8.6, 6.6, 4.7, 5.1] : [12, 11, 9.8, 8.2, 7.6, 8, 9.4, 7, 5, 5.4];
   return { o: o.map((v) => v * k), i: i.map((v) => v * k) };
 }
 
-/** pantaloni: la stoffa scende dalla coscia senza seguire il polpaccio; larghi = più ampi in fondo */
+/** pantaloni: sulla coscia seguono la gamba, dal ginocchio in giù la stoffa scende dritta (non segue il polpaccio); larghi = più ampi in fondo */
 export function pantWidths(woman: boolean, k: number, wide: boolean) {
   const base = legWidths(woman, k);
-  const o = base.o.map((v, n) => {
-    const fall = wide ? [14.4, 13.8, 13.2, 12.8, 12.6, 12.6, 12.6, 12.6, 12.8, 13] : [13, 12.4, 11.4, 10.4, 10, 9.9, 9.8, 9.6, 9.6, 9.8];
-    return Math.max(v + 0.6, fall[n] * k);
-  });
-  const i = base.i.map((v, n) => {
-    const fall = wide ? [12.4, 11.8, 11.4, 11.2, 11, 11, 11, 11, 11.2, 11.4] : [11.8, 10.8, 10, 9.2, 8.9, 8.8, 8.8, 8.6, 8.6, 8.8];
-    return Math.max(v + 0.6, fall[n] * k);
-  });
+  const fallO = wide ? [14.6, 14, 13.4, 13, 12.8, 12.8, 12.8, 12.8, 13, 13.2] : [13.6, 13, 11.8, 10.4, 9.8, 9.7, 9.6, 9.5, 9.5, 9.7];
+  const fallI = wide ? [12.8, 12.2, 11.8, 11.4, 11.2, 11.2, 11.2, 11.2, 11.4, 11.6] : [12.4, 11.4, 10.4, 9.2, 8.8, 8.7, 8.7, 8.6, 8.6, 8.8];
+  const o = base.o.map((v, n) => (n <= 3 ? Math.max(v + 0.8, fallO[n] * k) : fallO[n] * k));
+  const i = base.i.map((v, n) => (n <= 3 ? Math.max(v + 0.8, fallI[n] * k) : fallI[n] * k));
   return { o, i };
 }
