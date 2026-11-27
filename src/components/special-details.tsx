@@ -27,6 +27,100 @@ function Baldric({ a, b, crest, s = 1 }: { a: [number, number]; b: [number, numb
   );
 }
 
+const VELVET = "#17141a";
+const LINEN = "#f1ede4";
+
+/** veste partita di Romina: la metà sinistra dell'arciera (a destra di chi guarda) è di velluto nero */
+function PartitoHalf({ shapes, cx, x1, y0, y1, uid, folds }: { shapes: string[]; cx: number; x1: number; y0: number; y1: number; uid: string; folds: string }) {
+  return (
+    <g pointerEvents="none">
+      <clipPath id={`${uid}pt`}>{shapes.map((d, k) => <path key={k} d={d} />)}</clipPath>
+      <linearGradient id={`${uid}ptg`} x1="0" x2="1">
+        <stop offset="0" stopColor="#24202a" />
+        <stop offset="0.55" stopColor={VELVET} />
+        <stop offset="1" stopColor="#2c2731" />
+      </linearGradient>
+      <g clipPath={`url(#${uid}pt)`}>
+        <rect x={f(cx)} y={f(y0)} width={f(x1 - cx)} height={f(y1 - y0)} fill={`url(#${uid}ptg)`} />
+        {/* pieghe morbide del velluto e la cucitura al centro */}
+        <path d={folds} stroke="#3a3440" strokeOpacity="0.8" strokeWidth="1.1" fill="none" strokeLinecap="round" />
+        <path d={`M${f(cx)} ${f(y0)} V${f(y1)}`} stroke={OUTL} strokeOpacity="0.55" strokeWidth="0.9" />
+      </g>
+    </g>
+  );
+}
+
+/** tracolla di lino bianca della bisaccia, da una spalla al fianco opposto */
+function LinenStrap({ a, b }: { a: [number, number]; b: [number, number] }) {
+  const d = `M${f(a[0])} ${f(a[1])} L${f(b[0])} ${f(b[1])}`;
+  return (
+    <g pointerEvents="none">
+      <path d={d} stroke={OUTL} strokeOpacity="0.75" strokeWidth="5.6" strokeLinecap="round" />
+      <path d={d} stroke={LINEN} strokeWidth="4.2" strokeLinecap="round" />
+      <path d={d} stroke="#c9c1b2" strokeWidth="0.5" strokeDasharray="1.6 1.4" transform="translate(-1.2 0)" />
+    </g>
+  );
+}
+
+/** bisaccia di lino bianca con sopra la borsa di cuoio rosso scuro con la fibbia, appese al fianco */
+function RominaBags({ x, y, s = 1 }: { x: number; y: number; s?: number }) {
+  return (
+    <g transform={`translate(${f(x)} ${f(y)}) scale(${s})`} pointerEvents="none">
+      {/* lino: un sacco morbido che pende, con l'orlo sfilacciato e le pieghe */}
+      <path d="M-4 -2 C4 -4 14 -2 18 2 C22 14 22 30 18 42 C12 46 4 45 -2 42 C-5 30 -6 12 -4 -2 Z" fill={LINEN} stroke={OUTL} strokeWidth="0.9" strokeLinejoin="round" />
+      <path d="M2 4 C3 18 2 30 1 40 M10 2 C12 16 13 30 12 43 M16 6 C18 18 18 30 16 40" stroke="#cfc6b4" strokeWidth="0.8" fill="none" />
+      {/* cuoio: corpo, patta con la fibbia e la cinghia */}
+      <path d="M-6 6 H12 C14 6 15 8 15 10 V26 C15 30 12 32 8 32 H-2 C-6 32 -8 30 -8 26 V10 C-8 8 -7 6 -6 6 Z" fill="#6a3424" stroke={OUTL} strokeWidth="0.9" />
+      <path d="M-8 10 C-8 7 -6 5 -4 5 H12 C14 5 15 7 15 10 V18 C10 21 -3 21 -8 18 Z" fill="#7d4430" stroke={OUTL} strokeWidth="0.8" />
+      <path d="M-6 9 H13" stroke="#a4664a" strokeWidth="0.5" strokeDasharray="1.2 1" />
+      <rect x="1.4" y="14.6" width="4.4" height="5" rx="0.6" fill="none" stroke="#c9a24a" strokeWidth="1.1" />
+      <path d="M3.6 15 V24" stroke="#4a2418" strokeWidth="1.6" />
+      <path d="M-4 31 C-2 34 8 34 11 31" stroke="#3a1c12" strokeOpacity="0.6" strokeWidth="0.8" fill="none" />
+    </g>
+  );
+}
+
+/** capo della cintura azzurra che pende davanti, con il puntale di metallo */
+function BeltEnd({ x, y, len, color }: { x: number; y: number; len: number; color: string }) {
+  const d = `M${f(x)} ${f(y)} C${f(x - 1.6)} ${f(y + len * 0.4)} ${f(x + 1)} ${f(y + len * 0.7)} ${f(x - 0.6)} ${f(y + len)}`;
+  return (
+    <g pointerEvents="none">
+      <path d={d} stroke={OUTL} strokeOpacity="0.7" strokeWidth="3.6" fill="none" strokeLinecap="round" />
+      <path d={d} stroke={color} strokeWidth="2.4" fill="none" strokeLinecap="round" />
+      <path d={`M${f(x - 2)} ${f(y + len - 1)} h3 l-0.4 6 l-1.1 1.4 l-1.1 -1.4 Z`} fill="#8d949b" stroke={OUTL} strokeWidth="0.5" />
+    </g>
+  );
+}
+
+const isRomina = (look: AvatarLook) => look.special === "romina-fabriano" && look.style === "medievale";
+
+/** di profilo, sulla veste prima di bordi e cintura: metà nera, stemma e tracolla */
+export function SpecialSideCloth({ look, cx, shoulderL, shoulderR, hipR, shapes, tunicLen, uid }: { look: AvatarLook; cx: number; shoulderL: number; shoulderR: number; hipR: number; shapes: string[]; tunicLen: number; uid: string }) {
+  if (!isRomina(look)) return null;
+  const folds = `M${cx + 9} 214 Q${cx + 11} ${(214 + tunicLen) / 2} ${cx + 13} ${tunicLen - 4} M${cx + 20} 222 Q${cx + 24} ${(222 + tunicLen) / 2} ${cx + 30} ${tunicLen - 6} M${cx + 8} 150 Q${cx + 10} 170 ${cx + 9} 194`;
+  return (
+    <g>
+      <PartitoHalf shapes={shapes} cx={cx} x1={shoulderR + 24} y0={108} y1={tunicLen + 8} uid={uid} folds={folds} />
+      {/* sottoveste color sabbia nella scollatura */}
+      <path d={`M${f(cx - 12)} 116 Q${f(cx)} 132 ${f(cx + 12)} 116 Q${f(cx)} 115 ${f(cx - 12)} 116 Z`} fill={look.sleeves || "#c9b08a"} pointerEvents="none" />
+      <g transform={`translate(${f(cx - 11)} 147)`}><CompanyCrest id={look.crest} x={0} y={0} s={0.42} /></g>
+      <LinenStrap a={[shoulderL + 7, 119]} b={[hipR + 3, 206]} />
+    </g>
+  );
+}
+
+/** di fronte, sulla veste prima delle finiture: metà nera e stemma */
+export function SpecialFrontCloth({ look, cx, sh, shapes, hem, uid }: { look: AvatarLook; cx: number; sh: { l: number; r: number }; shapes: string[]; hem: number; uid: string }) {
+  if (!isRomina(look)) return null;
+  const folds = `M${cx + 12} 204 Q${cx + 14} ${(204 + hem) / 2} ${cx + 16} ${hem - 4} M${cx + 26} 212 Q${cx + 30} ${(212 + hem) / 2} ${cx + 36} ${hem - 6} M${cx + 10} 130 Q${cx + 12} 156 ${cx + 11} 182`;
+  return (
+    <g>
+      <PartitoHalf shapes={shapes} cx={cx} x1={sh.r + 30} y0={90} y1={hem + 10} uid={uid} folds={folds} />
+      <g transform={`translate(${f(cx - 15)} 132)`}><CompanyCrest id={look.crest} x={0} y={0} s={0.5} /></g>
+    </g>
+  );
+}
+
 /** davanti, sul busto (sopra la veste) */
 export function SpecialFrontTorso({ look, cx, sh, hip, layer = "under", uid = "sp" }: { look: AvatarLook; cx: number; sh: { l: number; r: number }; hip: { l: number; r: number }; /** "over": sopra le braccia (la pellegrina copre spalle e braccia) */ layer?: "under" | "over"; uid?: string }) {
   if (demonOf(look)) return <DemonFrontTorso look={look} cx={cx} sh={sh} hip={hip} layer={layer} />;
@@ -55,6 +149,16 @@ export function SpecialFrontTorso({ look, cx, sh, hip, layer = "under", uid = "s
     );
   }
   if (layer !== "under") return null;
+  if (isRomina(look)) {
+    // tracolla di lino dalla spalla destra al fianco sinistro, bisacce appese; capo della cintura che pende
+    return (
+      <g pointerEvents="none">
+        <LinenStrap a={[sh.l + 12, 100]} b={[hip.r - 2, 190]} />
+        <BeltEnd x={cx - 7} y={190} len={72} color={look.beltColor} />
+        <RominaBags x={hip.r - 4} y={186} s={1.05} />
+      </g>
+    );
+  }
   if (look.special === "simone-inverno" && look.top === "giacca") {
     return (
       <g pointerEvents="none">
@@ -102,6 +206,14 @@ export function SpecialSideTorso({ look, cx, shoulderL, shoulderR, hipL, hipR }:
   void hipR;
   if (demonOf(look)) return <DemonSideTorso look={look} cx={cx} shoulderL={shoulderL} shoulderR={shoulderR} />;
   if (look.special === "simone-medievale" && look.style === "medievale") return <Baldric a={[shoulderR - 6, 122]} b={[hipL + 6, 200]} crest={look.crest} s={1.05} />;
+  if (isRomina(look)) {
+    return (
+      <g pointerEvents="none">
+        <BeltEnd x={cx - 5} y={206} len={74} color={look.beltColor} />
+        <RominaBags x={hipR - 2} y={204} s={0.95} />
+      </g>
+    );
+  }
   if (look.special === "simone-inverno" && look.top === "giacca") {
     return (
       <g pointerEvents="none">

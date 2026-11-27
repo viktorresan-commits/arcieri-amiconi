@@ -1,7 +1,8 @@
 import { ink, cubicPts, Tufts, Clumps, fanStrokes, MetalDefs } from "./avatar-ink";
 import { PATTERN2_IDS } from "@/lib/arcieri/avatar-more";
 import { EyepatchFront, EyepatchProfile, Marks2Front, Marks2Profile, Pendant, browShape } from "./avatar-more";
-import { SpecialSideTorso } from "./special-details";
+import { SpecialSideCloth, SpecialSideTorso } from "./special-details";
+import { GOWN_LEN } from "@/lib/arcieri/special-looks";
 import { DemonFaceSvg, DemonSideBack, DemonSideHead, DemonSideLeg, DemonStaffSide, demonHand, demonOf } from "./demon-costume";
 import { cloneElement, isValidElement, useEffect, useId, useMemo, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { tune, type AvatarLook, type Pose, nearSide, sideOf } from "@/lib/arcieri/avatar";
@@ -399,7 +400,7 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4, cssBlink = fals
   const TUNIC: Record<string, number> = { tunica: 252, "tunica-lunga": 266, ranger: 262, incrociata: 250, cappotto: 258, "cappotto-lungo": 292, giubba: 230, cotta: 240, giubbetto: 234 };
   // la barra "lunghezza" allunga o accorcia la veste; anche una maglia può scendere sui fianchi
   const stretch = (tune(look.topLength, 50, 0, 100) - 50) * 1.3;
-  const tunicLen = Math.round(Math.max(206, Math.min(312, (TUNIC[look.top] ?? 200) + stretch)));
+  const tunicLen = GOWN_LEN[look.special] ?? Math.round(Math.max(206, Math.min(312, (TUNIC[look.top] ?? 200) + stretch)));
   const tunicD = `M${f(hipL + 1)} 200 L${f(hipR - 1)} 200 C${f(hipR + 4)} 224 ${f(hipR + 10)} ${tunicLen - 18} ${f(hipR + 12)} ${tunicLen} Q${f(cx)} ${tunicLen + 5} ${f(hipL - 12)} ${tunicLen} C${f(hipL - 10)} ${tunicLen - 18} ${f(hipL - 4)} 224 ${f(hipL + 1)} 200 Z`;
   const longTunic = tunicLen > 216;
 
@@ -854,6 +855,7 @@ function Figure({ look, def, t, flying, blink, uid, wind = -1.4, cssBlink = fals
       <path d={torso} fill={`url(#${uid}shirt)`} stroke={OUT} strokeOpacity="0.58" strokeWidth="1.32" />
       <ClothPattern kind={look.pattern} shapes={longTunic ? [torso, tunicD] : [torso]} base={look.shirt} trim={look.trim} uid={uid} box={[shoulderL - 16, 112, shoulderR + 16, (longTunic ? tunicLen : 210) + 6]} />
       <ClothDetail uid={uid} shapes={longTunic ? [torso, tunicD] : [torso]} cx={cx} shoulderL={shoulderL} shoulderR={shoulderR} hipL={hipL} hipR={hipR} tunicLen={tunicLen} longTunic={longTunic} seam={seamOf(look.shirt)} belt={look.belt === "larga" ? 196 : 200} />
+      {look.special ? <SpecialSideCloth look={look} cx={cx} shoulderL={shoulderL} shoulderR={shoulderR} hipR={hipR} shapes={longTunic ? [torso, tunicD] : [torso]} tunicLen={tunicLen} uid={uid} /> : null}
       <Outfit look={look} cx={cx} shoulderL={shoulderL} shoulderR={shoulderR} hipL={hipL} hipR={hipR} tunicLen={tunicLen} W={W} woman={woman} uid={uid} />
       {/* volume dipinto della veste: luce sul petto verso il bersaglio, schiena in ombra, ombra sotto la cintura */}
       <g pointerEvents="none">
@@ -1101,7 +1103,7 @@ function Outfit({ look, cx, shoulderL, shoulderR, hipL, hipR, tunicLen, W, woman
         <g>
           <path d={`M${f(cx - 12)} 116 Q${f(cx)} 132 ${f(cx + 12)} 116`} stroke={tr} strokeWidth="3.5" fill="none" />
           <path d={`M${f(cx)} 126 v14`} stroke={shade(sh, -0.35)} strokeWidth="1.2" />
-          <path d={`M${f(hipL - 6)} ${tunicLen - 2} L${f(hipR + 6)} ${tunicLen - 2}`} stroke={tr} strokeWidth="4" />
+          {GOWN_LEN[look.special] ? null : <path d={`M${f(hipL - 6)} ${tunicLen - 2} L${f(hipR + 6)} ${tunicLen - 2}`} stroke={tr} strokeWidth="4" />}
           <path d={`M${f(cx)} 210 L${f(cx)} ${tunicLen}`} stroke={shade(sh, -0.25)} strokeWidth="1.2" />
           {belt}
         </g>

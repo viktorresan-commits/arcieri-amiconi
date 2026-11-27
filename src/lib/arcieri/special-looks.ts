@@ -97,6 +97,38 @@ SPECIAL_LOOKS.push(
   },
 );
 
+/**
+ * Romina Partenzi: la veste partita bianca e nera degli Arcieri di Fabriano, dalla sua foto in costume.
+ * Finché il fondatore non la conferma (ROMINA_GIFT) la vede solo lui, per provarla; poi passa a Romina,
+ * con l'avviso «Hai un nuovo vestito in regalo» in Bacheca.
+ */
+export const ROMINA_GIFT = false;
+export const ROMINA_LOOK = "romina-fabriano";
+const ROMINA_OWNERS: Owner[] = ROMINA_GIFT ? [{ given: "Romina", family: "Partenzi" }] : [];
+/** il viso di Romina (solo per l'anteprima: sul suo profilo resta il suo) */
+export const ROMINA_FACE: Partial<AvatarLook> = { body: "donna", skin: "#eec5a4", hair: "coda", hairColor: "#5e3b22", beard: "nessuna", stache: "nessuno", eyes: "#5b3a1e", brows: "normali", face: "allungato", nose: "dritto", expression: "sorriso" };
+SPECIAL_LOOKS.push({
+  id: ROMINA_LOOK,
+  owner: ROMINA_OWNERS[0] ?? { given: "", family: "" },
+  owners: ROMINA_OWNERS,
+  founder: true,
+  label: "Romina · Arciera di Fabriano",
+  motto: "Veste lunga partita bianca e nera con lo stemma, maniche color sabbia, cintura azzurra e arco lungo di legno chiaro",
+  look: {
+    body: "donna", beard: "nessuna", stache: "nessuno",
+    style: "medievale", top: "tunica", shirt: "#f3f0e8", trim: "#9a2630", sleeves: "#c9b08a", pattern: "nessuno", emblem: "nessuno", topLength: "100",
+    bottom: "calzamaglia", pants: "#16131a", footwear: "stivaletti", shoes: "#2a1c14",
+    hat: "nessuno", cape: false, cowl: false, fur: false, scarf: false, mask: false, sash: false, straps: false, wraps: false,
+    belt: "sottile", beltColor: "#2f4f9a", buckle: "semplice", pouch: false, gloves: false, bracers: "", necklace: false, amulet: false, pendant: "nessuno", eyepatch: "nessuna",
+    quiverPlace: "fianco", quiver: "#4a2a16", quiverStyle: "cuoio", chestguard: false, armguard: "",
+    bowType: "longbow", useMain: false, riser: "#b8915a", limbs: "#d9bd85", string: "#ece4d0", fletch: "#e8e2d4", cock: "#8a6a4a", nock: "#2a1a10", shaft: "#b08a5a",
+    scene: "fabriano", frame: "nessuna", special: ROMINA_LOOK,
+  },
+});
+
+/** vesti su misura lunghe fino ai piedi: lunghezza fissa della veste di profilo */
+export const GOWN_LEN: Record<string, number> = { [ROMINA_LOOK]: 322 };
+
 const keyOf = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").trim().toLowerCase();
 const isOwner = (o: Owner, given: string, family: string) => Boolean(o.given) && keyOf(o.given) === keyOf(given) && keyOf(o.family) === keyOf(family);
 

@@ -28,7 +28,9 @@ export async function publishNews(sql: Sql, userId: string) {
       values (${userId}, ${"È arrivato il costume da Demone di Montelago"}, ${"I due costumi del Montelago Celtic Festival sono nel tuo Avatar: maschera, corna, bastone e lo sfondo dell'Arpa di notte con i fuochi. Li potete indossare solo voi due, Simone e Victor: li trovi tra i tuoi abiti su misura, con il nome «Demone di Montelago»."}, ${"/avatar"}, ${`demone-montelago-${userId}`})
       on conflict (dedupe) do nothing`;
   }
-  const gifts = all.filter((g) => !g.id.startsWith("demone-"));
+  // gli abiti che il fondatore sta ancora provando non sono regali: contano solo quelli di cui si è titolari
+  const owned = me[0] ? specialLooksFor(me[0].given_name ?? "", me[0].family_name ?? "") : [];
+  const gifts = owned.filter((g) => !g.id.startsWith("demone-"));
   if (gifts.length) {
     const names = gifts.map((g) => `«${g.label.replace(/^[^·]*·\s*/, "")}»`).join(" e ");
     await sql`

@@ -3,7 +3,8 @@ import { tune, type AvatarLook, nearSide, sideOf } from "@/lib/arcieri/avatar";
 import { AvatarFace, blend, bodyWidth, CAPE_CLOTH, shade } from "./archer-avatar";
 import { PATTERN2_IDS } from "@/lib/arcieri/avatar-more";
 import { Pendant } from "./avatar-more";
-import { SpecialFrontLeg, SpecialFrontTorso } from "./special-details";
+import { SpecialFrontCloth, SpecialFrontLeg, SpecialFrontTorso } from "./special-details";
+import { GOWN_LEN } from "@/lib/arcieri/special-looks";
 import { DemonStaffFront, demonHand, demonOf, demonScale } from "./demon-costume";
 import { FrontShoe, frontBootTop } from "./avatar-shoes";
 import { FrontFist } from "./avatar-hands";
@@ -42,7 +43,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
   const sleeve = look.top === "cotta" ? look.sleeves || "#8d949b" : look.top === "giubbetto" ? look.sleeves || "#f1ece0" : LONG_SLEEVES.includes(look.top) ? look.sleeves || shirt : skin;
   // lunghezza della veste: stessa barra della figura di profilo
   const stretch = (tune(look.topLength, 50, 0, 100) - 50) * 1.3;
-  const sideLen = Math.max(206, Math.min(312, (LONG_TOPS[look.top] ?? 200) + stretch));
+  const sideLen = GOWN_LEN[look.special] ?? Math.max(206, Math.min(312, (LONG_TOPS[look.top] ?? 200) + stretch));
   const hem = 206 + (sideLen - 206) * 1.05;
   const longTop = sideLen > 216;
   const tunicD = `M${hip.l} 196 L${hip.r} 196 C${hip.r + 6} 230 ${hip.r + 12} ${hem - 20} ${hip.r + 14} ${hem} Q${cx} ${hem + 6} ${hip.l - 14} ${hem} C${hip.l - 12} ${hem - 20} ${hip.l - 6} 230 ${hip.l} 196 Z`;
@@ -634,6 +635,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
         {longTop ? round(tunicD, "tu", "#000", 1.1) : null}
         <ClothPattern kind={look.pattern} shapes={longTop ? [torsoD, tunicD] : [torsoD]} base={shirt} trim={look.trim} uid={`${uid}f`} box={[sh.l - 16, 94, sh.r + 16, (longTop ? hem : 208) + 6]} />
         <g opacity="0.55"><ClothDetail uid={`${uid}cd`} shapes={longTop ? [torsoD, tunicD] : [torsoD]} cx={cx} shoulderL={sh.l} shoulderR={sh.r} hipL={hip.l} hipR={hip.r} tunicLen={longTop ? hem : 206} longTunic={longTop} seam={seamOf(shirt)} dy={-14} belt={look.belt === "larga" ? 184 : 187} /></g>
+        {look.special ? <SpecialFrontCloth look={look} cx={cx} sh={sh} shapes={longTop ? [torsoD, tunicD] : [torsoD]} hem={hem} uid={uid} /> : null}
         <FrontTop look={look} cx={cx} sh={sh} waist={waist} hip={hip} hem={hem} sideLen={sideLen} longTop={longTop} skin={skin} shirt={shirt} sleeve={sleeve} uid={uid} tw={tw} />
         <g pointerEvents="none">
           <clipPath id={`${uid}vc`}>
@@ -918,7 +920,7 @@ function FrontTop({ look, cx, sh, waist, hip, hem, sideLen, longTop, skin, shirt
           {scoop(13, 9, tr, 3.5)}
           <path d={`M${cx} 106 v15`} stroke={shade(shirt, -0.35)} strokeWidth="1.2" />
           {longTop ? <path d={`M${cx} 198 L${cx} ${hem}`} stroke={shade(shirt, -0.25)} strokeWidth="1.2" /> : null}
-          {hemTrim(4)}
+          {GOWN_LEN[look.special] ? null : hemTrim(4)}
         </g>
       );
     case "tunica-lunga":
