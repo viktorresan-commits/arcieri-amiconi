@@ -99,10 +99,10 @@ SPECIAL_LOOKS.push(
 
 /**
  * Romina Partenzi: la veste partita bianca e nera degli Arcieri di Fabriano, dalla sua foto in costume.
- * Finché il fondatore non la conferma (ROMINA_GIFT) la vede solo lui, per provarla; poi passa a Romina,
- * con l'avviso «Hai un nuovo vestito in regalo» in Bacheca.
+ * Il fondatore l'ha confermata il 27 novembre 2026 (ROMINA_GIFT): è di Romina, che riceve l'avviso
+ * «Hai un nuovo vestito in regalo» in Bacheca alla prima apertura della Home.
  */
-export const ROMINA_GIFT = false;
+export const ROMINA_GIFT = true;
 export const ROMINA_LOOK = "romina-fabriano";
 const ROMINA_OWNERS: Owner[] = ROMINA_GIFT ? [{ given: "Romina", family: "Partenzi" }] : [];
 /** il viso di Romina (solo per l'anteprima: sul suo profilo resta il suo) */
