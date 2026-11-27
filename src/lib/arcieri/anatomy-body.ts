@@ -383,9 +383,9 @@ export function bodyMatrices(meta: BodyMeta, J: Record<number, V3>, look?: V3, g
     const s = g.side;
     const k = Math.min(1, g.k);
     curlK[s] = wrap
-      ? // mano dell'arco: le falangi come corde di un cerchio attorno al riser del ricurvo (4,2 × 4,8 cm più
-        // la carne delle dita): nocca 42°, seconda falange 66° (la terza segue)
-        { k, a1: (42 * Math.PI) / 180, a2: (66 * Math.PI) / 180, spread: 0 }
+      ? // mano dell'arco rilassata (come si insegna: l'arco non si stringe): le dita girano attorno al davanti
+        // del riser senza entrarci. Angoli trovati misurando la mano del modello contro il riser vero
+        { k: Math.min(1, k / 0.85), a1: WRAP_GRIP.a1, a2: WRAP_GRIP.a2, spread: 0 }
       : { k, a1: (14 * Math.PI) / 180, a2: (100 * Math.PI) / 180, spread: (9 * Math.PI) / 180 };
     if (wrap) {
       // mano dell'arco: le nocche in fila lungo l'impugnatura (indice in alto, sotto la freccia, mignolo in
@@ -413,7 +413,26 @@ export function bodyMatrices(meta: BodyMeta, J: Record<number, V3>, look?: V3, g
       const IXn = add(add(W, mul(e1, hLen)), mul(X, wid / 2));
       const PKn = add(add(W, mul(e1, hLen)), mul(X, -wid / 2));
       const fwd = norm(cross(norm(sub(J[11], J[12])), torsoUp));
-      Fc[`mano_${s}`] = frame(W, lerp(IXn, PKn, 0.5), cross(sub(IXn, W), sub(PKn, W)), fwd);
+      const fm = frame(W, lerp(IXn, PKn, 0.5), cross(sub(IXn, W), sub(PKn, W)), fwd);
+      // Presa vera: la mano a riposo si gira tutta insieme in modo che le dita (F) vadano verso il bersaglio e
+      // la fila delle nocche (dall'indice al mignolo) scenda lungo l'arco. È l'orientamento con cui la presa è
+      // stata misurata contro il riser (WRAP_GRIP): le dita girano attorno all'impugnatura, non di traverso
+      const fr = Fr[`mano_${s}`];
+      const cf = curlFrame(meta, s);
+      const uP = flat(dirIn ?? sub(g.toward, W));
+      if (fr && cf && len(uP) > 1e-4) {
+        const Sp = dot(cf.S, cf.X) >= 0 ? cf.S : mul(cf.S, -1);
+        const r3 = cross(cf.F, Sp);
+        const c1 = norm(uP);
+        const c3 = cross(c1, ax);
+        const R = (v: V3) => add(add(mul(c1, dot(v, cf.F)), mul(ax, dot(v, Sp))), mul(c3, dot(v, r3)));
+        const e1 = norm(R(fr.e1));
+        const e2 = norm(R(fr.e2));
+        // la mano resta della sua misura (la presa è misurata su questa mano contro il riser vero)
+        Fc[`mano_${s}`] = { o: W, e1, e2, e3: cross(e1, e2), L: fr.L };
+        continue;
+      }
+      Fc[`mano_${s}`] = fm;
       continue;
     }
     // mano della corda: dal polso verso la cocca, indice in alto (sopra la freccia)
@@ -514,7 +533,8 @@ export function bodyMatrices(meta: BodyMeta, J: Record<number, V3>, look?: V3, g
     const c = c0 ?? { k: 0, a1: 0, a2: 0, spread: 0 };
     for (const f of [d, pl]) {
       if (f < 0) continue;
-      const kk = f === pl ? c.k * 0.6 : c.k;
+      // il pollice della mano dell'arco resta com'è nella mano (lungo il riser, verso il bersaglio)
+      const kk = f === pl ? c.k * (s === grips?.wrap?.side ? 1 : 0.6) : c.k;
       for (let i = 0; i < 16; i++) out[f * 16 + i] = out[f * 16 + i] * (1 - kk) + out[m * 16 + i] * kk;
     }
     // piega di ogni dito: conta tanto meno quanto più la mano è in presa (lì i punti sono coperti)
@@ -560,6 +580,22 @@ export function curlFrame(meta: BodyMeta, s: "L" | "R") {
   const P = perpTo(F, sub(palm, mul(X, dot(palm, X))), [0, 0, 1]);
   const S = norm(cross(F, P));
   return { K: k0, L, F, P, S, X };
+}
+
+/**
+ * Presa della mano dell'arco, misurata sulla mano del modello contro il riser vero del Samik: nocca e
+ * seconda falange appena piegate; il centro dell'impugnatura sta davanti al palmo (F avanti, P verso il
+ * palmo) e 2,5 cm verso il mignolo, così indice e pollice stanno sotto la mensola e il pollice passa
+ * accanto alla finestra. Nessun vertice della mano entra nel riser (margine 2 mm).
+ */
+export const WRAP_GRIP = { a1: (15 * Math.PI) / 180, a2: (30 * Math.PI) / 180, F: 0.0225, P: 0.06, S: 0.025 };
+/** dove sta, nella mano a riposo, il centro dell'impugnatura dell'arco */
+export function gripHole(meta: BodyMeta, s: "L" | "R"): V3 | null {
+  const cf = curlFrame(meta, s);
+  if (!cf) return null;
+  // verso il mignolo: per le due mani l'asse di piega S ha verso opposto rispetto alla fila delle nocche
+  const toPinky = dot(cf.S, cf.X) >= 0 ? mul(cf.S, -1) : cf.S;
+  return add(add(add(cf.K, mul(cf.F, WRAP_GRIP.F)), mul(cf.P, WRAP_GRIP.P)), mul(toPinky, WRAP_GRIP.S));
 }
 
 /**

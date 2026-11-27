@@ -890,7 +890,7 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gea
   // presa: il palmo della mano dell'arco (con i punti della mano), altrimenti tra polso e indice
   const bowBase = handBase(S.bow[2]);
   const drwBase = handBase(S.draw[2]);
-  const grip = J[bowBase] ? lerp(lerp(J[bowBase], J[bowBase + 5], 0.5), J[bowBase + 9], 0.5) : lerp(bow.wr, bowIdx, 0.55);
+  let grip = J[bowBase] ? lerp(lerp(J[bowBase], J[bowBase + 5], 0.5), J[bowBase + 9], 0.5) : lerp(bow.wr, bowIdx, 0.55);
   // dita sulla corda: le seconde falangi di indice e medio
   // la corda sta nella piega della prima falange di indice e medio (la cocca tra le due dita)
   const fingers = J[drwBase] ? lerp(J[drwBase + 7], J[drwBase + 11], 0.5) : lerp(drw.wr, drwIdx, 0.75);
@@ -951,6 +951,19 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gea
   }
   let n = perp(u, [0, 1, 0]);
   let half = 0.8;
+  /**
+   * Il centro dell'impugnatura dove lo tiene la mano dell'arco (WRAP_GRIP in anatomy-body): dal polso, con
+   * le dita verso il bersaglio e la fila delle nocche lungo l'arco. Misurato sulla mano del modello: avanti
+   * 10,2 cm, 2,6 cm verso il mignolo, 2,2 cm verso il palmo (di lato). Così l'arco va nella mano invece di
+   * tirare la mano fino all'arco
+   */
+  const holeAt = (axis: V3, dir: V3): V3 => {
+    const ax = norm(axis);
+    const c1 = norm(sub(dir, mul(ax, dot(dir, ax))));
+    const c3 = cross(c1, ax);
+    const lat = S.bow[2] === 15 ? 0.0215 : -0.0221;
+    return add(add(add(bow.wr, mul(c1, 0.102)), mul(ax, -0.0257)), mul(c3, lat));
+  };
   // arco trovato nel video: inclinazione e lunghezza vere
   if (gear?.bow && sImg > 0) {
     const a = fromImage(gear.bow.x1, gear.bow.y1, bow.wr, bowWrI);
@@ -970,6 +983,8 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gea
     u = bowPre.u;
     half = bowPre.half;
   }
+  // l'arco nel pugno: il centro dell'impugnatura dove la mano lo tiene davvero
+  if (len(sub(bow.wr, drw.wr)) > 0.05) grip = holeAt(n, sub(bow.wr, drw.wr));
   // flettenti curvati verso il bersaglio (davanti alla presa), corda dietro
   const curve = (s: number): V3 => add(add(grip, mul(n, half * s)), mul(u, 0.02 - 0.13 * s * s));
   const steps = 44;
@@ -993,13 +1008,14 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gea
   const sBow = half / SAMIK.half;
   const mir = hand === "destro" ? 1 : -1;
   const bowXm = mul(bowX, mir);
-  const bowO = sub(grip, add(mul(bowXm, SAMIK.grip[0] * sBow), add(mul(n, SAMIK.grip[1] * sBow), mul(u, SAMIK.grip[2] * sBow))));
-  const bowPl = place(bowO, bowXm, n, u, sBow, sBow, sBow);
+  // l'arco si allunga solo in lunghezza: lo spessore del riser (l'impugnatura nella mano) resta quello vero
+  const bowO = sub(grip, add(mul(bowXm, SAMIK.grip[0]), add(mul(n, SAMIK.grip[1] * sBow), mul(u, SAMIK.grip[2]))));
+  const bowPl = place(bowO, bowXm, n, u, 1, sBow, 1);
   const realPart = (mesh: GearMesh, pl: { m: Float32Array; nm: Float32Array }, color: V3) => parts.push({ mesh, m: pl.m, nm: pl.nm, color, mode: 3, alpha: 1, act: 0, layer: "arco", alt: "real" });
   realPart("sbRiser", bowPl, [0.4, 0.25, 0.12]);
   realPart("sbLight", bowPl, [0.33, 0.19, 0.09]);
   realPart("sbDark", bowPl, [0.02, 0.02, 0.02]);
-  const onBow = (q: V3): V3 => add(bowO, add(mul(bowXm, q[0] * sBow), add(mul(n, q[1] * sBow), mul(u, q[2] * sBow))));
+  const onBow = (q: V3): V3 => add(bowO, add(mul(bowXm, q[0]), add(mul(n, q[1] * sBow), mul(u, q[2]))));
   for (const tq of [SAMIK.tipA, SAMIK.tipB]) {
     parts.push({ ...seg(onBow(tq), nock, 0.0022, 0.0022, 1.0), mesh: "tube", color: [0.95, 0.95, 0.9], mode: 3, alpha: 0.9, act: 0, layer: "arco", alt: "real" });
   }

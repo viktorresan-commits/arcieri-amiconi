@@ -3,7 +3,7 @@
  * Usato dalla vista 3D dell'analisi e dalle immagini dei muscoli per le zone del corpo.
  */
 import { v3, type GearMesh, type Model, type Part, type V3 } from "./anatomy-model";
-import { bodyMatrices, curlFrame, groupValues, type BodyBatch, type BodyData, type BodyLevel, type BodyMeta } from "./anatomy-body";
+import { bodyMatrices, curlFrame, gripHole, groupValues, type BodyBatch, type BodyData, type BodyLevel, type BodyMeta } from "./anatomy-body";
 import { flexInfo, flexValues, skinWithMuscles, type FlexInfo } from "./anatomy-flex";
 import { loadGlb } from "./glb-geo";
 import { sides } from "./pose-analysis";
@@ -1026,8 +1026,8 @@ function seatHands(meta: BodyMeta, J: Record<number, V3>, mats: Float32Array, ha
     const ixR = meta.rest[h.side === "L" ? "19" : "20"];
     const pkR = meta.rest[h.side === "L" ? "17" : "18"];
     const toIndex: V3 = ixR && pkR ? v3.mul(v3.sub(ixR, pkR), 0.25) : [0, 0, 0];
-    // mano dell'arco: il centro del cerchio delle dita piegate, 3,2 cm davanti alle nocche (vedi la piega in anatomy-body)
-    const holeRest: V3 = h.hole === "wrap" ? v3.add(v3.add(k0, v3.mul(P, 0.032)), v3.mul(F, 0.002)) : v3.add(v3.add(v3.add(k0, v3.mul(F, L * 0.42)), v3.mul(P, 0.012)), toIndex);
+    // mano dell'arco: il centro dell'impugnatura nella mano a riposo (vedi WRAP_GRIP in anatomy-body)
+    const holeRest: V3 = h.hole === "wrap" ? (gripHole(meta, h.side) ?? k0) : v3.add(v3.add(v3.add(k0, v3.mul(F, L * 0.42)), v3.mul(P, 0.012)), toIndex);
     const hole = xf(mats, m, holeRest);
     let d = v3.sub(h.at, hole);
     const dl = v3.len(d);
