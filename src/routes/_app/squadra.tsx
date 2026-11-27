@@ -135,7 +135,7 @@ function ArcherCard({ row, look, index, me }: {
           </div>
           {look ? (
             <div className="absolute inset-x-0 bottom-0 h-[122%] overflow-hidden rounded-b-[0.8rem]">
-              <ArcherFront look={{ ...look, lefty: false }} fit crop="28 2 144 150" className="aa-bust h-full w-full drop-shadow-[0_3px_5px_rgba(0,0,0,0.45)]" />
+              <ArcherFront look={{ ...look, lefty: false }} fit crop="28 2 144 150" className="aa-bust h-full w-full" />
             </div>
           ) : (
             <div className="absolute inset-0 grid place-items-center">

@@ -501,7 +501,7 @@ export function AvatarEditor() {
             <div className="aa-avatar-stage relative h-72 overflow-hidden">
               <SceneBackdrop sky={sky} id="edfront" scene={shown.scene} />
               <div className="absolute inset-x-0 bottom-[2%] top-[3%] flex justify-center">
-                <ArcherFront look={shown} className="h-full w-auto drop-shadow-[0_12px_20px_rgba(0,0,0,0.45)]" />
+                <ArcherFront look={shown} className="h-full w-auto" />
               </div>
             </div>
           ) : (

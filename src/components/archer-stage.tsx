@@ -8,7 +8,7 @@ import { useLoad } from "@/lib/arcieri/use-load";
 import { Avatar } from "@/components/kit";
 import { PrizeMark, prizeTier } from "@/components/prize-mark";
 import { PiazzoleMark } from "@/components/piazzole-mark";
-import { LevelCrest, haloOfXp } from "@/components/level-crest";
+import { LevelCrest } from "@/components/level-crest";
 import { RankBanner } from "@/components/rank-banner";
 import { Glyph } from "@/components/icons";
 import { AVATAR_DEFAULT, type AvatarLook } from "@/lib/arcieri/avatar";
@@ -68,7 +68,7 @@ export function ArcherStage({ data, look: lookIn, avatar, onArcherTap, corner }:
     .slice(0, 3);
   const look = lookIn ?? AVATAR_DEFAULT;
   const rank = data.stats.fitast;
-  const figure = <ArcherFront look={look} fit className="h-full w-auto drop-shadow-[0_16px_24px_rgba(0,0,0,0.5)]" />;
+  const figure = <ArcherFront look={look} fit className="h-full w-auto" />;
   return (
     // la scena va da bordo a bordo, parte subito sotto l'intestazione e in basso sfuma nella pagina (come in Casa)
     <div className="aa-profile-stage relative -mx-4 -mt-6 h-[38rem] overflow-hidden">
@@ -77,7 +77,6 @@ export function ArcherStage({ data, look: lookIn, avatar, onArcherTap, corner }:
         <div className="absolute inset-x-0 bottom-0 h-[22%] bg-gradient-to-t from-black/35 to-transparent" />
       </div>
       {/* luce morbida dietro l'arciere e ombra a terra: l'arciere sta nella scena, non sopra */}
-      <div style={{ ["--glow" as string]: haloOfXp(data.xp).a }} className={`aa-stage-glow aa-stage-glow-lv pointer-events-none absolute inset-x-0 top-[18%] bottom-[8%] ${rank ? "px-[22%]" : "pr-[22%]"}`} aria-hidden />
       <div className={`aa-stage-shadow pointer-events-none absolute bottom-[3.5%] h-[4.5%] w-[34%] -translate-x-1/2 ${rank ? "left-1/2" : "left-[39%]"}`} aria-hidden />
       <div className={`absolute inset-x-0 bottom-[1%] top-[11%] flex justify-center ${rank ? "px-[22%]" : "pr-[22%]"}`}>
         {onArcherTap ? (

@@ -52,7 +52,6 @@ export function AvatarTurntable({ look, glow, children, onOpen }: { look: Avatar
   return (
     <div className="aa-turntable relative h-[27rem] overflow-hidden rounded-[1.75rem]">
       <SceneBackdrop sky={sky} id="turn" scene={look.scene} />
-      <div style={glow ? { ["--glow" as string]: glow } : undefined} className="aa-stage-glow aa-stage-glow-lv pointer-events-none absolute inset-x-0 bottom-[8%] top-[22%]" aria-hidden />
       <div className="aa-stage-shadow pointer-events-none absolute bottom-[3%] left-1/2 h-[4.5%] w-[36%] -translate-x-1/2" aria-hidden />
       <div
         className="absolute inset-x-0 bottom-[1%] top-[20%] flex touch-pan-y select-none justify-center"
@@ -72,10 +71,10 @@ export function AvatarTurntable({ look, glow, children, onOpen }: { look: Avatar
         <div key={`${view}${i}`} className="aa-turn-in flex h-full justify-center" style={{ ["--from" as string]: dir > 0 ? "18deg" : "-18deg" }}>
           {side ? (
             <div className={`h-full ${view === "sinistra" ? "aa-mirror" : ""}`}>
-              <ArcherAvatar look={straight} pose="riposo" interactive={false} still className="h-full w-auto drop-shadow-[0_16px_24px_rgba(0,0,0,0.5)]" />
+              <ArcherAvatar look={straight} pose="riposo" interactive={false} still className="h-full w-auto" />
             </div>
           ) : (
-            <ArcherFront look={look} fit className="h-full w-auto drop-shadow-[0_16px_24px_rgba(0,0,0,0.5)]" />
+            <ArcherFront look={look} fit className="h-full w-auto" />
           )}
         </div>
       </div>

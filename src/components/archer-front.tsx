@@ -49,23 +49,33 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
   // busto: collo, trapezio che scende alla spalla tonda, petto e dorsali che stringono alla vita (lui),
   // seno e vita stretta che si apre sui fianchi (lei)
   const nk = 14 * tw;
+  // il busto è largo alle spalle e si stringe sotto l'ascella: lì comincia il braccio, che gli sta accanto
+  // (non sopra), e tra braccio e vita resta un poco di vuoto
   const sideD = (s: 1 | -1) => {
     const S = s > 0 ? sh.r : sh.l;
     const Wt = s > 0 ? waist.r : waist.l;
     const H = s > 0 ? hip.r : hip.l;
     return woman
-      ? `C${S + s * 1.5} 138 ${Wt - s * 1} 160 ${Wt} 178 C${Wt + s * 1} 190 ${H + s * 1} 194 ${H} 202`
-      : `C${S} 140 ${Wt + s * 3} 164 ${Wt} 182 C${Wt - s * 0.5} 190 ${H} 192 ${H} 200`;
+      ? `C${S - s * 5} 124 ${S - s * 8} 125 ${S - s * 8.5} 130 C${S - s * 7.5} 142 ${Wt + s * 0.5} 160 ${Wt} 178 C${Wt + s * 1} 190 ${H + s * 1} 194 ${H} 202`
+      : `C${S - s * 6} 124 ${S - s * 9} 125 ${S - s * 9.5} 130 C${S - s * 10.5} 148 ${Wt + s * 2} 166 ${Wt} 182 C${Wt - s * 0.5} 190 ${H} 192 ${H} 200`;
   };
   const revSide = (s: 1 | -1) => {
     const S = s > 0 ? sh.r : sh.l;
     const Wt = s > 0 ? waist.r : waist.l;
     const H = s > 0 ? hip.r : hip.l;
     return woman
-      ? `C${H + s * 1} 194 ${Wt + s * 1} 190 ${Wt} 178 C${Wt - s * 1} 160 ${S + s * 1.5} 138 ${S + s * 1} 121`
-      : `C${H} 192 ${Wt - s * 0.5} 190 ${Wt} 182 C${Wt + s * 3} 164 ${S} 140 ${S + s * 1} 121`;
+      ? `C${H + s * 1} 194 ${Wt + s * 1} 190 ${Wt} 178 C${Wt + s * 0.5} 160 ${S - s * 7.5} 142 ${S - s * 8.5} 130 C${S - s * 8} 125 ${S - s * 5} 124 ${S - s * 3} 119`
+      : `C${H} 192 ${Wt - s * 0.5} 190 ${Wt} 182 C${Wt + s * 2} 166 ${S - s * 10.5} 148 ${S - s * 9.5} 130 C${S - s * 9} 125 ${S - s * 6} 124 ${S - s * 3} 119`;
   };
-  const torsoD = `M${cx - nk} 96.6 Q${cx} 98.2 ${cx + nk} 96.6 C${cx + nk + 8} 99 ${sh.r - 14} 102.5 ${sh.r - 5} 106.5 C${sh.r + 0.5} 108.5 ${sh.r + 2.5} 113 ${sh.r + 1} 121 ${sideD(1)} L${hip.r} 208 Q${cx} 209.6 ${hip.l} 208 L${hip.l} ${woman ? 202 : 200} ${revSide(-1)} C${sh.l - 2.5} 113 ${sh.l - 0.5} 108.5 ${sh.l + 5} 106.5 C${sh.l + 14} 102.5 ${cx - nk - 8} 99 ${cx - nk} 96.6 Z`;
+  // canotta: spalline strette vicino al collo e scalfo profondo; sotto si vede la pelle delle spalle
+  const tank = look.top === "canotta";
+  const pit = woman ? 8.5 : 9.5;
+  const strap = 22 * tw;
+  const lowerR = sideD(1).split(" C").slice(1).map((c) => ` C${c}`).join("");
+  const upperL = revSide(-1).split(" C").slice(0, 2).join(" C");
+  const tankD = `M${cx - nk} 96.6 Q${cx} 98.2 ${cx + nk} 96.6 L${cx + strap} 98.4 C${cx + strap + 2} 112 ${sh.r - 7} 124 ${sh.r - pit} 130${lowerR} L${hip.r} 208 Q${cx} 209.6 ${hip.l} 208 L${hip.l} ${woman ? 202 : 200} ${upperL} C${sh.l + 7} 124 ${cx - strap - 2} 112 ${cx - strap} 98.4 Z`;
+  const bodyD = `M${cx - nk} 96.6 Q${cx} 98.2 ${cx + nk} 96.6 C${cx + nk + 8} 99 ${sh.r - 14} 102.5 ${sh.r - 5} 106.5 C${sh.r - 1} 108 ${sh.r} 113 ${sh.r - 3} 119 ${sideD(1)} L${hip.r} 208 Q${cx} 209.6 ${hip.l} 208 L${hip.l} ${woman ? 202 : 200} ${revSide(-1)} C${sh.l} 113 ${sh.l + 1} 108 ${sh.l + 5} 106.5 C${sh.l + 14} 102.5 ${cx - nk - 8} 99 ${cx - nk} 96.6 Z`;
+  const torsoD = tank ? tankD : bodyD;
   const tight = look.bottom === "calzamaglia";
   const wide = look.bottom === "larghi" || look.bottom === "brache";
   const shorts = look.bottom === "pantaloncini" || look.bottom === "gonna";
@@ -102,10 +112,10 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
   const arm = (side: -1 | 1) => {
     const open = armsOut != null;
     const bowArm = side === bowSide && !open;
-    const s0 = { x: side < 0 ? sh.l + 7 : sh.r - 7, y: 110 };
+    const s0 = { x: side < 0 ? sh.l + 5 : sh.r - 5, y: 110 };
     // braccia aperte: la punta del dito medio a armsOut dal centro, la mano finisce lì
-    const hand = open ? { x: cx + side * (armsOut - handR * 0.9), y: 110 } : bowArm ? { x: grip.x - bowSide * 1, y: grip.y } : { x: s0.x + side * 1, y: 214 };
-    const elbow = open ? { x: lerp(s0.x, hand.x, 0.47), y: 109 } : bowArm ? { x: s0.x + side * 11, y: 158 } : { x: s0.x + side * 7, y: 160 };
+    const hand = open ? { x: cx + side * (armsOut - handR * 0.9), y: 110 } : bowArm ? { x: grip.x - bowSide * 1, y: grip.y } : { x: s0.x + side * 2.5, y: 214 };
+    const elbow = open ? { x: lerp(s0.x, hand.x, 0.47), y: 109 } : bowArm ? { x: s0.x + side * 11, y: 158 } : { x: s0.x + side * 4.5, y: 160 };
     const upW = 16.5 * W;
     const foreW = 13 * W;
     const cuff = lerpP(elbow, hand, 0.84);
@@ -173,8 +183,6 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
           <g fill="none" stroke={skinLine} strokeLinecap="round" pointerEvents="none">
             {shortSleeve ? null : <path d={`M${f(outerPt(2).x)} ${f(outerPt(2).y)} Q${f(lerpP(outerPt(1), at2(1), 0.45).x)} ${f(lerpP(outerPt(1), at2(1), 0.45).y)} ${f(lerpP(at2(1), innerPt(1), 0.2).x)} ${f(at2(1).y - 3)}`} strokeOpacity="0.3" strokeWidth="0.7" />}
             <path d={`M${f(lerpP(at2(5), innerPt(5), 0.5).x)} ${f(at2(5).y - 1.5)} q${f(side * -1.4)} 2.2 ${f(side * 0.6)} 4`} strokeOpacity="0.32" strokeWidth="0.6" />
-            <path d={`M${f(lerpP(at2(5), outerPt(5), 0.6).x)} ${f(at2(5).y + 1)} Q${f(lerpP(at2(7), outerPt(7), 0.2).x)} ${f(at2(7).y)} ${f(lerpP(at2(8), innerPt(8), 0.15).x)} ${f(at2(8).y + 2)}`} strokeOpacity="0.2" strokeWidth="0.7" />
-            <path d={`M${f(lerpP(at2(3), innerPt(3), 0.55).x)} ${f(at2(2).y)} q${f(side * 1.2)} 6 0 11`} stroke="#fff" strokeOpacity="0.14" strokeWidth="1.6" />
           </g>
         )}
         {sleeveArm ? (
@@ -235,7 +243,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
     );
   };
   // freccia nella mano libera: punta in giù lungo la gamba, penne sopra la mano
-  const freeHand = { x: (bowSide > 0 ? sh.l + 7 : sh.r - 7) - bowSide * 1, y: 214 };
+  const freeHand = { x: (bowSide > 0 ? sh.l + 5 : sh.r - 5) - bowSide * 2.5, y: 214 };
   const heldArrow = (
     <g className={live ? "aa-front-arm" : undefined} style={live ? { transformOrigin: `${f(freeHand.x)}px 110px` } : undefined}>
     <g transform={`translate(${f(freeHand.x)} ${f(freeHand.y)}) rotate(${-bowSide * 4})`}>
@@ -346,7 +354,7 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
         {/* ombra a terra morbida, più scura sotto i piedi */}
         <ellipse cx="100" cy="356" rx="70" ry="8.5" fill={`url(#${uid}rimg)`} />
         <ellipse cx="100" cy="355" rx="34" ry="3.4" fill="#000" opacity="0.28" />
-        <g filter={`url(#${uid}rim)`}>
+        <g>
         <g className={live ? "aa-front-sway" : undefined}>
         {/* dietro: mantello e faretra sulla schiena */}
         {look.cape ? (() => {
@@ -522,6 +530,15 @@ export function ArcherFront({ look, className = "h-96 w-auto", crop, fit = false
           <path d={`M${cx - 6} 84 Q${cx - 4} 94 ${cx - 1.4} 101 M${cx + 6} 84 Q${cx + 4} 94 ${cx + 1.4} 101`} stroke={shade(skin, -0.4)} strokeOpacity="0.3" strokeWidth="0.7" fill="none" />
           <path d={`M${cx - 7.5} 76 C${cx - 8} 88 ${cx - 9.5} 96 ${cx - 16} 103 M${cx + 7.5} 76 C${cx + 8} 88 ${cx + 9.5} 96 ${cx + 16} 103`} stroke={OUT} strokeOpacity="0.54" strokeWidth="0.72" fill="none" />
         </g>
+        {/* sotto la canotta: la pelle delle spalle e del petto, come quella del volto */}
+        {tank ? (
+          <g>
+            <path d={bodyD} fill={`url(#${uid}sk)`} stroke={shade(skin, -0.55)} strokeOpacity="0.62" strokeWidth="0.7" />
+            <path d={bodyD} fill={`url(#${uid}skp)`} opacity="0.12" pointerEvents="none" />
+            {/* clavicole appena accennate */}
+            <path d={`M${cx - 4} 101 Q${cx - 14 * tw} 99.5 ${cx - 24 * tw} 103.5 M${cx + 4} 101 Q${cx + 14 * tw} 99.5 ${cx + 24 * tw} 103.5`} fill="none" stroke={shade(skin, -0.38)} strokeOpacity="0.3" strokeWidth="0.7" strokeLinecap="round" pointerEvents="none" />
+          </g>
+        ) : null}
         {/* veste */}
         {longTop ? <path d={tunicD} fill={`url(#${uid}sh)`} stroke={OUT} strokeOpacity="0.54" strokeWidth="0.84" /> : null}
         <path d={torsoD} fill={`url(#${uid}sh)`} stroke={OUT} strokeOpacity="0.54" strokeWidth="0.84" />
@@ -873,13 +890,17 @@ function FrontTop({ look, cx, sh, waist, hip, hem, sideLen, longTop, skin, shirt
         </g>
       );
     }
-    case "canotta":
+    case "canotta": {
+      // bordo dello scalfo: dalla spallina, vicino al collo, giù fino all'ascella
+      const strap = 22 * tw;
+      const pit = look.body === "donna" || look.body === "ragazza" ? 8.5 : 9.5;
       return (
         <g>
-          {scoop(16, 13, tr, 2)}
-          <path d={`M${sh.l + 4} 108 Q${sh.l + 10} 132 ${sh.l + 4} 152 M${sh.r - 4} 108 Q${sh.r - 10} 132 ${sh.r - 4} 152`} stroke={tr} strokeWidth="2" fill="none" />
+          {scoop(14, 13, tr, 2)}
+          <path d={`M${cx + strap} 98.4 C${cx + strap + 2} 112 ${sh.r - 7} 124 ${sh.r - pit} 130 M${cx - strap} 98.4 C${cx - strap - 2} 112 ${sh.l + 7} 124 ${sh.l + pit} 130`} stroke={tr} strokeWidth="1.8" fill="none" strokeLinecap="round" />
         </g>
       );
+    }
     case "camicia":
       return (
         <g>

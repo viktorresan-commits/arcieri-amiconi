@@ -2386,7 +2386,7 @@ export function ArcherAvatar({ look, className = "h-72 w-auto", interactive = tr
         <ellipse cx="150" cy="340" rx="86" ry="8.5" fill={`url(#${uid}rimg)`} />
         <ellipse cx="150" cy="339.5" rx="40" ry="3.6" fill="#000" opacity="0.26" />
         {/* luce di contorno (calda davanti, fredda dietro); nel gioco no, la figura si muove di continuo */}
-        <g filter={drive ? undefined : `url(#${uid}rim)`} transform={`translate(150 342) scale(${((kid ? 0.8 : 1) * (0.9 + (tune(look.stature, 50, 0, 100) / 100) * 0.2)).toFixed(3)}) translate(-150 -342)`}>
+        <g transform={`translate(150 342) scale(${((kid ? 0.8 : 1) * (0.9 + (tune(look.stature, 50, 0, 100) / 100) * 0.2)).toFixed(3)}) translate(-150 -342)`}>
           <Figure look={look} def={def} t={t} flying={hideFlight ? null : flying} blink={blink} uid={uid} wind={wind} cssBlink={cssBlink} />
         </g>
       </g>
@@ -2819,7 +2819,7 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false, part }
   const beard = beardShape ? (
     <g transform={look.beard === "barbetta" || look.beard === "basette" ? undefined : `translate(0 ${fy + 6}) scale(1 ${bk.toFixed(3)}) translate(0 ${-(fy + 6)})`}>
       {painted && paintedSpec && beardD ? (
-        <PaintedBeard uid={uid} id="pbf" d={beardD} color={beardC} dark={shade(beardC, -0.52)} light={shade(beardC, 0.42)} box={paintedSpec.box} edge={paintedSpec.edge} c={[50, fy + 4]} len={paintedSpec.len} feather={look.beard === "pizzetto" || look.beard === "mosca" ? 0.5 : 1.1} lipY={look.beard === "pizzetto" || look.beard === "mosca" ? undefined : fy + 14} />
+        <PaintedBeard uid={uid} id="pbf" d={beardD} color={beardC} dark={shade(beardC, -0.52)} light={shade(beardC, 0.42)} box={paintedSpec.box} edge={paintedSpec.edge} c={[50, fy + 4]} len={paintedSpec.len} feather={look.beard === "pizzetto" || look.beard === "mosca" ? 0.4 : 0.75} lipY={look.beard === "pizzetto" || look.beard === "mosca" ? undefined : fy + 14} />
       ) : (
       <>
       {/* bordo morbido: un alone dello stesso colore (i peli sul bordo sono radi e lasciano vedere la pelle) */}
@@ -2893,17 +2893,17 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false, part }
         const j = hash(i * 3.7 + 1);
         const side = t - 0.5;
         const lineY = fy - ry + 6.2 + Math.pow(Math.abs(side) * 2, 2.2) * ry * 0.62;
-        const sx = 50 + side * (rx * 2 - 2.4) + (j - 0.5) * 1.6;
+        const sx = 50 + side * (rx * 2 + 2) + (j - 0.5) * 1.6;
         const sy = lineY - 0.5 - j * 1.4;
         // la riga: le ciocche a sinistra vanno a sinistra, le altre si pettinano verso destra
         const part = 46;
         const dirX = sx < part ? -1 : 1;
         const ex = sx < part ? 50 - rx * 0.2 - (part - sx) * 0.35 : part + (sx - part) * 0.55;
-        const ey = fy - ry - 7 + Math.abs(side) * 5 + j * 2;
+        const ey = fy - ry - 13 + Math.abs(side) * 4 + j * 2;
         const cxq = sx + dirX * (2 + Math.abs(side) * rx * 0.9);
         const cyq = (sy + ey) / 2 - 1.5;
         const lightK = i % 3 === 0;
-        return <path key={i} d={`M${sx.toFixed(1)} ${sy.toFixed(1)} Q${cxq.toFixed(1)} ${cyq.toFixed(1)} ${ex.toFixed(1)} ${ey.toFixed(1)}`} stroke={lightK ? shade(hair, 0.5) : shade(hair, -0.5)} strokeOpacity={lightK ? 0.28 : 0.32} strokeWidth={i % 5 === 0 ? 0.5 : 0.24 + j * 0.12} />;
+        return <path key={i} d={`M${sx.toFixed(1)} ${sy.toFixed(1)} Q${cxq.toFixed(1)} ${cyq.toFixed(1)} ${ex.toFixed(1)} ${ey.toFixed(1)}`} stroke={lightK ? shade(hair, 0.45) : shade(hair, -0.5)} strokeOpacity={lightK ? 0.22 : 0.32} strokeWidth={i % 5 === 0 ? 0.5 : 0.24 + j * 0.12} />;
       })
     : null;
   // ciocche larghe sotto i fili: il capello si raccoglie in ciocche, alcune in luce e altre in ombra
@@ -2913,12 +2913,12 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false, part }
         const j = hash(i * 9.1 + 4);
         const side = t - 0.5;
         const lineY = fy - ry + 6.2 + Math.pow(Math.abs(side) * 2, 2.2) * ry * 0.62;
-        const sx = 50 + side * (rx * 2 - 3) + (j - 0.5) * 1.4;
+        const sx = 50 + side * (rx * 2 + 1.5) + (j - 0.5) * 1.4;
         const sy = lineY - 1;
         const part = 46;
         const dirX = sx < part ? -1 : 1;
         const ex = sx < part ? 50 - rx * 0.2 - (part - sx) * 0.35 : part + (sx - part) * 0.55;
-        const ey = fy - ry - 7 + Math.abs(side) * 5 + j * 2;
+        const ey = fy - ry - 13 + Math.abs(side) * 4 + j * 2;
         const cxq = sx + dirX * (2 + Math.abs(side) * rx * 0.9);
         const cyq = (sy + ey) / 2 - 1.5;
         const lit = i % 3 === 1;
@@ -3409,7 +3409,7 @@ export function AvatarFace({ look, className = "h-10 w-10", bare = false, part }
                 {hairClumps}
                 {hairFlow}
               </g>
-              {hairlineFlicks ? <path d={hairlineFlicks} stroke={shade(hair, -0.15)} strokeOpacity="0.42" strokeWidth="0.26" fill="none" strokeLinecap="round" pointerEvents="none" /> : null}
+              {hairlineFlicks && false ? <path d={hairlineFlicks} stroke={shade(hair, -0.15)} strokeOpacity="0.42" strokeWidth="0.26" fill="none" strokeLinecap="round" pointerEvents="none" /> : null}
             </>
           ) : null}
           {!capOn && top && look.hair === "spettinati" ? paintOver(top, "hsp", "down", [50 - rx - 10, fy - ry - 18, rx * 2 + 20, ry + 18], 11, false) : null}

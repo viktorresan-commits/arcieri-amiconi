@@ -79,16 +79,16 @@ export function armLimb(axis: P[], wl: number[], wr: number[], side: -1 | 1, pea
   const outer = side < 0 ? L : R;
   const inner = side < 0 ? R : L;
   const n = axis.length - 1;
-  const o0 = outer[0];
+  const o0 = outer[1];
   const i0 = inner[0];
-  // la spalla continua la pendenza del trapezio e si arrotonda sul deltoide
+  // la spalla continua la pendenza del trapezio e si arrotonda sul deltoide fino al suo punto più largo
   const dx = o0.x - peak.x;
-  const shoulder = `M${f(peak.x)} ${f(peak.y)} C${f(peak.x + dx * 0.5)} ${f(peak.y + Math.abs(dx) * 0.16)} ${f(o0.x + dx * 0.08)} ${f(peak.y + (o0.y - peak.y) * 0.35)} ${f(o0.x)} ${f(o0.y)}`;
+  const shoulder = `M${f(peak.x)} ${f(peak.y)} C${f(peak.x + dx * 0.55)} ${f(peak.y + Math.abs(dx) * 0.12)} ${f(o0.x + dx * 0.04)} ${f(peak.y + (o0.y - peak.y) * 0.3)} ${f(o0.x)} ${f(o0.y)}`;
   const len = Math.hypot(axis[n].x - axis[n - 1].x, axis[n].y - axis[n - 1].y) || 1;
   const d = { x: (axis[n].x - axis[n - 1].x) / len, y: (axis[n].y - axis[n - 1].y) / len };
   const w = ((wl[n] + wr[n]) / 2) * bottom * 1.3;
   const cap = `C${f(outer[n].x + d.x * w)} ${f(outer[n].y + d.y * w)} ${f(inner[n].x + d.x * w)} ${f(inner[n].y + d.y * w)} ${f(inner[n].x)} ${f(inner[n].y)}`;
-  const down = curveThrough(outer, true);
+  const down = curveThrough(outer.slice(1), true);
   const upAll = curveThrough([...inner].reverse(), true);
   const upToPit = curveThrough([...inner].reverse().slice(0, n - 1), true);
   const back = `C${f(i0.x)} ${f(i0.y - (i0.y - peak.y) * 0.5)} ${f(peak.x + (i0.x - peak.x) * 0.5)} ${f(peak.y)} ${f(peak.x)} ${f(peak.y)}`;
