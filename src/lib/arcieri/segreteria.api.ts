@@ -67,8 +67,8 @@ export const secretaryBoard = createServerFn({ method: "POST" })
     if (!company[0]) throw new Error("Compagnia non trovata.");
     const companies = staff ? await sql<{ id: number; name: string }>`select id, name from companies order by name` : [];
     const people = await peopleOf(sql, companyId);
-    const dues = await sql<{ user_id: string; paid: boolean; paid_on: unknown; amount_cents: number | null; note: string }>`
-      select user_id, paid, paid_on, amount_cents, note from company_dues where company_id = ${companyId} and season = ${data.season}`;
+    const dues = await sql<{ user_id: string; paid: boolean; paid_on: unknown; amount_cents: number | null; note: string; card_until: unknown }>`
+      select user_id, paid, paid_on, amount_cents, note, card_until from company_dues where company_id = ${companyId} and season = ${data.season}`;
     const certs = await sql<{ user_id: string; valid_until: unknown; kind: string }>`select user_id, valid_until, kind from company_certs where company_id = ${companyId}`;
     const days = await sql<{ id: number; day: unknown; title: string }>`select id, day, title from course_days where company_id = ${companyId} order by day desc, id desc limit 40`;
     const presence = await sql<{ day_id: number; user_id: string }>`
@@ -89,6 +89,7 @@ export const secretaryBoard = createServerFn({ method: "POST" })
         paid: Boolean(d?.paid),
         paidOn: d ? dayOf(d.paid_on) : "",
         amount: d?.amount_cents != null ? asNum(d.amount_cents) / 100 : null,
+        cardUntil: d ? dayOf(d.card_until) : "",
         certUntil: until,
         certKind: c?.kind ?? "agonistico",
         certDays: daysLeft,
@@ -135,6 +136,27 @@ export const setDue = createServerFn({ method: "POST" })
         paid_on = case when excluded.paid and company_dues.paid then company_dues.paid_on else excluded.paid_on end,
         amount_cents = coalesce(excluded.amount_cents, company_dues.amount_cents),
         updated_at = now()`;
+    return { ok: true as const };
+  });
+
+/** scadenza della tessera della stagione (vuota = fino al 31 dicembre, se la quota è pagata) */
+export const setCard = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: unknown) => {
+    const raw = (input ?? {}) as { companyId?: unknown; userId?: unknown; season?: unknown; cardUntil?: unknown };
+    const until = String(raw.cardUntil ?? "");
+    if (until && !/^\d{4}-\d{2}-\d{2}$/.test(until)) throw new Error("Data non valida.");
+    return { companyId: asNum(raw.companyId), userId: clip(raw.userId, 80), season: asNum(raw.season) || currentSeason(), cardUntil: until || null };
+  })
+  .handler(async ({ context, data }) => {
+    const sql = await db();
+    const me = await ensureMember(sql, context.userId);
+    const { companyId } = await access(sql, me, context.userId, data.companyId);
+    await checkPerson(sql, companyId, data.userId);
+    await sql`
+      insert into company_dues (company_id, user_id, season, card_until, updated_at)
+      values (${companyId}, ${data.userId}, ${data.season}, ${data.cardUntil}, now())
+      on conflict (company_id, user_id, season) do update set card_until = excluded.card_until, updated_at = now()`;
     return { ok: true as const };
   });
 

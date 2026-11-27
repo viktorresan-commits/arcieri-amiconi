@@ -60,7 +60,7 @@ export const PAGE_HELP: Record<string, string[]> = {
     "Le notifiche arrivano solo per gare, sfide e medaglie.",
   ],
   "/acquisti": ["La lista è tua: gli altri non la vedono."],
-  "/profilo": ["Dati personali, importazioni, password e preferenze dell'app."],
+  "/profilo": ["Dati personali, importazioni, password e preferenze dell'app.", "Le tue scadenze: tessera e certificato medico. Le vedi solo tu e la segreteria; se mancano puoi scriverle con la matita."],
   "/staff": [
     "Hai ricevuto un codice? Scrivilo in «Hai un codice?»: vale per la nomina a presidente e per gli inviti.",
     "Presidente e allenatori creano un invito e lo mandano su WhatsApp: chi apre il link entra nella compagnia.",

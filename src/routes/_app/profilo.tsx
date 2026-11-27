@@ -11,6 +11,7 @@ import { useAvatar } from "@/components/avatar-hero";
 import { archerBoard, listCompetitions, listGadgets } from "@/lib/arcieri/club.api";
 import { ArcherStage } from "@/components/archer-stage";
 import { FitastLinkCard } from "@/components/fitast-link";
+import { MyDeadlines } from "@/components/scadenze";
 import { forgetLoadCache, useLoad } from "@/lib/arcieri/use-load";
 import { simplePdf } from "@/lib/arcieri/pdf";
 import { useMember } from "@/components/shell";
@@ -255,6 +256,9 @@ function Page() {
           <b className="font-display text-2xl leading-tight tabular-nums">{myPrizes.length}<span className="text-sm font-normal text-muted"> / {prizes.length}</span></b>
         </Link>
       </div>
+
+      {/* tessera e certificato medico: le scadenze di ognuno, sempre sotto gli occhi */}
+      <MyDeadlines />
 
       {/* storie da condividere: foto con un compagno o video con i propri numeri */}
       <Link to="/riepilogo" search={{ vista: "foto" }} className="aa-press flex min-h-14 items-center gap-3 rounded-2xl border border-[#e0b15a]/35 bg-[linear-gradient(110deg,rgba(224,177,90,0.16),rgba(181,72,106,0.12))] px-3 py-2.5">

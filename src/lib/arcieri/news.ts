@@ -1,6 +1,7 @@
 import { asNum } from "./access";
 import { MONTELAGO_GIFT, specialLooksFor } from "./special-looks";
 import type { getSql } from "@/lib/db";
+import { deadlineNotices } from "./scadenze";
 
 type Sql = Awaited<ReturnType<typeof getSql>>;
 
@@ -10,6 +11,12 @@ function weekKey(date = new Date()) {
 }
 
 export async function publishNews(sql: Sql, userId: string) {
+  // scadenze di tessera e certificato: avviso 15 giorni prima e a scadenza passata
+  try {
+    await deadlineNotices(sql, userId);
+  } catch {
+    /* gli altri avvisi arrivano comunque */
+  }
   // abiti su misura regalati: un avviso in Bacheca per il titolare, una volta sola
   const me = await sql<{ given_name: string | null; family_name: string | null; is_super: boolean | null; role: string | null }>`select given_name, family_name, is_super, role from members where user_id = ${userId} limit 1`;
   const founder = Boolean(me[0]?.is_super) && me[0]?.role === "admin";

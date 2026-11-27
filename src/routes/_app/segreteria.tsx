@@ -4,7 +4,7 @@ import { Avatar, Button, Card, Empty, ErrorNote, HoldDelete, Loading, PageHead, 
 import { useLoad, messageOf } from "@/lib/arcieri/use-load";
 import { useEntryState } from "@/lib/arcieri/back-restore";
 import { saveFile, whatsappLink } from "@/lib/arcieri/native";
-import { addCourseDay, deleteCourseDay, secretaryBoard, setCert, setDue, setPresence } from "@/lib/arcieri/segreteria.api";
+import { addCourseDay, deleteCourseDay, secretaryBoard, setCard, setCert, setDue, setPresence } from "@/lib/arcieri/segreteria.api";
 
 export const Route = createFileRoute("/_app/segreteria")({ component: Page });
 
@@ -62,8 +62,8 @@ export function SegreteriaBody({ embedded = false }: { embedded?: boolean }) {
   }
 
   function exportCsv() {
-    const head = ["Nome", `Quota ${b.season}`, "Pagata il", "Importo", "Certificato fino al", "Tipo", "Presenze"];
-    const lines = b.people.map((p) => [p.name, p.paid ? "pagata" : "da pagare", itDate(p.paidOn), p.amount != null ? p.amount.toFixed(2).replace(".", ",") : "", itDate(p.certUntil), p.certUntil ? p.certKind : "", p.attended]);
+    const head = ["Nome", `Quota ${b.season}`, "Pagata il", "Importo", "Tessera fino al", "Certificato fino al", "Tipo", "Presenze"];
+    const lines = b.people.map((p) => [p.name, p.paid ? "pagata" : "da pagare", itDate(p.paidOn), p.amount != null ? p.amount.toFixed(2).replace(".", ",") : "", itDate(p.cardUntil || (p.paid ? `${b.season}-12-31` : "")), itDate(p.certUntil), p.certUntil ? p.certKind : "", p.attended]);
     const text = [head, ...lines].map((r) => r.map(csvCell).join(";")).join("\n");
     void saveFile(new Blob(["﻿" + text], { type: "text/csv;charset=utf-8" }), `segreteria-${b.company.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${b.season}.csv`);
   }
@@ -101,7 +101,8 @@ export function SegreteriaBody({ embedded = false }: { embedded?: boolean }) {
           </div>
           <Card className="grid gap-0 !py-1">
             {b.people.map((p, i) => (
-              <div key={p.userId} className={cx("flex items-center gap-3 py-2.5", i ? "border-t border-white/[0.06]" : "")}>
+              <div key={p.userId} className={cx("grid gap-1.5 py-2.5", i ? "border-t border-white/[0.06]" : "")}>
+              <div className="flex items-center gap-3">
                 <Avatar label={p.name.slice(0, 2).toUpperCase()} color={p.color} photo={p.photoUrl} size="sm" />
                 <span className="min-w-0 flex-1">
                   <b className="block truncate text-sm">{p.name}</b>
@@ -132,6 +133,24 @@ export function SegreteriaBody({ embedded = false }: { embedded?: boolean }) {
                 >
                   {p.paid ? "Pagata" : "Segna pagata"}
                 </button>
+              </div>
+              {/* scadenza della tessera: la vede anche l'arciere dal suo profilo */}
+              <label className="flex items-center gap-2 pl-11 text-xs text-muted">
+                <span className="shrink-0">Tessera fino al</span>
+                <TextInput
+                  type="date"
+                  aria-label={`Scadenza della tessera di ${p.name}`}
+                  value={p.cardUntil}
+                  placeholder={p.paid ? `${b.season}-12-31` : ""}
+                  className="!min-h-9 flex-1"
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    patch(p.userId, { cardUntil: v });
+                    void run(() => setCard({ data: { companyId: cid, userId: p.userId, season: b.season, cardUntil: v } }));
+                  }}
+                />
+                {!p.cardUntil && p.paid ? <span className="shrink-0">31/12/{b.season}</span> : null}
+              </label>
               </div>
             ))}
           </Card>
