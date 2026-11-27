@@ -377,6 +377,8 @@ export function bodyMatrices(meta: BodyMeta, J: Record<number, V3>, look?: V3, g
   // sotto, agganciati alla corda con la piega delle dita; il palmo verso il viso. Mano dell'arco: chiusa
   // attorno all'impugnatura. Qui: l'orientamento della mano della corda e quanto piegare (curl).
   const curlK: Record<"L" | "R", { k: number; a1: number; a2: number; spread: number } | null> = { L: null, R: null };
+  /** mano dell'arco: verso il bersaglio, asse dell'arco e centro dell'impugnatura (per posare il pollice) */
+  const thumbRest: Record<"L" | "R", { c1: V3; ax: V3; grip: V3 } | null> = { L: null, R: null };
   const torsoUp = norm(sub(lerp(J[11], J[12], 0.5), lerp(J[23], J[24], 0.5)));
   for (const [g, wrap] of [[grips?.hook, false], [grips?.wrap, true]] as const) {
     if (!g || g.k <= 0.05) continue;
@@ -430,6 +432,7 @@ export function bodyMatrices(meta: BodyMeta, J: Record<number, V3>, look?: V3, g
         const e2 = norm(R(fr.e2));
         // la mano resta della sua misura (la presa è misurata su questa mano contro il riser vero)
         Fc[`mano_${s}`] = { o: W, e1, e2, e3: cross(e1, e2), L: fr.L };
+        thumbRest[s] = { c1, ax, grip: sub(g.toward, mul(c1, 0.05)) };
         continue;
       }
       Fc[`mano_${s}`] = fm;
@@ -537,6 +540,35 @@ export function bodyMatrices(meta: BodyMeta, J: Record<number, V3>, look?: V3, g
       const kk = f === pl ? c.k * (s === grips?.wrap?.side ? 1 : 0.6) : c.k;
       for (let i = 0; i < 16; i++) out[f * 16 + i] = out[f * 16 + i] * (1 - kk) + out[m * 16 + i] * kk;
     }
+    // Pollice della mano dell'arco rilassato: in avanti lungo il riser, sotto la freccia e fuori dalla
+    // finestra (a riposo il pollice del modello sta alzato: arrivava sopra la mensola e dentro il legno)
+    const tr = thumbRest[s];
+    const p0r = meta.rest[`pol0_${s}`] as V3 | undefined;
+    if (tr && pl >= 0 && p0r && s === grips?.wrap?.side) {
+      const k = Math.min(1, c.k);
+      const M = out.subarray(pl * 16, pl * 16 + 16);
+      const xfm = (q: V3): V3 => [M[0] * q[0] + M[4] * q[1] + M[8] * q[2] + M[12], M[1] * q[0] + M[5] * q[1] + M[9] * q[2] + M[13], M[2] * q[0] + M[6] * q[1] + M[10] * q[2] + M[14]];
+      const piv = xfm(p0r);
+      const c3 = norm(cross(tr.c1, tr.ax));
+      const rotV = (v: V3, axis: V3, a: number): V3 => add(add(mul(v, Math.cos(a)), mul(cross(axis, v), Math.sin(a))), mul(axis, dot(axis, v) * (1 - Math.cos(a))));
+      // giù: la punta scende lungo l'arco (verso il mignolo); fuori: lontano dal centro dell'impugnatura
+      const down = dot(rotV(tr.c1, c3, 0.3), tr.ax) < dot(tr.c1, tr.ax) ? 1 : -1;
+      const outS = dot(sub(piv, tr.grip), c3) >= 0 ? 1 : -1;
+      const outA = dot(rotV(tr.c1, tr.ax, 0.3), c3) * outS > 0 ? 1 : -1;
+      const aDown = ((24 * Math.PI) / 180) * k * down;
+      const aOut = ((14 * Math.PI) / 180) * k * outA;
+      const R = (v: V3) => rotV(rotV(v, c3, aDown), tr.ax, aOut);
+      const cols: V3[] = [[M[0], M[1], M[2]], [M[4], M[5], M[6]], [M[8], M[9], M[10]]].map((v) => R(v as V3));
+      const t = add(piv, R(sub([M[12], M[13], M[14]], piv)));
+      for (let j = 0; j < 3; j++) {
+        M[j * 4] = cols[j][0];
+        M[j * 4 + 1] = cols[j][1];
+        M[j * 4 + 2] = cols[j][2];
+      }
+      M[12] = t[0];
+      M[13] = t[1];
+      M[14] = t[2];
+    }
     // piega di ogni dito: conta tanto meno quanto più la mano è in presa (lì i punti sono coperti)
     if (fing && pf) {
       const w = 1 - c.k;
@@ -588,7 +620,7 @@ export function curlFrame(meta: BodyMeta, s: "L" | "R") {
  * palmo) e 2,5 cm verso il mignolo, così indice e pollice stanno sotto la mensola e il pollice passa
  * accanto alla finestra. Nessun vertice della mano entra nel riser (margine 2 mm).
  */
-export const WRAP_GRIP = { a1: (15 * Math.PI) / 180, a2: (30 * Math.PI) / 180, F: 0.0225, P: 0.06, S: 0.025 };
+export const WRAP_GRIP = { a1: (15 * Math.PI) / 180, a2: (30 * Math.PI) / 180, F: 0.0225, P: 0.06, S: -0.018 };
 /** dove sta, nella mano a riposo, il centro dell'impugnatura dell'arco */
 export function gripHole(meta: BodyMeta, s: "L" | "R"): V3 | null {
   const cf = curlFrame(meta, s);

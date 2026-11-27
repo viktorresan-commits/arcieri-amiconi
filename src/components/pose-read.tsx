@@ -434,7 +434,34 @@ export function PoseRead() {
       },
     };
   }, [samples, analysis.shots]);
-  const clockFn = useRef(() => videoRef.current?.currentTime ?? 0).current;
+  // Tempo del video per la sagoma: su molti telefoni currentTime si aggiorna a scatti (anche ogni 100-250 ms)
+  // mentre il video scorre, e la sagoma andava a gradini. In play si prosegue dall'ultimo valore con il
+  // tempo vero e la velocità scelta; quando il video dà un valore nuovo ci si riallinea dolcemente
+  const clockState = useRef({ ct: -1, at: 0, t: 0 });
+  const clockFn = useRef(() => {
+    const v = videoRef.current;
+    if (!v) return 0;
+    const now = performance.now();
+    const c = clockState.current;
+    const ct = v.currentTime;
+    if (v.paused || v.seeking || v.ended) {
+      c.ct = ct;
+      c.at = now;
+      c.t = ct;
+      return ct;
+    }
+    if (ct !== c.ct) {
+      // valore nuovo dal video: la stima riparte da lì (se era molto lontana, ci si mette subito)
+      const est = c.t + ((now - c.at) / 1000) * (v.playbackRate || 1);
+      c.ct = ct;
+      c.at = now;
+      c.t = Math.abs(est - ct) > 0.25 ? ct : ct + (est - ct) * 0.5;
+      return c.t;
+    }
+    const t = c.t + ((now - c.at) / 1000) * (v.playbackRate || 1);
+    // mai più di un quarto di secondo avanti rispetto a quello che dice il video
+    return Math.min(t, ct + 0.25, Number.isFinite(v.duration) ? v.duration : t);
+  }).current;
   // appena caricato il video si analizza tutto (qualche secondo, con la barra): poi scheletro e sagoma
   // vanno fluidi dal primo play, senza calcolare nulla mentre il video scorre
   const autoScan = useRef<string | null>(null);

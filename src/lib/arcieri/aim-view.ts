@@ -32,6 +32,10 @@ export type AimInfo = {
   path: V3[];
   /** dove l'occhio vede la punta della freccia sul piano del bersaglio */
   aimPt: V3;
+  /** dove arriva il prolungamento dell'asta (la direzione in cui la freccia parte) sul piano del bersaglio */
+  shaftPt: V3;
+  /** lo stesso, in cm sopra (+) o sotto l'oro */
+  shaftCm: number;
 };
 
 const { add, sub, mul, dot, cross, len, norm } = v3;
@@ -197,11 +201,15 @@ export function aimScene(model: Model, setup: AimSetup, distanceM: number, hand:
   const tHit = (along - dot(sub(eye, nock), a)) / Math.max(1e-4, dot(ray, a));
   const aimPt = add(eye, mul(ray, tHit));
   const gapCm = (aimPt[1] - goldH) * 100;
+  // l'asta prolungata: la direzione di partenza, che sale sopra l'oro (la freccia poi scende)
+  const tS = (along - 0) / Math.max(1e-4, dot(dir, a));
+  const shaftPt = add(nock, mul(dir, tS));
+  const shaftCm = (shaftPt[1] - goldH) * 100;
   const dropCm = (nock[1] + Math.tan(theta) * along - hit.z) * 100;
   // la corda passa a pochi centimetri dall'occhio: l'occhio la vede sfocata, quasi trasparente
   const own = turned.parts.map((p) => (p.id === "corda" ? { ...p, alpha: 0.12 } : p));
   return {
     model: { ...turned, parts: [...own, ...parts] },
-    info: { thetaDeg: (theta * 180) / Math.PI, videoDeg: (videoRad * 180) / Math.PI, v0: hit.v0, tof: hit.t, dropCm, gapCm, distanceM, faceCm, eye, gold, cut, path, aimPt },
+    info: { thetaDeg: (theta * 180) / Math.PI, videoDeg: (videoRad * 180) / Math.PI, v0: hit.v0, tof: hit.t, dropCm, gapCm, distanceM, faceCm, eye, gold, cut, path, aimPt, shaftPt, shaftCm },
   };
 }

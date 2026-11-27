@@ -169,8 +169,15 @@ function paintField(ctx: CanvasRenderingContext2D, VP: Float32Array, eye: V3, di
   }
 }
 
-/** sopra il 3D: la traiettoria tratteggiata e il cerchietto dove la punta della freccia copre il bersaglio */
-function paintAimHud(ctx: CanvasRenderingContext2D, VP: Float32Array, info: AimInfo, W: number, H: number, dpr: number) {
+/** come si guarda nella visuale: tiro istintivo (si guarda l'oro) o mira con la punta della freccia (gap) */
+export type AimMode = "istintivo" | "punta";
+
+/**
+ * Sopra il 3D, con le scritte: la traiettoria tratteggiata, dove l'asta punta (sopra l'oro, la freccia poi
+ * scende), dove si vede la punta della freccia sul bersaglio e dove si guarda. Nel tiro istintivo lo sguardo
+ * resta sull'oro e la punta si vede solo di lato; nella mira con la punta si mette la punta sul suo punto.
+ */
+function paintAimHud(ctx: CanvasRenderingContext2D, VP: Float32Array, info: AimInfo, W: number, H: number, dpr: number, mode: AimMode = "istintivo") {
   const proj = (p: V3): [number, number] | null => {
     const x = VP[0] * p[0] + VP[4] * p[1] + VP[8] * p[2] + VP[12];
     const y = VP[1] * p[0] + VP[5] * p[1] + VP[9] * p[2] + VP[13];
@@ -178,9 +185,11 @@ function paintAimHud(ctx: CanvasRenderingContext2D, VP: Float32Array, info: AimI
     if (w < 0.05) return null;
     return [((x / w) * 0.5 + 0.5) * W, (1 - ((y / w) * 0.5 + 0.5)) * H];
   };
+  const cm = (v: number) => `${Math.abs(Math.round(v))} cm ${v < 0 ? "sotto" : "sopra"} l'oro`;
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.lineCap = "round";
+  // traiettoria
   ctx.beginPath();
   let on = false;
   for (const p of info.path) {
@@ -195,16 +204,85 @@ function paintAimHud(ctx: CanvasRenderingContext2D, VP: Float32Array, info: AimI
   }
   ctx.setLineDash([5 * dpr, 4 * dpr]);
   ctx.lineWidth = 1.4 * dpr;
-  ctx.strokeStyle = "rgba(255, 224, 140, 0.9)";
+  ctx.strokeStyle = "rgba(255, 224, 140, 0.85)";
   ctx.stroke();
   ctx.setLineDash([]);
-  const a = proj(info.aimPt);
-  if (a) {
+  /** etichetta su fondo scuro, accanto a un punto, a destra se c'è posto */
+  const label = (q: [number, number], text: string, col: string, dy = 0) => {
+    ctx.font = `600 ${Math.round(11 * dpr)}px system-ui, sans-serif`;
+    const w = ctx.measureText(text).width + 12 * dpr;
+    const h = 18 * dpr;
+    let x = q[0] + 12 * dpr;
+    let below = 0;
+    if (x + w > W - 4 * dpr) x = q[0] - 12 * dpr - w;
+    if (x < 4 * dpr) {
+      // non ci sta né a destra né a sinistra: sotto il punto, dentro lo schermo
+      x = Math.max(4 * dpr, Math.min(W - w - 4 * dpr, q[0] - w / 2));
+      below = 14 * dpr + h / 2;
+    }
+    const y = Math.max(4 * dpr, Math.min(H - h - 4 * dpr, q[1] - h / 2 + dy + below));
+    ctx.fillStyle = "rgba(10, 14, 18, 0.72)";
     ctx.beginPath();
-    ctx.arc(a[0], a[1], 6 * dpr, 0, Math.PI * 2);
-    ctx.lineWidth = 1.6 * dpr;
-    ctx.strokeStyle = "rgba(120, 225, 255, 0.95)";
+    ctx.roundRect(x, y, w, h, 9 * dpr);
+    ctx.fill();
+    ctx.fillStyle = col;
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, x + 6 * dpr, y + h / 2 + 0.5 * dpr);
+  };
+  const ring = (q: [number, number], r: number, col: string, wdt: number) => {
+    ctx.beginPath();
+    ctx.arc(q[0], q[1], r * dpr, 0, Math.PI * 2);
+    ctx.lineWidth = wdt * dpr;
+    ctx.strokeStyle = col;
     ctx.stroke();
+  };
+  const g = proj(info.gold);
+  const a = proj(info.aimPt);
+  const sh = proj(info.shaftPt);
+  // dove punta l'asta: sopra l'oro (in entrambe le viste, piccolo)
+  if (sh) {
+    ctx.beginPath();
+    ctx.moveTo(sh[0] - 5 * dpr, sh[1]);
+    ctx.lineTo(sh[0] + 5 * dpr, sh[1]);
+    ctx.moveTo(sh[0], sh[1] - 5 * dpr);
+    ctx.lineTo(sh[0], sh[1] + 5 * dpr);
+    ctx.lineWidth = 1.4 * dpr;
+    ctx.strokeStyle = "rgba(255, 224, 140, 0.95)";
+    ctx.stroke();
+    label(sh, `L'asta punta qui: ${cm(info.shaftCm)}`, "#ffe08c");
+  }
+  if (mode === "istintivo") {
+    // lo sguardo sull'oro; la punta si vede solo di lato
+    if (a) {
+      ring(a, 5, "rgba(120, 225, 255, 0.55)", 1.2);
+      label(a, "La punta: la vedi solo di lato", "rgba(175, 235, 255, 0.85)");
+    }
+    if (g) {
+      ring(g, 9, "rgba(255, 255, 255, 0.95)", 2);
+      ring(g, 15, "rgba(255, 255, 255, 0.45)", 1);
+      label(g, "Guardi qui: il centro del bersaglio", "#ffffff");
+    }
+  } else {
+    // mira con la punta: la punta va sul suo punto, a questa distanza dall'oro
+    if (a && g) {
+      ctx.beginPath();
+      ctx.moveTo(a[0] + 18 * dpr, a[1]);
+      ctx.lineTo(g[0] + 18 * dpr, g[1]);
+      ctx.lineWidth = 1.2 * dpr;
+      ctx.strokeStyle = "rgba(120, 225, 255, 0.9)";
+      ctx.stroke();
+      for (const q of [a, g]) {
+        ctx.beginPath();
+        ctx.moveTo(q[0] + 13 * dpr, q[1]);
+        ctx.lineTo(q[0] + 23 * dpr, q[1]);
+        ctx.stroke();
+      }
+    }
+    if (g) ring(g, 6, "rgba(255, 255, 255, 0.7)", 1.2);
+    if (a) {
+      ring(a, 7, "rgba(120, 225, 255, 0.98)", 2);
+      label(a, `Metti qui la punta: ${cm(info.gapCm)}`, "#9fe9ff", 0);
+    }
   }
   ctx.restore();
 }
@@ -372,7 +450,7 @@ export async function sagomaPainter(W: number, H: number, quality: "hd" | "pieno
   return {
     canvas: out,
     /** disegna la posa; smooth: inquadratura che segue piano (video), altrimenti esatta (foto) */
-    paint(o: { lm: Landmark[]; aspect: number; hand: Hand; gear: Gear | null; cal: BoneCal | null; time: number; smooth?: boolean; view?: typeof sagomaView; /** centro dell'inquadratura scelto dal modello (es. una mano), per i dettagli */ at?: (m: Model) => V3; /** inquadratura "come il video" (con l'eventuale ingrandimento, in frazioni del riquadro) */ frameView?: { z: number; nx: number; ny: number } | null; /** crediti scritti sull'immagine (no per i fotogrammi del play: sotto c'è già la riga) */ credit?: boolean; /** posa già risolta sull'intero video (motion-solve) */ pre?: PrePose | null; /** visuale dell'arciere con il paglione */ aim?: { setup: AimSetup; distanceM: number; cam?: AimCam } | null }) {
+    paint(o: { lm: Landmark[]; aspect: number; hand: Hand; gear: Gear | null; cal: BoneCal | null; time: number; smooth?: boolean; view?: typeof sagomaView; /** centro dell'inquadratura scelto dal modello (es. una mano), per i dettagli */ at?: (m: Model) => V3; /** inquadratura "come il video" (con l'eventuale ingrandimento, in frazioni del riquadro) */ frameView?: { z: number; nx: number; ny: number } | null; /** crediti scritti sull'immagine (no per i fotogrammi del play: sotto c'è già la riga) */ credit?: boolean; /** posa già risolta sull'intero video (motion-solve) */ pre?: PrePose | null; /** visuale dell'arciere con il paglione */ aim?: { setup: AimSetup; distanceM: number; cam?: AimCam; mode?: AimMode } | null }) {
       const view = o.view ?? sagomaView;
       const model = buildModel(o.lm, o.aspect, o.hand, o.gear, o.cal, o.pre ? null : o.smooth ? memo : null, o.time, o.pre ?? null);
       if (o.aim) {
@@ -384,7 +462,7 @@ export async function sagomaPainter(W: number, H: number, quality: "hd" | "pieno
         R.clear(W, H);
         R.draw(af.model, af.VP, af.eye, o.time, aimLayers(view.layers), null, false, af.info.cut);
         ctx.drawImage(gl, 0, 0);
-        paintAimHud(ctx, af.VP, af.info, W, H, dpr);
+        paintAimHud(ctx, af.VP, af.info, W, H, dpr, o.aim.mode ?? "istintivo");
         if (o.credit === false) return true;
         ctx.font = `500 ${Math.round(9 * dpr)}px system-ui, sans-serif`;
         ctx.textAlign = "center";
@@ -566,8 +644,9 @@ export function Anatomy3D({
   const [aim, setAim] = useState(false);
   const [aimD, setAimD] = useState(18);
   const [aimInfo, setAimInfo] = useState<AimInfo | null>(null);
-  const aimRef = useRef({ on: aim, D: aimD, setup: aimSetup });
-  aimRef.current = { on: aim, D: aimD, setup: aimSetup };
+  const [aimMode, setAimMode] = useState<AimMode>("istintivo");
+  const aimRef = useRef({ on: aim, D: aimD, setup: aimSetup, mode: aimMode });
+  aimRef.current = { on: aim, D: aimD, setup: aimSetup, mode: aimMode };
   const aimCam = useRef<AimCam>({ zoom: 1, yaw: 0, pitch: 0 });
   const [failed, setFailed] = useState(false);
   /** il corpo anatomico vero è pronto (prima di allora non si mostra la sagoma semplice a tubi) */
@@ -623,7 +702,7 @@ export function Anatomy3D({
       const frameView = inBox ? { z: v2?.z ?? 1, nx: (v2?.x ?? 0) / Math.max(1, box.clientWidth), ny: (v2?.y ?? 0) / Math.max(1, box.clientHeight) } : null;
       const am = aimRef.current;
       if (am.on) await painter.aimReady();
-      painter.paint({ lm: shot.lm, aspect: shot.aspect, hand: shot.hand, gear: shot.gear, cal: shot.cal, time: shot.time, frameView, pre: shot.pre ?? null, aim: am.on ? { setup: am.setup, distanceM: am.D, cam: { ...aimCam.current } } : null });
+      painter.paint({ lm: shot.lm, aspect: shot.aspect, hand: shot.hand, gear: shot.gear, cal: shot.cal, time: shot.time, frameView, pre: shot.pre ?? null, aim: am.on ? { setup: am.setup, distanceM: am.D, cam: { ...aimCam.current }, mode: am.mode } : null });
       const blob = await new Promise<Blob | null>((res) => painter.canvas.toBlob(res, "image/png"));
       painter.dispose();
       if (!blob) throw new Error("vuota");
@@ -782,6 +861,8 @@ export function Anatomy3D({
     // play fluido: l'immagine preparata mostrata ora
     let shown: { i: number; bmp: ImageBitmap; key: string } | null = null;
     let decoding = false;
+    /** immagini dei fotogrammi successivi, già decodificate */
+    const ahead = new Map<number, ImageBitmap>();
     let drawnI = -1;
     let cacheVisible = false;
     let lastKey = "";
@@ -875,18 +956,38 @@ export function Anatomy3D({
           }
           const i = Math.abs(cache.t[hi] - tNow) < Math.abs(cache.t[lo] - tNow) ? hi : lo;
           const blob = cache.blobs[i];
-          if (blob && shown?.i !== i && !decoding && typeof createImageBitmap === "function") {
-            decoding = true;
-            void createImageBitmap(blob)
-              .then((bmp) => {
-                const prev = shown;
-                shown = { i, bmp, key: cache.key };
-                prev?.bmp.close();
-              })
-              .catch(() => {})
-              .finally(() => {
-                decoding = false;
-              });
+          // le immagini dei prossimi fotogrammi si preparano prima: quando servono sono già pronte
+          if (typeof createImageBitmap === "function" && !decoding) {
+            for (const j of [i, i + 1, i + 2, i + 3]) {
+              const bj = cache.blobs[j];
+              if (!bj || ahead.has(j) || (shown?.i === j && shown.key === cache.key)) continue;
+              decoding = true;
+              const key = cache.key;
+              void createImageBitmap(bj)
+                .then((bmp) => {
+                  if (key !== cacheRef.current?.key) bmp.close();
+                  else ahead.set(j, bmp);
+                })
+                .catch(() => {})
+                .finally(() => {
+                  decoding = false;
+                });
+              break;
+            }
+          }
+          const ready = ahead.get(i);
+          if (blob && ready && shown?.i !== i) {
+            const prev = shown;
+            ahead.delete(i);
+            shown = { i, bmp: ready, key: cache.key };
+            prev?.bmp.close();
+          }
+          // quelle rimaste indietro (o di un'altra preparazione) si liberano
+          for (const [j, bmp] of ahead) {
+            if (j < i || j > i + 4) {
+              bmp.close();
+              ahead.delete(j);
+            }
           }
           if (blob && shown && shown.key === cache.key) {
             if (drawnI !== shown.i) {
@@ -918,7 +1019,7 @@ export function Anatomy3D({
           lastKey = "";
         });
       }
-      const aimKey = am.on ? `${am.D}|${ac.zoom.toFixed(3)}|${ac.yaw.toFixed(4)}|${ac.pitch.toFixed(4)}|${R.targetReady()}|${am.setup.drawLb},${am.setup.drawIn},${am.setup.grains},${am.setup.lengthIn},${am.setup.bowType}` : "";
+      const aimKey = am.on ? `${am.mode}|${am.D}|${ac.zoom.toFixed(3)}|${ac.yaw.toFixed(4)}|${ac.pitch.toFixed(4)}|${R.targetReady()}|${am.setup.drawLb},${am.setup.drawIn},${am.setup.grains},${am.setup.lengthIn},${am.setup.bowType}` : "";
       const key = `${aimKey}|${ready}|${styleRef.current}|${c.yaw.toFixed(4)}|${c.pitch.toFixed(4)}|${c.zoom.toFixed(3)}|${v2 ? `${v2.z},${v2.x},${v2.y}` : ""}|${L0.pelle}${L0.muscolo}${L0.osso}${L0.punti}${L0.quote}|${canvas.clientWidth}x${canvas.clientHeight}|${scale}|${bodyTick}|${R.gearReady()}`;
       // dopo un movimento si disegna ancora un attimo con il corpo leggero, poi una volta con quello pieno
       const fast = now - lastChange < 450 || dragging.current;
@@ -1045,7 +1146,7 @@ export function Anatomy3D({
         if (!af) return;
         R.setStyle(0);
         R.draw(af.model, af.VP, af.eye, time, aimLayers(L), null, fast && slowDevice, af.info.cut);
-        paintAimHud(ctx, af.VP, af.info, W, H, dpr);
+        paintAimHud(ctx, af.VP, af.info, W, H, dpr, am.mode);
         return;
       }
       if (fast && !slowDevice && R.hasBody()) {
@@ -1127,6 +1228,8 @@ export function Anatomy3D({
       canvas.removeEventListener("pointerup", up);
       canvas.removeEventListener("pointercancel", up);
       canvas.removeEventListener("wheel", wheel);
+      for (const b of ahead.values()) b.close();
+      ahead.clear();
       R.dispose();
     };
   }, []);
@@ -1243,7 +1346,7 @@ export function Anatomy3D({
           <span className="shrink-0 text-[0.7rem] tabular-nums text-white/80">{transport.time.toFixed(1)} s</span>
         </div>
       ) : null}
-      {aim ? <AimPanel info={aimInfo} known={aimSetup.known} summary={aimSetup.known ? `${archer.summary}, frecce da ${aimSetup.grains} gr` : ""} full={full} /> : null}
+      {aim ? <AimPanel info={aimInfo} mode={aimMode} onMode={setAimMode} known={aimSetup.known} summary={aimSetup.known ? `${archer.summary}, frecce da ${aimSetup.grains} gr` : ""} full={full} /> : null}
       <div className={cx("absolute inset-x-2 flex flex-wrap justify-center gap-1", full ? "bottom-[max(1rem,env(safe-area-inset-bottom))]" : "bottom-4")}>
         {aim
           ? [18, 25, 30, 50, 70, 90].map((d) => (
@@ -1521,24 +1624,41 @@ function tag(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, 
 }
 
 // icone del lettore disegnate a linee: i caratteri ▶ ⏸ su Android diventano emoji colorate
-/** numeri del tiro nella visuale dell'arciere: angolo, velocità, volo e dove la punta copre il bersaglio */
-function AimPanel({ info, known, summary, full }: { info: AimInfo | null; known: boolean; summary: string; full: boolean }) {
+/**
+ * La visuale spiegata: nel tiro istintivo si guarda l'oro (il corpo dà alla freccia l'angolo); mirando con
+ * la punta (gap) si mette la punta della freccia sul suo punto, sotto o sopra l'oro. L'asta intanto punta
+ * più in alto: la freccia sale e poi scende sull'oro.
+ */
+function AimPanel({ info, mode, onMode, known, summary, full }: { info: AimInfo | null; mode: AimMode; onMode: (m: AimMode) => void; known: boolean; summary: string; full: boolean }) {
   const f = (n: number, d = 1) => n.toFixed(d).replace(".", ",").replace("-", "−");
   const pos = full ? "bottom-[calc(max(1rem,env(safe-area-inset-bottom))+6.2rem)]" : "bottom-14";
   if (!info)
     return <p className={cx("pointer-events-none absolute inset-x-2 mx-auto w-fit rounded-xl bg-black/55 px-3 py-1.5 text-center text-[0.72rem] text-white backdrop-blur", pos)}>Scegli un fotogramma con la freccia sulla corda: da lì si guarda il paglione.</p>;
   const gap = Math.round(info.gapCm);
+  const where = (v: number) => `${Math.abs(Math.round(v))} cm ${v < 0 ? "sotto" : "sopra"} l'oro`;
   return (
-    <div className={cx("pointer-events-none absolute left-2 max-w-[18rem] rounded-xl bg-black/50 px-3 py-2 text-[0.7rem] leading-snug text-white backdrop-blur", pos)}>
+    <div className={cx("absolute left-2 max-w-[18.5rem] rounded-xl bg-black/55 px-3 py-2 text-[0.7rem] leading-snug text-white backdrop-blur", pos)}>
+      <div className="mb-1.5 flex gap-1" role="group" aria-label="Come si mira">
+        {([["istintivo", "Tiro istintivo"], ["punta", "Con la punta"]] as const).map(([k, l]) => (
+          <button key={k} type="button" aria-pressed={mode === k} onClick={() => onMode(k)} className={cx("min-h-8 rounded-full px-2.5 text-[0.7rem] font-semibold", mode === k ? "bg-white text-[#14181c]" : "bg-white/12 text-white/85")}>
+            {l}
+          </button>
+        ))}
+      </div>
       <p className="font-semibold">Paglione a {info.distanceM} m, visuale da {info.faceCm} cm</p>
-      <p>
-        Freccia a {f(info.thetaDeg)}° sull'orizzonte (nel video {f(info.videoDeg)}°)
-      </p>
-      <p>
-        {f(info.v0, 0)} m/s, {f(info.tof, 2)} s di volo
-      </p>
-      <p>{Math.abs(gap) < 1 ? "La punta della freccia copre l'oro" : `La punta della freccia copre ${Math.abs(gap)} cm ${gap < 0 ? "sotto" : "sopra"} l'oro`}</p>
-      <p className="text-white/70">{known ? summary : "Valori tipici: inserisci arco e frecce nell'attrezzatura principale per la tua balistica"}</p>
+      {mode === "istintivo" ? (
+        <>
+          <p>Guardi il centro del bersaglio, non la freccia. Il corpo dà alla freccia l'angolo che serve ({f(info.thetaDeg)}° sull'orizzonte).</p>
+          <p className="text-white/75">La punta resta di lato nel campo visivo: qui cade {Math.abs(gap) < 1 ? "sull'oro" : where(gap)}.</p>
+        </>
+      ) : (
+        <>
+          <p>{Math.abs(gap) < 1 ? "La punta della freccia va sull'oro." : `Metti la punta della freccia ${where(gap)}: è il «gap» di questa distanza.`}</p>
+          <p className="text-white/75">Il gap cambia con la distanza: si impara a ogni distanza, con lo stesso ancoraggio.</p>
+        </>
+      )}
+      <p className="text-white/75">L'asta punta {where(info.shaftCm)}: la freccia sale e poi scende sull'oro ({f(info.v0, 0)} m/s, {f(info.tof, 2)} s).</p>
+      <p className="text-white/60">{known ? summary : "Valori tipici: inserisci arco e frecce nell'attrezzatura principale per la tua balistica"}</p>
     </div>
   );
 }

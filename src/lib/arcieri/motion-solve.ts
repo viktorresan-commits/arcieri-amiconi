@@ -761,6 +761,46 @@ export function solveMotion(frames: SolveFrame[], aspect: number, hand: Hand, ca
       Jf[a.el] = [Jf[a.el][0], Jf[a.el][1], Jf[a.el][2] + (ez - Jf[a.el][2]) * ct];
     }
   }
+  // Ancoraggio alla bocca con la pinza mediterranea (indice sopra la cocca, medio e anulare sotto): la punta
+  // dell'indice tocca l'angolo della bocca dal lato della corda, la corda sta appena fuori dal viso. Se nel
+  // video la mano è vicina alla bocca (entro 9 cm) la si porta lì; se è lontana resta dov'è (è un errore
+  // vero dell'arciere, che la valutazione deve vedere)
+  {
+    const ai = hand === "destro" ? 1 : 0;
+    const a = arms[ai];
+    const cornerId = hand === "destro" ? 10 : 9;
+    const otherId = hand === "destro" ? 9 : 10;
+    for (let i = 0; i < n; i++) {
+      const ct = contact[ai][i];
+      const Jf = J[i];
+      const tip = Jf[a.hb + 8] ?? Jf[a.hand[1]];
+      const mc = Jf[cornerId];
+      const mo = Jf[otherId];
+      if (ct <= 0 || !tip || !mc || !mo || !Jf[a.wr] || !Jf[a.el]) continue;
+      // di lato verso la corda: perpendicolare alla linea di tiro (dalla mano della corda a quella dell'arco)
+      const bw = arms[1 - ai];
+      const aim = Jf[bw.wr] ? v3.sub(Jf[bw.wr], Jf[a.wr]) : v3.sub(mc, mo);
+      const aimH = v3.norm([aim[0], 0, aim[2]]);
+      let latN = v3.norm(v3.cross(aimH, [0, 1, 0]));
+      if (hand !== "destro") latN = v3.mul(latN, -1);
+      // l'angolo della bocca: dal centro della bocca 2,5 cm verso la corda, la punta dell'indice appena fuori
+      const mouthC = v3.lerp(mc, mo, 0.5);
+      const target = v3.add(mouthC, v3.mul(latN, 0.031));
+      const d = v3.sub(target, tip);
+      const dist = v3.len(d);
+      const near = Math.max(0, Math.min(1, (0.14 - dist) / 0.06));
+      const w = ct * near;
+      if (w <= 0) continue;
+      const mv = v3.mul(d, w);
+      Jf[a.wr] = v3.add(Jf[a.wr], mv);
+      for (const f of a.hand) if (Jf[f]) Jf[f] = v3.add(Jf[f], mv);
+      for (let k = 0; k < 21; k++) if (Jf[a.hb + k]) Jf[a.hb + k] = v3.add(Jf[a.hb + k], mv);
+      // il gomito tiene l'avambraccio intero: si sposta in profondità quanto serve
+      const r = roots(Jf[a.wr], Jf[a.el], a.fa);
+      const ez = Math.abs(r[0] - Jf[a.el][2]) < Math.abs(r[1] - Jf[a.el][2]) ? r[0] : r[1];
+      Jf[a.el] = [Jf[a.el][0], Jf[a.el][1], ez];
+    }
+  }
   dbg?.("viterbi", J);
   // fuori da busto e testa; poi la profondità si liscia di nuovo (niente scatti) e si ricontrolla
   {

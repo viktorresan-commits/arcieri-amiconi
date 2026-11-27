@@ -972,7 +972,7 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gea
     const c1 = norm(sub(dir, mul(ax, dot(dir, ax))));
     const c3 = cross(c1, ax);
     const lat = S.bow[2] === 15 ? 0.0215 : -0.0221;
-    return add(add(add(bow.wr, mul(c1, 0.102)), mul(ax, -0.0257)), mul(c3, lat));
+    return add(add(add(bow.wr, mul(c1, 0.102)), mul(ax, 0.0173)), mul(c3, lat));
   };
   // arco trovato nel video: inclinazione e lunghezza vere
   if (gear?.bow && sImg > 0) {
