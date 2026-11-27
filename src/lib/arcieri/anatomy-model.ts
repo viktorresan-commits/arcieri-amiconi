@@ -952,6 +952,21 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gea
   if (arrowSeen) nock = arrowSeen.nock;
   else if (onString) nock = toFace(fingers);
   else nock = sub(grip, mul(toT, 0.22)); // arco a riposo: la cocca sta sulla corda a 22 cm dalla presa
+  // ancoraggio alla bocca (pinza mediterranea, Manuale FITA): in trazione, con la mano vicina al viso, la
+  // punta dell'indice tocca l'angolo della bocca dal lato della corda e la cocca sta subito sotto. Con la
+  // mano vera (hand-rig) la punta dell'indice sta 1,4 cm fuori, 1,4 cm sopra e 0,9 cm dietro la cocca:
+  // la cocca va lì. Se nel video la mano è lontana dalla bocca resta dov'è (errore vero dell'arciere)
+  {
+    const corner = J[hand === "destro" ? 10 : 9];
+    if (drawn && onString && corner && len(sub(grip, nock)) > 0.2) {
+      const u0 = norm(sub(grip, nock));
+      const upH: V3 = [0, 1, 0];
+      const out = mul(norm(cross(u0, upH)), hand === "destro" ? 1 : -1);
+      const target = add(corner, add(mul(out, 0.014), add(mul(upH, -0.014), mul(u0, 0.009))));
+      const w = Math.max(0, Math.min(1, (0.13 - len(sub(nock, target))) / 0.06));
+      if (w > 0) nock = lerp(nock, target, w);
+    }
+  }
   // se la mano sta proprio sulla presa la freccia non ha direzione: si usa il verso del bersaglio
   let u = len(sub(grip, nock)) > 0.08 ? norm(sub(grip, nock)) : toT;
   if (len(sub(grip, nock)) <= 0.08) nock = sub(grip, mul(toT, 0.22));

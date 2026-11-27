@@ -7,6 +7,7 @@ import { bodyMatrices, curlFrame, gripHole, groupValues, type BodyBatch, type Bo
 import { flexInfo, flexValues, skinWithMuscles, type FlexInfo } from "./anatomy-flex";
 import { loadGlb } from "./glb-geo";
 import { sides } from "./pose-analysis";
+import { bowGrip, drawHook, freeHand, handLength, loadHandRig, placeApply, skinHand, type HandRig, type Placement, type RigHand } from "./hand-rig";
 
 export type Layers = { pelle: boolean; muscolo: boolean; osso: boolean };
 
@@ -69,7 +70,9 @@ attribute vec3 aP; attribute vec3 aN; attribute vec2 aJ; attribute vec4 aM; attr
 uniform mat4 uVP; uniform vec4 uSeg[63]; uniform vec3 uLo; uniform vec3 uHi;
 uniform vec4 uAct[16]; uniform vec4 uBul[16]; uniform float uLayerV;
 uniform vec4 uCurl[8]; uniform vec2 uDita; uniform vec4 uFa[4];
-varying vec3 vW; varying vec3 vN; varying vec2 vF; varying float vAct; varying float vFoc; varying float vTend; varying float vStr; varying float vGrp; varying vec3 vR;
+// mani vere al posto di quelle dell'atlante: segmenti del braccio (avambraccio, mano, dita, pollice; -9 = nessuno)
+uniform vec4 uArmL; uniform vec4 uArmR;
+varying vec3 vW; varying vec3 vN; varying vec2 vF; varying float vAct; varying float vFoc; varying float vTend; varying float vStr; varying float vGrp; varying vec3 vR; varying float vHide;
 float pick(vec4 v, int k){ return k == 0 ? v.x : k == 1 ? v.y : k == 2 ? v.z : v.w; }
 vec3 rotA(vec3 v, vec3 ax, float a){ float c = cos(a); float s = sin(a); return v * c + cross(ax, v) * s + ax * dot(ax, v) * (1.0 - c); }
 // dita piegate in presa (prima di seguire i segmenti): terza falange, seconda, allargamento dell'indice, nocca
@@ -122,15 +125,20 @@ void main(){
   float pv = pick(uAct[gi], gk); float fc = floor(pv / 2.0) - 1.0;
   vAct = pv - (fc + 1.0) * 2.0; vFoc = fc;
   vF = vec2(aM.z, aM.w) / 255.0; vTend = aT; vGrp = float(g);
+  float sg = w >= 0.5 ? aJ.x : aJ.y;
+  vec4 dl = abs(vec4(sg) - uArmL); vec4 dr = abs(vec4(sg) - uArmR);
+  vHide = min(min(dl.x, dl.y), min(dl.z, dl.w)) < 0.5 ? 1.0 : (min(min(dr.x, dr.y), min(dr.z, dr.w)) < 0.5 ? 2.0 : 0.0);
   vW = wp.xyz; vR = p; gl_Position = uVP * wp;
 }`;
 const BFS = `${PREC}
-varying vec3 vW; varying vec3 vN; varying vec2 vF; varying float vAct; varying float vFoc; varying float vTend; varying float vStr; varying float vGrp; varying vec3 vR;
+varying vec3 vW; varying vec3 vN; varying vec2 vF; varying float vAct; varying float vFoc; varying float vTend; varying float vStr; varying float vGrp; varying vec3 vR; varying float vHide;
 uniform vec3 uEye; uniform float uLayer; uniform float uAlpha; uniform float uDim; uniform float uTime; uniform float uStyle;
 // tono della pelle vera (lineare): quello del personaggio della prova 3D o quello scelto nell'avatar
 uniform vec3 uSkin;
 // dettaglio del muscolo (immagine ripetuta lungo le fibre): R rilievo dei fasci, G chiaroscuro del tessuto, B fasce connettivali
 uniform sampler2D uFib; uniform float uFibOn;
+// taglio del braccio al polso della mano vera (normale verso la mano, distanza; normale nulla = niente)
+uniform vec4 uClipL; uniform vec4 uClipR;
 // visuale dall'occhio: la testa attorno alla camera non si disegna
 uniform vec4 uCut;
 // luce calcolata come in fotografia (valori lineari), poi la curva "da pellicola" e lo schermo (sRGB):
@@ -147,6 +155,8 @@ float vnoise(vec3 x){
 }
 void main(){
   if (uCut.w > 0.0 && distance(vW, uCut.xyz) < uCut.w) discard;
+  if (vHide > 0.5 && vHide < 1.5 && dot(uClipL.xyz, uClipL.xyz) > 0.5 && dot(vW, uClipL.xyz) > uClipL.w) discard;
+  if (vHide > 1.5 && dot(uClipR.xyz, uClipR.xyz) > 0.5 && dot(vW, uClipR.xyz) > uClipR.w) discard;
   vec3 N = normalize(vN); vec3 V = normalize(uEye - vW);
   float ndv = clamp(dot(N, V), 0.0, 1.0);
   // le luci girano con chi guarda (studio fotografico): da ogni lato il corpo è illuminato allo stesso modo.
@@ -409,6 +419,49 @@ function torusMesh(R = 1, r = 0.07, seg = 32, tube = 6) {
     }
   return { pos: new Float32Array(p), nor: new Float32Array(n), idx: new Uint16Array(idx) };
 }
+
+/* mani vere (personaggio Quaternius): già piegate e messe nel mondo dalla CPU, pelle come quella vera del corpo */
+const HVS = `
+attribute vec3 aP; attribute vec3 aN; attribute vec2 aUV;
+uniform mat4 uVP;
+varying vec3 vW; varying vec3 vN; varying vec2 vUV;
+void main(){ vW = aP; vN = aN; vUV = aUV; gl_Position = uVP * vec4(aP, 1.0); }`;
+const HFS = `${PREC}
+varying vec3 vW; varying vec3 vN; varying vec2 vUV;
+uniform vec3 uEye; uniform vec3 uSkin; uniform sampler2D uTex; uniform float uMeanL; uniform float uTexOn; uniform vec4 uCut;
+// il pezzo d'avambraccio della mano vera finisce dentro quello della sagoma (niente bordo frastagliato)
+uniform vec4 uBack;
+vec3 tone(vec3 c){ c = clamp((c * (2.51 * c + 0.03)) / (c * (2.43 * c + 0.59) + 0.14), 0.0, 1.0); return pow(c, vec3(1.0 / 2.2)); }
+float wrapL(vec3 N, vec3 L, float w){ return max(0.0, (dot(N, L) + w) / (1.0 + w)); }
+void main(){
+  if (uCut.w > 0.0 && distance(vW, uCut.xyz) < uCut.w) discard;
+  if (dot(uBack.xyz, uBack.xyz) > 0.5 && dot(vW, uBack.xyz) < uBack.w) discard;
+  vec3 N = normalize(vN); vec3 V = normalize(uEye - vW);
+  if (!gl_FrontFacing) N = -N;
+  float ndv = clamp(dot(N, V), 0.0, 1.0);
+  vec3 Rt = normalize(cross(vec3(0.0, 1.0, 0.0), V) + vec3(1e-4, 0.0, 0.0)); vec3 Up = cross(V, Rt);
+  vec3 L1 = normalize(-0.5 * Rt + 0.75 * Up + 0.55 * V); vec3 C1 = vec3(1.0, 0.95, 0.88) * 1.9;
+  vec3 L2 = normalize(0.8 * Rt + 0.1 * Up + 0.45 * V); vec3 C2 = vec3(0.70, 0.80, 1.0) * 0.45;
+  vec3 L3 = normalize(0.3 * Rt + 0.45 * Up - 0.85 * V); vec3 C3 = vec3(0.95, 0.97, 1.0);
+  vec3 amb = mix(vec3(0.12, 0.10, 0.09), vec3(0.24, 0.26, 0.30), 0.5 + 0.5 * N.y);
+  vec3 H = normalize(L1 + V);
+  // il colore è quello della pelle scelta; dall'immagine della pelle del personaggio solo luci e ombre
+  // dipinte (nocche, unghie, pieghe)
+  vec3 alb = mix(vec3(dot(uSkin, vec3(0.2126, 0.7152, 0.0722))), uSkin, 0.85);
+  if (uTexOn > 0.5) {
+    float l = dot(texture2D(uTex, vUV).rgb, vec3(0.2126, 0.7152, 0.0722)) / uMeanL;
+    alb *= mix(1.0, clamp(l, 0.55, 1.35), 0.75);
+  }
+  float d1 = dot(N, L1);
+  vec3 w = vec3(0.6, 0.32, 0.24);
+  vec3 dif = max(vec3(0.0), (vec3(d1) + w) / (1.0 + w));
+  vec3 light = C1 * dif * 0.82 + C2 * wrapL(N, L2, 0.35) + amb * 1.15;
+  light += C3 * vec3(1.0, 0.55, 0.42) * pow(1.0 - ndv, 3.0) * wrapL(N, L3, 0.3) * 0.5;
+  float nh = max(dot(N, H), 0.0);
+  float F = 0.028 + 0.972 * pow(1.0 - ndv, 5.0);
+  float sp = (pow(nh, 28.0) * 0.5 + pow(nh, 110.0) * 0.7) * F * step(0.0, d1);
+  gl_FragColor = vec4(tone(alb * light + C1 * sp), 1.0);
+}`;
 
 export function perspective(fov: number, aspect: number, near: number, far: number) {
   const f = 1 / Math.tan(fov / 2);
@@ -790,9 +843,104 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     uCurl: gl.getUniformLocation(bprog, "uCurl"),
     uFa: gl.getUniformLocation(bprog, "uFa"),
     uDita: gl.getUniformLocation(bprog, "uDita"),
+    uArmL: gl.getUniformLocation(bprog, "uArmL"),
+    uArmR: gl.getUniformLocation(bprog, "uArmR"),
+    uClipL: gl.getUniformLocation(bprog, "uClipL"),
+    uClipR: gl.getUniformLocation(bprog, "uClipR"),
     uFib: gl.getUniformLocation(bprog, "uFib"),
     uCut: gl.getUniformLocation(bprog, "uCut"),
     uFibOn: gl.getUniformLocation(bprog, "uFibOn"),
+  };
+  // ---- mani vere (pelle opaca) ----
+  const hprog = gl.createProgram()!;
+  gl.attachShader(hprog, sh(gl.VERTEX_SHADER, HVS));
+  gl.attachShader(hprog, sh(gl.FRAGMENT_SHADER, HFS));
+  gl.linkProgram(hprog);
+  const handOk = Boolean(gl.getProgramParameter(hprog, gl.LINK_STATUS));
+  const hl = {
+    aP: gl.getAttribLocation(hprog, "aP"),
+    aN: gl.getAttribLocation(hprog, "aN"),
+    aUV: gl.getAttribLocation(hprog, "aUV"),
+    uVP: gl.getUniformLocation(hprog, "uVP"),
+    uEye: gl.getUniformLocation(hprog, "uEye"),
+    uSkin: gl.getUniformLocation(hprog, "uSkin"),
+    uTex: gl.getUniformLocation(hprog, "uTex"),
+    uMeanL: gl.getUniformLocation(hprog, "uMeanL"),
+    uTexOn: gl.getUniformLocation(hprog, "uTexOn"),
+    uCut: gl.getUniformLocation(hprog, "uCut"),
+    uBack: gl.getUniformLocation(hprog, "uBack"),
+  };
+  let rig: HandRig | null = null;
+  const handTex = gl.createTexture();
+  type HandGpu = { pos: WebGLBuffer; nrm: WebGLBuffer; uv: WebGLBuffer; ib: WebGLBuffer; count: number; p: Float32Array; n: Float32Array };
+  const handGpu: Partial<Record<"L" | "R", HandGpu>> = {};
+  if (handOk)
+    void loadHandRig().then((r) => {
+      if (!r || disposed) return;
+      rig = r;
+      for (const s of ["L", "R"] as const) {
+        const h = r[s];
+        const mk = (data: ArrayBufferView, target: number, usage: number) => {
+          const b = gl.createBuffer()!;
+          gl.bindBuffer(target, b);
+          gl.bufferData(target, data, usage);
+          return b;
+        };
+        handGpu[s] = { pos: mk(new Float32Array(h.n * 3), gl.ARRAY_BUFFER, gl.DYNAMIC_DRAW), nrm: mk(new Float32Array(h.n * 3), gl.ARRAY_BUFFER, gl.DYNAMIC_DRAW), uv: mk(h.uv, gl.ARRAY_BUFFER, gl.STATIC_DRAW), ib: mk(h.idx, gl.ELEMENT_ARRAY_BUFFER, gl.STATIC_DRAW), count: h.idx.length, p: new Float32Array(h.n * 3), n: new Float32Array(h.n * 3) };
+      }
+      if (r.image) {
+        gl.bindTexture(gl.TEXTURE_2D, handTex);
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, r.image);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      }
+    });
+  const drawHands = (hands: RigPose[], VP: Float32Array, eye: V3, back: Partial<Record<"L" | "R", number[]>>) => {
+    if (!rig || !hands.length) return;
+    gl.useProgram(hprog);
+    gl.uniformMatrix4fv(hl.uVP, false, VP);
+    gl.uniform3fv(hl.uEye, eye);
+    gl.uniform3fv(hl.uSkin, skinLin);
+    gl.uniform1f(hl.uMeanL, rig.meanLuma);
+    gl.uniform1f(hl.uTexOn, rig.image ? 1 : 0);
+    gl.uniform4fv(hl.uCut, cutNow);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, handTex);
+    gl.uniform1i(hl.uTex, 0);
+    gl.disable(gl.BLEND);
+    gl.disable(gl.CULL_FACE);
+    gl.depthMask(true);
+    for (const hp of hands) {
+      const g = handGpu[hp.side];
+      const h = rig[hp.side];
+      if (!g) continue;
+      skinHand(h, hp.bones, hp.pl, g.p, g.n);
+      gl.uniform4fv(hl.uBack, back[hp.side] ?? [0, 0, 0, 0]);
+      gl.bindBuffer(gl.ARRAY_BUFFER, g.pos);
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, g.p);
+      gl.enableVertexAttribArray(hl.aP);
+      gl.vertexAttribPointer(hl.aP, 3, gl.FLOAT, false, 0, 0);
+      gl.bindBuffer(gl.ARRAY_BUFFER, g.nrm);
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, g.n);
+      gl.enableVertexAttribArray(hl.aN);
+      gl.vertexAttribPointer(hl.aN, 3, gl.FLOAT, false, 0, 0);
+      gl.bindBuffer(gl.ARRAY_BUFFER, g.uv);
+      if (hl.aUV >= 0) {
+        gl.enableVertexAttribArray(hl.aUV);
+        gl.vertexAttribPointer(hl.aUV, 2, gl.FLOAT, false, 0, 0);
+      }
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, g.ib);
+      gl.drawElements(gl.TRIANGLES, g.count, gl.UNSIGNED_SHORT, 0);
+    }
+    gl.disableVertexAttribArray(hl.aP);
+    gl.disableVertexAttribArray(hl.aN);
+    if (hl.aUV >= 0) gl.disableVertexAttribArray(hl.aUV);
+    gl.enable(gl.BLEND);
+    gl.useProgram(prog);
+    bound = "";
   };
   // dettaglio dei fasci muscolari: un'immagine ripetuta lungo le fibre (arriva dopo il corpo, non lo blocca)
   const cutNow = new Float32Array(4);
@@ -825,7 +973,7 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     im.onerror = () => fibDone();
     im.src = "/anatomia/fibre.jpg";
   }
-  type GpuBody = { meta: BodyMeta; flex: FlexInfo; batches: { layer: BodyBatch["layer"]; vb: WebGLBuffer; ib: WebGLBuffer; count: number }[] };
+  type GpuBody = { meta: BodyMeta; flex: FlexInfo; sample: SkinSample; batches: { layer: BodyBatch["layer"]; vb: WebGLBuffer; ib: WebGLBuffer; count: number }[] };
   const bodies: Partial<Record<BodyLevel, GpuBody>> = {};
   /** il corpo usato per il disegno in corso */
   let body: GpuBody | null = null;
@@ -942,31 +1090,9 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
   const drawBody = (model: Model, VP: Float32Array, eye: V3, L: Layers, focus: Set<string> | null | undefined, time: number, sil = false) => {
     if (!body || !model.J || !model.hand) return;
     const meta = body.meta;
-    const sd = sides(model.hand);
-    const side = (i: number): "L" | "R" => (i === 15 ? "L" : "R");
-    const pts = model.hud.pts;
-    const aim = v3.sub(pts.bowWr, pts.drawWr);
-    const grips = model.grip ? {
-      hook: { side: side(sd.draw[2]), k: model.grip.draw, toward: pts.nock },
-      wrap: { side: side(sd.bow[2]), k: model.grip.bow, toward: v3.add(pts.grip, v3.mul(v3.norm(aim), 0.05)), axis: model.bowAxis, dir: v3.norm(aim) },
-    } : undefined;
-    // le mani in presa si mettono sull'attrezzo: il pugno chiuso attorno all'impugnatura dell'arco e la piega
-    // delle dita sulla corda alla cocca. Prima si guarda dove cade il «buco» delle dita piegate, poi si sposta
-    // la mano (solo lei: l'avambraccio si allunga di pochi centimetri) perché cada proprio lì
-    // dove guarda la testa, con l'inclinazione in su o in giù
-    const pitch = model.headPitch ?? 0;
-    const look: V3 | undefined = model.headF ? [model.headF[0] * Math.cos(pitch), -Math.sin(pitch), model.headF[2] * Math.cos(pitch)] : undefined;
-    let J = model.J;
-    if (grips) {
-      const first = bodyMatrices(meta, J, look, grips, curlBuf, fingBuf, undefined, model.palms);
-      J = seatHands(meta, J, first, [
-        grips.wrap.k > 0.3 ? { side: grips.wrap.side, base: grips.wrap.side === "L" ? 33 : 54, at: pts.grip, hole: "wrap" as const } : null,
-        grips.hook.k > 0.3 ? { side: grips.hook.side, base: grips.hook.side === "L" ? 33 : 54, at: pts.nock, hole: "hook" as const } : null,
-      ]);
-    }
-    // ossa e muscoli restano quelli dell'atlante; la corporatura dell'arciere (aura: grasso, vestiti) è nella pelle
-    const mats = bodyMatrices(meta, J, look, grips, curlBuf, fingBuf, undefined, model.palms);
-    const skinMats = model.build ? bodyMatrices(meta, J, look, grips, undefined, undefined, model.build, model.palms) : mats;
+    // pelle vera: le mani vere al posto di quelle dell'atlante
+    const useRig = !sil && style === 2 && Boolean(rig) && L.pelle;
+    const { J, mats, skinMats, hands } = poseBody(meta, model, curlBuf, fingBuf, body.sample, useRig ? rig : null)!;
     // matrici dei segmenti come tre righe ciascuna (la quarta è sempre 0 0 0 1)
     const nSeg = Math.min(21, meta.segments.length);
     const rows = (m: Float32Array) => {
@@ -993,6 +1119,22 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     gl.uniform4fv(bl.uCurl, curlBuf);
     gl.uniform4fv(bl.uFa, fingBuf);
     gl.uniform2f(bl.uDita, meta.segments.indexOf("dita_L"), meta.segments.indexOf("dita_R"));
+    // le mani vere sostituiscono quelle dell'atlante: il braccio si taglia 1 cm prima del loro polso,
+    // il loro pezzo d'avambraccio 1,8 cm prima (si sovrappongono di poco, senza bordi)
+    const back: Partial<Record<"L" | "R", number[]>> = {};
+    for (const s of ["L", "R"] as const) {
+      const h = rig && hands.find((x) => x.side === s);
+      const el = J[s === "L" ? 13 : 14];
+      let clip = [0, 0, 0, 0];
+      if (h && rig && el) {
+        const w = placeApply(h.pl, rig[s].W);
+        const n = v3.norm(v3.sub(w, el));
+        clip = [n[0], n[1], n[2], v3.dot(n, w) - 0.01];
+        back[s] = [n[0], n[1], n[2], v3.dot(n, w) - 0.018];
+      }
+      gl.uniform4fv(s === "L" ? bl.uArmL : bl.uArmR, [`avambr_${s}`, `mano_${s}`, `dita_${s}`, `pollice_${s}`].map((n) => meta.segments.indexOf(n)));
+      gl.uniform4fv(s === "L" ? bl.uClipL : bl.uClipR, clip);
+    }
     gl.uniform3fv(bl.uLo, meta.lo);
     gl.uniform3fv(bl.uHi, meta.hi);
     const a16 = new Float32Array(64);
@@ -1044,6 +1186,12 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
       gl.disable(gl.CULL_FACE);
       drawBodyLayer("skin", 0, 1);
       gl.enable(gl.BLEND);
+      if (hands.length) {
+        for (const a of bodyAttribs) if (a >= 0) gl.disableVertexAttribArray(a);
+        drawHands(hands, VP, eye, back);
+        gl.useProgram(bprog);
+        for (const a of bodyAttribs) if (a >= 0) gl.enableVertexAttribArray(a);
+      }
     } else if (L.pelle) {
       skinRows();
       // pelle in due passate: solo profondità, poi il colore sulla superficie più esterna, sommato come vetro
@@ -1088,7 +1236,7 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
         gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(data.buf, b.iOffset, b.indices), gl.STATIC_DRAW);
         return { layer: b.layer, vb, ib, count: b.indices };
       });
-      bodies[level] = { meta: data.meta, flex: flexOf(data), batches };
+      bodies[level] = { meta: data.meta, flex: flexOf(data), sample: skinSample(data), batches };
       bound = "";
     },
     /** l'arco e la freccia veri sono pronti (la vista ferma si ridisegna quando arrivano) */
@@ -1192,6 +1340,274 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
 }
 
 /** camera che guarda un punto da una direzione (yaw, pitch) a una distanza */
+/**
+ * La posa del corpo anatomico per un modello: le mani messe sull'attrezzo, le matrici dei segmenti (ossa e
+ * muscoli) e quelle della pelle (con la corporatura). curl e fing ricevono la piega delle dita.
+ */
+/** un vertice su quattro della pelle di petto, spalle, base del collo e bacino (riposo): per tenere la corda lontana dal petto */
+export type SkinSample = { p: Float32Array; a: Uint8Array; b: Uint8Array; w: Float32Array; n: number };
+export function skinSample(data: BodyData, every = 4): SkinSample {
+  const meta = data.meta;
+  // le braccia no: l'avambraccio e il gomito dell'arco sfiorano la corda (il paracolpi è lì per quello)
+  const keep = new Set(["bacino", "torace", "clav_L", "clav_R"].map((n) => meta.segments.indexOf(n)));
+  // anche la base del collo (pelle tra busto e testa: sotto la mandibola la corda non tocca) e la cima
+  // della spalla (pelle tra clavicola e braccio)
+  const head = meta.segments.indexOf("testa");
+  const arm = new Set(["omero_L", "omero_R"].map((n) => meta.segments.indexOf(n)));
+  const dv = new DataView(data.buf);
+  const st = meta.stride;
+  const lo = meta.lo;
+  const hi = meta.hi;
+  const P: number[] = [];
+  const A: number[] = [];
+  const B: number[] = [];
+  const W: number[] = [];
+  for (const b of meta.batches) {
+    if (b.layer !== "skin") continue;
+    for (let v = 0; v < b.vertices; v += every) {
+      const off = b.vOffset + v * st;
+      const ja = dv.getUint8(off + 9);
+      const jb = dv.getUint8(off + 10);
+      const w0 = dv.getUint8(off + 11) / 255;
+      const okA = keep.has(ja) && (keep.has(jb) || (jb === head && w0 > 0.6));
+      const okB = keep.has(jb) && ja === head && w0 < 0.4;
+      const okC = (keep.has(ja) && arm.has(jb) && w0 >= 0.5) || (keep.has(jb) && arm.has(ja) && w0 < 0.5);
+      if (!okA && !okB && !okC) continue;
+      for (let k = 0; k < 3; k++) P.push(lo[k] + (dv.getUint16(off + k * 2, true) / 65535) * (hi[k] - lo[k]));
+      A.push(ja);
+      B.push(jb);
+      W.push(dv.getUint8(off + 11) / 255);
+    }
+  }
+  return { p: new Float32Array(P), a: new Uint8Array(A), b: new Uint8Array(B), w: new Float32Array(W), n: A.length };
+}
+
+/** la corda (puntali -> cocca) più vicina alla pelle del campione: distanza, punto della pelle e della corda */
+function stringGap(sample: SkinSample, mats: Float32Array, ends: [V3, V3][]) {
+  let bd = Infinity;
+  const P = sample.p;
+  const segs = ends.map(([e0, e1]) => {
+    const ab = v3.sub(e1, e0);
+    return { e0, ab, l2: Math.max(1e-9, v3.dot(ab, ab)) };
+  });
+  for (let i = 0; i < sample.n; i++) {
+    const x = P[i * 3];
+    const y = P[i * 3 + 1];
+    const z = P[i * 3 + 2];
+    const oa = sample.a[i] * 16;
+    const ob = sample.b[i] * 16;
+    const w = sample.w[i];
+    const w1 = 1 - w;
+    const px = (mats[oa] * x + mats[oa + 4] * y + mats[oa + 8] * z + mats[oa + 12]) * w + (mats[ob] * x + mats[ob + 4] * y + mats[ob + 8] * z + mats[ob + 12]) * w1;
+    const py = (mats[oa + 1] * x + mats[oa + 5] * y + mats[oa + 9] * z + mats[oa + 13]) * w + (mats[ob + 1] * x + mats[ob + 5] * y + mats[ob + 9] * z + mats[ob + 13]) * w1;
+    const pz = (mats[oa + 2] * x + mats[oa + 6] * y + mats[oa + 10] * z + mats[oa + 14]) * w + (mats[ob + 2] * x + mats[ob + 6] * y + mats[ob + 10] * z + mats[ob + 14]) * w1;
+    for (const sg of segs) {
+      const dx = px - sg.e0[0];
+      const dy = py - sg.e0[1];
+      const dz = pz - sg.e0[2];
+      let t = (dx * sg.ab[0] + dy * sg.ab[1] + dz * sg.ab[2]) / sg.l2;
+      t = t < 0 ? 0 : t > 1 ? 1 : t;
+      const qx = dx - sg.ab[0] * t;
+      const qy = dy - sg.ab[1] * t;
+      const qz = dz - sg.ab[2] * t;
+      const d = qx * qx + qy * qy + qz * qz;
+      if (d < bd) bd = d;
+    }
+  }
+  return { d: Math.sqrt(bd) };
+}
+
+/** la corda non tocca mai il petto né le spalle: al massimo bocca e mandibola (3 cm d'aria, misurati su un vertice ogni quattro) */
+const STRING_GAP = 0.03;
+
+/** una mano vera in posa: ossa piegate e messa nel mondo */
+export type RigPose = { side: "L" | "R"; bones: ReturnType<typeof bowGrip>["bones"]; pl: Placement; kind: "arco" | "corda" | "libera" };
+
+function xfm(m: Float32Array, at: number, p: V3): V3 {
+  const o = at * 16;
+  return [m[o] * p[0] + m[o + 4] * p[1] + m[o + 8] * p[2] + m[o + 12], m[o + 1] * p[0] + m[o + 5] * p[1] + m[o + 9] * p[2] + m[o + 13], m[o + 2] * p[0] + m[o + 6] * p[1] + m[o + 10] * p[2] + m[o + 14]];
+}
+function xfv(m: Float32Array, at: number, v: V3): V3 {
+  const o = at * 16;
+  return [m[o] * v[0] + m[o + 4] * v[1] + m[o + 8] * v[2], m[o + 1] * v[0] + m[o + 5] * v[1] + m[o + 9] * v[2], m[o + 2] * v[0] + m[o + 6] * v[1] + m[o + 10] * v[2]];
+}
+
+/**
+ * Le mani vere sull'attrezzo: la mano dell'arco sull'impugnatura e quella della corda alla cocca come
+ * nel Manuale FITA; quando non tengono nulla seguono la mano della sagoma, rilassate. Il polso della
+ * sagoma va dove sta il polso della mano vera (l'avambraccio si allunga di poco).
+ */
+function rigHands(meta: BodyMeta, model: Model, mats: Float32Array, rig: HandRig) {
+  const sd = sides(model.hand!);
+  const side = (i: number): "L" | "R" => (i === 15 ? "L" : "R");
+  const mir: 1 | -1 = model.hand === "destro" ? 1 : -1;
+  const out: (RigPose & { wrist: number })[] = [];
+  const anat = (s: "L" | "R") => {
+    const mI = meta.segments.indexOf(`mano_${s}`);
+    const cf = curlFrame(meta, s);
+    const Wr = meta.rest[s === "L" ? "15" : "16"] as V3 | undefined;
+    if (mI < 0 || !cf || !Wr) return null;
+    const W = xfm(mats, mI, Wr);
+    const K = xfm(mats, mI, cf.K);
+    return { W, K, F: v3.norm(xfv(mats, mI, cf.F)), N: v3.norm(xfv(mats, mI, cf.P)) };
+  };
+  const scaleOf = (h: RigHand, a: { W: V3; K: V3 }) => Math.max(0.75, Math.min(1.3, v3.len(v3.sub(a.K, a.W)) / handLength(h)));
+  // mano dell'arco
+  {
+    const s = side(sd.bow[2]);
+    const h = rig[s];
+    const a = anat(s);
+    const riser = model.parts.find((p) => p.mesh === "sbRiser");
+    if (a && model.J?.[sd.bow[1]]) {
+      const k = scaleOf(h, a);
+      if (riser && (model.grip?.bow ?? 0) > 0.3) {
+        const m = riser.m;
+        const g = bowGrip(rig, s, { o: [m[12], m[13], m[14]], x: [m[0], m[1], m[2]], y: [m[4], m[5], m[6]], z: [m[8], m[9], m[10]] }, k);
+        out.push({ side: s, bones: g.bones, pl: g.pl, kind: "arco", wrist: sd.bow[2] });
+      } else {
+        const g = freeHand(h, a.W, a.F, a.N, k);
+        out.push({ side: s, bones: g.bones, pl: g.pl, kind: "libera", wrist: -1 });
+      }
+    }
+  }
+  // mano della corda
+  {
+    const s = side(sd.draw[2]);
+    const h = rig[s];
+    const a = anat(s);
+    const str = model.parts.filter((p) => p.id === "corda" && p.alt === "real");
+    if (a && model.J?.[sd.draw[1]]) {
+      const k = scaleOf(h, a);
+      if (model.arrow && str.length === 2 && (model.grip?.draw ?? 0) > 0.3) {
+        const nock = model.arrow.nock;
+        const far = str.map((p) => {
+          const c: V3 = [p.m[12], p.m[13], p.m[14]];
+          const ax: V3 = [p.m[4], p.m[5], p.m[6]];
+          const e0 = v3.sub(c, ax);
+          const e1 = v3.add(c, ax);
+          return v3.len(v3.sub(e0, nock)) > v3.len(v3.sub(e1, nock)) ? e0 : e1;
+        });
+        const top = far[0][1] > far[1][1] ? far[0] : far[1];
+        const bot = far[0][1] > far[1][1] ? far[1] : far[0];
+        const up = v3.norm(v3.sub(v3.norm(v3.sub(top, nock)), v3.norm(v3.sub(bot, nock))));
+        const fwd = v3.norm(v3.sub(model.arrow.dir, v3.mul(up, v3.dot(model.arrow.dir, up))));
+        const outV = v3.mul(v3.norm(v3.cross(fwd, up)), mir);
+        const g = drawHook(h, { o: nock, fwd, up, out: outV }, k, mir, model.J![sd.draw[1]]);
+        out.push({ side: s, bones: g.bones, pl: g.pl, kind: "corda", wrist: sd.draw[2] });
+      } else {
+        const g = freeHand(h, a.W, a.F, a.N, k);
+        out.push({ side: s, bones: g.bones, pl: g.pl, kind: "libera", wrist: -1 });
+      }
+    }
+  }
+  return out;
+}
+
+export function poseBody(meta: BodyMeta, model: Model, curl: Float32Array = new Float32Array(32), fing: Float32Array = new Float32Array(16), sample?: SkinSample | null, rig?: HandRig | null) {
+  if (!model.J || !model.hand) return null;
+  const sd = sides(model.hand);
+  const side = (i: number): "L" | "R" => (i === 15 ? "L" : "R");
+  const pts = model.hud.pts;
+  const aim = v3.sub(pts.bowWr, pts.drawWr);
+  const grips = model.grip ? {
+    hook: { side: side(sd.draw[2]), k: model.grip.draw, toward: pts.nock },
+    wrap: { side: side(sd.bow[2]), k: model.grip.bow, toward: v3.add(pts.grip, v3.mul(v3.norm(aim), 0.05)), axis: model.bowAxis, dir: v3.norm(aim) },
+  } : undefined;
+  // le mani in presa si mettono sull'attrezzo: il pugno chiuso attorno all'impugnatura dell'arco e la piega
+  // delle dita sulla corda alla cocca. Prima si guarda dove cade il «buco» delle dita piegate, poi si sposta
+  // la mano (solo lei: l'avambraccio si allunga di pochi centimetri) perché cada proprio lì
+  // dove guarda la testa, con l'inclinazione in su o in giù
+  const pitch = model.headPitch ?? 0;
+  const look: V3 | undefined = model.headF ? [model.headF[0] * Math.cos(pitch), -Math.sin(pitch), model.headF[2] * Math.cos(pitch)] : undefined;
+  let J = model.J;
+  if (grips) {
+    const first = bodyMatrices(meta, J, look, grips, curl, fing, undefined, model.palms);
+    J = seatHands(meta, J, first, [
+      grips.wrap.k > 0.3 ? { side: grips.wrap.side, base: grips.wrap.side === "L" ? 33 : 54, at: pts.grip, hole: "wrap" as const } : null,
+      grips.hook.k > 0.3 ? { side: grips.hook.side, base: grips.hook.side === "L" ? 33 : 54, at: pts.nock, hole: "hook" as const } : null,
+    ]);
+  }
+  // ossa e muscoli restano quelli dell'atlante; la corporatura dell'arciere (aura: grasso, vestiti) è nella pelle
+  let mats = bodyMatrices(meta, J, look, grips, curl, fing, undefined, model.palms);
+  let skinMats = model.build ? bodyMatrices(meta, J, look, grips, undefined, undefined, model.build, model.palms) : mats;
+  // mani vere: il polso della sagoma va al polso della mano che tiene arco o corda
+  let hands: RigPose[] = [];
+  if (rig) {
+    const rh = rigHands(meta, model, mats, rig);
+    hands = rh;
+    let moved = false;
+    for (const r of rh) {
+      if (r.wrist < 0 || !J[r.wrist]) continue;
+      const w = placeApply(r.pl, rig[r.side].W);
+      if (v3.len(v3.sub(w, J[r.wrist])) > 0.12) continue;
+      J = { ...J, [r.wrist]: w };
+      moved = true;
+    }
+    if (moved) {
+      mats = bodyMatrices(meta, J, look, grips, curl, fing, undefined, model.palms);
+      skinMats = model.build ? bodyMatrices(meta, J, look, grips, undefined, undefined, model.build, model.palms) : mats;
+    }
+  }
+  // in trazione la corda passa davanti al petto e sfiora al più bocca e mandibola: se il corpo ricostruito
+  // (la profondità è la misura più incerta del video) la porta sul petto o sulla spalla dell'arco, il corpo
+  // si sposta un poco indietro, lontano dalla corda; testa (ancoraggio) e mani (arco e corda) restano dove
+  // sono, collo e braccia si adattano di qualche centimetro
+  if (sample && sample.n && model.arrow && (model.grip?.draw ?? 0) > 0.3) {
+    const real = model.parts.filter((p) => p.id === "corda" && p.alt === "real");
+    const ends = (real.length ? real : model.parts.filter((p) => p.id === "corda")).map((p): [V3, V3] => {
+      const c: V3 = [p.m[12], p.m[13], p.m[14]];
+      const ax: V3 = [p.m[4], p.m[5], p.m[6]];
+      return [v3.sub(c, ax), v3.add(c, ax)];
+    });
+    const body = [11, 12, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32];
+    const half = [13, 14];
+    const J0 = J;
+    // al più 7 cm: oltre, la ricostruzione è troppo lontana dal vero per correggerla così
+    const cap = 0.07;
+    let moved = 0;
+    let shift: V3 = [0, 0, 0];
+    for (let it = 0; it < 6 && ends.length && J[11] && J[12]; it++) {
+      const g = stringGap(sample, skinMats, ends);
+      if (g.d >= STRING_GAP || moved >= cap) break;
+      // via dalla corda, in orizzontale: dal punto della corda più vicino alle spalle verso le spalle
+      const sh = v3.lerp(J[11], J[12], 0.5);
+      let q = ends[0][0];
+      let dq = Infinity;
+      for (const [e0, e1] of ends) {
+        const ab = v3.sub(e1, e0);
+        const t = Math.max(0, Math.min(1, v3.dot(v3.sub(sh, e0), ab) / Math.max(1e-9, v3.dot(ab, ab))));
+        const c = v3.add(e0, v3.mul(ab, t));
+        const d = v3.len(v3.sub(sh, c));
+        if (d < dq) {
+          dq = d;
+          q = c;
+        }
+      }
+      const a = v3.sub(sh, q);
+      const away = v3.norm([a[0], 0, a[2]]);
+      const push = Math.min(cap - moved, STRING_GAP - g.d + 0.004);
+      shift = v3.add(shift, v3.mul(away, push));
+      moved += push;
+      J = { ...J0 };
+      for (const i of body) if (J0[i]) J[i] = v3.add(J0[i], shift);
+      for (const i of half) if (J0[i]) J[i] = v3.add(J0[i], v3.mul(shift, 0.5));
+      mats = bodyMatrices(meta, J, look, grips, curl, fing, undefined, model.palms);
+      skinMats = model.build ? bodyMatrices(meta, J, look, grips, undefined, undefined, model.build, model.palms) : mats;
+    }
+    // entrando e uscendo dalla trazione lo spostamento cresce e cala piano (niente corpo che salta)
+    const k = Math.min(1, Math.max(0, ((model.grip?.draw ?? 0) - 0.3) / 0.25));
+    if (moved > 0 && k < 1) {
+      const kk = k * k * (3 - 2 * k);
+      J = { ...J0 };
+      for (const i of body) if (J0[i]) J[i] = v3.add(J0[i], v3.mul(shift, kk));
+      for (const i of half) if (J0[i]) J[i] = v3.add(J0[i], v3.mul(shift, 0.5 * kk));
+      mats = bodyMatrices(meta, J, look, grips, curl, fing, undefined, model.palms);
+      skinMats = model.build ? bodyMatrices(meta, J, look, grips, undefined, undefined, model.build, model.palms) : mats;
+    }
+  }
+  return { J, mats, skinMats, grips, look, hands };
+}
+
 export function viewFrom(target: V3, yaw: number, pitch: number, dist: number, aspect: number, fovDeg = 34, near = 0.05) {
   const eye: V3 = [target[0] + Math.sin(yaw) * Math.cos(pitch) * dist, target[1] + Math.sin(pitch) * dist, target[2] + Math.cos(yaw) * Math.cos(pitch) * dist];
   return { eye, VP: mul4(perspective((fovDeg * Math.PI) / 180, aspect, near, 30), lookAt(eye, target)) };
