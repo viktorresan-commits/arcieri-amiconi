@@ -1,5 +1,6 @@
 /**
- * Prova dell'arciere 3D: pagina nascosta che vede solo il Fondatore.
+ * Prova dell'arciere 3D: pagina nascosta che vede solo il Fondatore (e la stessa scena, senza comandi,
+ * per il tiro in 3D della Balistica).
  *
  * Il server controlla chi la chiede e consegna la pagina solo al Fondatore. Corpi, abiti e three.js
  * sono liberi e stanno in /public/prova3d/. Le animazioni da arco (Kevin Iglesias, licenza Unity
@@ -31,7 +32,25 @@ export const prova3dPage = createServerFn({ method: "GET" })
     const { PROVA3D_PAGE } = await import("./prova3d-page");
     // dentro uno <script>: nessun "<" vero, così il testo non può chiudere lo script
     const safe = clips.replace(/</g, "\\u003c");
-    return { ok: true, html: PROVA3D_PAGE.replace("__CLIPS__", () => safe) };
+    return { ok: true, html: PROVA3D_PAGE.replace("__CLIPS__", () => safe).replace("__MODE__", '"prova"') };
+  });
+
+/**
+ * Tiro in 3D della pagina Balistica, per ogni socio: la stessa scena (arciere animato, paglione e frecce
+ * vere) senza i comandi della prova. Le animazioni arrivano dal database dentro la pagina, come per la
+ * prova: non sono mai un file a sé da scaricare. Se il Fondatore non le ha ancora caricate, la Balistica
+ * resta sul tiro disegnato.
+ */
+export const tiro3dPage = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async (): Promise<PageResult> => {
+    const sql = await db();
+    const rows = await sql<{ body: string }>`select body from founder_files where name = ${CLIPS} limit 1`;
+    const clips = rows[0]?.body;
+    if (!clips) return { ok: false, reason: "animazioni" };
+    const { PROVA3D_PAGE } = await import("./prova3d-page");
+    const safe = clips.replace(/</g, "\\u003c");
+    return { ok: true, html: PROVA3D_PAGE.replace("__CLIPS__", () => safe).replace("__MODE__", '"tiro"') };
   });
 
 /** il file delle animazioni (arco-clips.json): controllato e salvato, solo per il Fondatore */

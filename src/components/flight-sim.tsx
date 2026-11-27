@@ -6,6 +6,9 @@ import { listEquipment, saveEquipment } from "@/lib/arcieri/club.api";
 import { Zoomable } from "./zoomable";
 import { ConvertButton } from "./unit-converter";
 import { Flight3D } from "./flight-gl";
+import { Tiro3D } from "./tiro-3d";
+import { useAvatar } from "./avatar-hero";
+import { tiroConfig } from "@/lib/arcieri/tiro3d";
 import { FlightCurves } from "./flight-curves";
 import { useNarrow } from "@/lib/arcieri/use-narrow";
 import { readMainGear, useMainArrowLook } from "@/lib/arcieri/main-gear";
@@ -118,6 +121,9 @@ export function FlightSim() {
   const [trueScale, setTrueScale] = useState(false);
   const [replay, setReplay] = useState(0);
   const [view3d, setView3d] = useState(true);
+  /** il 3D con i modelli veri non parte (niente animazioni o WebGL): resta il tiro disegnato */
+  const [plain3d, setPlain3d] = useState(false);
+  const { shown: avatarLook } = useAvatar();
   const arrowLook = useMainArrowLook();
   const archer = useArcherSetup();
   const [tab, setTab] = useState<"arco" | "freccia" | "tiro" | "meteo">("arco");
@@ -197,6 +203,7 @@ export function FlightSim() {
   );
   const speed = launchSpeed({ ...form, sighted: setup.sighted });
   const flightInput = useMemo(() => ({ ...form, sighted: setup.sighted }), [form, setup.sighted]);
+  const tiroCfg = useMemo(() => tiroConfig(flightInput, primary, bow, avatarLook), [flightInput, primary, bow, avatarLook]);
   const gpp = form.drawLb > 0 ? form.grains / form.drawLb : 0;
   const bad = form.braceCm >= form.drawCm || form.grains < 80 || form.drawLb < 10;
 
@@ -316,7 +323,11 @@ export function FlightSim() {
       {view3d ? (
         <>
           <Expand title="Tiro in 3D" onReplay={() => setReplay((r) => r + 1)}>
-            <Flight3D key={`f3-${replay}`} input={flightInput} round={primary} sighted={setup.sighted} look={arrowLook} height="h-[30rem] sm:h-80" />
+            {plain3d ? (
+              <Flight3D key={`f3-${replay}`} input={flightInput} round={primary} sighted={setup.sighted} look={arrowLook} height="h-[30rem] sm:h-80" />
+            ) : (
+              <Tiro3D cfg={tiroCfg} replay={replay} onFail={() => setPlain3d(true)} className="h-[30rem] sm:h-96" />
+            )}
           </Expand>
           <AimHelp input={flightInput} round={primary} sighted={setup.sighted} fixY={-primary.my} fixZ={goldOf(form) + (setup.sighted ? 0 : primary.gap) - (primary.mz - goldOf(form))} gold={goldOf(form)} R={form.faceCm / 200} />
         </>
