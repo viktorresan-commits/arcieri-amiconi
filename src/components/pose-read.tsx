@@ -406,6 +406,43 @@ export function PoseRead() {
   shotsRef.current = analysis.shots;
   // fotogrammi dell'analisi: la sagoma ne ricava le lunghezze vere delle ossa dell'arciere
   const calFrames = useMemo(() => samples.map((s) => s.lm), [samples]);
+  // play fluido: la sagoma di ogni fotogramma dell'analisi (con la freccia partita dopo il rilascio)
+  const track = useMemo(() => {
+    if (samples.length < 2) return null;
+    const shotsNow = analysis.shots;
+    return {
+      t: samples.map((sm) => sm.t),
+      at: (i: number) => {
+        const sm = samples[i];
+        let g: Gear | null = sm.g ?? samples[i - 1]?.g ?? samples[i + 1]?.g ?? null;
+        for (let q = 0; q < shotsNow.length; q++) {
+          const r = shotsNow[q].release;
+          if (r == null || sm.t < r) continue;
+          const next = shotsNow[q + 1]?.phases[0]?.from ?? Infinity;
+          if (sm.t < next - 0.5) {
+            g = { arrow: null, bow: g?.bow ?? null, loose: sm.t - r };
+            break;
+          }
+        }
+        return { lm: sm.lm, gear: g };
+      },
+    };
+  }, [samples, analysis.shots]);
+  const clockFn = useRef(() => videoRef.current?.currentTime ?? 0).current;
+  // appena caricato il video si analizza tutto (qualche secondo, con la barra): poi scheletro e sagoma
+  // vanno fluidi dal primo play, senza calcolare nulla mentre il video scorre
+  const autoScan = useRef<string | null>(null);
+  useEffect(() => {
+    if (kind !== "video" || !src || !duration || samples.length || busy || scanning.current) return;
+    if (autoScan.current === src) return;
+    const id = window.setTimeout(() => {
+      if (autoScan.current === src || scanning.current) return;
+      autoScan.current = src;
+      void scanAll();
+    }, 400);
+    return () => window.clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kind, src, duration, samples.length, busy]);
   const shot: Shot | null = analysis.shots[Math.min(shotIndex, analysis.shots.length - 1)] ?? null;
   const distance = useMemo(
     () => cameraDistance(samples.length ? samples : now ? [{ t: 0, lm: null, m: now }] : [], size.w, size.h),
@@ -1364,7 +1401,7 @@ export function PoseRead() {
             {/* una volta aperta la vista 3D resta pronta (nascosta): cambiare vista non la ricrea, niente scatti */}
             {used3d ? (
               <div className={`absolute inset-0 z-[1] ${look === "sagoma" ? "" : "hidden"}`}>
-                <Anatomy3D lmRef={lastLm} gearRef={gearRef} calFrames={calFrames} aspect={size.w / Math.max(1, size.h)} hand={effHand} mirror={mirror3d} transport={{ playing, time, duration, onToggle: toggle, onSeek: seek, step: frameStep }} view2d={zoomV} build={auraRes?.build ?? null} inBox className="h-full" />
+                <Anatomy3D lmRef={lastLm} gearRef={gearRef} calFrames={calFrames} aspect={size.w / Math.max(1, size.h)} hand={effHand} mirror={mirror3d} transport={{ playing, time, duration, onToggle: toggle, onSeek: seek, step: frameStep }} view2d={zoomV} build={auraRes?.build ?? null} track={track} clock={clockFn} inBox className="h-full" />
               </div>
             ) : null}
             {zoomOn ? (

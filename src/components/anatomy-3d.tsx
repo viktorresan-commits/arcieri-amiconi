@@ -225,14 +225,15 @@ export async function auraFit(o: { frames: { lm: Landmark[]; aura: Aura }[]; asp
  * Pittore della sagoma 3D fuori schermo, in alta definizione (foto 4K, video 1080p): stesso corpo,
  * stessa luce, stessa vista dello schermo, con lo sfondo e i crediti dell'atlante anatomico.
  */
-export async function sagomaPainter(W: number, H: number) {
+export async function sagomaPainter(W: number, H: number, quality: "hd" | "pieno" = "hd", /** scala di testi e linee (come lo schermo); se manca, come un telefono largo 440 punti */ hudScale?: number) {
   const gl = document.createElement("canvas");
   gl.width = W;
   gl.height = H;
   const R = createAnatomyRenderer(gl, true);
   if (!R) return null;
-  // il corpo in piena definizione dell'atlante (si scarica la prima volta), altrimenti quello dello schermo
-  const body = (await loadBody("hd")) ?? (await loadBody("pieno")) ?? (await loadBody("leggero"));
+  // il corpo in piena definizione dell'atlante (si scarica la prima volta), altrimenti quello dello schermo;
+  // per preparare il play fluido basta quello dello schermo (più veloce)
+  const body = (quality === "hd" ? await loadBody("hd") : null) ?? (await loadBody("pieno")) ?? (await loadBody("leggero"));
   if (body) R.setBody(body, "pieno");
   await R.gearLoaded();
   const out = document.createElement("canvas");
@@ -241,14 +242,14 @@ export async function sagomaPainter(W: number, H: number) {
   const ctx = out.getContext("2d");
   if (!ctx) return null;
   // il testo e le linee come sullo schermo di un telefono largo 400 punti
-  const dpr = Math.min(W, H) / 440;
+  const dpr = hudScale ?? Math.min(W, H) / 440;
   let camSm: { c: V3; h: number } | null = null;
   let lastT = 0;
   const memo = depthMemo();
   return {
     canvas: out,
     /** disegna la posa; smooth: inquadratura che segue piano (video), altrimenti esatta (foto) */
-    paint(o: { lm: Landmark[]; aspect: number; hand: Hand; gear: Gear | null; cal: BoneCal | null; time: number; smooth?: boolean; view?: typeof sagomaView; /** centro dell'inquadratura scelto dal modello (es. una mano), per i dettagli */ at?: (m: Model) => V3; /** inquadratura "come il video" (con l'eventuale ingrandimento, in frazioni del riquadro) */ frameView?: { z: number; nx: number; ny: number } | null }) {
+    paint(o: { lm: Landmark[]; aspect: number; hand: Hand; gear: Gear | null; cal: BoneCal | null; time: number; smooth?: boolean; view?: typeof sagomaView; /** centro dell'inquadratura scelto dal modello (es. una mano), per i dettagli */ at?: (m: Model) => V3; /** inquadratura "come il video" (con l'eventuale ingrandimento, in frazioni del riquadro) */ frameView?: { z: number; nx: number; ny: number } | null; /** crediti scritti sull'immagine (no per i fotogrammi del play: sotto c'è già la riga) */ credit?: boolean }) {
       const view = o.view ?? sagomaView;
       const model = buildModel(o.lm, o.aspect, o.hand, o.gear, o.cal, o.smooth ? memo : null, o.time);
       const g = ctx.createRadialGradient(W * 0.45, H * 0.35, 0, W * 0.45, H * 0.35, Math.max(W, H) * 0.8);
@@ -276,6 +277,7 @@ export async function sagomaPainter(W: number, H: number) {
       paintHud(ctx, model, VP, W, H, dpr, view.layers, o.time, st);
       // crediti dell'atlante (licenze CC BY e CC BY-SA): restano sull'immagine
       ctx.setTransform(1, 0, 0, 1, 0, 0);
+      if (o.credit === false) return true;
       ctx.font = `500 ${Math.round(9 * dpr)}px system-ui, sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "alphabetic";
@@ -304,7 +306,16 @@ export function Anatomy3D({
   transport,
   view2d,
   build,
+  track,
+  clock,
 }: {
+  /**
+   * Tutti i fotogrammi dell'analisi: la sagoma si prepara una volta (immagine per immagine, come il video)
+   * e durante il play si mostrano quelle, sincronizzate con il video: fluida anche sui telefoni più lenti
+   */
+  track?: { t: number[]; at: (i: number) => { lm: Landmark[] | null; gear: Gear | null } } | null;
+  /** il tempo del video, letto a ogni immagine dello schermo */
+  clock?: () => number;
   /** corporatura presa dall'aura dell'arciere (silhouette nel video): spessore di busto, braccia, gambe, testa */
   build?: Build | null;
   /** ingrandimento del video nel riquadro: la sagoma "come il video" lo segue */
@@ -458,8 +469,59 @@ export function Anatomy3D({
       window.setTimeout(() => setShotMsg(""), 3500);
     }
   }
-  const input = useRef({ lm, lmRef, seq, aspect, hand: effHand, gearRef, cal: fixedCal, mirror, inBox, view2d: full ? null : (view2d ?? null) });
-  input.current = { lm, lmRef, seq, aspect, hand: effHand, gearRef, cal: fixedCal, mirror, inBox, view2d: full ? null : (view2d ?? null) };
+  const input = useRef({ lm, lmRef, seq, aspect, hand: effHand, gearRef, cal: fixedCal, mirror, inBox, view2d: full ? null : (view2d ?? null), playing: Boolean(transport?.playing), clock, full });
+  input.current = { lm, lmRef, seq, aspect, hand: effHand, gearRef, cal: fixedCal, mirror, inBox, view2d: full ? null : (view2d ?? null), playing: Boolean(transport?.playing), clock, full };
+
+  // ---- play fluido: la sagoma di ogni fotogramma dell'analisi preparata una volta, come immagini ----
+  const cacheRef = useRef<{ key: string; t: number[]; blobs: (Blob | null)[] } | null>(null);
+  const cacheCanvas = useRef<HTMLCanvasElement>(null);
+  const [prep, setPrep] = useState<number | null>(null);
+  const layersKey = `${layers.pelle}${layers.muscolo}${layers.osso}${layers.punti}${layers.quote}`;
+  useEffect(() => {
+    if (!track || !inBox || full || track.t.length < 2) return;
+    let alive = true;
+    const run = async () => {
+      const box = glCanvas.current;
+      if (!box || !box.clientWidth || !box.clientHeight) return;
+      const k = Math.min(1.5, window.devicePixelRatio || 1);
+      const W = Math.round((box.clientWidth * k) / 2) * 2;
+      const H = Math.round((box.clientHeight * k) / 2) * 2;
+      const key = `${W}x${H}|${style}|${layersKey}|${mirror}|${effHand}|${aspect.toFixed(4)}|${JSON.stringify(fixedCal ?? null)}|${track.t.length}|${track.t[0]}|${track.t[track.t.length - 1]}`;
+      if (cacheRef.current?.key === key) return;
+      cacheRef.current = null;
+      const painter = await sagomaPainter(W, H, "pieno", k).catch(() => null);
+      if (!painter || !alive) {
+        painter?.dispose();
+        return;
+      }
+      const blobs: (Blob | null)[] = new Array(track.t.length).fill(null);
+      cacheRef.current = { key, t: track.t, blobs };
+      setPrep(0);
+      const view = { yaw: 0, pitch: 0, zoom: 1, layers: { ...layers }, style };
+      try {
+        for (let i = 0; i < track.t.length && alive; i++) {
+          const { lm: fl, gear } = track.at(i);
+          if (fl) {
+            painter.paint({ lm: mirror ? swapSides(fl) : fl, aspect, hand: effHand, gear, cal: fixedCal, time: track.t[i], smooth: true, view, frameView: { z: 1, nx: 0, ny: 0 }, credit: false });
+            blobs[i] = await new Promise<Blob | null>((res) => painter.canvas.toBlob(res, "image/jpeg", 0.86));
+          }
+          if (i % 8 === 0) setPrep(i / track.t.length);
+          // lascia respirare lo schermo tra un fotogramma e l'altro
+          await new Promise((r) => setTimeout(r, 0));
+        }
+      } finally {
+        painter.dispose();
+        if (alive) setPrep(null);
+      }
+    };
+    const id = window.setTimeout(() => void run(), 500);
+    return () => {
+      alive = false;
+      window.clearTimeout(id);
+      setPrep(null);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [track, fixedCal, style, layersKey, mirror, effHand, aspect, inBox, full]);
 
   useEffect(() => {
     const canvas = glCanvas.current;
@@ -513,6 +575,11 @@ export function Anatomy3D({
     // e niente batteria consumata a vuoto
     let lastTarget: Landmark[] | null = null;
     let lastCal: BoneCal | null = null;
+    // play fluido: l'immagine preparata mostrata ora
+    let shown: { i: number; bmp: ImageBitmap; key: string } | null = null;
+    let decoding = false;
+    let drawnI = -1;
+    let cacheVisible = false;
     let lastKey = "";
     let moving = false;
     let lastChange = -1e9;
@@ -579,6 +646,59 @@ export function Anatomy3D({
       if (off !== turnedRef.current && !c.auto) {
         turnedRef.current = off;
         setTurned(off);
+      }
+      // durante il play: le immagini preparate, sincronizzate con il video (niente 3D da calcolare)
+      {
+        const cache = cacheRef.current;
+        const { playing: vPlaying, clock: clk, full: isFull } = input.current;
+        const v2ok = !v2 || (v2.z === 1 && !v2.x && !v2.y);
+        const cc = cacheCanvas.current;
+        let used = false;
+        if (cc && cache && vPlaying && clk && !isFull && v2ok && !turnedRef.current && !c.auto && !dragging.current) {
+          const tNow = clk();
+          let lo = 0;
+          let hi = cache.t.length - 1;
+          while (hi - lo > 1) {
+            const mid = (lo + hi) >> 1;
+            if (cache.t[mid] <= tNow) lo = mid;
+            else hi = mid;
+          }
+          const i = Math.abs(cache.t[hi] - tNow) < Math.abs(cache.t[lo] - tNow) ? hi : lo;
+          const blob = cache.blobs[i];
+          if (blob && shown?.i !== i && !decoding && typeof createImageBitmap === "function") {
+            decoding = true;
+            void createImageBitmap(blob)
+              .then((bmp) => {
+                const prev = shown;
+                shown = { i, bmp, key: cache.key };
+                prev?.bmp.close();
+              })
+              .catch(() => {})
+              .finally(() => {
+                decoding = false;
+              });
+          }
+          if (blob && shown && shown.key === cache.key) {
+            if (drawnI !== shown.i) {
+              drawnI = shown.i;
+              if (cc.width !== shown.bmp.width || cc.height !== shown.bmp.height) {
+                cc.width = shown.bmp.width;
+                cc.height = shown.bmp.height;
+              }
+              cc.getContext("2d")?.drawImage(shown.bmp, 0, 0);
+            }
+            used = true;
+          }
+        }
+        if (used !== cacheVisible && cc) {
+          cacheVisible = used;
+          cc.style.visibility = used ? "visible" : "hidden";
+        }
+        if (used) {
+          // al termine del play si ridisegna subito dal vivo
+          lastKey = "";
+          return;
+        }
       }
       const key = `${ready}|${styleRef.current}|${c.yaw.toFixed(4)}|${c.pitch.toFixed(4)}|${c.zoom.toFixed(3)}|${v2 ? `${v2.z},${v2.x},${v2.y}` : ""}|${L0.pelle}${L0.muscolo}${L0.osso}${L0.punti}${L0.quote}|${canvas.clientWidth}x${canvas.clientHeight}|${scale}|${bodyTick}|${R.gearReady()}`;
       // dopo un movimento si disegna ancora un attimo con il corpo leggero, poi una volta con quello pieno
@@ -742,6 +862,12 @@ export function Anatomy3D({
       <canvas ref={stageCanvas} className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden />
       <canvas ref={glCanvas} className={cx("absolute inset-0 h-full w-full", inBox && !full ? "touch-pan-y" : "touch-none")} aria-label="Analisi del gesto in 3D: corpo, scheletro e muscoli, da girare con il dito" />
       <canvas ref={hudCanvas} className="pointer-events-none absolute inset-0 h-full w-full" />
+      <canvas ref={cacheCanvas} className="pointer-events-none absolute inset-0 h-full w-full" style={{ visibility: "hidden" }} aria-hidden />
+      {prep != null ? (
+        <p className={cx("pointer-events-none absolute inset-x-0 mx-auto w-fit rounded-full px-3 py-1 text-[0.7rem] font-semibold text-white backdrop-blur", full ? "bottom-28" : "bottom-14", style ? "bg-[#22303a]/80" : "bg-black/50")}>
+          Preparo il play fluido… {Math.round(prep * 100)}%
+        </p>
+      ) : null}
       <p className={cx("pointer-events-none absolute inset-x-0 bottom-0 truncate px-2 text-center text-[0.45rem] leading-[0.7rem]", style ? "text-black/45" : "text-white/50")}>{BODY_CREDIT}</p>
       {!bodyReady && !empty ? <p className={cx("pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 text-center text-sm", style ? "text-black/60" : "text-white/75")}>Preparo il corpo anatomico…</p> : null}
       {empty ? <p className={cx("absolute inset-x-0 top-1/2 -translate-y-1/2 text-center text-sm", style ? "text-black/70" : "text-white/80")}>In attesa della posa: avvia il video o scegli un fotogramma.</p> : null}
