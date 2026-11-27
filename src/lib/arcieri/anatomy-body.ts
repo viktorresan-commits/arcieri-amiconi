@@ -6,7 +6,7 @@
  * che lo porta dalla posa di riposo alla posa del video (osso per osso, con la torsione presa dalla
  * mano, dal gomito e dai piedi). La deformazione la fa la scheda grafica.
  */
-import { v3, type V3 } from "./anatomy-model";
+import { v3, type Build, type V3 } from "./anatomy-model";
 import type { Hand } from "./pose-analysis";
 import { sides } from "./pose-analysis";
 
@@ -248,7 +248,7 @@ export type Grips = {
   wrap?: { side: "L" | "R"; k: number; toward: V3 };
 };
 
-export function bodyMatrices(meta: BodyMeta, J: Record<number, V3>, look?: V3, grips?: Grips, /** 32 numeri: la piega delle dita in presa per la scheda grafica (mano S, poi D) */ curl?: Float32Array, /** 16 numeri: piega di ogni dito dai punti della mano (nocca e falangi; mano S, poi D) */ fing?: Float32Array): Float32Array {
+export function bodyMatrices(meta: BodyMeta, J: Record<number, V3>, look?: V3, grips?: Grips, /** 32 numeri: la piega delle dita in presa per la scheda grafica (mano S, poi D) */ curl?: Float32Array, /** 16 numeri: piega di ogni dito dai punti della mano (nocca e falangi; mano S, poi D) */ fing?: Float32Array, /** corporatura dall'aura dell'arciere: spessore di busto, braccia, gambe e testa */ build?: Build): Float32Array {
   const rest = (i: number | string) => meta.rest[String(i)];
   const hasHand = (base: number) => Boolean(J[base] && J[base + 5] && J[base + 17]);
   // le mani da 21 punti hanno nocche vere: con quelle si usano le teste dei metacarpi del modello
@@ -400,7 +400,9 @@ export function bodyMatrices(meta: BodyMeta, J: Record<number, V3>, look?: V3, g
     // le dita in presa si accorciano (piegate), le altre parti no
     const lo = name === "torace" || name === "bacino" ? 0 : name.startsWith("dita") ? kT * 0.35 : kT * 0.8;
     const hi = name === "torace" || name === "bacino" ? 99 : kT * 1.22;
-    segMatrix(r, c, 1, out, i * 16, lo, hi);
+    // spessore di traverso: la corporatura che copre la silhouette dell'arciere (aura); mani e piedi restano
+    const th = !build ? 1 : name === "torace" || name === "bacino" ? build.torso : name.startsWith("omero") || name.startsWith("avambr") ? build.arm : name.startsWith("coscia") || name.startsWith("gamba") ? build.leg : name === "testa" ? build.head : 1;
+    segMatrix(r, c, th, out, i * 16, lo, hi);
   });
   // dita senza punti della mano: stessa trasformazione della mano
   for (const s of ["L", "R"] as const) {

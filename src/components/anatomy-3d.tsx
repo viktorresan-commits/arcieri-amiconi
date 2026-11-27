@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { boneCal, buildModel, depthMemo, v3, type BoneCal, type Model, type V3 } from "@/lib/arcieri/anatomy-model";
+import { boneCal, buildModel, depthMemo, v3, type BoneCal, type Build, type ImageFrame, type Model, type V3 } from "@/lib/arcieri/anatomy-model";
+import { bodySlices, buildFrom, overlap, rasterAura, sliceWidth, type Aura } from "@/lib/arcieri/aura";
 import { createAnatomyRenderer, lookAt, mul4, perspective } from "@/lib/arcieri/anatomy-render";
 import { BODY_CREDIT, loadBody } from "@/lib/arcieri/anatomy-body";
 import { mixLm, sideEvidence, swapSides, type Gear, type Hand, type Landmark } from "@/lib/arcieri/pose-analysis";
@@ -56,6 +57,45 @@ function sceneCamera(camSm: { c: V3; h: number }, c: { yaw: number; pitch: numbe
   return { eye, VP: mul4(perspective(fov, W / H, 0.05, 30), lookAt(eye, target3)) };
 }
 
+/** ingrandimento del video nel riquadro (pizzico sullo scheletro): la sagoma lo segue */
+export type View2d = { z: number; x: number; y: number };
+
+/**
+ * Camera "come il video": proiezione parallela del fotogramma, così ogni punto della sagoma cade
+ * esattamente sul punto trovato nel video (larghezza e altezza della sagoma vengono dal video, la
+ * profondità no: una prospettiva qualsiasi li spostava). Girando con il dito ruota attorno al corpo
+ * e il fotogramma resta allineato; v2d riporta lo stesso ingrandimento del video nel riquadro.
+ */
+function videoCamera(fr: ImageFrame, pivot: V3, c: { yaw: number; pitch: number; zoom: number }, W: number, H: number, v2d?: View2d | null) {
+  const fw = Math.max(0.1, fr.x1 - fr.x0);
+  const fh = Math.max(0.1, fr.yTop - fr.yBot);
+  const ca = W / H;
+  // il fotogramma intero nel riquadro, come object-contain del video
+  let hw = fw / 2;
+  let hh = fh / 2;
+  if (ca > fw / fh) hw = hh * ca;
+  else hh = hw / ca;
+  const ox = (fr.x0 + fr.x1) / 2 - pivot[0];
+  const oy = (fr.yTop + fr.yBot) / 2 - pivot[1];
+  const z = c.zoom;
+  const l = (ox - hw) / z;
+  const r = (ox + hw) / z;
+  const b = (oy - hh) / z;
+  const t = (oy + hh) / z;
+  const dist = 8;
+  const near = 0.5;
+  const far = 16;
+  const eye: V3 = [pivot[0] + Math.sin(c.yaw) * Math.cos(c.pitch) * dist, pivot[1] + Math.sin(c.pitch) * dist, pivot[2] + Math.cos(c.yaw) * Math.cos(c.pitch) * dist];
+  const P = new Float32Array([2 / (r - l), 0, 0, 0, 0, 2 / (t - b), 0, 0, 0, 0, -2 / (far - near), 0, -(r + l) / (r - l), -(t + b) / (t - b), -(far + near) / (far - near), 1]);
+  let VP = mul4(P, lookAt(eye, pivot));
+  if (v2d && (v2d.z !== 1 || v2d.x || v2d.y)) {
+    // lo stesso translate+scale (origine in alto a sinistra) del video, in coordinate dello schermo
+    const M = new Float32Array([v2d.z, 0, 0, 0, 0, v2d.z, 0, 0, 0, 0, 1, 0, v2d.z - 1 + (2 * v2d.x) / Math.max(1, W), 1 - v2d.z - (2 * v2d.y) / Math.max(1, H), 0, 1]);
+    VP = mul4(M, VP);
+  }
+  return { eye, VP };
+}
+
 /** la vista scelta nella sagoma 3D: la usano anche foto e video in alta definizione */
 export const sagomaView: { yaw: number; pitch: number; zoom: number; layers: Record<Layer, boolean> } = {
   yaw: 0,
@@ -70,6 +110,97 @@ const BG_STOPS: [number, string][] = [
   [0.78, "#0b3f82"],
   [1, "#072a5c"],
 ];
+
+/**
+ * Aura: la sagoma prende la corporatura dell'arciere. Su alcuni fotogrammi la silhouette della sagoma
+ * vista come il video (che non si mostra) si confronta con la silhouette dell'arciere: larghezza a
+ * fette di busto, testa, braccio dell'arco e gambe. Il rapporto mediano dà lo spessore di ogni parte,
+ * poi si ricontrolla quanto le due silhouette coincidono (prima e dopo, 0..1).
+ */
+export async function auraFit(o: { frames: { lm: Landmark[]; aura: Aura }[]; aspect: number; hand: Hand; cal: BoneCal | null; /** per le prove: le due silhouette e le fette di ogni fotogramma */ debug?: (d: { S: Uint8Array; A: Uint8Array; W: number; H: number; slices: { p: [number, number]; d: [number, number]; wa: number; ws: number; g: string }[] }) => void }): Promise<{ build: Build; before: number; after: number; n: number } | null> {
+  if (o.frames.length < 3) return null;
+  const long = 320;
+  const W = o.aspect >= 1 ? long : Math.max(16, Math.round(long * o.aspect));
+  const H = o.aspect >= 1 ? Math.max(16, Math.round(long / o.aspect)) : long;
+  const canvas = document.createElement("canvas");
+  canvas.width = W;
+  canvas.height = H;
+  const R = createAnatomyRenderer(canvas, true);
+  if (!R) return null;
+  try {
+    const body = (await loadBody("leggero")) ?? (await loadBody("pieno"));
+    if (!body) return null;
+    R.setBody(body, "leggero");
+    const view = { yaw: 0, pitch: 0, zoom: 1 };
+    const sil = (lm: Landmark[], build: Build | null) => {
+      const model = buildModel(lm, o.aspect, o.hand, null, { ...(o.cal ?? {}), build: build ?? undefined });
+      if (!model?.frame) return null;
+      const { VP, eye } = videoCamera(model.frame, model.center, view, W, H);
+      return R.silhouette(model, VP, eye, W, H);
+    };
+    const archers = o.frames.map((f) => ({ lm: f.lm, A: rasterAura(f.aura, W, H) }));
+    /** quanto le due auree coincidono in media con una corporatura */
+    const score = (build: Build | null) => {
+      let sum = 0;
+      let n = 0;
+      for (const a of archers) {
+        const S = sil(a.lm, build);
+        if (!S) continue;
+        sum += overlap(S, a.A);
+        n += 1;
+      }
+      return n ? sum / n : 0;
+    };
+    const one: Build = { torso: 1, arm: 1, leg: 1, head: 1 };
+    const before = score(null);
+    // 1) quanto credere alla girata del busto stimata dal video: quella che fa coincidere meglio le auree
+    let best = { turn: 1, s: before };
+    for (const turn of [0.65, 0.3, 0]) {
+      const sc = score({ ...one, turn });
+      if (sc > best.s + 0.002) best = { turn, s: sc };
+    }
+    // 2) corporatura: per ogni parte (busto, braccia, gambe, testa) lo spessore che fa coincidere meglio le
+    //    auree, a piccoli passi, due giri. Le fette dicono da che parte provare per prima
+    const ratios: Record<"torso" | "arm" | "leg" | "head", number[]> = { torso: [], arm: [], leg: [], head: [] };
+    for (const a of archers.slice(0, 4)) {
+      const S = sil(a.lm, { ...one, turn: best.turn });
+      if (!S) continue;
+      const dbg: { p: [number, number]; d: [number, number]; wa: number; ws: number; g: string }[] = [];
+      for (const sl of bodySlices(a.lm, o.hand, W, H)) {
+        const wa = sliceWidth(a.A, W, H, sl);
+        const ws = sliceWidth(S, W, H, sl);
+        dbg.push({ p: sl.p, d: sl.d, wa, ws, g: sl.g });
+        if (wa >= 3 && ws >= 3 && wa / ws > 0.5 && wa / ws < 2.2) ratios[sl.g].push(wa / ws);
+      }
+      o.debug?.({ S, A: a.A, W, H, slices: dbg });
+    }
+    const hint = buildFrom(ratios);
+    let cur: Build = { ...one, turn: best.turn };
+    let curS = best.s;
+    for (let pass = 0; pass < 2; pass++) {
+      for (const g of ["torso", "leg", "arm", "head"] as const) {
+        // primo giro: quello che dicono le fette, poi un passo per parte; secondo giro: ritocchi
+        const steps = pass === 0 ? [hint[g], hint[g] >= 1 ? 1.1 : 0.9] : [cur[g] * 0.95, cur[g] * 1.05];
+        for (const k of steps) {
+          const v = Math.max(0.7, Math.min(1.45, k));
+          if (Math.abs(v - cur[g]) < 0.01) continue;
+          const trial: Build = { ...cur, [g]: v };
+          const sc = score(trial);
+          if (sc > curS + 0.002) {
+            cur = trial;
+            curS = sc;
+          }
+        }
+      }
+    }
+    const n = archers.length;
+    const build = cur;
+    const after = curS;
+    return { build, before, after: Math.max(after, best.s), n };
+  } finally {
+    R.dispose();
+  }
+}
 
 /**
  * Pittore della sagoma 3D fuori schermo, in alta definizione (foto 4K, video 1080p): stesso corpo,
@@ -98,7 +229,7 @@ export async function sagomaPainter(W: number, H: number) {
   return {
     canvas: out,
     /** disegna la posa; smooth: inquadratura che segue piano (video), altrimenti esatta (foto) */
-    paint(o: { lm: Landmark[]; aspect: number; hand: Hand; gear: Gear | null; cal: BoneCal | null; time: number; smooth?: boolean; view?: typeof sagomaView; /** centro dell'inquadratura scelto dal modello (es. una mano), per i dettagli */ at?: (m: Model) => V3 }) {
+    paint(o: { lm: Landmark[]; aspect: number; hand: Hand; gear: Gear | null; cal: BoneCal | null; time: number; smooth?: boolean; view?: typeof sagomaView; /** centro dell'inquadratura scelto dal modello (es. una mano), per i dettagli */ at?: (m: Model) => V3; /** inquadratura "come il video" (con l'eventuale ingrandimento, in frazioni del riquadro) */ frameView?: { z: number; nx: number; ny: number } | null }) {
       const view = o.view ?? sagomaView;
       const model = buildModel(o.lm, o.aspect, o.hand, o.gear, o.cal, o.smooth ? memo : null, o.time);
       const g = ctx.createRadialGradient(W * 0.45, H * 0.35, 0, W * 0.45, H * 0.35, Math.max(W, H) * 0.8);
@@ -113,7 +244,10 @@ export async function sagomaPainter(W: number, H: number) {
       camSm = camSm && o.smooth
         ? { c: [camSm.c[0] + (model.center[0] - camSm.c[0]) * kc, camSm.c[1] + (model.height * 0.5 - camSm.c[1]) * kc, camSm.c[2] + (model.center[2] - camSm.c[2]) * kc], h: camSm.h + (model.height - camSm.h) * kc }
         : { c: [model.center[0], model.height * 0.5, model.center[2]], h: model.height };
-      const { VP, eye } = sceneCamera(o.at ? { c: o.at(model), h: camSm.h } : camSm, view, W, H);
+      const fv = o.frameView;
+      const { VP, eye } = fv && model.frame && !o.at
+        ? videoCamera(model.frame, camSm.c, view, W, H, { z: fv.z, x: fv.nx * W, y: fv.ny * H })
+        : sceneCamera(o.at ? { c: o.at(model), h: camSm.h } : camSm, view, W, H);
       R.clear(W, H);
       R.draw(model, VP, eye, o.time, view.layers, null, false);
       ctx.drawImage(gl, 0, 0);
@@ -146,7 +280,13 @@ export function Anatomy3D({
   inBox = false,
   mirror = false,
   transport,
+  view2d,
+  build,
 }: {
+  /** corporatura presa dall'aura dell'arciere (silhouette nel video): spessore di busto, braccia, gambe, testa */
+  build?: Build | null;
+  /** ingrandimento del video nel riquadro: la sagoma "come il video" lo segue */
+  view2d?: View2d | null;
   /** sinistra e destra del modello scambiate rispetto al video (lette al contrario): si raddrizzano per il 3D */
   mirror?: boolean;
   /** comandi del video, per guardarlo anche a schermo intero */
@@ -170,7 +310,12 @@ export function Anatomy3D({
   const layersRef = useRef(layers);
   layersRef.current = layers;
   // si parte come la ripresa del video (di fronte), fermi: si gira con il dito
-  const cam = useRef({ yaw: 0, pitch: 0.06, zoom: 1, auto: false, home: false });
+  // nel riquadro del video si parte "come il video": stessa inquadratura, punto su punto
+  const homePitch = inBox ? 0 : 0.06;
+  const cam = useRef({ yaw: 0, pitch: homePitch, zoom: 1, auto: false, home: false });
+  /** girata rispetto al video: compare «Come il video» per tornare davanti */
+  const [turned, setTurned] = useState(false);
+  const turnedRef = useRef(false);
   /** si sta girando o avvicinando con le dita: si usa il corpo leggero */
   const dragging = useRef(false);
   const [auto, setAuto] = useState(false);
@@ -224,10 +369,11 @@ export function Anatomy3D({
   // lunghezze vere delle ossa: dalla sequenza salvata o dai fotogrammi dell'analisi; dal vivo si
   // imparano dai fotogrammi che passano
   const fixedCal = useMemo<BoneCal | null>(() => {
-    if (calFrames && calFrames.length >= 8) return boneCal(mirror ? calFrames.map((f) => (f ? swapSides(f) : f)) : calFrames, aspect);
-    if (seq && seq.length >= 8) return boneCal(seq.map((f) => unpackLm(f.lm)), aspect);
+    const withBuild = (c: BoneCal) => (build ? { ...c, build } : c);
+    if (calFrames && calFrames.length >= 8) return withBuild(boneCal(mirror ? calFrames.map((f) => (f ? swapSides(f) : f)) : calFrames, aspect));
+    if (seq && seq.length >= 8) return withBuild(boneCal(seq.map((f) => unpackLm(f.lm)), aspect));
     return null;
-  }, [calFrames, seq, aspect, mirror]);
+  }, [calFrames, seq, aspect, mirror, build]);
   const live = useRef<{ frames: Landmark[][]; cal: BoneCal | null; n: number }>({ frames: [], cal: null, n: 0 });
   useEffect(() => {
     live.current = { frames: [], cal: null, n: 0 };
@@ -253,7 +399,9 @@ export function Anatomy3D({
       const H = ratio >= 1 ? Math.round(long / ratio / 2) * 2 : long;
       const painter = await sagomaPainter(W, H);
       if (!painter) throw new Error("3D");
-      painter.paint({ lm: shot.lm, aspect: shot.aspect, hand: shot.hand, gear: shot.gear, cal: shot.cal, time: shot.time });
+      const v2 = input.current.view2d;
+      const frameView = inBox ? { z: v2?.z ?? 1, nx: (v2?.x ?? 0) / Math.max(1, box.clientWidth), ny: (v2?.y ?? 0) / Math.max(1, box.clientHeight) } : null;
+      painter.paint({ lm: shot.lm, aspect: shot.aspect, hand: shot.hand, gear: shot.gear, cal: shot.cal, time: shot.time, frameView });
       const blob = await new Promise<Blob | null>((res) => painter.canvas.toBlob(res, "image/png"));
       painter.dispose();
       if (!blob) throw new Error("vuota");
@@ -266,8 +414,8 @@ export function Anatomy3D({
       window.setTimeout(() => setShotMsg(""), 3500);
     }
   }
-  const input = useRef({ lm, lmRef, seq, aspect, hand: effHand, gearRef, cal: fixedCal, mirror });
-  input.current = { lm, lmRef, seq, aspect, hand: effHand, gearRef, cal: fixedCal, mirror };
+  const input = useRef({ lm, lmRef, seq, aspect, hand: effHand, gearRef, cal: fixedCal, mirror, inBox, view2d: full ? null : (view2d ?? null) });
+  input.current = { lm, lmRef, seq, aspect, hand: effHand, gearRef, cal: fixedCal, mirror, inBox, view2d: full ? null : (view2d ?? null) };
 
   useEffect(() => {
     const canvas = glCanvas.current;
@@ -303,6 +451,7 @@ export function Anatomy3D({
     // si ridisegna solo quando cambia qualcosa (posa, camera, livelli, dimensioni): niente scatti
     // e niente batteria consumata a vuoto
     let lastTarget: Landmark[] | null = null;
+    let lastCal: BoneCal | null = null;
     let lastKey = "";
     let moving = false;
     let lastChange = -1e9;
@@ -326,6 +475,12 @@ export function Anatomy3D({
         target = seqAt(sq, time % end);
       } else target = ref?.current ?? still;
       if (target && mir) target = mirrorCache(target);
+      // ossa o corporatura nuove (fine dell'analisi, aura): si ricostruisce il corpo anche da fermi
+      if (fc !== lastCal) {
+        lastCal = fc;
+        moving = true;
+        lastChange = now;
+      }
       if (target && target !== lastTarget) {
         lastTarget = target;
         moving = true;
@@ -341,21 +496,30 @@ export function Anatomy3D({
         }
       }
       const c = cam.current;
+      const { inBox: boxed, view2d: v2 } = input.current;
+      const homeP = boxed ? 0 : 0.06;
       if (c.auto) c.yaw += dt * 0.35;
       else if (c.home) {
         // dopo «Ferma» si torna piano davanti, come nel video
         const tw = Math.round(c.yaw / (Math.PI * 2)) * Math.PI * 2;
         const k = 1 - Math.exp(-dt / 0.25);
         c.yaw += (tw - c.yaw) * k;
-        c.pitch += (0.06 - c.pitch) * k;
-        if (Math.abs(tw - c.yaw) < 0.002 && Math.abs(0.06 - c.pitch) < 0.002) {
+        c.pitch += (homeP - c.pitch) * k;
+        c.zoom += (1 - c.zoom) * k;
+        if (Math.abs(tw - c.yaw) < 0.002 && Math.abs(homeP - c.pitch) < 0.002 && Math.abs(1 - c.zoom) < 0.002) {
           c.yaw = tw;
-          c.pitch = 0.06;
+          c.pitch = homeP;
+          c.zoom = 1;
           c.home = false;
         }
       }
       const L0 = layersRef.current;
-      const key = `${c.yaw.toFixed(4)}|${c.pitch.toFixed(4)}|${c.zoom.toFixed(3)}|${L0.pelle}${L0.muscolo}${L0.osso}${L0.punti}${L0.quote}|${canvas.clientWidth}x${canvas.clientHeight}|${scale}|${bodyTick}|${R.gearReady()}`;
+      const off = Math.abs(Math.atan2(Math.sin(c.yaw), Math.cos(c.yaw))) > 0.03 || Math.abs(c.pitch - homeP) > 0.03 || Math.abs(c.zoom - 1) > 0.03;
+      if (off !== turnedRef.current && !c.auto) {
+        turnedRef.current = off;
+        setTurned(off);
+      }
+      const key = `${c.yaw.toFixed(4)}|${c.pitch.toFixed(4)}|${c.zoom.toFixed(3)}|${v2 ? `${v2.z},${v2.x},${v2.y}` : ""}|${L0.pelle}${L0.muscolo}${L0.osso}${L0.punti}${L0.quote}|${canvas.clientWidth}x${canvas.clientHeight}|${scale}|${bodyTick}|${R.gearReady()}`;
       // dopo un movimento si disegna ancora un attimo con il corpo leggero, poi una volta con quello pieno
       const fast = now - lastChange < 450 || dragging.current;
       if (!moving && key === lastKey && !playing && fast === lastFast) return;
@@ -416,7 +580,10 @@ export function Anatomy3D({
         ? { c: [camSm.c[0] + (model.center[0] - camSm.c[0]) * kc, camSm.c[1] + (model.height * 0.5 - camSm.c[1]) * kc, camSm.c[2] + (model.center[2] - camSm.c[2]) * kc], h: camSm.h + (model.height - camSm.h) * kc }
         : { c: [model.center[0], model.height * 0.5, model.center[2]], h: model.height };
       if (Math.abs(camSm.h - model.height) > 0.002) lastChange = now;
-      const { VP, eye } = sceneCamera(camSm, c, W, H);
+      // nel riquadro del video: inquadratura del video, punto su punto; altrimenti il corpo al centro
+      const { VP, eye } = boxed && model.frame
+        ? videoCamera(model.frame, camSm.c, c, W, H, v2 ? { z: v2.z, x: (v2.x * W) / Math.max(1, canvas.clientWidth), y: (v2.y * H) / Math.max(1, canvas.clientHeight) } : null)
+        : sceneCamera(camSm, c, W, H);
       const L = layersRef.current;
       // la vista scelta (angolo, distanza, livelli) vale anche per foto e video in alta definizione
       sagomaView.yaw = c.yaw;
@@ -485,7 +652,7 @@ export function Anatomy3D({
   const toggle = (k: Layer) => setLayers((l) => ({ ...l, [k]: !l[k] }));
   return (
     <div ref={boxRef} className={cx("overflow-hidden", full ? "fixed inset-0 z-[90] h-[100dvh] w-screen" : cx("relative w-full", inBox ? "" : "rounded-2xl", className))} style={{ background: "radial-gradient(ellipse at 45% 35%, #3f9fe6 0%, #1c6fc2 42%, #0b3f82 78%, #072a5c 100%)" }}>
-      <canvas ref={glCanvas} className="absolute inset-0 h-full w-full touch-none" aria-label="Analisi del gesto in 3D: corpo, scheletro e muscoli, da girare con il dito" />
+      <canvas ref={glCanvas} className={cx("absolute inset-0 h-full w-full", inBox && !full ? "touch-pan-y" : "touch-none")} aria-label="Analisi del gesto in 3D: corpo, scheletro e muscoli, da girare con il dito" />
       <canvas ref={hudCanvas} className="pointer-events-none absolute inset-0 h-full w-full" />
       <p className="pointer-events-none absolute inset-x-0 bottom-0 truncate px-2 text-center text-[0.45rem] leading-[0.7rem] text-white/50">{BODY_CREDIT}</p>
       {empty ? <p className="absolute inset-x-0 top-1/2 -translate-y-1/2 text-center text-sm text-white/80">In attesa della posa: avvia il video o scegli un fotogramma.</p> : null}
@@ -517,14 +684,28 @@ export function Anatomy3D({
           <button type="button" onClick={toggleFull} aria-pressed aria-label="Esci dallo schermo intero" className="min-h-9 rounded-full bg-[#5fd4ff]/35 px-3 text-xs font-semibold text-white ring-1 ring-[#5fd4ff]/70 backdrop-blur">
             Chiudi
           </button>
-        ) : (
-          // nell'anteprima solo l'icona, sotto «Gira»: in alto a destra c'è la scelta Scheletro / Sagoma
-          <button type="button" onClick={toggleFull} aria-label="Guarda a schermo intero" title="Schermo intero" className="grid h-9 w-9 basis-full place-items-start">
-            <span className="grid h-9 w-9 place-items-center rounded-full bg-black/45 text-white backdrop-blur">
+        ) : null}
+        <div className={cx("flex items-center gap-1", full ? "" : "basis-full")}>
+          {!full ? (
+            // nell'anteprima solo l'icona, sotto «Gira»: in alto a destra c'è la scelta Scheletro / Sagoma
+            <button type="button" onClick={toggleFull} aria-label="Guarda a schermo intero" title="Schermo intero" className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-black/45 text-white backdrop-blur">
               <Glyph name="expand" size={17} />
-            </span>
-          </button>
-        )}
+            </button>
+          ) : null}
+          {turned && !auto ? (
+            // girata o avvicinata con le dita: si torna all'inquadratura del video, punto su punto
+            <button
+              type="button"
+              onClick={() => {
+                cam.current.auto = false;
+                cam.current.home = true;
+              }}
+              className="min-h-9 rounded-full bg-black/45 px-3 text-xs font-semibold text-white backdrop-blur"
+            >
+              {inBox ? "Come il video" : "Di fronte"}
+            </button>
+          ) : null}
+        </div>
       </div>
       {full && transport ? (
         // a schermo intero anche il video: play, pausa, fotogramma per fotogramma e la linea del tempo
@@ -687,10 +868,8 @@ const HAND_LINKS: [number, number][] = [[0, 1], [1, 2], [2, 3], [3, 4], [0, 5], 
  * Lo scheletro dei punti rilevati nel video, sopra il corpo 3D: ogni articolazione è un punto
  * (lato dell'arco in azzurro, lato della corda in oro), le linee sono quelle dello scheletro del video
  */
-function drawJoints(ctx: CanvasRenderingContext2D, J: Record<number, V3>, proj: (p: V3) => [number, number, number], dpr: number, hand: Hand) {
-  // punti dispari (11, 13, 15...) = lato sinistro dell'arciere
-  const bowOdd = hand === "destro"; // per un destro l'arco è nella mano sinistra (punti dispari)
-  const tone = (i: number) => (i <= 10 ? "#ffffff" : (i % 2 === 1) === bowOdd ? "#5fd4ff" : "#ffd36e");
+function drawJoints(ctx: CanvasRenderingContext2D, J: Record<number, V3>, proj: (p: V3) => [number, number, number], dpr: number, _hand: Hand) {
+  // come lo scheletro sopra il video: linee bianche, sottili e trasparenti, per vedere il corpo sotto
   const P: Record<number, [number, number, number]> = {};
   for (const k of Object.keys(J)) {
     const i = Number(k);
@@ -708,27 +887,21 @@ function drawJoints(ctx: CanvasRenderingContext2D, J: Record<number, V3>, proj: 
     ctx.lineTo(q[0], q[1]);
     ctx.stroke();
   };
-  for (const [a, b] of BODY_LINKS) line(a, b, "rgba(4,20,34,0.45)", 1.7);
-  for (const [a, b] of BODY_LINKS) line(a, b, a <= 10 ? "rgba(255,255,255,0.85)" : tone(b), 0.8);
+  for (const [a, b] of BODY_LINKS) line(a, b, "rgba(255,255,255,0.55)", 0.7);
   for (const base of [33, 54]) {
     if (!J[base]) continue;
-    const col = base === 33 ? tone(15) : tone(16);
-    for (const [a, b] of HAND_LINKS) line(base + a, base + b, col, 0.45);
+    for (const [a, b] of HAND_LINKS) line(base + a, base + b, "rgba(255,255,255,0.45)", 0.4);
   }
   const dot = (i: number, r: number) => {
     const p = P[i];
     if (!p || p[2] <= 0) return;
-    ctx.fillStyle = "rgba(4,20,34,0.8)";
-    ctx.beginPath();
-    ctx.arc(p[0], p[1], (r + 0.6) * dpr, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = tone(i);
+    ctx.fillStyle = "rgba(255,255,255,0.8)";
     ctx.beginPath();
     ctx.arc(p[0], p[1], r * dpr, 0, Math.PI * 2);
     ctx.fill();
   };
-  for (const i of [0, 7, 8, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32]) dot(i, i >= 15 && i <= 22 ? 1 : 1.4);
-  for (const base of [33, 54]) if (J[base]) for (let k = 1; k < 21; k++) dot(base + k, 0.6);
+  for (const i of [0, 7, 8, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32]) dot(i, i >= 15 && i <= 22 ? 0.8 : 1.1);
+  for (const base of [33, 54]) if (J[base]) for (let k = 1; k < 21; k++) dot(base + k, 0.5);
 }
 
 /** etichetta con fondo scuro e bordo del colore della misura: piccola, per lasciare vedere il corpo */

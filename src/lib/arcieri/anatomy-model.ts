@@ -38,7 +38,9 @@ export type Hud = {
   feet: V3;
 };
 /** J e hand servono al corpo anatomico vero (anatomy-body): ogni segmento segue questi punti */
-export type Model = { parts: Part[]; hud: Hud; center: V3; height: number; J?: Record<number, V3>; hand?: Hand; /** dove guarda il viso (orizzontale): segue il bersaglio durante il tiro */ headF?: V3; /** testa in giù (+) o in su (-), radianti: dal naso rispetto alle orecchie nel fotogramma */ headPitch?: number; /** quanto la mano della corda è in presa sulla corda (0..1) e quanto quella dell'arco stringe l'impugnatura */ grip?: { draw: number; bow: number } };
+export type Model = { parts: Part[]; hud: Hud; center: V3; height: number; J?: Record<number, V3>; hand?: Hand; /** dove guarda il viso (orizzontale): segue il bersaglio durante il tiro */ headF?: V3; /** testa in giù (+) o in su (-), radianti: dal naso rispetto alle orecchie nel fotogramma */ headPitch?: number; /** quanto la mano della corda è in presa sulla corda (0..1) e quanto quella dell'arco stringe l'impugnatura */ grip?: { draw: number; bow: number }; /** il fotogramma del video nel piano del corpo (z = 0), in metri: sinistra, destra, sopra, sotto */ frame?: ImageFrame; /** corporatura trovata con l'aura (silhouette) dell'arciere */ build?: Build };
+/** dove sta il fotogramma del video nello spazio della sagoma: serve a guardarla "come il video", punto su punto */
+export type ImageFrame = { x0: number; x1: number; yTop: number; yBot: number };
 
 const add = (a: V3, b: V3): V3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
 const sub = (a: V3, b: V3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
@@ -94,7 +96,12 @@ const BONES = {
 } as const;
 type BoneName = keyof typeof BONES;
 /** lunghezze delle ossa dell'arciere, nelle stesse unità della sagoma */
-export type BoneCal = Partial<Record<BoneName, number>>;
+/**
+ * Corporatura dall'aura: quanto la sagoma va ingrossata (o assottigliata) di traverso per coprire la
+ * silhouette dell'arciere nel video (vestiti compresi). 1 = il corpo dell'atlante.
+ */
+export type Build = { torso: number; arm: number; leg: number; head: number; /** quanto credere alla girata di spalle e anche stimata dal video (0..1): la sceglie l'aura */ turn?: number };
+export type BoneCal = Partial<Record<BoneName, number>> & { build?: Build };
 const PAIRS: [BoneName, BoneName][] = [["omeroS", "omeroD"], ["avambraccioS", "avambraccioD"], ["femoreS", "femoreD"], ["tibiaS", "tibiaD"]];
 
 /** posizione nel piano dell'immagine, in metri, piedi a terra: è il video, senza stime */
@@ -116,7 +123,13 @@ function planar(lm: Landmark[], aspect: number) {
   const floorY = anklesOk ? Math.max(P(27).y, P(28).y) + 0.075 * s : hipY + 0.93 * s;
   const cx = shM.x;
   const XY = (i: number): V3 => [(P(i).x - cx) / s, (floorY - P(i).y) / s, 0];
-  return { P, s, XY, hipsOk, anklesOk };
+  const frame: ImageFrame = { x0: -cx / s, x1: (aspect - cx) / s, yTop: floorY / s, yBot: (floorY - 1) / s };
+  return { P, s, XY, hipsOk, anklesOk, frame };
+}
+
+/** il fotogramma intero nello spazio della sagoma (vedi planar) */
+export function imageFrame(lm: Landmark[], aspect: number): ImageFrame | null {
+  return planar(lm, aspect)?.frame ?? null;
 }
 
 /**
@@ -247,8 +260,9 @@ function bodyPointsRaw(lm: Landmark[], aspect: number, cal: BoneCal | null = nul
     return Math.sign(slope) * Math.min(len_ * 1.1, dz);
   };
   // spalle e anche: il busto girato rispetto alla camera
+  const turnGain = cal?.build?.turn ?? 1;
   const turn = (l: number, r: number, len_: number) => {
-    const dz = depth(l, r, len_) * 0.5;
+    const dz = depth(l, r, len_) * 0.5 * turnGain;
     out[l][2] = -dz;
     out[r][2] = dz;
   };
@@ -889,6 +903,8 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gea
     headPitch,
     // la mano dell'arco lo tiene sempre (anche con il braccio giù); la mano della corda si apre al rilascio
     grip: { draw: loose ? 0 : aimed.drawing, bow: Math.max(0.85, aimed.raised) },
+    frame: imageFrame(lm, aspect) ?? undefined,
+    build: cal?.build,
   };
 }
 

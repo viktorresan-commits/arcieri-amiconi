@@ -509,7 +509,8 @@ export function drawPro(ctx: CanvasRenderingContext2D, w: number, h: number, lm:
   ctx.save();
   ctx.lineCap = "round";
   // viso: linea degli occhi, delle orecchie, asse naso-bocca
-  const line = (a: number, b: number, color: string, wd = 1.3) => {
+  // come lo scheletro: linee bianche sottili e trasparenti (il colore resta solo alle etichette)
+  const line = (a: number, b: number, color: string, wd = 0.9) => {
     if (!seen(a) || !seen(b)) return;
     const p = at(a);
     const q = at(b);
@@ -520,23 +521,23 @@ export function drawPro(ctx: CanvasRenderingContext2D, w: number, h: number, lm:
     ctx.lineTo(q.x, q.y);
     ctx.stroke();
   };
-  line(3, 6, "rgba(103,232,249,0.9)");
-  line(7, 8, "rgba(103,232,249,0.55)");
-  line(9, 10, "rgba(244,114,182,0.9)");
+  line(3, 6, "rgba(255,255,255,0.55)");
+  line(7, 8, "rgba(255,255,255,0.4)");
+  line(9, 10, "rgba(255,255,255,0.55)");
   if (seen(0) && seen(9) && seen(10)) {
     const n = at(0);
     const mx = (at(9).x + at(10).x) / 2;
     const my = (at(9).y + at(10).y) / 2;
     const chinY = my + Math.max(4, my - n.y) * 1.15;
     ctx.setLineDash([3 * s, 3 * s]);
-    ctx.strokeStyle = "rgba(103,232,249,0.7)";
-    ctx.lineWidth = 1 * s;
+    ctx.strokeStyle = "rgba(255,255,255,0.45)";
+    ctx.lineWidth = 0.8 * s;
     ctx.beginPath();
     ctx.moveTo(n.x, n.y - 30 * s);
     ctx.lineTo(mx + (mx - n.x) * 0.6, chinY);
     ctx.stroke();
     // linea del mento: riferimento d'ancoraggio
-    ctx.strokeStyle = "rgba(230,179,37,0.85)";
+    ctx.strokeStyle = "rgba(230,179,37,0.6)";
     ctx.beginPath();
     ctx.moveTo(mx - 40 * s, chinY);
     ctx.lineTo(mx + 40 * s, chinY);
@@ -546,19 +547,19 @@ export function drawPro(ctx: CanvasRenderingContext2D, w: number, h: number, lm:
   for (const i of HEAD) {
     if (!seen(i)) continue;
     const p = at(i);
-    ctx.fillStyle = i === 0 ? "#fde68a" : i >= 9 ? "#f472b6" : "#67e8f9";
+    ctx.fillStyle = "rgba(255,255,255,0.8)";
     ctx.beginPath();
-    ctx.arc(p.x, p.y, (i === 0 ? 2.8 : 2.1) * s, 0, Math.PI * 2);
+    ctx.arc(p.x, p.y, (i === 0 ? 1.6 : 1.2) * s, 0, Math.PI * 2);
     ctx.fill();
   }
   // mani
-  for (const [a, b] of HAND_LINKS) line(a, b, "rgba(244,114,182,0.85)", 1.4);
+  for (const [a, b] of HAND_LINKS) line(a, b, "rgba(255,255,255,0.5)", 0.9);
   for (const i of [17, 18, 19, 20, 21, 22]) {
     if (!seen(i)) continue;
     const p = at(i);
-    ctx.fillStyle = "#f472b6";
+    ctx.fillStyle = "rgba(255,255,255,0.8)";
     ctx.beginPath();
-    ctx.arc(p.x, p.y, 2.2 * s, 0, Math.PI * 2);
+    ctx.arc(p.x, p.y, 1.3 * s, 0, Math.PI * 2);
     ctx.fill();
   }
   // angolo dei polsi: arco tra avambraccio e indice
@@ -574,7 +575,7 @@ export function drawPro(ctx: CanvasRenderingContext2D, w: number, h: number, lm:
     while (da > Math.PI) da -= 2 * Math.PI;
     while (da < -Math.PI) da += 2 * Math.PI;
     ctx.strokeStyle = color;
-    ctx.lineWidth = 2 * s;
+    ctx.lineWidth = 1 * s;
     ctx.beginPath();
     ctx.arc(W.x, W.y, 11 * s, a1, a1 + da, da < 0);
     ctx.stroke();

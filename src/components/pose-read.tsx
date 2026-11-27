@@ -1,9 +1,11 @@
 import { Glyph, IconLabel, StatusMark } from "./icons";
 import { Link } from "@tanstack/react-router";
-import { Anatomy3D, sagomaPainter } from "@/components/anatomy-3d";
-import { boneCal } from "@/lib/arcieri/anatomy-model";
+import { Anatomy3D, auraFit, sagomaPainter } from "@/components/anatomy-3d";
+import { boneCal, type Build } from "@/lib/arcieri/anatomy-model";
+import { auraFromMask, type Aura } from "@/lib/arcieri/aura";
 import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from "react";
 import { MediaPick } from "@/components/media-pick";
+import { cx } from "./kit";
 import { saveFile } from "@/lib/arcieri/native";
 import { saveGesture } from "@/lib/arcieri/gesture.api";
 import { ProPanel, drawPro, type ProSave } from "./pose-pro";
@@ -76,6 +78,8 @@ const MODELS: Record<Quality, string> = {
 const QUALITY_LABEL: Record<Quality, string> = { lite: "Veloce", full: "Preciso", heavy: "Massimo" };
 
 type Marker = { detect: (image: CanvasImageSource) => { landmarks?: Landmark[][] } };
+/** maschera della persona del modello di posa (MPMask): valori 0..1 nel riquadro letto */
+type SegMask = { width: number; height: number; getAsFloat32Array: () => Float32Array; close: () => void };
 const engines: Partial<Record<Quality, Promise<Marker>>> = {};
 
 function engine(q: Quality): Promise<Marker> {
@@ -91,6 +95,8 @@ function engine(q: Quality): Promise<Marker> {
           numPoses: 3,
           minPoseDetectionConfidence: 0.4,
           minPosePresenceConfidence: 0.4,
+          // nell'analisi completa anche la silhouette della persona: è l'aura dell'arciere per i calcoli
+          outputSegmentationMasks: q === "heavy",
         }) as Promise<Marker>;
       try {
         return await make("GPU");
@@ -298,6 +304,9 @@ export function PoseRead() {
   /** riquadro dell'arciere nell'ultimo fotogramma: serve a seguire sempre la stessa persona */
   const lastPerson = useRef<Rect | null>(null);
   const lostFor = useRef(0);
+  /** aura (silhouette) dell'arciere nell'ultimo fotogramma letto, quando la si chiede */
+  const lastAura = useRef<Aura | null>(null);
+  const wantAura = useRef(false);
   /** ultimo aggiornamento delle letture sullo schermo (si limitano durante la riproduzione) */
   const lastReadout = useRef(0);
   const samplesRef = useRef<Sample[]>(samples);
@@ -381,6 +390,8 @@ export function PoseRead() {
   const [cues, setCues] = useState<Cues>({});
   // il modello ha letto i lati al contrario (arciere di fronte letto come di spalle): il 3D si raddrizza
   const [mirror3d, setMirror3d] = useState(false);
+  /** corporatura della sagoma presa dall'aura dell'arciere, e quanto le silhouette coincidono prima e dopo */
+  const [auraRes, setAuraRes] = useState<{ build: Build; before: number; after: number } | null>(null);
   const cuesFor = useRef<{ src: string; job: Promise<Cues> } | null>(null);
   function soundCues(url: string): Promise<Cues> {
     if (cuesFor.current?.src === url) return cuesFor.current.job;
@@ -421,14 +432,35 @@ export function PoseRead() {
     ctx.drawImage(source, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
     let poses: Landmark[][] = [];
     let worlds: { x: number; y: number; z: number }[][] = [];
+    let masks: SegMask[] = [];
+    lastAura.current = null;
     try {
-      const res = marker.detect(canvas) as { landmarks?: Landmark[][]; worldLandmarks?: { x: number; y: number; z: number }[][] };
+      const res = marker.detect(canvas) as { landmarks?: Landmark[][]; worldLandmarks?: { x: number; y: number; z: number }[][]; segmentationMasks?: SegMask[] };
       poses = res.landmarks ?? [];
       worlds = res.worldLandmarks ?? [];
+      masks = res.segmentationMasks ?? [];
     } catch {
       poses = [];
     }
+    // la silhouette della persona scelta diventa l'aura (compatta); le maschere si liberano sempre
+    const takeAura = (idx: number) => {
+      try {
+        const m = masks[idx];
+        if (wantAura.current && m) lastAura.current = auraFromMask(m.getAsFloat32Array(), m.width, m.height, region);
+      } catch {
+        lastAura.current = null;
+      }
+      for (const m of masks) {
+        try {
+          m.close();
+        } catch {
+          /* già libera */
+        }
+      }
+      masks = [];
+    };
     if (!poses.length) {
+      takeAura(-1);
       if (!cropRef.current) autoBox.current = null; // perso: la prossima volta guardo tutto il fotogramma
       return null;
     }
@@ -460,9 +492,11 @@ export function PoseRead() {
       const r = Math.min(chosenBox.w * chosenBox.h, prevB.w * prevB.h) / Math.max(1e-6, Math.max(chosenBox.w * chosenBox.h, prevB.w * prevB.h));
       if ((d > 0.9 || r < 0.3) && lostFor.current < 12) {
         lostFor.current += 1;
+        takeAura(-1);
         return null;
       }
     }
+    takeAura(poses.indexOf(chosen));
     lostFor.current = 0;
     if (chosenBox) lastPerson.current = chosenBox;
     const world = worlds[poses.indexOf(chosen)];
@@ -485,6 +519,28 @@ export function PoseRead() {
     // sempre 133 punti (mani e viso a visibilità 0 se non cercati), così i fotogrammi si confrontano
     if (!detailRef.current || !extras) return withExtras(mapped, null, null, null);
     return detectExtras(source, W, H, mapped);
+  }
+
+  /** sceglie una dozzina di fotogrammi con l'aura, sparsi nel video, e adatta la corporatura della sagoma */
+  async function fitAura(out: Sample[], auras: Map<number, Aura>, aspect: number, mirror: boolean) {
+    const ok = (lm: Landmark[]) => [11, 12, 23, 24].every((i) => (lm[i]?.visibility ?? 0) > 0.6);
+    const pool: { lm: Landmark[]; aura: Aura }[] = [];
+    for (const sm of out) {
+      const a = auras.get(Math.round(sm.t * 1000));
+      if (a && sm.lm && ok(sm.lm)) pool.push({ lm: mirror ? swapSides(sm.lm) : sm.lm, aura: a });
+    }
+    if (pool.length < 3) return;
+    const pick: typeof pool = [];
+    const n = Math.min(12, pool.length);
+    for (let k = 0; k < n; k++) pick.push(pool[Math.floor(((k + 0.5) * pool.length) / n)]);
+    const hand3d = mirror ? otherHand(handRef.current) : handRef.current;
+    const frames = out.map((sm) => (sm.lm && mirror ? swapSides(sm.lm) : sm.lm));
+    try {
+      const res = await auraFit({ frames: pick, aspect, hand: hand3d, cal: boneCal(frames, aspect) });
+      if (res) setAuraRes(res);
+    } catch {
+      /* senza aura la sagoma resta con la corporatura dell'atlante */
+    }
   }
 
   function paintOverlay(lm: Landmark[] | null, draft?: Rect | null) {
@@ -698,6 +754,7 @@ export function PoseRead() {
     setSamples([]);
     setCues({});
     setMirror3d(false);
+    setAuraRes(null);
     setNow(null);
     setGear(null);
     gearRef.current = null;
@@ -807,13 +864,18 @@ export function PoseRead() {
       // dura di più ma la sagoma segue il video senza buchi e con la profondità più affidabile
       const step = Math.max(1 / 30, (to - from) / 600);
       const out: Sample[] = [];
+      const auras = new Map<number, Aura>();
       let prev: Landmark[] | null = null;
       // fotogrammi letti prima di sapere se i lati sono scambiati: si sistemano alla fine
       let undecided = 0;
       for (let t = from; t <= to + 1e-6; t += step) {
         if (cancel.current) break;
         await seekTo(video, Math.min(t, Math.max(0, duration - 0.02)));
+        // l'aura (silhouette) di un fotogramma ogni cinque basta ai calcoli e costa poco
+        wantAura.current = out.length % 5 === 0;
         let lm = await detectOn(video, W, H);
+        wantAura.current = false;
+        if (lastAura.current) auras.set(Math.round(video.currentTime * 1000), lastAura.current);
         if (sideSwap.current === null) undecided = out.length + 1;
         if (lm) lm = smoothLm(prev, lm);
         prev = lm;
@@ -845,6 +907,8 @@ export function PoseRead() {
         const clean = cleanSequence(out, handRef.current, W / H, H);
         out.splice(0, out.length, ...clean);
         result = out;
+        // aura: la sagoma prende la corporatura dell'arciere confrontando le silhouette (in sottofondo)
+        void fitAura(out, auras, W / H, sidesOk.mirror);
         // il suono si legge mentre il modello lavora; al massimo pochi secondi in più
         const heard = await Promise.race([sound, new Promise<Cues>((ok) => setTimeout(() => ok({}), 6000))]);
         setCues(heard);
@@ -1300,7 +1364,7 @@ export function PoseRead() {
             {/* una volta aperta la vista 3D resta pronta (nascosta): cambiare vista non la ricrea, niente scatti */}
             {used3d ? (
               <div className={`absolute inset-0 z-[1] ${look === "sagoma" ? "" : "hidden"}`}>
-                <Anatomy3D lmRef={lastLm} gearRef={gearRef} calFrames={calFrames} aspect={size.w / Math.max(1, size.h)} hand={effHand} mirror={mirror3d} transport={{ playing, time, duration, onToggle: toggle, onSeek: seek, step: frameStep }} inBox className="h-full" />
+                <Anatomy3D lmRef={lastLm} gearRef={gearRef} calFrames={calFrames} aspect={size.w / Math.max(1, size.h)} hand={effHand} mirror={mirror3d} transport={{ playing, time, duration, onToggle: toggle, onSeek: seek, step: frameStep }} view2d={zoomV} build={auraRes?.build ?? null} inBox className="h-full" />
               </div>
             ) : null}
             {zoomOn ? (
@@ -1325,6 +1389,11 @@ export function PoseRead() {
               </div>
             ) : null}
           </div>
+          {look === "sagoma" && auraRes ? (
+            <p className="text-xs text-muted">
+              Sagoma adattata alla silhouette dell'arciere: coincide al {Math.round(auraRes.after * 100)}% (prima {Math.round(auraRes.before * 100)}%). Corporatura: busto {Math.round(auraRes.build.torso * 100)}%, braccia {Math.round(auraRes.build.arm * 100)}%, gambe {Math.round(auraRes.build.leg * 100)}%.
+            </p>
+          ) : null}
 
           {kind === "video" ? (
             <div className="grid gap-2">
@@ -1611,6 +1680,10 @@ function Timeline({ samples, shots, time, duration, onSeek }: { samples: Sample[
   );
 }
 
+/** colore dello scheletro sopra il video: bianco trasparente, linee sottili */
+const SKEL_LINE = "rgba(255,255,255,0.55)";
+const SKEL_DOT = "rgba(255,255,255,0.8)";
+
 export function drawPose(ctx: CanvasRenderingContext2D, w: number, h: number, lm: Landmark[], hand: Hand, gear: Gear | null) {
   drawPoseBody(ctx, w, h, lm, hand, gear);
   drawExtras(ctx, w, h, lm);
@@ -1623,25 +1696,25 @@ function drawExtras(ctx: CanvasRenderingContext2D, w: number, h: number, lm: Lan
   ctx.lineCap = "round";
   for (const base of [HAND_L, HAND_R]) {
     if ((lm[base].visibility ?? 0) < 0.5) continue;
-    ctx.strokeStyle = "rgba(255,214,120,0.95)";
-    ctx.lineWidth = 1.1 * s;
+    ctx.strokeStyle = SKEL_LINE;
+    ctx.lineWidth = 0.8 * s;
     ctx.beginPath();
     for (const [a, b] of HAND_LINKS) {
       ctx.moveTo(lm[base + a].x * w, lm[base + a].y * h);
       ctx.lineTo(lm[base + b].x * w, lm[base + b].y * h);
     }
     ctx.stroke();
-    ctx.fillStyle = "#ffd678";
+    ctx.fillStyle = SKEL_DOT;
     for (let k = 0; k < 21; k++) {
       ctx.beginPath();
-      ctx.arc(lm[base + k].x * w, lm[base + k].y * h, (k % 4 === 0 ? 1.8 : 1.2) * s, 0, Math.PI * 2);
+      ctx.arc(lm[base + k].x * w, lm[base + k].y * h, (k % 4 === 0 ? 1.3 : 0.9) * s, 0, Math.PI * 2);
       ctx.fill();
     }
   }
   if ((lm[FACE0].visibility ?? 0) >= 0.5) {
     // contorno delle labbra (i primi 20 punti) e il resto come puntini
-    ctx.strokeStyle = "rgba(255,138,170,0.9)";
-    ctx.lineWidth = 1 * s;
+    ctx.strokeStyle = SKEL_LINE;
+    ctx.lineWidth = 0.8 * s;
     ctx.beginPath();
     for (let k = 0; k <= 20; k++) {
       const p = lm[FACE0 + (k % 20)];
@@ -1649,11 +1722,11 @@ function drawExtras(ctx: CanvasRenderingContext2D, w: number, h: number, lm: Lan
       else ctx.moveTo(p.x * w, p.y * h);
     }
     ctx.stroke();
-    ctx.fillStyle = "rgba(140,220,255,0.95)";
+    ctx.fillStyle = SKEL_DOT;
     for (let k = 20; k < FACE_IDS.length; k++) {
       const p = lm[FACE0 + k];
       ctx.beginPath();
-      ctx.arc(p.x * w, p.y * h, 1.1 * s, 0, Math.PI * 2);
+      ctx.arc(p.x * w, p.y * h, 0.8 * s, 0, Math.PI * 2);
       ctx.fill();
     }
   }
@@ -1665,8 +1738,8 @@ function drawPoseBody(ctx: CanvasRenderingContext2D, w: number, h: number, lm: L
   const { bow, draw } = sides(hand);
   ctx.lineCap = "round";
   if (gear?.arrow) {
-    ctx.strokeStyle = "#f97316";
-    ctx.lineWidth = 1.8 * s;
+    ctx.strokeStyle = "rgba(249,115,22,0.8)";
+    ctx.lineWidth = 1.1 * s;
     ctx.beginPath();
     ctx.moveTo(gear.arrow.x1 * w, gear.arrow.y1 * h);
     ctx.lineTo(gear.arrow.x2 * w, gear.arrow.y2 * h);
@@ -1676,8 +1749,8 @@ function drawPoseBody(ctx: CanvasRenderingContext2D, w: number, h: number, lm: L
     const dw = at(draw[2]);
     if (bw.v > 0.3 && dw.v > 0.3) {
       ctx.setLineDash([8 * s, 6 * s]);
-      ctx.strokeStyle = "rgba(244,241,234,0.8)";
-      ctx.lineWidth = 1.2 * s;
+      ctx.strokeStyle = "rgba(255,255,255,0.45)";
+      ctx.lineWidth = 0.9 * s;
       ctx.beginPath();
       ctx.moveTo(bw.x, bw.y);
       ctx.lineTo(dw.x, dw.y);
@@ -1686,15 +1759,16 @@ function drawPoseBody(ctx: CanvasRenderingContext2D, w: number, h: number, lm: L
     }
   }
   if (gear?.bow) {
-    ctx.strokeStyle = "#a3e635";
-    ctx.lineWidth = 1.8 * s;
+    ctx.strokeStyle = "rgba(163,230,53,0.8)";
+    ctx.lineWidth = 1.1 * s;
     ctx.beginPath();
     ctx.moveTo(gear.bow.x1 * w, gear.bow.y1 * h);
     ctx.lineTo(gear.bow.x2 * w, gear.bow.y2 * h);
     ctx.stroke();
   }
-  ctx.strokeStyle = "#4aa3ff";
-  ctx.lineWidth = 1.6 * s;
+  // scheletro: linee bianche, sottili e trasparenti, per vedere l'arciere sotto
+  ctx.strokeStyle = SKEL_LINE;
+  ctx.lineWidth = 1 * s;
   for (const [a, b] of LINKS) {
     if (!lm[a] || !lm[b]) continue;
     const p = at(a);
@@ -1707,19 +1781,17 @@ function drawPoseBody(ctx: CanvasRenderingContext2D, w: number, h: number, lm: L
   }
   const l = at(11);
   const r = at(12);
-  ctx.strokeStyle = "#e6b325";
-  ctx.lineWidth = 1.8 * s;
   ctx.beginPath();
   ctx.moveTo(l.x, l.y);
   ctx.lineTo(r.x, r.y);
   ctx.stroke();
+  ctx.fillStyle = SKEL_DOT;
   for (const i of JOINTS) {
     if (!lm[i]) continue;
     const p = at(i);
     if (p.v < 0.4) continue;
     ctx.beginPath();
-    ctx.fillStyle = i === draw[1] || i === bow[1] ? "#ef4444" : i >= 29 ? "#34d399" : i >= 17 && i <= 22 ? "#f472b6" : "#4aa3ff";
-    ctx.arc(p.x, p.y, (i >= 17 && i <= 22 ? 2 : 2.6) * s, 0, Math.PI * 2);
+    ctx.arc(p.x, p.y, (i >= 17 && i <= 22 ? 1.2 : 1.8) * s, 0, Math.PI * 2);
     ctx.fill();
   }
   const m = metricsOf(lm, hand, w / h, h);
@@ -1742,13 +1814,13 @@ function drawPoseBody(ctx: CanvasRenderingContext2D, w: number, h: number, lm: L
     const p = at(i);
     if (p.v < 0.4) return;
     ctx.strokeStyle = color;
-    ctx.lineWidth = 2.5 * s;
+    ctx.lineWidth = 1 * s;
     ctx.beginPath();
-    ctx.arc(p.x, p.y, 14 * s, 0, Math.PI * 2);
+    ctx.arc(p.x, p.y, 11 * s, 0, Math.PI * 2);
     ctx.stroke();
   };
-  ring(draw[1], "#c084fc");
-  ring(bow[1], "#e07a2f");
+  ring(draw[1], "rgba(192,132,252,0.6)");
+  ring(bow[1], "rgba(224,122,47,0.6)");
   if (m) {
     const de = at(draw[1]);
     const be = at(bow[1]);
@@ -2094,6 +2166,81 @@ function LivePose({ hand, quality, onRecorded }: { hand: Hand; quality: Quality;
   const [secs, setSecs] = useState(0);
   const [ratio, setRatio] = useState(9 / 16);
   const [saveState, setSaveState] = useState("");
+  /** a tutto schermo: la ripresa copre l'app (e, dove il telefono lo permette, le barre del sistema) */
+  const [full, setFull] = useState(false);
+  const shell = useRef<HTMLDivElement>(null);
+  /**
+   * Zoom: quello vero della fotocamera quando il telefono lo offre (il modello vede l'arciere più
+   * grande e la ripresa registrata è già ingrandita), altrimenti un ingrandimento dell'immagine
+   */
+  const [zoom, setZoomS] = useState(1);
+  const zoomRef = useRef(1);
+  const [hwZoom, setHwZoom] = useState<{ min: number; max: number; step: number } | null>(null);
+  const pinch = useRef<{ ptrs: Map<number, { x: number; y: number }>; d: number; z: number }>({ ptrs: new Map(), d: 0, z: 1 });
+
+  function setZoom(z: number) {
+    const hw = hwZoom;
+    const lo = hw ? hw.min : 1;
+    const hi = hw ? Math.min(hw.max, 10) : 4;
+    const v = Math.max(lo, Math.min(hi, hw ? Math.round(z / hw.step) * hw.step : z));
+    zoomRef.current = v;
+    setZoomS(v);
+    const track = stream.current?.getVideoTracks()[0];
+    if (hw && track) void track.applyConstraints({ advanced: [{ zoom: v } as unknown as MediaTrackConstraintSet] }).catch(() => {});
+  }
+
+  useEffect(() => {
+    if (!full) return;
+    const out = () => {
+      if (!document.fullscreenElement) setFull(false);
+    };
+    const esc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setFull(false);
+    };
+    document.addEventListener("fullscreenchange", out);
+    window.addEventListener("keydown", esc);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("fullscreenchange", out);
+      window.removeEventListener("keydown", esc);
+      document.body.style.overflow = prev;
+      if (document.fullscreenElement) void document.exitFullscreen?.().catch(() => {});
+    };
+  }, [full]);
+
+  function toggleFull() {
+    if (full) {
+      setFull(false);
+      return;
+    }
+    setFull(true);
+    void shell.current?.requestFullscreen?.({ navigationUI: "hide" }).catch(() => {});
+  }
+
+  // pizzico con due dita: zoom (della fotocamera se c'è, altrimenti dell'immagine)
+  function pinchDown(e: RPointerEvent<HTMLDivElement>) {
+    const p = pinch.current;
+    p.ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (p.ptrs.size === 2) {
+      const [a, b] = [...p.ptrs.values()];
+      p.d = Math.hypot(a.x - b.x, a.y - b.y);
+      p.z = zoomRef.current;
+    }
+  }
+  function pinchMove(e: RPointerEvent<HTMLDivElement>) {
+    const p = pinch.current;
+    if (!p.ptrs.has(e.pointerId)) return;
+    p.ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (p.ptrs.size !== 2 || !p.d) return;
+    const [a, b] = [...p.ptrs.values()];
+    setZoom(p.z * (Math.hypot(a.x - b.x, a.y - b.y) / p.d));
+  }
+  function pinchUp(e: RPointerEvent<HTMLDivElement>) {
+    const p = pinch.current;
+    p.ptrs.delete(e.pointerId);
+    if (p.ptrs.size < 2) p.d = 0;
+  }
 
   async function start(face = facing) {
     setErr("");
@@ -2106,12 +2253,36 @@ function LivePose({ hand, quality, onRecorded }: { hand: Hand; quality: Quality;
       v.srcObject = s;
       await v.play();
       setRatio((v.videoWidth || 9) / (v.videoHeight || 16));
+      // zoom vero della fotocamera, se il telefono lo dà
+      const track = s.getVideoTracks()[0];
+      const caps = (track?.getCapabilities?.() ?? {}) as unknown as { zoom?: { min: number; max: number; step?: number } };
+      if (caps.zoom && caps.zoom.max > caps.zoom.min) {
+        setHwZoom({ min: caps.zoom.min, max: caps.zoom.max, step: caps.zoom.step || 0.1 });
+        const z = (track.getSettings() as unknown as { zoom?: number }).zoom ?? caps.zoom.min;
+        zoomRef.current = z;
+        setZoomS(z);
+      } else {
+        setHwZoom(null);
+        zoomRef.current = 1;
+        setZoomS(1);
+      }
       setOn(true);
-      await engine(quality);
     } catch (e) {
       setErr(e instanceof Error && /Permission|NotAllowed/i.test(e.name + e.message) ? "Serve il permesso della fotocamera: consentilo nelle impostazioni del browser." : "Non riesco ad aprire la fotocamera.");
     }
   }
+
+  // il modello del corpo si prepara a parte: se non si scarica, la fotocamera resta aperta e lo si dice
+  useEffect(() => {
+    if (!on) return;
+    let alive = true;
+    engine(quality).catch(() => {
+      if (alive) setErr("Il modello del corpo non si scarica: controlla la connessione e riprova.");
+    });
+    return () => {
+      alive = false;
+    };
+  }, [on, quality]);
 
   function stop() {
     stream.current?.getTracks().forEach((t) => t.stop());
@@ -2269,15 +2440,39 @@ function LivePose({ hand, quality, onRecorded }: { hand: Hand; quality: Quality;
 
   const mirror = facing === "user";
   const ok = (good: boolean) => (good ? "text-emerald-300" : "text-amber-300");
+  // ingrandimento dell'immagine solo se la fotocamera non ha lo zoom vero
+  const cssZoom = hwZoom ? 1 : zoom;
+  const recBtn = recording ? (
+    <button type="button" onClick={() => rec.current?.r.stop()} className="flex min-h-12 items-center justify-center gap-2 rounded-full bg-red-600 px-5 text-sm font-semibold text-white">
+      <span className="h-3 w-3 rounded-sm bg-white" /> Ferma e analizza
+    </button>
+  ) : (
+    <button type="button" onClick={record} className="flex min-h-12 items-center justify-center gap-2 rounded-full bg-red-600/90 px-5 text-sm font-semibold text-white">
+      <span className="h-3 w-3 rounded-full bg-white" /> Registra
+    </button>
+  );
   return (
     <div className="grid gap-3">
       <div
-        ref={holder}
-        className="relative mx-auto w-full overflow-hidden rounded-2xl bg-black"
-        style={{ aspectRatio: `${ratio}`, maxHeight: "70vh", width: `min(100%, calc(70vh * ${ratio.toFixed(4)}))` }}
+        ref={shell}
+        className={full ? "fixed inset-0 z-[90] grid h-[100dvh] w-screen place-items-center bg-black" : "relative mx-auto w-full overflow-hidden rounded-2xl bg-black"}
+        style={full ? undefined : { aspectRatio: `${ratio}`, maxHeight: "70vh", width: `min(100%, calc(70vh * ${ratio.toFixed(4)}))` }}
+        onPointerDown={pinchDown}
+        onPointerMove={pinchMove}
+        onPointerUp={pinchUp}
+        onPointerCancel={pinchUp}
       >
-        <video ref={video} playsInline muted className="absolute inset-0 h-full w-full object-cover" style={{ transform: mirror ? "scaleX(-1)" : undefined }} />
-        <canvas ref={over} className="pointer-events-none absolute inset-0 h-full w-full" style={{ transform: mirror ? "scaleX(-1)" : undefined }} />
+      {/* la ripresa con il suo formato, intera nello schermo; scheletro e punti sopra, nello stesso riquadro */}
+      <div
+        ref={holder}
+        className={full ? "relative overflow-hidden" : "absolute inset-0 overflow-hidden"}
+        style={full ? { width: `min(100vw, calc(100dvh * ${ratio.toFixed(4)}))`, aspectRatio: `${ratio}`, touchAction: "none" } : { touchAction: on ? "pan-y" : undefined }}
+      >
+        <div className="absolute inset-0" style={{ transform: cssZoom > 1 ? `scale(${cssZoom})` : undefined }}>
+          <video ref={video} playsInline muted className="absolute inset-0 h-full w-full object-cover" style={{ transform: mirror ? "scaleX(-1)" : undefined }} />
+          <canvas ref={over} className="pointer-events-none absolute inset-0 h-full w-full" style={{ transform: mirror ? "scaleX(-1)" : undefined }} />
+        </div>
+      </div>
         {!on ? (
           <div className="absolute inset-0 grid place-items-center p-6 text-center">
             <div className="grid justify-items-center gap-3">
@@ -2287,16 +2482,33 @@ function LivePose({ hand, quality, onRecorded }: { hand: Hand; quality: Quality;
             </div>
           </div>
         ) : null}
+        {on ? (
+          // in alto a destra: zoom (anche con due dita) e schermo intero
+          <div className={cx("absolute right-2 flex items-center gap-1", full ? "top-[max(0.5rem,env(safe-area-inset-top))]" : "top-2")}>
+            <div className="flex items-center gap-0.5 rounded-full bg-black/55 p-1 text-xs font-semibold text-white backdrop-blur">
+              <button type="button" aria-label="Rimpicciolisci" onClick={() => setZoom(zoomRef.current / 1.25)} className="grid h-8 w-8 place-items-center rounded-full text-base">−</button>
+              <button type="button" aria-label="Zoom normale" onClick={() => setZoom(hwZoom ? hwZoom.min : 1)} className="min-h-8 rounded-full px-1 tabular-nums">{zoom.toFixed(1).replace(".", ",")}×</button>
+              <button type="button" aria-label="Ingrandisci" onClick={() => setZoom(zoomRef.current * 1.25)} className="grid h-8 w-8 place-items-center rounded-full text-base">+</button>
+            </div>
+            <button type="button" onClick={toggleFull} aria-label={full ? "Esci dallo schermo intero" : "Guarda a schermo intero"} className="grid h-10 w-10 place-items-center rounded-full bg-black/55 text-white backdrop-blur">
+              {full ? <span className="text-xs font-semibold">Chiudi</span> : <Glyph name="expand" size={17} />}
+            </button>
+          </div>
+        ) : null}
         {on && m ? (
-          <div className="absolute inset-x-2 bottom-2 grid grid-cols-3 gap-1 rounded-xl bg-black/60 p-1.5 text-center text-[0.7rem] text-white backdrop-blur">
+          <div className={cx("absolute inset-x-2 grid grid-cols-3 gap-1 rounded-xl bg-black/60 p-1.5 text-center text-[0.7rem] text-white backdrop-blur", full ? "bottom-[calc(max(1rem,env(safe-area-inset-bottom))+3.6rem)]" : "bottom-2")}>
             <span>Braccio arco<b className={`block font-display text-lg ${ok(m.bow >= 165)}`}>{m.bow.toFixed(0)}°</b></span>
             <span>Gomito in linea<b className={`block font-display text-lg ${ok(m.line >= 168)}`}>{m.line.toFixed(0)}°</b></span>
             <span>Spalle<b className={`block font-display text-lg ${ok(Math.abs(m.shoulder) <= 4)}`}>{Math.abs(m.shoulder).toFixed(0)}°</b></span>
           </div>
         ) : null}
-        {on && !lm ? <p className="absolute inset-x-0 top-2 text-center text-xs text-white/80">Cerco l'arciere…</p> : null}
+        {on && full ? (
+          // a schermo intero si registra da qui
+          <div className="absolute inset-x-0 bottom-[max(1rem,env(safe-area-inset-bottom))] flex justify-center">{recBtn}</div>
+        ) : null}
+        {on && !lm ? <p className="absolute inset-x-0 top-14 text-center text-xs text-white/80">Cerco l'arciere…</p> : null}
         {recording ? (
-          <span className="absolute left-2 top-2 flex items-center gap-1.5 rounded-full bg-black/60 px-2.5 py-1 text-xs font-semibold text-white">
+          <span className={cx("absolute left-2 flex items-center gap-1.5 rounded-full bg-black/60 px-2.5 py-1 text-xs font-semibold text-white", full ? "top-[max(0.5rem,env(safe-area-inset-top))]" : "top-2")}>
             <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-red-500" />REC {Math.floor(secs / 60)}:{String(secs % 60).padStart(2, "0")}
           </span>
         ) : null}

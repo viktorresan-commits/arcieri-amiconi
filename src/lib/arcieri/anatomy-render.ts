@@ -517,7 +517,7 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
   const segRows = new Float32Array(63 * 4);
   const curlBuf = new Float32Array(32);
   const fingBuf = new Float32Array(16);
-  const drawBody = (model: Model, VP: Float32Array, eye: V3, L: Layers, focus: Set<string> | null | undefined, time: number) => {
+  const drawBody = (model: Model, VP: Float32Array, eye: V3, L: Layers, focus: Set<string> | null | undefined, time: number, sil = false) => {
     if (!body || !model.J || !model.hand) return;
     const meta = body.meta;
     const sd = sides(model.hand);
@@ -542,10 +542,15 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
         grips.hook.k > 0.3 ? { side: grips.hook.side, base: grips.hook.side === "L" ? 33 : 54, at: pts.nock, hole: "hook" as const } : null,
       ]);
     }
+    // ossa e muscoli restano quelli dell'atlante; la corporatura dell'arciere (aura: grasso, vestiti) è nella pelle
     const mats = bodyMatrices(meta, J, look, grips, curlBuf, fingBuf);
+    const skinMats = model.build ? bodyMatrices(meta, J, look, grips, undefined, undefined, model.build) : mats;
     // matrici dei segmenti come tre righe ciascuna (la quarta è sempre 0 0 0 1)
     const nSeg = Math.min(21, meta.segments.length);
-    for (let i = 0; i < nSeg; i++) for (let r = 0; r < 3; r++) for (let c = 0; c < 4; c++) segRows[(i * 3 + r) * 4 + c] = mats[i * 16 + c * 4 + r];
+    const rows = (m: Float32Array) => {
+      for (let i = 0; i < nSeg; i++) for (let r = 0; r < 3; r++) for (let c = 0; c < 4; c++) segRows[(i * 3 + r) * 4 + c] = m[i * 16 + c * 4 + r];
+    };
+    rows(mats);
     const acts = new Map<string, number>();
     for (const p of model.parts) if (p.layer === "muscolo" && p.id) acts.set(p.id, Math.max(acts.get(p.id) ?? 0, p.act));
     const g = groupValues(meta, model.hand, acts, focus);
@@ -555,8 +560,8 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     gl.disable(gl.CULL_FACE);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     gl.depthMask(true);
-    // arco, corda e freccia: dal modello semplice (senza scartare facce)
-    drawProcedural(model.parts.filter((p) => p.layer === "arco" && !focus), VP, eye, 0);
+    // arco, corda e freccia: dal modello semplice (senza scartare facce); non nella silhouette del corpo
+    if (!sil) drawProcedural(model.parts.filter((p) => p.layer === "arco" && !focus), VP, eye, 0);
     gl.disableVertexAttribArray(loc.aP);
     gl.disableVertexAttribArray(loc.aN);
     gl.useProgram(bprog);
@@ -580,9 +585,29 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     gl.enable(gl.CULL_FACE);
     gl.cullFace(gl.BACK);
     gl.frontFace(gl.CCW);
+    const skinRows = () => {
+      if (skinMats === mats) return;
+      rows(skinMats);
+      gl.uniform4fv(bl.uSeg, segRows);
+    };
+    if (sil) {
+      // aura della sagoma: solo la pelle, piena (alfa saturo), senza fusione: la silhouette per i calcoli
+      skinRows();
+      gl.disable(gl.BLEND);
+      gl.colorMask(false, false, false, true);
+      drawBodyLayer("skin", 0, 40);
+      gl.colorMask(true, true, true, true);
+      gl.enable(gl.BLEND);
+      gl.disable(gl.CULL_FACE);
+      for (const a of bodyAttribs) if (a >= 0) gl.disableVertexAttribArray(a);
+      gl.useProgram(prog);
+      bound = "";
+      return;
+    }
     if (L.osso) drawBodyLayer("bone", 1, 1);
     if (L.muscolo) drawBodyLayer("muscle", 2, 1);
     if (L.pelle) {
+      skinRows();
       // pelle in due passate: solo profondità, poi il colore sulla superficie più esterna, sommato come vetro
       gl.colorMask(false, false, false, false);
       drawBodyLayer("skin", 0, 1);
@@ -628,6 +653,26 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     },
     hasBody() {
       return Boolean(bodies.pieno || bodies.leggero);
+    },
+    /**
+     * Aura della sagoma: la silhouette del corpo (solo pelle) vista con VP, W×H celle dall'alto in basso
+     * (1 = corpo). Non si vede: serve a confrontarla con la silhouette dell'arciere nel video.
+     */
+    silhouette(model: Model, VP: Float32Array, eye: V3, W: number, H: number): Uint8Array | null {
+      body = bodies.leggero ?? bodies.pieno ?? null;
+      if (!body || !model.J || !model.hand) return null;
+      gl.viewport(0, 0, W, H);
+      gl.clearColor(0, 0, 0, 0);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+      drawBody(model, VP, eye, { pelle: true, muscolo: false, osso: false }, null, 0, true);
+      const px = new Uint8Array(W * H * 4);
+      gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, px);
+      const out = new Uint8Array(W * H);
+      for (let y = 0; y < H; y++) {
+        const row = (H - 1 - y) * W;
+        for (let x = 0; x < W; x++) out[y * W + x] = px[(row + x) * 4 + 3] > 60 ? 1 : 0;
+      }
+      return out;
     },
     clear(W: number, H: number) {
       gl.viewport(0, 0, W, H);
