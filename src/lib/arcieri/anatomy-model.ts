@@ -9,7 +9,27 @@ import { archeryKit } from "./pose-kit";
 
 export type V3 = [number, number, number];
 export type Mode = 0 | 1 | 2 | 3; // 0 pelle (bordo luminoso), 1 osso, 2 muscolo, 3 materiale semplice
-export type Part = { mesh: "sphere" | "torus" | "spindle" | "tube"; m: Float32Array; nm: Float32Array; color: V3; mode: Mode; alpha: number; act: number; layer: "pelle" | "osso" | "muscolo" | "arco"; deep?: boolean; id?: string };
+/** mesh vere dell'arco lungo e della freccia di legno (public/models/arco-legno.bin) */
+export type GearMesh = "lbWood" | "lbGrip" | "arFletch" | "arShaft" | "arPoint" | "arTrim";
+export type Part = {
+  mesh: "sphere" | "torus" | "spindle" | "tube" | GearMesh;
+  m: Float32Array;
+  nm: Float32Array;
+  color: V3;
+  mode: Mode;
+  alpha: number;
+  act: number;
+  layer: "pelle" | "osso" | "muscolo" | "arco";
+  deep?: boolean;
+  id?: string;
+  /** arco e freccia: «real» = il modello vero (quando è caricato), «proc» = quello disegnato a tubi (finché no) */
+  alt?: "real" | "proc";
+};
+
+/** arco lungo vero (impugnatura nell'origine, +Y lungo l'arco, schiena verso +Z): mezza lunghezza e puntali */
+const LONGBOW = { half: 0.857, tipA: [0.028, -0.856, -0.195] as V3, tipB: [0.027, 0.858, -0.19] as V3 };
+/** freccia di legno vera: lunghezza dalla cocca alla punta */
+const WOOD_ARROW_LEN = 0.742;
 export type Hud = {
   pts: Record<string, V3>;
   labels: { at: V3; text: string; tone: "cyan" | "gold" | "warn" }[];
@@ -775,11 +795,25 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gea
     const mid = (s0 + s1) / 2;
     const r = Math.abs(mid) < 0.28 ? 0.018 : 0.011 - Math.abs(mid) * 0.004;
     push("tube", seg(curve(s0), curve(s1), r, r * 0.7, 1.04, u), WOOD, 3, 1, "arco");
+    parts[parts.length - 1].alt = "proc";
   }
   const tipU = curve(1);
   const tipD = curve(-1);
   push("tube", seg(tipU, nock, 0.0022, 0.0022, 1.0), [0.95, 0.95, 0.9], 3, 0.9, "arco");
+  parts[parts.length - 1].alt = "proc";
   push("tube", seg(tipD, nock, 0.0022, 0.0022, 1.0), [0.95, 0.95, 0.9], 3, 0.9, "arco");
+  parts[parts.length - 1].alt = "proc";
+  // arco lungo vero (Pyramid bow, signguy, CC0): stesse misure e stesso verso di quello a tubi, corda dai suoi puntali
+  const bowX = norm(cross(n, u));
+  const sBow = half / LONGBOW.half;
+  const bowPl = place(grip, bowX, n, u, sBow, sBow, sBow);
+  const realPart = (mesh: GearMesh, pl: { m: Float32Array; nm: Float32Array }, color: V3) => parts.push({ mesh, m: pl.m, nm: pl.nm, color, mode: 3, alpha: 1, act: 0, layer: "arco", alt: "real" });
+  realPart("lbWood", bowPl, [0.5, 0.29, 0.13]);
+  realPart("lbGrip", bowPl, [0.2, 0.12, 0.07]);
+  const onBow = (q: V3): V3 => add(grip, add(mul(bowX, q[0] * sBow), add(mul(n, q[1] * sBow), mul(u, q[2] * sBow))));
+  for (const tq of [LONGBOW.tipA, LONGBOW.tipB]) {
+    parts.push({ ...seg(onBow(tq), nock, 0.0022, 0.0022, 1.0), mesh: "tube", color: [0.95, 0.95, 0.9], mode: 3, alpha: 0.9, act: 0, layer: "arco", alt: "real" });
+  }
   // freccia: incoccata quando le dita sono sulla corda (in trazione o pronte a tirare)
   const nocked = Boolean(arrowSeen) || onString;
   if (nocked) {
@@ -796,7 +830,19 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gea
       if (along > gn * 0.8 && along < gn + 0.45) arrowTip = add(nock, mul(ua, along));
     }
     push("tube", seg(nock, arrowTip, 0.004, 0.004, 1.0), [0.98, 0.82, 0.35], 3, 1, "arco");
+    parts[parts.length - 1].alt = "proc";
     push("sphere", seg(nock, add(nock, mul(ua, 0.09)), 0.012, 0.003, 1.0, n), [0.95, 0.35, 0.3], 3, 0.9, "arco"); // alette
+    parts[parts.length - 1].alt = "proc";
+    // freccia di legno vera con le penne naturali: lunga come quella stimata, una penna (la guida) lontana dall'arco
+    const aLen = len(sub(arrowTip, nock));
+    const ax = perp(ua, leftOfBow);
+    const az = norm(cross(ax, ua));
+    const arPl = place(nock, ax, ua, az, 1, aLen / WOOD_ARROW_LEN, 1);
+    // nel modello l'asta di legno è «arTrim» e le legature di filo rosso sono «arShaft»
+    parts.push({ mesh: "arShaft", m: arPl.m, nm: arPl.nm, color: [0.55, 0.12, 0.1], mode: 3, alpha: 1, act: 0, layer: "arco", alt: "real" });
+    parts.push({ mesh: "arFletch", m: arPl.m, nm: arPl.nm, color: [0.62, 0.55, 0.47], mode: 3, alpha: 1, act: 0, layer: "arco", alt: "real" });
+    parts.push({ mesh: "arPoint", m: arPl.m, nm: arPl.nm, color: [0.3, 0.3, 0.32], mode: 3, alpha: 1, act: 0, layer: "arco", alt: "real" });
+    parts.push({ mesh: "arTrim", m: arPl.m, nm: arPl.nm, color: [0.78, 0.6, 0.38], mode: 3, alpha: 1, act: 0, layer: "arco", alt: "real" });
   }
 
   // ---------- quote ----------

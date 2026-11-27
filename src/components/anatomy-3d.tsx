@@ -72,6 +72,7 @@ export async function sagomaPainter(W: number, H: number) {
   // il corpo in piena definizione dell'atlante (si scarica la prima volta), altrimenti quello dello schermo
   const body = (await loadBody("hd")) ?? (await loadBody("pieno")) ?? (await loadBody("leggero"));
   if (body) R.setBody(body, "pieno");
+  await R.gearLoaded();
   const out = document.createElement("canvas");
   out.width = W;
   out.height = H;

@@ -2,7 +2,7 @@
  * Disegno WebGL del modello anatomico (pelle di vetro, ossa, muscoli con fibre e tendini).
  * Usato dalla vista 3D dell'analisi e dalle immagini dei muscoli per le zone del corpo.
  */
-import { v3, type Model, type Part, type V3 } from "./anatomy-model";
+import { v3, type GearMesh, type Model, type Part, type V3 } from "./anatomy-model";
 import { bodyMatrices, groupValues, type BodyBatch, type BodyData, type BodyLevel, type BodyMeta } from "./anatomy-body";
 import { flexInfo, flexValues, skinWithMuscles, type FlexInfo } from "./anatomy-flex";
 import { sides } from "./pose-analysis";
@@ -325,6 +325,51 @@ function flexOf(data: BodyData) {
   return f;
 }
 
+/**
+ * Arco lungo e freccia di legno (dal pacchetto CC0 «Pyramid bow and natural fletch arrows» di signguy):
+ * un file solo, letto una volta e condiviso da tutte le viste. Posizioni quantizzate, normali int8, indici uint16.
+ */
+type GearGeo = { name: GearMesh; pos: Float32Array; nor: Float32Array; idx: Uint16Array };
+let gearPromise: Promise<GearGeo[] | null> | null = null;
+function loadGear() {
+  gearPromise ??= fetch("/models/arco-legno.bin")
+    .then((r) => (r.ok ? r.arrayBuffer() : null))
+    .then((buf) => {
+      if (!buf) return null;
+      const dv = new DataView(buf);
+      const hl = dv.getUint32(0, true);
+      const head = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 4, hl))) as { meshes: { name: GearMesh; count: number; indices: number; lo: number[]; hi: number[] }[] };
+      let off = 4 + hl;
+      const pad = () => {
+        off += (4 - (off % 4)) % 4;
+      };
+      return head.meshes.map((m) => {
+        const q = new Uint16Array(buf, off, m.count * 3);
+        off += m.count * 6;
+        pad();
+        const nq = new Int8Array(buf, off, m.count * 4);
+        off += m.count * 4;
+        const idx = new Uint16Array(buf.slice(off, off + m.indices * 2));
+        off += m.indices * 2;
+        pad();
+        const pos = new Float32Array(m.count * 3);
+        const nor = new Float32Array(m.count * 3);
+        for (let i = 0; i < m.count; i++) {
+          for (let c = 0; c < 3; c++) {
+            pos[i * 3 + c] = m.lo[c] + (q[i * 3 + c] / 65535) * (m.hi[c] - m.lo[c]);
+            nor[i * 3 + c] = nq[i * 4 + c] / 127;
+          }
+        }
+        return { name: m.name, pos, nor, idx };
+      });
+    })
+    .catch(() => {
+      gearPromise = null;
+      return null;
+    });
+  return gearPromise;
+}
+
 export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
   const gl = canvas.getContext("webgl", { antialias: true, premultipliedAlpha: false, alpha: true, preserveDrawingBuffer: keep });
   if (!gl) return null;
@@ -365,7 +410,17 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, mesh.idx, gl.STATIC_DRAW);
     return { p, n, i, count: mesh.idx.length };
   };
-  const meshes = { sphere: upload(sphereMesh()), torus: upload(torusMesh()), spindle: upload(spindleMesh()), tube: upload(tubeMesh()) };
+  const meshes: Partial<Record<Part["mesh"], ReturnType<typeof upload>>> = { sphere: upload(sphereMesh()), torus: upload(torusMesh()), spindle: upload(spindleMesh()), tube: upload(tubeMesh()) };
+  // arco lungo e freccia di legno veri: finché il file non arriva restano quelli a tubi
+  let gearReady = false;
+  let disposed = false;
+  void loadGear()
+    .then((list) => {
+      if (disposed || !list) return;
+      for (const g of list) meshes[g.name] = upload(g);
+      gearReady = true;
+    })
+    .catch(() => {});
   // ---- corpo anatomico vero ----
   const bprog = gl.createProgram()!;
   gl.attachShader(bprog, sh(gl.VERTEX_SHADER, BVS));
@@ -420,7 +475,7 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
   let bound = "";
   const bind = (name: Part["mesh"]) => {
     if (bound === name) return;
-    const m = meshes[name];
+    const m = meshes[name]!;
     gl.bindBuffer(gl.ARRAY_BUFFER, m.p);
     gl.enableVertexAttribArray(loc.aP);
     gl.vertexAttribPointer(loc.aP, 3, gl.FLOAT, false, 0, 0);
@@ -431,6 +486,8 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     bound = name;
   };
   const one = (p: Part) => {
+    if (p.alt && (p.alt === "real") !== gearReady) return;
+    if (!meshes[p.mesh]) return;
     bind(p.mesh);
     gl.uniformMatrix4fv(loc.uM, false, p.m);
     gl.uniformMatrix3fv(loc.uNM, false, p.nm);
@@ -438,7 +495,7 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     gl.uniform1f(loc.uMode, p.mode);
     gl.uniform1f(loc.uAlpha, p.alpha);
     gl.uniform1f(loc.uAct, p.act);
-    gl.drawElements(gl.TRIANGLES, meshes[p.mesh].count, gl.UNSIGNED_SHORT, 0);
+    gl.drawElements(gl.TRIANGLES, meshes[p.mesh]!.count, gl.UNSIGNED_SHORT, 0);
   };
   const drawProcedural = (parts: Part[], VP: Float32Array, eye: V3, time: number) => {
     gl.useProgram(prog);
@@ -548,6 +605,11 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
       bodies[level] = { meta: data.meta, flex: flexOf(data), batches };
       bound = "";
     },
+    /** aspetta l'arco e la freccia veri (per le foto: un disegno solo, deve già averli) */
+    async gearLoaded() {
+      await loadGear();
+      return gearReady;
+    },
     hasBody() {
       return Boolean(bodies.pieno || bodies.leggero);
     },
@@ -603,6 +665,7 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
       gl.depthMask(true);
     },
     dispose() {
+      disposed = true;
       gl.getExtension("WEBGL_lose_context")?.loseContext();
     },
   };

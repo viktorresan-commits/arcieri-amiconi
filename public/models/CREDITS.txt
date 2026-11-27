@@ -2,3 +2,6 @@ archer-body.bin, archer-body.jpg, archer-top.jpg, archer-bottom.jpg, archer-shoe
   Corpo dell'arciere ricavato da un personaggio Adobe Fuse/Mixamo ("Man Muscular Tank Top Workout Shorts")
   fornito dal proprietario dell'app, convertito nel formato interno con pesi sulle ossa.
   Uso consentito all'interno di progetti e prodotti secondo i termini Mixamo; non è distribuito come modello separato.
+
+Arco lungo e freccia di legno dell'analisi del gesto (arco-legno.bin): "Pyramid bow and natural
+fletch arrows" di signguy, Blend Swap, licenza CC0 (pubblico dominio). Convertiti per l'app.
