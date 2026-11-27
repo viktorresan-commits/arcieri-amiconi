@@ -159,7 +159,21 @@ function poseAt(plan: Plan, t: number): { def: PoseDef; release: number | null; 
     const [name, d] = steps[i];
     if (t < acc + d) {
       const raw = (t - acc) / d;
-      const prev = POSES[steps[(i + steps.length - 1) % steps.length][0]];
+      const prevName = steps[(i + steps.length - 1) % steps.length][0];
+      const nextName = steps[(i + 1) % steps.length][0];
+      // trazione, mira, rilascio e accompagnamento seguono i movimenti veri
+      if (name === "trazione" || name === "allungo") {
+        const joined = name === "trazione" ? nextName === "allungo" : prevName === "trazione";
+        const start = name === "allungo" && joined ? acc - steps[i - 1][1] : acc;
+        const span = joined ? (name === "trazione" ? d + steps[i + 1][1] : steps[i - 1][1] + d) : d;
+        return { def: realDraw((t - start) / span), release, phase: PHASE_NAMES[name] ?? name };
+      }
+      if (name === "mira") return { def: realHold(t - acc), release, phase: PHASE_NAMES[name] ?? name };
+      if (name === "rilascio" || name === "accompagna") {
+        const start = name === "accompagna" && prevName === "rilascio" ? acc - steps[i - 1][1] : acc;
+        return { def: realRelease(t - start), release, phase: PHASE_NAMES[name] ?? name };
+      }
+      const prev = POSES[prevName];
       const cur = POSES[name];
       // il rilascio è uno scatto; il resto scorre morbido; nella mira resta un filo di espansione
       const k = name === "rilascio" ? Math.min(1, raw * 1.6) : easeIO(raw);
@@ -235,6 +249,57 @@ function mix(a: PoseDef, b: PoseDef, t: number): PoseDef {
     bend: lerp(a.bend ?? -1, b.bend ?? -1, t),
     holding: t < 0.5 ? a.holding : b.holding,
   };
+}
+
+/*
+ * Movimenti veri: tracce prese da un'animazione d'arco catturata (Kevin Iglesias, adattata allo
+ * scheletro 3D dell'app) e ridotte al profilo del disegno, in unità del disegno.
+ * Trazione: progresso 0-1, corda 0-1, spostamento della mano dell'arco (x, y), inclinazione dell'arco.
+ * Rilascio: secondi, mano dell'arco (x, y), inclinazione, mano della corda rispetto all'ancoraggio (x, y).
+ * Mira: secondi, respiro della mano dell'arco (y), espansione dietro (in unità).
+ */
+const REAL_DRAW: number[][] = [[0.0, 0, -0.5, -0.1, 2.7], [0.165, 0.015, -2.5, -0.5, 2.2], [0.335, 0.028, -4.3, -0.7, 1.7], [0.5, 0.117, -5.3, -0.7, 1.2], [0.665, 0.356, -5.0, -0.5, 0.7], [0.835, 0.764, -3.1, -0.3, 0.3], [1.0, 1, 0.0, -0.0, 0.0]];
+const REAL_RELEASE: number[][] = [[0, 0.0, -0.0, 0.0, 0.0, -0.0], [0.033, -0.2, -0.0, -0.1, -19.8, 1.1], [0.067, -0.8, -0.1, -0.6, -24.5, -2.5], [0.1, -1.7, -0.2, -1.2, -28.8, -7.1], [0.133, -2.6, -0.2, -2.0, -29.7, -7.2], [0.167, -3.2, -0.3, -2.9, -27.9, -5.1], [0.2, -3.3, -0.1, -3.6, -24.3, -2.2], [0.233, -2.9, 0.1, -4.1, -20.5, 1.0], [0.267, -2.7, -0.1, -4.3, -16.2, 4.5]];
+const REAL_HOLD: number[][] = [[0, -0.0, 0.0], [0.13, -0.18, -0.6], [0.27, -0.55, -0.75], [0.4, -0.99, -0.59], [0.53, -1.25, -0.17], [0.67, -1.35, 0.34], [0.8, -1.22, 0.78], [0.93, -0.85, 0.9], [1.07, -0.4, 0.76], [1.2, -0.1, 0.52], [1.33, -0.0, -0.0]];
+
+function track(rows: number[][], x: number): number[] {
+  if (x <= rows[0][0]) return rows[0];
+  for (let i = 1; i < rows.length; i += 1) {
+    if (x <= rows[i][0]) {
+      const a = rows[i - 1];
+      const b = rows[i];
+      const k = (x - a[0]) / (b[0] - a[0] || 1);
+      return a.map((v, j) => v + (b[j] - v) * k);
+    }
+  }
+  return rows[rows.length - 1];
+}
+
+/** trazione vera: la corda parte piano e accelera a metà, la mano dell'arco spinge e l'arco si raddrizza */
+function realDraw(k: number): PoseDef {
+  const kk = Math.max(0, Math.min(1, k));
+  const [, pull, gx, gy, a] = track(REAL_DRAW, kk);
+  const base = mix(POSES.predraw, POSES.allungo, easeIO(kk));
+  return { ...base, grip: p(base.grip.x + gx, base.grip.y + gy), bowAngle: base.bowAngle + a, pull: POSES.predraw.pull + (POSES.allungo.pull - POSES.predraw.pull) * pull };
+}
+
+/** mira: il respiro lento sposta appena la mano dell'arco, dietro continua l'espansione */
+function realHold(t: number): PoseDef {
+  const [, gy, ex] = track(REAL_HOLD, t % 1.33);
+  const m = POSES.mira;
+  return { ...m, grip: p(m.grip.x, m.grip.y + gy), pull: m.pull + ex * 0.004 };
+}
+
+const RELEASE_END = REAL_RELEASE[REAL_RELEASE.length - 1][0];
+/** rilascio vero: la mano della corda scatta indietro lungo il viso, l'arco reagisce e si inclina appena; poi l'accompagnamento */
+function realRelease(dt: number): PoseDef {
+  const at = (x: number): PoseDef => {
+    const [, gx, gy, a, hx, hy] = track(REAL_RELEASE, x);
+    const m = POSES.allungo;
+    return { ...m, grip: p(m.grip.x + gx, m.grip.y + gy), bowAngle: m.bowAngle + a, hand: p(ANCHOR.x + hx, ANCHOR.y + hy), pull: 0, hooked: false, hookW: 0, arrow: false };
+  };
+  if (dt < RELEASE_END) return at(dt);
+  return mix(at(RELEASE_END), POSES.accompagna, easeIO(Math.min(1, (dt - RELEASE_END) / 0.5)));
 }
 
 /** Due ossa: dalla spalla verso la mano, con il gomito dalla parte giusta. */
@@ -2314,10 +2379,7 @@ export function ArcherAvatar({ look, className = "h-72 w-auto", interactive = tr
     if (drive.released != null) {
       const dt = drive.released;
       // dopo il rilascio: accompagnamento e ritorno in posizione; la freccia nuova si prende prima del tiro dopo
-      def =
-        dt < 0.12 ? mix(POSES.allungo, POSES.rilascio, dt / 0.12)
-        : dt < 1.0 ? mix(POSES.rilascio, POSES.accompagna, Math.min(1, (dt - 0.12) / 0.6))
-        : mix(POSES.accompagna, POSES.riposo, easeIO(Math.min(1, (dt - 1.0) / 0.9)));
+      def = dt < 1.0 ? realRelease(dt) : mix(POSES.accompagna, POSES.riposo, easeIO(Math.min(1, (dt - 1.0) / 0.9)));
       const fade = dt > 1.0 ? 1 - easeIO(Math.min(1, (dt - 1.0) / 0.9)) : 1;
       def = { ...def, grip: p(def.grip.x, def.grip.y - lift * fade) };
     }
@@ -2350,7 +2412,7 @@ export function ArcherAvatar({ look, className = "h-72 w-auto", interactive = tr
     if (tapShot != null) {
       const dt = t - tapShot;
       if (dt < 1.3) {
-        def = dt < 0.25 ? mix(POSES[name], POSES.predraw, easeIO(dt / 0.25)) : dt < 0.6 ? mix(POSES.predraw, POSES.allungo, easeIO((dt - 0.25) / 0.35)) : dt < 0.72 ? mix(POSES.allungo, POSES.rilascio, (dt - 0.6) / 0.12) : mix(POSES.accompagna, POSES[name], easeIO((dt - 0.72) / 0.58));
+        def = dt < 0.25 ? mix(POSES[name], POSES.predraw, easeIO(dt / 0.25)) : dt < 0.6 ? realDraw((dt - 0.25) / 0.35) : dt < 0.9 ? realRelease(dt - 0.6) : mix(realRelease(0.3), POSES[name], easeIO((dt - 0.9) / 0.4));
         if (dt >= 0.6) flying = dt - 0.6;
       }
     }
