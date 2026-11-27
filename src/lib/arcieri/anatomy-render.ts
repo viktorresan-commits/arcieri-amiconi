@@ -8,6 +8,11 @@ import { flexInfo, flexValues, skinWithMuscles, type FlexInfo } from "./anatomy-
 import { loadGlb } from "./glb-geo";
 import { sides } from "./pose-analysis";
 import { bowGrip, drawHook, freeHand, handLength, loadHandRig, placeApply, skinHand, type HandRig, type Placement, type RigHand } from "./hand-rig";
+import { bodyBones, loadSkinBody, loadSkinDetail, skinMesh, type SkinBody, type SkinMesh } from "./skin-body";
+/** la grana della pelle si ripete 11 volte sul lato dell'immagine del corpo (circa 12 cm di pelle) */
+const SKIN_DETAIL_K = 11;
+/** sulle mani vere: la loro immagine è un ritaglio di 0,64 lati di quella del corpo, la stessa grana */
+const HAND_DETAIL_K = 7;
 
 export type Layers = { pelle: boolean; muscolo: boolean; osso: boolean };
 
@@ -429,8 +434,13 @@ void main(){ vW = aP; vN = aN; vUV = aUV; gl_Position = uVP * vec4(aP, 1.0); }`;
 const HFS = `${PREC}
 varying vec3 vW; varying vec3 vN; varying vec2 vUV;
 uniform vec3 uEye; uniform vec3 uSkin; uniform sampler2D uTex; uniform float uMeanL; uniform float uTexOn; uniform vec4 uCut;
+// 1 = colore dell'immagine così com'è (occhi); 0 = tono della pelle scelta con le luci dell'immagine
+uniform float uRaw;
 // il pezzo d'avambraccio della mano vera finisce dentro quello della sagoma (niente bordo frastagliato)
 uniform vec4 uBack;
+// grana della pelle (dal pacchetto pelle): r = luce, g = ruvidità, b = rossore (0,5 neutri) e normal map,
+// ripetute sulla pelle ogni uDetK lati dell'immagine
+uniform sampler2D uDet; uniform sampler2D uDnm; uniform float uDetOn; uniform float uDetK;
 vec3 tone(vec3 c){ c = clamp((c * (2.51 * c + 0.03)) / (c * (2.43 * c + 0.59) + 0.14), 0.0, 1.0); return pow(c, vec3(1.0 / 2.2)); }
 float wrapL(vec3 N, vec3 L, float w){ return max(0.0, (dot(N, L) + w) / (1.0 + w)); }
 void main(){
@@ -438,6 +448,29 @@ void main(){
   if (dot(uBack.xyz, uBack.xyz) > 0.5 && dot(vW, uBack.xyz) < uBack.w) discard;
   vec3 N = normalize(vN); vec3 V = normalize(uEye - vW);
   if (!gl_FrontFacing) N = -N;
+  float dL = 0.0; float dR = 0.0; float dS = 0.0;
+#ifdef HAS_DERIV
+  if (uDetOn > 0.5 && uRaw < 0.5) {
+    vec2 uv = vUV * uDetK;
+    vec2 du = dFdx(uv); vec2 dv = dFdy(uv);
+    // da vicino i pori e il rilievo fine; da lontano spariscono piano (niente sfarfallio)
+    float far = max(length(du), length(dv)) * 512.0;
+    float near = 1.0 - smoothstep(1.5, 9.0, far);
+    vec3 dt = texture2D(uDet, uv).rgb - 0.5;
+    vec3 nm = texture2D(uDnm, uv).rgb * 2.0 - 1.0;
+    // base tangente dalla superficie stessa (niente tangenti nei vertici)
+    vec3 p = vW * 100.0;
+    vec3 dp1 = dFdx(p); vec3 dp2 = dFdy(p);
+    vec3 dp2p = cross(dp2, N); vec3 dp1p = cross(N, dp1);
+    vec3 T = dp2p * du.x + dp1p * dv.x;
+    vec3 B = dp2p * du.y + dp1p * dv.y;
+    float im = inversesqrt(max(max(dot(T, T), dot(B, B)), 1e-20));
+    N = normalize(N + (T * nm.x + B * nm.y) * im * 1.3 * near);
+    // la stessa grana più larga (circa 3,5 volte): macchie e rossori che si vedono anche da lontano
+    vec3 dc = texture2D(uDet, vUV * uDetK * 0.29 + vec2(0.37, 0.61)).rgb - 0.5;
+    dL = dt.r * 0.9 + dc.r * 0.55; dR = dt.b * 0.9 + dc.b * 0.8; dS = dt.g;
+  }
+#endif
   float ndv = clamp(dot(N, V), 0.0, 1.0);
   vec3 Rt = normalize(cross(vec3(0.0, 1.0, 0.0), V) + vec3(1e-4, 0.0, 0.0)); vec3 Up = cross(V, Rt);
   vec3 L1 = normalize(-0.5 * Rt + 0.75 * Up + 0.55 * V); vec3 C1 = vec3(1.0, 0.95, 0.88) * 1.9;
@@ -449,8 +482,24 @@ void main(){
   // dipinte (nocche, unghie, pieghe)
   vec3 alb = mix(vec3(dot(uSkin, vec3(0.2126, 0.7152, 0.0722))), uSkin, 0.85);
   if (uTexOn > 0.5) {
-    float l = dot(texture2D(uTex, vUV).rgb, vec3(0.2126, 0.7152, 0.0722)) / uMeanL;
-    alb *= mix(1.0, clamp(l, 0.55, 1.35), 0.75);
+    vec3 tx = texture2D(uTex, vUV).rgb;
+    if (uRaw > 0.5) {
+      alb = pow(tx, vec3(2.2)) * 0.9;
+    } else {
+      float lt = dot(tx, vec3(0.2126, 0.7152, 0.0722));
+      float l = lt / uMeanL;
+      alb *= mix(1.0, clamp(l, 0.55, 1.35), 0.75);
+      // un poco del colore dipinto (labbra, guance) sul tono scelto
+      vec3 hue = tx / max(lt, 0.05);
+      alb = mix(alb, alb * clamp(hue, 0.6, 1.6), 0.35);
+      // la grana della pelle vera: pori, lentiggini, macchioline appena più rosse
+      alb *= (1.0 + dL) * vec3(1.0 + dR * 0.5, 1.0 - dR * 0.12, 1.0 - dR * 0.25);
+      // i pantaloncini del personaggio (grigi, senza colore) restano stoffa: grigio scuro
+      float mx = max(tx.r, max(tx.g, tx.b));
+      float sat = (mx - min(tx.r, min(tx.g, tx.b))) / max(mx, 1e-3);
+      float cloth = 1.0 - smoothstep(0.07, 0.15, sat);
+      alb = mix(alb, vec3(0.06, 0.065, 0.075) * (0.6 + 0.8 * lt), cloth);
+    }
   }
   float d1 = dot(N, L1);
   vec3 w = vec3(0.6, 0.32, 0.24);
@@ -460,6 +509,8 @@ void main(){
   float nh = max(dot(N, H), 0.0);
   float F = 0.028 + 0.972 * pow(1.0 - ndv, 5.0);
   float sp = (pow(nh, 28.0) * 0.5 + pow(nh, 110.0) * 0.7) * F * step(0.0, d1);
+  // dove la pelle è più ruvida il lucido si spegne, dove è liscia brilla un poco di più
+  sp *= clamp(1.0 - dS * 1.5, 0.4, 1.7);
   gl_FragColor = vec4(tone(alb * light + C1 * sp), 1.0);
 }`;
 
@@ -854,7 +905,7 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
   // ---- mani vere (pelle opaca) ----
   const hprog = gl.createProgram()!;
   gl.attachShader(hprog, sh(gl.VERTEX_SHADER, HVS));
-  gl.attachShader(hprog, sh(gl.FRAGMENT_SHADER, HFS));
+  gl.attachShader(hprog, sh(gl.FRAGMENT_SHADER, deriv ? "#extension GL_OES_standard_derivatives : enable\n#define HAS_DERIV 1\n" + HFS : HFS));
   gl.linkProgram(hprog);
   const handOk = Boolean(gl.getProgramParameter(hprog, gl.LINK_STATUS));
   const hl = {
@@ -869,13 +920,101 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     uTexOn: gl.getUniformLocation(hprog, "uTexOn"),
     uCut: gl.getUniformLocation(hprog, "uCut"),
     uBack: gl.getUniformLocation(hprog, "uBack"),
+    uRaw: gl.getUniformLocation(hprog, "uRaw"),
+    uDet: gl.getUniformLocation(hprog, "uDet"),
+    uDnm: gl.getUniformLocation(hprog, "uDnm"),
+    uDetOn: gl.getUniformLocation(hprog, "uDetOn"),
+    uDetK: gl.getUniformLocation(hprog, "uDetK"),
+  };
+  // grana della pelle (pacchetto pelle): due immagini piccole che si ripetono, con le mipmap
+  const detTex = gl.createTexture();
+  const dnmTex = gl.createTexture();
+  let detOn = false;
+  const upRepeat = (t: WebGLTexture | null, im: HTMLImageElement) => {
+    gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, im);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    gl.generateMipmap(gl.TEXTURE_2D);
+  };
+  const detLoaded: Promise<unknown> = !(handOk && deriv)
+    ? Promise.resolve()
+    : loadSkinDetail().then((d) => {
+      if (!d || disposed) return;
+      upRepeat(detTex, d.det);
+      upRepeat(dnmTex, d.nrm);
+      detOn = true;
+    });
+  /** la grana sulla pelle: k = quante volte si ripete sul lato dell'immagine della pelle */
+  const bindDetail = (k: number) => {
+    gl.uniform1f(hl.uDetOn, detOn ? 1 : 0);
+    gl.uniform1f(hl.uDetK, k);
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, detTex);
+    gl.uniform1i(hl.uDet, 2);
+    gl.activeTexture(gl.TEXTURE3);
+    gl.bindTexture(gl.TEXTURE_2D, dnmTex);
+    gl.uniform1i(hl.uDnm, 3);
+    gl.activeTexture(gl.TEXTURE0);
+  };
+  // corpo intero del personaggio (pelle chiusa) e i suoi occhi
+  let skinBody: SkinBody | null = null;
+  const bodyTex = gl.createTexture();
+  const eyeTex = gl.createTexture();
+  type MeshGpu = { pos: WebGLBuffer; nrm: WebGLBuffer; uv: WebGLBuffer; ib: WebGLBuffer; count: number; p: Float32Array; n: Float32Array; m: SkinMesh; /** senza la testa (visuale dall'occhio) */ ibNoHead?: WebGLBuffer; countNoHead?: number };
+  let bodyGpu: { body: MeshGpu; eyes: MeshGpu } | null = null;
+  const upTex = (t: WebGLTexture | null, im: HTMLImageElement) => {
+    gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, im);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
   };
   let rig: HandRig | null = null;
   const handTex = gl.createTexture();
   type HandGpu = { pos: WebGLBuffer; nrm: WebGLBuffer; uv: WebGLBuffer; ib: WebGLBuffer; count: number; p: Float32Array; n: Float32Array };
   const handGpu: Partial<Record<"L" | "R", HandGpu>> = {};
-  if (handOk)
-    void loadHandRig().then((r) => {
+  const meshGpu = (m: SkinMesh): MeshGpu => {
+    const mk = (data: ArrayBufferView, target: number, usage: number) => {
+      const b = gl.createBuffer()!;
+      gl.bindBuffer(target, b);
+      gl.bufferData(target, data, usage);
+      return b;
+    };
+    return { pos: mk(new Float32Array(m.n * 3), gl.ARRAY_BUFFER, gl.DYNAMIC_DRAW), nrm: mk(new Float32Array(m.n * 3), gl.ARRAY_BUFFER, gl.DYNAMIC_DRAW), uv: mk(m.uv, gl.ARRAY_BUFFER, gl.STATIC_DRAW), ib: mk(m.idx, gl.ELEMENT_ARRAY_BUFFER, gl.STATIC_DRAW), count: m.idx.length, p: new Float32Array(m.n * 3), n: new Float32Array(m.n * 3), m };
+  };
+  const skinLoaded: Promise<unknown> = !handOk
+    ? Promise.resolve()
+    : loadSkinBody().then((b) => {
+      if (!b || disposed) return;
+      skinBody = b;
+      bodyGpu = { body: meshGpu(b.body), eyes: meshGpu(b.eyes) };
+      // dall'occhio dell'arciere la testa non si disegna: i triangoli della testa (osso Head) si tolgono
+      const hi = b.names.indexOf("Head");
+      const m = b.body;
+      const headW = (v: number) => {
+        let w = 0;
+        for (let k = 0; k < 4; k++) if (m.jo[v * 4 + k] === hi) w += m.wt[v * 4 + k];
+        return w;
+      };
+      const keep: number[] = [];
+      for (let t = 0; t < m.idx.length; t += 3) if (headW(m.idx[t]) < 0.5 && headW(m.idx[t + 1]) < 0.5 && headW(m.idx[t + 2]) < 0.5) keep.push(m.idx[t], m.idx[t + 1], m.idx[t + 2]);
+      const ib = gl.createBuffer()!;
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib);
+      gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(keep), gl.STATIC_DRAW);
+      bodyGpu.body.ibNoHead = ib;
+      bodyGpu.body.countNoHead = keep.length;
+      if (b.image) upTex(bodyTex, b.image);
+      if (b.eyeImage) upTex(eyeTex, b.eyeImage);
+    });
+  const rigLoaded: Promise<unknown> = !handOk
+    ? Promise.resolve()
+    : loadHandRig().then((r) => {
       if (!r || disposed) return;
       rig = r;
       for (const s of ["L", "R"] as const) {
@@ -898,6 +1037,57 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
       }
     });
+  const drawMesh = (g: MeshGpu, tex: WebGLTexture | null, texOn: boolean, raw: boolean, meanL: number, noHead = false) => {
+    gl.uniform1f(hl.uMeanL, meanL);
+    gl.uniform1f(hl.uTexOn, texOn ? 1 : 0);
+    gl.uniform1f(hl.uRaw, raw ? 1 : 0);
+    gl.uniform4fv(hl.uBack, [0, 0, 0, 0]);
+    bindDetail(SKIN_DETAIL_K);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.uniform1i(hl.uTex, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, g.pos);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, g.p);
+    gl.enableVertexAttribArray(hl.aP);
+    gl.vertexAttribPointer(hl.aP, 3, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, g.nrm);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, g.n);
+    gl.enableVertexAttribArray(hl.aN);
+    gl.vertexAttribPointer(hl.aN, 3, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, g.uv);
+    if (hl.aUV >= 0) {
+      gl.enableVertexAttribArray(hl.aUV);
+      gl.vertexAttribPointer(hl.aUV, 2, gl.FLOAT, false, 0, 0);
+    }
+    const useNo = noHead && g.ibNoHead && g.countNoHead;
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, useNo ? g.ibNoHead! : g.ib);
+    gl.drawElements(gl.TRIANGLES, useNo ? g.countNoHead! : g.count, gl.UNSIGNED_SHORT, 0);
+  };
+  /** pelle vera chiusa: il corpo del personaggio mosso dai segmenti e dalle mani vere */
+  const drawSkinBody = (meta: BodyMeta, skinMats: Float32Array, hands: RigPose[], VP: Float32Array, eye: V3) => {
+    if (!skinBody || !bodyGpu) return false;
+    const bones = bodyBones(meta, skinBody, skinMats, hands.map((h) => ({ side: h.side, pl: h.pl, bones: h.bones })));
+    skinMesh(bodyGpu.body.m, bones, bodyGpu.body.p, bodyGpu.body.n);
+    skinMesh(bodyGpu.eyes.m, bones, bodyGpu.eyes.p, bodyGpu.eyes.n);
+    gl.useProgram(hprog);
+    gl.uniformMatrix4fv(hl.uVP, false, VP);
+    gl.uniform3fv(hl.uEye, eye);
+    gl.uniform3fv(hl.uSkin, skinLin);
+    gl.uniform4fv(hl.uCut, cutNow);
+    gl.disable(gl.BLEND);
+    gl.disable(gl.CULL_FACE);
+    gl.depthMask(true);
+    const fromEye = cutNow[3] > 0;
+    drawMesh(bodyGpu.body, bodyTex, Boolean(skinBody.image), false, skinBody.meanLuma, fromEye);
+    if (!fromEye) drawMesh(bodyGpu.eyes, eyeTex, Boolean(skinBody.eyeImage), true, 0.5);
+    gl.disableVertexAttribArray(hl.aP);
+    gl.disableVertexAttribArray(hl.aN);
+    if (hl.aUV >= 0) gl.disableVertexAttribArray(hl.aUV);
+    gl.enable(gl.BLEND);
+    gl.useProgram(prog);
+    bound = "";
+    return true;
+  };
   const drawHands = (hands: RigPose[], VP: Float32Array, eye: V3, back: Partial<Record<"L" | "R", number[]>>) => {
     if (!rig || !hands.length) return;
     gl.useProgram(hprog);
@@ -906,6 +1096,8 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     gl.uniform3fv(hl.uSkin, skinLin);
     gl.uniform1f(hl.uMeanL, rig.meanLuma);
     gl.uniform1f(hl.uTexOn, rig.image ? 1 : 0);
+    gl.uniform1f(hl.uRaw, 0);
+    bindDetail(HAND_DETAIL_K);
     gl.uniform4fv(hl.uCut, cutNow);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, handTex);
@@ -1178,7 +1370,13 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     }
     if (L.osso) drawBodyLayer("bone", 1, 1);
     if (L.muscolo) drawBodyLayer("muscle", 2, 1);
-    if (L.pelle && style === 2) {
+    if (L.pelle && style === 2 && hands.length && skinBody && bodyGpu) {
+      // pelle vera chiusa: il corpo intero del personaggio con le sue mani
+      for (const a of bodyAttribs) if (a >= 0) gl.disableVertexAttribArray(a);
+      drawSkinBody(meta, skinMats, hands, VP, eye);
+      gl.useProgram(bprog);
+      for (const a of bodyAttribs) if (a >= 0) gl.enableVertexAttribArray(a);
+    } else if (L.pelle && style === 2) {
       // pelle vera: opaca, scrive la profondità come un corpo pieno
       // senza scartare le facce girate: dove il corpo si piega non restano buchi
       skinRows();
@@ -1250,7 +1448,10 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     },
     /** aspetta l'arco e la freccia veri e il dettaglio dei muscoli (per le foto: un disegno solo, deve già averli) */
     async gearLoaded() {
-      await Promise.all([loadGear(), Promise.race([fibLoaded, new Promise((r) => setTimeout(r, 4000))])]);
+      // per le foto e i video in alta definizione: anche le mani vere e la pelle vera chiusa (con la sua
+      // grana), se no il primo disegno usa la pelle dell'atlante
+      const skin = Promise.all([rigLoaded, skinLoaded, detLoaded]).catch(() => undefined);
+      await Promise.all([loadGear(), Promise.race([Promise.all([fibLoaded, skin]), new Promise((r) => setTimeout(r, 6000))])]);
       return gearReady;
     },
     hasBody() {

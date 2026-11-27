@@ -293,6 +293,8 @@ function paintAimHud(ctx: CanvasRenderingContext2D, VP: Float32Array, info: AimI
 /** dall'occhio si vede il proprio corpo come è: pelle vera e opaca, niente muscoli né ossa */
 const AIM_LAYERS: Record<Layer, boolean> = { pelle: true, muscolo: false, osso: false, punti: false, quote: false };
 /** il tono di pelle scelto nell'avatar (se c'è), altrimenti quello del personaggio della prova 3D */
+/** con la pelle vera la sagoma è chiusa: dentro non si vedono muscoli e ossa, non si disegnano */
+const realLayers = (L: Record<Layer, boolean>): Record<Layer, boolean> => ({ ...L, pelle: true, muscolo: false, osso: false });
 function avatarSkin(): string | null {
   try {
     const raw = localStorage.getItem(AVATAR_KEY);
@@ -311,7 +313,7 @@ function aimFrame(model: Model, setup: AimSetup, distanceM: number, hand: Hand, 
 }
 
 /** la vista scelta nella sagoma 3D: la usano anche foto e video in alta definizione */
-export const sagomaView: { yaw: number; pitch: number; zoom: number; layers: Record<Layer, boolean>; style?: SagomaStyle } = {
+export const sagomaView: { yaw: number; pitch: number; zoom: number; layers: Record<Layer, boolean>; style?: SagomaStyle; /** pelle vera, chiusa e opaca, al posto del velo sopra muscoli e ossa */ real?: boolean } = {
   yaw: 0,
   pitch: 0.06,
   zoom: 1,
@@ -488,6 +490,11 @@ export async function sagomaPainter(W: number, H: number, quality: "hd" | "pieno
       const g = ctx.createRadialGradient(W * 0.45, H * 0.35, 0, W * 0.45, H * 0.35, Math.max(W, H) * 0.8);
       const st: SagomaStyle = view.style ?? 0;
       R.setStyle(st);
+      if (view.real) {
+        R.setStyle(2);
+        R.setSkin(avatarSkin());
+      }
+      const lay = view.real ? realLayers(view.layers) : view.layers;
       for (const [k, c] of BG[st]) g.addColorStop(k, c);
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.fillStyle = g;
@@ -504,10 +511,10 @@ export async function sagomaPainter(W: number, H: number, quality: "hd" | "pieno
         ? videoCamera(model.frame, camSm.c, view, W, H, { z: fv.z, x: fv.nx * W, y: fv.ny * H })
         : sceneCamera(o.at ? { c: o.at(model), h: camSm.h } : camSm, view, W, H);
       R.clear(W, H);
-      R.draw(model, VP, eye, o.time, view.layers, null, false);
+      R.draw(model, VP, eye, o.time, lay, null, false);
       paintStage(ctx, model, VP, W, H, st);
       ctx.drawImage(gl, 0, 0);
-      paintHud(ctx, model, VP, W, H, dpr, view.layers, o.time, st);
+      paintHud(ctx, model, VP, W, H, dpr, lay, o.time, st);
       // crediti dell'atlante (licenze CC BY e CC BY-SA): restano sull'immagine
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       if (o.credit === false) return true;
@@ -591,6 +598,24 @@ export function Anatomy3D({
   });
   const styleRef = useRef(style);
   styleRef.current = style;
+  // pelle vera (il corpo chiuso del personaggio, con la grana della pelle) o velo di vetro sull'anatomia
+  const [real, setRealS] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("sagoma-pelle-vera") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const realRef = useRef(real);
+  realRef.current = real;
+  const setReal = (v: boolean) => {
+    setRealS(v);
+    try {
+      localStorage.setItem("sagoma-pelle-vera", v ? "1" : "0");
+    } catch {
+      /* niente memoria: vale per ora */
+    }
+  };
   const setStyle = (v: SagomaStyle) => {
     setStyleS(v);
     try {
@@ -1132,14 +1157,16 @@ export function Anatomy3D({
       const { VP, eye } = boxed && model.frame
         ? videoCamera(model.frame, camSm.c, c, W, H, v2 ? { z: v2.z, x: (v2.x * W) / Math.max(1, canvas.clientWidth), y: (v2.y * H) / Math.max(1, canvas.clientHeight) } : null)
         : sceneCamera(camSm, c, W, H);
-      const L = layersRef.current;
+      const L = realRef.current ? realLayers(layersRef.current) : layersRef.current;
       // la vista scelta (angolo, distanza, livelli) vale anche per foto e video in alta definizione
       sagomaView.yaw = c.yaw;
       sagomaView.pitch = c.pitch;
       sagomaView.zoom = c.zoom;
-      sagomaView.layers = { ...L };
+      sagomaView.layers = { ...layersRef.current };
       sagomaView.style = styleRef.current;
-      R.setStyle(styleRef.current);
+      sagomaView.real = realRef.current;
+      R.setStyle(realRef.current ? 2 : styleRef.current);
+      if (realRef.current) R.setSkin(skinTone);
       lastShot.current = { lm: smooth, aspect: asp, hand: hd, gear: gr?.current ?? null, cal: fc ?? live.current.cal, time, pre: usedPre };
       if (!ready && !R.hasBody()) return;
       if (am.on) {
@@ -1382,7 +1409,13 @@ export function Anatomy3D({
               </button>
             ))
           : null}
-        {aim ? null : ([["pelle", "Corpo"], ["muscolo", "Muscoli"], ["osso", "Scheletro"], ["punti", "Punti"], ["quote", "Misure"]] as const).map(([k, label]) => (
+        {aim ? null : (
+          // pelle vera: il corpo chiuso, con la pelle scelta per l'avatar; spenta torna il velo sull'anatomia
+          <button type="button" aria-pressed={real} onClick={() => setReal(!real)} className={cx("min-h-8 rounded-full px-2.5 text-[0.7rem] font-semibold backdrop-blur", real ? chipOn : chipOff)}>
+            Pelle vera
+          </button>
+        )}
+        {aim ? null : ([["pelle", "Corpo"], ["muscolo", "Muscoli"], ["osso", "Scheletro"], ["punti", "Punti"], ["quote", "Misure"]] as const).filter(([k]) => !real || k === "punti" || k === "quote").map(([k, label]) => (
           <button key={k} type="button" aria-pressed={layers[k]} onClick={() => toggle(k)} className={cx("min-h-8 rounded-full px-2.5 text-[0.7rem] font-semibold backdrop-blur", layers[k] ? chipOn : chipOff)}>
             {label}
           </button>
