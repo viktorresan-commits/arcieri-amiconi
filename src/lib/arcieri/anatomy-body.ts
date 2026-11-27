@@ -25,7 +25,7 @@ export type BodyMeta = {
 };
 export type BodyData = { meta: BodyMeta; buf: ArrayBuffer };
 
-export const BODY_CREDIT = "Anatomia: BodyParts3D © DBCLS (CC BY 4.0) · Z-Anatomy (CC BY-SA 4.0)";
+export const BODY_CREDIT = "Anatomia: BodyParts3D © DBCLS (CC BY 4.0) · Z-Anatomy (CC BY-SA 4.0) · Arco Samik Sage: signguy (CC BY 3.0)";
 
 /** leggero: in movimento; pieno: fermo; hd: piena definizione dell'atlante, solo per foto e video in alta definizione */
 export type BodyLevel = "leggero" | "pieno" | "hd";
@@ -382,9 +382,9 @@ export function bodyMatrices(meta: BodyMeta, J: Record<number, V3>, look?: V3, g
     const s = g.side;
     const k = Math.min(1, g.k);
     curlK[s] = wrap
-      ? // mano dell'arco: le falangi come corde di un cerchio attorno all'impugnatura (3,6 × 3,4 cm più
-        // la carne delle dita): nocca 52°, seconda falange 82° (la terza segue), il buco resta largo 5 cm
-        { k, a1: (52 * Math.PI) / 180, a2: (82 * Math.PI) / 180, spread: 0 }
+      ? // mano dell'arco: le falangi come corde di un cerchio attorno al riser del ricurvo (4,2 × 4,8 cm più
+        // la carne delle dita): nocca 42°, seconda falange 66° (la terza segue)
+        { k, a1: (42 * Math.PI) / 180, a2: (66 * Math.PI) / 180, spread: 0 }
       : { k, a1: (14 * Math.PI) / 180, a2: (100 * Math.PI) / 180, spread: (9 * Math.PI) / 180 };
     if (wrap) {
       // mano dell'arco: le nocche in fila lungo l'impugnatura (indice in alto, sotto la freccia, mignolo in

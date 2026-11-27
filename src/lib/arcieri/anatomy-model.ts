@@ -10,7 +10,7 @@ import { archeryKit } from "./pose-kit";
 export type V3 = [number, number, number];
 export type Mode = 0 | 1 | 2 | 3; // 0 pelle (bordo luminoso), 1 osso, 2 muscolo, 3 materiale semplice
 /** mesh vere dell'arco lungo e della freccia di legno (public/models/arco-legno.bin) */
-export type GearMesh = "lbWood" | "lbGrip" | "arFletch" | "arShaft" | "arPoint" | "arTrim";
+export type GearMesh = "lbWood" | "lbGrip" | "arFletch" | "arShaft" | "arPoint" | "arTrim" | "sbRiser" | "sbDark" | "sbLight";
 export type Part = {
   mesh: "sphere" | "torus" | "spindle" | "tube" | GearMesh;
   m: Float32Array;
@@ -26,8 +26,12 @@ export type Part = {
   alt?: "real" | "proc";
 };
 
-/** arco lungo vero (impugnatura nell'origine, +Y lungo l'arco, schiena verso +Z): mezza lunghezza e puntali */
-const LONGBOW = { half: 0.857, tipA: [0.028, -0.856, -0.195] as V3, tipB: [0.027, 0.858, -0.19] as V3 };
+/**
+ * Ricurvo tradizionale Samik Sage (file dell'arco, in metri): mezza lunghezza tra i puntali, punto della
+ * presa (il centro del pugno, sotto la mensola), puntali della corda e appoggio della freccia sulla mensola,
+ * dal lato della finestra (+x per un destro).
+ */
+const SAMIK = { half: 0.776, grip: [0, 0.012, 0] as V3, tipA: [-0.001, 0.825, -0.128] as V3, tipB: [0, -0.727, -0.128] as V3, rest: [0.005, 0.072, 0.0] as V3 };
 /** freccia di legno vera: lunghezza dalla cocca alla punta */
 const WOOD_ARROW_LEN = 0.742;
 export type Hud = {
@@ -909,15 +913,20 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gea
   parts[parts.length - 1].alt = "proc";
   push("tube", seg(tipD, nock, 0.0022, 0.0022, 1.0), [0.95, 0.95, 0.9], 3, 0.9, "arco");
   parts[parts.length - 1].alt = "proc";
-  // arco lungo vero (Pyramid bow, signguy, CC0): stesse misure e stesso verso di quello a tubi, corda dai suoi puntali
+  // arco vero: il ricurvo tradizionale Samik Sage (riser di legno, flettenti laminati), con la presa nel
+  // pugno della mano dell'arco e la corda dai suoi puntali. Per un mancino è lo stesso arco a specchio
   const bowX = norm(cross(n, u));
-  const sBow = half / LONGBOW.half;
-  const bowPl = place(grip, bowX, n, u, sBow, sBow, sBow);
+  const sBow = half / SAMIK.half;
+  const mir = hand === "destro" ? 1 : -1;
+  const bowXm = mul(bowX, mir);
+  const bowO = sub(grip, add(mul(bowXm, SAMIK.grip[0] * sBow), add(mul(n, SAMIK.grip[1] * sBow), mul(u, SAMIK.grip[2] * sBow))));
+  const bowPl = place(bowO, bowXm, n, u, sBow, sBow, sBow);
   const realPart = (mesh: GearMesh, pl: { m: Float32Array; nm: Float32Array }, color: V3) => parts.push({ mesh, m: pl.m, nm: pl.nm, color, mode: 3, alpha: 1, act: 0, layer: "arco", alt: "real" });
-  realPart("lbWood", bowPl, [0.5, 0.29, 0.13]);
-  realPart("lbGrip", bowPl, [0.2, 0.12, 0.07]);
-  const onBow = (q: V3): V3 => add(grip, add(mul(bowX, q[0] * sBow), add(mul(n, q[1] * sBow), mul(u, q[2] * sBow))));
-  for (const tq of [LONGBOW.tipA, LONGBOW.tipB]) {
+  realPart("sbRiser", bowPl, [0.4, 0.25, 0.12]);
+  realPart("sbLight", bowPl, [0.33, 0.19, 0.09]);
+  realPart("sbDark", bowPl, [0.02, 0.02, 0.02]);
+  const onBow = (q: V3): V3 => add(bowO, add(mul(bowXm, q[0] * sBow), add(mul(n, q[1] * sBow), mul(u, q[2] * sBow))));
+  for (const tq of [SAMIK.tipA, SAMIK.tipB]) {
     parts.push({ ...seg(onBow(tq), nock, 0.0022, 0.0022, 1.0), mesh: "tube", color: [0.95, 0.95, 0.9], mode: 3, alpha: 0.9, act: 0, layer: "arco", alt: "real" });
   }
   // freccia: incoccata quando le dita sono sulla corda (in trazione o pronte a tirare)
@@ -933,7 +942,8 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gea
     // la freccia appoggia sul rest: sopra la mano dell'arco e accanto al legno, a sinistra
     // dell'arco per un destro (a destra per un mancino), non in mezzo alla presa
     const leftOfBow = norm(cross(n, u));
-    const restPt = add(add(grip, mul(n, 0.035)), mul(leftOfBow, hand === "destro" ? 0.022 : -0.022));
+    // sulla mensola del riser, contro la finestra
+    const restPt = onBow(SAMIK.rest);
     const ua = len(sub(restPt, nock)) > 0.1 ? norm(sub(restPt, nock)) : u;
     const gn = len(sub(restPt, nock));
     // la freccia sporge sempre oltre la presa; se il video la mostra, finisce dove finisce davvero

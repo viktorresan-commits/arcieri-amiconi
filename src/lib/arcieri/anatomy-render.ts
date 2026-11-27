@@ -5,6 +5,7 @@
 import { v3, type GearMesh, type Model, type Part, type V3 } from "./anatomy-model";
 import { bodyMatrices, groupValues, type BodyBatch, type BodyData, type BodyLevel, type BodyMeta } from "./anatomy-body";
 import { flexInfo, flexValues, skinWithMuscles, type FlexInfo } from "./anatomy-flex";
+import { loadGlb } from "./glb-geo";
 import { sides } from "./pose-analysis";
 
 export type Layers = { pelle: boolean; muscolo: boolean; osso: boolean };
@@ -352,10 +353,40 @@ function flexOf(data: BodyData) {
  * Arco lungo e freccia di legno (dal pacchetto CC0 «Pyramid bow and natural fletch arrows» di signguy):
  * un file solo, letto una volta e condiviso da tutte le viste. Posizioni quantizzate, normali int8, indici uint16.
  */
-type GearGeo = { name: GearMesh; pos: Float32Array; nor: Float32Array; idx: Uint16Array };
+type GearGeo = { name: GearMesh; pos: Float32Array; nor: Float32Array; idx: Uint16Array; uv?: Float32Array; image?: ImageBitmap | HTMLImageElement | null };
 let gearPromise: Promise<GearGeo[] | null> | null = null;
+/**
+ * Arco ricurvo tradizionale Samik Sage («Bow and Arrows» di signguy, CC BY 3.0): riser di legno vero
+ * (dalla foto del file), flettenti con laminato chiaro e vernice nera, pomelli. I pezzi con lo stesso
+ * materiale si uniscono in un solo blocco da disegnare.
+ */
+async function loadSamik(): Promise<GearGeo[]> {
+  const parts = await loadGlb("/prova3d/assets/archery/bow.glb");
+  const groups: Record<"sbRiser" | "sbDark" | "sbLight", { pos: number[]; nor: number[]; uv: number[]; idx: number[]; image: ImageBitmap | HTMLImageElement | null }> = {
+    sbRiser: { pos: [], nor: [], uv: [], idx: [], image: null },
+    sbDark: { pos: [], nor: [], uv: [], idx: [], image: null },
+    sbLight: { pos: [], nor: [], uv: [], idx: [], image: null },
+  };
+  for (const p of parts) {
+    const key = p.image ? "sbRiser" : /brown/i.test(p.material) ? "sbLight" : "sbDark";
+    const g = groups[key];
+    const base = g.pos.length / 3;
+    g.pos.push(...p.geo.pos);
+    g.nor.push(...p.geo.nor);
+    g.uv.push(...(p.geo.uv ?? new Float32Array((p.geo.pos.length / 3) * 2)));
+    for (const i of p.geo.idx) g.idx.push(i + base);
+    if (p.image) g.image = p.image;
+  }
+  return (Object.keys(groups) as (keyof typeof groups)[])
+    .filter((k) => groups[k].idx.length && groups[k].pos.length / 3 < 65536)
+    .map((k) => ({ name: k, pos: new Float32Array(groups[k].pos), nor: new Float32Array(groups[k].nor), uv: new Float32Array(groups[k].uv), idx: new Uint16Array(groups[k].idx), image: groups[k].image }));
+}
 function loadGear() {
-  gearPromise ??= fetch("/models/arco-legno.bin")
+  gearPromise ??= Promise.all([loadGearBin(), loadSamik().catch(() => [] as GearGeo[])]).then(([a, b]) => (a ? [...a, ...b] : b.length ? b : null));
+  return gearPromise;
+}
+function loadGearBin(): Promise<GearGeo[] | null> {
+  return fetch("/models/arco-legno.bin")
     .then((r) => (r.ok ? r.arrayBuffer() : null))
     .then((buf) => {
       if (!buf) return null;
@@ -386,12 +417,66 @@ function loadGear() {
         return { name: m.name, pos, nor, idx };
       });
     })
-    .catch(() => {
-      gearPromise = null;
-      return null;
-    });
-  return gearPromise;
+    .catch(() => null);
 }
+
+/* attrezzatura vera (arco, freccia): materiali propri, con la stessa luce da studio del corpo */
+const GVS = `
+attribute vec3 aP; attribute vec3 aN; attribute vec2 aUV;
+uniform mat4 uVP; uniform mat4 uM; uniform mat3 uNM;
+varying vec3 vW; varying vec3 vN; varying vec3 vO; varying vec2 vUV;
+void main(){ vec4 w = uM * vec4(aP, 1.0); vW = w.xyz; vN = normalize(uNM * aN); vO = aP; vUV = aUV; gl_Position = uVP * w; }`;
+const GFS = `${PREC}
+varying vec3 vW; varying vec3 vN; varying vec3 vO; varying vec2 vUV;
+uniform vec3 uEye; uniform vec3 uColor; uniform float uKind; uniform sampler2D uTex;
+vec3 tone(vec3 c){ c = clamp((c * (2.51 * c + 0.03)) / (c * (2.43 * c + 0.59) + 0.14), 0.0, 1.0); return pow(c, vec3(1.0 / 2.2)); }
+float wrapL(vec3 N, vec3 L, float w){ return max(0.0, (dot(N, L) + w) / (1.0 + w)); }
+void main(){
+  vec3 N = normalize(vN); vec3 V = normalize(uEye - vW);
+  if (dot(N, V) < 0.0) N = -N;
+  float ndv = clamp(dot(N, V), 0.0, 1.0);
+  vec3 Rt = normalize(cross(vec3(0.0, 1.0, 0.0), V) + vec3(1e-4, 0.0, 0.0)); vec3 Up = cross(V, Rt);
+  vec3 L1 = normalize(-0.5 * Rt + 0.75 * Up + 0.55 * V); vec3 C1 = vec3(1.0, 0.95, 0.88) * 1.9;
+  vec3 L2 = normalize(0.8 * Rt + 0.1 * Up + 0.45 * V); vec3 C2 = vec3(0.70, 0.80, 1.0) * 0.45;
+  vec3 L3 = normalize(0.3 * Rt + 0.45 * Up - 0.85 * V);
+  vec3 amb = mix(vec3(0.12, 0.10, 0.09), vec3(0.24, 0.26, 0.30), 0.5 + 0.5 * N.y);
+  vec3 H = normalize(L1 + V);
+  vec3 alb = uColor; float spec = 0.08; float gloss = 24.0;
+  if (uKind < 0.5) {
+    // tinta unita (impugnatura di cuoio)
+    spec = 0.05;
+  } else if (uKind < 1.5) {
+    // legno del riser dalla foto: verniciato, lucido
+    alb = pow(texture2D(uTex, vUV).rgb, vec3(2.2));
+    spec = 0.28; gloss = 60.0;
+  } else if (uKind < 2.5) {
+    // legno con la venatura lungo il pezzo (asta della freccia, laminato dei flettenti)
+    float g = sin(vO.y * 260.0 + sin(vO.x * 900.0 + vO.z * 700.0) * 2.2 + sin(vO.y * 37.0) * 3.0);
+    alb = uColor * (0.84 + 0.16 * g);
+    spec = 0.14; gloss = 36.0;
+  } else if (uKind < 3.5) {
+    // penne naturali barrate (tacchino): fasce chiare e scure, opache con un velo di lucido
+    float bar = smoothstep(0.3, 0.7, fract(vO.y * 42.0 + vO.x * 9.0 + vO.z * 9.0));
+    alb = mix(vec3(0.46, 0.37, 0.27), vec3(0.09, 0.07, 0.055), bar * 0.85);
+    spec = 0.06; gloss = 10.0;
+  } else if (uKind < 4.5) {
+    // punta d'acciaio
+    alb = vec3(0.40, 0.41, 0.43); spec = 0.75; gloss = 90.0;
+  } else if (uKind < 5.5) {
+    // legature di filo rosso
+    alb = vec3(0.42, 0.025, 0.03) * (0.78 + 0.22 * sin(vO.y * 2400.0));
+    spec = 0.12; gloss = 22.0;
+  } else {
+    // vernice nera lucida (flettenti, pomelli)
+    alb = vec3(0.012, 0.012, 0.013); spec = 0.55; gloss = 110.0;
+  }
+  vec3 light = C1 * wrapL(N, L1, 0.15) + C2 * wrapL(N, L2, 0.25) + amb;
+  float fres = 0.04 + 0.96 * pow(1.0 - ndv, 5.0);
+  vec3 col = alb * light + C1 * (pow(max(dot(N, H), 0.0), gloss) * spec + fres * spec * 0.25) + vec3(0.95, 0.97, 1.0) * pow(1.0 - ndv, 3.0) * max(0.0, dot(N, L3) + 0.2) * 0.25;
+  gl_FragColor = vec4(tone(col), 1.0);
+}`;
+/** materiale di ogni pezzo dell'attrezzatura vera: 0 tinta, 1 foto, 2 legno, 3 penne, 4 acciaio, 5 filo, 6 vernice nera */
+const GEAR_KIND: Partial<Record<GearMesh, number>> = { sbRiser: 1, sbDark: 6, sbLight: 2, lbWood: 2, lbGrip: 0, arTrim: 2, arShaft: 5, arFletch: 3, arPoint: 4 };
 
 export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
   const gl = canvas.getContext("webgl", { antialias: true, premultipliedAlpha: false, alpha: true, preserveDrawingBuffer: keep });
@@ -437,10 +522,56 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
   // arco lungo e freccia di legno veri: finché il file non arriva restano quelli a tubi
   let gearReady = false;
   let disposed = false;
+  // attrezzatura vera: un programma suo, con le coordinate della foto del legno
+  const gprog = gl.createProgram()!;
+  gl.attachShader(gprog, sh(gl.VERTEX_SHADER, GVS));
+  gl.attachShader(gprog, sh(gl.FRAGMENT_SHADER, GFS));
+  gl.linkProgram(gprog);
+  const gearOk = Boolean(gl.getProgramParameter(gprog, gl.LINK_STATUS));
+  const gloc = {
+    aP: gl.getAttribLocation(gprog, "aP"),
+    aN: gl.getAttribLocation(gprog, "aN"),
+    aUV: gl.getAttribLocation(gprog, "aUV"),
+    uVP: gl.getUniformLocation(gprog, "uVP"),
+    uM: gl.getUniformLocation(gprog, "uM"),
+    uNM: gl.getUniformLocation(gprog, "uNM"),
+    uEye: gl.getUniformLocation(gprog, "uEye"),
+    uColor: gl.getUniformLocation(gprog, "uColor"),
+    uKind: gl.getUniformLocation(gprog, "uKind"),
+    uTex: gl.getUniformLocation(gprog, "uTex"),
+  };
+  const gmeshes: Partial<Record<GearMesh, { p: WebGLBuffer; n: WebGLBuffer; t: WebGLBuffer; i: WebGLBuffer; count: number; tex: WebGLTexture | null }>> = {};
+  const texOf = (img: ImageBitmap | HTMLImageElement) => {
+    // la foto si porta a misure potenza di due (1024×256): così si può filtrare bene anche da lontano
+    const cv = document.createElement("canvas");
+    cv.width = 1024;
+    cv.height = 256;
+    const c2 = cv.getContext("2d");
+    if (!c2) return null;
+    c2.drawImage(img, 0, 0, cv.width, cv.height);
+    const t = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, cv);
+    gl.generateMipmap(gl.TEXTURE_2D);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    return t;
+  };
   void loadGear()
     .then((list) => {
       if (disposed || !list) return;
-      for (const g of list) meshes[g.name] = upload(g);
+      for (const g of list) {
+        meshes[g.name] = upload(g);
+        if (!gearOk) continue;
+        const t = gl.createBuffer()!;
+        gl.bindBuffer(gl.ARRAY_BUFFER, t);
+        gl.bufferData(gl.ARRAY_BUFFER, g.uv ?? new Float32Array((g.pos.length / 3) * 2), gl.STATIC_DRAW);
+        const m = meshes[g.name]!;
+        gmeshes[g.name] = { p: m.p, n: m.n, t, i: m.i, count: m.count, tex: g.image ? texOf(g.image) : null };
+      }
       gearReady = true;
     })
     .catch(() => {});
@@ -522,6 +653,43 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     gl.uniform1f(loc.uAct, p.act);
     gl.drawElements(gl.TRIANGLES, meshes[p.mesh]!.count, gl.UNSIGNED_SHORT, 0);
   };
+  /** arco e freccia veri con i loro materiali (dopo il resto, con la stessa camera) */
+  const drawGear = (parts: Part[], VP: Float32Array, eye: V3) => {
+    if (!gearOk || !gearReady) return;
+    const list = parts.filter((p) => p.alt === "real" && gmeshes[p.mesh as GearMesh]);
+    if (!list.length) return;
+    gl.useProgram(gprog);
+    for (const a of bodyAttribs) if (a >= 0) gl.disableVertexAttribArray(a);
+    gl.uniformMatrix4fv(gloc.uVP, false, VP);
+    gl.uniform3fv(gloc.uEye, eye);
+    gl.uniform1i(gloc.uTex, 0);
+    gl.disable(gl.CULL_FACE);
+    for (const p of list) {
+      const m = gmeshes[p.mesh as GearMesh]!;
+      gl.bindBuffer(gl.ARRAY_BUFFER, m.p);
+      gl.enableVertexAttribArray(gloc.aP);
+      gl.vertexAttribPointer(gloc.aP, 3, gl.FLOAT, false, 0, 0);
+      gl.bindBuffer(gl.ARRAY_BUFFER, m.n);
+      gl.enableVertexAttribArray(gloc.aN);
+      gl.vertexAttribPointer(gloc.aN, 3, gl.FLOAT, false, 0, 0);
+      if (gloc.aUV >= 0) {
+        gl.bindBuffer(gl.ARRAY_BUFFER, m.t);
+        gl.enableVertexAttribArray(gloc.aUV);
+        gl.vertexAttribPointer(gloc.aUV, 2, gl.FLOAT, false, 0, 0);
+      }
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, m.i);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, m.tex);
+      gl.uniformMatrix4fv(gloc.uM, false, p.m);
+      gl.uniformMatrix3fv(gloc.uNM, false, p.nm);
+      gl.uniform3fv(gloc.uColor, p.color);
+      gl.uniform1f(gloc.uKind, GEAR_KIND[p.mesh as GearMesh] ?? 0);
+      gl.drawElements(gl.TRIANGLES, m.count, gl.UNSIGNED_SHORT, 0);
+    }
+    if (gloc.aUV >= 0) gl.disableVertexAttribArray(gloc.aUV);
+    gl.useProgram(prog);
+    bound = "";
+  };
   const drawProcedural = (parts: Part[], VP: Float32Array, eye: V3, time: number) => {
     gl.useProgram(prog);
     for (const a of bodyAttribs) if (a >= 0) gl.disableVertexAttribArray(a);
@@ -529,7 +697,8 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     gl.uniform3fv(loc.uEye, eye);
     gl.uniform1f(loc.uTime, time);
     bound = "";
-    for (const p of parts) one(p);
+    for (const p of parts) if (!(p.alt === "real" && gearOk && gmeshes[p.mesh as GearMesh])) one(p);
+    drawGear(parts, VP, eye);
   };
   let style: 0 | 1 = 0;
   const bul = new Float32Array(64);
@@ -791,8 +960,8 @@ function seatHands(meta: BodyMeta, J: Record<number, V3>, mats: Float32Array, ha
     const ixR = meta.rest[h.side === "L" ? "19" : "20"];
     const pkR = meta.rest[h.side === "L" ? "17" : "18"];
     const toIndex: V3 = ixR && pkR ? v3.mul(v3.sub(ixR, pkR), 0.25) : [0, 0, 0];
-    // mano dell'arco: il centro del cerchio delle dita piegate, 2,7 cm davanti alle nocche (vedi la piega in anatomy-body)
-    const holeRest: V3 = h.hole === "wrap" ? v3.add(v3.add(k0, [0, 0, 0.027]), v3.mul(F, 0.002)) : v3.add(v3.add(v3.add(k0, v3.mul(F, L * 0.42)), [0, 0, 0.012]), toIndex);
+    // mano dell'arco: il centro del cerchio delle dita piegate, 3,2 cm davanti alle nocche (vedi la piega in anatomy-body)
+    const holeRest: V3 = h.hole === "wrap" ? v3.add(v3.add(k0, [0, 0, 0.032]), v3.mul(F, 0.002)) : v3.add(v3.add(v3.add(k0, v3.mul(F, L * 0.42)), [0, 0, 0.012]), toIndex);
     const hole = xf(mats, m, holeRest);
     let d = v3.sub(h.at, hole);
     const dl = v3.len(d);
