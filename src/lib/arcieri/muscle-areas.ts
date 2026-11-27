@@ -145,9 +145,10 @@ export function renderAreaImages(lm: Landmark[], aspect: number, hand: Hand, are
     R.clear(w, h);
     R.draw(model, VP, eye, 0, { pelle: true, muscolo: true, osso: true }, focus);
     const g = ctx.createRadialGradient(w / 2, h * 0.4, 10, w / 2, h * 0.5, Math.max(w, h) * 0.75);
-    g.addColorStop(0, "#3f9fe6");
-    g.addColorStop(0.5, "#1c6fc2");
-    g.addColorStop(1, "#072a5c");
+    // fondo grafite come la sagoma 3D (studio): i muscoli si leggono come in un atlante
+    g.addColorStop(0, "#454c54");
+    g.addColorStop(0.5, "#2b3035");
+    g.addColorStop(1, "#101214");
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, w, h);
     ctx.drawImage(canvas, 0, 0);

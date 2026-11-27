@@ -97,19 +97,38 @@ function videoCamera(fr: ImageFrame, pivot: V3, c: { yaw: number; pitch: number;
 }
 
 /** la vista scelta nella sagoma 3D: la usano anche foto e video in alta definizione */
-export const sagomaView: { yaw: number; pitch: number; zoom: number; layers: Record<Layer, boolean> } = {
+export const sagomaView: { yaw: number; pitch: number; zoom: number; layers: Record<Layer, boolean>; style?: SagomaStyle } = {
   yaw: 0,
   pitch: 0.06,
   zoom: 1,
+  style: 0,
   layers: { pelle: true, muscolo: true, osso: true, punti: true, quote: true },
 };
 
-const BG_STOPS: [number, string][] = [
-  [0, "#3f9fe6"],
-  [0.42, "#1c6fc2"],
-  [0.78, "#0b3f82"],
-  [1, "#072a5c"],
-];
+/**
+ * Stile della tavola: 0 = studio (grafite, come i visori anatomici), 1 = tavola chiara (come un atlante
+ * stampato). Sfondo, inchiostro delle quote e velo della pelle cambiano insieme.
+ */
+export type SagomaStyle = 0 | 1;
+const BG: Record<SagomaStyle, [number, string][]> = {
+  0: [
+    [0, "#454c54"],
+    [0.45, "#2b3035"],
+    [0.8, "#191c20"],
+    [1, "#101214"],
+  ],
+  1: [
+    [0, "#fbfaf7"],
+    [0.5, "#ecebe6"],
+    [1, "#d6d4cd"],
+  ],
+};
+const bgCss = (st: SagomaStyle) => `radial-gradient(ellipse at 45% 35%, ${BG[st].map(([k, c]) => `${c} ${Math.round(k * 100)}%`).join(", ")})`;
+/** inchiostro sopra la sagoma: chiaro su fondo scuro, scuro su fondo chiaro */
+const INK: Record<SagomaStyle, { ring: string; line: string; hand: string; dot: string; gold: string; cyan: string; warn: string }> = {
+  0: { ring: "255,255,255", line: "rgba(255,255,255,0.55)", hand: "rgba(255,255,255,0.45)", dot: "rgba(255,255,255,0.8)", gold: "rgba(255,214,120,0.85)", cyan: "rgba(170,215,255,0.75)", warn: "rgba(255,160,110,0.8)" },
+  1: { ring: "24,28,32", line: "rgba(24,28,32,0.5)", hand: "rgba(24,28,32,0.4)", dot: "rgba(24,28,32,0.75)", gold: "rgba(150,100,12,0.9)", cyan: "rgba(28,88,138,0.85)", warn: "rgba(190,75,35,0.9)" },
+};
 
 /**
  * Aura: la sagoma prende la corporatura dell'arciere. Su alcuni fotogrammi la silhouette della sagoma
@@ -233,7 +252,9 @@ export async function sagomaPainter(W: number, H: number) {
       const view = o.view ?? sagomaView;
       const model = buildModel(o.lm, o.aspect, o.hand, o.gear, o.cal, o.smooth ? memo : null, o.time);
       const g = ctx.createRadialGradient(W * 0.45, H * 0.35, 0, W * 0.45, H * 0.35, Math.max(W, H) * 0.8);
-      for (const [k, c] of BG_STOPS) g.addColorStop(k, c);
+      const st: SagomaStyle = view.style ?? 0;
+      R.setStyle(st);
+      for (const [k, c] of BG[st]) g.addColorStop(k, c);
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, W, H);
@@ -251,7 +272,7 @@ export async function sagomaPainter(W: number, H: number) {
       R.clear(W, H);
       R.draw(model, VP, eye, o.time, view.layers, null, false);
       ctx.drawImage(gl, 0, 0);
-      paintHud(ctx, model, VP, W, H, dpr, view.layers, o.time);
+      paintHud(ctx, model, VP, W, H, dpr, view.layers, o.time, st);
       // crediti dell'atlante (licenze CC BY e CC BY-SA): restano sull'immagine
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.font = `500 ${Math.round(9 * dpr)}px system-ui, sans-serif`;
@@ -309,6 +330,24 @@ export function Anatomy3D({
   const [layers, setLayers] = useState<Record<Layer, boolean>>({ pelle: true, muscolo: true, osso: true, punti: true, quote: true });
   const layersRef = useRef(layers);
   layersRef.current = layers;
+  // stile della tavola (studio scuro o tavola chiara), ricordato sul telefono
+  const [style, setStyleS] = useState<SagomaStyle>(() => {
+    try {
+      return localStorage.getItem("sagoma-stile") === "1" ? 1 : 0;
+    } catch {
+      return 0;
+    }
+  });
+  const styleRef = useRef(style);
+  styleRef.current = style;
+  const setStyle = (v: SagomaStyle) => {
+    setStyleS(v);
+    try {
+      localStorage.setItem("sagoma-stile", String(v));
+    } catch {
+      /* niente memoria: vale per ora */
+    }
+  };
   // si parte come la ripresa del video (di fronte), fermi: si gira con il dito
   // nel riquadro del video si parte "come il video": stessa inquadratura, punto su punto
   const homePitch = inBox ? 0 : 0.06;
@@ -519,7 +558,7 @@ export function Anatomy3D({
         turnedRef.current = off;
         setTurned(off);
       }
-      const key = `${c.yaw.toFixed(4)}|${c.pitch.toFixed(4)}|${c.zoom.toFixed(3)}|${v2 ? `${v2.z},${v2.x},${v2.y}` : ""}|${L0.pelle}${L0.muscolo}${L0.osso}${L0.punti}${L0.quote}|${canvas.clientWidth}x${canvas.clientHeight}|${scale}|${bodyTick}|${R.gearReady()}`;
+      const key = `${styleRef.current}|${c.yaw.toFixed(4)}|${c.pitch.toFixed(4)}|${c.zoom.toFixed(3)}|${v2 ? `${v2.z},${v2.x},${v2.y}` : ""}|${L0.pelle}${L0.muscolo}${L0.osso}${L0.punti}${L0.quote}|${canvas.clientWidth}x${canvas.clientHeight}|${scale}|${bodyTick}|${R.gearReady()}`;
       // dopo un movimento si disegna ancora un attimo con il corpo leggero, poi una volta con quello pieno
       const fast = now - lastChange < 450 || dragging.current;
       if (!moving && key === lastKey && !playing && fast === lastFast) return;
@@ -590,10 +629,12 @@ export function Anatomy3D({
       sagomaView.pitch = c.pitch;
       sagomaView.zoom = c.zoom;
       sagomaView.layers = { ...L };
+      sagomaView.style = styleRef.current;
+      R.setStyle(styleRef.current);
       lastShot.current = { lm: smooth, aspect: asp, hand: hd, gear: gr?.current ?? null, cal: fc ?? live.current.cal, time };
       R.draw(model, VP, eye, time, L, null, fast);
 
-      paintHud(ctx, model, VP, W, H, dpr, L, time);
+      paintHud(ctx, model, VP, W, H, dpr, L, time, styleRef.current);
     };
     raf = requestAnimationFrame(frame);
 
@@ -650,12 +691,16 @@ export function Anatomy3D({
 
   if (failed) return <p className="rounded-2xl bg-white/[0.04] p-3 text-sm text-muted">Il 3D non parte su questo telefono: le misure restano nell'analisi qui sopra.</p>;
   const toggle = (k: Layer) => setLayers((l) => ({ ...l, [k]: !l[k] }));
+  // comandi sobri, leggibili su tutti e due i fondi: grafite su chiaro, vetro scuro su scuro
+  const pill = style ? "bg-[#22303a]/85" : "bg-black/45";
+  const chipOn = style ? "bg-[#22303a] text-white ring-1 ring-[#22303a]" : "bg-white/20 text-white ring-1 ring-white/55";
+  const chipOff = style ? "bg-black/10 text-[#22303a]/70" : "bg-black/40 text-white/60";
   return (
-    <div ref={boxRef} className={cx("overflow-hidden", full ? "fixed inset-0 z-[90] h-[100dvh] w-screen" : cx("relative w-full", inBox ? "" : "rounded-2xl", className))} style={{ background: "radial-gradient(ellipse at 45% 35%, #3f9fe6 0%, #1c6fc2 42%, #0b3f82 78%, #072a5c 100%)" }}>
+    <div ref={boxRef} className={cx("overflow-hidden", full ? "fixed inset-0 z-[90] h-[100dvh] w-screen" : cx("relative w-full", inBox ? "" : "rounded-2xl", className))} style={{ background: bgCss(style) }}>
       <canvas ref={glCanvas} className={cx("absolute inset-0 h-full w-full", inBox && !full ? "touch-pan-y" : "touch-none")} aria-label="Analisi del gesto in 3D: corpo, scheletro e muscoli, da girare con il dito" />
       <canvas ref={hudCanvas} className="pointer-events-none absolute inset-0 h-full w-full" />
-      <p className="pointer-events-none absolute inset-x-0 bottom-0 truncate px-2 text-center text-[0.45rem] leading-[0.7rem] text-white/50">{BODY_CREDIT}</p>
-      {empty ? <p className="absolute inset-x-0 top-1/2 -translate-y-1/2 text-center text-sm text-white/80">In attesa della posa: avvia il video o scegli un fotogramma.</p> : null}
+      <p className={cx("pointer-events-none absolute inset-x-0 bottom-0 truncate px-2 text-center text-[0.45rem] leading-[0.7rem]", style ? "text-black/45" : "text-white/50")}>{BODY_CREDIT}</p>
+      {empty ? <p className={cx("absolute inset-x-0 top-1/2 -translate-y-1/2 text-center text-sm", style ? "text-black/70" : "text-white/80")}>In attesa della posa: avvia il video o scegli un fotogramma.</p> : null}
       {/* in alto: Gira e la foto in alta definizione; in basso cosa si vede (corpo, muscoli, scheletro…) */}
       <div className={cx("absolute flex flex-wrap gap-1", full ? "left-2 top-[max(0.5rem,env(safe-area-inset-top))]" : cx("top-2 w-[10.5rem]", inBox ? "left-2" : "right-2"))}>
         <button
@@ -667,7 +712,7 @@ export function Anatomy3D({
             cam.current.home = !cam.current.auto;
             setAuto(cam.current.auto);
           }}
-          className={cx("min-h-9 rounded-full px-3 text-xs font-semibold backdrop-blur", auto ? "bg-[#5fd4ff]/35 text-white ring-1 ring-[#5fd4ff]/70" : "bg-black/45 text-white")}
+          className={cx("min-h-9 rounded-full px-3 text-xs font-semibold backdrop-blur", auto ? chipOn : cx(pill, "text-white"))}
         >
           {auto ? "Ferma" : "Gira"}
         </button>
@@ -676,22 +721,35 @@ export function Anatomy3D({
           disabled={shooting || empty}
           onClick={() => void photoHD()}
           aria-label="Foto della sagoma in alta definizione"
-          className="min-h-9 rounded-full bg-black/45 px-3 text-xs font-semibold text-white backdrop-blur disabled:opacity-50"
+          className={cx("min-h-9 rounded-full px-3 text-xs font-semibold text-white backdrop-blur disabled:opacity-50", pill)}
         >
           {shooting ? "Foto…" : "Foto HD"}
         </button>
         {full ? (
-          <button type="button" onClick={toggleFull} aria-pressed aria-label="Esci dallo schermo intero" className="min-h-9 rounded-full bg-[#5fd4ff]/35 px-3 text-xs font-semibold text-white ring-1 ring-[#5fd4ff]/70 backdrop-blur">
+          <button type="button" onClick={toggleFull} aria-pressed aria-label="Esci dallo schermo intero" className={cx("min-h-9 rounded-full px-3 text-xs font-semibold backdrop-blur", chipOn)}>
             Chiudi
           </button>
         ) : null}
         <div className={cx("flex items-center gap-1", full ? "" : "basis-full")}>
           {!full ? (
             // nell'anteprima solo l'icona, sotto «Gira»: in alto a destra c'è la scelta Scheletro / Sagoma
-            <button type="button" onClick={toggleFull} aria-label="Guarda a schermo intero" title="Schermo intero" className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-black/45 text-white backdrop-blur">
+            <button type="button" onClick={toggleFull} aria-label="Guarda a schermo intero" title="Schermo intero" className={cx("grid h-9 w-9 shrink-0 place-items-center rounded-full text-white backdrop-blur", pill)}>
               <Glyph name="expand" size={17} />
             </button>
           ) : null}
+          <button
+            type="button"
+            onClick={() => setStyle(style ? 0 : 1)}
+            aria-label={style ? "Sfondo scuro, da studio" : "Sfondo chiaro, da tavola anatomica"}
+            title={style ? "Sfondo scuro" : "Sfondo chiaro"}
+            className={cx("grid h-9 w-9 shrink-0 place-items-center rounded-full text-white backdrop-blur", pill)}
+          >
+            {/* cerchio mezzo pieno: chiaro / scuro */}
+            <svg viewBox="0 0 24 24" width={17} height={17} aria-hidden>
+              <circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" strokeWidth="1.7" />
+              <path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor" />
+            </svg>
+          </button>
           {turned && !auto ? (
             // girata o avvicinata con le dita: si torna all'inquadratura del video, punto su punto
             <button
@@ -700,7 +758,7 @@ export function Anatomy3D({
                 cam.current.auto = false;
                 cam.current.home = true;
               }}
-              className="min-h-9 rounded-full bg-black/45 px-3 text-xs font-semibold text-white backdrop-blur"
+              className={cx("min-h-9 rounded-full px-3 text-xs font-semibold text-white backdrop-blur", pill)}
             >
               {inBox ? "Come il video" : "Di fronte"}
             </button>
@@ -709,17 +767,17 @@ export function Anatomy3D({
       </div>
       {full && transport ? (
         // a schermo intero anche il video: play, pausa, fotogramma per fotogramma e la linea del tempo
-        <div className="absolute inset-x-2 bottom-[calc(max(1rem,env(safe-area-inset-bottom))+2.6rem)] flex items-center gap-1.5 rounded-full bg-black/45 px-2 py-1 text-white backdrop-blur">
+        <div className={cx("absolute inset-x-2 bottom-[calc(max(1rem,env(safe-area-inset-bottom))+2.6rem)] flex items-center gap-1.5 rounded-full px-2 py-1 text-white backdrop-blur", pill)}>
           <button type="button" onClick={() => transport.onSeek(transport.time - (transport.step ?? 1 / 30))} aria-label="Fotogramma indietro" className="grid h-9 w-9 shrink-0 place-items-center rounded-full"><TrIcon k="prev" /></button>
-          <button type="button" onClick={transport.onToggle} aria-label={transport.playing ? "Pausa" : "Play"} className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#5fd4ff]/35 text-base ring-1 ring-[#5fd4ff]/70"><TrIcon k={transport.playing ? "pause" : "play"} /></button>
+          <button type="button" onClick={transport.onToggle} aria-label={transport.playing ? "Pausa" : "Play"} className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white/20 text-base ring-1 ring-white/55"><TrIcon k={transport.playing ? "pause" : "play"} /></button>
           <button type="button" onClick={() => transport.onSeek(transport.time + (transport.step ?? 1 / 30))} aria-label="Fotogramma avanti" className="grid h-9 w-9 shrink-0 place-items-center rounded-full"><TrIcon k="next" /></button>
-          <input type="range" min={0} max={Math.max(0.01, transport.duration)} step={0.01} value={Math.min(transport.time, transport.duration)} onChange={(e) => transport.onSeek(Number(e.currentTarget.value))} aria-label="Tempo del video" className="min-w-0 flex-1 accent-[#5fd4ff]" />
+          <input type="range" min={0} max={Math.max(0.01, transport.duration)} step={0.01} value={Math.min(transport.time, transport.duration)} onChange={(e) => transport.onSeek(Number(e.currentTarget.value))} aria-label="Tempo del video" className="min-w-0 flex-1 accent-white" />
           <span className="shrink-0 text-[0.7rem] tabular-nums text-white/80">{transport.time.toFixed(1)} s</span>
         </div>
       ) : null}
       <div className={cx("absolute inset-x-2 flex flex-wrap justify-center gap-1", full ? "bottom-[max(1rem,env(safe-area-inset-bottom))]" : "bottom-4")}>
         {([["pelle", "Corpo"], ["muscolo", "Muscoli"], ["osso", "Scheletro"], ["punti", "Punti"], ["quote", "Misure"]] as const).map(([k, label]) => (
-          <button key={k} type="button" aria-pressed={layers[k]} onClick={() => toggle(k)} className={cx("min-h-8 rounded-full px-2.5 text-[0.7rem] font-semibold backdrop-blur", layers[k] ? "bg-[#5fd4ff]/25 text-white ring-1 ring-[#5fd4ff]/60" : "bg-black/40 text-white/60")}>
+          <button key={k} type="button" aria-pressed={layers[k]} onClick={() => toggle(k)} className={cx("min-h-8 rounded-full px-2.5 text-[0.7rem] font-semibold backdrop-blur", layers[k] ? chipOn : chipOff)}>
             {label}
           </button>
         ))}
@@ -730,7 +788,8 @@ export function Anatomy3D({
 }
 
 /** quote, punti e anelli a terra disegnati sopra la scena (2D), per lo schermo e per le immagini HD */
-function paintHud(ctx: CanvasRenderingContext2D, model: Model, VP: Float32Array, W: number, H: number, dpr: number, L: Record<Layer, boolean>, time: number) {
+function paintHud(ctx: CanvasRenderingContext2D, model: Model, VP: Float32Array, W: number, H: number, dpr: number, L: Record<Layer, boolean>, time: number, style: SagomaStyle = 0) {
+  const ink = INK[style];
   const proj = (p: V3): [number, number, number] => {
     const x = VP[0] * p[0] + VP[4] * p[1] + VP[8] * p[2] + VP[12];
     const y = VP[1] * p[0] + VP[5] * p[1] + VP[9] * p[2] + VP[13];
@@ -741,7 +800,7 @@ function paintHud(ctx: CanvasRenderingContext2D, model: Model, VP: Float32Array,
   ctx.lineWidth = 0.55 * dpr;
   // anelli a terra
   for (const [r, a] of [[0.45, 0.4], [0.62, 0.2], [0.8, 0.1]] as const) {
-    ctx.strokeStyle = `rgba(95,212,255,${a})`;
+    ctx.strokeStyle = `rgba(${ink.ring},${a * 0.7})`;
     ctx.setLineDash(r > 0.5 ? [3 * dpr, 5 * dpr] : []);
     ctx.beginPath();
     for (let i = 0; i <= 64; i++) {
@@ -757,13 +816,13 @@ function paintHud(ctx: CanvasRenderingContext2D, model: Model, VP: Float32Array,
     const an = (i / 16) * Math.PI * 2 + time * 0.2;
     const a = proj([hudD.feet[0] + Math.cos(an) * 0.45, 0.002, hudD.feet[2] + Math.sin(an) * 0.45]);
     const b = proj([hudD.feet[0] + Math.cos(an) * 0.48, 0.002, hudD.feet[2] + Math.sin(an) * 0.48]);
-    ctx.strokeStyle = "rgba(95,212,255,0.35)";
+    ctx.strokeStyle = `rgba(${ink.ring},0.25)`;
     ctx.beginPath();
     ctx.moveTo(a[0], a[1]);
     ctx.lineTo(b[0], b[1]);
     ctx.stroke();
   }
-  if (L.punti && model.J) drawJoints(ctx, model.J, proj, dpr, model.hand ?? "destro");
+  if (L.punti && model.J) drawJoints(ctx, model.J, proj, dpr, ink);
   if (!L.quote) return;
   // archi degli angoli ai gomiti
   for (const a of hudD.arcs) {
@@ -776,7 +835,7 @@ function paintHud(ctx: CanvasRenderingContext2D, model: Model, VP: Float32Array,
     while (d > Math.PI) d -= Math.PI * 2;
     while (d < -Math.PI) d += Math.PI * 2;
     a2 = a1 + d;
-    ctx.strokeStyle = "rgba(255,214,120,0.85)";
+    ctx.strokeStyle = ink.gold;
     ctx.lineWidth = 0.75 * dpr;
     ctx.beginPath();
     ctx.arc(o[0], o[1], 8.5 * dpr, Math.min(a1, a2), Math.max(a1, a2));
@@ -792,7 +851,7 @@ function paintHud(ctx: CanvasRenderingContext2D, model: Model, VP: Float32Array,
     const off = 10 * dpr;
     const ox = (nx / nl) * off * (ny / nl > 0 ? -1 : 1);
     const oy = (ny / nl) * off * (ny / nl > 0 ? -1 : 1);
-    ctx.strokeStyle = "rgba(255,214,120,0.8)";
+    ctx.strokeStyle = ink.gold;
     ctx.lineWidth = 0.55 * dpr;
     ctx.setLineDash([2.4 * dpr, 2.4 * dpr]);
     ctx.beginPath();
@@ -839,7 +898,7 @@ function paintHud(ctx: CanvasRenderingContext2D, model: Model, VP: Float32Array,
       ty = hit.y1 + gap + th / 2;
     }
     placed.push({ x0, x1, y0: ty - th / 2, y1: ty + th / 2 });
-    ctx.strokeStyle = it.tone === "warn" ? "rgba(255,160,110,0.75)" : it.tone === "gold" ? "rgba(255,214,120,0.75)" : "rgba(95,212,255,0.7)";
+    ctx.strokeStyle = it.tone === "warn" ? ink.warn : it.tone === "gold" ? ink.gold : ink.cyan;
     ctx.lineWidth = 0.5 * dpr;
     ctx.beginPath();
     ctx.moveTo(it.p[0], it.p[1]);
@@ -868,7 +927,7 @@ const HAND_LINKS: [number, number][] = [[0, 1], [1, 2], [2, 3], [3, 4], [0, 5], 
  * Lo scheletro dei punti rilevati nel video, sopra il corpo 3D: ogni articolazione è un punto
  * (lato dell'arco in azzurro, lato della corda in oro), le linee sono quelle dello scheletro del video
  */
-function drawJoints(ctx: CanvasRenderingContext2D, J: Record<number, V3>, proj: (p: V3) => [number, number, number], dpr: number, _hand: Hand) {
+function drawJoints(ctx: CanvasRenderingContext2D, J: Record<number, V3>, proj: (p: V3) => [number, number, number], dpr: number, ink: { line: string; hand: string; dot: string }) {
   // come lo scheletro sopra il video: linee bianche, sottili e trasparenti, per vedere il corpo sotto
   const P: Record<number, [number, number, number]> = {};
   for (const k of Object.keys(J)) {
@@ -887,15 +946,15 @@ function drawJoints(ctx: CanvasRenderingContext2D, J: Record<number, V3>, proj: 
     ctx.lineTo(q[0], q[1]);
     ctx.stroke();
   };
-  for (const [a, b] of BODY_LINKS) line(a, b, "rgba(255,255,255,0.55)", 0.7);
+  for (const [a, b] of BODY_LINKS) line(a, b, ink.line, 0.7);
   for (const base of [33, 54]) {
     if (!J[base]) continue;
-    for (const [a, b] of HAND_LINKS) line(base + a, base + b, "rgba(255,255,255,0.45)", 0.4);
+    for (const [a, b] of HAND_LINKS) line(base + a, base + b, ink.hand, 0.4);
   }
   const dot = (i: number, r: number) => {
     const p = P[i];
     if (!p || p[2] <= 0) return;
-    ctx.fillStyle = "rgba(255,255,255,0.8)";
+    ctx.fillStyle = ink.dot;
     ctx.beginPath();
     ctx.arc(p[0], p[1], r * dpr, 0, Math.PI * 2);
     ctx.fill();

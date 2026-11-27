@@ -68,7 +68,7 @@ attribute vec3 aP; attribute vec3 aN; attribute vec2 aJ; attribute vec4 aM; attr
 uniform mat4 uVP; uniform vec4 uSeg[63]; uniform vec3 uLo; uniform vec3 uHi;
 uniform vec4 uAct[16]; uniform vec4 uBul[16]; uniform float uLayerV;
 uniform vec4 uCurl[8]; uniform vec2 uDita; uniform vec4 uFa[4];
-varying vec3 vW; varying vec3 vN; varying vec2 vF; varying float vAct; varying float vFoc; varying float vTend; varying float vStr;
+varying vec3 vW; varying vec3 vN; varying vec2 vF; varying float vAct; varying float vFoc; varying float vTend; varying float vStr; varying float vGrp;
 float pick(vec4 v, int k){ return k == 0 ? v.x : k == 1 ? v.y : k == 2 ? v.z : v.w; }
 vec3 rotA(vec3 v, vec3 ax, float a){ float c = cos(a); float s = sin(a); return v * c + cross(ax, v) * s + ax * dot(ax, v) * (1.0 - c); }
 // dita piegate in presa (prima di seguire i segmenti): terza falange, seconda, allargamento dell'indice, nocca
@@ -120,99 +120,113 @@ void main(){
   // lavoro e messa in evidenza nello stesso numero (meno uniformi: alcuni telefoni ne hanno poche)
   float pv = pick(uAct[gi], gk); float fc = floor(pv / 2.0) - 1.0;
   vAct = pv - (fc + 1.0) * 2.0; vFoc = fc;
-  vF = vec2(aM.z, aM.w) / 255.0; vTend = aT;
+  vF = vec2(aM.z, aM.w) / 255.0; vTend = aT; vGrp = float(g);
   vW = wp.xyz; gl_Position = uVP * wp;
 }`;
 const BFS = `${PREC}
-varying vec3 vW; varying vec3 vN; varying vec2 vF; varying float vAct; varying float vFoc; varying float vTend; varying float vStr;
-uniform vec3 uEye; uniform float uLayer; uniform float uAlpha; uniform float uDim; uniform float uTime;
+varying vec3 vW; varying vec3 vN; varying vec2 vF; varying float vAct; varying float vFoc; varying float vTend; varying float vStr; varying float vGrp;
+uniform vec3 uEye; uniform float uLayer; uniform float uAlpha; uniform float uDim; uniform float uTime; uniform float uStyle;
+// luce calcolata come in fotografia (valori lineari), poi la curva "da pellicola" e lo schermo (sRGB):
+// volumi morbidi e colori veri come nelle tavole anatomiche fotografiche, niente rosso piatto
+vec3 tone(vec3 c){ c = clamp((c * (2.51 * c + 0.03)) / (c * (2.43 * c + 0.59) + 0.14), 0.0, 1.0); return pow(c, vec3(1.0 / 2.2)); }
+float hash(float n){ return fract(sin(n * 12.9898 + 4.1) * 43758.5453); }
+float wrapL(vec3 N, vec3 L, float w){ return max(0.0, (dot(N, L) + w) / (1.0 + w)); }
 void main(){
   vec3 N = normalize(vN); vec3 V = normalize(uEye - vW);
-  // si disegnano solo le facce verso chi guarda: ai bordi la normale può sfiorare il lato opposto
   float ndv = clamp(dot(N, V), 0.0, 1.0);
-  float rim = pow(1.0 - ndv, 2.0);
-  vec3 L = normalize(vec3(0.35, 0.8, 0.55)); vec3 L2 = normalize(vec3(-0.6, 0.25, 0.3));
-  float dif = max(dot(N, L), 0.0) * 0.75 + max(dot(N, L2), 0.0) * 0.3;
-  float hemi = 0.55 + 0.45 * N.y;
-  vec3 R = reflect(-L, N);
+  // le luci girano con chi guarda (studio fotografico): da ogni lato il corpo è illuminato allo stesso modo.
+  // Principale calda in alto a sinistra, riempimento freddo a destra, controluce che stacca il bordo
+  vec3 Rt = normalize(cross(vec3(0.0, 1.0, 0.0), V) + vec3(1e-4, 0.0, 0.0)); vec3 Up = cross(V, Rt);
+  vec3 L1 = normalize(-0.5 * Rt + 0.75 * Up + 0.55 * V); vec3 C1 = vec3(1.0, 0.95, 0.88) * 1.9;
+  vec3 L2 = normalize(0.8 * Rt + 0.1 * Up + 0.45 * V); vec3 C2 = vec3(0.70, 0.80, 1.0) * 0.45;
+  vec3 L3 = normalize(0.3 * Rt + 0.45 * Up - 0.85 * V); vec3 C3 = vec3(0.95, 0.97, 1.0);
+  vec3 amb = mix(vec3(0.12, 0.10, 0.09), vec3(0.24, 0.26, 0.30), 0.5 + 0.5 * N.y);
+  vec3 H = normalize(L1 + V);
   vec3 col; float a = uAlpha;
   if (uLayer < 0.5) {
-    // pelle: vetro azzurro, il bordo si accende come nelle tavole mediche
-    col = vec3(0.4, 0.72, 1.0) * (0.36 + rim * 1.5) + vec3(0.85, 0.95, 1.0) * pow(rim, 3.0) * 0.6;
-    // vetro sottile: i muscoli sotto si leggono bene anche su gambe e busto
-    a = uAlpha * (0.08 + rim * 0.55) * (1.0 - 0.85 * vStr);
+    // pelle: un velo appena accennato che disegna il contorno del corpo, neutro (non più azzurro)
+    float rim = pow(1.0 - ndv, 2.4);
+    if (uStyle > 0.5) {
+      col = vec3(0.30, 0.33, 0.37);
+      a = uAlpha * (0.03 + rim * 0.42) * (1.0 - vStr);
+    } else {
+      col = vec3(0.62, 0.68, 0.76) * (0.12 + rim * 1.4);
+      a = uAlpha * (0.05 + rim * 0.5) * (1.0 - 0.85 * vStr);
+    }
+    gl_FragColor = vec4(tone(col), a);
+    return;
   } else if (uLayer < 1.5) {
-    // ossa: bianco azzurro, morbide
-    // con i muscoli accesi le ossa tra un muscolo e l'altro restano azzurrine, non bianche
-    vec3 boneCol = mix(vec3(0.88, 0.93, 0.98), vec3(0.6, 0.72, 0.86), uDim);
-    // iride degli occhi (segnata nel canale dei tendini)
-    if (vTend > 0.5) boneCol = vec3(0.24, 0.36, 0.48);
-    col = boneCol * (0.32 + 0.12 * hemi + dif * 0.55) + vec3(0.55, 0.8, 1.0) * rim * 0.35;
+    // ossa: avorio, opache, con una lucentezza leggera; tra i muscoli un po' in ombra
+    vec3 alb = mix(vec3(0.66, 0.59, 0.46), vec3(0.50, 0.45, 0.35), uDim);
+    if (vTend > 0.5) alb = vec3(0.03, 0.035, 0.04);
+    float dif = wrapL(N, L1, 0.2);
+    vec3 light = C1 * dif + C2 * wrapL(N, L2, 0.3) + amb;
+    float spec = pow(max(dot(N, H), 0.0), 36.0) * 0.12;
+    float rimL = pow(1.0 - ndv, 2.0) * max(0.0, dot(N, L3) + 0.3) * 0.35;
+    col = alb * light * mix(1.0, 0.7, pow(1.0 - ndv, 2.0)) + C1 * spec + C3 * rimL * 0.5;
   } else {
-    // muscoli: rosso bruno con le fibre lungo il muscolo, tendini chiari, lucidi.
-    // Le fibre sono fasci (circa 4-5 mm, il passo è già in millimetri veri nel modello) separati da solchi,
-    // ognuno con il suo tono e il suo spessore; dentro ogni fascio le fibrille fini, visibili solo da vicino.
-    // Tutto si attenua dove sullo schermo sarebbe più fitto di un paio di pixel (niente puntinato).
+    // muscoli: rosso carne con piccole differenze da un muscolo all'altro, il ventre un po' più chiaro;
+    // fasci appena accennati e la lucentezza a seta lungo le fibre (come nei preparati anatomici),
+    // tendini e aponeurosi bianco perla e lucidi
+    float h = hash(vGrp);
+    vec3 alb = vec3(0.31, 0.036, 0.028) * vec3(1.0 + (h - 0.5) * 0.22, 1.0 + (h - 0.5) * 0.45, 1.0 + (hash(vGrp + 7.0) - 0.5) * 0.3);
+    alb *= 0.88 + 0.14 * sin(3.14159 * vF.x);
     float fy = vF.y * 34.0 + 0.18 * sin(vF.x * 9.0) + 0.22 * sin(vF.x * 2.7 + vF.y * 4.1);
     float id = floor(fy);
-    float h = fract(id * 0.618034 + 0.27);
-    float h2 = fract(h * h * 7.13 + h * 3.71);
+    float hh = fract(id * 0.618034 + 0.27);
 #ifdef HAS_DERIV
     float fw = fwidth(fy);
-    float amp = 1.0 - smoothstep(0.16, 0.45, fw);
-    float ampF = 1.0 - smoothstep(0.03, 0.09, fw);
+    float amp = 1.0 - smoothstep(0.12, 0.35, fw);
 #else
     float fw = 0.08;
-    float amp = 0.5;
-    float ampF = 0.0;
+    float amp = 0.4;
 #endif
     float fr = fract(fy);
-    // il solco non sta sempre a metà: fasci un po' più larghi o più stretti
-    float dl = min(fr, 1.0 - fr) * (0.8 + 0.4 * h2);
-    // lungo il muscolo ogni fascio cambia piano tono e i solchi a tratti si chiudono (fasci che si uniscono):
-    // niente righe tutte uguali da un capo all'altro
-    float x5 = vF.x * 5.0 + h * 7.0;
-    float fx = floor(x5); float tx = fract(x5); tx = tx * tx * (3.0 - 2.0 * tx);
-    float n = mix(fract(sin(id * 12.9898 + fx * 78.233) * 43758.5453), fract(sin(id * 12.9898 + (fx + 1.0) * 78.233) * 43758.5453), tx);
-    float groove = (1.0 - smoothstep(0.02, 0.09 + fw * 1.2, dl)) * (0.4 + 0.6 * n) * (0.7 + 0.3 * h);
-    // ventre del fascio un po' in rilievo (luce sopra, ombra nel solco)
+    float dl = min(fr, 1.0 - fr);
+    float groove = 1.0 - smoothstep(0.03, 0.12 + fw, dl);
     float crown = sin(fr * 3.14159);
-    float fibril = 0.5 + 0.5 * cos(fy * 6.2832 * 6.0 + h * 6.0);
-    float tone = (n - 0.5) * 0.16 + (h2 - 0.5) * 0.08;
-    float fib = 1.0 - amp * (0.3 * groove - 0.06 * crown) - amp * tone - ampF * 0.06 * fibril;
-    vec3 rest = vec3(0.74, 0.35, 0.31);
-    vec3 work = vec3(1.0, 0.36, 0.2);
+    // solchi appena accennati: la grana del muscolo, non righe di legno
+    float fib = 1.0 - amp * (0.07 * groove - 0.025 * crown + (hh - 0.5) * 0.05);
     float act = clamp(vAct, 0.0, 1.0);
     float on = smoothstep(0.32, 0.8, act);
-    vec3 base = mix(rest, work, on);
-    if (vFoc > 0.5) { base = work; on = 1.0; }
-    else if (vFoc < -0.5) { base = mix(rest, vec3(0.5, 0.42, 0.42), 0.35); on = 0.0; }
-    base = mix(base, vec3(0.93, 0.9, 0.86), vTend * 0.85);
-    float spec = pow(max(dot(R, V), 0.0), 40.0) * (0.1 + 0.18 * on);
-    // lucido lungo le fibre (come la seta): la riga di luce corre di traverso al fascio
+    // muscolo che lavora: rosso acceso tendente all'arancio, ben distinto ma non giallo
+    vec3 work = vec3(0.70, 0.11, 0.02);
+    alb = mix(alb, work, on * 0.8);
+    if (vFoc > 0.5) { alb = vec3(0.78, 0.20, 0.03); on = 1.0; }
+    else if (vFoc < -0.5) { alb = mix(alb, vec3(0.20, 0.15, 0.15), 0.5); on = 0.0; }
+    vec3 tend = vec3(0.52, 0.50, 0.45);
+    alb = mix(alb * fib, tend, vTend * 0.9);
+    // luce morbida (la carne lascia passare un po' di luce), bordi che si scuriscono tra un muscolo e l'altro
+    vec3 light = C1 * wrapL(N, L1, 0.45) + C2 * wrapL(N, L2, 0.5) + amb;
+    float edge = mix(1.0, 0.32, pow(1.0 - ndv, 1.6));
+    col = alb * light * edge;
+    // lucentezza a seta lungo le fibre: la riga di luce corre di traverso al fascio
     float silk = 0.0;
 #ifdef HAS_DERIV
-    // scalati: sui telefoni con poca precisione numeri così piccoli diventerebbero zero
     vec3 dp1 = dFdx(vW) * 1000.0; vec3 dp2 = dFdy(vW) * 1000.0;
     vec3 T = cross(dp2, N) * (dFdx(vF.x) * 100.0) + cross(N, dp1) * (dFdy(vF.x) * 100.0);
     float tl = length(T);
     if (tl > 1e-4) {
       T /= tl;
-      float th = dot(T, normalize(L + V));
-      silk = pow(sqrt(max(0.0, 1.0 - th * th)), 24.0) * 0.14 * amp * (1.0 - groove) * (0.6 + 0.4 * crown);
+      float th = dot(T, H);
+      float kk = sqrt(max(0.0, 1.0 - th * th));
+      // lobo largo: la direzione delle fibre cambia a scatti tra un triangolo e l'altro, un riflesso stretto
+      // diventava una pioggia di puntini bianchi
+      silk = pow(kk, 8.0) * 0.05 * (1.0 - 0.6 * groove);
     }
 #endif
-    float edge = mix(1.0, 0.62, pow(1.0 - ndv, 2.4));
-    // il muscolo che lavora si accende dall'interno (arancio che va verso il giallo al centro del ventre)
-    // e pulsa piano, come nelle animazioni anatomiche
-    float pulse = 0.82 + 0.18 * sin(uTime * 4.4);
-    vec3 glow = mix(vec3(1.0, 0.42, 0.16), vec3(1.0, 0.78, 0.32), pow(ndv, 3.0) * on);
-    col = base * (0.3 + 0.16 * hemi + dif * 0.72) * mix(fib, 1.0, vTend) * edge
-        + glow * on * (0.3 + 0.55 * rim) * (1.0 - vTend) * pulse
-        + vec3(1.0, 0.92, 0.85) * spec
-        + vec3(1.0, 0.86, 0.8) * silk * (1.0 - vTend);
+    float wet = pow(max(dot(N, H), 0.0), 64.0) * 0.12;
+    vec3 sheen = mix(vec3(1.0, 0.8, 0.72), vec3(1.0), vTend);
+    col += C1 * sheen * (silk * (1.0 - 0.5 * vTend) + wet + vTend * pow(max(dot(N, H), 0.0), 24.0) * 0.12);
+    // controluce: stacca il corpo dallo sfondo
+    col += C3 * pow(1.0 - ndv, 3.0) * max(0.0, dot(N, L3) + 0.2) * 0.22;
+    // muscolo che lavora: si accende dall'interno, piano
+    float pulse = 0.85 + 0.15 * sin(uTime * 4.4);
+    col += vec3(0.8, 0.16, 0.03) * on * (0.05 + 0.14 * pow(ndv, 2.0)) * pulse * (1.0 - vTend);
+    // superficie stirata dove due segmenti tirano: più scura e senza luce (niente schegge luccicanti)
+    col *= 1.0 - 0.4 * vStr;
   }
-  gl_FragColor = vec4(col, a);
+  gl_FragColor = vec4(tone(col), a);
 }`;
 
 function sphereMesh(lat = 16, lon = 24) {
@@ -449,6 +463,7 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     uLayer: gl.getUniformLocation(bprog, "uLayer"),
     uAlpha: gl.getUniformLocation(bprog, "uAlpha"),
     uDim: gl.getUniformLocation(bprog, "uDim"),
+    uStyle: gl.getUniformLocation(bprog, "uStyle"),
     uBul: gl.getUniformLocation(bprog, "uBul"),
     uLayerV: gl.getUniformLocation(bprog, "uLayerV"),
     uTime: gl.getUniformLocation(bprog, "uTime"),
@@ -513,6 +528,7 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     bound = "";
     for (const p of parts) one(p);
   };
+  let style: 0 | 1 = 0;
   const bul = new Float32Array(64);
   const segRows = new Float32Array(63 * 4);
   const curlBuf = new Float32Array(32);
@@ -580,6 +596,7 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     gl.uniform1f(bl.uTime, time);
     gl.uniform3fv(bl.uEye, eye);
     gl.uniform1f(bl.uDim, L.muscolo ? 1 : 0);
+    gl.uniform1f(bl.uStyle, style);
     // le superfici del corpo sono chiuse e orientate verso l'esterno: le facce interne non si disegnano
     // (niente pieghe luccicanti dentro la pelle)
     gl.enable(gl.CULL_FACE);
@@ -614,7 +631,8 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
       gl.colorMask(true, true, true, true);
       gl.depthMask(false);
       gl.depthFunc(gl.LEQUAL);
-      gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+      // su fondo scuro il velo della pelle si somma come vetro; su fondo chiaro si posa come un'ombra leggera
+      gl.blendFunc(gl.SRC_ALPHA, style ? gl.ONE_MINUS_SRC_ALPHA : gl.ONE);
       drawBodyLayer("skin", 0, L.osso || L.muscolo ? 1 : 1.6);
       gl.depthFunc(gl.LESS);
       gl.depthMask(true);
@@ -626,6 +644,10 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     bound = "";
   };
   return {
+    /** stile della tavola: 0 = studio scuro, 1 = tavola chiara (cambia il velo della pelle) */
+    setStyle(v: 0 | 1) {
+      style = v;
+    },
     /** carica il corpo vero nella scheda grafica; da quel momento sostituisce la sagoma semplice */
     setBody(data: BodyData, level: BodyLevel = "pieno") {
       if (!bodyOk || bodies[level]) return;
