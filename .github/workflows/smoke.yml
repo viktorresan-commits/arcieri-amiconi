@@ -12,4 +12,5 @@ jobs:
       - uses: actions/checkout@v4
       - run: npm i --no-save --prefix /tmp/sm puppeteer-core@23
       - run: NODE_PATH=/tmp/sm/node_modules node --input-type=module -e "import('/tmp/sm/node_modules/puppeteer-core/lib/esm/puppeteer/puppeteer-core.js').then(()=>console.log('ok'))" || true
+      - run: node .github/smoke/db.mjs
       - run: cp .github/smoke/open.mjs /tmp/sm/open.mjs && cd /tmp/sm && node open.mjs
