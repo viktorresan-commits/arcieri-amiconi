@@ -41,6 +41,7 @@ dell'atlante dove c'è (BodyParts3D, CC BY 4.0) e la grana del pacchetto pelle d
     python3 bake_relief.py ../../public/anatomia/pelle.body.npz <tavola normal map del corpo> ../../public/anatomia/pelle-rilievo.jpg ../../public/anatomia/pelle.json
     python3 skin_detail.py <human_materials_1_cc0.glb | cartella del pacchetto pelle> ../../public/anatomia
     python3 smooth_skin.py ../../public/anatomia/pelle.json ../../public/anatomia/pelle.bin 150
+    python3 add_fat.py ../../public/anatomia/pelle.json ../../public/anatomia/pelle.bin 0.85
     python3 cloth_mask.py ../../public/anatomia/pelle ../../public/anatomia/pelle.jpg ../../public/anatomia/corpo.json
 
 - `wrap_rest.ts` mette le ossa del personaggio nel riposo dell'atlante con il codice dell'app;
@@ -61,6 +62,10 @@ dell'atlante dove c'è (BodyParts3D, CC BY 4.0) e la grana del pacchetto pelle d
   `pelle-rilievo.jpg`, nello spazio tangente delle uv del corpo (`pelle.body.npz` è di passaggio);
 - `smooth_skin.py` leviga la forma a riposo di busto, braccia e gambe (solo lungo la normale, 150 passate di
   Taubin): contorni senza gobbe e spigoli; mani, piedi e testa restano; dopo si rifà `cloth_mask.py`.
+- `add_fat.py` aggiunge lo strato di grasso sotto la pelle (la pelle anatomica era incollata ai muscoli: vita
+  75 cm su 1,72 m). Spessore per zona (pancia e fianchi ~2 cm, cosce ~1,5 cm, braccia pochi mm; niente su testa,
+  mani e piedi), limitato dove braccia e busto o le due cosce sono vicini, spinto lungo normali molto lisciate.
+  Con scala 0.85: torace ~105, vita ~86, fianchi ~95 cm. Va dopo `smooth_skin.py` e prima di `cloth_mask.py`.
 - `skin_detail.py` fa la grana della pelle (pori, rossori, rilievo, ruvidità) che si ripete: ora dal file .glb di
   "Human Materials 1 (CC0)" di britdawgmasterfunk (Sketchfab; nel file la licenza è CC BY 4.0, si cita),
   materiale "Material", a 1024 px.
