@@ -9,7 +9,7 @@ import { v3, type V3 } from "./anatomy-model";
 import type { BodyMeta } from "./anatomy-body";
 
 type MeshJson = { n: number; vOffset: number; iOffset: number; indices: number; /** dove cominciano gli indici della testa (con uv e immagine loro) */ headStart?: number };
-type BodyJson = { stride: number; meshes: { corpo: MeshJson; occhi: MeshJson }; joints: { name: string; parent: number; rest: number[] }[]; /** byte in più per vertice (scripts/anatomia/wrap_skin.py) */ extra?: { group: number; bulge: number; ao: number; paint: number; bulgeScale: number; delta?: number; zone?: number; nrm0?: number; face?: number }; /** occhi del personaggio nascosti (occhi dalla foto del viso) */ hideEyes?: boolean; /** pelle della foto del viso, colore lineare */ faceSkin?: number[]; headUvScale?: number };
+type BodyJson = { stride: number; meshes: { corpo: MeshJson; occhi: MeshJson }; joints: { name: string; parent: number; rest: number[] }[]; /** byte in più per vertice (scripts/anatomia/wrap_skin.py) */ extra?: { group: number; bulge: number; ao: number; paint: number; bulgeScale: number; delta?: number; zone?: number; nrm0?: number; face?: number }; /** occhi del personaggio nascosti (occhi dalla foto del viso) */ hideEyes?: boolean; /** pelle della foto del viso, colore lineare */ faceSkin?: number[]; headUvScale?: number; relief?: boolean };
 export type SkinMesh = {
   n: number;
   pos: Float32Array;
@@ -32,7 +32,7 @@ export type SkinMesh = {
   /** indici della testa nuova (dopo quelli del corpo): uv sferiche (× uvScale) e immagine pelle-testa.jpg */
   headStart: number | null;
 };
-export type SkinBody = { body: SkinMesh; eyes: SkinMesh; names: string[]; heads: V3[]; parent: number[]; image: HTMLImageElement | null; eyeImage: HTMLImageElement | null; meanLuma: number; hideEyes: boolean; faceSkin: [number, number, number]; /** testa nuova (foto del viso) */ headImage: HTMLImageElement | null; headUvScale: number };
+export type SkinBody = { body: SkinMesh; eyes: SkinMesh; names: string[]; heads: V3[]; parent: number[]; image: HTMLImageElement | null; eyeImage: HTMLImageElement | null; meanLuma: number; hideEyes: boolean; faceSkin: [number, number, number]; /** testa nuova (foto del viso) */ headImage: HTMLImageElement | null; headUvScale: number; /** rilievo del corpo dalle tavole (normal map nello spazio delle uv) */ reliefImage: HTMLImageElement | null };
 
 let bodyP: Promise<SkinBody | null> | null = null;
 const img = (src: string) =>
@@ -50,7 +50,7 @@ export function loadSkinBody(base = "/anatomia/pelle"): Promise<SkinBody | null>
     try {
       const [js, bin] = await Promise.all([fetch(`${base}.json`).then((r) => (r.ok ? (r.json() as Promise<BodyJson>) : null)), fetch(`${base}.bin`).then((r) => (r.ok ? r.arrayBuffer() : null))]);
       if (!js || !bin) return null;
-      const [image, eyeImage, headImage] = await Promise.all([img(`${base}.jpg`), img(`${base}-occhi.jpg`), js.meshes.corpo.headStart != null ? img(`${base}-testa.jpg`) : Promise.resolve(null)]);
+      const [image, eyeImage, headImage, reliefImage] = await Promise.all([img(`${base}.jpg`), img(`${base}-occhi.jpg`), js.meshes.corpo.headStart != null ? img(`${base}-testa.jpg`) : Promise.resolve(null), js.relief ? img(`${base}-rilievo.jpg`) : Promise.resolve(null)]);
       const dec = (m: MeshJson): SkinMesh => {
         const dv = new DataView(bin);
         const st = js.stride;
@@ -127,6 +127,7 @@ export function loadSkinBody(base = "/anatomia/pelle"): Promise<SkinBody | null>
         hideEyes: Boolean(js.hideEyes),
         headImage,
         headUvScale: js.headUvScale ?? 1,
+        reliefImage,
         faceSkin: (js.faceSkin?.length === 3 ? js.faceSkin : [0.41, 0.23, 0.14]) as [number, number, number],
       };
     } catch {
@@ -152,6 +153,78 @@ function segAff(m: Float32Array, at: number): Aff {
 function affLerp(a: Aff, b: Aff, t: number): Aff {
   return { r: a.r.map((x, i) => x * (1 - t) + b.r[i] * t), t: v3.lerp(a.t, b.t, t) };
 }
+/** parte di rotazione di una 3x3 (decomposizione polare, poche iterazioni: le matrici sono quasi rotazioni) */
+function polarRot(m: number[]): number[] {
+  let r = m.slice();
+  for (let it = 0; it < 6; it++) {
+    const [a, b, c, d, e, f, g, h, i] = r;
+    const det = a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g);
+    if (Math.abs(det) < 1e-12) break;
+    // inversa trasposta
+    const it_ = [(e * i - f * h) / det, -(d * i - f * g) / det, (d * h - e * g) / det, -(b * i - c * h) / det, (a * i - c * g) / det, -(a * h - b * g) / det, (b * f - c * e) / det, -(a * f - c * d) / det, (a * e - b * d) / det];
+    r = r.map((x, k) => 0.5 * (x + it_[k]));
+  }
+  return r;
+}
+function quatOf(r: number[]): [number, number, number, number] {
+  const [m00, m01, m02, m10, m11, m12, m20, m21, m22] = r;
+  const tr = m00 + m11 + m22;
+  let q: [number, number, number, number];
+  if (tr > 0) {
+    const s = Math.sqrt(tr + 1) * 2;
+    q = [(m21 - m12) / s, (m02 - m20) / s, (m10 - m01) / s, 0.25 * s];
+  } else if (m00 > m11 && m00 > m22) {
+    const s = Math.sqrt(1 + m00 - m11 - m22) * 2;
+    q = [0.25 * s, (m01 + m10) / s, (m02 + m20) / s, (m21 - m12) / s];
+  } else if (m11 > m22) {
+    const s = Math.sqrt(1 + m11 - m00 - m22) * 2;
+    q = [(m01 + m10) / s, 0.25 * s, (m12 + m21) / s, (m02 - m20) / s];
+  } else {
+    const s = Math.sqrt(1 + m22 - m00 - m11) * 2;
+    q = [(m02 + m20) / s, (m12 + m21) / s, 0.25 * s, (m10 - m01) / s];
+  }
+  const l = Math.hypot(...q) || 1;
+  return q.map((x) => x / l) as [number, number, number, number];
+}
+function matOf(q: [number, number, number, number]): number[] {
+  const [x, y, z, w] = q;
+  return [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w), 2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w), 2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)];
+}
+const mul3 = (a: number[], b: number[]) => [0, 1, 2].flatMap((i) => [0, 1, 2].map((j) => a[i * 3] * b[j] + a[i * 3 + 1] * b[3 + j] + a[i * 3 + 2] * b[6 + j]));
+const tr3 = (a: number[]) => [a[0], a[3], a[6], a[1], a[4], a[7], a[2], a[5], a[8]];
+/**
+ * fra due segmenti (collo tra torace e testa, vertebre tra bacino e torace): rotazione interpolata davvero
+ * (slerp) attorno al giunto. La media delle matrici, con la testa girata di 90° verso il bersaglio, rimpiccioliva
+ * il collo di un terzo: sotto la testa restava una strozzatura (testa "a fungo")
+ */
+function affBlend(a: Aff, b: Aff, t: number, c: V3): Aff {
+  const Ra = polarRot(a.r);
+  const Rb = polarRot(b.r);
+  const Sa = mul3(tr3(Ra), a.r);
+  const Sb = mul3(tr3(Rb), b.r);
+  const qa = quatOf(Ra);
+  let qb = quatOf(Rb);
+  let d = qa[0] * qb[0] + qa[1] * qb[1] + qa[2] * qb[2] + qa[3] * qb[3];
+  if (d < 0) {
+    qb = qb.map((x) => -x) as [number, number, number, number];
+    d = -d;
+  }
+  let q: [number, number, number, number];
+  if (d > 0.9995) q = qa.map((x, k) => x + (qb[k] - x) * t) as [number, number, number, number];
+  else {
+    const th = Math.acos(Math.min(1, d));
+    const s0 = Math.sin((1 - t) * th) / Math.sin(th);
+    const s1 = Math.sin(t * th) / Math.sin(th);
+    q = qa.map((x, k) => x * s0 + qb[k] * s1) as [number, number, number, number];
+  }
+  const l = Math.hypot(...q) || 1;
+  const R = matOf(q.map((x) => x / l) as [number, number, number, number]);
+  const S = Sa.map((x, k) => x + (Sb[k] - x) * t);
+  const r = mul3(R, S);
+  const cc = v3.lerp(affApply(a, c), affApply(b, c), t);
+  const rc: V3 = [r[0] * c[0] + r[1] * c[1] + r[2] * c[2], r[3] * c[0] + r[4] * c[1] + r[5] * c[2], r[6] * c[0] + r[7] * c[1] + r[8] * c[2]];
+  return { r, t: v3.sub(cc, rc) };
+}
 function minRot(a: V3, b: V3): number[] {
   const v = v3.cross(a, b);
   const c = v3.dot(a, b);
@@ -161,7 +234,7 @@ function minRot(a: V3, b: V3): number[] {
 }
 
 /** per ogni osso del personaggio: segmenti dell'atlante che lo muovono e messa dal riposo del personaggio a quello dell'atlante */
-type Bind = { a: number; b: number; t: number; A: Aff } | { hand: "L" | "R"; bone: number };
+type Bind = { a: number; b: number; t: number; A: Aff; /** giunto tra i due segmenti (riposo dell'atlante) */ pivot?: V3 } | { hand: "L" | "R"; bone: number };
 const cache = new WeakMap<BodyMeta, Bind[]>();
 
 const FINGERS = ["thumb", "index", "middle", "ring", "pinky"];
@@ -216,13 +289,13 @@ function binds(meta: BodyMeta, sb: SkinBody): Bind[] {
       case "pelvis":
         return one("bacino", G);
       case "spine_01":
-        return { a: seg("bacino"), b: seg("torace"), t: 0.35, A: G };
+        return { a: seg("bacino"), b: seg("torace"), t: 0.35, A: G, pivot: affApply(G, J(name)) };
       case "spine_02":
-        return { a: seg("bacino"), b: seg("torace"), t: 0.8, A: G };
+        return { a: seg("bacino"), b: seg("torace"), t: 0.8, A: G, pivot: affApply(G, J(name)) };
       case "spine_03":
         return one("torace", G);
       case "neck_01":
-        return { a: seg("torace"), b: seg("testa"), t: 0.5, A: G };
+        return { a: seg("torace"), b: seg("testa"), t: 0.5, A: G, pivot: affApply(G, J(name)) };
       case "Head":
         return one("testa", G);
       case "clavicle":
@@ -260,7 +333,7 @@ export function bodyBones(meta: BodyMeta, sb: SkinBody, skinMats: Float32Array, 
       const pl: Aff = { r: h.pl.m, t: h.pl.t };
       return b.bone === 0 ? pl : affComp(pl, h.bones[b.bone]);
     }
-    const M = b.a === b.b || b.t <= 0 ? segAff(skinMats, b.a) : affLerp(segAff(skinMats, b.a), segAff(skinMats, b.b), b.t);
+    const M = b.a === b.b || b.t <= 0 ? segAff(skinMats, b.a) : b.pivot ? affBlend(segAff(skinMats, b.a), segAff(skinMats, b.b), b.t, b.pivot) : affLerp(segAff(skinMats, b.a), segAff(skinMats, b.b), b.t);
     return affComp(M, b.A);
   });
 }

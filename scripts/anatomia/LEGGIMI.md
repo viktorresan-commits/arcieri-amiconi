@@ -38,6 +38,7 @@ dell'atlante dove c'è (BodyParts3D, CC BY 4.0) e la grana del pacchetto pelle d
     node /tmp/wrap_rest.mjs ../../public/anatomia/corpo.json <pelle originale>.json > rest-bones.json
     python3 wrap_skin.py <pelle originale> rest-bones.json ../../public/anatomia/corpo ../../public/anatomia/pelle
     python3 bake_face.py ../../public/anatomia/pelle.rest.npz - <pacchetto pelle>/09_face_albedo_4k.jpg ../../public/anatomia/pelle-testa.jpg ../../public/anatomia/pelle.json
+    python3 bake_relief.py ../../public/anatomia/pelle.body.npz <tavola normal map del corpo> ../../public/anatomia/pelle-rilievo.jpg ../../public/anatomia/pelle.json
     python3 skin_detail.py <cartella del pacchetto pelle> ../../public/anatomia
 
 - `wrap_rest.ts` mette le ossa del personaggio nel riposo dell'atlante con il codice dell'app;
@@ -47,4 +48,7 @@ dell'atlante dove c'è (BodyParts3D, CC BY 4.0) e la grana del pacchetto pelle d
 - `bake_face.py` fa la testa nuova: la foto del viso del pacchetto (occhi aperti) deformata sulla testa
   dell'atlante con punti di riferimento, capelli rasati ai lati e dietro, in `pelle-testa.jpg` (uv sferiche);
   `pelle.rest.npz` è un file di passaggio, non va nel sito;
+- `bake_relief.py` porta sulla pelle il rilievo fine delle tavole di riferimento dell'avatar (normal map di
+  fronte, di schiena e delle braccia): addominali, dorsali, glutei, ginocchia, polpacci, vene; in
+  `pelle-rilievo.jpg`, nello spazio tangente delle uv del corpo (`pelle.body.npz` è di passaggio);
 - `skin_detail.py` fa la grana della pelle (pori, rossori, rilievo, ruvidità) che si ripete.

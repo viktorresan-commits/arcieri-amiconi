@@ -445,6 +445,8 @@ uniform vec4 uBack;
 // grana della pelle (dal pacchetto pelle): r = luce, g = ruvidità, b = rossore (0,5 neutri) e normal map,
 // ripetute sulla pelle ogni uDetK lati dell'immagine
 uniform sampler2D uDet; uniform sampler2D uDnm; uniform float uDetOn; uniform float uDetK;
+// rilievo del corpo dalle tavole (addominali, dorsali, vene): normal map nello spazio delle uv del corpo
+uniform sampler2D uRil; uniform float uRilOn;
 vec3 tone(vec3 c){ c = clamp((c * (2.51 * c + 0.03)) / (c * (2.43 * c + 0.59) + 0.14), 0.0, 1.0); return pow(c, vec3(1.0 / 2.2)); }
 float wrapL(vec3 N, vec3 L, float w){ return max(0.0, (dot(N, L) + w) / (1.0 + w)); }
 void main(){
@@ -470,6 +472,10 @@ void main(){
     vec3 B = dp2p * du.y + dp1p * dv.y;
     float im = inversesqrt(max(max(dot(T, T), dot(B, B)), 1e-20));
     N = normalize(N + (T * nm.x + B * nm.y) * im * 1.3 * near);
+    if (uRilOn > 0.5) {
+      vec2 rn = texture2D(uRil, vUV).rg * 2.0 - 1.0;
+      N = normalize(N + (T * rn.x + B * rn.y) * im * 0.85);
+    }
     // la stessa grana più larga (circa 3,5 volte): macchie e rossori che si vedono anche da lontano
     vec3 dc = texture2D(uDet, vUV * uDetK * 0.29 + vec2(0.37, 0.61)).rgb - 0.5;
     dL = dt.r * 0.9 + dc.r * 0.55; dR = dt.b * 0.9 + dc.b * 0.8; dS = dt.g;
@@ -933,6 +939,8 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     aK: gl.getAttribLocation(hprog, "aK"),
     uFaceSkin: gl.getUniformLocation(hprog, "uFaceSkin"),
     uUvScale: gl.getUniformLocation(hprog, "uUvScale"),
+    uRil: gl.getUniformLocation(hprog, "uRil"),
+    uRilOn: gl.getUniformLocation(hprog, "uRilOn"),
     uVP: gl.getUniformLocation(hprog, "uVP"),
     uEye: gl.getUniformLocation(hprog, "uEye"),
     uSkin: gl.getUniformLocation(hprog, "uSkin"),
@@ -986,6 +994,8 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
   const bodyTex = gl.createTexture();
   const eyeTex = gl.createTexture();
   const headTex = gl.createTexture();
+  const reliefTex = gl.createTexture();
+  let reliefOn = false;
   type MeshGpu = { pos: WebGLBuffer; nrm: WebGLBuffer; uv: WebGLBuffer; k: WebGLBuffer; ib: WebGLBuffer; count: number; p: Float32Array; n: Float32Array; m: SkinMesh; /** senza la testa (visuale dall'occhio) */ ibNoHead?: WebGLBuffer; countNoHead?: number };
   let bodyGpu: { body: MeshGpu; eyes: MeshGpu } | null = null;
   const upTex = (t: WebGLTexture | null, im: HTMLImageElement) => {
@@ -1039,6 +1049,10 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
       bodyGpu.body.countNoHead = keep.length;
       if (b.image) upTex(bodyTex, b.image);
       if (b.eyeImage) upTex(eyeTex, b.eyeImage);
+      if (b.reliefImage) {
+        upTex(reliefTex, b.reliefImage);
+        reliefOn = true;
+      }
       if (b.headImage) {
         upTex(headTex, b.headImage);
         // la giunta delle uv della testa è dietro: l'immagine si ripete in orizzontale
@@ -1070,8 +1084,13 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
       }
     });
-  const drawMesh = (g: MeshGpu, tex: WebGLTexture | null, texOn: boolean, raw: boolean, meanL: number, noHead = false, /** solo questi indici (inizio, quanti) e uv × scala */ range?: [number, number, number]) => {
+  const drawMesh = (g: MeshGpu, tex: WebGLTexture | null, texOn: boolean, raw: boolean, meanL: number, noHead = false, /** solo questi indici (inizio, quanti) e uv × scala */ range?: [number, number, number], relief = false) => {
     gl.uniform1f(hl.uUvScale, range ? range[2] : 1);
+    gl.uniform1f(hl.uRilOn, relief && reliefOn ? 1 : 0);
+    gl.activeTexture(gl.TEXTURE4);
+    gl.bindTexture(gl.TEXTURE_2D, reliefTex);
+    gl.uniform1i(hl.uRil, 4);
+    gl.activeTexture(gl.TEXTURE0);
     gl.uniform1f(hl.uMeanL, meanL);
     gl.uniform1f(hl.uTexOn, texOn ? 1 : 0);
     gl.uniform1f(hl.uRaw, raw ? 1 : 0);
@@ -1139,9 +1158,9 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     const hs = bodyGpu.body.m.headStart;
     if (hs != null && skinBody.headImage) {
       // corpo con la sua immagine, testa nuova con la foto del viso (dall'occhio dell'arciere la testa non c'è)
-      drawMesh(bodyGpu.body, bodyTex, Boolean(skinBody.image), false, skinBody.meanLuma, fromEye, [0, hs, 1]);
+      drawMesh(bodyGpu.body, bodyTex, Boolean(skinBody.image), false, skinBody.meanLuma, fromEye, [0, hs, 1], true);
       if (!fromEye) drawMesh(bodyGpu.body, headTex, true, false, skinBody.meanLuma, false, [hs, bodyGpu.body.count - hs, skinBody.headUvScale]);
-    } else drawMesh(bodyGpu.body, bodyTex, Boolean(skinBody.image), false, skinBody.meanLuma, fromEye);
+    } else drawMesh(bodyGpu.body, bodyTex, Boolean(skinBody.image), false, skinBody.meanLuma, fromEye, undefined, true);
     // occhi del personaggio solo se la testa non ha la foto del viso
     if (!fromEye && !skinBody.hideEyes) drawMesh(bodyGpu.eyes, eyeTex, Boolean(skinBody.eyeImage), true, 0.5);
     gl.disableVertexAttribArray(hl.aP);
@@ -1164,6 +1183,7 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     gl.uniform1f(hl.uRaw, 0);
     bindDetail(HAND_DETAIL_K);
     gl.uniform1f(hl.uUvScale, 1);
+    gl.uniform1f(hl.uRilOn, 0);
     // le mani vere da sole: niente occlusione cotta, chiaroscuro dipinto pieno
     if (hl.aK >= 0) {
       gl.disableVertexAttribArray(hl.aK);

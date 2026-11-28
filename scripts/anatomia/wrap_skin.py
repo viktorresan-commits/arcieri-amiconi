@@ -226,6 +226,43 @@ def front_depth(P, T, x0, x1, y0, y1, ppm=3500.0):
     return zb, (x0, y1, ppm)
 
 
+def sphere_radius(P, T, C, NU=720, NV=360):
+    """raggio della superficie più esterna attorno a C, per direzione (u = angolo attorno alla verticale, v = dall'alto)"""
+    d = P - C
+    r = np.linalg.norm(d, axis=1)
+    u = (np.arctan2(d[:, 0], d[:, 2]) / (2 * np.pi) + 0.5) * NU
+    v = np.arccos(np.clip(d[:, 1] / np.maximum(r, 1e-9), -1, 1)) / np.pi * NV
+    R = np.full((NV, NU), np.nan)
+    for t in T:
+        uu, vv, rr = u[t].copy(), v[t], r[t]
+        if uu.max() - uu.min() > NU / 2:
+            uu[uu < NU / 2] += NU
+        mnx, mxx = int(np.floor(uu.min())), int(np.ceil(uu.max()))
+        mny, mxy = int(max(0, np.floor(vv.min()))), int(min(NV - 1, np.ceil(vv.max())))
+        gx, gy = np.meshgrid(np.arange(mnx, mxx + 1) + 0.5, np.arange(mny, mxy + 1) + 0.5)
+        dd = (vv[1] - vv[2]) * (uu[0] - uu[2]) + (uu[2] - uu[1]) * (vv[0] - vv[2])
+        if abs(dd) < 1e-12:
+            continue
+        l0 = ((vv[1] - vv[2]) * (gx - uu[2]) + (uu[2] - uu[1]) * (gy - vv[2])) / dd
+        l1 = ((vv[2] - vv[0]) * (gx - uu[2]) + (uu[0] - uu[2]) * (gy - vv[2])) / dd
+        l2 = 1 - l0 - l1
+        m = (l0 >= -1e-6) & (l1 >= -1e-6) & (l2 >= -1e-6)
+        if not m.any():
+            continue
+        z = l0 * rr[0] + l1 * rr[1] + l2 * rr[2]
+        ix = (gx[m].astype(int)) % NU
+        iy = gy[m].astype(int)
+        cur = R[iy, ix]
+        R[iy, ix] = np.where(np.isnan(cur), z[m], np.maximum(cur, z[m]))
+    # buchi (poli, bordi): dai vicini
+    for _ in range(50):
+        if not np.isnan(R).any():
+            break
+        nb = np.nanmean(np.stack([np.roll(R, 1, 1), np.roll(R, -1, 1), np.roll(R, 1, 0), np.roll(R, -1, 0)]), 0)
+        R = np.where(np.isnan(R), nb, R)
+    return R
+
+
 # ---------------------------------------------------------------- occlusione
 def ray_ao(pts, nrm, occ_pts, cell=0.006, dirs=28, reach=0.22, start=0.012):
     """quanto cielo vede ogni punto (0..1) contro le superfici occ_pts (griglia di voxel)"""
@@ -383,7 +420,13 @@ def main():
     ue, cnt = np.unique(e, axis=0, return_counts=True)
     bverts = np.unique(ue[cnt == 1])
     db = cKDTree(P[bverts]).query(best_p)[0] if len(bverts) else np.full(nw, 1.0)
-    valid = np.isfinite(best_d) * (1 - smoothstep(0.03, 0.05, np.where(np.isfinite(best_d), best_d, 1))) * smoothstep(0.006, 0.03, db)
+    # la testa del personaggio è più grande di quella dell'atlante (fino a 8-9 cm sulla nuca e in cima): lì si
+    # accetta un punto più lontano, se no il cranio resta grosso sopra il viso (a fungo)
+    hw0 = np.zeros(nw)
+    np.add.at(hw0, wid, wsum(is_head))
+    hw0 /= np.bincount(wid, minlength=nw)
+    dd = np.where(np.isfinite(best_d), best_d, 1)
+    valid = np.isfinite(best_d) * (1 - smoothstep(0.03 + 0.05 * hw0, 0.05 + 0.06 * hw0, dd)) * smoothstep(0.006, 0.03, db)
     print("distanza dall'atlante (cm):", np.percentile(best_d[np.isfinite(best_d)] * 100, [50, 90, 99]).round(2), "validi", round(float((valid > 0.5).mean()), 3))
 
     # ---- viso: la pelle davanti va sulla superficie dell'atlante solo in profondità (lungo z), senza scorrere:
@@ -407,6 +450,23 @@ def main():
     tgt = np.where(front[:, None] > 0, tgt * (1 - front[:, None]) + np.stack([qw[:, 0], qw[:, 1], np.where(np.isfinite(zf), zf, qw[:, 2])], 1) * front[:, None], tgt)
     valid = np.maximum(valid, front)
     print("viso proiettato di fronte:", int((front > 0.5).sum()), "punti")
+    # cranio (fuori dal viso): lungo il raggio dal centro della testa fino alla pelle dell'atlante. Con il punto più
+    # vicino la nuca finiva sul collo (un incavo sotto i capelli, testa a fungo)
+    CH0 = np.array([0.0, 1.61, -0.01])
+    hsel2 = AI[P[AI][:, :, 1].min(1) > 1.46]
+    RS = sphere_radius(P, hsel2, CH0)
+    dq = qw - CH0
+    rq = np.maximum(np.linalg.norm(dq, axis=1), 1e-9)
+    uq = ((np.arctan2(dq[:, 0], dq[:, 2]) / (2 * np.pi) + 0.5) * RS.shape[1]).astype(int) % RS.shape[1]
+    vq = np.clip((np.arccos(np.clip(dq[:, 1] / rq, -1, 1)) / np.pi * RS.shape[0]).astype(int), 0, RS.shape[0] - 1)
+    ra = RS[vq, uq]
+    # solo dove la direzione sta sopra il collo (v < 0,62: dall'alto fino sotto le orecchie)
+    vfrac = vq / RS.shape[0]
+    radial = smoothstep(0.3, 0.7, head_w) * (1 - smoothstep(0.6, 0.82, vfrac)) * (1 - front) * np.isfinite(ra)
+    rad_t = CH0 + dq / rq[:, None] * np.where(np.isfinite(ra), ra, rq)[:, None]
+    tgt = tgt * (1 - radial[:, None]) + rad_t * radial[:, None]
+    valid = np.maximum(valid, radial)
+    print("cranio lungo il raggio:", int((radial > 0.5).sum()), "punti")
 
     # ---- spostamento: dove l'atlante manca si riempie dai vicini, poi si ammorbidisce appena
     D = tgt - qw
@@ -618,6 +678,15 @@ def main():
     open(out + ".bin", "wb").write(b"".join(parts))
     # per la foto del viso: la pelle a riposo nell'atlante (viso verso +z), uv e quanto conta il viso
     np.savez(out + ".rest.npz", pos=restU[allv], nrm=nn[wid][allv], uv=alluv, tri=htri2 - n, face=face[allv])
+    # per il rilievo del corpo (bake_relief.py): tutta la pelle a riposo, uv del corpo, triangoli del corpo e la parte
+    # (0 busto, 1 braccio sinistro, 2 braccio destro, 3 gamba sinistra, 4 gamba destra, 5 mani e testa: niente rilievo)
+    pid = np.zeros(n, np.int64)
+    up_l, up_r = wsum(np.array([nm.startswith(("upperarm_l", "lowerarm_l")) for nm in names])), wsum(np.array([nm.startswith(("upperarm_r", "lowerarm_r")) for nm in names]))
+    lg_l, lg_r = wsum(np.array([nm.endswith("_l") and nm.startswith(("thigh", "calf", "foot", "ball")) for nm in names])), wsum(np.array([nm.endswith("_r") and nm.startswith(("thigh", "calf", "foot", "ball")) for nm in names]))
+    other = wsum(is_hand | is_head)
+    stack = np.stack([1 - up_l - up_r - lg_l - lg_r - other, up_l, up_r, lg_l, lg_r, other], 1)
+    pid = np.argmax(stack, 1)
+    np.savez(out + ".body.npz", pos=restU, nrm=nn[wid], uv=Q["uv"] / 65535.0, tri=btri, part=pid, arm=np.stack([up_l, up_r], 1))
     json.dump(j, open(out + ".json", "w"), separators=(",", ":"))
     print("scritto", out, off, "byte")
 
