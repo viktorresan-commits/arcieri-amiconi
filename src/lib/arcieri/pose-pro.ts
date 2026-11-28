@@ -29,6 +29,10 @@ export type ProMetrics = {
   drawWrist: number | null; // deviazione del polso della corda, gradi
   elbowLine: number; // allineamento gomito della corda con la freccia (180 = in linea)
   elbowHeight: number; // gomito della corda rispetto alla linea della freccia, in spalle (+ = sopra)
+  /** gomito della corda sopra l'asse della freccia, in gradi (tavole: 15–20°, circa 17°) */
+  elbowRise: number;
+  /** braccio dell'arco rispetto al busto (spalla-anca / spalla-polso), gradi (tavole: circa 80–90°) */
+  bowArmTrunk: number | null;
   anchorV: number | null; // posizione verticale dell'indice: 0 = bocca, 1 = mento
   anchorH: number | null; // distanza orizzontale dall'asse del viso, in spalle
   anchorDist: number | null; // mano della corda – viso, in spalle
@@ -160,6 +164,9 @@ export function proMetrics(lm: Landmark[], hand: Hand, aspect: number, setup: Pr
   const t = (dE.x - dW.x) / ((bW.x - dW.x) || 1e-3);
   const arrowYAtElbow = dW.y + (bW.y - dW.y) * t;
   const elbowHeight = (arrowYAtElbow - dE.y) / w;
+  const elbowRise = deg(Math.atan2(arrowYAtElbow - dE.y, Math.max(1e-3, Math.abs(dE.x - dW.x))));
+  const hipBowI = pick(23, 24);
+  const bowArmTrunk = ok(hipBowI, 0.4) ? joint(P(hipBowI), bS, bW) : null;
 
   // ancoraggio: dove sta l'indice della mano della corda rispetto a bocca e mento
   let anchorV: number | null = null;
@@ -293,7 +300,7 @@ export function proMetrics(lm: Landmark[], hand: Hand, aspect: number, setup: Pr
   const bowGrip = grips.length ? grips.reduce((a, b) => a + b, 0) / grips.length : null;
 
   return {
-    headTilt, headTurn, headLean, shrug, shoulderLevel, bowArm, bowArmHeight, bowWrist, bowWristDir, drawWrist, elbowLine, elbowHeight, anchorV, anchorH, anchorDist, trunk, sideLean, kneeBow, kneeDraw, stance, weight, drawLenCm, scaleFrom, cmPerUnit,
+    headTilt, headTurn, headLean, shrug, shoulderLevel, bowArm, bowArmHeight, bowWrist, bowWristDir, drawWrist, elbowLine, elbowHeight, elbowRise, bowArmTrunk, anchorV, anchorH, anchorDist, trunk, sideLean, kneeBow, kneeDraw, stance, weight, drawLenCm, scaleFrom, cmPerUnit,
     stanceOpen, footBow, footDraw, shoulderRot, trunkTwist, trunkForward, bowArmTilt, drawForearmTilt, drawUpperTilt, bowKnuckles, drawKnuckles, drawHook, fingersOnString, bowGrip,
   };
 }
@@ -386,15 +393,19 @@ export function evaluate(m: ProMetrics, setup: ProSetup, steady?: ReturnType<typ
     { area: "spalle", label: "Spalla dell'arco bassa", value: m.shrug, unit: "×", lo: 0.88, hi: 1.25, min: 0.3, max: 1.6, digits: 2, tol: 0.2 },
     { area: "braccioArco", label: "Braccio dell'arco disteso", value: m.bowArm, unit: "°", lo: 167, hi: 182, min: 120, max: 182, tol: 12 },
     { area: "braccioArco", label: "Braccio all'altezza della spalla", value: m.bowArmHeight, unit: " sp", lo: -0.12, hi: 0.18, min: -0.8, max: 0.8, digits: 2, tol: 0.2 },
+    { area: "braccioArco", label: "Braccio dell'arco a 80–90° dal busto", value: m.bowArmTrunk, unit: "°", lo: 78, hi: 95, min: 20, max: 150, tol: 12 },
     { area: "polsoArco", label: "Polso dell'arco dritto", value: m.bowWrist, unit: "°", lo: 0, hi: 15, min: 0, max: 60, tol: 15 },
     { area: "gomito", label: "Gomito in linea con la freccia", value: m.elbowLine, unit: "°", lo: 170, hi: 182, min: 130, max: 182, tol: 12 },
-    { area: "gomito", label: "Gomito all'altezza della freccia", value: m.elbowHeight, unit: " sp", lo: -0.05, hi: 0.25, min: -0.5, max: 0.6, digits: 2, tol: 0.15 },
+    // tavole di postura (arco nudo): gomito 15–20° sopra l'asse della freccia
+    { area: "gomito", label: "Gomito 15–20° sopra la freccia", value: m.elbowRise, unit: "°", lo: 12, hi: 23, min: -30, max: 60, tol: 10 },
     { area: "polsoCorda", label: "Polso della corda rilassato", value: m.drawWrist, unit: "°", lo: 0, hi: 18, min: 0, max: 60, tol: 15 },
     { area: "ancoraggio", label: "Altezza dell'ancoraggio", value: m.anchorV, unit: "", lo: at.lo, hi: at.hi, min: -1.5, max: 2.5, digits: 2, tol: 0.35 },
     { area: "ancoraggio", label: "Mano vicina al viso", value: m.anchorDist, unit: " sp", lo: 0, hi: 0.3, min: 0, max: 1.5, digits: 2, tol: 0.25 },
     { area: "busto", label: "Busto verticale", value: m.trunk == null ? null : Math.abs(m.trunk), unit: "°", lo: 0, hi: 5, min: 0, max: 20, tol: 7 },
     { area: "busto", label: "Spalle sopra le anche", value: m.sideLean == null ? null : Math.abs(m.sideLean), unit: " sp", lo: 0, hi: 0.1, min: 0, max: 0.6, digits: 2, tol: 0.15 },
-    { area: "gambe", label: "Piedi larghi come le spalle", value: m.stance, unit: " sp", lo: 0.85, hi: 1.3, min: 0.3, max: 2.2, digits: 2, tol: 0.3 },
+    { area: "gambe", label: "Piedi larghi come le spalle (40–45 cm)", value: m.stance, unit: " sp", lo: 0.9, hi: 1.25, min: 0.3, max: 2.2, digits: 2, tol: 0.3 },
+    { area: "gambe", label: "Piedi aperti 15–20° (open stance)", value: m.stanceOpen, unit: "°", lo: 12, hi: 23, min: -40, max: 60, tol: 10 },
+    { area: "busto", label: "Busto né avanti né indietro", value: m.trunkForward == null ? null : Math.abs(m.trunkForward), unit: "°", lo: 0, hi: 5, min: 0, max: 30, tol: 7 },
     { area: "gambe", label: "Peso al centro", value: m.weight == null ? null : Math.abs(m.weight), unit: " sp", lo: 0, hi: 0.12, min: 0, max: 0.6, digits: 2, tol: 0.15 },
     { area: "gambe", label: "Ginocchia distese", value: m.kneeBow != null && m.kneeDraw != null ? Math.min(m.kneeBow, m.kneeDraw) : (m.kneeBow ?? m.kneeDraw), unit: "°", lo: 165, hi: 182, min: 120, max: 182, tol: 15 },
   ];
@@ -403,6 +414,10 @@ export function evaluate(m: ProMetrics, setup: ProSetup, steady?: ReturnType<typ
   // dita: pinza mediterranea (tre dita sulla corda) e mano dell'arco che non stringe, se la mano si vede
   if (m.fingersOnString != null && m.fingersOnString > 0) gauges.push({ area: "polsoCorda", label: "Tre dita sulla corda (pinza mediterranea)", value: m.fingersOnString, unit: "", lo: 3, hi: 3, min: 0, max: 3, tol: 2 });
   if (m.bowGrip != null) gauges.push({ area: "polsoArco", label: "Mano dell'arco che non stringe", value: m.bowGrip, unit: "°", lo: 0, hi: 70, min: 0, max: 140, tol: 40 });
+  // tavole: mano dell'arco con le nocche a circa 45°, spinta sull'eminenza tenar
+  if (m.bowKnuckles != null) gauges.push({ area: "polsoArco", label: "Nocche dell'arco a circa 45°", value: m.bowKnuckles, unit: "°", lo: 30, hi: 60, min: 0, max: 90, tol: 15 });
+  // ancoraggio all'angolo della bocca (pinza mediterranea): l'indice di lato al naso, non sotto
+  if (at.lo < 0 && m.anchorH != null) gauges.push({ area: "ancoraggio", label: "Indice all'angolo della bocca", value: m.anchorH, unit: " sp", lo: 0.02, hi: 0.16, min: 0, max: 0.6, digits: 2, tol: 0.08 });
 
   // Punteggio stretto: dentro la fascia della tecnica giusta 100, fuori si scende in fretta (a zero a «tol»
   // dalla fascia). Prima si scendeva su un terzo dell'intera scala: quasi ogni tiro prendeva un voto alto
@@ -500,12 +515,6 @@ export function evaluate(m: ProMetrics, setup: ProSetup, steady?: ReturnType<typ
     fix: "Porta il gomito dietro, sul prolungamento della freccia, chiudendo la scapola verso la colonna.",
     drill: { label: "Tenute a secco", to: "/secco" },
   });
-  add(m.elbowHeight < -0.08, {
-    area: "gomito", weight: 1,
-    title: "Gomito della corda basso",
-    why: "Un gomito sotto la freccia fa lavorare il bicipite e il rilascio diventa una spinta in avanti.",
-    fix: "Alza il gomito all'altezza della freccia o appena sopra.",
-  });
   add(m.drawWrist != null && m.drawWrist > 24, {
     area: "polsoCorda", weight: ((m.drawWrist ?? 0) - 20) / 8 + 0.6,
     title: `Polso della corda agganciato (${(m.drawWrist ?? 0).toFixed(0)}°)`,
@@ -530,6 +539,25 @@ export function evaluate(m: ProMetrics, setup: ProSetup, steady?: ReturnType<typ
     title: `Busto inclinato ${(m.trunk ?? 0) > 0 ? "verso il bersaglio" : "all'indietro"} (${Math.abs(m.trunk ?? 0).toFixed(0)}°)`,
     why: "Il busto inclinato sposta il peso e cambia l'altezza del tiro da una freccia all'altra.",
     fix: "Bacino in avanti e sotto, busto verticale: immagina di essere tra due vetri.",
+  });
+  // regole delle tavole di postura (ARC-TD-007/008, BB-SET-001)
+  add(m.elbowRise < 8 || m.elbowRise > 30, {
+    area: "gomito", weight: m.elbowRise < 8 ? (12 - m.elbowRise) / 8 : (m.elbowRise - 25) / 8,
+    title: m.elbowRise < 8 ? `Gomito della corda poco sopra la freccia (${m.elbowRise.toFixed(0)}°)` : `Gomito della corda troppo alto (${m.elbowRise.toFixed(0)}°)`,
+    why: "Nelle tavole il gomito di trazione sta 15–20° sopra l'asse della freccia: la linea di forza resta orizzontale e lavora la schiena. Un gomito basso fa lavorare il bicipite e il rilascio diventa una spinta in avanti.",
+    fix: "Gomito leggermente sopra la freccia (circa 17°), avambraccio in linea con la freccia vista dall'alto.",
+  });
+  add(m.bowArmTrunk != null && (m.bowArmTrunk < 70 || m.bowArmTrunk > 102), {
+    area: "braccioArco", weight: 0.9,
+    title: `Braccio dell'arco a ${(m.bowArmTrunk ?? 0).toFixed(0)}° dal busto`,
+    why: "Il braccio dell'arco a circa 80–90° dal busto lascia la spalla bassa e incassata e il carico passa sulle ossa.",
+    fix: "Alza o abbassa il braccio con il busto fermo, finché è quasi perpendicolare al tronco; spalla giù.",
+  });
+  add(m.stanceOpen != null && (m.stanceOpen < 5 || m.stanceOpen > 32), {
+    area: "gambe", weight: 0.7,
+    title: (m.stanceOpen ?? 0) < 5 ? "Piedi in linea, poco aperti" : "Piedi troppo aperti verso il bersaglio",
+    why: "Le tavole indicano un'apertura di 15–20° (open stance): busto stabile senza torcere le anche.",
+    fix: "Piede verso il bersaglio arretrato di mezza scarpa, punte aperte di 15–20°.",
   });
   add(m.stance != null && (m.stance < 0.75 || m.stance > 1.6), {
     area: "gambe", weight: 0.9,

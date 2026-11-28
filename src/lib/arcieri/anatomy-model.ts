@@ -5,6 +5,7 @@
  * renderer (anatomy-3d) disegna ogni parte con una matrice.
  */
 import { FACE0, FACE_IDS, metricsOf, sides, type Gear, type Hand, type Landmark } from "./pose-analysis";
+import { correctPosture, postureChecks, postureMode, type PostureCheck, type PostureId } from "./posture-ref";
 import { archeryKit } from "./pose-kit";
 
 export type V3 = [number, number, number];
@@ -51,7 +52,7 @@ export type BowPose = { n: V3; u: V3; half: number; nocked: boolean };
 export type PrePose = { J: Record<number, V3>; bow?: BowPose | null; /** verso del palmo per mano (sinistra, destra della persona), continuo nel tempo */ palms?: { L?: V3; R?: V3 }; /** il fotogramma nello spazio della sagoma con la scala e il pavimento dell'intero video */ frame?: ImageFrame };
 /** scala (unità d'immagine per metro) e pavimento decisi sull'intero video: valgono per ogni fotogramma */
 export type PlanarFix = { s: number; floorY: number };
-export type Model = { parts: Part[]; /** posa dell'arco usata (per il filtro sull'intero video) */ bowPose?: BowPose; hud: Hud; center: V3; height: number; J?: Record<number, V3>; hand?: Hand; /** dove guarda il viso (orizzontale): segue il bersaglio durante il tiro */ headF?: V3; /** testa in giù (+) o in su (-), radianti: dal naso rispetto alle orecchie nel fotogramma */ headPitch?: number; /** quanto la mano della corda è in presa sulla corda (0..1) e quanto quella dell'arco stringe l'impugnatura */ grip?: { draw: number; bow: number }; /** il fotogramma del video nel piano del corpo (z = 0), in metri: sinistra, destra, sopra, sotto */ frame?: ImageFrame; /** corporatura trovata con l'aura (silhouette) dell'arciere */ build?: Build; /** asse dell'arco all'impugnatura (verso il flettente alto): la mano dell'arco ci si chiude attorno */ bowAxis?: V3; /** verso del palmo filtrato sull'intero video (vedi PrePose) */ palms?: { L?: V3; R?: V3 }; /** la freccia incoccata: cocca, direzione e lunghezza (per la visuale dell'arciere) */ arrow?: { nock: V3; dir: V3; len: number } };
+export type Model = { parts: Part[]; /** posa dell'arco usata (per il filtro sull'intero video) */ bowPose?: BowPose; hud: Hud; center: V3; height: number; J?: Record<number, V3>; hand?: Hand; /** dove guarda il viso (orizzontale): segue il bersaglio durante il tiro */ headF?: V3; /** testa in giù (+) o in su (-), radianti: dal naso rispetto alle orecchie nel fotogramma */ headPitch?: number; /** quanto la mano della corda è in presa sulla corda (0..1) e quanto quella dell'arco stringe l'impugnatura */ grip?: { draw: number; bow: number }; /** il fotogramma del video nel piano del corpo (z = 0), in metri: sinistra, destra, sopra, sotto */ frame?: ImageFrame; /** corporatura trovata con l'aura (silhouette) dell'arciere */ build?: Build; /** asse dell'arco all'impugnatura (verso il flettente alto): la mano dell'arco ci si chiude attorno */ bowAxis?: V3; /** verso del palmo filtrato sull'intero video (vedi PrePose) */ palms?: { L?: V3; R?: V3 }; /** la freccia incoccata: cocca, direzione e lunghezza (per la visuale dell'arciere) */ arrow?: { nock: V3; dir: V3; len: number }; /** postura rispetto alle tavole: misure sul gesto del video e parti corrette (se la sagoma è corretta) */ posture?: { checks: PostureCheck[]; fixed: PostureId[] } };
 /** dove sta il fotogramma del video nello spazio della sagoma: serve a guardarla "come il video", punto su punto */
 export type ImageFrame = { x0: number; x1: number; yTop: number; yBot: number };
 
@@ -607,8 +608,12 @@ const muscleCol = (a: number): V3 => {
 };
 
 export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gear | null = null, cal: BoneCal | null = null, memo?: DepthMemo | null, time?: number, pre?: PrePose | null): Model | null {
-  const J = pre?.J ?? bodyPoints(lm, aspect, cal, memo, time);
-  if (!J) return null;
+  const J0 = pre?.J ?? bodyPoints(lm, aspect, cal, memo, time);
+  if (!J0) return null;
+  // postura delle tavole: si misura sul gesto del video; a richiesta la sagoma si corregge dove serve
+  const pChecks = postureChecks(J0, hand);
+  const pFix = postureMode.fix ? correctPosture(J0, hand) : null;
+  const J = pFix ? pFix.J : J0;
   const S = sides(hand);
   const parts: Part[] = [];
   const push = (mesh: Part["mesh"], pl: { m: Float32Array; nm: Float32Array }, color: V3, mode: Mode, alpha: number, layer: Part["layer"], act = 0) =>
@@ -1088,19 +1093,23 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gea
   }
 
   // ---------- quote ----------
-  const m = metricsOf(lm, hand, aspect, 1000);
   const kit = archeryKit(lm, aspect * 1000, 1000, hand, gear)?.nums ?? null;
   const kneeM = lerp(J[25], J[26], 0.5);
-  const eyeL = J[2], eyeR = J[5];
-  const headTilt = eyeL && eyeR ? Math.abs((Math.atan2(eyeR[1] - eyeL[1], Math.hypot(eyeR[0] - eyeL[0], eyeR[2] - eyeL[2])) * 180) / Math.PI) : null;
   const labels: Hud["labels"] = [];
-  const ok = (good: boolean): "cyan" | "warn" => (good ? "cyan" : "warn");
   labels.push({ at: drw.el, text: `Gomito corda ${Math.round(drawAng)}°`, tone: "cyan" });
-  labels.push({ at: bow.el, text: `Gomito arco ${Math.round(bowAng)}°`, tone: ok(bowAng >= 160) });
-  if (m) labels.push({ at: shM, text: `Spalle ${Math.abs(m.shoulder).toFixed(0)}°`, tone: ok(Math.abs(m.shoulder) <= 5) });
-  if (headTilt != null) labels.push({ at: headC, text: `Testa ${headTilt.toFixed(0)}°`, tone: ok(headTilt <= 8) });
   labels.push({ at: hipM, text: `Anca ${Math.round(angleAt(shM, hipM, kneeM))}°`, tone: "cyan" });
-  if (m) labels.push({ at: drw.el, text: `Linea gomito ${Math.round(m.line)}°`, tone: ok(m.line >= 165) });
+  // parti da sistemare secondo le tavole: misurate sul gesto del video; con la sagoma corretta, dove si è corretto
+  const fmt = (c: PostureCheck) => `${c.value.toFixed(c.unit === "×" ? 2 : 0).replace(".", ",")}${c.unit}`;
+  const now = pFix ? new Map(postureChecks(J, hand).map((c) => [c.id, c])) : null;
+  for (const c of pChecks) {
+    if (c.ok) continue;
+    const n = now?.get(c.id);
+    if (pFix && pFix.fixed.includes(c.id) && n) {
+      // corretto del tutto, o solo avvicinato (con spalla e polso fermi non sempre si arriva alla fascia)
+      labels.push({ at: n.at, text: n.ok ? `Corretto: ${c.label.toLowerCase()} (${fmt(c)} → ${fmt(n)})` : `Avvicinato: ${c.label.toLowerCase()} ${fmt(c)} → ${fmt(n)} (rif. ${c.ref})`, tone: "gold" });
+    } else labels.push({ at: n?.at ?? c.at, text: `${c.label}: ${fmt(c)} (rif. ${c.ref})`, tone: "warn" });
+  }
+  if (!pChecks.some((c) => !c.ok) && pChecks.length >= 5) labels.push({ at: shM, text: "Postura come nelle tavole", tone: "cyan" });
   if (drawn && !loose && kit?.anchorCm != null) labels.push({ at: nock, text: `Ancoraggio ${kit.anchorCm.toFixed(0)} cm dalla bocca`, tone: "gold" });
   const dims: Hud["dims"] = kit && drawn && !loose ? [{ a: nock, b: grip, text: `Allungo ${kit.drawCm.toFixed(0)} cm (${(kit.drawCm / 2.54).toFixed(1)}″)` }] : [];
   const arcs: Hud["arcs"] = [
@@ -1118,6 +1127,7 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gea
     J,
     hand,
     headF,
+    posture: { checks: pChecks, fixed: pFix?.fixed ?? [] },
     headPitch,
     // la mano dell'arco lo tiene sempre (anche con il braccio giù); la mano della corda si apre al rilascio
     grip: { draw: loose ? 0 : aimed.drawing, bow: Math.max(0.85, aimed.raised) },

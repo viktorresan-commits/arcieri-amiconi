@@ -11,6 +11,7 @@ import { useLocalState } from "@/lib/arcieri/local-store";
 import { mixLm, sideEvidence, swapSides, type Gear, type Hand, type Landmark } from "@/lib/arcieri/pose-analysis";
 import { unpackLm, type PackedLm } from "@/lib/arcieri/gesture-record";
 import { saveFile } from "@/lib/arcieri/native";
+import { withPosture } from "@/lib/arcieri/posture-ref";
 import { cx } from "./kit";
 import { Glyph } from "./icons";
 
@@ -313,7 +314,7 @@ function aimFrame(model: Model, setup: AimSetup, distanceM: number, hand: Hand, 
 }
 
 /** la vista scelta nella sagoma 3D: la usano anche foto e video in alta definizione */
-export const sagomaView: { yaw: number; pitch: number; zoom: number; layers: Record<Layer, boolean>; style?: SagomaStyle; /** pelle vera, chiusa e opaca, al posto del velo sopra muscoli e ossa */ real?: boolean } = {
+export const sagomaView: { yaw: number; pitch: number; zoom: number; layers: Record<Layer, boolean>; style?: SagomaStyle; /** pelle vera, chiusa e opaca, al posto del velo sopra muscoli e ossa */ real?: boolean; /** sagoma con la postura corretta secondo le tavole (non il gesto del video) */ fix?: boolean } = {
   yaw: 0,
   pitch: 0.06,
   zoom: 1,
@@ -467,7 +468,7 @@ export async function sagomaPainter(W: number, H: number, quality: "hd" | "pieno
     /** disegna la posa; smooth: inquadratura che segue piano (video), altrimenti esatta (foto) */
     paint(o: { lm: Landmark[]; aspect: number; hand: Hand; gear: Gear | null; cal: BoneCal | null; time: number; smooth?: boolean; view?: typeof sagomaView; /** centro dell'inquadratura scelto dal modello (es. una mano), per i dettagli */ at?: (m: Model) => V3; /** inquadratura "come il video" (con l'eventuale ingrandimento, in frazioni del riquadro) */ frameView?: { z: number; nx: number; ny: number } | null; /** crediti scritti sull'immagine (no per i fotogrammi del play: sotto c'è già la riga) */ credit?: boolean; /** posa già risolta sull'intero video (motion-solve) */ pre?: PrePose | null; /** visuale dell'arciere con il paglione */ aim?: { setup: AimSetup; distanceM: number; cam?: AimCam; mode?: AimMode } | null }) {
       const view = o.view ?? sagomaView;
-      const model = buildModel(o.lm, o.aspect, o.hand, o.gear, o.cal, o.pre ? null : o.smooth ? memo : null, o.time, o.pre ?? null);
+      const model = withPosture(Boolean(view.fix), () => buildModel(o.lm, o.aspect, o.hand, o.gear, o.cal, o.pre ? null : o.smooth ? memo : null, o.time, o.pre ?? null));
       if (o.aim) {
         const af = model ? aimFrame(model, o.aim.setup, o.aim.distanceM, o.hand, o.aim.cam ?? { zoom: 1, yaw: 0, pitch: 0 }, W, H) : null;
         ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -612,6 +613,24 @@ export function Anatomy3D({
     setRealS(v);
     try {
       localStorage.setItem("sagoma-pelle-vera", v ? "1" : "0");
+    } catch {
+      /* niente memoria: vale per ora */
+    }
+  };
+  // postura corretta: la sagoma si mette come nelle tavole (busto, braccio, gomito, piedi), il video resta com'è
+  const [fixPose, setFixPoseS] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("sagoma-postura-corretta") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const fixRef = useRef(fixPose);
+  fixRef.current = fixPose;
+  const setFixPose = (v: boolean) => {
+    setFixPoseS(v);
+    try {
+      localStorage.setItem("sagoma-postura-corretta", v ? "1" : "0");
     } catch {
       /* niente memoria: vale per ora */
     }
@@ -807,7 +826,7 @@ export function Anatomy3D({
       const k = Math.min(1.5, window.devicePixelRatio || 1);
       const W = Math.round((box.clientWidth * k) / 2) * 2;
       const H = Math.round((box.clientHeight * k) / 2) * 2;
-      const key = `${W}x${H}|${style}|${layersKey}|${solved.key}`;
+      const key = `${W}x${H}|${style}|${layersKey}|${real ? 1 : 0}${fixPose ? 1 : 0}|${solved.key}`;
       if (cacheRef.current?.key === key) return;
       cacheRef.current = null;
       const painter = await sagomaPainter(W, H, "pieno", k).catch(() => null);
@@ -818,7 +837,7 @@ export function Anatomy3D({
       const blobs: (Blob | null)[] = new Array(track.t.length).fill(null);
       cacheRef.current = { key, t: track.t, blobs };
       setPrep(0);
-      const view = { yaw: 0, pitch: 0, zoom: 1, layers: { ...layers }, style };
+      const view = { yaw: 0, pitch: 0, zoom: 1, layers: { ...layers }, style, real, fix: fixPose };
       try {
         for (let i = 0; i < track.t.length && alive; i++) {
           const fl = solved.lm[i];
@@ -843,7 +862,7 @@ export function Anatomy3D({
       setPrep(null);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [track, solved, fixedCal, style, layersKey, mirror, effHand, aspect, inBox, full]);
+  }, [track, solved, fixedCal, style, layersKey, real, fixPose, mirror, effHand, aspect, inBox, full]);
 
   useEffect(() => {
     const canvas = glCanvas.current;
@@ -905,6 +924,7 @@ export function Anatomy3D({
     let drawnI = -1;
     let cacheVisible = false;
     let lastKey = "";
+    let lastFix = fixRef.current;
     let moving = false;
     let lastChange = -1e9;
     let lastFast = false;
@@ -938,6 +958,12 @@ export function Anatomy3D({
       // ossa o corporatura nuove (fine dell'analisi, aura): si ricostruisce il corpo anche da fermi
       if (fc !== lastCal) {
         lastCal = fc;
+        moving = true;
+        lastChange = now;
+      }
+      // postura corretta accesa o spenta: il corpo si ricostruisce anche da fermi
+      if (fixRef.current !== lastFix) {
+        lastFix = fixRef.current;
         moving = true;
         lastChange = now;
       }
@@ -1061,7 +1087,7 @@ export function Anatomy3D({
         });
       }
       const aimKey = am.on ? `${am.mode}|${am.D}|${ac.zoom.toFixed(3)}|${ac.yaw.toFixed(4)}|${ac.pitch.toFixed(4)}|${R.targetReady()}|${am.setup.drawLb},${am.setup.drawIn},${am.setup.grains},${am.setup.lengthIn},${am.setup.bowType}` : "";
-      const key = `${aimKey}|${ready}|${styleRef.current}|${c.yaw.toFixed(4)}|${c.pitch.toFixed(4)}|${c.zoom.toFixed(3)}|${v2 ? `${v2.z},${v2.x},${v2.y}` : ""}|${L0.pelle}${L0.muscolo}${L0.osso}${L0.punti}${L0.quote}|${canvas.clientWidth}x${canvas.clientHeight}|${scale}|${bodyTick}|${R.gearReady()}`;
+      const key = `${aimKey}|${ready}|${styleRef.current}|${c.yaw.toFixed(4)}|${c.pitch.toFixed(4)}|${c.zoom.toFixed(3)}|${v2 ? `${v2.z},${v2.x},${v2.y}` : ""}|${L0.pelle}${L0.muscolo}${L0.osso}${L0.punti}${L0.quote}${realRef.current ? 1 : 0}${fixRef.current ? 1 : 0}|${canvas.clientWidth}x${canvas.clientHeight}|${scale}|${bodyTick}|${R.gearReady()}`;
       // dopo un movimento si disegna ancora un attimo con il corpo leggero, poi una volta con quello pieno
       const fast = now - lastChange < 450 || dragging.current;
       if (!moving && key === lastKey && !playing && fast === lastFast) return;
@@ -1099,12 +1125,12 @@ export function Anatomy3D({
           const i = Math.abs(sv.t[hi] - tNow) < Math.abs(sv.t[lo] - tNow) ? hi : lo;
           const l = sv.lm[i];
           if (l && sv.pre[i] && Math.abs(sv.t[i] - tNow) < 0.06) {
-            fromSolved = buildModel(l, asp, hd, sv.gear[i], fc ?? live.current.cal, null, sv.t[i], sv.pre[i]);
+            fromSolved = withPosture(fixRef.current, () => buildModel(l, asp, hd, sv.gear[i], fc ?? live.current.cal, null, sv.t[i], sv.pre[i]));
             if (fromSolved) usedPre = sv.pre[i];
           }
         }
         if (!fromSolved) usedPre = null;
-        model = fromSolved ?? buildModel(smooth, asp, hd, gr?.current ?? null, fc ?? live.current.cal, memo, time) ?? model;
+        model = fromSolved ?? withPosture(fixRef.current, () => buildModel(smooth!, asp, hd, gr?.current ?? null, fc ?? live.current.cal, memo, time)) ?? model;
         if (model?.arrow) {
           aimSrc = model;
           aimSrcPre = usedPre;
@@ -1165,6 +1191,7 @@ export function Anatomy3D({
       sagomaView.layers = { ...layersRef.current };
       sagomaView.style = styleRef.current;
       sagomaView.real = realRef.current;
+      sagomaView.fix = fixRef.current;
       R.setStyle(realRef.current ? 2 : styleRef.current);
       if (realRef.current) R.setSkin(skinTone);
       lastShot.current = { lm: smooth, aspect: asp, hand: hd, gear: gr?.current ?? null, cal: fc ?? live.current.cal, time, pre: usedPre };
@@ -1413,6 +1440,12 @@ export function Anatomy3D({
           // pelle vera: il corpo chiuso, con la pelle scelta per l'avatar; spenta torna il velo sull'anatomia
           <button type="button" aria-pressed={real} onClick={() => setReal(!real)} className={cx("min-h-8 rounded-full px-2.5 text-[0.7rem] font-semibold backdrop-blur", real ? chipOn : chipOff)}>
             Pelle vera
+          </button>
+        )}
+        {aim ? null : (
+          // la sagoma come nelle tavole di postura: le parti fuori misura si correggono e restano segnate in oro
+          <button type="button" aria-pressed={fixPose} onClick={() => setFixPose(!fixPose)} className={cx("min-h-8 rounded-full px-2.5 text-[0.7rem] font-semibold backdrop-blur", fixPose ? chipOn : chipOff)}>
+            Postura corretta
           </button>
         )}
         {aim ? null : ([["pelle", "Corpo"], ["muscolo", "Muscoli"], ["osso", "Scheletro"], ["punti", "Punti"], ["quote", "Misure"]] as const).filter(([k]) => !real || k === "punti" || k === "quote").map(([k, label]) => (
