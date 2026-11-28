@@ -425,7 +425,11 @@ function bodyPointsRaw(lm: Landmark[], aspect: number, cal: BoneCal | null = nul
     const steepDz = Math.max(l * Math.abs(slope) * 0.85, Math.sqrt(Math.max(0, len_ * len_ - l * l)) * 0.9);
     const tSteep = Math.max(0, Math.min(1, (Math.abs(slope) - 0.7) / 0.6));
     const dz = flatDz + (steepDz - flatDz) * tSteep;
-    return Math.sign(slope) * Math.min(len_ * 1.1, dz);
+    // un osso non è più lungo di quanto è: se nel video si vede già quasi intero (di piatto, come il braccio
+    // dell'arco con l'arciere di fronte e il bersaglio di lato) la profondità stimata, rumorosa, non può
+    // piegarlo. Prima il braccio dritto nella foto (166°) risultava piegato nella sagoma (149°)
+    const maxDz = Math.sqrt(Math.max(0, (len_ * 1.04) ** 2 - l * l));
+    return Math.sign(slope) * Math.min(len_ * 1.1, dz, maxDz);
   };
   // spalle e anche: il busto girato rispetto alla camera
   const turnGain = cal?.build?.turn ?? 1;
@@ -1170,9 +1174,10 @@ function headAim(J: Record<number, V3>, bow: { sh: V3; el: V3; wr: V3 }, drw: { 
   const pitch = Math.asin(Math.max(-0.4, Math.min(0.8, (drop - 0.022) / 0.05))) * (1 - 0.7 * drawing);
   const aim = flat(sub(bow.wr, drawing > 0.2 ? drw.wr : bow.sh));
   if (!aim || raised < 0.05) return { f: look, raised, drawing, pitch };
-  // il viso segue il video (naso e orecchie); in trazione solo una spinta leggera verso la freccia,
-  // quanto basta a togliere il tremolio dei punti del viso (prima la testa girava più del vero)
-  const w = Math.min(0.3, 0.12 * raised + 0.18 * drawing);
+  // il viso segue il video (naso e orecchie) finché la mano della corda non arriva al viso; all'ancoraggio
+  // l'arciere guarda il bersaglio lungo la freccia: testa e occhi si girano lì (di scorcio i punti del viso
+  // la davano girata a metà, verso la camera)
+  const w = Math.min(0.9, 0.12 * raised + 0.85 * drawing);
   let f = add(mul(look, 1 - w), mul(aim, w));
   if (len(f) < 1e-3) f = aim;
   f = perp(up, f);
