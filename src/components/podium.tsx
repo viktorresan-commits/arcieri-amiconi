@@ -248,7 +248,7 @@ function CrestMedal({ row, place }: { row: CrestPodiumRow; place: Place }) {
         <Laurel place={place} className="pointer-events-none absolute -inset-x-[16%] -bottom-[14%] z-0 h-auto w-[132%]" />
         <div className="relative z-10 aspect-square w-full rounded-full p-[5%] shadow-[0_14px_18px_rgba(0,0,0,0.55)]" style={{ background: `linear-gradient(135deg, ${m.a}, ${m.b} 50%, ${m.c})` }}>
           <div className="grid h-full w-full place-items-center rounded-full" style={{ background: `radial-gradient(circle at 50% 30%, ${row.color}66, #0d1b17 75%)` }}>
-            {row.logo ? <img src={row.logo} alt="" className="h-[74%] w-[74%] object-contain drop-shadow-[0_4px_6px_rgba(0,0,0,0.5)]" /> : <span className="font-display text-3xl text-white">{row.name.slice(0, 1)}</span>}
+            {row.logo ? <img src={row.logo} alt="" decoding="async" className="h-[74%] w-[74%] object-contain drop-shadow-[0_4px_6px_rgba(0,0,0,0.5)]" /> : <span className="font-display text-3xl text-white">{row.name.slice(0, 1)}</span>}
           </div>
         </div>
       </div>

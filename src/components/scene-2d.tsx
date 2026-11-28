@@ -53,7 +53,7 @@ function keepDecoded(src: string) {
   decoded.set(src, img);
 }
 
-function PaintedBackdrop({ sky, id, art, wind = 0 }: { sky: Sky; id: string; art: Painted; wind?: number }) {
+function PaintedBackdrop({ sky, id, art, wind = 0, lite = false }: { sky: Sky; id: string; art: Painted; wind?: number; lite?: boolean }) {
   const night = sky.tod === "notte";
   const rain = sky.weather === "pioggia";
   const cloudy = sky.weather !== "sereno";
@@ -81,7 +81,8 @@ function PaintedBackdrop({ sky, id, art, wind = 0 }: { sky: Sky; id: string; art
       </defs>
       {/* base scura sotto l'illustrazione: finché l'immagine non è pronta non si vede attraverso */}
       <rect x="-10" y="-400" width="420" height="720" fill={night ? "#0b1220" : "#1b2419"} />
-      <image href={src} x="-10" y={300 - 420 * 1.5} width="420" height={420 * 1.5} preserveAspectRatio="xMidYMax slice" filter={`url(#${id}wide)`} opacity="0.9" />
+      {/* in piccolo (nicchia di un elenco) la cornice sfocata non si vede ma costa: niente */}
+      {lite ? null : <image href={src} x="-10" y={300 - 420 * 1.5} width="420" height={420 * 1.5} preserveAspectRatio="xMidYMax slice" filter={`url(#${id}wide)`} opacity="0.9" />}
       <g transform={`translate(${tx} ${ty}) scale(${k})`}>
       <defs>
         <filter id={`${id}soft`} x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="18" /></filter>
@@ -98,7 +99,7 @@ function PaintedBackdrop({ sky, id, art, wind = 0 }: { sky: Sky; id: string; art
       {grey && dusk ? <rect width={w} height={h} fill="#ff9a5a" opacity="0.16" style={{ mixBlendMode: "soft-light" }} /> : null}
       {grey && !rain ? <rect width={w} height={h} fill="#ffffff" opacity="0.06" /> : null}
       {/* foschia che scorre nel cielo, nel verso del vento */}
-      {!night ? (
+      {!night && !lite ? (
         <g className="aa-paint-mist" style={{ ["--drift" as string]: `${drift * 120}px` }} filter={`url(#${id}soft)`} fill="#fff" opacity={rain ? 0.22 : 0.16}>
           <ellipse cx={w * 0.25} cy={art.sky * 0.42} rx={w * 0.22} ry="34" />
           <ellipse cx={w * 0.72} cy={art.sky * 0.3} rx={w * 0.18} ry="26" />
@@ -106,13 +107,13 @@ function PaintedBackdrop({ sky, id, art, wind = 0 }: { sky: Sky; id: string; art
         </g>
       ) : null}
       {/* uccelli lontani di giorno */}
-      {!night && !rain ? (
+      {!night && !rain && !lite ? (
         <g className="aa-paint-birds" fill="none" stroke="#2a2a2a" strokeOpacity="0.55" strokeWidth="2.4" strokeLinecap="round">
           {[[0, 0], [26, 12], [52, -6]].map(([dx, dy], i) => <FlapBird key={i} x={w * 0.18 + dx} y={art.sky * 0.55 + dy} a={7} dur={0.55 + i * 0.07} delay={i * 0.17} stroke="#2a2a2a" width={2.4} opacity={0.55} />)}
         </g>
       ) : null}
       {/* di notte: torce che tremolano e lucciole sull'erba */}
-      {night ? (
+      {night && !lite ? (
         <g>
           {(art.torches ?? []).map(([x, y], i) => <circle key={i} className="aa-torch" style={{ animationDelay: `${i * 0.37}s` }} cx={x} cy={y} r="46" fill={`url(#${id}glow)`} />)}
           {Array.from({ length: 16 }, (_, i) => {
@@ -122,7 +123,7 @@ function PaintedBackdrop({ sky, id, art, wind = 0 }: { sky: Sky; id: string; art
           })}
         </g>
       ) : null}
-      {rain ? (
+      {rain && !lite ? (
         <g className="aa-rain" stroke="#dce8f2" strokeOpacity="0.45" strokeWidth="2">
           {Array.from({ length: 110 }, (_, i) => <path key={i} d={`M${(i * 79.3) % (w + 40)} ${(i * 53.9) % h} l-7 26`} />)}
         </g>
@@ -133,11 +134,11 @@ function PaintedBackdrop({ sky, id, art, wind = 0 }: { sky: Sky; id: string; art
   );
 }
 
-export const SceneBackdrop = memo(function SceneBackdrop({ sky, id = "bk", scene = "campo", wind }: { sky: Sky; id?: string; scene?: string; /** vento in m/s: positivo verso destra. Le nuvole vanno dove tira */ wind?: number }) {
+export const SceneBackdrop = memo(function SceneBackdrop({ sky, id = "bk", scene = "campo", wind, lite = false }: { sky: Sky; id?: string; scene?: string; /** vento in m/s: positivo verso destra. Le nuvole vanno dove tira */ wind?: number; /** in piccolo (elenchi): senza la vita animata, la foschia e le sfocature, che lì non si vedono */ lite?: boolean }) {
   const p = SKY[sky.tod];
   const sc = sceneById(scene);
   const art = PAINTED[sc.id];
-  if (art) return <PaintedBackdrop sky={sky} id={id} art={art} wind={wind} />;
+  if (art) return <PaintedBackdrop sky={sky} id={id} art={art} wind={wind} lite={lite} />;
   const rain = sky.weather === "pioggia";
   const cloudy = sky.weather !== "sereno";
   const night = sky.tod === "notte";
@@ -240,7 +241,7 @@ export const SceneBackdrop = memo(function SceneBackdrop({ sky, id = "bk", scene
       </>}
 
       {LAYERS[sc.id]?.(id, night) ?? LAYERS.campo(id, night)}
-      {indoor || own ? null : <SceneLife scene={sc.id} night={night} rain={rain} dusk={sky.tod === "tramonto"} />}
+      {indoor || own || lite ? null : <SceneLife scene={sc.id} night={night} rain={rain} dusk={sky.tod === "tramonto"} />}
       {own ? null : indoor ? <IndoorLight id={id} /> : <Atmosphere id={id} sunX={sunX} sunY={sunY} sun={p.sun} night={night} tod={sky.tod} />}
       {indoor || own ? null : <>
       {/* velo dell'ora: la stessa luce su tutto */}
@@ -1345,8 +1346,9 @@ const LAYERS: Record<SceneId, (id: string, night: boolean) => ReactNode> = {
 /** Miniatura di un'ambientazione per la scelta nelle impostazioni. */
 export function SceneThumb({ scene, sky, className = "h-16 w-24" }: { scene: string; sky: Sky; className?: string }) {
   return (
-    <span className={`relative block overflow-hidden rounded-xl ${className}`}>
-      <SceneBackdrop sky={sky} scene={scene} id={`th${scene}`} />
+    <span className={`aa-still relative block overflow-hidden rounded-xl ${className}`}>
+      {/* in miniatura: l'illustrazione e la luce dell'ora, senza la vita animata che lì non si distingue */}
+      <SceneBackdrop sky={sky} scene={scene} id={`th${scene}`} lite />
     </span>
   );
 }

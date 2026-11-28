@@ -206,7 +206,7 @@ export function TeamArchersSheet({ team, crest, onClose }: { team: string; crest
   if (typeof document === "undefined") return null;
   const list: TeamArcher[] = data?.archers ?? [];
   return createPortal(
-    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/55 backdrop-blur-[3px] md:items-center" onClick={onClose} role="dialog" aria-modal="true" aria-label={`Arcieri di ${titleName(team)}`}>
+    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/65 md:items-center md:bg-black/55 md:backdrop-blur-[3px]" onClick={onClose} role="dialog" aria-modal="true" aria-label={`Arcieri di ${titleName(team)}`}>
       <div className="aa-sheet grid max-h-[88dvh] w-full max-w-lg grid-rows-[auto_minmax(0,1fr)] gap-3 overflow-hidden rounded-t-3xl border-t border-hair bg-elev p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] md:rounded-3xl md:border" onClick={(e) => e.stopPropagation()}>
         <header className="flex items-center gap-3">
           <CrestMark crest={crest} team={team} size={46} />
@@ -607,7 +607,7 @@ export function TeamArchersInline({ team, canClaim = false, first = 8, onClaimed
           return (
             <li key={`${a.name}-${i}`} className="flex items-center gap-2.5 rounded-xl bg-black/15 px-2.5 py-1.5">
               {face ? (
-                face.photoUrl ? <img src={face.photoUrl} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" /> : <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs font-bold text-white" style={{ background: face.color }}>{face.label.slice(0, 1).toUpperCase()}</span>
+                face.photoUrl ? <img src={face.photoUrl} alt="" loading="lazy" decoding="async" className="h-8 w-8 shrink-0 rounded-full object-cover" /> : <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs font-bold text-white" style={{ background: face.color }}>{face.label.slice(0, 1).toUpperCase()}</span>
               ) : (
                 <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/[0.06] text-xs font-semibold tabular-nums text-muted">{i + 1}</span>
               )}
@@ -641,7 +641,7 @@ export function JoinLinkSheet({ team, companyName, onClose }: { team: string; co
   const [done, setDone] = useState(false);
   if (typeof document === "undefined") return null;
   return createPortal(
-    <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/60 backdrop-blur-[3px] md:items-center" role="dialog" aria-modal="true" aria-label="Collega il tuo nome FITAST">
+    <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/70 md:items-center md:bg-black/60 md:backdrop-blur-[3px]" role="dialog" aria-modal="true" aria-label="Collega il tuo nome FITAST">
       <div className="aa-sheet grid max-h-[88dvh] w-full max-w-lg grid-rows-[auto_minmax(0,1fr)_auto] gap-3 overflow-hidden rounded-t-3xl border-t border-hair bg-elev p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] md:rounded-3xl md:border">
         <header className="flex items-center gap-3">
           <FitastLogo size={52} />

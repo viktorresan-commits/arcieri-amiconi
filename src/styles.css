@@ -1090,11 +1090,13 @@ html[data-scenes="no"] .aa-scene { display: none; }
 .aa-prize { animation: aa-prize-in 0.6s cubic-bezier(0.22, 1.3, 0.36, 1) both; transform-style: preserve-3d; }
 @keyframes aa-prize-in { from { opacity: 0; transform: rotateY(80deg) scale(0.8); } to { opacity: 1; transform: none; } }
 .aa-prize-on { position: relative; overflow: hidden; }
+/* il riflesso scorre spostando una striscia (solo transform: niente ridisegno a ogni fotogramma) */
 .aa-prize-on::after {
-  content: ""; position: absolute; inset: 0; pointer-events: none;
-  background: linear-gradient(115deg, transparent 40%, rgb(255 255 255 / 0.18) 50%, transparent 60%);
-  background-size: 260% 100%; animation: aa-sweep 4s ease-in-out infinite;
+  content: ""; position: absolute; top: 0; bottom: 0; left: -60%; width: 60%; pointer-events: none;
+  background: linear-gradient(115deg, transparent 25%, rgb(255 255 255 / 0.18) 50%, transparent 75%);
+  animation: aa-sweep-x 4s ease-in-out infinite; will-change: transform;
 }
+@keyframes aa-sweep-x { 0% { transform: translateX(0); } 45%, 100% { transform: translateX(270%); } }
 .aa-prize-off { filter: grayscale(0.85); opacity: 0.55; }
 .aa-pro {
   background:
@@ -1884,10 +1886,13 @@ html[data-motion="ridotta"] .aa-sock-flap { animation: none; }
     background: linear-gradient(180deg, color-mix(in srgb, var(--plate-b) 92%, transparent) 0%, color-mix(in srgb, var(--plate-b) 78%, transparent) 55%, color-mix(in srgb, var(--plate-b) 42%, transparent) 100%);
   }
   .aa-game-pill { -webkit-backdrop-filter: none; backdrop-filter: none; background: rgba(10, 16, 14, 0.74); }
+  /* i veli scuri a tutto schermo dietro i fogli (aiuto, arcieri, specifiche…): la sfocatura di tutta la pagina
+     rallenta l'apertura del foglio; il velo resta scuro uguale, il foglio sopra è pieno */
+  .fixed.inset-0[class*="backdrop-blur"] { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
 }
 
 /* Compagnia: le sei schede, una cosa per scheda */
-.aa-club-tabs > div { background: linear-gradient(180deg, var(--bar-a), var(--bar-b)), var(--bg, #0b110d); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tone) 26%, transparent), 0 8px 18px -12px rgb(0 0 0 / 0.7); }
+.aa-club-tabs > div { background: linear-gradient(180deg, var(--bar-a), var(--bar-b)), var(--bg, #0b110d); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tone) 26%, transparent), 0 8px 18px -12px rgb(0 0 0 / 0.7); }
 .aa-club-tab { color: color-mix(in srgb, var(--fg) 62%, transparent); transition: background-color 0.2s ease, color 0.2s ease; }
 .aa-club-tab[aria-pressed="true"] { background: color-mix(in srgb, var(--primary) 22%, transparent); color: var(--fg); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 55%, transparent); }
 .aa-club-tab[aria-pressed="true"] svg { color: var(--primary); }
@@ -2022,10 +2027,18 @@ svg .aa-fall { stroke-dasharray: 4 3; animation: aa-fall 0.8s linear infinite; }
 .aa-stage-glow-lv { background: radial-gradient(42% 48% at 50% 46%, color-mix(in srgb, var(--glow) 55%, transparent), color-mix(in srgb, var(--glow) 18%, transparent) 55%, transparent 75%); mix-blend-mode: screen; opacity: 0.55; animation: aa-halo-breathe 3.4s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .aa-stage-glow-lv { animation: none; } }
 /* nicchia dell'arciere nell'elenco: lo stesso alone del livello, a forma di nicchia */
-.aa-niche-halo { overflow: hidden; isolation: isolate; box-shadow: 0 0 14px -2px color-mix(in srgb, var(--halo-a) 70%, transparent); animation: aa-niche-breathe 2.8s ease-in-out infinite; }
-.aa-niche-halo::before { content: ""; position: absolute; left: 50%; top: 50%; width: 200%; aspect-ratio: 1; translate: -50% -50%; background: conic-gradient(from 0deg, var(--halo-a), var(--halo-b), var(--halo-c), var(--halo-a), var(--halo-b), var(--halo-a)); animation: aa-halo-spin 5s linear infinite; }
-@keyframes aa-niche-breathe { 0%, 100% { box-shadow: 0 0 8px -2px color-mix(in srgb, var(--halo-a) 55%, transparent); } 50% { box-shadow: 0 0 18px 0 color-mix(in srgb, var(--halo-a) 80%, transparent); } }
-@media (prefers-reduced-motion: reduce) { .aa-niche-halo, .aa-niche-halo::before { animation: none; } }
+/* il respiro dell'alone: l'ombra luminosa è fissa e cambia solo la sua trasparenza (prima si ridisegnava l'ombra
+   di ogni scheda a ogni fotogramma e l'elenco degli arcieri andava a scatti) */
+.aa-niche-halo { overflow: hidden; isolation: isolate; }
+.aa-niche-glow { box-shadow: 0 0 18px 0 color-mix(in srgb, var(--halo-a) 80%, transparent); opacity: 0.45; animation: aa-niche-glow 2.8s ease-in-out infinite; will-change: opacity; }
+@keyframes aa-niche-glow { 0%, 100% { opacity: 0.45; } 50% { opacity: 1; } }
+/* sfondi in miniatura (nicchie degli elenchi, scelta dell'ambientazione): foglie, bandiere e nuvole restano ferme
+   dove sono. Dentro un disegno SVG ogni movimento ridipinge tutto il disegno a ogni fotogramma, e lì non si distingue */
+.aa-still *, .aa-still *::before, .aa-still *::after { animation-play-state: paused !important; }
+/* fuori dallo schermo la scheda non si disegna; il margine in più contiene alone e ombra (il contenimento li taglierebbe) */
+.aa-archer-row { content-visibility: auto; contain-intrinsic-size: auto 102px; padding-inline: 1rem; padding-bottom: 1.25rem; margin: 0 -1rem -1.25rem; }
+.aa-niche-halo::before { content: ""; position: absolute; left: 50%; top: 50%; width: 200%; aspect-ratio: 1; translate: -50% -50%; will-change: transform; background: conic-gradient(from 0deg, var(--halo-a), var(--halo-b), var(--halo-c), var(--halo-a), var(--halo-b), var(--halo-a)); animation: aa-halo-spin 5s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .aa-niche-halo, .aa-niche-halo::before, .aa-niche-glow { animation: none; } }
 /* barra delle sezioni in basso: icona e nome, quella attiva accesa nel suo colore; scorre se è stretta */
 .aa-secbar { mask-image: linear-gradient(90deg, transparent 0, #000 10px, #000 calc(100% - 10px), transparent 100%); }
 .aa-secbar-item { color: rgb(255 255 255 / 0.62); transition: color 0.2s ease; }

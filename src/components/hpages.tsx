@@ -2,7 +2,7 @@
  * Liste lunghe in pagine che scorrono di lato (niente elenchi infiniti): in alto le scorciatoie
  * (1–5, 6–10, …) e, se c'è, quella per saltare alla nostra riga; il dito scorre da una pagina all'altra.
  */
-import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { cx } from "@/components/kit";
 
 export function HPages<T>({ items, per = 6, render, keyOf, labelOf, focus, focusLabel = "Noi", className, as = "ol" }: {
@@ -21,8 +21,11 @@ export function HPages<T>({ items, per = 6, render, keyOf, labelOf, focus, focus
 }) {
   const box = useRef<HTMLDivElement>(null);
   const [cur, setCur] = useState(0);
-  const pages: T[][] = [];
-  for (let i = 0; i < items.length; i += per) pages.push(items.slice(i, i + per));
+  const pages = useMemo(() => {
+    const out: T[][] = [];
+    for (let i = 0; i < items.length; i += per) out.push(items.slice(i, i + per));
+    return out;
+  }, [items, per]);
   const List = as;
   // cambiando elenco (un'altra categoria) si riparte dalla prima pagina
   const sig = `${items.length}|${items.length ? keyOf(items[0], 0) : ""}`;
@@ -30,6 +33,16 @@ export function HPages<T>({ items, per = 6, render, keyOf, labelOf, focus, focus
     box.current?.scrollTo({ left: 0 });
     setCur(0);
   }, [sig]);
+  // le righe si ridisegnano solo se cambia l'elenco: scorrendo da una pagina all'altra cambia solo il segnalino
+  const body = useMemo(
+    () =>
+      pages.map((pg, p) => (
+        <List key={p} className={cx("grid w-full shrink-0 snap-start content-start gap-1.5", className)} aria-label={`Righe ${labelOf ? labelOf(pg[0], pg[pg.length - 1], p) : `${p * per + 1}–${p * per + pg.length}`}`}>
+          {pg.map((it, i) => <Fragment key={keyOf(it, p * per + i)}>{render(it, p * per + i)}</Fragment>)}
+        </List>
+      )),
+    [pages, per, List, className, labelOf, keyOf, render],
+  );
   if (pages.length <= 1) {
     return <List className={cx("grid gap-1.5", className)}>{items.map((it, i) => <Fragment key={keyOf(it, i)}>{render(it, i)}</Fragment>)}</List>;
   }
@@ -67,11 +80,7 @@ export function HPages<T>({ items, per = 6, render, keyOf, labelOf, focus, focus
         }}
         className="flex snap-x snap-mandatory overflow-x-auto overscroll-x-contain [scrollbar-width:none]"
       >
-        {pages.map((pg, p) => (
-          <List key={p} className={cx("grid w-full shrink-0 snap-start content-start gap-1.5", className)} aria-label={`Righe ${label(p)}`}>
-            {pg.map((it, i) => <Fragment key={keyOf(it, p * per + i)}>{render(it, p * per + i)}</Fragment>)}
-          </List>
-        ))}
+        {body}
       </div>
       <div className="flex justify-center gap-1" aria-hidden>
         {pages.map((_, p) => <span key={p} className={cx("h-1.5 rounded-full transition-all", cur === p ? "w-4 bg-[#e0b15a]" : "w-1.5 bg-white/20")} />)}

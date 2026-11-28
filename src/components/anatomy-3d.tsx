@@ -12,6 +12,7 @@ import { mixLm, sideEvidence, swapSides, type Gear, type Hand, type Landmark } f
 import { unpackLm, type PackedLm } from "@/lib/arcieri/gesture-record";
 import { saveFile } from "@/lib/arcieri/native";
 import { withPosture } from "@/lib/arcieri/posture-ref";
+import { watchOnScreen } from "@/lib/arcieri/on-screen";
 import { cx } from "./kit";
 import { Glyph } from "./icons";
 
@@ -876,6 +877,7 @@ export function Anatomy3D({
       return;
     }
     let raf = 0;
+    const seen = watchOnScreen(canvas);
     // corpo anatomico vero (muscoli e ossa da atlante): si scarica la prima volta, poi resta in memoria
     let bodyTick = 0;
     let alive = true;
@@ -945,8 +947,8 @@ export function Anatomy3D({
       const dt = Math.min(0.1, (now - last) / 1000);
       last = now;
       const time = (now - t0) / 1000;
-      // nascosto (vista non attiva o fuori schermo): non lavora
-      if (!canvas.clientWidth || !canvas.clientHeight) return;
+      // nascosto (vista non attiva o pagina scorsa oltre): non lavora
+      if (!canvas.clientWidth || !canvas.clientHeight || !seen.on) return;
       const { lm: still, lmRef: ref, seq: sq, aspect: asp, hand: hd, gearRef: gr, cal: fc, mirror: mir } = input.current;
       // punti da mostrare: sequenza salvata (in ciclo), poi quelli dal vivo, poi quelli fissi
       let target: Landmark[] | null = null;
@@ -1293,6 +1295,7 @@ export function Anatomy3D({
     canvas.addEventListener("wheel", wheel, { passive: false });
     return () => {
       alive = false;
+      seen.stop();
       window.clearTimeout(fallback);
       cancelAnimationFrame(raf);
       canvas.removeEventListener("pointerdown", down);

@@ -3,7 +3,7 @@ import { haloOfXp } from "@/components/level-crest";
 import { GareBody } from "@/components/gare-body";
 import { removeTeamMember } from "@/lib/arcieri/account.api";
 import { TargetGL } from "@/components/target-gl";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { listCompanies } from "@/lib/arcieri/compagnie.api";
 import { CompanyForm, CompanyHero, CompanyLeague, joinAndReload } from "@/components/compagnia";
 import { CompanyTrophies, Cup } from "@/components/palmares";
@@ -101,8 +101,11 @@ function TrendLine({ values, pct }: { values: number[]; pct: number | null }) {
   );
 }
 
-/** Scheda compatta di un arciere: mezzo busto nella nicchia con il livello, nome, gare, podi, allenamenti, frecce e andamento */
-function ArcherCard({ row, look, index, me }: {
+/**
+ * Scheda compatta di un arciere: mezzo busto nella nicchia con il livello, nome, gare, podi, allenamenti, frecce e andamento.
+ * `memo`: toccando pastiglie e classifiche sotto, le schede (con il mezzo busto disegnato) non si ridisegnano.
+ */
+const ArcherCard = memo(function ArcherCard({ row, look, index, me }: {
   row: { id: number; userId: string; name: string; division: string; bowType: string; xp?: number; sessions: number; arrows: number; gare: number; podi?: number; trend?: number[]; trendPct?: number | null; bestDistance: number | null; avatarColor: string; photoUrl: string | null; admin: boolean };
   look?: AvatarLook;
   index: number;
@@ -119,15 +122,17 @@ function ArcherCard({ row, look, index, me }: {
     { icon: "arrow", v: row.arrows, label: "frecce", color: "#e07a2f" },
   ];
   return (
-    <Link to="/arciere/$id" params={{ id: String(row.id) }} className="block pt-2.5">
+    // fuori dallo schermo la scheda non si disegna (elenchi lunghi fluidi): vedi .aa-archer-row
+    <Link to="/arciere/$id" params={{ id: String(row.id) }} className="aa-archer-row block pt-2.5">
       <div className={`aa-menu-row aa-archer-card relative flex items-center gap-2.5 rounded-[1.15rem] p-1.5 pr-2 ${me ? "is-me" : ""}`} style={{ animationDelay: `${Math.min(index, 10) * 30}ms`, ["--div" as string]: tint }}>
         {/* nicchia piccola: l'ambientazione dietro, il mezzo busto che sporge in alto, lo stemma del livello */}
         <div className="relative h-[3.9rem] w-[3.4rem] shrink-0">
+          <span aria-hidden className="aa-niche-glow pointer-events-none absolute -inset-[2px] rounded-[0.95rem]" style={{ ["--halo-a" as string]: haloOfXp(row.xp ?? 0).a }} />
           <span aria-hidden className="aa-niche-halo pointer-events-none absolute -inset-[2px] rounded-[0.95rem]" style={{ ["--halo-a" as string]: haloOfXp(row.xp ?? 0).a, ["--halo-b" as string]: haloOfXp(row.xp ?? 0).b, ["--halo-c" as string]: haloOfXp(row.xp ?? 0).c }} />
           <div className="absolute inset-0 overflow-hidden rounded-[0.8rem] bg-[#16201b]">
             {look?.scene ? (
-              <span className="absolute inset-x-[-60%] -bottom-[10%] top-[-60%] opacity-90">
-                <SceneBackdrop sky={MEMBER_SKY} scene={look.scene} id={`mb${row.id}`} />
+              <span className="aa-still absolute inset-x-[-60%] -bottom-[10%] top-[-60%] opacity-90">
+                <SceneBackdrop sky={MEMBER_SKY} scene={look.scene} id={`mb${row.id}`} lite />
               </span>
             ) : null}
             <span className="absolute inset-0 bg-[radial-gradient(90%_70%_at_50%_30%,transparent,rgba(0,0,0,0.45))]" />
@@ -164,7 +169,7 @@ function ArcherCard({ row, look, index, me }: {
       </div>
     </Link>
   );
-}
+});
 
 function axisName(name: string, peers: string[]) {
   const first = name.split(" ")[0] || name;

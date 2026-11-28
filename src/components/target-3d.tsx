@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from "react";
 import type { Face } from "@/lib/arcieri/scoring";
+import { watchOnScreen } from "@/lib/arcieri/on-screen";
 
 /**
  * Bersaglio in 3D con le frecce che arrivano e restano piantate.
@@ -120,13 +121,23 @@ export function Target3D({ face, shots, picture, look }: { face: Face; shots: Sh
     return () => el.removeEventListener("wheel", wheel);
   }, []);
 
-  // Ciclo di disegno: gira sempre, disegna solo quando serve.
+  // Ciclo di disegno: gira sempre, disegna solo quando serve (e mai fuori dalla vista).
   useEffect(() => {
     let raf = 0;
     let last = performance.now();
+    const seen = watchOnScreen(canvas.current);
     const loop = (now: number) => {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
+      if (!seen.on) {
+        raf = requestAnimationFrame(loop);
+        return;
+      }
+      if (seen.back) {
+        // tornato in vista: il volo può essere finito mentre non si vedeva
+        seen.back = false;
+        dirty.current = true;
+      }
       const c = cam.current;
       let moving = false;
       if (pointers.current.size === 0 && (Math.abs(spin.current.yaw) > 0.0004 || Math.abs(spin.current.pitch) > 0.0004)) {
@@ -164,7 +175,10 @@ export function Target3D({ face, shots, picture, look }: { face: Face; shots: Sh
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      cancelAnimationFrame(raf);
+      seen.stop();
+    };
   }, []);
 
   function down(event: RPointerEvent<HTMLCanvasElement>) {

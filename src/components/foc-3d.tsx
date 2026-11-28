@@ -1,5 +1,6 @@
 import { useEffect, useState, type MutableRefObject, type RefObject } from "react";
 import { useOrbitGestures, type OrbitView } from "@/lib/arcieri/gestures";
+import { watchOnScreen } from "@/lib/arcieri/on-screen";
 
 /**
  * Due animazioni 3D per il FOC, disegnate su canvas con una piccola proiezione prospettica.
@@ -60,10 +61,16 @@ export function useCanvas(draw: (ctx: CanvasRenderingContext2D, w: number, h: nu
     let raf = 0;
     const t0 = performance.now();
     let last = t0;
+    // fuori dalla vista (pagina scorsa più in giù) non si ridisegna
+    const seen = watchOnScreen(cv);
     const frame = (now: number) => {
       // «Gira»: la camera fa il giro della scena e la freccia ruota sul suo asse
       const dt = Math.min(0.1, (now - last) / 1000);
       last = now;
+      if (!seen.on) {
+        raf = requestAnimationFrame(frame);
+        return;
+      }
       if (view.current.auto) {
         view.current.yaw += dt * 0.55;
         view.current.spin += dt * 9;
@@ -82,7 +89,10 @@ export function useCanvas(draw: (ctx: CanvasRenderingContext2D, w: number, h: nu
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      cancelAnimationFrame(raf);
+      seen.stop();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
   return { ref, view };

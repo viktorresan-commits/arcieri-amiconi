@@ -198,7 +198,7 @@ export function CompanyHero({ co, canEdit, onEdit }: { co: Co; canEdit: boolean;
             {co.motto ? <p className="mt-0.5 truncate font-display text-sm italic text-white/80">«{co.motto}»</p> : null}
           </div>
           {canEdit ? (
-            <button type="button" onClick={onEdit} aria-label="Modifica la compagnia" title="Modifica la compagnia" className="aa-press grid h-10 w-10 shrink-0 place-items-center self-start rounded-full bg-white/15 text-white backdrop-blur">
+            <button type="button" onClick={onEdit} aria-label="Modifica la compagnia" title="Modifica la compagnia" className="aa-press grid h-10 w-10 shrink-0 place-items-center self-start rounded-full bg-white/20 text-white">
               <Glyph name="edit" size={17} />
             </button>
           ) : null}
@@ -219,7 +219,7 @@ export function CompanyHero({ co, canEdit, onEdit }: { co: Co; canEdit: boolean;
                 ["Gare", co.gare.toLocaleString("it-IT")],
               ]
           ).map(([k, v]) => (
-            <div key={k} className="rounded-xl bg-black/25 px-1 py-1.5 text-center backdrop-blur-sm">
+            <div key={k} className="rounded-xl bg-black/30 px-1 py-1.5 text-center">
               <p className="font-display text-base leading-none text-white tabular-nums">{v}</p>
               <p className="mt-1 text-[0.56rem] font-semibold uppercase tracking-wider text-white/65">{k}</p>
             </div>
@@ -497,7 +497,7 @@ export function CompanyLeague({ board, onJoin, busy, onSynced, part, fitastBoard
             <div key={co.id} className={`rounded-2xl ${expanded ? "bg-white/[0.07] ring-1 ring-white/10" : "bg-white/[0.04]"}`}>
               <div className="flex items-center gap-3 p-2.5">
                 <button type="button" onClick={() => setOpen(expanded ? null : co.id)} aria-expanded={expanded} className="flex min-w-0 flex-1 items-center gap-3 text-left">
-                  {co.logoUrl ? <img src={co.logoUrl} alt="" className="h-12 w-11 shrink-0 object-contain" /> : <span className="h-12 w-11 shrink-0"><DefaultCrest color={co.color} letter={co.name.replace(/^Compagnia (degli |dei |di )?/i, "").slice(0, 1)} /></span>}
+                  {co.logoUrl ? <img src={co.logoUrl} alt="" loading="lazy" decoding="async" className="h-12 w-11 shrink-0 object-contain" /> : <span className="h-12 w-11 shrink-0"><DefaultCrest color={co.color} letter={co.name.replace(/^Compagnia (degli |dei |di )?/i, "").slice(0, 1)} /></span>}
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-semibold">{co.name}</span>
                     <span className="block truncate text-xs text-muted">{(() => {
@@ -863,7 +863,7 @@ export function CompanyWelcome() {
   const allOthers = w.companies.filter((c) => c.id !== home?.id);
   const others = needle ? allOthers.filter((c) => `${c.name} ${c.city}`.toLowerCase().includes(needle)) : allOthers;
   return createPortal(
-    <div className="fixed inset-0 z-[80] overflow-y-auto bg-[#07100b]/92 backdrop-blur-md" role="dialog" aria-modal="true" aria-label="Scegli la tua compagnia">
+    <div className="fixed inset-0 z-[80] overflow-y-auto bg-[#07100b]/95 md:bg-[#07100b]/92 md:backdrop-blur-md" role="dialog" aria-modal="true" aria-label="Scegli la tua compagnia">
       <div className="mx-auto grid max-w-md gap-4 px-4 pb-10 pt-[calc(env(safe-area-inset-top)+2rem)]">
         <div className="text-center">
           <p className="text-[0.66rem] font-semibold uppercase tracking-[0.2em] text-white/60">Benvenuto</p>

@@ -4,7 +4,7 @@
  * sfaccettate, alloro con le nervature, cuffia a coste col pompon soffice.
  * Di fronte (FaceHat, coordinate del volto 0–100) e di profilo (SideHat, coordinate della figura).
  */
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import type { AvatarLook } from "@/lib/arcieri/avatar";
 
 const f = (n: number) => n.toFixed(2);
@@ -106,7 +106,7 @@ export function FaceHat({ look, uid, rx, ry, fy }: { look: AvatarLook; uid: stri
           <path d={`M${f(L - 3)} ${f(fy - 9)} C${f(L - 4)} ${f(top - 12)} ${f(R + 4)} ${f(top - 12)} ${f(R + 3)} ${f(fy - 9)} Z`} fill={cl} stroke={INK} strokeOpacity="0.8" strokeWidth="0.5" />
           {/* spicchi cuciti fino al bottone */}
           {[-0.55, 0, 0.55].map((k) => <path key={k} d={`M50 ${f(top - 4.8)} Q${f(50 + k * rx * 0.8)} ${f(top - 2)} ${f(50 + k * (rx + 2.4))} ${f(fy - 12)}`} stroke={shade(c, -0.35)} strokeWidth="0.36" fill="none" />)}
-          {[-0.55, 0.55].map((k) => stitch(`M${f(50 + k * 1.2)} ${f(top - 4.2)} Q${f(50 + k * rx * 0.8 + k * 1.2)} ${f(top - 1.2)} ${f(50 + k * (rx + 2.4) + k * 1.2)} ${f(fy - 12)}`))}
+          {[-0.55, 0.55].map((k) => <Fragment key={k}>{stitch(`M${f(50 + k * 1.2)} ${f(top - 4.2)} Q${f(50 + k * rx * 0.8 + k * 1.2)} ${f(top - 1.2)} ${f(50 + k * (rx + 2.4) + k * 1.2)} ${f(fy - 12)}`)}</Fragment>)}
           <circle cx="50" cy={f(top - 5.4)} r="1.5" fill={shade(c, -0.25)} stroke={INK} strokeWidth="0.35" />
           <path d={`M${f(L + 1)} ${f(top + 5)} Q${f(50 - rx * 0.5)} ${f(top - 2.6)} ${f(48)} ${f(top - 3.4)}`} stroke="#fff" strokeOpacity="0.28" strokeWidth="0.65" fill="none" strokeLinecap="round" />
           {/* fascia e visiera corta che fa ombra sugli occhi */}
@@ -145,7 +145,7 @@ export function FaceHat({ look, uid, rx, ry, fy }: { look: AvatarLook; uid: stri
           {/* spicchi cuciti e luce, tenuti dentro la calotta */}
           <g clipPath={`url(#${uid}pcl)`}>
             {[-0.5, 0, 0.5].map((k) => <path key={k} d={`M${f(50 + k * rx * 0.9)} ${f(top - 14)} q${f(k * 3)} 6 ${f(k * 5)} 13`} stroke={shade(c, -0.35)} strokeWidth="0.32" fill="none" />)}
-            {[-0.5, 0, 0.5].map((k) => stitch(`M${f(50 + k * rx * 0.9 + 0.7)} ${f(top - 14)} q${f(k * 3)} 6 ${f(k * 5)} 13`, "#f1e4c4", 0.35))}
+            {[-0.5, 0, 0.5].map((k) => <Fragment key={k}>{stitch(`M${f(50 + k * rx * 0.9 + 0.7)} ${f(top - 14)} q${f(k * 3)} 6 ${f(k * 5)} 13`, "#f1e4c4", 0.35)}</Fragment>)}
             <path d={`M${f(L - 4)} ${f(fy - 14)} Q${f(50 - rx * 0.6)} ${f(top - 5)} ${f(50 + 4)} ${f(top - 6.6)}`} stroke="#fff" strokeOpacity="0.3" strokeWidth="0.48" fill="none" strokeLinecap="round" />
           </g>
           <path d={`M${f(L - 6)} ${f(fy - 10.4)} Q50 ${f(fy - 5)} ${f(R + 8)} ${f(fy - 13.4)} L${f(R + 8.4)} ${f(fy - 11)} Q50 ${f(fy - 2)} ${f(L - 6.4)} ${f(fy - 8)} Z`} fill={shade(c, -0.35)} stroke={INK} strokeOpacity="0.7" strokeWidth="0.36" />
