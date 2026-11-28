@@ -13,9 +13,9 @@ pelle dell'atlante (BodyParts3D, che segue i muscoli veri) senza i suoi buchi.
    locale (solchi degli addominali, tra i muscoli);
 5. quanto conta il chiaroscuro dipinto: tutto su testa e mani, poco dove la forma viene dall'atlante.
 
-Uscita: pelle.bin / pelle.json con 14 byte in più per vertice (stride 41): gruppo, gonfiore, occlusione, dipinto,
-quanto togliere della forma dell'atlante a gomito chiuso (3 int16, decimi di mm), lato/peso della zona del braccio
-e la normale della forma del personaggio (3 int8).
+Uscita: pelle.bin / pelle.json con 15 byte in più per vertice (stride 42): gruppo, gonfiore, occlusione, dipinto,
+quanto togliere della forma dell'atlante a gomito chiuso (3 int16, decimi di mm), lato/peso della zona del braccio,
+la normale della forma del personaggio (3 int8) e quanto conta la foto del viso; più pelle.rest.npz per bake_face.py.
 
 Uso (vedi LEGGIMI.md):
   node /tmp/wrap_rest.mjs public/anatomia/corpo.json <pelle originale>.json > rest-bones.json
@@ -185,6 +185,47 @@ def closest_on_tris(p, A, B, C):
     return q, bary
 
 
+def front_depth(P, T, x0, x1, y0, y1, ppm=3500.0):
+    """profondità (z più vicina alla camera, che guarda da +z) della superficie, vista di fronte"""
+    W, H = int((x1 - x0) * ppm), int((y1 - y0) * ppm)
+    zb = np.full((H, W), -np.inf)
+    px = (P[:, 0] - x0) * ppm
+    py = (y1 - P[:, 1]) * ppm
+    for a, b, c in T:
+        xs = np.array([px[a], px[b], px[c]])
+        ys = np.array([py[a], py[b], py[c]])
+        mnx, mxx = int(max(0, np.floor(xs.min()))), int(min(W - 1, np.ceil(xs.max())))
+        mny, mxy = int(max(0, np.floor(ys.min()))), int(min(H - 1, np.ceil(ys.max())))
+        if mnx > mxx or mny > mxy:
+            continue
+        gx, gy = np.meshgrid(np.arange(mnx, mxx + 1) + 0.5, np.arange(mny, mxy + 1) + 0.5)
+        d = (ys[1] - ys[2]) * (xs[0] - xs[2]) + (xs[2] - xs[1]) * (ys[0] - ys[2])
+        if abs(d) < 1e-12:
+            continue
+        l0 = ((ys[1] - ys[2]) * (gx - xs[2]) + (xs[2] - xs[1]) * (gy - ys[2])) / d
+        l1 = ((ys[2] - ys[0]) * (gx - xs[2]) + (xs[0] - xs[2]) * (gy - ys[2])) / d
+        l2 = 1 - l0 - l1
+        m = (l0 >= -1e-6) & (l1 >= -1e-6) & (l2 >= -1e-6)
+        z = l0 * P[a, 2] + l1 * P[b, 2] + l2 * P[c, 2]
+        sub = zb[mny:mxy + 1, mnx:mxx + 1]
+        sub[m] = np.maximum(sub[m], z[m])
+    # le aperture degli occhi dell'atlante sono gallerie: di fronte si vedrebbe la nuca. Dove la profondità cade
+    # molto sotto quella dei dintorni si richiude con la media dei vicini (una palpebra liscia)
+    fin = np.isfinite(zb)
+    gx = x0 + (np.arange(W) + 0.5) / ppm
+    gy = y1 - (np.arange(H) + 0.5) / ppm
+    X, Y = np.meshgrid(gx, gy)
+    # nel viso (davanti al piano delle orecchie) la pelle sta sempre avanti: più indietro è una galleria
+    hole = fin & (zb < 0.02) & (np.abs(X) < 0.065) & (Y > 1.56) & (Y < 1.65)
+    zb[hole] = np.nan
+    for _ in range(300):
+        nb = np.nanmean(np.stack([np.roll(zb, 1, 0), np.roll(zb, -1, 0), np.roll(zb, 1, 1), np.roll(zb, -1, 1)]), 0)
+        upd = hole & np.isfinite(nb)
+        zb[upd] = nb[upd]
+    zb[np.isnan(zb)] = -np.inf
+    return zb, (x0, y1, ppm)
+
+
 # ---------------------------------------------------------------- occlusione
 def ray_ao(pts, nrm, occ_pts, cell=0.006, dirs=28, reach=0.22, start=0.012):
     """quanto cielo vede ogni punto (0..1) contro le superfici occ_pts (griglia di voxel)"""
@@ -276,7 +317,9 @@ def main():
         return (Q["wt"] * mask[Q["jo"]]).sum(1)
 
     # dove si segue l'atlante: niente testa, mani, dita dei piedi; passaggio morbido
-    keep = (1 - smoothstep(0.0, 0.45, wsum(is_hand))) * (1 - smoothstep(0.05, 0.55, wsum(is_head))) * (1 - smoothstep(0.1, 0.6, wsum(is_toe)))
+    # anche la testa prende la forma dell'atlante (viso vero, proporzioni vere); gli occhi del personaggio non
+    # si disegnano più: occhi, sopracciglia, labbra vengono dalla foto del viso (scripts/anatomia/bake_face.py)
+    keep = (1 - smoothstep(0.0, 0.45, wsum(is_hand))) * (1 - smoothstep(0.1, 0.6, wsum(is_toe)))
     # vicino alle articolazioni che si piegano molto (spalla, gomito; meno anca, ginocchio, caviglia) la forma
     # resta quella del personaggio, fatta per piegarsi: spostata, la pelle farebbe pieghe e spigoli
     def cls(nm):
@@ -343,8 +386,42 @@ def main():
     valid = np.isfinite(best_d) * (1 - smoothstep(0.03, 0.05, np.where(np.isfinite(best_d), best_d, 1))) * smoothstep(0.006, 0.03, db)
     print("distanza dall'atlante (cm):", np.percentile(best_d[np.isfinite(best_d)] * 100, [50, 90, 99]).round(2), "validi", round(float((valid > 0.5).mean()), 3))
 
+    # ---- viso: la pelle davanti va sulla superficie dell'atlante solo in profondità (lungo z), senza scorrere:
+    # le cavità del personaggio (occhi, narici) si appiattiscono invece di piegarsi sopra le sopracciglia
+    head_w = np.zeros(nw)
+    np.add.at(head_w, wid, wsum(is_head))
+    head_w /= np.bincount(wid, minlength=nw)
+    hsel = AI[P[AI][:, :, 1].min(1) > 1.45]
+    zb, (fx0, fy1, ppm) = front_depth(P, hsel, -0.11, 0.11, 1.44, 1.78)
+    fx = (qw[:, 0] - fx0) * ppm
+    fy = (fy1 - qw[:, 1]) * ppm
+    ok_f = (fx >= 0) & (fx < zb.shape[1] - 1) & (fy >= 0) & (fy < zb.shape[0] - 1)
+    zf = np.full(nw, -np.inf)
+    ix, iy = np.clip(fx.astype(int), 0, zb.shape[1] - 1), np.clip(fy.astype(int), 0, zb.shape[0] - 1)
+    zf[ok_f] = zb[iy[ok_f], ix[ok_f]]
+    # davanti: la pelle che guarda avanti, e tutto il viso (anche le pareti delle cavità degli occhi, che
+    # guardano di lato: con il punto più vicino finirebbero sulle tempie, stirate)
+    face_reg = smoothstep(0.015, 0.035, qw[:, 2]) * (1 - smoothstep(0.055, 0.07, np.abs(qw[:, 0])))
+    front = np.maximum(smoothstep(0.3, 0.65, nqw[:, 2]), face_reg) * smoothstep(0.2, 0.6, head_w) * np.isfinite(zf)
+    tgt = np.where(np.isfinite(best_d)[:, None], best_p, qw)
+    tgt = np.where(front[:, None] > 0, tgt * (1 - front[:, None]) + np.stack([qw[:, 0], qw[:, 1], np.where(np.isfinite(zf), zf, qw[:, 2])], 1) * front[:, None], tgt)
+    valid = np.maximum(valid, front)
+    print("viso proiettato di fronte:", int((front > 0.5).sum()), "punti")
+
     # ---- spostamento: dove l'atlante manca si riempie dai vicini, poi si ammorbidisce appena
-    D = np.where(np.isfinite(best_d)[:, None], best_p - qw, 0.0)
+    D = tgt - qw
+    # le cavità appiattite lasciano triangoli rovesciati: i punti del viso si distendono sulla superficie
+    # dell'atlante (media dei vicini in x, y, poi di nuovo sulla profondità vista di fronte)
+    fm = front > 0.5
+    xy = tgt[:, :2].copy()
+    for _ in range(12):
+        xy[fm] = 0.5 * xy[fm] + 0.5 * avg(xy)[fm]
+        fx2 = np.clip(((xy[:, 0] - fx0) * ppm).astype(int), 0, zb.shape[1] - 1)
+        fy2 = np.clip(((fy1 - xy[:, 1]) * ppm).astype(int), 0, zb.shape[0] - 1)
+        z2 = zb[fy2, fx2]
+        okz = fm & np.isfinite(z2)
+        tgt[okz, 0], tgt[okz, 1], tgt[okz, 2] = xy[okz, 0], xy[okz, 1], z2[okz]
+    D = tgt - qw
     Df = D * valid[:, None]
     for _ in range(400):
         Df = valid[:, None] * D + (1 - valid[:, None]) * avg(Df)
@@ -424,9 +501,16 @@ def main():
     bulge = bk[wid] / np.maximum(s, 1e-6)
     BK = 1.25
     paint = 1 - 0.75 * kw[wid]
+    # viso: dove conta la foto del viso (testa, con passaggio morbido sul collo)
+    fw = np.zeros(nw)
+    np.add.at(fw, wid, smoothstep(0.25, 0.75, wsum(is_head)))
+    fw /= np.bincount(wid, minlength=nw)
+    for _ in range(3):
+        fw = 0.5 * fw + 0.5 * avg(fw)
+    face = fw[wid]
 
     # ---- scrittura (stride 31)
-    ST = 41
+    ST = 42
 
     def pack(m, extra):
         nv = len(m["pos"])
@@ -446,11 +530,59 @@ def main():
     zb = np.where(zs[wid] > 0, (zs[wid] - 1) * 128 + np.round(np.clip(zw[wid], 0, 1) * 127), 0).astype(np.uint8)[:, None]
     # le normali della forma del personaggio, per il braccio piegato
     n0 = np.clip(np.round(Q["nrm"] * 127), -127, 127).astype(np.int8).view(np.uint8)
-    ex = np.concatenate([ex, dq, zb, n0], 1)
+    ex = np.concatenate([ex, dq, zb, n0, np.round(face * 255).astype(np.uint8)[:, None]], 1)
     print("braccio piegato:", int((zw[wid] > 0.05).sum()), "vertici, spostamento medio (mm)", round(float(np.linalg.norm(delta, axis=1)[zw[wid] > 0.05].mean() * 1000), 2))
-    body = dict(pos=pn, nrm=nrm, uv=Q["uv"], jo=Q["jo"], wt=Q["wt"], idx=Q["idx"])
-    vb = pack(body, ex)
-    eb = pack(E, np.tile(np.array([0, 0, 255, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], np.uint8), (len(E["pos"]), 1)))
+    # ---- testa nuova: i triangoli della testa (viso almeno a metà) vanno in coda, con punti loro (copie) e uv
+    # loro, sferiche attorno al centro del cranio (davanti al centro dell'immagine, la giunta dietro, tra i
+    # capelli): l'immagine è pelle-testa.jpg, cotta da bake_face.py. Così niente uv sovrapposte del personaggio
+    restU = q + disp[wid]
+    tri_all = Q["idx"]
+    hmask = face[tri_all].mean(1) >= 0.5
+    htri, btri = tri_all[hmask], tri_all[~hmask]
+    hv = np.unique(htri)
+    remap = np.full(n, -1)
+    remap[hv] = np.arange(len(hv)) + n
+    htri2 = remap[htri]
+    CH = np.array([0.0, 1.61, -0.01])
+    dh = restU[hv] - CH
+    rh = np.maximum(np.linalg.norm(dh, axis=1), 1e-9)
+    hu = 0.5 + np.arctan2(dh[:, 0], dh[:, 2]) / (2 * np.pi)
+    hvv = np.arccos(np.clip(dh[:, 1] / rh, -1, 1)) / np.pi
+    huv = np.stack([hu, hvv], 1)
+    # triangoli a cavallo della giunta dietro: i punti dall'altra parte fanno un giro (u + 1, l'immagine si ripete)
+    extra_v = []
+    loc = {int(v): i for i, v in enumerate(hv)}
+    allv = list(hv)
+    alluv = [tuple(x) for x in huv]
+    for ti in range(len(htri2)):
+        us = [alluv[htri2[ti, kk] - n][0] for kk in range(3)]
+        if max(us) - min(us) > 0.5:
+            for kk in range(3):
+                li = htri2[ti, kk] - n
+                if alluv[li][0] < 0.5:
+                    allv.append(allv[li])
+                    alluv.append((alluv[li][0] + 1.0, alluv[li][1]))
+                    htri2[ti, kk] = n + len(allv) - 1
+    allv = np.array(allv)
+    alluv = np.array(alluv)
+    print("testa:", len(htri), "triangoli,", len(allv), "punti (copie)")
+    face_b = np.zeros(n)
+    ex_b = ex.copy()
+    ex_b[:, 14] = 0  # il corpo non usa la foto del viso
+    ex_h = ex[allv].copy()
+    ex_h[:, 14] = 255
+    body = dict(
+        pos=np.concatenate([pn, pn[allv]]),
+        nrm=np.concatenate([nrm, nrm[allv]]),
+        uv=np.concatenate([Q["uv"], np.round(alluv * 32767.0)]),
+        jo=np.concatenate([Q["jo"], Q["jo"][allv]]),
+        wt=np.concatenate([Q["wt"], Q["wt"][allv]]),
+        idx=np.concatenate([btri, htri2]),
+    )
+    if len(body["pos"]) > 65535:
+        raise SystemExit("troppi vertici per indici a 16 bit")
+    vb = pack(body, np.concatenate([ex_b, ex_h]))
+    eb = pack(E, np.tile(np.array([0, 0, 255, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], np.uint8), (len(E["pos"]), 1)))
     parts = []
     off = 0
     meshes = {}
@@ -477,9 +609,15 @@ def main():
     j = dict(pj)
     j["stride"] = ST
     j["meshes"] = meshes
-    j["extra"] = {"group": 27, "bulge": 28, "ao": 29, "paint": 30, "bulgeScale": BK, "delta": 31, "zone": 37, "nrm0": 38}
+    j["extra"] = {"group": 27, "bulge": 28, "ao": 29, "paint": 30, "bulgeScale": BK, "delta": 31, "zone": 37, "nrm0": 38, "face": 41}
+    j["hideEyes"] = True
+    # indici della testa (dopo quelli del corpo) e uv della testa in 0..2 (u fa un giro in più dietro)
+    j["meshes"]["corpo"]["headStart"] = int(btri.size)
+    j["headUvScale"] = 2.0
     j["wrap"] = "forma dalla pelle di BodyParts3D (CC BY 4.0) dove c'è, vedi scripts/anatomia/wrap_skin.py"
     open(out + ".bin", "wb").write(b"".join(parts))
+    # per la foto del viso: la pelle a riposo nell'atlante (viso verso +z), uv e quanto conta il viso
+    np.savez(out + ".rest.npz", pos=restU[allv], nrm=nn[wid][allv], uv=alluv, tri=htri2 - n, face=face[allv])
     json.dump(j, open(out + ".json", "w"), separators=(",", ":"))
     print("scritto", out, off, "byte")
 

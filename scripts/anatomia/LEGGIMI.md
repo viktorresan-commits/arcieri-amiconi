@@ -37,10 +37,14 @@ dell'atlante dove c'è (BodyParts3D, CC BY 4.0) e la grana del pacchetto pelle d
     esbuild wrap_rest.ts --bundle --platform=node --format=esm --alias:@=../../src --outfile=/tmp/wrap_rest.mjs
     node /tmp/wrap_rest.mjs ../../public/anatomia/corpo.json <pelle originale>.json > rest-bones.json
     python3 wrap_skin.py <pelle originale> rest-bones.json ../../public/anatomia/corpo ../../public/anatomia/pelle
+    python3 bake_face.py ../../public/anatomia/pelle.rest.npz - <pacchetto pelle>/09_face_albedo_4k.jpg ../../public/anatomia/pelle-testa.jpg ../../public/anatomia/pelle.json
     python3 skin_detail.py <cartella del pacchetto pelle> ../../public/anatomia
 
 - `wrap_rest.ts` mette le ossa del personaggio nel riposo dell'atlante con il codice dell'app;
 - `wrap_skin.py` divide i triangoli, porta la pelle sulla forma dell'atlante (muscoli veri), riempie i buchi,
   prende il muscolo sotto ogni punto (la pelle si gonfia con lui), cuoce l'occlusione e i dati per il braccio
   piegato (a gomito chiuso torna la forma del personaggio, che si piega senza lembi);
+- `bake_face.py` fa la testa nuova: la foto del viso del pacchetto (occhi aperti) deformata sulla testa
+  dell'atlante con punti di riferimento, capelli rasati ai lati e dietro, in `pelle-testa.jpg` (uv sferiche);
+  `pelle.rest.npz` è un file di passaggio, non va nel sito;
 - `skin_detail.py` fa la grana della pelle (pori, rossori, rilievo, ruvidità) che si ripete.

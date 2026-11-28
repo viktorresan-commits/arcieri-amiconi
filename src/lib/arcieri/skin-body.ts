@@ -8,8 +8,8 @@
 import { v3, type V3 } from "./anatomy-model";
 import type { BodyMeta } from "./anatomy-body";
 
-type MeshJson = { n: number; vOffset: number; iOffset: number; indices: number };
-type BodyJson = { stride: number; meshes: { corpo: MeshJson; occhi: MeshJson }; joints: { name: string; parent: number; rest: number[] }[]; /** byte in più per vertice (scripts/anatomia/wrap_skin.py) */ extra?: { group: number; bulge: number; ao: number; paint: number; bulgeScale: number; delta?: number; zone?: number; nrm0?: number } };
+type MeshJson = { n: number; vOffset: number; iOffset: number; indices: number; /** dove cominciano gli indici della testa (con uv e immagine loro) */ headStart?: number };
+type BodyJson = { stride: number; meshes: { corpo: MeshJson; occhi: MeshJson }; joints: { name: string; parent: number; rest: number[] }[]; /** byte in più per vertice (scripts/anatomia/wrap_skin.py) */ extra?: { group: number; bulge: number; ao: number; paint: number; bulgeScale: number; delta?: number; zone?: number; nrm0?: number; face?: number }; /** occhi del personaggio nascosti (occhi dalla foto del viso) */ hideEyes?: boolean; /** pelle della foto del viso, colore lineare */ faceSkin?: number[]; headUvScale?: number };
 export type SkinMesh = {
   n: number;
   pos: Float32Array;
@@ -21,7 +21,7 @@ export type SkinMesh = {
   /** muscolo sotto la pelle (gruppo dell'atlante) e quanto la pelle si gonfia con lui (metri per metro) */
   grp: Uint8Array | null;
   bulge: Float32Array | null;
-  /** occlusione (0..1, 1 = all'aperto) e quanto conta il chiaroscuro dipinto, a coppie */
+  /** a terne: occlusione (0..1, 1 = all'aperto), quanto conta il chiaroscuro dipinto, quanto conta la foto del viso */
   k: Float32Array;
   /** braccio piegato: quanto della forma dell'atlante si toglie (a gomito chiuso) e da che lato (1 sinistro, 2 destro) */
   delta: Float32Array | null;
@@ -29,8 +29,10 @@ export type SkinMesh = {
   zside: Uint8Array | null;
   /** normali della forma del personaggio (braccio piegato) */
   nrm0: Float32Array | null;
+  /** indici della testa nuova (dopo quelli del corpo): uv sferiche (× uvScale) e immagine pelle-testa.jpg */
+  headStart: number | null;
 };
-export type SkinBody = { body: SkinMesh; eyes: SkinMesh; names: string[]; heads: V3[]; parent: number[]; image: HTMLImageElement | null; eyeImage: HTMLImageElement | null; meanLuma: number };
+export type SkinBody = { body: SkinMesh; eyes: SkinMesh; names: string[]; heads: V3[]; parent: number[]; image: HTMLImageElement | null; eyeImage: HTMLImageElement | null; meanLuma: number; hideEyes: boolean; faceSkin: [number, number, number]; /** testa nuova (foto del viso) */ headImage: HTMLImageElement | null; headUvScale: number };
 
 let bodyP: Promise<SkinBody | null> | null = null;
 const img = (src: string) =>
@@ -48,7 +50,7 @@ export function loadSkinBody(base = "/anatomia/pelle"): Promise<SkinBody | null>
     try {
       const [js, bin] = await Promise.all([fetch(`${base}.json`).then((r) => (r.ok ? (r.json() as Promise<BodyJson>) : null)), fetch(`${base}.bin`).then((r) => (r.ok ? r.arrayBuffer() : null))]);
       if (!js || !bin) return null;
-      const [image, eyeImage] = await Promise.all([img(`${base}.jpg`), img(`${base}-occhi.jpg`)]);
+      const [image, eyeImage, headImage] = await Promise.all([img(`${base}.jpg`), img(`${base}-occhi.jpg`), js.meshes.corpo.headStart != null ? img(`${base}-testa.jpg`) : Promise.resolve(null)]);
       const dec = (m: MeshJson): SkinMesh => {
         const dv = new DataView(bin);
         const st = js.stride;
@@ -61,7 +63,11 @@ export function loadSkinBody(base = "/anatomia/pelle"): Promise<SkinBody | null>
         const ex = js.extra;
         const grp = ex ? new Uint8Array(n) : null;
         const bulge = ex ? new Float32Array(n) : null;
-        const k = new Float32Array(n * 2).fill(1);
+        const k = new Float32Array(n * 3);
+        for (let i = 0; i < n; i++) {
+          k[i * 3] = 1;
+          k[i * 3 + 1] = 1;
+        }
         const hasD = ex?.delta != null && ex?.zone != null;
         const delta = hasD ? new Float32Array(n * 3) : null;
         const zone = hasD ? new Float32Array(n) : null;
@@ -80,8 +86,9 @@ export function loadSkinBody(base = "/anatomia/pelle"): Promise<SkinBody | null>
           if (ex && grp && bulge) {
             grp[i] = dv.getUint8(o + ex.group);
             bulge[i] = (dv.getUint8(o + ex.bulge) / 255) * ex.bulgeScale;
-            k[i * 2] = dv.getUint8(o + ex.ao) / 255;
-            k[i * 2 + 1] = dv.getUint8(o + ex.paint) / 255;
+            k[i * 3] = dv.getUint8(o + ex.ao) / 255;
+            k[i * 3 + 1] = dv.getUint8(o + ex.paint) / 255;
+            if (ex.face != null) k[i * 3 + 2] = dv.getUint8(o + ex.face) / 255;
           }
           if (ex && delta && zone && zside && ex.delta != null && ex.zone != null) {
             for (let c = 0; c < 3; c++) delta[i * 3 + c] = dv.getInt16(o + ex.delta + c * 2, true) / 1e4;
@@ -91,7 +98,7 @@ export function loadSkinBody(base = "/anatomia/pelle"): Promise<SkinBody | null>
             if (nrm0 && ex.nrm0 != null) for (let c = 0; c < 3; c++) nrm0[i * 3 + c] = dv.getInt8(o + ex.nrm0 + c) / 127;
           }
         }
-        return { n, pos, nrm, uv, jo, wt, grp, bulge, k, delta, zone, zside, nrm0, idx: new Uint16Array(bin.slice(m.iOffset, m.iOffset + m.indices * 2)) };
+        return { n, pos, nrm, uv, jo, wt, grp, bulge, k, delta, zone, zside, nrm0, headStart: m.headStart ?? null, idx: new Uint16Array(bin.slice(m.iOffset, m.iOffset + m.indices * 2)) };
       };
       // luminanza media della pelle (per tenere solo luci e ombre dipinte)
       let meanLuma = 0.45;
@@ -117,6 +124,10 @@ export function loadSkinBody(base = "/anatomia/pelle"): Promise<SkinBody | null>
         image,
         eyeImage,
         meanLuma,
+        hideEyes: Boolean(js.hideEyes),
+        headImage,
+        headUvScale: js.headUvScale ?? 1,
+        faceSkin: (js.faceSkin?.length === 3 ? js.faceSkin : [0.41, 0.23, 0.14]) as [number, number, number],
       };
     } catch {
       return null;

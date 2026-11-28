@@ -427,14 +427,16 @@ function torusMesh(R = 1, r = 0.07, seg = 32, tube = 6) {
 
 /* mani vere (personaggio Quaternius): già piegate e messe nel mondo dalla CPU, pelle come quella vera del corpo */
 const HVS = `
-attribute vec3 aP; attribute vec3 aN; attribute vec2 aUV; attribute vec2 aK;
-uniform mat4 uVP;
-varying vec3 vW; varying vec3 vN; varying vec2 vUV; varying vec2 vK;
-void main(){ vW = aP; vN = aN; vUV = aUV; vK = aK; gl_Position = uVP * vec4(aP, 1.0); }`;
+attribute vec3 aP; attribute vec3 aN; attribute vec2 aUV; attribute vec3 aK;
+uniform mat4 uVP; uniform float uUvScale;
+varying vec3 vW; varying vec3 vN; varying vec2 vUV; varying vec3 vK;
+void main(){ vW = aP; vN = aN; vUV = aUV * uUvScale; vK = aK; gl_Position = uVP * vec4(aP, 1.0); }`;
 const HFS = `${PREC}
 varying vec3 vW; varying vec3 vN; varying vec2 vUV;
-// x: occlusione (pieghe, solchi tra i muscoli; 1 = all'aperto), y: quanto conta il chiaroscuro dipinto
-varying vec2 vK;
+// x: occlusione (pieghe, solchi tra i muscoli; 1 = all'aperto), y: quanto conta il chiaroscuro dipinto,
+// z: quanto conta la foto del viso (testa nuova: colori veri, portati al tono di pelle scelto)
+varying vec3 vK;
+uniform vec3 uFaceSkin;
 uniform vec3 uEye; uniform vec3 uSkin; uniform sampler2D uTex; uniform float uMeanL; uniform float uTexOn; uniform vec4 uCut;
 // 1 = colore dell'immagine così com'è (occhi); 0 = tono della pelle scelta con le luci dell'immagine
 uniform float uRaw;
@@ -494,14 +496,25 @@ void main(){
       alb *= mix(1.0, clamp(l, 0.55, 1.35), 0.75 * vK.y);
       // un poco del colore dipinto (labbra, guance) sul tono scelto
       vec3 hue = tx / max(lt, 0.05);
-      alb = mix(alb, alb * clamp(hue, 0.6, 1.6), 0.35);
+      // dove la forma viene dall'atlante il colore dipinto del personaggio conta meno (attacco con la testa nuova)
+      alb = mix(alb, alb * clamp(hue, 0.6, 1.6), 0.35 * (0.35 + 0.65 * vK.y));
       // la grana della pelle vera: pori, lentiggini, macchioline appena più rosse
       alb *= (1.0 + dL) * vec3(1.0 + dR * 0.5, 1.0 - dR * 0.12, 1.0 - dR * 0.25);
       // i pantaloncini del personaggio (grigi, senza colore) restano stoffa: grigio scuro
       float mx = max(tx.r, max(tx.g, tx.b));
       float sat = (mx - min(tx.r, min(tx.g, tx.b))) / max(mx, 1e-3);
-      float cloth = 1.0 - smoothstep(0.07, 0.15, sat);
+      float cloth = (1.0 - smoothstep(0.07, 0.15, sat)) * (1.0 - vK.z);
       alb = mix(alb, vec3(0.06, 0.065, 0.075) * (0.6 + 0.8 * lt), cloth);
+      // viso: i colori della foto; la pelle (colorata) prende il tono scelto, bianco degli occhi e capelli restano
+      if (vK.z > 0.001) {
+        vec3 fl = pow(tx, vec3(2.2));
+        float fm = max(fl.r, max(fl.g, fl.b));
+        float fs = (fm - min(fl.r, min(fl.g, fl.b))) / max(fm, 1e-3);
+        vec3 fa = fl * mix(vec3(1.0), uSkin / max(uFaceSkin, vec3(1e-3)), smoothstep(0.2, 0.4, fs));
+        // stessa saturazione del corpo (che parte dal tono scelto appena desaturato)
+        fa = mix(vec3(dot(fa, vec3(0.2126, 0.7152, 0.0722))), fa, 0.85);
+        alb = mix(alb, fa * (1.0 + dL * 0.5), vK.z);
+      }
     }
   }
   float d1 = dot(N, L1);
@@ -918,6 +931,8 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     aN: gl.getAttribLocation(hprog, "aN"),
     aUV: gl.getAttribLocation(hprog, "aUV"),
     aK: gl.getAttribLocation(hprog, "aK"),
+    uFaceSkin: gl.getUniformLocation(hprog, "uFaceSkin"),
+    uUvScale: gl.getUniformLocation(hprog, "uUvScale"),
     uVP: gl.getUniformLocation(hprog, "uVP"),
     uEye: gl.getUniformLocation(hprog, "uEye"),
     uSkin: gl.getUniformLocation(hprog, "uSkin"),
@@ -970,13 +985,19 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
   let skinBody: SkinBody | null = null;
   const bodyTex = gl.createTexture();
   const eyeTex = gl.createTexture();
+  const headTex = gl.createTexture();
   type MeshGpu = { pos: WebGLBuffer; nrm: WebGLBuffer; uv: WebGLBuffer; k: WebGLBuffer; ib: WebGLBuffer; count: number; p: Float32Array; n: Float32Array; m: SkinMesh; /** senza la testa (visuale dall'occhio) */ ibNoHead?: WebGLBuffer; countNoHead?: number };
   let bodyGpu: { body: MeshGpu; eyes: MeshGpu } | null = null;
   const upTex = (t: WebGLTexture | null, im: HTMLImageElement) => {
     gl.bindTexture(gl.TEXTURE_2D, t);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, im);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    // immagine grande (viso dalla foto) vista da lontano: con le mipmap niente sfarfallio di occhi e sopracciglia
+    const pot = (v: number) => v > 0 && (v & (v - 1)) === 0;
+    if (pot(im.width) && pot(im.height)) {
+      gl.generateMipmap(gl.TEXTURE_2D);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    } else gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
@@ -1009,7 +1030,8 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
         return w;
       };
       const keep: number[] = [];
-      for (let t = 0; t < m.idx.length; t += 3) if (headW(m.idx[t]) < 0.5 && headW(m.idx[t + 1]) < 0.5 && headW(m.idx[t + 2]) < 0.5) keep.push(m.idx[t], m.idx[t + 1], m.idx[t + 2]);
+      const end = m.headStart ?? m.idx.length;
+      for (let t = 0; t < end; t += 3) if (headW(m.idx[t]) < 0.5 && headW(m.idx[t + 1]) < 0.5 && headW(m.idx[t + 2]) < 0.5) keep.push(m.idx[t], m.idx[t + 1], m.idx[t + 2]);
       const ib = gl.createBuffer()!;
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib);
       gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(keep), gl.STATIC_DRAW);
@@ -1017,6 +1039,11 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
       bodyGpu.body.countNoHead = keep.length;
       if (b.image) upTex(bodyTex, b.image);
       if (b.eyeImage) upTex(eyeTex, b.eyeImage);
+      if (b.headImage) {
+        upTex(headTex, b.headImage);
+        // la giunta delle uv della testa è dietro: l'immagine si ripete in orizzontale
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+      }
     });
   const rigLoaded: Promise<unknown> = !handOk
     ? Promise.resolve()
@@ -1043,7 +1070,8 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
       }
     });
-  const drawMesh = (g: MeshGpu, tex: WebGLTexture | null, texOn: boolean, raw: boolean, meanL: number, noHead = false) => {
+  const drawMesh = (g: MeshGpu, tex: WebGLTexture | null, texOn: boolean, raw: boolean, meanL: number, noHead = false, /** solo questi indici (inizio, quanti) e uv × scala */ range?: [number, number, number]) => {
+    gl.uniform1f(hl.uUvScale, range ? range[2] : 1);
     gl.uniform1f(hl.uMeanL, meanL);
     gl.uniform1f(hl.uTexOn, texOn ? 1 : 0);
     gl.uniform1f(hl.uRaw, raw ? 1 : 0);
@@ -1068,11 +1096,13 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     if (hl.aK >= 0) {
       gl.bindBuffer(gl.ARRAY_BUFFER, g.k);
       gl.enableVertexAttribArray(hl.aK);
-      gl.vertexAttribPointer(hl.aK, 2, gl.FLOAT, false, 0, 0);
+      gl.vertexAttribPointer(hl.aK, 3, gl.FLOAT, false, 0, 0);
     }
     const useNo = noHead && g.ibNoHead && g.countNoHead;
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, useNo ? g.ibNoHead! : g.ib);
-    gl.drawElements(gl.TRIANGLES, useNo ? g.countNoHead! : g.count, gl.UNSIGNED_SHORT, 0);
+    if (useNo) gl.drawElements(gl.TRIANGLES, g.countNoHead!, gl.UNSIGNED_SHORT, 0);
+    else if (range) gl.drawElements(gl.TRIANGLES, range[1], gl.UNSIGNED_SHORT, range[0] * 2);
+    else gl.drawElements(gl.TRIANGLES, g.count, gl.UNSIGNED_SHORT, 0);
   };
   /** pelle vera chiusa: il corpo del personaggio mosso dai segmenti e dalle mani vere */
   const flexBuf: [number, number] = [0, 0];
@@ -1105,8 +1135,15 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     gl.disable(gl.CULL_FACE);
     gl.depthMask(true);
     const fromEye = cutNow[3] > 0;
-    drawMesh(bodyGpu.body, bodyTex, Boolean(skinBody.image), false, skinBody.meanLuma, fromEye);
-    if (!fromEye) drawMesh(bodyGpu.eyes, eyeTex, Boolean(skinBody.eyeImage), true, 0.5);
+    gl.uniform3fv(hl.uFaceSkin, skinBody.faceSkin);
+    const hs = bodyGpu.body.m.headStart;
+    if (hs != null && skinBody.headImage) {
+      // corpo con la sua immagine, testa nuova con la foto del viso (dall'occhio dell'arciere la testa non c'è)
+      drawMesh(bodyGpu.body, bodyTex, Boolean(skinBody.image), false, skinBody.meanLuma, fromEye, [0, hs, 1]);
+      if (!fromEye) drawMesh(bodyGpu.body, headTex, true, false, skinBody.meanLuma, false, [hs, bodyGpu.body.count - hs, skinBody.headUvScale]);
+    } else drawMesh(bodyGpu.body, bodyTex, Boolean(skinBody.image), false, skinBody.meanLuma, fromEye);
+    // occhi del personaggio solo se la testa non ha la foto del viso
+    if (!fromEye && !skinBody.hideEyes) drawMesh(bodyGpu.eyes, eyeTex, Boolean(skinBody.eyeImage), true, 0.5);
     gl.disableVertexAttribArray(hl.aP);
     gl.disableVertexAttribArray(hl.aN);
     if (hl.aUV >= 0) gl.disableVertexAttribArray(hl.aUV);
@@ -1126,10 +1163,11 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     gl.uniform1f(hl.uTexOn, rig.image ? 1 : 0);
     gl.uniform1f(hl.uRaw, 0);
     bindDetail(HAND_DETAIL_K);
+    gl.uniform1f(hl.uUvScale, 1);
     // le mani vere da sole: niente occlusione cotta, chiaroscuro dipinto pieno
     if (hl.aK >= 0) {
       gl.disableVertexAttribArray(hl.aK);
-      gl.vertexAttrib2f(hl.aK, 1, 1);
+      gl.vertexAttrib3f(hl.aK, 1, 1, 0);
     }
     gl.uniform4fv(hl.uCut, cutNow);
     gl.activeTexture(gl.TEXTURE0);
