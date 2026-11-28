@@ -1095,7 +1095,7 @@ export function atlasSkinBones(meta: BodyMeta, sb: SkinBody, mats: Float32Array,
 
 let detailP: Promise<{ det: HTMLImageElement; nrm: HTMLImageElement } | null> | null = null;
 /**
- * Grana della pelle (dal pacchetto pelle dell'avatar, vedi scripts/anatomia/skin_detail.py):
+ * Grana della pelle (dalla pelle "Human Materials 1" di britdawgmasterfunk, vedi scripts/anatomia/skin_detail.py):
  * pelle-dettaglio.jpg (r luce, g ruvidità, b rossore) e pelle-normali.jpg, si ripetono sulla pelle.
  */
 export function loadSkinDetail(base = "/anatomia/pelle"): Promise<{ det: HTMLImageElement; nrm: HTMLImageElement } | null> {

@@ -25,7 +25,7 @@ export type BodyMeta = {
 };
 export type BodyData = { meta: BodyMeta; buf: ArrayBuffer };
 
-export const BODY_CREDIT = "Anatomia: BodyParts3D © DBCLS (CC BY 4.0) · Z-Anatomy (CC BY-SA 4.0) · Pelle e mani: Quaternius (CC0) · Arco Samik Sage: signguy (CC BY 3.0)";
+export const BODY_CREDIT = "Anatomia: BodyParts3D © DBCLS (CC BY 4.0) · Z-Anatomy (CC BY-SA 4.0) · Pelle e mani: Quaternius (CC0) · Arco Samik Sage: signguy (CC BY 3.0) · Grana della pelle: britdawgmasterfunk (CC BY 4.0)";
 
 /** leggero: in movimento; pieno: fermo; hd: piena definizione dell'atlante, solo per foto e video in alta definizione */
 export type BodyLevel = "leggero" | "pieno" | "hd";

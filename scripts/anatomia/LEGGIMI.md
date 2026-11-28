@@ -39,7 +39,7 @@ dell'atlante dove c'è (BodyParts3D, CC BY 4.0) e la grana del pacchetto pelle d
     python3 wrap_skin.py <pelle originale> rest-bones.json ../../public/anatomia/corpo ../../public/anatomia/pelle
     python3 bake_face.py ../../public/anatomia/pelle.rest.npz - <pacchetto pelle>/09_face_albedo_4k.jpg ../../public/anatomia/pelle-testa.jpg ../../public/anatomia/pelle.json
     python3 bake_relief.py ../../public/anatomia/pelle.body.npz <tavola normal map del corpo> ../../public/anatomia/pelle-rilievo.jpg ../../public/anatomia/pelle.json
-    python3 skin_detail.py <cartella del pacchetto pelle> ../../public/anatomia
+    python3 skin_detail.py <human_materials_1_cc0.glb | cartella del pacchetto pelle> ../../public/anatomia
     python3 cloth_mask.py ../../public/anatomia/pelle ../../public/anatomia/pelle.jpg ../../public/anatomia/corpo.json
 
 - `wrap_rest.ts` mette le ossa del personaggio nel riposo dell'atlante con il codice dell'app;
@@ -58,6 +58,8 @@ dell'atlante dove c'è (BodyParts3D, CC BY 4.0) e la grana del pacchetto pelle d
 - `bake_relief.py` porta sulla pelle il rilievo fine delle tavole di riferimento dell'avatar (normal map di
   fronte, di schiena e delle braccia): addominali, dorsali, glutei, ginocchia, polpacci, vene; in
   `pelle-rilievo.jpg`, nello spazio tangente delle uv del corpo (`pelle.body.npz` è di passaggio);
-- `skin_detail.py` fa la grana della pelle (pori, rossori, rilievo, ruvidità) che si ripete.
+- `skin_detail.py` fa la grana della pelle (pori, rossori, rilievo, ruvidità) che si ripete: ora dal file .glb di
+  "Human Materials 1 (CC0)" di britdawgmasterfunk (Sketchfab; nel file la licenza è CC BY 4.0, si cita),
+  materiale "Material", a 1024 px.
 - `cloth_mask.py` fa il bordo dei pantaloncini liscio: dalla stoffa dell'immagine del corpo una vita e due orli
   sulle cosce, e in ogni vertice la distanza da quel bordo (byte 31 di pelle.bin, extra.cloth).
