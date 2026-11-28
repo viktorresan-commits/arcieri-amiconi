@@ -2085,8 +2085,13 @@ export function poseBody(meta: BodyMeta, model: Model, curl: Float32Array = new 
     for (const r of rh) {
       if (r.wrist < 0 || !J[r.wrist]) continue;
       const w = placeApply(r.pl, rig[r.side].W);
-      if (v3.len(v3.sub(w, J[r.wrist])) > 0.12) continue;
-      J = { ...J, [r.wrist]: w };
+      const d = v3.sub(w, J[r.wrist]);
+      if (v3.len(d) > 0.12) continue;
+      // tutta la mano con il polso: anche i suoi 21 punti, da cui l'avambraccio prende il polso (prima restava
+      // dov'era e tra avambraccio e mano vera i muscoli si stiravano in fili dritti fino alle dita)
+      J = { ...J };
+      const base = r.side === "L" ? 33 : 54;
+      for (const i of [r.wrist, ...(r.side === "L" ? [17, 19, 21] : [18, 20, 22]), ...Array.from({ length: 21 }, (_, k) => base + k)]) if (J[i]) J[i] = v3.add(J[i], d);
       moved = true;
     }
     if (moved) {

@@ -38,13 +38,16 @@ Poi, nell'ordine:
     BP3D_MODELS=<human-atlas>/public/models/ python3 add_face.py ../../public/anatomia/corpo:0.3 ../../public/anatomia/corpo-leggero:0.15 ../../public/anatomia/corpo-hd:0.7
     python3 za_nerve_curves.py
     BP3D_MODELS=<human-atlas>/public/models/ python3 add_nerves.py ../../public/anatomia/corpo:0.010:6 ../../public/anatomia/corpo-leggero:0.022:4 ../../public/anatomia/corpo-hd:0.006:8
+    python3 fix_dita.py ../../public/anatomia/corpo ../../public/anatomia/corpo-leggero ../../public/anatomia/corpo-hd
 
 - `fix_abs.py`: la parete dell'addome (retti, linea alba, obliqui, erettori) passa dal bacino al torace con un peso
   che dipende solo dall'altezza, uguale per tutti: torcendo il busto si torce tutta insieme;
 - `add_face.py`: muscoli del viso, della masticazione e dell'occhio, galea e platisma (Z-Anatomy) in un blocco di
   muscoli in più; il bianco degli occhi segnato nelle ossa (0,5 nel canale dei tendini, l'iride ha 1);
 - `za_nerve_curves.py` e `add_nerves.py`: i nervi di Z-Anatomy sono curve; si leggono da Startup.blend e diventano
-  tubi (strato `nerve`), ogni punto con i due segmenti delle ossa più vicine della sua regione.
+  tubi (strato `nerve`), ogni punto con i due segmenti delle ossa più vicine della sua regione;
+- `fix_dita.py`: muscoli e tendini delle dita prendono segmenti e pesi della pelle che li copre (dita e pollice),
+  così si piegano con le dita in presa sulla corda e sull'impugnatura invece di restare dritti.
 
 Tutti aggiungono una voce a `ritocchi` nel `.json`: cambia l'impronta del corpo e i telefoni lo riscaricano.
 

@@ -687,7 +687,15 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gea
   // testa: centro tra le orecchie, orientata col naso; durante il tiro guarda il bersaglio
   const earM = lerp(J[7], J[8], 0.5);
   const headC = add(earM, mul(up, 0.025));
-  const aimed = headAim(J, bow, drw, up, fwd);
+  // il viso nel video guarda dalla parte del bersaglio (o di fronte)? Il naso rispetto alle orecchie sullo
+  // schermo: se sta chiaramente dall'altra parte, l'arciere guarda altrove e la testa lo segue
+  const bowWr2 = lm[S.bow[2]];
+  const drwSh2 = lm[S.draw[0]];
+  const shW2 = Math.abs(lm[11].x - lm[12].x) * aspect;
+  const tgtSide2 = bowWr2 && drwSh2 ? Math.sign(bowWr2.x - drwSh2.x) : 0;
+  const noseOff2 = lm[0] && lm[7] && lm[8] ? (lm[0].x - (lm[7].x + lm[8].x) / 2) * aspect : 0;
+  const faceAway = tgtSide2 !== 0 && noseOff2 * tgtSide2 < -0.15 * Math.max(0.02, shW2);
+  const aimed = headAim(J, bow, drw, up, fwd, !faceAway);
   const headF = aimed.f;
   const headPitch = aimed.pitch;
   const headR = norm(cross(up, headF));
@@ -1171,14 +1179,29 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gea
     posture: { checks: pChecks, fixed: pFix?.fixed ?? [] },
     headPitch,
     // la mano dell'arco lo tiene sempre (anche con il braccio giù); la mano della corda si apre al rilascio
-    grip: { draw: loose ? 0 : aimed.drawing, bow: Math.max(0.85, aimed.raised) },
+    // mano della corda: con la freccia incoccata e le dita sulla corda è in presa (pinza mediterranea) per tutta
+    // la trazione, non solo all'ancoraggio: prima, a metà trazione, la mano restava aperta e girata
+    grip: { draw: loose ? 0 : Math.max(aimed.drawing, nocked && onString ? 1 : 0), bow: Math.max(0.85, aimed.raised) },
     frame: pre?.frame ?? imageFrame(lm, aspect) ?? undefined,
     build: cal?.build,
     bowAxis: n,
     bowPose: rawBow,
-    palms: pre?.palms,
+    // mano della corda in presa (pinza mediterranea): il palmo guarda la freccia e il viso, il dorso fuori. Il verso
+    // letto dai punti della mano (spesso ribaltato, guanto o mano di scorcio) girava l'avambraccio al contrario
+    // della mano sulla corda: i muscoli dell'avambraccio si attorcigliavano fino alle dita
+    palms: drawPalms(pre?.palms, hand, loose ? 0 : Math.max(aimed.drawing, nocked && onString ? 1 : 0), u, n),
     arrow: arrowOut ?? { nock, dir: u, len: WOOD_ARROW_LEN },
   };
+}
+
+/** verso del palmo (come in motion-solve: per la mano destra il palmo, per la sinistra il dorso) con la mano della corda in presa */
+function drawPalms(palms: { L?: V3; R?: V3 } | undefined, hand: Hand, k: number, u: V3, n: V3) {
+  if (k <= 0.3) return palms;
+  const f = sub(u, mul(n, dot(u, n)));
+  if (len(f) < 1e-4) return palms;
+  // palmo della destra (o dorso della sinistra): uguale per le due mani, perché la presa è a specchio
+  const p = norm(mul(cross(norm(f), n), -1));
+  return { ...(palms ?? {}), [hand === "destro" ? "R" : "L"]: p };
 }
 
 /**
@@ -1186,9 +1209,9 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gea
  * di fronte alla camera, bersaglio di lato) la girata si vede sempre più piccola del vero: la sagoma
  * guardava la camera invece del bersaglio. Durante il tiro l'arciere guarda il bersaglio lungo la
  * freccia, quindi con il braccio dell'arco alzato la testa si gira verso la mano dell'arco
- * (del tutto all'ancoraggio), al massimo di 85° rispetto al petto.
+ * (già dall'alzata, a meno che nel video il viso guardi chiaramente altrove), al massimo di 92° rispetto al petto.
  */
-function headAim(J: Record<number, V3>, bow: { sh: V3; el: V3; wr: V3 }, drw: { sh: V3; el: V3; wr: V3 }, up: V3, fwd: V3) {
+function headAim(J: Record<number, V3>, bow: { sh: V3; el: V3; wr: V3 }, drw: { sh: V3; el: V3; wr: V3 }, up: V3, fwd: V3, /** il viso nel video non guarda dall'altra parte */ toTarget = true) {
   const earM = lerp(J[7], J[8], 0.5);
   const look = perp(up, sub(J[0], earM));
   const mouth: V3 = J[9] && J[10] ? lerp(J[9], J[10], 0.5) : J[0];
@@ -1214,15 +1237,19 @@ function headAim(J: Record<number, V3>, bow: { sh: V3; el: V3; wr: V3 }, drw: { 
   // il viso segue il video (naso e orecchie) finché la mano della corda non arriva al viso; all'ancoraggio
   // l'arciere guarda il bersaglio lungo la freccia: testa e occhi si girano lì (di scorcio i punti del viso
   // la davano girata a metà, verso la camera)
-  const w = Math.min(0.9, 0.12 * raised + 0.85 * drawing);
+  // Con il braccio dell'arco alzato l'arciere guarda già il bersaglio (dalla preparazione all'ancoraggio): è la
+  // regola, e i punti del viso girato di lato o di spalle sono i meno sicuri (davano il viso verso la camera).
+  // Se nel video il viso guarda chiaramente dall'altra parte, la testa segue il video
+  const up_ = Math.max(0, Math.min(1, (raised - 0.15) / 0.45));
+  const w = toTarget ? Math.min(0.92, Math.max(0.92 * up_ * up_ * (3 - 2 * up_), 0.12 * raised + 0.85 * drawing)) : Math.min(0.9, 0.12 * raised + 0.85 * drawing);
   let f = add(mul(look, 1 - w), mul(aim, w));
   if (len(f) < 1e-3) f = aim;
   f = perp(up, f);
-  // collo: al massimo 85° dal petto
+  // collo: al massimo 92° dal petto (in mira il mento va sulla spalla dell'arco)
   const fw = flat(fwd);
   if (fw) {
     const c = dot(f, fw);
-    const lim = Math.cos((85 * Math.PI) / 180);
+    const lim = Math.cos((92 * Math.PI) / 180);
     if (c < lim) {
       const side = norm(sub(f, mul(fw, c)));
       f = norm(add(mul(fw, lim), mul(side, Math.sqrt(1 - lim * lim))));
