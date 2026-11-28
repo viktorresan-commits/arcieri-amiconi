@@ -2,8 +2,37 @@
  * Pezzi di scena per le viste 3D in WebGL: cielo con colline e nuvole, prato, alberi, paglione con
  * la visuale, frecce (di legno con il modello CC0, oppure costruite con i colori scelti).
  */
-import { basis, canvasTexture, hexRgb, segment, trs, v3, type GL3D, type Vec3 } from "./gl3d";
+import { basis, canvasTexture, hexRgb, segment, trs, v3, type Env, type GL3D, type Vec3 } from "./gl3d";
 import { drawSky, type Sky } from "./sky3d";
+
+/** fondo dello studio bianco: il pavimento lontano sfuma in questo colore, senza riga dell'orizzonte */
+const STUDIO_FOG: Vec3 = [0.95, 0.947, 0.94];
+/**
+ * Studio bianco "infinito" (come le foto di prodotto): luce morbida dall'alto, pavimento chiaro che sfuma nel
+ * fondo senza orizzonte. `near`/`far`: da dove a dove il pavimento sparisce nel fondo (metri dalla camera).
+ */
+export function studioEnv(near: number, far: number): { env: Env; clear: Vec3 } {
+  const env: Env = { sun: v3.norm([0.3, 0.88, -0.36]), sunCol: [0.6, 0.595, 0.585], sky: [0.5, 0.5, 0.51], ground: [0.36, 0.355, 0.35], fog: STUDIO_FOG, fogNear: near, fogFar: far };
+  // il programma scurisce appena i colori (curva 1/1,12): lo sfondo pulito è lo stesso colore già corretto
+  const clear = STUDIO_FOG.map((c) => Math.pow(c, 1 / 1.12)) as Vec3;
+  return { env, clear };
+}
+
+/**
+ * Pavimento dello studio bianco: dello stesso colore del fondo (senza luce propria, altrimenti vicino alla camera
+ * diventava più chiaro del fondo e la riga dell'orizzonte tornava). Appoggiano gli oggetti le ombre morbide.
+ */
+export function drawStudio(g: GL3D, center: Vec3, size = 600) {
+  g.draw(g.once("studio-floor", () => g.mesh(groundGeo(1))), trs([center[0], 0, center[2]], 0, [size, 1, size]), STUDIO_FOG, { unlit: true });
+}
+
+/** Corsia nello studio: solo la linea di tiro e le linee delle distanze, grigio chiaro (niente prato). */
+export function drawStudioLane(g: GL3D, D: number, k: number, step: number) {
+  const half = 3 * k;
+  for (let z = 0; z <= D + 0.01; z += step) {
+    g.draw("box", trs([0, 0.006, z], 0, [half * 2, 0.004, z === 0 ? 0.1 * k : 0.05 * k]), z === 0 ? [0.55, 0.55, 0.56] : [0.78, 0.78, 0.79], { unlit: true, alpha: z === 0 ? 0.9 : 0.7 });
+  }
+}
 
 const rand = (seed: number) => {
   let s = seed >>> 0;

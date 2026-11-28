@@ -16,6 +16,30 @@ import { watchOnScreen } from "@/lib/arcieri/on-screen";
 import { cx } from "./kit";
 import { Glyph } from "./icons";
 
+const lerpN = (a: number | undefined, b: number | undefined, k: number) => (a == null ? b : b == null ? a : a + (b - a) * k);
+/** punti del video tra due campioni */
+function lerpLm(a: Landmark[], b: Landmark[], k: number): Landmark[] {
+  return a.map((p, j) => {
+    const q = b[j];
+    if (!p || !q) return p ?? q;
+    return { x: p.x + (q.x - p.x) * k, y: p.y + (q.y - p.y) * k, z: lerpN(p.z, q.z, k), visibility: lerpN(p.visibility, q.visibility, k), xw: lerpN(p.xw, q.xw, k), yw: lerpN(p.yw, q.yw, k), zw: lerpN(p.zw, q.zw, k) };
+  });
+}
+const lerpV = (a: V3, b: V3, k: number): V3 => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
+/** posa risolta tra due campioni: ossa, arco e palmi interpolati (i versi rinormalizzati) */
+function lerpPre(a: PrePose, b: PrePose, k: number): PrePose {
+  const J: Record<number, V3> = {};
+  for (const key of Object.keys(a.J)) {
+    const id = Number(key);
+    const q = b.J[id];
+    J[id] = q ? lerpV(a.J[id], q, k) : a.J[id];
+  }
+  const bow = a.bow && b.bow ? { n: v3.norm(lerpV(a.bow.n, b.bow.n, k)), u: v3.norm(lerpV(a.bow.u, b.bow.u, k)), half: a.bow.half + (b.bow.half - a.bow.half) * k, nocked: k < 0.5 ? a.bow.nocked : b.bow.nocked } : k < 0.5 ? a.bow : b.bow;
+  const pl = (x?: V3, y?: V3) => (x && y ? v3.norm(lerpV(x, y, k)) : k < 0.5 ? x : y);
+  const palms = a.palms || b.palms ? { L: pl(a.palms?.L, b.palms?.L), R: pl(a.palms?.R, b.palms?.R) } : undefined;
+  return { ...(k < 0.5 ? a : b), J, bow, palms };
+}
+
 /** punti con sinistra e destra scambiate, una volta sola per fotogramma (la stessa posa resta la stessa) */
 const mirrored = new WeakMap<Landmark[], Landmark[]>();
 function mirrorCache(lm: Landmark[]) {
@@ -1162,10 +1186,20 @@ export function Anatomy3D({
             else hi = mid;
           }
           const i = Math.abs(sv.t[hi] - tNow) < Math.abs(sv.t[lo] - tNow) ? hi : lo;
-          const l = sv.lm[i];
-          if (l && sv.pre[i] && Math.abs(sv.t[i] - tNow) < 0.06) {
-            fromSolved = withPosture(fixRef.current, () => buildModel(l, asp, hd, sv.gear[i], fc ?? live.current.cal, null, sv.t[i], sv.pre[i]));
-            if (fromSolved) usedPre = sv.pre[i];
+          // tra due campioni la posa si interpola (punti, ossa, arco, palmi): il movimento scorre senza scatti
+          // anche quando lo schermo disegna più fotogrammi di quelli analizzati
+          const gap = sv.t[hi] - sv.t[lo];
+          const kk = gap > 1e-4 ? Math.max(0, Math.min(1, (tNow - sv.t[lo]) / gap)) : 0;
+          const la = sv.lm[lo];
+          const lb = sv.lm[hi];
+          const pa = sv.pre[lo];
+          const pb = sv.pre[hi];
+          const between = la && lb && pa && pb && hi === lo + 1 && gap < 0.15 && tNow >= sv.t[lo] && tNow <= sv.t[hi];
+          const l = between ? lerpLm(la, lb, kk) : sv.lm[i];
+          const pr = between ? lerpPre(pa, pb, kk) : sv.pre[i];
+          if (l && pr && (between || Math.abs(sv.t[i] - tNow) < 0.06)) {
+            fromSolved = withPosture(fixRef.current, () => buildModel(l, asp, hd, sv.gear[i], fc ?? live.current.cal, null, between ? tNow : sv.t[i], pr));
+            if (fromSolved) usedPre = pr;
           }
         }
         if (!fromSolved) usedPre = null;

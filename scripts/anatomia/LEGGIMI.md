@@ -39,6 +39,8 @@ Poi, nell'ordine:
     python3 za_nerve_curves.py
     BP3D_MODELS=<human-atlas>/public/models/ python3 add_nerves.py ../../public/anatomia/corpo:0.010:6 ../../public/anatomia/corpo-leggero:0.022:4 ../../public/anatomia/corpo-hd:0.006:8
     python3 fix_dita.py ../../public/anatomia/corpo ../../public/anatomia/corpo-leggero ../../public/anatomia/corpo-hd
+    python3 add_pube.py ../../public/anatomia/corpo-hd ../../public/anatomia/corpo ../../public/anatomia/corpo-leggero
+    python3 fix_nervi.py ../../public/anatomia/corpo ../../public/anatomia/corpo-leggero ../../public/anatomia/corpo-hd
 
 - `fix_abs.py`: la parete dell'addome (retti, linea alba, obliqui, erettori) passa dal bacino al torace con un peso
   che dipende solo dall'altezza, uguale per tutti: torcendo il busto si torce tutta insieme;
@@ -47,7 +49,12 @@ Poi, nell'ordine:
 - `za_nerve_curves.py` e `add_nerves.py`: i nervi di Z-Anatomy sono curve; si leggono da Startup.blend e diventano
   tubi (strato `nerve`), ogni punto con i due segmenti delle ossa più vicine della sua regione;
 - `fix_dita.py`: muscoli e tendini delle dita prendono segmenti e pesi della pelle che li copre (dita e pollice),
-  così si piegano con le dita in presa sulla corda e sull'impugnatura invece di restare dritti.
+  così si piegano con le dita in presa sulla corda e sull'impugnatura invece di restare dritti;
+- `add_pube.py`: fascia liscia bianco crema sopra pube e inguine, come nelle tavole per tutti (senza organi):
+  superficie costruita davanti a muscoli e ossa con una palla di 5 cm che ci rotola sopra, levigata, ripiegata
+  tra le cosce; segue i segmenti dei muscoli vicini;
+- `fix_nervi.py`: ogni anello dei nervi segue i due segmenti con più peso tra i 40 vertici di muscolo più vicini
+  (campo liscio): i nervi restano attaccati ai muscoli in posa, non escono dalla pelle e non si stirano in lame.
 
 Tutti aggiungono una voce a `ritocchi` nel `.json`: cambia l'impronta del corpo e i telefoni lo riscaricano.
 

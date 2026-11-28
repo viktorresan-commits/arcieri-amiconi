@@ -563,9 +563,23 @@ export class GL3D {
     gl.useProgram(this.prog);
   }
 
-  /** Ombra morbida a macchia sul terreno (y = 0.002). */
+  /** Ombra morbida a macchia sul terreno (y = 0.002): scura al centro, sfuma fino al bordo (niente ellisse piatta). */
   shadow(at: Vec3, rx: number, rz: number, alpha = 0.35) {
-    this.draw("disc", basis([at[0], 0.003, at[2]], [rx, 0, 0], [0, 0, rz], [0, -1, 0]), [0, 0, 0], { alpha, unlit: true });
+    const tex = this.once("soft-shadow", () =>
+      this.textureFrom(
+        canvasTexture(128, (c, sz) => {
+          const g = c.createRadialGradient(sz / 2, sz / 2, 0, sz / 2, sz / 2, sz / 2);
+          g.addColorStop(0, "rgba(0,0,0,1)");
+          g.addColorStop(0.45, "rgba(0,0,0,0.7)");
+          g.addColorStop(1, "rgba(0,0,0,0)");
+          c.fillStyle = g;
+          c.fillRect(0, 0, sz, sz);
+        }),
+        true,
+        false,
+      ),
+    );
+    this.draw("disc", basis([at[0], 0.003, at[2]], [rx * 1.25, 0, 0], [0, 0, rz * 1.25], [0, -1, 0]), [0, 0, 0], { alpha: Math.min(1, alpha * 1.35), unlit: true, tex, texAlpha: true });
   }
 
   /** Capsula fra due punti. */

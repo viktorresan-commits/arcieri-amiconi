@@ -49,7 +49,7 @@ export type BowPose = { n: V3; u: V3; half: number; nocked: boolean };
  * Posa già risolta sull'intero video (motion-solve): punti del corpo con ossa di lunghezza costante,
  * niente scatti né compenetrazioni, e arco rigido filtrato. Se c'è, il fotogramma non si ricalcola da solo.
  */
-export type PrePose = { J: Record<number, V3>; bow?: BowPose | null; /** verso del palmo per mano (sinistra, destra della persona), continuo nel tempo */ palms?: { L?: V3; R?: V3 }; /** il fotogramma nello spazio della sagoma con la scala e il pavimento dell'intero video */ frame?: ImageFrame };
+export type PrePose = { J: Record<number, V3>; bow?: BowPose | null; /** verso del palmo per mano (sinistra, destra della persona), continuo nel tempo */ palms?: { L?: V3; R?: V3 }; /** il fotogramma nello spazio della sagoma con la scala e il pavimento dell'intero video */ frame?: ImageFrame; /** ancoraggio dell'arciere visto nel video: alla bocca o sotto il mento */ anchor?: "bocca" | "mento" };
 /** scala (unità d'immagine per metro) e pavimento decisi sull'intero video: valgono per ogni fotogramma */
 export type PlanarFix = { s: number; floorY: number };
 export type Model = { parts: Part[]; /** posa dell'arco usata (per il filtro sull'intero video) */ bowPose?: BowPose; hud: Hud; center: V3; height: number; J?: Record<number, V3>; hand?: Hand; /** dove guarda il viso (orizzontale): segue il bersaglio durante il tiro */ headF?: V3; /** testa in giù (+) o in su (-), radianti: dal naso rispetto alle orecchie nel fotogramma */ headPitch?: number; /** quanto la mano della corda è in presa sulla corda (0..1) e quanto quella dell'arco stringe l'impugnatura */ grip?: { draw: number; bow: number }; /** il fotogramma del video nel piano del corpo (z = 0), in metri: sinistra, destra, sopra, sotto */ frame?: ImageFrame; /** corporatura trovata con l'aura (silhouette) dell'arciere */ build?: Build; /** asse dell'arco all'impugnatura (verso il flettente alto): la mano dell'arco ci si chiude attorno */ bowAxis?: V3; /** verso del palmo filtrato sull'intero video (vedi PrePose) */ palms?: { L?: V3; R?: V3 }; /** la freccia incoccata: cocca, direzione e lunghezza (per la visuale dell'arciere) */ arrow?: { nock: V3; dir: V3; len: number }; /** postura rispetto alle tavole: misure sul gesto del video e parti corrette (se la sagoma è corretta) */ posture?: { checks: PostureCheck[]; fixed: PostureId[] } };
@@ -1016,7 +1016,9 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gea
       const u0 = norm(sub(grip, nock));
       const upH: V3 = [0, 1, 0];
       const out = mul(norm(cross(u0, upH)), hand === "destro" ? 1 : -1);
-      const target = add(corner, add(mul(out, 0.014), add(mul(upH, -0.014), mul(u0, 0.009))));
+      // sotto il mento (ancoraggio basso visto nel video): la corda tocca il centro del mento, appena davanti
+      const chin = J[9] && J[10] ? add(lerp(J[9], J[10], 0.5), [0, -0.05, 0]) : null;
+      const target = pre?.anchor === "mento" && chin ? add(chin, mul(u0, 0.012)) : add(corner, add(mul(out, 0.014), add(mul(upH, -0.014), mul(u0, 0.009))));
       const w = Math.max(0, Math.min(1, (0.13 - len(sub(nock, target))) / 0.06));
       if (w > 0) nock = lerp(nock, target, w);
     }
@@ -1141,6 +1143,10 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gea
     parts.push({ mesh: "arTrim", m: arPl.m, nm: arPl.nm, color: [0.78, 0.6, 0.38], mode: 3, alpha: 1, act: 0, layer: "arco", alt: "real" });
   }
 
+  // mano della corda in presa (pinza mediterranea) solo quando tira: con l'arco alzato e le dita sulla corda, o
+  // all'ancoraggio. A riposo (arco giù, prima dell'alzata) la mano resta come nel video, rilassata
+  const hookK = nocked && onString ? Math.max(0, Math.min(1, (aimed.raised - 0.25) / 0.3)) : 0;
+  const drawGrip = loose ? 0 : Math.max(aimed.drawing, hookK);
   // ---------- quote ----------
   const kit = archeryKit(lm, aspect * 1000, 1000, hand, gear)?.nums ?? null;
   const kneeM = lerp(J[25], J[26], 0.5);
@@ -1179,9 +1185,8 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gea
     posture: { checks: pChecks, fixed: pFix?.fixed ?? [] },
     headPitch,
     // la mano dell'arco lo tiene sempre (anche con il braccio giù); la mano della corda si apre al rilascio
-    // mano della corda: con la freccia incoccata e le dita sulla corda è in presa (pinza mediterranea) per tutta
-    // la trazione, non solo all'ancoraggio: prima, a metà trazione, la mano restava aperta e girata
-    grip: { draw: loose ? 0 : Math.max(aimed.drawing, nocked && onString ? 1 : 0), bow: Math.max(0.85, aimed.raised) },
+    // mano della corda: in presa per tutta la trazione (vedi drawGrip), rilassata a riposo
+    grip: { draw: drawGrip, bow: Math.max(0.85, aimed.raised) },
     frame: pre?.frame ?? imageFrame(lm, aspect) ?? undefined,
     build: cal?.build,
     bowAxis: n,
@@ -1189,7 +1194,7 @@ export function buildModel(lm: Landmark[], aspect: number, hand: Hand, gear: Gea
     // mano della corda in presa (pinza mediterranea): il palmo guarda la freccia e il viso, il dorso fuori. Il verso
     // letto dai punti della mano (spesso ribaltato, guanto o mano di scorcio) girava l'avambraccio al contrario
     // della mano sulla corda: i muscoli dell'avambraccio si attorcigliavano fino alle dita
-    palms: drawPalms(pre?.palms, hand, loose ? 0 : Math.max(aimed.drawing, nocked && onString ? 1 : 0), u, n),
+    palms: drawPalms(pre?.palms, hand, drawGrip, u, n),
     arrow: arrowOut ?? { nock, dir: u, len: WOOD_ARROW_LEN },
   };
 }
@@ -1230,8 +1235,13 @@ function headAim(J: Record<number, V3>, bow: { sh: V3; el: V3; wr: V3 }, drw: { 
   // dritta la punta del naso sta poco sotto le orecchie; chinando la testa scende in fretta.
   // In mira la testa resta dritta: lì conta poco (il tremolio dei punti non deve farla annuire)
   const drop = earM[1] - J[0][1];
-  // (provato sui video: a testa dritta circa 2,2 cm, guardando le mani nell'incocco 5 cm e oltre)
-  const pitch = Math.asin(Math.max(-0.4, Math.min(0.8, (drop - 0.022) / 0.05))) * (1 - 0.7 * drawing);
+  // (provato sui video: a testa dritta circa 2,2 cm, guardando le mani nell'incocco 5 cm e oltre). La testa non si
+  // piega di forza: entro 3 cm dalla testa dritta resta dritta (il naso letto dal video oscilla e di profilo scende),
+  // oltre segue solo quello che eccede; con il braccio dell'arco alzato resta dritta (si guarda il bersaglio)
+  const dev = drop - 0.022;
+  const eff = Math.sign(dev) * Math.max(0, Math.abs(dev) - 0.03);
+  const upK = Math.max(0, Math.min(1, (raised - 0.15) / 0.45));
+  const pitch = Math.asin(Math.max(-0.4, Math.min(0.8, eff / 0.05))) * (1 - upK) * (1 - 0.7 * drawing);
   const aim = flat(sub(bow.wr, drawing > 0.2 ? drw.wr : bow.sh));
   if (!aim || raised < 0.05) return { f: look, raised, drawing, pitch };
   // il viso segue il video (naso e orecchie) finché la mano della corda non arriva al viso; all'ancoraggio

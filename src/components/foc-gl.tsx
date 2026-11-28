@@ -1,6 +1,5 @@
 import { basis, canvasTexture, cylinderGeo, project, segment, trs, v3, type Env, type GL3D, type Vec3 } from "@/lib/arcieri/gl3d";
-import { drawArrow3D, drawBoss, drawLane, drawTrees, drawWorld } from "@/lib/arcieri/scene3d";
-import { drawSkyOverlay, envOf, useSky } from "@/lib/arcieri/sky3d";
+import { drawArrow3D, drawBoss, drawStudio, drawStudioLane, studioEnv } from "@/lib/arcieri/scene3d";
 import { useAvatar } from "./avatar-hero";
 import { FocBalance3D, FocFlight3D, orbit, type Arrow3DLook } from "./foc-3d";
 import { GLStage, useGLScene } from "./gl-stage";
@@ -125,7 +124,6 @@ export function FocBalanceGL({ L, B, foc, look = {} }: { L: number; B: number; f
 export function FocFlightGL({ distance, speed, foc, look = {} }: { distance: number; speed: number; foc: number; look?: Arrow3DLook }) {
   const { shown } = useAvatar();
   const sprite = useAvatarSprite(shown);
-  const { sky } = useSky();
   const { ref, glRef, view, failed } = useGLScene((g, o, w, h, time, v) => {
     const G = 9.81;
     const D = distance;
@@ -143,11 +141,12 @@ export function FocFlightGL({ distance, speed, foc, look = {} }: { distance: num
     const rel = 1.45 * big;
     const yAt = (u: number) => rel + ex * (Math.tan(theta) * D * u - (G * (D * u) ** 2) / (2 * vel * vel * Math.cos(theta) ** 2)) - (rel - 1.3 * big) * u;
     const cam = orbit([-(D * 0.55 + 6), 2.6 + D * 0.1, D * 0.15 - 3], [0, rel * 0.8 + peak * ex * 0.5, D * 0.45], v);
-    g.begin(cam.eye as Vec3, cam.target as Vec3, 50, envOf(sky));
-    drawWorld(g, [0, 0, D / 2], 900, sky, time);
-    drawTrees(g, D, Math.round(D) + 7);
+    // studio bianco "infinito", come il tiro della balistica: niente cielo né prato
+    const st = studioEnv(Math.max(30, D * 1.5 + 10 * big), Math.max(90, D * 4 + 30 * big));
+    g.begin(cam.eye as Vec3, cam.target as Vec3, 50, st.env, st.clear);
+    drawStudio(g, [0, 0, D / 2], Math.max(600, D * 12));
     const step = D > 40 ? 10 : 5;
-    drawLane(g, D, big, step);
+    drawStudioLane(g, D, big, step);
     drawBoss(g, 0, 1.3 * big, D, 0.61 * big, big, 10);
     // arciere: ancoraggio e mira prima del rilascio (t = 0)
     const s = big;
@@ -160,10 +159,10 @@ export function FocFlightGL({ distance, speed, foc, look = {} }: { distance: num
     const N = 60;
     const pts: Vec3[] = [];
     for (let i = 0; i <= N; i += 1) pts.push([0, yAt(i / N), (i / N) * D]);
-    for (let i = 0; i < N; i += 2) g.draw("tube", segment(pts[i], pts[i + 1], 0.006 * big), [1, 1, 1], { alpha: 0.45, unlit: true });
+    for (let i = 0; i < N; i += 2) g.draw("tube", segment(pts[i], pts[i + 1], 0.006 * big), [0.35, 0.37, 0.4], { alpha: 0.5, unlit: true });
     const k = t <= 0 ? 0 : Math.min(1, t / play);
     const n = Math.floor(k * N);
-    for (let i = 0; i < n; i += 1) g.draw("tube", segment(pts[i], pts[i + 1], 0.012 * big), [0.49, 0.94, 0.66], { unlit: true, alpha: 0.9 });
+    for (let i = 0; i < n; i += 1) g.draw("tube", segment(pts[i], pts[i + 1], 0.012 * big), [0.09, 0.53, 0.29], { unlit: true, alpha: 0.9 });
     const len = 0.75 * big;
     if (k > 0 && k < 1) {
       const fi = k * N;
@@ -176,17 +175,16 @@ export function FocFlightGL({ distance, speed, foc, look = {} }: { distance: num
       const dir = v3.norm(v3.sub(pts[N], pts[N - 2]));
       drawArrow3D(g, v3.sub(v3.add(pts[N], [0, 0, 0.05 * big]), v3.scale(dir, len * 0.8)), dir, len * 0.8, 0.5, 0.0065 * big, look);
     }
-    drawSkyOverlay(o, g, sky, w, h, time);
     const P = (p: Vec3) => project(g.vp, p, w, h);
     const top = P([0, yAt(0.5), D * 0.5]);
     if (top) {
       o.font = "600 10px system-ui, sans-serif";
       o.textAlign = "center";
       o.lineWidth = 3;
-      o.strokeStyle = "rgba(8,14,12,0.7)";
+      o.strokeStyle = "rgba(255,255,255,0.8)";
       const txt = `sale fino a ${peak.toFixed(2).replace(".", ",")} m`;
       o.strokeText(txt, top.x, top.y - 10);
-      o.fillStyle = "#ffe39a";
+      o.fillStyle = "#8a5a00";
       o.fillText(txt, top.x, top.y - 10);
     }
     o.textAlign = "left";
@@ -195,9 +193,9 @@ export function FocFlightGL({ distance, speed, foc, look = {} }: { distance: num
     const line2 = `FOC ${foc.toFixed(1).replace(".", ",")}% · ${big > 1.05 ? `oggetti ×${big.toFixed(1).replace(".", ",")} · ` : ""}curva ×${ex.toFixed(0)}`;
     for (const [txt, y] of [[line1, 18], [line2, 32]] as const) {
       o.lineWidth = 3;
-      o.strokeStyle = "rgba(8,14,12,0.7)";
+      o.strokeStyle = "rgba(255,255,255,0.8)";
       o.strokeText(txt, 10, y);
-      o.fillStyle = "#fff";
+      o.fillStyle = "#1d2124";
       o.fillText(txt, 10, y);
     }
   });

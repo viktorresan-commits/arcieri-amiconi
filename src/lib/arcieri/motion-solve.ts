@@ -449,6 +449,37 @@ export function solveMotion(frames: SolveFrame[], aspect: number, hand: Hand, ca
 
   // gambe credibili, busto in piedi, piedi a terra
   const shiftOf = standUpright(J, lms, fs);
+  // Testa dritta sul collo: dal video (di fronte, con il viso girato al bersaglio) la testa risultava sempre un
+  // poco avanti o di lato sulle spalle, e la sagoma la portava piegata. L'arciere tiene la testa dritta: entro 12°
+  // dalla verticale del busto la testa si raddrizza (ruota tutta insieme attorno alla base del collo, così viso e
+  // bocca restano dove la corda li tocca); oltre, resta la parte che eccede (una testa piegata davvero si vede)
+  for (let i = 0; i < n; i++) {
+    const Jf = J[i];
+    if (!Jf[7] || !Jf[8] || !Jf[11] || !Jf[12] || !Jf[23] || !Jf[24]) continue;
+    const sm = v3.lerp(Jf[11], Jf[12], 0.5);
+    const up = v3.norm(v3.sub(sm, v3.lerp(Jf[23], Jf[24], 0.5)));
+    const d = v3.sub(v3.lerp(Jf[7], Jf[8], 0.5), sm);
+    const dl = v3.len(d);
+    if (dl < 1e-4) continue;
+    const th = Math.acos(Math.max(-1, Math.min(1, v3.dot(d, up) / dl)));
+    const keep = Math.max(0, th - (12 * Math.PI) / 180);
+    const rot = th - keep;
+    if (rot < 1e-3) continue;
+    const ax = v3.cross(d, up);
+    if (v3.len(ax) < 1e-6) continue;
+    const k = v3.norm(ax);
+    const c = Math.cos(rot);
+    const sn = Math.sin(rot);
+    const turn = (p: V3): V3 => {
+      const v = v3.sub(p, sm);
+      const r = v3.add(v3.add(v3.mul(v, c), v3.mul(v3.cross(k, v), sn)), v3.mul(k, v3.dot(k, v) * (1 - c)));
+      return v3.add(sm, r);
+    };
+    for (const key of Object.keys(Jf)) {
+      const id = Number(key);
+      if (id <= 10 || id >= 75) Jf[id] = turn(Jf[id]);
+    }
+  }
   dbg?.("smooth", J);
   // ---- braccia con la lunghezza vera: profondità di gomito e polso con il verso scelto sull'intera sequenza ----
   // Omero e avambraccio con le proporzioni del corpo anatomico disegnato, scalate sul busto dell'arciere:
@@ -538,7 +569,8 @@ export function solveMotion(frames: SolveFrame[], aspect: number, hand: Hand, ca
     const sh = Jf[bowArm.sh];
     const wr = Jf[bowArm.wr];
     if (!sh || !wr) return 0;
-    const level = clamp01(1 - Math.abs(wr[1] - sh[1]) / 0.3);
+    // alzato: polso fino a 6 cm sopra o sotto la spalla del tutto, a 28 cm per niente
+    const level = clamp01(1 - Math.max(0, Math.abs(wr[1] - sh[1]) - 0.06) / 0.22);
     const ext = clamp01((Math.hypot(wr[0] - sh[0], wr[1] - sh[1]) / (UA + FA) - 0.5) / 0.2);
     return level * ext;
   });
@@ -854,12 +886,77 @@ export function solveMotion(frames: SolveFrame[], aspect: number, hand: Hand, ca
     }
   }
   dbg?.("bowArm", J);
-  // Mano della corda in trazione: tiene la corda, quindi sta sulla linea della freccia, dalla mano dell'arco
-  // all'ancoraggio sotto la bocca. Dal video si vede dove sta sullo schermo, non quanto va verso la camera: il
-  // rilevatore la portava anche 40 cm davanti al viso (freccia di traverso, arco fuori asse). La profondità del
-  // polso va sulla linea; il gomito resta sul cerchio delle due lunghezze, il più vicino al punto del video
+  // Ancoraggio dell'arciere, sull'intero video: alla bocca (indice all'angolo della bocca) o sotto la bocca
+  // (indice sotto il mento). Lo dice dove sta la punta dell'indice quando la mano tocca il viso
+  const drawAi = hand === "destro" ? 1 : 0;
+  const lowAnchor = (() => {
+    const v: number[] = [];
+    for (let i = 0; i < n; i++) {
+      const Jf = J[i];
+      const tip = Jf[drawArm.hb + 8] ?? Jf[drawArm.hand[1]];
+      if (contact[drawAi][i] < 0.5 || !tip || !Jf[9] || !Jf[10]) continue;
+      v.push(tip[1] - (Jf[9][1] + Jf[10][1]) / 2);
+    }
+    if (v.length < 3) return false;
+    v.sort((x, y) => x - y);
+    return v[Math.floor(v.length / 2)] < -0.03;
+  })();
+  /** dove arriva la corda all'ancoraggio: sotto la bocca (sulle labbra) o sotto il mento */
+  const anchorOf = (Jf: Record<number, V3>): V3 => v3.add(v3.lerp(Jf[9], Jf[10], 0.5), [0, lowAnchor ? -0.05 : -0.018, 0]);
+  // Mano della corda in trazione: le dita tengono la corda, quindi stanno nel piano verticale della freccia, dalla
+  // mano dell'arco al punto d'ancoraggio: la corda viene indietro dritta verso la bocca (o il mento), mai verso
+  // l'esterno. Dal video si vede dove sta la mano sullo schermo, non quanto va verso la camera: il rilevatore la
+  // portava anche 40 cm davanti al viso (freccia di traverso, arco fuori asse). Si sposta in profondità tutta la
+  // mano perché le dita (la cocca) stiano nel piano; il gomito resta sul cerchio delle due lunghezze, il più
+  // vicino al punto del video
+  /**
+   * Profondità del gomito della corda. Sullo schermo il gomito resta dove lo mostra il video (la vista di fronte
+   * deve essere fedele: cercarlo sul cerchio delle due lunghezze lo spostava di 10-15 cm rispetto al video); si
+   * cerca solo quanto sta davanti o dietro, con braccio e avambraccio il più possibile della loro lunghezza.
+   * Le due soluzioni a specchio (davanti / dietro) costavano quasi uguale e il gomito saltava dall'una all'altra:
+   * decidono il piano verticale della freccia (in trazione il gomito sta in linea con la freccia) e la vicinanza
+   * al gomito del fotogramma prima.
+   */
+  const drawElbow = (sh: V3, W: V3, el: V3, A: V3, B: V3, prevEl: V3 | null): V3 | null => {
+    const a = drawArm;
+    const d = v3.sub(B, A);
+    const dl = Math.hypot(d[0], d[2]);
+    if (dl < 1e-4) return null;
+    const nH: V3 = [-d[2] / dl, 0, d[0] / dl];
+    const cost = (z: number) => {
+      const q: V3 = [el[0], el[1], z];
+      const eu = v3.len(v3.sub(q, sh)) - a.ua;
+      const ef = v3.len(v3.sub(q, W)) - a.fa;
+      const pl = nH[0] * (q[0] - A[0]) + nH[2] * (q[2] - A[2]);
+      let c = eu * eu + ef * ef + 0.15 * pl * pl;
+      if (prevEl) c += 0.5 * (z - prevEl[2]) ** 2;
+      return c;
+    };
+    let bz = el[2];
+    let bc = Infinity;
+    for (let k = -45; k <= 45; k++) {
+      const z = sh[2] + k * 0.01;
+      const c = cost(z);
+      if (c < bc) {
+        bc = c;
+        bz = z;
+      }
+    }
+    // al millimetro attorno al migliore (niente scalini di un centimetro tra un fotogramma e l'altro)
+    const z0 = bz;
+    for (let k = -10; k <= 10; k++) {
+      const z = z0 + k * 0.001;
+      const c = cost(z);
+      if (c < bc) {
+        bc = c;
+        bz = z;
+      }
+    }
+    return [el[0], el[1], bz];
+  };
   {
     const a = drawArm;
+    const drawElSet: boolean[] = new Array(n).fill(false);
     for (let i = 0; i < n; i++) {
       const Jf = J[i];
       const sh = Jf[a.sh];
@@ -867,49 +964,34 @@ export function solveMotion(frames: SolveFrame[], aspect: number, hand: Hand, ca
       const wr = Jf[a.wr];
       const B = Jf[bowArm.wr];
       if (!sh || !el || !wr || !B || !Jf[9] || !Jf[10] || raisedW[i] <= 0) continue;
-      const A = v3.lerp(Jf[9], Jf[10], 0.5);
+      const A = anchorOf(Jf);
+      // le dita sulla corda: tra le seconde falangi di indice e medio (la cocca), se la mano si vede
+      const Fp: V3 = Jf[a.hb + 6] && Jf[a.hb + 10] ? v3.lerp(Jf[a.hb + 6], Jf[a.hb + 10], 0.5) : (Jf[a.hand[1]] ?? wr);
       const ab: [number, number] = [B[0] - A[0], B[1] - A[1]];
       const l2 = ab[0] * ab[0] + ab[1] * ab[1];
       if (l2 < 0.04) continue;
-      const t = ((wr[0] - A[0]) * ab[0] + (wr[1] - A[1]) * ab[1]) / l2;
+      const t = ((Fp[0] - A[0]) * ab[0] + (Fp[1] - A[1]) * ab[1]) / l2;
       // fuori dal tratto tra il viso e la mano dell'arco (o lontana dalla linea) la mano non è sulla corda
       const along = clamp01((t + 0.35) / 0.15) * clamp01((0.85 - t) / 0.15);
-      const off = Math.abs((wr[0] - A[0]) * ab[1] - (wr[1] - A[1]) * ab[0]) / Math.sqrt(l2);
+      const off = Math.abs((Fp[0] - A[0]) * ab[1] - (Fp[1] - A[1]) * ab[0]) / Math.sqrt(l2);
       const near = clamp01((0.2 - off) / 0.08);
-      // dove la mano tocca il viso decide il contatto (qui sotto)
-      const wd = raisedW[i] * along * near * (1 - contact[hand === "destro" ? 1 : 0][i]);
+      const wd = raisedW[i] * along * near;
       if (wd <= 0) continue;
-      const zLine = A[2] + Math.max(0, t) * (B[2] - A[2]);
-      const dzw = (zLine - wr[2]) * wd;
+      // piano verticale della freccia per A e B: la profondità che porta le dita nel piano
+      const d = v3.sub(B, A);
+      const nH = v3.norm([-d[2], 0, d[0]]);
+      if (Math.abs(nH[2]) < 0.25) continue;
+      const dz = -(nH[0] * (Fp[0] - A[0]) + nH[2] * (Fp[2] - A[2])) / nH[2];
+      const dzw = dz * wd;
       if (Math.abs(dzw) < 1e-4) continue;
       const W: V3 = [wr[0], wr[1], wr[2] + dzw];
       Jf[a.wr] = W;
       moveHand(Jf, a, dzw);
-      // gomito sul cerchio delle due lunghezze attorno alla linea spalla-polso, il più vicino al video
-      const u = v3.sub(W, sh);
-      const D = v3.len(u);
-      if (D < 1e-4 || D >= a.ua + a.fa || D <= Math.abs(a.ua - a.fa)) continue;
-      const un = v3.mul(u, 1 / D);
-      const x = (D * D + a.ua * a.ua - a.fa * a.fa) / (2 * D);
-      const rad = Math.sqrt(Math.max(0, a.ua * a.ua - x * x));
-      const C = v3.add(sh, v3.mul(un, x));
-      let p1 = v3.sub(el, C);
-      p1 = v3.sub(p1, v3.mul(un, v3.dot(p1, un)));
-      if (v3.len(p1) < 1e-5) p1 = v3.cross(un, [0, 1, 0]);
-      p1 = v3.norm(p1);
-      const p2 = v3.cross(un, p1);
-      let best: V3 = el;
-      let bc = Infinity;
-      for (let k = 0; k < 48; k++) {
-        const th = (k * Math.PI) / 24;
-        const q = v3.add(C, v3.add(v3.mul(p1, rad * Math.cos(th)), v3.mul(p2, rad * Math.sin(th))));
-        const c = (q[0] - el[0]) ** 2 + (q[1] - el[1]) ** 2 + 0.05 * (q[2] - el[2]) ** 2;
-        if (c < bc) {
-          bc = c;
-          best = q;
-        }
-      }
+      // gomito sul cerchio delle due lunghezze attorno alla linea spalla-polso (vedi drawElbow)
+      const best = drawElbow(sh, W, el, A, B, i > 0 && drawElSet[i - 1] ? J[i - 1][a.el] : null);
+      if (!best) continue;
       Jf[a.el] = v3.add(el, v3.mul(v3.sub(best, el), wd));
+      drawElSet[i] = true;
     }
   }
   dbg?.("drawArm", J);
@@ -917,7 +999,10 @@ export function solveMotion(frames: SolveFrame[], aspect: number, hand: Hand, ca
   // gomito si mette dietro, con l'avambraccio intero (l'omero si adatta di quel poco che serve)
   for (const [ai, a] of arms.entries()) {
     for (let i = 0; i < n; i++) {
-      const ct = contact[ai][i];
+      // la mano della corda con l'arco alzato è sulla corda: la sua profondità l'ha già data il piano della
+      // freccia (qui sopra), quella del rilevatore la riportava davanti al viso; all'ancoraggio la mette a posto
+      // l'aggancio alla bocca (qui sotto)
+      const ct = contact[ai][i] * (a === drawArm ? 1 - clamp01((raisedW[i] - 0.15) / 0.35) : 1);
       const zw = absZ[a.wr][i];
       const Jf = J[i];
       if (ct <= 0 || zw == null || !Jf[a.el] || !Jf[a.wr]) continue;
@@ -939,6 +1024,7 @@ export function solveMotion(frames: SolveFrame[], aspect: number, hand: Hand, ca
     const a = arms[ai];
     const cornerId = hand === "destro" ? 10 : 9;
     const otherId = hand === "destro" ? 9 : 10;
+    const anchElSet: boolean[] = new Array(n).fill(false);
     for (let i = 0; i < n; i++) {
       const ct = contact[ai][i];
       const Jf = J[i];
@@ -952,9 +1038,10 @@ export function solveMotion(frames: SolveFrame[], aspect: number, hand: Hand, ca
       const aimH = v3.norm([aim[0], 0, aim[2]]);
       let latN = v3.norm(v3.cross(aimH, [0, 1, 0]));
       if (hand !== "destro") latN = v3.mul(latN, -1);
-      // l'angolo della bocca: dal centro della bocca 2,5 cm verso la corda, la punta dell'indice appena fuori
+      // l'angolo della bocca: dal centro della bocca 2,5 cm verso la corda, la punta dell'indice appena fuori.
+      // Ancoraggio sotto la bocca: l'indice passa sotto il mento, poco di lato
       const mouthC = v3.lerp(mc, mo, 0.5);
-      const target = v3.add(mouthC, v3.mul(latN, 0.031));
+      const target = lowAnchor ? v3.add(v3.add(mouthC, v3.mul(latN, 0.014)), [0, -0.048, 0]) : v3.add(mouthC, v3.mul(latN, 0.031));
       const d = v3.sub(target, tip);
       const dist = v3.len(d);
       const near = Math.max(0, Math.min(1, (0.14 - dist) / 0.06));
@@ -964,10 +1051,20 @@ export function solveMotion(frames: SolveFrame[], aspect: number, hand: Hand, ca
       Jf[a.wr] = v3.add(Jf[a.wr], mv);
       for (const f of a.hand) if (Jf[f]) Jf[f] = v3.add(Jf[f], mv);
       for (let k = 0; k < 21; k++) if (Jf[a.hb + k]) Jf[a.hb + k] = v3.add(Jf[a.hb + k], mv);
-      // il gomito tiene l'avambraccio intero: si sposta in profondità quanto serve
-      const r = roots(Jf[a.wr], Jf[a.el], a.fa);
-      const ez = Math.abs(r[0] - Jf[a.el][2]) < Math.abs(r[1] - Jf[a.el][2]) ? r[0] : r[1];
-      Jf[a.el] = [Jf[a.el][0], Jf[a.el][1], ez];
+      // il gomito tiene braccio e avambraccio interi, in linea con la freccia e senza saltare (vedi drawElbow);
+      // prima si cercava solo la profondità con l'avambraccio: quando l'avambraccio sullo schermo era già lungo
+      // quanto quello vero non c'era soluzione e il gomito saltava avanti e indietro di 5 cm a ogni fotogramma
+      const sh = Jf[a.sh];
+      const Bw = Jf[bw.wr];
+      const el2 = sh && Bw ? drawElbow(sh, Jf[a.wr], Jf[a.el], target, Bw, i > 0 && anchElSet[i - 1] ? J[i - 1][a.el] : null) : null;
+      if (el2) {
+        Jf[a.el] = v3.add(Jf[a.el], v3.mul(v3.sub(el2, Jf[a.el]), Math.min(1, w * 1.5)));
+        anchElSet[i] = true;
+      } else {
+        const r = roots(Jf[a.wr], Jf[a.el], a.fa);
+        const ez = Math.abs(r[0] - Jf[a.el][2]) < Math.abs(r[1] - Jf[a.el][2]) ? r[0] : r[1];
+        Jf[a.el] = [Jf[a.el][0], Jf[a.el][1], ez];
+      }
     }
   }
   dbg?.("viterbi", J);
@@ -1017,6 +1114,32 @@ export function solveMotion(frames: SolveFrame[], aspect: number, hand: Hand, ca
       }
     }
     dbg?.("collide", J);
+  }
+  // Gomiti lisci in profondità: la profondità del gomito si sceglie fotogramma per fotogramma e tremava di qualche
+  // centimetro anche con la mano ferma all'ancoraggio. Si liscia nel tempo (circa un decimo di secondo) solo la
+  // profondità: sullo schermo il gomito resta quello del video. Un salto vero (rilascio) non si mescola
+  {
+    const sg = Math.max(1, fs * 0.08);
+    const R = Math.ceil(sg * 2.5);
+    for (const a of arms) {
+      const Z = J.map((Jf) => (Jf[a.el] ? Jf[a.el][2] : null));
+      for (let i = 0; i < n; i++) {
+        const Jf = J[i];
+        const z0 = Z[i];
+        if (z0 == null || !Jf[a.el]) continue;
+        let acc = 0;
+        let ws = 0;
+        for (let k = -R; k <= R; k++) {
+          const z = Z[i + k];
+          if (z == null) continue;
+          const w = Math.exp((-0.5 * k * k) / (sg * sg)) * clamp01((0.12 - Math.abs(z - z0)) / 0.06);
+          if (w <= 0) continue;
+          acc += z * w;
+          ws += w;
+        }
+        if (ws > 0) Jf[a.el] = [Jf[a.el][0], Jf[a.el][1], acc / ws];
+      }
+    }
   }
   dbg?.("final", J);
   // ---- verso del palmo: continuo (una mano non si ribalta in un trentesimo di secondo) e liscio ----
@@ -1171,6 +1294,6 @@ export function solveMotion(frames: SolveFrame[], aspect: number, hand: Hand, ca
     const fr = lm ? imageFrame(lm, aspect, fixes[i]) : null;
     // il fotogramma segue lo spostamento dei piedi a terra: "come il video" resta allineato
     const frame = fr ? { ...fr, yTop: fr.yTop + shiftOf[i], yBot: fr.yBot + shiftOf[i] } : undefined;
-    return { J: J[i], bow, palms: palms[i], frame };
+    return { J: J[i], bow, palms: palms[i], frame, anchor: lowAnchor ? "mento" : "bocca" };
   });
 }

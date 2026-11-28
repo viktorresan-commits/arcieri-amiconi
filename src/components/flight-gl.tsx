@@ -2,19 +2,18 @@ import { useRef, useState } from "react";
 import { describeRound, goldOf, releasePoint, type FlightInput } from "@/lib/arcieri/flight";
 import { project, segment, v3, type Vec3 } from "@/lib/arcieri/gl3d";
 import { phaseAt, ROUTINE_END, ROUTINE_START } from "@/lib/arcieri/mannequin";
-import { drawArrow3D, drawBoss, drawLane, drawTrees, drawWorld } from "@/lib/arcieri/scene3d";
+import { drawArrow3D, drawBoss, drawStudio, drawStudioLane, studioEnv } from "@/lib/arcieri/scene3d";
 import { useAvatar } from "./avatar-hero";
 import { orbit, type Arrow3DLook } from "./foc-3d";
 import { Flight3DCanvas, PRESETS, type Preset } from "./flight-3d";
 import { GLStage, useGLScene } from "./gl-stage";
 import { useAvatarSprite } from "./avatar-sprite";
-import { SkyPicker } from "./archer-3d";
-import { drawSkyOverlay, envOf, useSky } from "@/lib/arcieri/sky3d";
 
 type RoundView = ReturnType<typeof describeRound>;
 
 /**
- * Il tiro in 3D con WebGL: campo con cielo, colline e alberi, paglione con la visuale, l'arciere
+ * Il tiro in 3D con WebGL, nello studio bianco "infinito" (niente cielo né prato: si legge solo il tiro):
+ * paglione con la visuale, linee delle distanze a terra, l'arciere
  * (il tuo avatar) che alza, tende, mira e rilascia, la freccia che vola nel tempo reale e si pianta.
  * Le altezze degli oggetti sono ingrandite sulle distanze lunghe e la curva è esagerata a parte
  * (scritto in alto). Se WebGL non c'è, resta la versione disegnata in 2D.
@@ -24,7 +23,6 @@ export function Flight3D({ input, round, sighted, look = {}, height = "h-72" }: 
   const presetRef = useRef<Preset>(preset);
   presetRef.current = preset;
   const { shown } = useAvatar();
-  const { sky } = useSky();
   const sprite = useAvatarSprite(shown);
 
   const { ref, glRef, view, failed } = useGLScene((g, o, w, h, time, v) => {
@@ -73,13 +71,14 @@ export function Flight3D({ input, round, sighted, look = {}, height = "h-72" }: 
     }
     const cam = orbit(eye, tgt, v);
     const portrait = h > w * 1.1;
-    g.begin(cam.eye as Vec3, cam.target as Vec3, (p === "bersaglio" ? 44 : 50) + (portrait ? 12 : 0), envOf(sky));
+    // studio bianco: il pavimento sparisce nel fondo ben oltre il paglione (niente orizzonte)
+    const st = studioEnv(Math.max(30, D * 1.5 + 10 * big), Math.max(90, D * 4 + 30 * big));
+    g.begin(cam.eye as Vec3, cam.target as Vec3, (p === "bersaglio" ? 44 : 50) + (portrait ? 12 : 0), st.env, st.clear);
     const P2 = (q: Vec3) => project(g.vp, q, w, h);
 
-    drawWorld(g, [0, 0, D / 2], 900, sky, time);
-    drawTrees(g, D, Math.round(D));
+    drawStudio(g, [0, 0, D / 2], Math.max(600, D * 12));
     const step = D > 40 ? 10 : 5;
-    drawLane(g, D, big, step);
+    drawStudioLane(g, D, big, step);
     const cx = shift * big;
     drawBoss(g, cx, gH, D, R * big, big, input.zones === 5 ? 5 : 10);
 
@@ -92,11 +91,11 @@ export function Flight3D({ input, round, sighted, look = {}, height = "h-72" }: 
 
     // traiettoria: tratteggio intero e scia fin dove è arrivata
     const pts = path.map((q) => W3(q.x, q.z));
-    for (let i = 0; i < pts.length - 1; i += 2) g.draw("tube", segment(pts[i], pts[i + 1], 0.006 * big), [1, 1, 1], { alpha: 0.45, unlit: true });
+    for (let i = 0; i < pts.length - 1; i += 2) g.draw("tube", segment(pts[i], pts[i + 1], 0.006 * big), [0.35, 0.37, 0.4], { alpha: 0.5, unlit: true });
     const u = flying ? tt / T : landed ? 1 : 0;
     const n = Math.max(1, Math.min(pts.length - 1, Math.floor(u * (pts.length - 1))));
     if (u > 0) {
-      for (let i = 0; i < n; i += 1) g.draw("tube", segment(pts[i], pts[i + 1], 0.013 * big), [1, 0.92, 0.6], { unlit: true, alpha: 0.9 });
+      for (let i = 0; i < n; i += 1) g.draw("tube", segment(pts[i], pts[i + 1], 0.013 * big), [0.93, 0.62, 0.12], { unlit: true, alpha: 0.9 });
     }
 
     // frecce del gruppo piantate; le mancate seguono la discesa e finiscono nel prato dietro
@@ -138,18 +137,17 @@ export function Flight3D({ input, round, sighted, look = {}, height = "h-72" }: 
       flyTip = tip;
     }
 
-    drawSkyOverlay(o, g, sky, w, h, time);
     // ── scritte ──
     o.font = "10px system-ui, sans-serif";
     o.textAlign = "left";
     for (let z = step; z <= D + 0.01; z += step) {
       const q = P2([-3 * big, 0.02, z]);
       if (!q || q.x < -20 || q.x > w + 20) continue;
-      label(o, `${z} m`, q.x + 4, q.y + 3, "rgba(255,255,255,0.85)");
+      label(o, `${z} m`, q.x + 4, q.y + 3, "rgba(40,44,48,0.85)");
     }
     if (Math.abs(lead) > 0.005) {
       o.setLineDash([4, 4]);
-      o.strokeStyle = "rgba(255,255,255,0.7)";
+      o.strokeStyle = "rgba(40,44,48,0.65)";
       o.lineWidth = 1.2;
       o.beginPath();
       for (let i = 0; i <= 48; i += 1) {
@@ -162,7 +160,7 @@ export function Flight3D({ input, round, sighted, look = {}, height = "h-72" }: 
       const q = P2([-lead * big, gH - R * big - 0.15 * big, D]);
       if (q) {
         o.textAlign = "center";
-        label(o, `al rilascio · anticipo ${Math.abs(lead * 100).toFixed(0)} cm`, q.x, q.y + 12, "#fff", "600 10px system-ui, sans-serif");
+        label(o, `al rilascio · anticipo ${Math.abs(lead * 100).toFixed(0)} cm`, q.x, q.y + 12, "#22262a", "600 10px system-ui, sans-serif");
       }
     }
     // mira giusta
@@ -170,7 +168,7 @@ export function Flight3D({ input, round, sighted, look = {}, height = "h-72" }: 
     const fm = P2([-round.my * big, (G + gap - (round.mz - G)) * big, D - 0.02]);
     if (fm) {
       const rr = Math.max(6, (0.06 * big * h) / Math.max(0.1, fm.depth) * 0.9);
-      o.strokeStyle = "#7cf0a8";
+      o.strokeStyle = "#16864a";
       o.lineWidth = 2;
       o.beginPath();
       o.arc(fm.x, fm.y, rr, 0, Math.PI * 2);
@@ -184,23 +182,23 @@ export function Flight3D({ input, round, sighted, look = {}, height = "h-72" }: 
       o.lineTo(fm.x, fm.y + rr + 6);
       o.stroke();
       o.textAlign = "left";
-      label(o, "MIRA QUI", fm.x + rr + 8, fm.y - rr, "#7cf0a8", "800 10px system-ui, sans-serif");
+      label(o, "MIRA QUI", fm.x + rr + 8, fm.y - rr, "#16864a", "800 10px system-ui, sans-serif");
     }
     const top = rawPath.reduce((b, q) => (q.z > b.z ? q : b), rawPath[0] ?? { x: 0, z: 0 });
     const tp = P2(W3(top.x, top.z));
     if (tp) {
-      o.fillStyle = "#e6b325";
+      o.fillStyle = "#c98a0c";
       o.beginPath();
       o.arc(tp.x, tp.y, 3, 0, Math.PI * 2);
       o.fill();
       o.textAlign = "center";
-      label(o, `culmine ${top.z.toFixed(2).replace(".", ",")} m`, tp.x, tp.y - 8, "#ffe39a", "600 10px system-ui, sans-serif");
+      label(o, `culmine ${top.z.toFixed(2).replace(".", ",")} m`, tp.x, tp.y - 8, "#8a5a00", "600 10px system-ui, sans-serif");
     }
     if (landed && tt - T < 0.6) {
       const q = P2(W3(end.x, end.z));
       if (q) {
         const k = (tt - T) / 0.6;
-        o.strokeStyle = `rgba(255,241,176,${1 - k})`;
+        o.strokeStyle = `rgba(201,138,12,${1 - k})`;
         o.lineWidth = 2;
         o.beginPath();
         o.arc(q.x, q.y, 6 + k * 26, 0, Math.PI * 2);
@@ -210,7 +208,7 @@ export function Flight3D({ input, round, sighted, look = {}, height = "h-72" }: 
     if (flyTip && p !== "bersaglio") {
       const q = P2(flyTip);
       if (q) {
-        o.fillStyle = "rgba(255,241,176,0.35)";
+        o.fillStyle = "rgba(201,138,12,0.3)";
         o.beginPath();
         o.arc(q.x, q.y, 7, 0, Math.PI * 2);
         o.fill();
@@ -218,8 +216,8 @@ export function Flight3D({ input, round, sighted, look = {}, height = "h-72" }: 
     }
     const phase = tt < 0 ? phaseAt(tt).toLowerCase() : flying ? "in volo" : "a segno";
     o.textAlign = "left";
-    label(o, `${Math.min(T, Math.max(0, tt)).toFixed(2).replace(".", ",")} / ${T.toFixed(2).replace(".", ",")} s · ${round.clean.v0.toFixed(0)} m/s · ${phase}`, 10, 18, "rgba(255,255,255,0.95)", "600 11px system-ui, sans-serif");
-    label(o, `${D} m · ${big > 1.05 ? `oggetti ×${big.toFixed(1).replace(".", ",")} · ` : ""}curva ×${ex.toFixed(0)}`, 10, 32, "rgba(255,255,255,0.8)");
+    label(o, `${Math.min(T, Math.max(0, tt)).toFixed(2).replace(".", ",")} / ${T.toFixed(2).replace(".", ",")} s · ${round.clean.v0.toFixed(0)} m/s · ${phase}`, 10, 18, "#1d2124", "600 11px system-ui, sans-serif");
+    label(o, `${D} m · ${big > 1.05 ? `oggetti ×${big.toFixed(1).replace(".", ",")} · ` : ""}curva ×${ex.toFixed(0)}`, 10, 32, "rgba(29,33,36,0.8)");
   });
 
   if (failed) return <Flight3DCanvas input={input} round={round} sighted={sighted} look={look} height={height} />;
@@ -227,7 +225,6 @@ export function Flight3D({ input, round, sighted, look = {}, height = "h-72" }: 
     <div className="grid gap-1.5">
       <GLStage glRef={glRef} overlayRef={ref} view={view} className={`w-full ${height}`} label="Tiro in 3D: arciere, traiettoria e bersaglio">
         {sprite.node}
-        <SkyPicker className="absolute bottom-11 left-2" />
       </GLStage>
       <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 [scrollbar-width:none]">
         {PRESETS.map((item) => (
@@ -254,7 +251,8 @@ function label(o: CanvasRenderingContext2D, text: string, x: number, y: number, 
   o.font = font;
   o.lineWidth = 3;
   o.lineJoin = "round";
-  o.strokeStyle = "rgba(8,14,12,0.7)";
+  // scritte scure con un alone chiaro: si leggono sullo studio bianco e sopra il paglione
+  o.strokeStyle = "rgba(255,255,255,0.8)";
   o.strokeText(text, x, y);
   o.fillStyle = color;
   o.fillText(text, x, y);

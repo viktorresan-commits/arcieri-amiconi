@@ -1,15 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Face } from "@/lib/arcieri/scoring";
 import { basis, project, segment, trs, v3, type Vec3 } from "@/lib/arcieri/gl3d";
-import { drawArrow3D, drawBoss, drawTrees, drawWorld, ringsTexture, type ArrowLook as Look3D } from "@/lib/arcieri/scene3d";
-import { drawSkyOverlay, envOf, useSky, type Sky } from "@/lib/arcieri/sky3d";
+import { drawArrow3D, drawBoss, drawStudio, ringsTexture, studioEnv, type ArrowLook as Look3D } from "@/lib/arcieri/scene3d";
 
-const CLEAR_DAY: Sky = { tod: "pomeriggio", weather: "sereno" };
 import { useMainArrowLook } from "@/lib/arcieri/main-gear";
 import { orbit } from "./foc-3d";
 import { GLStage, useGLScene } from "./gl-stage";
 import { Target3D, type ArrowLook, type Picture } from "./target-3d";
-import { SkyPicker } from "./archer-3d";
 import { useAvatar } from "./avatar-hero";
 import { drawArcher, poseAt, ROUTINE_END } from "@/lib/arcieri/mannequin";
 import { bleed, buildSagomaVolume } from "@/lib/arcieri/sagoma-mesh";
@@ -100,9 +97,9 @@ const hash = (n: number) => {
 };
 
 /**
- * Bersaglio in 3D con WebGL: paglione su cavalletto (o sagoma ritagliata sul prato), cielo e luce
- * dell'ora scelta, frecce dettagliate dell'arciere che arrivano una dopo l'altra e restano piantate;
- * quelle fuori passano oltre e finiscono nel prato dietro. Se WebGL manca, resta la versione 2D.
+ * Bersaglio in 3D con WebGL nello studio bianco "infinito" (niente cielo né prato, come per la balistica):
+ * paglione su cavalletto (o sagoma), frecce dettagliate dell'arciere che arrivano una dopo l'altra e restano
+ * piantate; quelle fuori passano oltre e finiscono a terra dietro. Se WebGL manca, resta la versione 2D.
  */
 export function TargetGL({ face, shots, picture, look, bare, faceCanvas }: { face: Face; shots: Shot[]; picture?: Picture | null; look?: ArrowLook; /** senza ora e meteo: cielo sereno di giorno, niente comandi del cielo */ bare?: boolean; /** visuale disegnata a parte (es. con la mappa termica) al posto degli anelli */ faceCanvas?: { canvas: HTMLCanvasElement; key: string } | null }) {
   const [gear, setGear] = useState<RealGear | null>(null);
@@ -115,8 +112,6 @@ export function TargetGL({ face, shots, picture, look, bare, faceCanvas }: { fac
       on = false;
     };
   }, []);
-  const { sky: chosenSky } = useSky();
-  const sky = bare ? CLEAR_DAY : chosenSky;
   const avatar = useAvatar();
   const main = useMainArrowLook();
   const [preset, setPreset] = useState("tre");
@@ -148,11 +143,11 @@ export function TargetGL({ face, shots, picture, look, bare, faceCanvas }: { fac
     const eye: Vec3 = p.id === "arciere" || seq ? p.eye : [p.eye[0] * zoom, gH ? 1.3 + (p.eye[1] - 1.4) * zoom : p.eye[1] * 0.6 * zoom, p.eye[2] * zoom];
     const target: Vec3 = seq ? [0.1, 0.75, -1.5] : picture ? [0, picture.halfH * k, 0] : [0, gH, 0];
     const cam = orbit(eye, target, v);
-    g.begin(cam.eye as Vec3, cam.target as Vec3, 42, envOf(sky));
-    drawWorld(g, [0, 0, 0], 400, sky, time);
-    drawTrees(g, 30, 11);
+    const st = studioEnv(26, 70);
+    g.begin(cam.eye as Vec3, cam.target as Vec3, 42, st.env, st.clear);
+    drawStudio(g, [0, 0, -6], 400);
     // linea di tiro lontana
-    g.draw("box", basis([0, 0.006, -12], [6, 0, 0], [0, 0.006, 0], [0, 0, 0.08]), [1, 1, 1], { unlit: true, alpha: 0.7 });
+    g.draw("box", basis([0, 0.006, -12], [6, 0, 0], [0, 0.006, 0], [0, 0, 0.08]), [0.55, 0.55, 0.56], { unlit: true, alpha: 0.8 });
     let depthAt: ((x: number, y: number) => number) | null = null;
     if (picture) {
       const hw = picture.halfW * k;
@@ -252,11 +247,10 @@ export function TargetGL({ face, shots, picture, look, bare, faceCanvas }: { fac
       else drawArrow3D(g, v3.sub(v3.add(hit, v3.scale(dir, depthIn)), v3.scale(dir, len)), dir, len, roll, r, lk);
       if (!off && t - s0 - FLY < 0.45) flashes.push({ p: hit, k: (t - s0 - FLY) / 0.45 });
     });
-    if (!bare) drawSkyOverlay(o, g, sky, w, h, time);
     for (const f of flashes) {
       const q = project(g.vp, f.p, w, h);
       if (!q) continue;
-      o.strokeStyle = `rgba(255,248,220,${(1 - f.k) * 0.95})`;
+      o.strokeStyle = `rgba(201,138,12,${(1 - f.k) * 0.95})`;
       o.lineWidth = 2;
       o.beginPath();
       o.arc(q.x, q.y, 4 + f.k * 22, 0, Math.PI * 2);
@@ -279,7 +273,6 @@ export function TargetGL({ face, shots, picture, look, bare, faceCanvas }: { fac
         <div className="absolute left-2 top-2 flex gap-1.5">
           <button type="button" onClick={() => setNonce((x) => x + 1)} className="min-h-9 rounded-full bg-black/55 px-3 text-xs font-semibold text-white backdrop-blur">Rivedi i tiri</button>
         </div>
-        {bare ? null : <SkyPicker className="absolute bottom-11 left-2" />}
       </GLStage>
       {gear && !picture ? <p className="text-[10px] text-muted">Paglione: «Archery Target» di elevin (CC BY 4.0) · Frecce di legno (CC0)</p> : null}
       <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 [scrollbar-width:none]">
