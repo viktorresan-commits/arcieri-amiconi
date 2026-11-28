@@ -73,6 +73,18 @@ def main():
     tps = RBFInterpolator(src, dst, kernel="thin_plate_spline", smoothing=1e-4)
 
     # toppe: capelli corti (alto della testa) e pelle della guancia
+    # la luce della foto (di fronte, guance e lati più scuri) si sommava a quella della scena: viso più scuro e più
+    # rosso del collo. Metà dell'ombreggiatura larga della pelle si toglie (i dettagli fini restano)
+    from scipy.ndimage import gaussian_filter
+
+    lum_ph = photo @ np.array([0.2126, 0.7152, 0.0722])
+    big = gaussian_filter(lum_ph * silf, 45 * k) / np.maximum(gaussian_filter(silf, 45 * k), 1e-3)
+    ref_l = np.median(lum_ph[int(560 * k):int(640 * k), int(430 * k):int(520 * k)])
+    mx_ = photo.max(2)
+    sat_ = (mx_ - photo.min(2)) / np.maximum(mx_, 1e-3)
+    skinish = np.clip((sat_ - 0.15) / 0.15, 0, 1) * np.clip((lum_ph - 0.12) / 0.1, 0, 1) * silf
+    flat = np.clip(ref_l / np.maximum(big, 1e-3), 0.75, 1.45) ** 0.5
+    photo = photo * (1 + (flat - 1) * skinish)[..., None]
     hair_patch = photo[int(45 * k):int(140 * k), int(560 * k):int(860 * k)]
     skin_patch = photo[int(560 * k):int(640 * k), int(430 * k):int(520 * k)]
     hair_mean = hair_patch.reshape(-1, 3).mean(0)
@@ -164,11 +176,19 @@ def main():
         q = tps(P[:, :2])
         inside = map_coordinates(silf, [q[:, 1], q[:, 0]], order=1, mode="constant")
         col = np.stack([map_coordinates(photo[..., c], [q[:, 1], q[:, 0]], order=1, mode="nearest") for c in range(3)], 1)
-        wf = smoothstep(0.08, 0.42, N[:, 2]) * np.clip(inside, 0, 1)
-        # di lato e dietro: capelli sopra la linea delle orecchie e della nuca, pelle sotto
-        yh = np.interp(P[:, 2], [-0.08, -0.06, -0.005, 0.03], [Y_MOUTH - 0.012, Y_MOUTH, Y_EYE + 0.022, Y_EYE + 0.03])
-        hw = smoothstep(-0.006, 0.006, P[:, 1] - yh)
+        # la foto solo dove la pelle guarda davvero davanti: di sbieco (lati della faccia) si allungava e sulle
+        # orecchie del personaggio portava la tempia e i capelli della foto, a macchie
+        ear = smoothstep(0.068, 0.076, np.abs(P[:, 0])) * smoothstep(Y_MOUTH + 0.02, Y_MOUTH + 0.035, P[:, 1]) * (1 - smoothstep(Y_EYE + 0.024, Y_EYE + 0.036, P[:, 1]))
+        wf = smoothstep(0.3, 0.62, N[:, 2]) * np.clip(inside, 0, 1) * (1 - ear)
+        # di lato e dietro: capelli sopra la linea delle orecchie e della nuca, pelle sotto. La linea non è dritta
+        # (un'ondulazione lenta di qualche millimetro) e il passaggio è morbido: prima un taglio netto che sul
+        # collo, con i triangoli stirati, diventava una frangia a denti
         ang = np.arctan2(P[:, 0], P[:, 2] + 0.01)
+        yh = np.interp(P[:, 2], [-0.08, -0.06, -0.005, 0.03], [Y_MOUTH - 0.012, Y_MOUTH, Y_EYE + 0.022, Y_EYE + 0.03])
+        yh = yh + 0.0025 * np.sin(ang * 7.0 + 0.6) + 0.0015 * np.sin(ang * 17.0 + 2.1)
+        hw = smoothstep(-0.011, 0.009, P[:, 1] - yh)
+        # l'orecchio resta pelle: i capelli gli girano attorno
+        hw = hw * (1 - smoothstep(0.075, 0.079, np.abs(P[:, 0])) * (1 - smoothstep(Y_EYE + 0.022, Y_EYE + 0.032, P[:, 1])))
         # capelli rasati come nella foto: il loro colore medio con una grana fine (peli corti, pelle che si vede)
         cell = np.floor(P * 900.0)
         nz = np.modf(np.abs(np.sin(cell @ np.array([12.9898, 78.233, 37.719])) * 43758.5453))[0]
@@ -177,7 +197,10 @@ def main():
         sv = ((Y1 - P[:, 1]) / 0.03 * skin_t.shape[0]) % skin_t.shape[0]
         grain = np.stack([map_coordinates(skin_t[..., c], [sv, su], order=1, mode="wrap") for c in range(3)], 1) / np.maximum(skin_mean, 1e-3)
         row = np.clip(q[:, 1], 0, ph - 1).astype(int)
-        skin = np.where((P[:, 0] < 0)[:, None], edge[0, row], edge[1, row]) * grain
+        # il colore dei bordi della foto è in ombra (la foto è illuminata di fronte): sui lati della testa, che
+        # nell'app hanno la loro luce, la pelle era più scura del collo. Si tiene poco di quella sfumatura
+        side = np.where((P[:, 0] < 0)[:, None], edge[0, row], edge[1, row])
+        skin = (0.25 * side + 0.75 * skin_mean[None, :]) * grain
         fill = hair * hw[:, None] + skin * (1 - hw[:, None])
         c = col * wf[:, None] + fill * (1 - wf[:, None])
         # verso il collo il colore va al tono medio della pelle (lì attacca il corpo, con il tono scelto)

@@ -43,6 +43,8 @@ dell'atlante dove c'è (BodyParts3D, CC BY 4.0) e la grana del pacchetto pelle d
     python3 smooth_skin.py ../../public/anatomia/pelle.json ../../public/anatomia/pelle.bin 150
     python3 add_fat.py ../../public/anatomia/pelle.json ../../public/anatomia/pelle.bin 0.85
     python3 fit_feet.py ../../public/anatomia/pelle.json ../../public/anatomia/pelle.bin ../../public/anatomia/corpo.json
+    python3 fix_neck.py ../../public/anatomia/pelle.json ../../public/anatomia/pelle.bin
+    python3 sharp_elbows.py ../../public/anatomia/pelle.json ../../public/anatomia/pelle.bin
     python3 tone_relief.py ../../public/anatomia/pelle.json ../../public/anatomia/pelle.bin ../../public/anatomia/pelle-rilievo.jpg ../../public/anatomia/pelle-rilievo.jpg 0.85
     python3 cloth_mask.py ../../public/anatomia/pelle ../../public/anatomia/pelle.jpg ../../public/anatomia/corpo.json
 
@@ -56,6 +58,9 @@ dell'atlante dove c'è (BodyParts3D, CC BY 4.0) e la grana del pacchetto pelle d
   prende i pesi dai muscoli e dalle ossa sotto ogni punto (nell'app la pelle si muove con le loro stesse matrici e
   resta sopra di loro in ogni posa; collo e vita con rotazioni interpolate), prende il muscolo sotto ogni punto
   (la pelle si gonfia con lui) e cuoce l'occlusione;
+- `bake_face.py` (oltre a quanto sotto): la foto solo dove la pelle guarda davvero davanti, orecchie senza foto né
+  capelli, attaccatura morbida e un poco ondulata, lati della testa del tono medio della pelle e metà
+  dell'ombreggiatura larga della foto tolta (viso meno scuro e meno rosso del collo); scrive `faceSkin`.
 - `bake_face.py` fa la testa nuova: la foto del viso del pacchetto (occhi aperti) deformata sulla testa
   dell'atlante con punti di riferimento, capelli rasati ai lati e dietro, in `pelle-testa.jpg` (uv sferiche);
   `pelle.rest.npz` è un file di passaggio, non va nel sito;
@@ -74,6 +79,11 @@ dell'atlante dove c'è (BodyParts3D, CC BY 4.0) e la grana del pacchetto pelle d
   lunghe il doppio, sotto il pavimento). Davanti alle teste dei metatarsi la pelle si accorcia fino a 1,2 cm oltre
   la punta delle ossa, le dita si stringono un poco e la loro pianta torna a terra, poi il piede si leviga (dita
   piene, resto a metà: anche lo scalino sul collo del piede). Dopo `add_fat.py`, prima di `cloth_mask.py`.
+- `fix_neck.py` aggiusta l'attacco tra testa e collo: l'orlo del collo era spiegazzato e l'anello d'attacco
+  andava a zig-zag (3-8 mm), in posa una frangia a denti sotto la nuca e la mandibola. I punti dei due pezzi
+  sull'anello diventano uno, l'anello si leviga come una curva e la pelle attorno (3,5 cm) si distende.
+- `sharp_elbows.py` accorcia il passaggio dei pesi tra omero e avambraccio (x1.8, una volta sola): a gomito
+  piegato il gomito fa la sua punta invece di un tubo arrotondato.
 - `tone_relief.py` calma il rilievo delle tavole dove arriva di sbieco (fianchi, lati del torace, sotto le
   braccia: lì diventava righe), con un filo di sfocatura e la forza data (0.85). Va una volta sola dopo
   `bake_relief.py`.
