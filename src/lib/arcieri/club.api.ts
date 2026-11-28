@@ -6,7 +6,7 @@ import { companyPeers, myMembership } from "./compagnie.api";
 import { teamResultsOf } from "./palmares.api";
 import { challengeScores, gameScores, garaScores, metricInfo, ruleKind, rulesFair, teamMeans, type Metric, type Rule } from "./challenge";
 import { kindOf } from "./kinds";
-import { romeMidnightUtc, ymdAdd } from "./time";
+import { romeDayKey, romeMidnightUtc, ymdAdd } from "./time";
 import { divisionOf } from "./labels";
 import { accountWriter, writerFor } from "./acting.api";
 import { activityXp, allActivityXp } from "./xp.api";
@@ -524,7 +524,8 @@ export const listCompetitions = createServerFn({ method: "GET" })
     const mine = new Map(presence.filter((row) => row.user_id === context.userId).map((row) => [asNum(row.competition_id), asBool(row.attended)]));
     const members = await sql<MemberRow & { fitast_name?: string; fitast_team?: string }>`select * from members where user_id is not null`;
     // risultati di squadra della propria compagnia (dalla classifica squadre del portale FITAST)
-    const teamRows = await teamResultsOf(sql, (await myMembership(sql, context.userId)).companyId);
+    const myCo = (await myMembership(sql, context.userId)).companyId;
+    const teamRows = await teamResultsOf(sql, myCo);
     const linkedTo = (c: { id: number; notes: string }) =>
       teamRows.filter((r) => r.competitionId === asNum(c.id) || (r.fitastId !== "" && new RegExp(`^fitast:${r.fitastId}(\\D|$)`).test(c.notes ?? "")));
 
@@ -532,8 +533,8 @@ export const listCompetitions = createServerFn({ method: "GET" })
     const tables = await sql<GaraTable>`
       select gara_id, gara_title, held_on::text as held_on, season, category, rows from fitast_standings
       where kind = 'gara-arcieri' and gara_id <> ''`.catch(() => [] as GaraTable[]);
-    const homes = await sql<{ user_id: string; name: string; fitast_name: string }>`
-      select cm.user_id, c.name, c.fitast_name from company_members cm join companies c on c.id = cm.company_id`.catch(() => []);
+    const homes = await sql<{ user_id: string; company_id: number; name: string; fitast_name: string }>`
+      select cm.user_id, cm.company_id, c.name, c.fitast_name from company_members cm join companies c on c.id = cm.company_id`.catch(() => []);
     const homeOf = new Map(homes.map((h) => [h.user_id, h.fitast_name || h.name]));
     const who: Who[] = members.map((m) => ({
       userId: m.user_id ?? "",
@@ -629,6 +630,31 @@ export const listCompetitions = createServerFn({ method: "GET" })
         garaId: list[0]?.gara_id ?? garaId,
         known: people.length ? [] : pzKnown,
       };
+    };
+    /**
+     * la compagnia nell'elenco delle piazzole del portale: chi dei nostri parte da quale piazzola. I nostri sono i
+     * profili della compagnia trovati per nome (collegato o nome e cognome) e chi il portale scrive con il nome
+     * della compagnia anche se nell'app non c'è. null: l'elenco della gara non è ancora stato letto
+     */
+    const coUsers = new Set(homes.filter((h) => asNum(h.company_id) === myCo).map((h) => h.user_id));
+    const coHome = homes.find((h) => asNum(h.company_id) === myCo);
+    const ourTeamKeys = new Set([coHome?.name, coHome?.fitast_name].filter((x): x is string => Boolean(x)).map((x) => teamKeyOf(x)).filter((k) => k.length >= 3));
+    const ourWho = who.filter((w) => coUsers.has(w.userId));
+    const ourPzOf = (garaId: string, day = "") => {
+      const list = pzFor(garaId, day);
+      if (!list.length) return null;
+      const people = peopleOf(list);
+      const found = new Map<string, { name: string; piazzola: number; userId: string | null }>();
+      for (const w of ourWho) {
+        const m = matchPerson(people, w);
+        const pz = m?.p.entries[0]?.place ?? null;
+        if (m && pz != null && !found.has(m.p.key)) found.set(m.p.key, { name: titleName(m.p.name), piazzola: pz, userId: w.userId });
+      }
+      for (const p of people) {
+        const pz = p.entries[0]?.place ?? null;
+        if (pz != null && !found.has(p.key) && ourTeamKeys.has(p.teamK)) found.set(p.key, { name: titleName(p.name), piazzola: pz, userId: null });
+      }
+      return [...found.values()].sort((a, b) => a.piazzola - b.piazzola || a.name.localeCompare(b.name, "it"));
     };
     const memberOf = (userId: string) => members.find((m) => m.user_id === userId);
     const face = (userId: string) => {
@@ -757,6 +783,8 @@ export const listCompetitions = createServerFn({ method: "GET" })
         /** con chi si era in piazzola (cartellini e portale) */
         group: groupOf(asNum(c.id), garaId, String(c.starts_on).slice(0, 10)),
         pzInfo: pzInfoOf(garaId, String(c.starts_on).slice(0, 10)),
+        /** chi della compagnia parte da quale piazzola (elenco delle piazzole del portale) */
+        ourPz: garaId ? ourPzOf(garaId, String(c.starts_on).slice(0, 10)) : null,
         /** solo dal portale: nessuna gara nell'app (niente presenza né punteggio da segnare) */
         virtual: false,
       };
@@ -786,6 +814,42 @@ export const listCompetitions = createServerFn({ method: "GET" })
         fitast: fitastOf(garaId),
         group: groupOf(id, garaId, g.day),
         pzInfo: pzInfoOf(garaId, g.day),
+        ourPz: ourPzOf(garaId, g.day),
+        virtual: true,
+      });
+    }
+    // gare in arrivo del portale che nell'app non ci sono: con l'elenco delle piazzole già uscito e dentro qualcuno
+    // della compagnia (la classifica ancora non c'è, ma si sa chi parte da dove)
+    const today = romeDayKey(new Date().toISOString());
+    for (const t of pzTables) {
+      const garaId = t.gara_id;
+      const day = String(t.held_on ?? "").slice(0, 10);
+      if (!garaId || !day || day < today || listed.has(garaId) || portal.has(garaId) || out.some((c) => c.notes === `fitast:${garaId}`)) continue;
+      const ourPz = ourPzOf(garaId, day);
+      if (!ourPz?.length) continue;
+      const id = -Number(garaId);
+      out.push({
+        id,
+        name: championshipName(t.gara_title) || titleName(t.gara_title) || `Gara ${garaId}`,
+        startsOn: day,
+        place: "",
+        organizer: "",
+        kind: "campionato",
+        distanceM: null,
+        lanes: null as number | null,
+        category: "",
+        signupDeadline: null,
+        externalUrl: "",
+        notes: `fitast:${garaId}`,
+        canDelete: false,
+        teamResults: [],
+        attended: ourPz.some((x) => x.userId === context.userId) ? true : null,
+        roster: rosterOf(id, garaId),
+        entries: [],
+        fitast: fitastOf(garaId),
+        group: groupOf(id, garaId, day),
+        pzInfo: pzInfoOf(garaId, day),
+        ourPz,
         virtual: true,
       });
     }

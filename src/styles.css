@@ -1896,6 +1896,29 @@ html[data-motion="ridotta"] .aa-sock-flap { animation: none; }
 .aa-club-tab { color: color-mix(in srgb, var(--fg) 62%, transparent); transition: background-color 0.2s ease, color 0.2s ease; }
 .aa-club-tab[aria-pressed="true"] { background: color-mix(in srgb, var(--primary) 22%, transparent); color: var(--fg); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 55%, transparent); }
 .aa-club-tab[aria-pressed="true"] svg { color: var(--primary); }
+/* la scheda scelta: una pastiglia piena con una riga d'oro sotto (si vede subito dove si è) */
+.aa-club-tab { position: relative; }
+.aa-club-tab[aria-pressed="true"]::after { content: ""; position: absolute; left: 28%; right: 28%; bottom: 3px; height: 2px; border-radius: 2px; background: #e0b15a; }
+/* sotto-schede (Altro: bersaglio, mercatino, compagnie; Classifiche: compagnia, campionato) */
+.aa-subtabs { display: flex; gap: 0.375rem; padding: 0.25rem; border-radius: 1rem; background: rgb(255 255 255 / 0.045); }
+.aa-subtab { flex: 1 1 0; min-height: 2.6rem; border-radius: 0.8rem; font-size: 0.8rem; font-weight: 600; color: color-mix(in srgb, var(--fg) 62%, transparent); display: flex; align-items: center; justify-content: center; gap: 0.35rem; }
+.aa-subtab[aria-pressed="true"] { background: var(--primary); color: var(--primary-fg); box-shadow: 0 6px 14px -8px rgb(0 0 0 / 0.7); }
+/* titolo di sezione della compagnia: una riga, con il conteggio a destra */
+.aa-sec-title { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; padding: 0 0.25rem; }
+.aa-sec-title h2 { font-family: var(--font-display); font-size: 1.5rem; line-height: 1.1; }
+
+/* Prossima gara: un biglietto scuro con il giorno su carta e le piazzole della compagnia */
+.aa-next-gara {
+  background:
+    radial-gradient(110% 70% at 0% 0%, rgba(224, 177, 90, 0.16), transparent 60%),
+    radial-gradient(90% 60% at 100% 100%, rgba(184, 67, 47, 0.14), transparent 65%),
+    linear-gradient(180deg, #16231c, #0e1612);
+}
+.aa-next-gara::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 3px; background: linear-gradient(90deg, #b8432f, #e0b15a 55%, transparent); }
+.aa-next-gara-strip {
+  background: linear-gradient(90deg, rgba(224, 177, 90, 0.14), rgba(255, 255, 255, 0.03) 60%);
+  box-shadow: inset 0 0 0 1px rgba(224, 177, 90, 0.28);
+}
 
 /* ── la vita delle ambientazioni: tutto con trasformazioni CSS, la scena non si ridisegna ── */
 .aa-life-mist { animation: aa-life-mist 26s ease-in-out infinite alternate; }

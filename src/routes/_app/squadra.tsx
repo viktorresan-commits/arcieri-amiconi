@@ -6,7 +6,8 @@ import { TargetGL } from "@/components/target-gl";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { listCompanies } from "@/lib/arcieri/compagnie.api";
 import { CompanyForm, CompanyHero, CompanyLeague, joinAndReload } from "@/components/compagnia";
-import { CompanyTrophies, Cup } from "@/components/palmares";
+import { CompanyTrophies } from "@/components/palmares";
+import { NextGaraCard } from "@/components/next-gara";
 import { MarketTab } from "@/components/market";
 import { FitastArchersCard, FitastCompanyBoard, FitastHeader, FitastTeamsBoard, JoinLinkSheet, useFitastLeague } from "@/components/fitast-league";
 import { FitastArchiveCard } from "@/components/fitast-archive";
@@ -44,17 +45,27 @@ const MEMBER_SKY: Sky = { tod: "pomeriggio", weather: "sereno", clouds: 0.25, se
 
 export const Route = createFileRoute("/_app/squadra")({ component: Page });
 
-type Section = "arcieri" | "gare" | "bersaglio" | "mercatino" | "compagnie";
-/** le schede della Compagnia, una cosa per scheda: chi c'è, chi va meglio, dove tiriamo, cosa abbiamo vinto */
+type Section = "arcieri" | "classifiche" | "gare" | "podi" | "altro";
+type Other = "bersaglio" | "mercatino" | "compagnie";
+/**
+ * le schede della Compagnia, una cosa per scheda e la più usata prima: chi c'è, chi va meglio, le gare (con la
+ * prossima e le sue piazzole), cosa abbiamo vinto; bersaglio, mercatino e le altre compagnie stanno in «Altro»
+ */
 const SECTIONS: { id: Section; label: string; icon: IconName; lede: string }[] = [
-  { id: "arcieri", label: "Arcieri", icon: "team", lede: "Chi tira con noi, i podi per divisione e il confronto fra arcieri." },
-  { id: "gare", label: "Gare", icon: "flag", lede: "Le gare della stagione: segni le tue, quelle degli altri si vedono." },
-  { id: "bersaglio", label: "Bersaglio", icon: "target", lede: "Dove arrivano le frecce, tue o della compagnia." },
-  { id: "mercatino", label: "Mercatino", icon: "bag", lede: "Usato in vendita: della tua compagnia o di tutte." },
-  { id: "compagnie", label: "Compagnie", icon: "shield", lede: "Tutte le compagnie e il campionato FITAST." },
+  { id: "arcieri", label: "Arcieri", icon: "team", lede: "Chi tira con noi: il podio e le schede, per divisione e tipo d'arco." },
+  { id: "classifiche", label: "Classifiche", icon: "chart", lede: "Chi va meglio in compagnia e nel campionato FITAST." },
+  { id: "gare", label: "Gare", icon: "flag", lede: "La prossima gara con le piazzole della compagnia, poi tutte le gare della stagione." },
+  { id: "podi", label: "Podi", icon: "trophy", lede: "La bacheca della compagnia: podi, piazzamenti di squadra e premi dell'app." },
+  { id: "altro", label: "Altro", icon: "grid", lede: "Il bersaglio della compagnia, il mercatino dell'usato e le altre compagnie." },
 ];
-/** le schede salvate dalla versione di prima */
-const OLD_SECTION: Record<string, Section> = { bacheca: "mercatino", compagnia: "arcieri", statistiche: "arcieri", classifiche: "arcieri", classifica: "compagnie", fitast: "compagnie", sfida: "arcieri" };
+const OTHERS: { id: Other; label: string; icon: IconName }[] = [
+  { id: "bersaglio", label: "Bersaglio", icon: "target" },
+  { id: "mercatino", label: "Mercatino", icon: "bag" },
+  { id: "compagnie", label: "Compagnie", icon: "shield" },
+];
+/** le schede salvate dalle versioni di prima */
+const OLD_SECTION: Record<string, Section> = { bacheca: "altro", mercatino: "altro", bersaglio: "altro", compagnie: "altro", compagnia: "arcieri", statistiche: "classifiche", classifica: "classifiche", fitast: "classifiche", sfida: "classifiche" };
+const OLD_OTHER: Record<string, Other> = { bacheca: "mercatino", mercatino: "mercatino", bersaglio: "bersaglio", compagnie: "compagnie" };
 
 type Archer = Awaited<ReturnType<typeof squadBoard>>["people"][number] & { name: string; color: string; mark: string; skill: number };
 
@@ -195,14 +206,19 @@ export function CompagniaPage({ initial }: { initial?: Section } = {}) {
   const [sectionRaw, setStored] = useLocalState<string>("aa-compagnia-tab", "arcieri");
   // aperta da /gare si parte da Gare; un tocco sulle schede sceglie e ricorda
   // da un avviso del mercatino in Bacheca (#mercatino-12) si apre il Mercatino con l'annuncio
-  const [opened, setOpened] = useState<Section | undefined>(() => (typeof window !== "undefined" && /^#mercatino(-\d+)?$/.test(window.location.hash) ? "mercatino" : initial));
+  const [opened, setOpened] = useState<Section | undefined>(() => (typeof window !== "undefined" && /^#mercatino(-\d+)?$/.test(window.location.hash) ? "altro" : initial));
+  const [otherRaw, setOther] = useLocalState<string>("aa-compagnia-altro", typeof window !== "undefined" && /^#mercatino(-\d+)?$/.test(window.location.hash) ? "mercatino" : OLD_OTHER[sectionRaw] ?? "bersaglio");
+  const other: Other = OTHERS.some((x) => x.id === otherRaw) ? (otherRaw as Other) : "bersaglio";
+  // Classifiche: quelle della compagnia (dall'app) o il campionato FITAST (dal portale)
+  const [rankScope, setRankScope] = useLocalState<"compagnia" | "campionato">("aa-compagnia-classifiche", "compagnia");
   // dal Menu (Compagnia › Mercatino) o da un avviso, anche con la pagina già aperta: si apre il Mercatino e ci si arriva
   const hash = useRouterState({ select: (st) => st.location.hash });
   const wasMarket = useRef(false);
   useEffect(() => {
     const isMarket = /^#?mercatino(-\d+)?$/.test(hash ?? "");
     if (isMarket) {
-      setOpened("mercatino");
+      setOpened("altro");
+      setOther("mercatino");
       const t = window.setTimeout(() => document.getElementById("mercatino")?.scrollIntoView({ block: "start", behavior: "smooth" }), 120);
       wasMarket.current = true;
       return () => window.clearTimeout(t);
@@ -219,7 +235,6 @@ export function CompagniaPage({ initial }: { initial?: Section } = {}) {
   const [editing, setEditing] = useState<"none" | "edit" | "new">("none");
   const [busy, setBusy] = useState<number | null>(null);
   const [linkFor, setLinkFor] = useState<{ team: string; name: string } | null>(null);
-  const [showTrophies, setShowTrophies] = useState(false);
   const looks = useTeamAvatars();
   const [removed, setRemoved] = useState<number[]>([]);
   const [board, setBoard] = useEntryState<"padiglione" | "sagoma">("squadra-board", "padiglione");
@@ -305,31 +320,16 @@ export function CompagniaPage({ initial }: { initial?: Section } = {}) {
     }
   }
 
+  const goGare = () => {
+    setSection("gare");
+    window.setTimeout(() => document.getElementById("compagnia-schede")?.scrollIntoView({ block: "start", behavior: "smooth" }), 60);
+  };
   return (
     <div className="grid gap-4">
       {linkFor ? <JoinLinkSheet team={linkFor.team} companyName={linkFor.name} onClose={() => { setLinkFor(null); setNonce((n) => n + 1); }} /> : null}
-      {company ? (
-        <>
-          <CompanyHero co={company} canEdit={Boolean(companies.data?.canEdit)} onEdit={() => setEditing("edit")} />
-          {/* il palmarès sta nel profilo della compagnia: podi, piazzamenti di squadra e premi dell'app */}
-          <button type="button" onClick={() => setShowTrophies((v) => !v)} aria-expanded={showTrophies} className="aa-press -mt-2 flex min-h-12 items-center gap-3 rounded-2xl border border-line bg-white/[0.03] px-3 text-left">
-            <Cup place={null} size={34} />
-            <span className="min-w-0 flex-1">
-              <b className="block text-sm">Podi e premi della compagnia</b>
-              <span className="block text-[0.7rem] text-muted">Bacheca, piazzamenti di squadra e premi dell'app</span>
-            </span>
-            <Glyph name="chevron" size={15} className={`shrink-0 text-muted transition-transform ${showTrophies ? "rotate-90" : ""}`} />
-          </button>
-          {showTrophies ? (
-            <>
-              <CompanyTrophies companyId={company.id} companyName={company.name} />
-              <GadgetShelf />
-            </>
-          ) : null}
-        </>
-      ) : (
-        <PageHead title="Compagnia" />
-      )}
+      {company ? <CompanyHero co={company} canEdit={Boolean(companies.data?.canEdit)} onEdit={() => setEditing("edit")} /> : <PageHead title="Compagnia" />}
+      {/* la prossima gara in una riga, sempre in vista: chi dei nostri e da quale piazzola (scheda Gare) */}
+      {section !== "gare" ? <NextGaraCard compact meId={me.userId ?? ""} looks={looks} onOpen={goGare} /> : null}
       {editing !== "none" ? (
         <CompanyForm
           co={editing === "edit" && company ? company : undefined}
@@ -341,7 +341,7 @@ export function CompagniaPage({ initial }: { initial?: Section } = {}) {
           }}
         />
       ) : null}
-      <nav aria-label="Sezioni della compagnia" className="aa-club-tabs sticky top-[calc(env(safe-area-inset-top)+3.6rem)] z-20 -mx-1 px-1">
+      <nav id="compagnia-schede" aria-label="Sezioni della compagnia" className="aa-club-tabs sticky top-[calc(env(safe-area-inset-top)+3.6rem)] z-20 -mx-1 scroll-mt-[calc(env(safe-area-inset-top)+3.6rem)] px-1">
         <div className="grid grid-cols-5 gap-1 rounded-2xl p-1">
           {SECTIONS.map((x) => (
             <button key={x.id} type="button" aria-pressed={section === x.id} onClick={() => setSection(x.id)} className="aa-club-tab grid min-h-14 place-items-center gap-0.5 rounded-xl px-0 py-1 text-[0.62rem] font-semibold leading-tight tracking-tight">
@@ -395,6 +395,38 @@ export function CompagniaPage({ initial }: { initial?: Section } = {}) {
             })}
           </div>
 
+        </>
+      ) : null}
+
+      {section === "classifiche" ? (
+        <>
+          <div className="aa-subtabs" role="group" aria-label="Quali classifiche">
+            {([["compagnia", "In compagnia", "team"], ["campionato", "Campionato FITAST", "trophy"]] as const).map(([id, label, icon]) => (
+              <button key={id} type="button" aria-pressed={rankScope === id} onClick={() => setRankScope(id)} className="aa-subtab">
+                <Glyph name={icon} size={15} />
+                {label}
+              </button>
+            ))}
+          </div>
+          {rankScope === "compagnia" ? (
+            <>
+          {/* una divisione alla volta: podio, elenco e classifiche seguono la scelta */}
+          <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none]">
+            {(["", ...DIVISIONS.filter((d) => people.some((row) => row.division === d))] as ("" | (typeof DIVISIONS)[number])[]).map((d) => (
+              <button key={d || "tutti"} type="button" aria-pressed={division === d} onClick={() => setDivision(d)} className={`aa-chip shrink-0 ${division === d ? "border-[#e0b15a]/60 bg-[#e0b15a]/15 text-[#f1cf8a]" : ""}`}>
+                {d || "Tutti"}
+              </button>
+            ))}
+          </div>
+          {bows.length > 1 ? (
+            <div className="-mx-1 -mt-2 flex gap-1.5 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none]" role="group" aria-label="Tipo d'arco">
+              {["", ...bows].map((b) => (
+                <button key={b || "tutti"} type="button" aria-pressed={bowOn === b} onClick={() => setBow(b)} className={`aa-chip shrink-0 ${bowOn === b ? "border-[#e0b15a]/60 bg-[#e0b15a]/15 text-[#f1cf8a]" : ""}`}>
+                  {b ? bowLabel(b) : "Tutti gli archi"}
+                </button>
+              ))}
+            </div>
+          ) : null}
           <Card className="grid grid-cols-[minmax(0,1fr)] gap-3">
             <div>
               <h2 className="font-display text-2xl">Classifiche{division ? ` · ${division}` : ""}</h2>
@@ -459,26 +491,55 @@ export function CompagniaPage({ initial }: { initial?: Section } = {}) {
               </>
             )}
           </Card>
+            </>
+          ) : companies.data ? (
+            <CampionatoTab board={companies.data} onJoin={(id) => void join(id)} busy={busy} />
+          ) : companies.error ? (
+            <ErrorNote text={companies.error} />
+          ) : (
+            <Loading />
+          )}
         </>
       ) : null}
 
-      {section === "mercatino" ? (
+      {section === "gare" ? (
+        <>
+          <NextGaraCard meId={me.userId ?? ""} looks={looks} />
+          <GareTab companies={companies.data?.companies ?? NO_COMPANIES} />
+        </>
+      ) : null}
+
+      {section === "podi" ? (
+        company ? (
+          <>
+            <CompanyTrophies companyId={company.id} companyName={company.name} />
+            <GadgetShelf />
+          </>
+        ) : (
+          <Empty title="Nessuna compagnia" text="Entra in una compagnia (Altro › Compagnie) per vedere la sua bacheca." />
+        )
+      ) : null}
+
+      {section === "altro" ? (
+        <div className="aa-subtabs" role="group" aria-label="Altro della compagnia">
+          {OTHERS.map((x) => (
+            <button key={x.id} type="button" aria-pressed={other === x.id} onClick={() => setOther(x.id)} className="aa-subtab">
+              <Glyph name={x.icon} size={15} />
+              {x.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      {section === "altro" && other === "mercatino" ? (
         <div id="mercatino" className="scroll-mt-[calc(env(safe-area-inset-top)+8.5rem)]">
           <MarketTab />
         </div>
       ) : null}
 
-
-      {section === "gare" ? (
+      {section === "altro" && other === "compagnie" ? (
         <>
-          <GareTab companies={companies.data?.companies ?? NO_COMPANIES} />
-        </>
-      ) : null}
-
-
-      {section === "compagnie" ? (
-        <>
-          {companies.data ? <CompagnieTab board={companies.data} onJoin={(id) => void join(id)} busy={busy} onSynced={() => setNonce((n) => n + 1)} /> : companies.error ? <ErrorNote text={companies.error} /> : <Loading />}
+          {companies.data ? <CompanyLeague part="directory" board={companies.data} onJoin={(id) => void join(id)} busy={busy} onSynced={() => setNonce((n) => n + 1)} /> : companies.error ? <ErrorNote text={companies.error} /> : <Loading />}
           {editing === "none" ? (
             <Card className="grid gap-2">
               <h2 className="font-display text-2xl">Una nuova compagnia</h2>
@@ -489,7 +550,7 @@ export function CompagniaPage({ initial }: { initial?: Section } = {}) {
         </>
       ) : null}
 
-      {section === "bersaglio" ? (
+      {section === "altro" && other === "bersaglio" ? (
         <>
           {/* un solo pannello: di chi, poi un solo grafico che passa da padiglione a sagome, termica e piana */}
           <Card className="grid gap-3">
@@ -553,11 +614,10 @@ export function CompagniaPage({ initial }: { initial?: Section } = {}) {
 }
 
 /**
- * Compagnie: la classifica (prima il campionato FITAST letto dal portale, poi i numeri dell'app),
- * i primi arcieri del campionato e l'elenco delle compagnie in cui entrare. Le gare del campionato
- * stanno nella scheda Gare.
+ * Campionato FITAST: la classifica delle compagnie (prima il campionato letto dal portale, poi i numeri
+ * dell'app), i primi arcieri del campionato e l'albo. L'elenco delle compagnie in cui entrare sta in «Altro».
  */
-function CompagnieTab({ board, onJoin, busy, onSynced }: { board: Awaited<ReturnType<typeof listCompanies>>; onJoin: (id: number) => void; busy: number | null; onSynced: () => void }) {
+function CampionatoTab({ board, onJoin, busy }: { board: Awaited<ReturnType<typeof listCompanies>>; onJoin: (id: number) => void; busy: number | null }) {
   const league = useFitastLeague(board.companies);
   // la nostra compagnia come la scrive il portale (anche negli anni passati): per i nostri podi nell'albo
   const mine = board.companies.find((c) => c.id === board.mine);
@@ -570,7 +630,6 @@ function CompagnieTab({ board, onJoin, busy, onSynced }: { board: Awaited<Return
       <CompanyLeague part="ranking" board={board} onJoin={onJoin} busy={busy} fitastBoard={<FitastCompanyBoard league={league} />} fitastMetric={(m) => <FitastTeamsBoard league={league} metric={m} />} fitastReady={league.genSq.length > 0} />
       <FitastArchersCard league={league} />
       <FitastArchiveCard crestOf={league.crestOf} isOurs={isOurs} ourName={mine?.name ?? ""} ourTeams={ourTeams} />
-      <CompanyLeague part="directory" board={board} onJoin={onJoin} busy={busy} onSynced={onSynced} />
     </>
   );
 }

@@ -21,6 +21,7 @@ import { FitastLinkCard } from "@/components/fitast-link";
 import { ScorecardImport } from "@/components/scorecard-import";
 import { PiazzolaPicker } from "@/components/piazzola-picker";
 import { removePiazzolaMate } from "@/lib/arcieri/scorecard.api";
+import { CompanyLanes } from "@/components/next-gara";
 import { categoryGroup, titleName } from "@/lib/arcieri/fitast-league";
 
 
@@ -69,6 +70,8 @@ type Comp = {
   virtual?: boolean;
   /** con chi si era in piazzola: dai cartellini letti dalla foto e dall'elenco delle piazzole del portale */
   group?: { piazzola: number; mates: Mate[] } | null;
+  /** chi della compagnia parte da quale piazzola (elenco delle piazzole del portale) */
+  ourPz?: { name: string; piazzola: number; userId: string | null }[] | null;
   /** l'elenco delle piazzole del portale per questa gara */
   pzInfo?: { read: boolean; people: number; mine: number | null; lanes: number; garaId?: string; known?: { id: string; day: string; n: number }[] } | null;
 };
@@ -82,6 +85,7 @@ function hasResult(entry: Entry) {
 /** Le gare: dentro la Compagnia (scheda Gare) e alla pagina /gare, che apre la Compagnia su questa scheda. */
 export function GareBody({ embedded = false, league }: { embedded?: boolean; /** classifiche FITAST (stemmi e aggiornamento dal portale) */ league?: FitastLeagueState } = {}) {
   const { me } = useMember();
+  const looks = useTeamAvatars();
   const crestOf = league?.crestOf ?? noCrest;
   // sezioni aperte o chiuse di ogni gara («id:sezione»)
   const [folds, setFolds] = useState<Record<string, boolean>>({});
@@ -190,45 +194,19 @@ export function GareBody({ embedded = false, league }: { embedded?: boolean; /**
   return (
     <div className="grid min-w-0 gap-4">
       {embedded ? null : <PageHead title="Gare" lede="Segni solo quelle a cui hai partecipato. Il punteggio degli altri si vede, ma si cambia solo il tuo." />}
-      {totals.gare > 0 ? (
-        <Card className="relative">
-          <span className="absolute right-3 top-3"><KindEmblem kind="campionato" size={54} glow /></span>
-          <p className="text-xs uppercase tracking-wide text-muted">Tutte le gare</p>
-          <p className="font-display text-4xl tabular-nums leading-none">{totals.points}</p>
-          <p className="mt-1 text-sm text-muted">punti in {totals.gare} gare{totals.avg != null ? ` · media ${totals.avg.toFixed(1).replace(".", ",")}` : ""}{totals.perArrow != null ? ` · ${totals.perArrow.toFixed(2).replace(".", ",")} a freccia` : ""}</p>
-          <div className="mt-3 grid grid-cols-4 gap-2 text-center">
-            <MiniStat k="Piazzole" v={String(totals.lanes)} />
-            <MiniStat k="Frecce" v={String(totals.arrows)} />
-            <MiniStat k="Spot" v={String(totals.spots)} />
-            <MiniStat k="Campionato" v={String(totals.champ)} />
-          </div>
-          {totals.distances.length ? (
-            <div className="mt-3">
-              <p className="text-xs uppercase tracking-wide text-muted">Distanze</p>
-              <p className="mt-1 text-sm text-muted">Migliore {totals.bestDistance} m · media {totals.avgDistance?.toFixed(1)} m</p>
-              <ul className="mt-2 grid gap-1 text-sm">
-                {totals.distances.map((row) => (
-                  <li key={row.distance} className="flex justify-between gap-3">
-                    <span>{row.distance} m</span>
-                    <span className="tabular-nums text-muted">{row.lanes} piazzole · {row.arrows} frecce</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-        </Card>
-      ) : null}
-      <FitastLinkCard crestOf={crestOf} onChanged={() => setNonce((n) => n + 1)} />
       {league?.running ? <p className="px-1 text-xs text-muted">Aggiorno le classifiche…</p> : null}
+      {/* quali gare: fatte o in arrivo, le mie o le altre (una riga sola) */}
       <div className="grid grid-cols-2 gap-2">
-        {([["past", "Passate"], ["next", "In arrivo"]] as const).map(([id, label]) => (
-          <button key={id} type="button" onClick={() => { setTab(id); setShowNo(false); setNote(""); }} className={`min-h-11 rounded-xl text-sm font-semibold ${tab === id ? "bg-primary text-primary-fg" : "border border-line"}`}>{label}</button>
-        ))}
-      </div>
-      <div className="grid grid-cols-2 gap-2">
-        {([["mine", "Le mie"], ["rest", "Le altre"]] as const).map(([id, label]) => (
-          <button key={id} type="button" onClick={() => { setScope(id); setShowNo(false); setNote(""); }} className={`min-h-11 rounded-xl text-sm font-semibold ${scope === id && !noMode ? "bg-accent text-accent-fg" : "border border-line"}`}>{label}</button>
-        ))}
+        <div className="aa-subtabs" role="group" aria-label="Quando">
+          {([["past", "Passate"], ["next", "In arrivo"]] as const).map(([id, label]) => (
+            <button key={id} type="button" aria-pressed={tab === id} onClick={() => { setTab(id); setShowNo(false); setNote(""); }} className="aa-subtab">{label}</button>
+          ))}
+        </div>
+        <div className="aa-subtabs" role="group" aria-label="Di chi">
+          {([["mine", "Le mie"], ["rest", "Le altre"]] as const).map(([id, label]) => (
+            <button key={id} type="button" aria-pressed={scope === id && !noMode} onClick={() => { setScope(id); setShowNo(false); setNote(""); }} className="aa-subtab">{label}</button>
+          ))}
+        </div>
       </div>
       {declined.length ? (
         <button type="button" onClick={() => { setShowNo((v) => !v); setPickId(null); setNote(""); }} aria-pressed={noMode} className={cx("justify-self-center rounded-full px-3 py-1.5 text-xs font-semibold", noMode ? "bg-white/15" : "border border-line text-muted")}>
@@ -323,6 +301,12 @@ export function GareBody({ embedded = false, league }: { embedded?: boolean; /**
               ) : (
                 <Roster tab={tab} people={comp.roster ?? []} />
               )}
+              {/* in arrivo: chi della compagnia parte da quale piazzola (elenco delle piazzole del portale) */}
+              {!past && comp.ourPz?.length ? (
+                <Fold icon="target" title="Piazzole della compagnia" sub={`${comp.ourPz.length} dei nostri · dal portale FITAST`} {...fold("ourpz", true)}>
+                  <CompanyLanes rows={comp.ourPz} meId={me.userId ?? ""} looks={looks} />
+                </Fold>
+              ) : null}
               {/* le tue piazzole: con chi eri, i punti piazzola per piazzola, il cartellino in foto */}
               {(past && ask) || mates.length ? (
                 <Fold
@@ -406,6 +390,37 @@ export function GareBody({ embedded = false, league }: { embedded?: boolean; /**
           <GaraTrend points={minePoints} />
         </Card>
       ) : null}
+      {/* la stagione in numeri e il collegamento al portale: sotto la gara scelta, non prima */}
+      {totals.gare > 0 ? (
+        <Card className="relative">
+          <span className="absolute right-3 top-3"><KindEmblem kind="campionato" size={54} glow /></span>
+          <p className="text-xs uppercase tracking-wide text-muted">Tutte le gare</p>
+          <p className="font-display text-4xl tabular-nums leading-none">{totals.points}</p>
+          <p className="mt-1 text-sm text-muted">punti in {totals.gare} gare{totals.avg != null ? ` · media ${totals.avg.toFixed(1).replace(".", ",")}` : ""}{totals.perArrow != null ? ` · ${totals.perArrow.toFixed(2).replace(".", ",")} a freccia` : ""}</p>
+          <div className="mt-3 grid grid-cols-4 gap-2 text-center">
+            <MiniStat k="Piazzole" v={String(totals.lanes)} />
+            <MiniStat k="Frecce" v={String(totals.arrows)} />
+            <MiniStat k="Spot" v={String(totals.spots)} />
+            <MiniStat k="Campionato" v={String(totals.champ)} />
+          </div>
+          {totals.distances.length ? (
+            <div className="mt-3">
+              <p className="text-xs uppercase tracking-wide text-muted">Distanze</p>
+              <p className="mt-1 text-sm text-muted">Migliore {totals.bestDistance} m · media {totals.avgDistance?.toFixed(1)} m</p>
+              <ul className="mt-2 grid gap-1 text-sm">
+                {totals.distances.map((row) => (
+                  <li key={row.distance} className="flex justify-between gap-3">
+                    <span>{row.distance} m</span>
+                    <span className="tabular-nums text-muted">{row.lanes} piazzole · {row.arrows} frecce</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </Card>
+      ) : null}
+      <FitastLinkCard crestOf={crestOf} onChanged={() => setNonce((n) => n + 1)} />
+
       <div id="fitast" className="scroll-mt-4">
         {portal ? (
           <FitastPanel
