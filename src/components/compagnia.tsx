@@ -4,7 +4,8 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "@tanstack/react-router";
 import type { listCompanies } from "@/lib/arcieri/compagnie.api";
-import { companyWelcome, createCompany, joinCompany, updateCompany } from "@/lib/arcieri/compagnie.api";
+import { companyWelcome, createCompany, joinCompany, setCompanyLogo, updateCompany } from "@/lib/arcieri/compagnie.api";
+import { logoDataUrl } from "@/lib/arcieri/logo-cutout";
 import { findCompanyLogos, fitastTeamStats, logoImageData, logoImageSearch, syncFitastCompanies, type TeamStat } from "@/lib/arcieri/fitast-league.api";
 import { useLoad } from "@/lib/arcieri/use-load";
 import { teamKey } from "@/lib/arcieri/fitast-league";
@@ -340,6 +341,30 @@ export function CompanyLeague({ board, onJoin, busy, onSynced, part, fitastBoard
   // il fondatore: solo le compagnie senza stemma vero (per sceglierli uno dopo l'altro)
   const [onlyMissing, setOnlyMissing] = useState(false);
   const noCrest = (co: { logoUrl: string | null }) => !co.logoUrl || co.logoUrl.startsWith("data:image/svg");
+  // stemmi già messi con lo sfondo pieno (bianco, colorato): si scontornano tutti sul telefono e si risalvano
+  const [cutting, setCutting] = useState("");
+  async function cutoutLogos() {
+    const todo = board.companies.filter((co) => co.logoUrl && !co.logoUrl.startsWith("data:image/svg") && (co.logoUrl.startsWith("data:") || co.logoUrl.startsWith("/api/logo/")));
+    let done = 0;
+    let changed = 0;
+    for (const co of todo) {
+      done++;
+      setCutting(`Scontorno ${done} di ${todo.length}…`);
+      try {
+        const r = await logoDataUrl(co.logoUrl as string);
+        if (!r.cut) continue;
+        await setCompanyLogo({ data: { id: co.id, logo: r.dataUrl } });
+        changed++;
+      } catch {
+        /* stemma illeggibile: resta com'è */
+      }
+    }
+    setCutting(`Fatto: ${changed} ${changed === 1 ? "stemma scontornato" : "stemmi scontornati"} su ${todo.length} (gli altri erano già senza sfondo o su una foto).`);
+    if (changed) {
+      refreshCrests();
+      onSynced?.();
+    }
+  }
   async function downloadLogos() {
     setLogos({ busy: true, text: "Cerco i loghi…", list: [] });
     const list: { name: string; found: boolean; via: string }[] = [];
@@ -436,6 +461,8 @@ export function CompanyLeague({ board, onJoin, busy, onSynced, part, fitastBoard
             <button type="button" disabled={sync.busy} onClick={() => void forceSync()} className="aa-chip">{sync.busy ? "Leggo l'elenco FITAST…" : "Aggiorna l'elenco delle compagnie"}</button>
             <button type="button" disabled={logos.busy} onClick={() => void downloadLogos()} className="aa-chip">{logos.busy ? "Scarico i loghi…" : "Scarica e aggiorna i loghi"}</button>
             <button type="button" aria-pressed={onlyMissing} onClick={() => setOnlyMissing((v) => !v)} className="aa-chip">Senza stemma ({board.companies.filter(noCrest).length})</button>
+            <button type="button" disabled={cutting.startsWith("Scontorno")} onClick={() => void cutoutLogos()} className="aa-chip">Scontorna gli stemmi</button>
+            {cutting ? <p className="w-full text-xs text-muted" aria-live="polite">{cutting}</p> : null}
             {onlyMissing ? <p className="w-full text-xs text-muted">Tocca una compagnia, poi «Modifica logo, sito e contatti» e «Cerca lo stemma in rete»: scegli l'immagine giusta e salva.</p> : null}
             {sync.text ? <p className="w-full break-words text-xs text-muted">{sync.text}</p> : null}
             {logos.text ? <p className="w-full break-words text-xs text-muted" aria-live="polite">{logos.text}</p> : null}
@@ -597,8 +624,9 @@ export function CompanyForm({ co, onDone, onCancel, searchable = false }: { co?:
   async function pickLogo(file: File) {
     try {
       setD((cur) => ({ ...cur, logoUrl: "" }));
-      const data = await shrink(file);
-      setD((cur) => ({ ...cur, logoUrl: data }));
+      // sfondo pieno attorno allo stemma: tolto (trasparente) e margini tagliati
+      const { dataUrl } = await logoDataUrl(file);
+      setD((cur) => ({ ...cur, logoUrl: dataUrl }));
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Immagine non letta");
     }
@@ -725,7 +753,7 @@ function LogoSearch({ name, onPick }: { name: string; onPick: (dataUrl: string) 
       // l'immagine intera; se il suo sito non la dà, la miniatura
       const r = await logoImageData({ data: { url: hit.img } }).catch(() => logoImageData({ data: { url: hit.thumb } }));
       const blob = await (await fetch(r.dataUrl)).blob();
-      onPick(await shrink(new File([blob], "stemma", { type: blob.type })));
+      onPick((await logoDataUrl(blob)).dataUrl);
       setSt((cur) => ({ ...cur, text: "Stemma messo: tocca «Salva» in fondo." }));
     } catch (e) {
       setSt((cur) => ({ ...cur, text: e instanceof Error ? e.message : "Immagine non letta: prova un'altra." }));
@@ -753,26 +781,6 @@ function LogoSearch({ name, onPick }: { name: string; onPick: (dataUrl: string) 
       {st.items.length ? <p className="text-[0.68rem] text-muted">Ricerca: «{q}». Gli stemmi sono delle compagnie: usali solo per riconoscerle nell'app.</p> : null}
     </div>
   );
-}
-
-function shrink(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      const scale = Math.min(1, 320 / Math.max(img.width, img.height));
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.max(1, Math.round(img.width * scale));
-      canvas.height = Math.max(1, Math.round(img.height * scale));
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return reject(new Error("Canvas non disponibile"));
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      // png per tenere la trasparenza dello stemma, jpeg se diventa troppo pesante
-      const png = canvas.toDataURL("image/png");
-      resolve(png.length < 170_000 ? png : canvas.toDataURL("image/jpeg", 0.8));
-    };
-    img.onerror = () => reject(new Error("Immagine non letta"));
-    img.src = URL.createObjectURL(file);
-  });
 }
 
 /* ---------------- primo accesso: scelta della compagnia ---------------- */

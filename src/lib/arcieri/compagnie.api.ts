@@ -296,6 +296,22 @@ export const updateCompany = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+/** Solo lo stemma di una compagnia (lo staff, per esempio dopo averlo scontornato): il resto non cambia. */
+export const setCompanyLogo = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: unknown) => {
+    const raw = (input ?? {}) as { id?: unknown; logo?: unknown };
+    return { id: asNum(raw.id), logo: cleanPhoto(raw.logo) };
+  })
+  .handler(async ({ context, data }) => {
+    const sql = await db();
+    const me = await ensureMember(sql, context.userId);
+    if (!staffLevel(me)) throw new Error("Solo lo staff cambia gli stemmi delle altre compagnie.");
+    if (!data.id || !data.logo) throw new Error("Stemma non valido.");
+    await sql`update companies set logo_url = ${data.logo} where id = ${data.id}`;
+    return { ok: true };
+  });
+
 /** entra in un'altra compagnia; se quella di prima resta vuota (e non è Fabriano) si chiude */
 export const joinCompany = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
