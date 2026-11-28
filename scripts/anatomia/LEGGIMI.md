@@ -42,6 +42,8 @@ dell'atlante dove c'è (BodyParts3D, CC BY 4.0) e la grana del pacchetto pelle d
     python3 skin_detail.py <human_materials_1_cc0.glb | cartella del pacchetto pelle> ../../public/anatomia
     python3 smooth_skin.py ../../public/anatomia/pelle.json ../../public/anatomia/pelle.bin 150
     python3 add_fat.py ../../public/anatomia/pelle.json ../../public/anatomia/pelle.bin 0.85
+    python3 fit_feet.py ../../public/anatomia/pelle.json ../../public/anatomia/pelle.bin ../../public/anatomia/corpo.json
+    python3 tone_relief.py ../../public/anatomia/pelle.json ../../public/anatomia/pelle.bin ../../public/anatomia/pelle-rilievo.jpg ../../public/anatomia/pelle-rilievo.jpg 0.85
     python3 cloth_mask.py ../../public/anatomia/pelle ../../public/anatomia/pelle.jpg ../../public/anatomia/corpo.json
 
 - `wrap_rest.ts` mette le ossa del personaggio nel riposo dell'atlante con il codice dell'app;
@@ -66,6 +68,15 @@ dell'atlante dove c'è (BodyParts3D, CC BY 4.0) e la grana del pacchetto pelle d
   75 cm su 1,72 m). Spessore per zona (pancia e fianchi ~2 cm, cosce ~1,5 cm, braccia pochi mm; niente su testa,
   mani e piedi), limitato dove braccia e busto o le due cosce sono vicini, spinto lungo normali molto lisciate.
   Con scala 0.85: torace ~105, vita ~86, fianchi ~95 cm. Va dopo `smooth_skin.py` e prima di `cloth_mask.py`.
+  Sopra il grasso un poco di massa muscolare (MUSCLE: deltoidi, braccia, petto, dorso, trapezio, cosce; la scala
+  vale solo per il grasso): braccio ~35 cm, avambraccio ~31, coscia ~53, spalle ~48 cm.
+- `fit_feet.py` porta i piedi sulle ossa del piede dell'atlante: la pelle finiva 6-7 cm oltre le falangi (dita
+  lunghe il doppio, sotto il pavimento). Davanti alle teste dei metatarsi la pelle si accorcia fino a 1,2 cm oltre
+  la punta delle ossa, le dita si stringono un poco e la loro pianta torna a terra, poi il piede si leviga (dita
+  piene, resto a metà: anche lo scalino sul collo del piede). Dopo `add_fat.py`, prima di `cloth_mask.py`.
+- `tone_relief.py` calma il rilievo delle tavole dove arriva di sbieco (fianchi, lati del torace, sotto le
+  braccia: lì diventava righe), con un filo di sfocatura e la forza data (0.85). Va una volta sola dopo
+  `bake_relief.py`.
 - `skin_detail.py` fa la grana della pelle (pori, rossori, rilievo, ruvidità) che si ripete: ora dal file .glb di
   "Human Materials 1 (CC0)" di britdawgmasterfunk (Sketchfab; nel file la licenza è CC BY 4.0, si cita),
   materiale "Material", a 1024 px.

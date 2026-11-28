@@ -279,7 +279,82 @@ export type Grips = {
   wrap?: { side: "L" | "R"; k: number; toward: V3; /** asse dell'arco all'impugnatura (verso il flettente alto) */ axis?: V3; /** verso il bersaglio */ dir?: V3 };
 };
 
-export function bodyMatrices(meta: BodyMeta, J: Record<number, V3>, look?: V3, grips?: Grips, /** 32 numeri: la piega delle dita in presa per la scheda grafica (mano S, poi D) */ curl?: Float32Array, /** 16 numeri: piega di ogni dito dai punti della mano (nocca e falangi; mano S, poi D) */ fing?: Float32Array, /** corporatura dall'aura dell'arciere: spessore di busto, braccia, gambe e testa */ build?: Build, /** verso del palmo per mano, filtrato sull'intero video */ palms?: { L?: V3; R?: V3 } | null): Float32Array {
+/**
+ * Braccia con la lunghezza dell'atlante (al più il 6% in più o in meno). In trazione il modello del gesto mette il
+ * gomito della corda dove l'avambraccio ha la sua lunghezza e l'omero restava corto anche del 30%; il segmento
+ * dell'omero non scende sotto l'80% (vedi segMatrix), quindi la sua pelle passava il gomito di qualche centimetro e
+ * l'avambraccio ripartiva più in qua: tra gomito e polso il braccio si piegava e si deformava. Spalla e polso (la
+ * mano sulla corda o sull'arco) restano dove sono; il gomito va sul cerchio delle due lunghezze, nel punto più
+ * vicino a quello del modello, soprattutto nel piano del video (la profondità è la misura meno sicura).
+ */
+const ARM_TOL = 0.06;
+function armLengths(meta: BodyMeta, J: Record<number, V3>): Record<number, V3> {
+  const rest = (i: number) => meta.rest[String(i)];
+  const r11 = rest(11), r12 = rest(12), r23 = rest(23), r24 = rest(24);
+  if (!r11 || !r12 || !r23 || !r24 || !J[11] || !J[12] || !J[23] || !J[24]) return J;
+  const kT = Math.max(0.5, Math.min(2, len(sub(lerp(J[11], J[12], 0.5), lerp(J[23], J[24], 0.5))) / (len(sub(lerp(r11, r12, 0.5), lerp(r23, r24, 0.5))) || 1)));
+  const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
+  let out = J;
+  for (const [sh, el, wr, base] of [[11, 13, 15, 33], [12, 14, 16, 54]] as const) {
+    const S = J[sh];
+    const E0 = J[el];
+    // il polso come lo usano i segmenti: quello della mano da 21 punti, se c'è
+    const W = J[base] && J[base + 5] && J[base + 17] ? J[base] : J[wr];
+    const rs = rest(sh), re = rest(el), rw = rest(wr);
+    if (!S || !E0 || !W || !rs || !re || !rw) continue;
+    const a0 = len(sub(re, rs)) * kT;
+    const b0 = len(sub(rw, re)) * kT;
+    const a = clamp(len(sub(E0, S)), a0 * (1 - ARM_TOL), a0 * (1 + ARM_TOL));
+    const b = clamp(len(sub(W, E0)), b0 * (1 - ARM_TOL), b0 * (1 + ARM_TOL));
+    const u = sub(W, S);
+    const d = len(u);
+    if (d < 1e-4 || d <= Math.abs(a - b)) continue;
+    const un = mul(u, 1 / d);
+    let E: V3;
+    if (d >= a + b) {
+      // braccio teso oltre le due lunghezze: dritto, ognuno allungato quanto serve
+      E = add(S, mul(un, (d * a) / (a + b)));
+    } else {
+      const x = (d * d + a * a - b * b) / (2 * d);
+      const r = Math.sqrt(Math.max(0, a * a - x * x));
+      const C = add(S, mul(un, x));
+      const p1 = perpTo(un, sub(E0, C), [0, 1, 0]);
+      const p2 = cross(un, p1);
+      const at = (th: number): V3 => add(C, add(mul(p1, r * Math.cos(th)), mul(p2, r * Math.sin(th))));
+      const cost = (th: number) => {
+        const q = sub(at(th), E0);
+        return q[0] * q[0] + q[1] * q[1] + 0.3 * q[2] * q[2];
+      };
+      let best = 0;
+      let bc = cost(0);
+      for (let k = -23; k <= 24; k++) {
+        const th = (k * Math.PI) / 24;
+        const c = cost(th);
+        if (c < bc) {
+          bc = c;
+          best = th;
+        }
+      }
+      for (let step = Math.PI / 48; step > 0.002; step /= 2) {
+        for (const th of [best - step, best + step]) {
+          const c = cost(th);
+          if (c < bc) {
+            bc = c;
+            best = th;
+          }
+        }
+      }
+      E = at(best);
+    }
+    if (len(sub(E, E0)) < 1e-4) continue;
+    if (out === J) out = { ...J };
+    out[el] = E;
+  }
+  return out;
+}
+
+export function bodyMatrices(meta: BodyMeta, J0: Record<number, V3>, look?: V3, grips?: Grips, /** 32 numeri: la piega delle dita in presa per la scheda grafica (mano S, poi D) */ curl?: Float32Array, /** 16 numeri: piega di ogni dito dai punti della mano (nocca e falangi; mano S, poi D) */ fing?: Float32Array, /** corporatura dall'aura dell'arciere: spessore di busto, braccia, gambe e testa */ build?: Build, /** verso del palmo per mano, filtrato sull'intero video */ palms?: { L?: V3; R?: V3 } | null): Float32Array {
+  const J = armLengths(meta, J0);
   const rest = (i: number | string) => meta.rest[String(i)];
   const hasHand = (base: number) => Boolean(J[base] && J[base + 5] && J[base + 17]);
   // le mani da 21 punti hanno nocche vere: con quelle si usano le teste dei metacarpi del modello

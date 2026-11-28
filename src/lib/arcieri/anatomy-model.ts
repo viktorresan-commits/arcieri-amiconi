@@ -587,27 +587,45 @@ function bodyPointsRaw(lm: Landmark[], aspect: number, cal: BoneCal | null = nul
     out[23][0] = out[11][0] * 0.6;
     out[24][0] = out[12][0] * 0.6;
   }
+  // avanti del bacino in orizzontale (dove guardano anche e ginocchia): senza punte e talloni nel video i piedi
+  // guardavano sempre la camera, e con il bacino girato restavano storti rispetto a gambe e ginocchia. Ora
+  // guardano dove guarda il bacino, ognuno un poco in fuori (come si sta in piedi)
+  const lrX = out[23][0] - out[24][0];
+  const lrZ = out[23][2] - out[24][2];
+  const lrL = Math.hypot(lrX, lrZ) || 1;
+  const fwdH: V3 = [-lrZ / lrL, 0, lrX / lrL];
+  const OUT_TOE = (15 * Math.PI) / 180;
+  /** verso del piede: lato +1 il sinistro (in fuori verso l'anca sinistra), -1 il destro */
+  const footDir = (sd: number): V3 => [fwdH[0] * Math.cos(OUT_TOE) + sd * (lrX / lrL) * Math.sin(OUT_TOE), 0, fwdH[2] * Math.cos(OUT_TOE) + sd * (lrZ / lrL) * Math.sin(OUT_TOE)];
+  const FOOT = 0.17;
+  const toeSeen = { 31: Boolean(out[31]) && vis(lm[31]) >= 0.3, 32: Boolean(out[32]) && vis(lm[32]) >= 0.3 };
   if (!anklesOk) {
     // in piedi, piedi alla larghezza delle spalle
-    for (const [hip, knee, ank, heel, toe] of [[23, 25, 27, 29, 31], [24, 26, 28, 30, 32]] as const) {
+    for (const [hip, knee, ank, heel, toe, sd] of [[23, 25, 27, 29, 31, 1], [24, 26, 28, 30, 32, -1]] as const) {
       const h = out[hip];
       out[knee] = [h[0] * 1.15, 0.5, h[2] + 0.02];
       out[ank] = [h[0] * 1.3, 0.08, h[2]];
-      out[heel] = [h[0] * 1.3, 0.03, h[2] - 0.06];
-      out[toe] = [h[0] * 1.3, 0.02, h[2] + 0.16];
+      const v = mul(footDir(sd), FOOT);
+      out[heel] = [out[ank][0] - v[0] * 0.35, 0.03, out[ank][2] - v[2] * 0.35];
+      out[toe] = [out[ank][0] + v[0], 0.02, out[ank][2] + v[2]];
     }
   }
   for (const i of [29, 30, 31, 32]) if (!out[i] || vis(lm[i]) < 0.3) out[i] = i < 31 ? add(out[i - 2], [0, -0.05, -0.05]) : add(out[i - 4], [0, -0.06, 0.15]);
   if (anklesOk) {
     // in piedi per tirare i piedi sono piatti a terra. Nel video la camera sta più in alto dei piedi e le punte
     // sembrano più in basso delle caviglie: il piede si inclinava e le dita entravano nel pavimento di 5-9 cm.
-    // Caviglie alla loro altezza, tallone e punta a terra; la direzione del piede resta quella del video
-    for (const [ank, heel, toe] of [[27, 29, 31], [28, 30, 32]] as const) {
+    // Caviglie alla loro altezza, tallone e punta a terra; la direzione del piede è quella del video se la punta
+    // si vede (in profondità verso il davanti del bacino), altrimenti quella del bacino
+    for (const [ank, heel, toe, sd] of [[27, 29, 31, 1], [28, 30, 32, -1]] as const) {
       const a = out[ank];
       a[1] = 0.08;
-      const tx = (out[toe]?.[0] ?? a[0]) - a[0];
-      const h = Math.hypot(tx, 0.15);
-      const v: V3 = [(tx / h) * 0.17, 0, (0.15 / h) * 0.17];
+      let v: V3;
+      if (toeSeen[toe]) {
+        const tx = (out[toe]?.[0] ?? a[0]) - a[0];
+        const h = Math.hypot(tx, 0.15);
+        const sz = fwdH[2] < -0.2 ? -1 : 1;
+        v = [(tx / h) * FOOT, 0, ((sz * 0.15) / h) * FOOT];
+      } else v = mul(footDir(sd), FOOT);
       out[toe] = [a[0] + v[0], 0.02, a[2] + v[2]];
       out[heel] = [a[0] - v[0] * 0.35, 0.03, a[2] - v[2] * 0.35];
     }

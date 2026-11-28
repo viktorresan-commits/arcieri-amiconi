@@ -7,7 +7,10 @@ fuori, lungo la normale di una forma levigata, dello spessore del grasso di un f
 testa. Dove due parti del corpo sono vicine (cosce tra loro, braccio contro il fianco) lo spessore si limita, così
 non si compenetrano. Lo spessore si leviga sulla pelle (niente gradini); le normali si rifanno.
 
-Uso: python3 scripts/anatomia/add_fat.py <pelle.json> <pelle.bin> [scala=1] [uscita.bin]
+Sopra il grasso un poco di massa muscolare in più (MUSCLE): l'atlante è un corpo da tavola anatomica, magro; con
+il solo grasso l'avambraccio era quasi grosso come il braccio e spalle e petto restavano piatti.
+
+Uso: python3 scripts/anatomia/add_fat.py <pelle.json> <pelle.bin> [scala del grasso=1] [uscita.bin]
 (dopo: cloth_mask.py, perché il bordo dei pantaloncini segue la forma)
 """
 import json
@@ -21,8 +24,11 @@ from scipy.spatial import cKDTree
 # pancia e fianchi di più, glutei e anche il massimo
 TORSO_Y = [(1.50, 0.003), (1.38, 0.004), (1.28, 0.006), (1.18, 0.011), (1.10, 0.016), (1.03, 0.019), (0.97, 0.020), (0.90, 0.019), (0.84, 0.014)]
 # gambe per altezza: coscia alta piena, ginocchio sottile, polpaccio poco, caviglia quasi niente
-LEG_Y = [(0.92, 0.016), (0.80, 0.011), (0.66, 0.008), (0.52, 0.004), (0.40, 0.005), (0.20, 0.003), (0.10, 0.0015)]
-SEG_T = {"clav_L": 0.004, "clav_R": 0.004, "omero_L": 0.005, "omero_R": 0.005, "avambr_L": 0.0028, "avambr_R": 0.0028}
+LEG_Y = [(0.92, 0.016), (0.80, 0.011), (0.66, 0.008), (0.52, 0.004), (0.40, 0.004), (0.20, 0.0025), (0.10, 0.0015)]
+SEG_T = {"clav_L": 0.004, "clav_R": 0.004, "omero_L": 0.004, "omero_R": 0.004, "avambr_L": 0.0008, "avambr_R": 0.0008}
+# massa muscolare di un arciere sportivo sopra quella dell'atlante (che è un corpo da tavola, magro): spalle,
+# braccia, petto, schiena e cosce più piene, l'avambraccio che si assottiglia verso il polso. In metri, al massimo
+MUSCLE = {"deltoide": 0.007, "braccio": 0.004, "avambraccio": 0.0008, "petto": 0.005, "dorso": 0.004, "trapezio": 0.004, "coscia": 0.004}
 NONE = {"testa", "mano_L", "mano_R", "piede_L", "piede_R", "dita_L", "dita_R", "pollice_L", "pollice_R"}
 
 
@@ -113,6 +119,43 @@ def main() -> None:
     arm = np.isin(np.array([segs[i] if i < ns else "" for i in jo[np.arange(n), wt.argmax(1)]]), ["omero_L", "omero_R"])
     t[arm & (front < 0)] *= 1.3
 
+    t *= scale
+
+    # massa muscolare (non scala con il grasso)
+    dname = np.array([segs[i] if i < ns else "" for i in jo[np.arange(n), wt.argmax(1)]])
+    rest = json.loads((js_p.parent / "corpo.json").read_text())["rest"] if (js_p.parent / "corpo.json").exists() else None
+    mus = np.zeros(n)
+    if rest is not None:
+        sm = lambda a, b, x: np.clip((x - a) / (b - a), 0, 1) ** 2 * (3 - 2 * np.clip((x - a) / (b - a), 0, 1))
+        for sd, sh, el, wr in (("L", "11", "13", "15"), ("R", "12", "14", "16")):
+            S, E, Wr = (np.array(rest[k]) for k in (sh, el, wr))
+            # deltoide: attorno alla spalla, sul lato di fuori
+            ds = np.linalg.norm(pos - S, axis=1)
+            outw = np.clip((pos[:, 0] - S[0]) * np.sign(S[0]) / 0.03 + 0.6, 0, 1)
+            on = np.isin(dname, [f"omero_{sd}", f"clav_{sd}"])
+            mus += on * MUSCLE["deltoide"] * (1 - sm(0.05, 0.13, ds)) * outw
+            # braccio: pieno a metà, meno verso il gomito
+            ax = (E - S) / np.linalg.norm(E - S)
+            u = np.clip((pos - S) @ ax / np.linalg.norm(E - S), 0, 1)
+            mus += (dname == f"omero_{sd}") * MUSCLE["braccio"] * np.sin(np.pi * np.clip(u * 0.9 + 0.1, 0, 1))
+            # avambraccio: i muscoli sotto il gomito, niente al polso
+            ax = (Wr - E) / np.linalg.norm(Wr - E)
+            u = np.clip((pos - E) @ ax / np.linalg.norm(Wr - E), 0, 1)
+            mus += (dname == f"avambr_{sd}") * MUSCLE["avambraccio"] * (1 - sm(0.2, 0.75, u))
+        tor = np.isin(dname, ["torace", "clav_L", "clav_R"])
+        ax_ = np.abs(pos[:, 0])
+        # petto: davanti, tra le spalle e sotto le clavicole
+        mus += tor * MUSCLE["petto"] * np.clip(front, 0, 1) * (1 - sm(0.06, 0.11, np.abs(y - 1.31))) * (1 - sm(0.13, 0.19, ax_)) * sm(0.0, 0.03, ax_)
+        # dorso (gran dorsale e scapole): dietro, più sui lati
+        mus += tor * MUSCLE["dorso"] * np.clip(-front, 0, 1) * (1 - sm(0.1, 0.17, np.abs(y - 1.27))) * sm(0.02, 0.09, ax_)
+        # trapezio: tra collo e spalle
+        mus += tor * MUSCLE["trapezio"] * sm(1.38, 1.43, y) * (1 - sm(1.47, 1.52, y)) * sm(0.03, 0.06, ax_) * (1 - sm(0.12, 0.16, ax_))
+        # cosce: davanti (quadricipite) più che dietro
+        th = np.isin(dname, ["coscia_L", "coscia_R"])
+        mus += th * MUSCLE["coscia"] * (0.8 + 0.4 * np.clip(front, 0, 1)) * sm(0.48, 0.6, y) * (1 - sm(0.8, 0.9, y))
+    mus[~body_v] = 0
+    t += mus
+
     # dove due parti sono vicine (cosce tra loro, braccio e fianco) lo spessore resta sotto il 40 % dello spazio
     dom = jo[np.arange(n), wt.argmax(1)]
     group = np.full(n, -1)
@@ -141,7 +184,6 @@ def main() -> None:
     T = np.minimum(T, tmin)
     for _ in range(20):
         T = 0.5 * T + 0.5 * avg(T)
-    T *= scale
 
     Q = P + Ns * T[:, None]
     print(f"spessore medio {T[T > 0.0005].mean() * 1000:.1f} mm, massimo {T.max() * 1000:.1f} mm")
