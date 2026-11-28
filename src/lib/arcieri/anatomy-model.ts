@@ -598,6 +598,20 @@ function bodyPointsRaw(lm: Landmark[], aspect: number, cal: BoneCal | null = nul
     }
   }
   for (const i of [29, 30, 31, 32]) if (!out[i] || vis(lm[i]) < 0.3) out[i] = i < 31 ? add(out[i - 2], [0, -0.05, -0.05]) : add(out[i - 4], [0, -0.06, 0.15]);
+  if (anklesOk) {
+    // in piedi per tirare i piedi sono piatti a terra. Nel video la camera sta più in alto dei piedi e le punte
+    // sembrano più in basso delle caviglie: il piede si inclinava e le dita entravano nel pavimento di 5-9 cm.
+    // Caviglie alla loro altezza, tallone e punta a terra; la direzione del piede resta quella del video
+    for (const [ank, heel, toe] of [[27, 29, 31], [28, 30, 32]] as const) {
+      const a = out[ank];
+      a[1] = 0.08;
+      const tx = (out[toe]?.[0] ?? a[0]) - a[0];
+      const h = Math.hypot(tx, 0.15);
+      const v: V3 = [(tx / h) * 0.17, 0, (0.15 / h) * 0.17];
+      out[toe] = [a[0] + v[0], 0.02, a[2] + v[2]];
+      out[heel] = [a[0] - v[0] * 0.35, 0.03, a[2] - v[2] * 0.35];
+    }
+  }
   return out;
 }
 

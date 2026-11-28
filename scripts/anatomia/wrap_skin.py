@@ -11,8 +11,8 @@ pelle dell'atlante (BodyParts3D, che segue i muscoli veri) senza i suoi buchi.
    seguono la pelle attorno, gli occhi si appiattiscono di fronte (arrivano dalla foto del viso);
 2a. involucro: per busto (con testa e clavicole), braccia e gambe si fa una griglia di 2,5 mm con muscoli e ossa
    della stessa parte (la parte di ogni punto della pelle viene dai pesi dello scheletro del personaggio, così
-   l'interno del braccio non finisce sul busto), si chiude, si gonfia di 12 mm e si stringe fino a 4 mm sopra i
-   tessuti, si leviga; ogni punto va su quella superficie lungo il gradiente della distanza. Testa, mani e dita
+   l'interno del braccio non finisce sul busto), si chiude, si gonfia di 15 mm e si stringe fino a 4 mm sopra i
+   tessuti, si leviga di circa 4 mm (la pelle passa sopra i solchi tra i muscoli); ogni punto va su quella superficie lungo il gradiente della distanza. Testa, mani e dita
    dei piedi restano fuori (viso dalla foto, dita vere). WRAP_DEBUG=1 salva le griglie per controllo;
 2b. pesi: ogni punto si muove con i segmenti dei muscoli e delle ossa dell'atlante sotto di lui (le stesse matrici
    nell'app), presi solo dai tessuti della stessa parte; vicino alla spalla braccio e busto si dividono entro
@@ -139,7 +139,7 @@ def tri_samples(P, T, step=0.002):
     return np.concatenate(out)
 
 
-def envelope(points, vox=0.0025, r=0.012, t=0.004):
+def envelope(points, vox=0.0025, r=0.015, t=0.004, sigma=1.6):
     """
     involucro dei tessuti: i punti dilatati di r e riempiti dentro, poi erosi di r - t (chiusura): la superficie
     segue muscoli e ossa a t di distanza, i solchi più stretti di 2 r si chiudono. phi < 0 dentro, 0 sulla pelle.
@@ -155,7 +155,8 @@ def envelope(points, vox=0.0025, r=0.012, t=0.004):
     O = binary_fill_holes(O)
     S = (distance_transform_edt(~O) - distance_transform_edt(O)).astype(np.float32) * vox
     del O
-    phi = gaussian_filter(S + np.float32(r - t), 1.0)
+    # levigato di qualche millimetro: la pelle vera passa sopra i solchi tra i muscoli (niente ventri a bozzi)
+    phi = gaussian_filter(S + np.float32(r - t), sigma)
     return {"lo": lo, "vox": vox, "phi": phi}
 
 
@@ -654,7 +655,7 @@ def main():
     D2 = np.zeros_like(qn)
     D2[have] = tgt2[have] / wsum2[have, None] - qn[have]
     D2 *= (ew * np.clip(wsum2 / np.maximum(SPW.sum(1), 1e-9), 0, 1))[:, None]
-    for lam in (0.5, -0.53, 0.5, -0.53, 0.5, -0.53):
+    for lam in (0.5, -0.53) * 5:
         D2 = D2 + lam * (avg(D2) - D2)
     print("pelle sulla sagoma dei tessuti: spostamento medio (mm)", round(float(np.linalg.norm(D2, axis=1)[ew > 0.5].mean() * 1000), 1))
     disp = disp + D2

@@ -9,7 +9,7 @@ import { v3, type V3 } from "./anatomy-model";
 import type { BodyMeta } from "./anatomy-body";
 
 type MeshJson = { n: number; vOffset: number; iOffset: number; indices: number; /** dove cominciano gli indici della testa (con uv e immagine loro) */ headStart?: number };
-type BodyJson = { stride: number; meshes: { corpo: MeshJson; occhi: MeshJson }; joints: { name: string; parent: number; rest: number[] }[]; /** byte in più per vertice (scripts/anatomia/wrap_skin.py) */ extra?: { group: number; bulge: number; ao: number; paint: number; bulgeScale: number; delta?: number; zone?: number; nrm0?: number; face?: number }; /** occhi del personaggio nascosti (occhi dalla foto del viso) */ hideEyes?: boolean; /** "atlante": pelle a riposo nello spazio dell'atlante, mossa dai suoi segmenti (indici 0..20) e dalle ossa delle mani (21 + osso) */ rig?: string; segments?: string[]; /** per ogni osso del personaggio: dal riposo dell'atlante al suo spazio (3x3 a righe, poi traslazione) */ restInv?: number[][]; /** pelle della foto del viso, colore lineare */ faceSkin?: number[]; headUvScale?: number; relief?: boolean };
+type BodyJson = { stride: number; meshes: { corpo: MeshJson; occhi: MeshJson }; joints: { name: string; parent: number; rest: number[] }[]; /** byte in più per vertice (scripts/anatomia/wrap_skin.py) */ extra?: { group: number; bulge: number; ao: number; paint: number; bulgeScale: number; delta?: number; zone?: number; nrm0?: number; face?: number; /** quanto è stoffa (pantaloncini), levigato sulla superficie: vedi cloth_mask.py */ cloth?: number }; /** occhi del personaggio nascosti (occhi dalla foto del viso) */ hideEyes?: boolean; /** "atlante": pelle a riposo nello spazio dell'atlante, mossa dai suoi segmenti (indici 0..20) e dalle ossa delle mani (21 + osso) */ rig?: string; segments?: string[]; /** per ogni osso del personaggio: dal riposo dell'atlante al suo spazio (3x3 a righe, poi traslazione) */ restInv?: number[][]; /** pelle della foto del viso, colore lineare */ faceSkin?: number[]; headUvScale?: number; relief?: boolean };
 export type SkinMesh = {
   n: number;
   pos: Float32Array;
@@ -31,8 +31,55 @@ export type SkinMesh = {
   nrm0: Float32Array | null;
   /** indici della testa nuova (dopo quelli del corpo): uv sferiche (× uvScale) e immagine pelle-testa.jpg */
   headStart: number | null;
+  /** per il gonfiore levigato: punti saldati (stessa posizione) e i loro vicini, fatti al primo uso */
+  weld?: { of: Int32Array; n: number; start: Int32Array; nbr: Int32Array; acc: Float32Array; tmp: Float32Array; cnt: Float32Array };
 };
-export type SkinBody = { /** pelle mossa dai segmenti dell'atlante, come muscoli e ossa (vedi atlasSkinBones) */ atlasRig: boolean; restInv: Aff[] | null; body: SkinMesh; eyes: SkinMesh; names: string[]; heads: V3[]; parent: number[]; image: HTMLImageElement | null; eyeImage: HTMLImageElement | null; meanLuma: number; hideEyes: boolean; faceSkin: [number, number, number]; /** testa nuova (foto del viso) */ headImage: HTMLImageElement | null; headUvScale: number; /** rilievo del corpo dalle tavole (normal map nello spazio delle uv) */ reliefImage: HTMLImageElement | null };
+
+/**
+ * Punti saldati e vicini per levigare il gonfiore: ogni vertice si gonfia con il muscolo sotto di lui (un gruppo
+ * per vertice), e due vertici vicini su muscoli diversi si gonfiavano di quantità diverse: il bordo dell'avambraccio
+ * diventava a dente di sega. Le copie dello stesso punto (cuciture delle uv) contano come uno solo.
+ */
+function weldOf(m: SkinMesh) {
+  const of = new Int32Array(m.n);
+  const map = new Map<string, number>();
+  let n = 0;
+  for (let i = 0; i < m.n; i++) {
+    const k = `${Math.round(m.pos[i * 3] * 4000)},${Math.round(m.pos[i * 3 + 1] * 4000)},${Math.round(m.pos[i * 3 + 2] * 4000)}`;
+    let g = map.get(k);
+    if (g == null) {
+      g = n++;
+      map.set(k, g);
+    }
+    of[i] = g;
+  }
+  const sets: Set<number>[] = Array.from({ length: n }, () => new Set<number>());
+  const end = m.headStart ?? m.idx.length;
+  for (let t = 0; t + 2 < end; t += 3) {
+    const a = of[m.idx[t]], b = of[m.idx[t + 1]], c = of[m.idx[t + 2]];
+    if (a !== b) {
+      sets[a].add(b);
+      sets[b].add(a);
+    }
+    if (b !== c) {
+      sets[b].add(c);
+      sets[c].add(b);
+    }
+    if (a !== c) {
+      sets[a].add(c);
+      sets[c].add(a);
+    }
+  }
+  const start = new Int32Array(n + 1);
+  for (let g = 0; g < n; g++) start[g + 1] = start[g] + sets[g].size;
+  const nbr = new Int32Array(start[n]);
+  for (let g = 0; g < n; g++) {
+    let o = start[g];
+    for (const x of sets[g]) nbr[o++] = x;
+  }
+  return { of, n, start, nbr, acc: new Float32Array(n), tmp: new Float32Array(n), cnt: new Float32Array(n) };
+}
+export type SkinBody = { /** pelle mossa dai segmenti dell'atlante, come muscoli e ossa (vedi atlasSkinBones) */ atlasRig: boolean; restInv: Aff[] | null; body: SkinMesh; eyes: SkinMesh; names: string[]; heads: V3[]; parent: number[]; image: HTMLImageElement | null; eyeImage: HTMLImageElement | null; meanLuma: number; hideEyes: boolean; faceSkin: [number, number, number]; /** testa nuova (foto del viso) */ headImage: HTMLImageElement | null; headUvScale: number; /** rilievo del corpo dalle tavole (normal map nello spazio delle uv) */ reliefImage: HTMLImageElement | null; /** la stoffa è nei vertici (k.z negativo): bordo liscio dei pantaloncini */ clothV: boolean };
 
 let bodyP: Promise<SkinBody | null> | null = null;
 const img = (src: string) =>
@@ -89,6 +136,8 @@ export function loadSkinBody(base = "/anatomia/pelle"): Promise<SkinBody | null>
             k[i * 3] = dv.getUint8(o + ex.ao) / 255;
             k[i * 3 + 1] = dv.getUint8(o + ex.paint) / 255;
             if (ex.face != null) k[i * 3 + 2] = dv.getUint8(o + ex.face) / 255;
+            // stoffa nello stesso numero, in negativo (il viso è solo sulla testa, la stoffa solo sul corpo)
+            if (ex.cloth != null && k[i * 3 + 2] <= 0) k[i * 3 + 2] = -dv.getUint8(o + ex.cloth) / 255;
           }
           if (ex && delta && zone && zside && ex.delta != null && ex.zone != null) {
             for (let c = 0; c < 3; c++) delta[i * 3 + c] = dv.getInt16(o + ex.delta + c * 2, true) / 1e4;
@@ -130,6 +179,7 @@ export function loadSkinBody(base = "/anatomia/pelle"): Promise<SkinBody | null>
         eyeImage,
         meanLuma,
         hideEyes: Boolean(js.hideEyes),
+        clothV: js.extra?.cloth != null,
         headImage,
         headUvScale: js.headUvScale ?? 1,
         reliefImage,
@@ -373,12 +423,39 @@ export function skinMesh(m: SkinMesh, bones: Aff[], outP: Float32Array, outN: Fl
   const bg = m.bulge;
   const fx = flex && m.delta && m.zone && m.zside && (flex[0] > 0 || flex[1] > 0) ? flex : null;
   const { pos, nrm, wt, jo, delta, zone, zside, nrm0 } = m;
+  // gonfiore dei muscoli: per vertice, poi levigato due volte sui vicini (niente dente di sega tra muscoli diversi)
+  let bSmooth: Float32Array | null = null;
+  if (g) {
+    const W = (m.weld ??= weldOf(m));
+    const { acc, tmp, cnt, of, start, nbr } = W;
+    acc.fill(0);
+    cnt.fill(0);
+    for (let i = 0; i < m.n; i++) {
+      acc[of[i]] += bul![g[i]] * bg![i];
+      cnt[of[i]] += 1;
+    }
+    for (let k = 0; k < W.n; k++) acc[k] = cnt[k] ? acc[k] / cnt[k] : 0;
+    for (let pass = 0; pass < 2; pass++) {
+      for (let k = 0; k < W.n; k++) {
+        const s0 = start[k], s1 = start[k + 1];
+        if (s1 === s0) {
+          tmp[k] = acc[k];
+          continue;
+        }
+        let sum = 0;
+        for (let q = s0; q < s1; q++) sum += acc[nbr[q]];
+        tmp[k] = 0.5 * acc[k] + (0.5 * sum) / (s1 - s0);
+      }
+      acc.set(tmp);
+    }
+    bSmooth = acc;
+  }
   for (let i = 0; i < m.n; i++) {
     const i3 = i * 3;
     let nx = nrm[i3];
     let ny = nrm[i3 + 1];
     let nz = nrm[i3 + 2];
-    const b = g ? bul![g[i]] * bg![i] : 0;
+    const b = bSmooth && m.weld ? bSmooth[m.weld.of[i]] : 0;
     let x = pos[i3] + nx * b;
     let y = pos[i3 + 1] + ny * b;
     let z = pos[i3 + 2] + nz * b;

@@ -448,6 +448,8 @@ varying vec3 vW; varying vec3 vN; varying vec2 vUV;
 // z: quanto conta la foto del viso (testa nuova: colori veri, portati al tono di pelle scelto)
 varying vec3 vK;
 uniform vec3 uFaceSkin;
+// 1 = quanto è stoffa viene dai vertici (k.z negativo, levigato): bordo dei pantaloncini liscio
+uniform float uClothV;
 uniform vec3 uEye; uniform vec3 uSkin; uniform sampler2D uTex; uniform float uMeanL; uniform float uTexOn; uniform vec4 uCut;
 // 1 = colore dell'immagine così com'è (occhi); 0 = tono della pelle scelta con le luci dell'immagine
 uniform float uRaw;
@@ -522,17 +524,28 @@ void main(){
       // i pantaloncini del personaggio (grigi, senza colore) restano stoffa: grigio scuro
       float mx = max(tx.r, max(tx.g, tx.b));
       float sat = (mx - min(tx.r, min(tx.g, tx.b))) / max(mx, 1e-3);
-      float cloth = (1.0 - smoothstep(0.07, 0.15, sat)) * (1.0 - vK.z);
-      alb = mix(alb, vec3(0.06, 0.065, 0.075) * (0.6 + 0.8 * lt), cloth);
+      float face = max(vK.z, 0.0);
+      float cloth = (1.0 - smoothstep(0.07, 0.15, sat)) * (1.0 - face);
+      if (uClothV > 0.5) {
+        // bordo dove la stoffa vale metà, sottile quanto un punto dello schermo
+        float cv = max(-vK.z, 0.0);
+        float aa = 0.06;
+#ifdef HAS_DERIV
+        aa = clamp(fwidth(cv) * 1.5, 0.01, 0.2);
+#endif
+        cloth = smoothstep(0.5 - aa, 0.5 + aa, cv);
+      }
+      // stoffa quasi uniforme: le chiazze dell'immagine del personaggio sui pantaloncini si vedevano come toppe
+      alb = mix(alb, vec3(0.06, 0.065, 0.075) * (uClothV > 0.5 ? 0.82 + 0.36 * lt : 0.6 + 0.8 * lt) * (1.0 + dL * 0.6), cloth);
       // viso: i colori della foto; la pelle (colorata) prende il tono scelto, bianco degli occhi e capelli restano
-      if (vK.z > 0.001) {
+      if (face > 0.001) {
         vec3 fl = pow(tx, vec3(2.2));
         float fm = max(fl.r, max(fl.g, fl.b));
         float fs = (fm - min(fl.r, min(fl.g, fl.b))) / max(fm, 1e-3);
         vec3 fa = fl * mix(vec3(1.0), uSkin / max(uFaceSkin, vec3(1e-3)), smoothstep(0.2, 0.4, fs));
         // stessa saturazione del corpo (che parte dal tono scelto appena desaturato)
         fa = mix(vec3(dot(fa, vec3(0.2126, 0.7152, 0.0722))), fa, 0.85);
-        alb = mix(alb, fa * (1.0 + dL * 0.5), vK.z);
+        alb = mix(alb, fa * (1.0 + dL * 0.5), face);
       }
     }
   }
@@ -954,6 +967,7 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     aUV: gl.getAttribLocation(hprog, "aUV"),
     aK: gl.getAttribLocation(hprog, "aK"),
     uFaceSkin: gl.getUniformLocation(hprog, "uFaceSkin"),
+    uClothV: gl.getUniformLocation(hprog, "uClothV"),
     uUvScale: gl.getUniformLocation(hprog, "uUvScale"),
     uRil: gl.getUniformLocation(hprog, "uRil"),
     uRilOn: gl.getUniformLocation(hprog, "uRilOn"),
@@ -1185,6 +1199,7 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     gl.depthMask(true);
     const fromEye = cutNow[3] > 0;
     gl.uniform3fv(hl.uFaceSkin, skinBody.faceSkin);
+    gl.uniform1f(hl.uClothV, skinBody.clothV ? 1 : 0);
     const hs = bodyGpu.body.m.headStart;
     const skinPass = () => {
       if (hs != null && skinBody!.headImage) {
@@ -1228,6 +1243,7 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
       gl.depthMask(true);
       gl.disable(gl.BLEND);
     } else skinPass();
+    gl.uniform1f(hl.uClothV, 0);
     // occhi del personaggio solo se la testa non ha la foto del viso
     if (!fromEye && !skinBody.hideEyes) drawMesh(bodyGpu.eyes, eyeTex, Boolean(skinBody.eyeImage), true, 0.5);
     gl.disableVertexAttribArray(hl.aP);

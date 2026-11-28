@@ -40,13 +40,14 @@ dell'atlante dove c'è (BodyParts3D, CC BY 4.0) e la grana del pacchetto pelle d
     python3 bake_face.py ../../public/anatomia/pelle.rest.npz - <pacchetto pelle>/09_face_albedo_4k.jpg ../../public/anatomia/pelle-testa.jpg ../../public/anatomia/pelle.json
     python3 bake_relief.py ../../public/anatomia/pelle.body.npz <tavola normal map del corpo> ../../public/anatomia/pelle-rilievo.jpg ../../public/anatomia/pelle.json
     python3 skin_detail.py <cartella del pacchetto pelle> ../../public/anatomia
+    python3 cloth_mask.py ../../public/anatomia/pelle ../../public/anatomia/pelle.jpg ../../public/anatomia/corpo.json
 
 - `wrap_rest.ts` mette le ossa del personaggio nel riposo dell'atlante con il codice dell'app;
 - `wrap_skin.py` divide i triangoli, porta la pelle sulla forma dell'atlante (muscoli veri, spalle e gomiti
   compresi; la testa prima allineata a quella dell'atlante, orecchie del personaggio tenute), poi la stende
   sull'involucro di muscoli e ossa: per busto, braccia e gambe una griglia di 2,5 mm con i tessuti della stessa
   parte (la parte di ogni punto viene dallo scheletro del personaggio, così l'interno del braccio non si attacca
-  al busto), chiusa, gonfiata di 12 mm e stretta fino a 4 mm sopra i tessuti, levigata; ogni punto della pelle va
+  al busto), chiusa, gonfiata di 15 mm e stretta fino a 4 mm sopra i tessuti, levigata di circa 4 mm (la pelle passa sopra i solchi tra i muscoli); ogni punto della pelle va
   su quella superficie lungo il gradiente (testa, mani e dita dei piedi restano del personaggio). Riempie i buchi,
   prende i pesi dai muscoli e dalle ossa sotto ogni punto (nell'app la pelle si muove con le loro stesse matrici e
   resta sopra di loro in ogni posa; collo e vita con rotazioni interpolate), prende il muscolo sotto ogni punto
@@ -58,3 +59,5 @@ dell'atlante dove c'è (BodyParts3D, CC BY 4.0) e la grana del pacchetto pelle d
   fronte, di schiena e delle braccia): addominali, dorsali, glutei, ginocchia, polpacci, vene; in
   `pelle-rilievo.jpg`, nello spazio tangente delle uv del corpo (`pelle.body.npz` è di passaggio);
 - `skin_detail.py` fa la grana della pelle (pori, rossori, rilievo, ruvidità) che si ripete.
+- `cloth_mask.py` fa il bordo dei pantaloncini liscio: dalla stoffa dell'immagine del corpo una vita e due orli
+  sulle cosce, e in ogni vertice la distanza da quel bordo (byte 31 di pelle.bin, extra.cloth).
