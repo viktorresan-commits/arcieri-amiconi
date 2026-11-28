@@ -14,7 +14,7 @@ const SKIN_DETAIL_K = 11;
 /** sulle mani vere: la loro immagine è un ritaglio di 0,64 lati di quella del corpo, la stessa grana */
 const HAND_DETAIL_K = 7;
 
-export type Layers = { pelle: boolean; muscolo: boolean; osso: boolean };
+export type Layers = { pelle: boolean; muscolo: boolean; osso: boolean; nervo?: boolean };
 
 const VS = `
 attribute vec3 aP; attribute vec3 aN;
@@ -138,6 +138,8 @@ void main(){
 const BFS = `${PREC}
 varying vec3 vW; varying vec3 vN; varying vec2 vF; varying float vAct; varying float vFoc; varying float vTend; varying float vStr; varying float vGrp; varying vec3 vR; varying float vHide;
 uniform vec3 uEye; uniform float uLayer; uniform float uAlpha; uniform float uDim; uniform float uTime; uniform float uStyle;
+// occhi (a riposo): centro dell'iride e raggio, asse dello sguardo; uOnlyEyes: delle ossa solo gli occhi
+uniform vec4 uIrisL; uniform vec4 uIrisR; uniform vec3 uIrisAx; uniform float uOnlyEyes;
 // tono della pelle vera (lineare): quello del personaggio della prova 3D o quello scelto nell'avatar
 uniform vec3 uSkin;
 // dettaglio del muscolo (immagine ripetuta lungo le fibre): R rilievo dei fasci, G chiaroscuro del tessuto, B fasce connettivali
@@ -173,11 +175,23 @@ void main(){
   vec3 amb = mix(vec3(0.12, 0.10, 0.09), vec3(0.24, 0.26, 0.30), 0.5 + 0.5 * N.y);
   vec3 H = normalize(L1 + V);
   vec3 col; float a = uAlpha;
+  if (uLayer > 3.5) {
+    // nervi: cordoni giallo crema, lucidi, con le fibre in lungo appena accennate (come nelle tavole)
+    float st = 0.92 + 0.08 * sin(vF.y * 6.2832 * 3.0) * sin(vF.x * 900.0);
+    vec3 albN = vec3(0.80, 0.56, 0.09) * st;
+    vec3 lightN = C1 * wrapL(N, L1, 0.4) + C2 * wrapL(N, L2, 0.5) + amb;
+    col = albN * lightN * mix(1.0, 0.55, pow(1.0 - ndv, 1.5));
+    col += C1 * (pow(max(dot(N, H), 0.0), 40.0) * 0.22) + C3 * pow(1.0 - ndv, 3.0) * max(0.0, dot(N, L3) + 0.2) * 0.2;
+    gl_FragColor = vec4(tone(col), 1.0);
+    return;
+  }
   if (uLayer > 2.5) {
     // fondo sotto i muscoli: la parete interna del guscio della pelle (segnata nei dati, canale "tendine"), solo
     // quella lontana (le facce girate si scartano). Sta dietro i muscoli: si vede solo dove tra un muscolo e
     // l'altro resta uno spiraglio, carne in ombra invece del fondo dello studio
-    if (vTend < 0.5 || vStr > 0.5) discard;
+    // solo la parete vista di fronte: di taglio (lungo il contorno del corpo, fuori dai muscoli) faceva
+    // macchie scure attorno alla sagoma
+    if (vTend < 0.5 || vStr > 0.5 || abs(dot(N, V)) < 0.45) discard;
     col = vec3(0.075, 0.012, 0.012) * (C1 * max(dot(N, L1), 0.0) * 0.35 + amb);
     gl_FragColor = vec4(tone(col), 1.0);
     return;
@@ -242,7 +256,23 @@ void main(){
 #endif
     alb *= 1.0 - 0.32 * poreA;
     alb = mix(alb, alb * vec3(0.78, 0.74, 0.70), uDim * 0.6);
-    if (vTend > 0.5) alb = vec3(0.03, 0.035, 0.04);
+    // occhi: bianco della sclera (0,5 nel canale dei tendini) e iride (1) con pupilla, umidi e lucidi
+    float eyeK = 0.0;
+    if (vTend > 0.3) {
+      eyeK = 1.0;
+      vec4 ir = vR.x > 0.0 ? uIrisL : uIrisR;
+      vec3 d = vR - ir.xyz;
+      float rr = length(d - uIrisAx * dot(d, uIrisAx)) / max(ir.w, 1e-4);
+      if (vTend > 0.8) {
+        float ang = atan(d.y, d.x * sign(vR.x + 1e-5));
+        float fibre = 0.5 + 0.5 * sin(ang * 46.0 + 3.0 * sin(ang * 7.0)) * (0.6 + 0.4 * sin(rr * 18.0));
+        vec3 iris = mix(vec3(0.16, 0.085, 0.035), vec3(0.32, 0.20, 0.09), fibre * smoothstep(0.35, 0.75, rr));
+        iris = mix(iris, vec3(0.05, 0.035, 0.025), smoothstep(0.82, 1.0, rr));
+        alb = mix(vec3(0.012, 0.01, 0.01), iris, smoothstep(0.30, 0.38, rr));
+      } else {
+        alb = vec3(0.86, 0.83, 0.80) * mix(1.0, 0.93, smoothstep(0.012, 0.02, length(vR.yz - ir.yz)));
+      }
+    } else if (uOnlyEyes > 0.5) discard;
     float dif = wrapL(N, L1, 0.25);
     vec3 light = C1 * dif + C2 * wrapL(N, L2, 0.3) + amb;
     // luce che passa nell'osso sottile: un tepore nelle ombre
@@ -251,6 +281,8 @@ void main(){
     float fres = pow(1.0 - ndv, 4.0) * 0.12;
     float rimL = pow(1.0 - ndv, 2.0) * max(0.0, dot(N, L3) + 0.3) * 0.35;
     col = alb * (light + sss) * mix(1.0, 0.62, pow(1.0 - ndv, 1.6)) + C1 * (spec + fres * dif) + C3 * rimL * 0.45;
+    // superficie bagnata dell'occhio: riflesso stretto e brillante della luce
+    col += C1 * eyeK * (pow(max(dot(N, H), 0.0), 90.0) * 0.9 + pow(1.0 - ndv, 3.0) * 0.08);
   } else {
     // muscoli: rosso carne con piccole differenze da un muscolo all'altro, il ventre un po' più chiaro;
     // fasci appena accennati e la lucentezza a seta lungo le fibre (come nei preparati anatomici),
@@ -601,6 +633,37 @@ export function mul4(a: Float32Array, b: Float32Array) {
   return o;
 }
 
+
+/** occhi dell'atlante a riposo: centro e raggio dell'iride (canale dei tendini delle ossa = 1) e asse dello sguardo */
+function irisInfo(data: BodyData) {
+  const { meta } = data;
+  const dv = new DataView(data.buf);
+  const acc = { L: [0, 0, 0, 0], R: [0, 0, 0, 0] };
+  const pts: { L: number[][]; R: number[][] } = { L: [], R: [] };
+  const ax = [0, 0, 0];
+  for (const b of meta.batches) {
+    if (b.layer !== "bone") continue;
+    for (let v = 0; v < b.vertices; v++) {
+      const o = b.vOffset + v * meta.stride;
+      if (dv.getUint8(o + 15) < 200) continue;
+      const p = [0, 1, 2].map((k) => meta.lo[k] + (dv.getUint16(o + k * 2, true) / 65535) * (meta.hi[k] - meta.lo[k]));
+      const s = p[0] > 0 ? "L" : "R";
+      for (let k = 0; k < 3; k++) acc[s][k] += p[k];
+      acc[s][3]++;
+      pts[s].push(p);
+      for (let k = 0; k < 3; k++) ax[k] += dv.getInt8(o + 6 + k) / 127;
+    }
+  }
+  const out = (s: "L" | "R") => {
+    const n = Math.max(1, acc[s][3]);
+    const c = [acc[s][0] / n, acc[s][1] / n, acc[s][2] / n];
+    let r = 0;
+    for (const p of pts[s]) r = Math.max(r, Math.hypot(p[0] - c[0], p[1] - c[1], p[2] - c[2]));
+    return new Float32Array([c[0], c[1], c[2], acc[s][3] ? r * 0.95 : 0]);
+  };
+  const al = Math.hypot(ax[0], ax[1], ax[2]) || 1;
+  return { L: out("L"), R: out("R"), ax: new Float32Array(al > 1e-6 ? [ax[0] / al, ax[1] / al, ax[2] / al] : [0, 0, 1]) };
+}
 
 /** attacchi e spessori dei muscoli: si calcolano una volta per corpo */
 const flexCache = new WeakMap<ArrayBuffer, FlexInfo>();
@@ -962,6 +1025,10 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     uSkin: gl.getUniformLocation(bprog, "uSkin"),
     uBul: gl.getUniformLocation(bprog, "uBul"),
     uLayerV: gl.getUniformLocation(bprog, "uLayerV"),
+    uIrisL: gl.getUniformLocation(bprog, "uIrisL"),
+    uIrisR: gl.getUniformLocation(bprog, "uIrisR"),
+    uIrisAx: gl.getUniformLocation(bprog, "uIrisAx"),
+    uOnlyEyes: gl.getUniformLocation(bprog, "uOnlyEyes"),
     uTime: gl.getUniformLocation(bprog, "uTime"),
     uCurl: gl.getUniformLocation(bprog, "uCurl"),
     uFa: gl.getUniformLocation(bprog, "uFa"),
@@ -1401,7 +1468,7 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     im.onerror = () => fibDone();
     im.src = "/anatomia/fibre.jpg";
   }
-  type GpuBody = { meta: BodyMeta; flex: FlexInfo; sample: SkinSample; batches: { layer: BodyBatch["layer"]; vb: WebGLBuffer; ib: WebGLBuffer; count: number }[] };
+  type GpuBody = { meta: BodyMeta; flex: FlexInfo; sample: SkinSample; batches: { layer: BodyBatch["layer"]; vb: WebGLBuffer; ib: WebGLBuffer; count: number }[]; eyes: ReturnType<typeof irisInfo> };
   const bodies: Partial<Record<BodyLevel, GpuBody>> = {};
   /** il corpo usato per il disegno in corso */
   let body: GpuBody | null = null;
@@ -1568,6 +1635,10 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     }
     gl.uniform3fv(bl.uLo, meta.lo);
     gl.uniform3fv(bl.uHi, meta.hi);
+    gl.uniform4fv(bl.uIrisL, body.eyes.L);
+    gl.uniform4fv(bl.uIrisR, body.eyes.R);
+    gl.uniform3fv(bl.uIrisAx, body.eyes.ax);
+    gl.uniform1f(bl.uOnlyEyes, 0);
     const a16 = new Float32Array(64);
     for (let k = 0; k < 64; k++) a16[k] = Math.max(0, Math.min(1, g.act[k] ?? 0)) + ((g.foc[k] ?? 0) + 1) * 2;
     gl.uniform4fv(bl.uAct, a16);
@@ -1608,7 +1679,7 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
       return;
     }
     // con la pelle a velo: dove si vedono muscoli e ossa si segna lo stencil (lì il velo li copre anche se la passano)
-    const masked = hasStencil && L.pelle && style === 2 && (L.muscolo || L.osso);
+    const masked = hasStencil && L.pelle && style === 2 && (L.muscolo || L.osso || Boolean(L.nervo));
     // fondo sotto i muscoli: solo dove né muscoli né ossa coprono il punto (stencil)
     const fill = hasStencil && L.muscolo;
     if (masked || fill) {
@@ -1618,7 +1689,14 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
       gl.stencilOp(gl.KEEP, gl.KEEP, gl.REPLACE);
     }
     if (L.osso) drawBodyLayer("bone", 1, 1);
+    else if (L.muscolo) {
+      // senza scheletro gli occhi restano: dentro le orbite, tra i muscoli del viso
+      gl.uniform1f(bl.uOnlyEyes, 1);
+      drawBodyLayer("bone", 1, 1);
+      gl.uniform1f(bl.uOnlyEyes, 0);
+    }
     if (L.muscolo) drawBodyLayer("muscle", 2, 1);
+    if (L.nervo) drawBodyLayer("nerve", 4, 1);
     if (fill) {
       // carne in ombra negli spiragli tra un muscolo e l'altro (parete interna lontana della pelle dell'atlante),
       // invece del fondo dello studio: solo dove muscoli e ossa non ci sono, poi segnata anch'essa (il velo la copre)
@@ -1639,7 +1717,7 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
       for (const a of bodyAttribs) if (a >= 0) gl.disableVertexAttribArray(a);
       // con muscoli o scheletro accesi la pelle vera diventa un velo sopra di loro: si vede che li riveste.
       // Sopra i muscoli quasi trasparente al centro (il rosso della carne resta rosso), più presente sui bordi
-      drawSkinBody(meta, skinMats, hands, VP, eye, J, L.muscolo ? 0.1 : L.osso ? 0.24 : 0, masked);
+      drawSkinBody(meta, skinMats, hands, VP, eye, J, L.muscolo ? 0.1 : L.osso || L.nervo ? 0.24 : 0, masked);
       gl.useProgram(bprog);
       for (const a of bodyAttribs) if (a >= 0) gl.enableVertexAttribArray(a);
     } else if (L.pelle && style === 2) {
@@ -1666,7 +1744,7 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
       gl.depthFunc(gl.LEQUAL);
       // su fondo scuro il velo della pelle si somma come vetro; su fondo chiaro si posa come un'ombra leggera
       gl.blendFunc(gl.SRC_ALPHA, style ? gl.ONE_MINUS_SRC_ALPHA : gl.ONE);
-      drawBodyLayer("skin", 0, L.osso || L.muscolo ? 1 : 1.6);
+      drawBodyLayer("skin", 0, L.osso || L.muscolo || L.nervo ? 1 : 1.6);
       gl.depthFunc(gl.LESS);
       gl.depthMask(true);
       gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
@@ -1700,7 +1778,7 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
         gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(data.buf, b.iOffset, b.indices), gl.STATIC_DRAW);
         return { layer: b.layer, vb, ib, count: b.indices };
       });
-      bodies[level] = { meta: data.meta, flex: flexOf(data), sample: skinSample(data), batches };
+      bodies[level] = { meta: data.meta, flex: flexOf(data), sample: skinSample(data), batches, eyes: irisInfo(data) };
       bound = "";
     },
     /** l'arco e la freccia veri sono pronti (la vista ferma si ridisegna quando arrivano) */

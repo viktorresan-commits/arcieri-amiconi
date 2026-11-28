@@ -34,7 +34,7 @@ function mirrorCache(lm: Landmark[]) {
  * Le profondità arrivano da una ripresa 2D: sono stime.
  */
 
-type Layer = "pelle" | "muscolo" | "osso" | "punti" | "quote";
+type Layer = "pelle" | "muscolo" | "osso" | "nervo" | "punti" | "quote";
 type Seq = { t: number; lm: PackedLm }[];
 
 /** punti al tempo t della sequenza salvata, interpolati */
@@ -293,11 +293,13 @@ function paintAimHud(ctx: CanvasRenderingContext2D, VP: Float32Array, info: AimI
 }
 
 /** dall'occhio si vede il proprio corpo come è: pelle vera e opaca, niente muscoli né ossa */
-const AIM_LAYERS: Record<Layer, boolean> = { pelle: true, muscolo: false, osso: false, punti: false, quote: false };
+const AIM_LAYERS: Record<Layer, boolean> = { pelle: true, muscolo: false, osso: false, nervo: false, punti: false, quote: false };
 /** il tono di pelle scelto nell'avatar (se c'è), altrimenti quello del personaggio della prova 3D */
 /** con la pelle vera la sagoma è chiusa: dentro non si vedono muscoli e ossa, non si disegnano */
 // pelle vera: muscoli e scheletro restano come scelti, sotto la pelle che li riveste (trasparente se accesi)
 const realLayers = (L: Record<Layer, boolean>): Record<Layer, boolean> => ({ ...L, pelle: true });
+/** una sola pelle: senza la pelle vera non si disegna nessuna pelle (il velo dell'atlante era una seconda pelle, più grossolana) */
+const shownLayers = (L: Record<Layer, boolean>, real: boolean | undefined): Record<Layer, boolean> => (real ? realLayers(L) : { ...L, pelle: false });
 function avatarSkin(): string | null {
   try {
     const raw = localStorage.getItem(AVATAR_KEY);
@@ -321,7 +323,7 @@ export const sagomaView: { yaw: number; pitch: number; zoom: number; layers: Rec
   pitch: 0.06,
   zoom: 1,
   style: 0,
-  layers: { pelle: true, muscolo: true, osso: true, punti: true, quote: true },
+  layers: { pelle: false, muscolo: true, osso: true, nervo: false, punti: true, quote: true },
 };
 
 /**
@@ -497,7 +499,7 @@ export async function sagomaPainter(W: number, H: number, quality: "hd" | "pieno
         R.setStyle(2);
         R.setSkin(avatarSkin());
       }
-      const lay = view.real ? realLayers(view.layers) : view.layers;
+      const lay = shownLayers(view.layers, view.real);
       for (const [k, c] of BG[st]) g.addColorStop(k, c);
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.fillStyle = g;
@@ -588,7 +590,7 @@ export function Anatomy3D({
   const hudCanvas = useRef<HTMLCanvasElement>(null);
   /** sotto il corpo: fondo da studio, luce e ombre a terra */
   const stageCanvas = useRef<HTMLCanvasElement>(null);
-  const [layers, setLayers] = useState<Record<Layer, boolean>>({ pelle: true, muscolo: true, osso: true, punti: true, quote: true });
+  const [layers, setLayers] = useState<Record<Layer, boolean>>({ pelle: false, muscolo: true, osso: true, nervo: false, punti: true, quote: true });
   const layersRef = useRef(layers);
   layersRef.current = layers;
   // stile della tavola (studio scuro o tavola chiara), ricordato sul telefono
@@ -719,7 +721,7 @@ export function Anatomy3D({
   const [chrome, setChrome] = useState(true);
   const tapRef = useRef<() => void>(() => {});
   tapRef.current = () => setChrome((v) => !v);
-  /** gli strati meno usati (velo del corpo, punti, postura corretta) in una seconda riga */
+  /** gli strati meno usati (punti, postura corretta) in una seconda riga */
   const [more, setMore] = useState(false);
   // ---- visuale dell'arciere: dall'occhio di mira, con il paglione alla distanza scelta ----
   const archer = useArcherSetup();
@@ -852,7 +854,7 @@ export function Anatomy3D({
   const cacheRef = useRef<{ key: string; t: number[]; blobs: (Blob | null)[] } | null>(null);
   const cacheCanvas = useRef<HTMLCanvasElement>(null);
   const [prep, setPrep] = useState<number | null>(null);
-  const layersKey = `${layers.pelle}${layers.muscolo}${layers.osso}${layers.punti}${layers.quote}`;
+  const layersKey = `${layers.pelle}${layers.muscolo}${layers.osso}${layers.nervo}${layers.punti}${layers.quote}`;
   useEffect(() => {
     if (!track || !inBox || full || track.t.length < 2 || !solved) return;
     let alive = true;
@@ -1124,7 +1126,7 @@ export function Anatomy3D({
         });
       }
       const aimKey = am.on ? `${am.mode}|${am.D}|${ac.zoom.toFixed(3)}|${ac.yaw.toFixed(4)}|${ac.pitch.toFixed(4)}|${R.targetReady()}|${am.setup.drawLb},${am.setup.drawIn},${am.setup.grains},${am.setup.lengthIn},${am.setup.bowType}` : "";
-      const key = `${aimKey}|${ready}|${styleRef.current}|${c.yaw.toFixed(4)}|${c.pitch.toFixed(4)}|${c.zoom.toFixed(3)}|${v2 ? `${v2.z},${v2.x},${v2.y}` : ""}|${L0.pelle}${L0.muscolo}${L0.osso}${L0.punti}${L0.quote}${realRef.current ? 1 : 0}${fixRef.current ? 1 : 0}|${canvas.clientWidth}x${canvas.clientHeight}|${scale}|${bodyTick}|${R.gearReady()}`;
+      const key = `${aimKey}|${ready}|${styleRef.current}|${c.yaw.toFixed(4)}|${c.pitch.toFixed(4)}|${c.zoom.toFixed(3)}|${v2 ? `${v2.z},${v2.x},${v2.y}` : ""}|${L0.pelle}${L0.muscolo}${L0.osso}${L0.nervo}${L0.punti}${L0.quote}${realRef.current ? 1 : 0}${fixRef.current ? 1 : 0}|${canvas.clientWidth}x${canvas.clientHeight}|${scale}|${bodyTick}|${R.gearReady()}`;
       // dopo un movimento si disegna ancora un attimo con il corpo leggero, poi una volta con quello pieno
       const fast = now - lastChange < 450 || dragging.current;
       if (!moving && key === lastKey && !playing && fast === lastFast) return;
@@ -1220,7 +1222,7 @@ export function Anatomy3D({
       const { VP, eye } = boxed && model.frame
         ? videoCamera(model.frame, camSm.c, c, W, H, v2 ? { z: v2.z, x: (v2.x * W) / Math.max(1, canvas.clientWidth), y: (v2.y * H) / Math.max(1, canvas.clientHeight) } : null)
         : sceneCamera(camSm, c, W, H);
-      const L = realRef.current ? realLayers(layersRef.current) : layersRef.current;
+      const L = shownLayers(layersRef.current, realRef.current);
       // la vista scelta (angolo, distanza, livelli) vale anche per foto e video in alta definizione
       sagomaView.yaw = c.yaw;
       sagomaView.pitch = c.pitch;
@@ -1498,11 +1500,6 @@ export function Anatomy3D({
           <>
             {more ? (
               <div className="flex flex-wrap justify-center gap-1">
-                {!real ? (
-                  <button type="button" aria-pressed={layers.pelle} onClick={() => toggle("pelle")} className={cx(chip, layers.pelle ? chipOn : chipOff)}>
-                    Velo del corpo
-                  </button>
-                ) : null}
                 <button type="button" aria-pressed={layers.punti} onClick={() => toggle("punti")} className={cx(chip, layers.punti ? chipOn : chipOff)}>
                   Punti
                 </button>
@@ -1513,16 +1510,16 @@ export function Anatomy3D({
               </div>
             ) : null}
             <div className="flex max-w-full items-center gap-1 overflow-x-auto">
-              {/* pelle vera: il corpo chiuso, con la pelle scelta per l'avatar; spenta torna il velo sull'anatomia */}
+              {/* pelle vera: il corpo chiuso, con la pelle scelta per l'avatar; spenta, niente pelle (solo muscoli e ossa) */}
               <button type="button" aria-pressed={real} onClick={() => setReal(!real)} className={cx(chip, real ? chipOn : chipOff)}>
                 Pelle
               </button>
-              {([["muscolo", "Muscoli"], ["osso", "Scheletro"], ["quote", "Misure"]] as const).map(([k, label]) => (
+              {([["muscolo", "Muscoli"], ["osso", "Scheletro"], ["nervo", "Nervi"], ["quote", "Misure"]] as const).map(([k, label]) => (
                 <button key={k} type="button" aria-pressed={layers[k]} onClick={() => toggle(k)} className={cx(chip, layers[k] ? chipOn : chipOff)}>
                   {label}
                 </button>
               ))}
-              <button type="button" aria-expanded={more} aria-label={more ? "Meno strati" : "Altri strati: velo, punti, postura corretta"} onClick={() => setMore(!more)} className={cx(chip, "px-2", more ? chipOn : chipOff)}>
+              <button type="button" aria-expanded={more} aria-label={more ? "Meno strati" : "Altri strati: punti, postura corretta"} onClick={() => setMore(!more)} className={cx(chip, "px-2", more ? chipOn : chipOff)}>
                 <svg viewBox="0 0 24 24" width={16} height={16} aria-hidden fill="currentColor"><circle cx="5" cy="12" r="1.9" /><circle cx="12" cy="12" r="1.9" /><circle cx="19" cy="12" r="1.9" /></svg>
               </button>
             </div>

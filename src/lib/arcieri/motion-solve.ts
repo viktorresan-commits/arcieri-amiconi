@@ -305,12 +305,13 @@ function standUpright(J: Record<number, V3>[], lms: (Landmark[] | null)[], fs: n
     const d: V3 = [dx * k, 0, dz * k];
     for (const id of [23, 24, 25, 26, 27, 28, 29, 30, 31, 32]) if (Jf[id]) Jf[id] = v3.add(Jf[id], d);
   }
-  // piedi a terra: la caviglia più bassa all'altezza della caviglia (7,5 cm), mai sotto il pavimento né in aria
+  // piedi a terra: la caviglia più bassa all'altezza della caviglia (6,4 cm, come nel piede dell'anatomia), mai
+  // sotto il pavimento né in aria
   for (let i = 0; i < n; i++) {
     const Jf = J[i];
     if (!Jf[27] || !Jf[28]) continue;
     const low = Math.min(Jf[27][1], Jf[28][1]);
-    const dy = 0.075 - low;
+    const dy = 0.064 - low;
     if (Math.abs(dy) < 0.01) continue;
     for (const k of Object.keys(Jf)) {
       const p = Jf[Number(k)];

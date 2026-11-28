@@ -32,7 +32,21 @@ Per rigenerarli servono Python con numpy e scipy:
 - `mark_inner.py` segna la parete interna del guscio della pelle (fondo di carne in ombra dietro i muscoli,
   visibile solo negli spiragli tra un muscolo e l'altro).
 
-Entrambi aggiungono una voce a `ritocchi` nel `.json`: cambia l'impronta del corpo e i telefoni lo riscaricano.
+Poi, nell'ordine:
+
+    python3 fix_abs.py ../../public/anatomia/corpo ../../public/anatomia/corpo-leggero ../../public/anatomia/corpo-hd
+    BP3D_MODELS=<human-atlas>/public/models/ python3 add_face.py ../../public/anatomia/corpo:0.3 ../../public/anatomia/corpo-leggero:0.15 ../../public/anatomia/corpo-hd:0.7
+    python3 za_nerve_curves.py
+    BP3D_MODELS=<human-atlas>/public/models/ python3 add_nerves.py ../../public/anatomia/corpo:0.010:6 ../../public/anatomia/corpo-leggero:0.022:4 ../../public/anatomia/corpo-hd:0.006:8
+
+- `fix_abs.py`: la parete dell'addome (retti, linea alba, obliqui, erettori) passa dal bacino al torace con un peso
+  che dipende solo dall'altezza, uguale per tutti: torcendo il busto si torce tutta insieme;
+- `add_face.py`: muscoli del viso, della masticazione e dell'occhio, galea e platisma (Z-Anatomy) in un blocco di
+  muscoli in più; il bianco degli occhi segnato nelle ossa (0,5 nel canale dei tendini, l'iride ha 1);
+- `za_nerve_curves.py` e `add_nerves.py`: i nervi di Z-Anatomy sono curve; si leggono da Startup.blend e diventano
+  tubi (strato `nerve`), ogni punto con i due segmenti delle ossa più vicine della sua regione.
+
+Tutti aggiungono una voce a `ritocchi` nel `.json`: cambia l'impronta del corpo e i telefoni lo riscaricano.
 
 - `blend.py` legge i file `.blend` di Blender 3.x senza Blender;
 - `za_blend.py` estrae ossa e muscoli di Z-Anatomy con la loro posizione nel corpo;

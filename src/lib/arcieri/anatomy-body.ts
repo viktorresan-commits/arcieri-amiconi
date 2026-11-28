@@ -10,7 +10,7 @@ import { v3, type Build, type V3 } from "./anatomy-model";
 import type { Hand } from "./pose-analysis";
 import { sides } from "./pose-analysis";
 
-export type BodyBatch = { layer: "skin" | "bone" | "muscle"; vertices: number; indices: number; vOffset: number; iOffset: number };
+export type BodyBatch = { layer: "skin" | "bone" | "muscle" | "nerve"; vertices: number; indices: number; vOffset: number; iOffset: number };
 export type BodyMeta = {
   version: number;
   source: string;
@@ -263,7 +263,10 @@ function frames(P: Pts, hands: { L: [number, number, number] | null; R: [number,
     F[`mano_${s}`] = frame(W, lerp(IX, PK, 0.5), palm, fwd);
     F[`coscia_${s}`] = frame(get(hip), get(kn), fwdH, fwd);
     F[`gamba_${s}`] = frame(get(kn), get(an), sub(get(to), get(he)), fwdH);
-    F[`piede_${s}`] = frame(get(he), get(to), sub(get(kn), get(an)), up);
+    // piede: imperniato sulla caviglia (dove l'astragalo si incastra nella tibia), verso dal tallone alla punta.
+    // Prima partiva dal tallone: se nel modello il tallone era più in basso o più indietro rispetto alla caviglia
+    // che nell'atlante, le ossa del piede si staccavano dalla tibia di 2-3 cm
+    F[`piede_${s}`] = frame(get(an), add(get(an), sub(get(to), get(he))), sub(get(kn), get(an)), up);
   }
   return F;
 }

@@ -598,16 +598,21 @@ function bodyPointsRaw(lm: Landmark[], aspect: number, cal: BoneCal | null = nul
   /** verso del piede: lato +1 il sinistro (in fuori verso l'anca sinistra), -1 il destro */
   const footDir = (sd: number): V3 => [fwdH[0] * Math.cos(OUT_TOE) + sd * (lrX / lrL) * Math.sin(OUT_TOE), 0, fwdH[2] * Math.cos(OUT_TOE) + sd * (lrZ / lrL) * Math.sin(OUT_TOE)];
   const FOOT = 0.17;
+  // altezze di caviglia, tallone e punta come nel piede dell'anatomia (pianta a terra): con la caviglia più alta
+  // (8 cm) il piede si inclinava e restava sospeso o staccato dalla tibia
+  const ANK_Y = 0.064;
+  const HEEL_Y = 0.034;
+  const TOE_Y = 0.012;
   const toeSeen = { 31: Boolean(out[31]) && vis(lm[31]) >= 0.3, 32: Boolean(out[32]) && vis(lm[32]) >= 0.3 };
   if (!anklesOk) {
     // in piedi, piedi alla larghezza delle spalle
     for (const [hip, knee, ank, heel, toe, sd] of [[23, 25, 27, 29, 31, 1], [24, 26, 28, 30, 32, -1]] as const) {
       const h = out[hip];
       out[knee] = [h[0] * 1.15, 0.5, h[2] + 0.02];
-      out[ank] = [h[0] * 1.3, 0.08, h[2]];
+      out[ank] = [h[0] * 1.3, ANK_Y, h[2]];
       const v = mul(footDir(sd), FOOT);
-      out[heel] = [out[ank][0] - v[0] * 0.35, 0.03, out[ank][2] - v[2] * 0.35];
-      out[toe] = [out[ank][0] + v[0], 0.02, out[ank][2] + v[2]];
+      out[heel] = [out[ank][0] - v[0] * 0.35, HEEL_Y, out[ank][2] - v[2] * 0.35];
+      out[toe] = [out[ank][0] + v[0], TOE_Y, out[ank][2] + v[2]];
     }
   }
   for (const i of [29, 30, 31, 32]) if (!out[i] || vis(lm[i]) < 0.3) out[i] = i < 31 ? add(out[i - 2], [0, -0.05, -0.05]) : add(out[i - 4], [0, -0.06, 0.15]);
@@ -618,7 +623,7 @@ function bodyPointsRaw(lm: Landmark[], aspect: number, cal: BoneCal | null = nul
     // si vede (in profondità verso il davanti del bacino), altrimenti quella del bacino
     for (const [ank, heel, toe, sd] of [[27, 29, 31, 1], [28, 30, 32, -1]] as const) {
       const a = out[ank];
-      a[1] = 0.08;
+      a[1] = ANK_Y;
       let v: V3;
       if (toeSeen[toe]) {
         const tx = (out[toe]?.[0] ?? a[0]) - a[0];
@@ -626,8 +631,8 @@ function bodyPointsRaw(lm: Landmark[], aspect: number, cal: BoneCal | null = nul
         const sz = fwdH[2] < -0.2 ? -1 : 1;
         v = [(tx / h) * FOOT, 0, ((sz * 0.15) / h) * FOOT];
       } else v = mul(footDir(sd), FOOT);
-      out[toe] = [a[0] + v[0], 0.02, a[2] + v[2]];
-      out[heel] = [a[0] - v[0] * 0.35, 0.03, a[2] - v[2] * 0.35];
+      out[toe] = [a[0] + v[0], TOE_Y, a[2] + v[2]];
+      out[heel] = [a[0] - v[0] * 0.35, HEEL_Y, a[2] - v[2] * 0.35];
     }
   }
   return out;
