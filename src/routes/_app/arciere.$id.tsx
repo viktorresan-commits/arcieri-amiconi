@@ -29,7 +29,7 @@ function Page() {
   const looks = useTeamAvatars();
   const { id } = Route.useParams();
   const { data, error, loading } = useLoad(`archer-${id}`, () => archerBoard({ data: { id: Number(id) } }));
-  const gadgets = useLoad("gadgets", () => listGadgets());
+  const gadgets = useLoad(`gadgets-m${id}`, () => listGadgets({ data: { memberId: Number(id) } }));
   if (loading) return <Loading />;
   if (error || !data) return <ErrorNote text={error || "Errore"} />;
   const { name } = archerName(data);

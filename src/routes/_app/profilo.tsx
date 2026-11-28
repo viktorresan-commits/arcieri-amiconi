@@ -74,7 +74,7 @@ function Page() {
     notifyComps: me.notifyComps,
   });
   const comps = useLoad("profile-comps", () => listCompetitions());
-  const gadgets = useLoad("gadgets", () => listGadgets());
+  const gadgets = useLoad("gadgets", () => listGadgets({ data: {} }));
   const [accounts, setAccounts] = useState<SavedAccount[]>([]);
   const [newName, setNewName] = useState("");
   const [newUser, setNewUser] = useState("");

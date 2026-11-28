@@ -57,7 +57,7 @@ export function ArcherStage({ data, look: lookIn, avatar, onArcherTap, corner }:
   corner?: ReactNode;
 }) {
   const { sky } = useSky();
-  const gadgets = useLoad("gadgets", () => listGadgets());
+  const gadgets = useLoad(`gadgets-u${data.userId}`, () => listGadgets({ data: { userId: data.userId } }));
   const { name, nick } = archerName(data);
   const badges = roleBadges(data.roles);
   // gli ultimi tre premi vinti, dal più recente

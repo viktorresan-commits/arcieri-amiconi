@@ -21,7 +21,7 @@ function Page() {
   const { me } = useMember();
   const [nonce, setNonce] = useState(0);
   const { data, error, loading } = useLoad(`g-${nonce}`, () => listGoals());
-  const gadgets = useLoad(`prizes-${nonce}`, () => listGadgets());
+  const gadgets = useLoad(`prizes-${nonce}`, () => listGadgets({ data: {} }));
   const [title, setTitle] = useState("");
   const [metric, setMetric] = useState("arrows");
   const [target, setTarget] = useState("100");
