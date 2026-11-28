@@ -565,7 +565,8 @@ function PiazzolaMates({ group, past, compId, onChanged }: { group: { piazzola: 
       {group.piazzola ? <p className="text-[0.7rem] text-muted">{past ? "Piazzola di partenza" : "Partirai dalla piazzola"} {group.piazzola} · tocca un arciere per le sue piazzole</p> : null}
       <ul className="grid gap-1.5">
         {group.mates.map((m) => {
-          const cat = categoryText(m.category);
+          // senza risultato nella classifica non c'è categoria («Tutti» era fuorviante)
+          const cat = m.category ? categoryText(m.category) : "";
           const lanes = m.lanes ?? [];
           return (
             <li key={m.name} className="grid gap-2 rounded-2xl bg-white/[0.035] px-2.5 py-2">
@@ -580,6 +581,8 @@ function PiazzolaMates({ group, past, compId, onChanged }: { group: { piazzola: 
                     <b className="block font-display text-xl leading-none tabular-nums">{m.total}</b>
                     <span className="text-[0.56rem] uppercase tracking-wider text-muted">{m.camp != null ? `${m.camp} pt camp.` : m.spots != null ? `${m.spots} spot` : "punti"}</span>
                   </span>
+                ) : past ? (
+                  <span className="shrink-0 text-right text-[0.62rem] leading-tight text-muted">punti non<br />trovati</span>
                 ) : null}
                 {lanes.length ? <Glyph name="chevron" size={14} className={`shrink-0 text-muted ${open === m.name ? "-rotate-90" : "rotate-90"}`} /> : null}
               </button>

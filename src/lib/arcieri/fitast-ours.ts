@@ -67,6 +67,52 @@ export function peopleOf(tables: GaraTable[]): Person[] {
   return [...people.values()];
 }
 
+/** lettere diverse tra due parole (inserite, tolte o cambiate) */
+function editDistance(a: string, b: string) {
+  if (a === b) return 0;
+  if (Math.abs(a.length - b.length) > 2) return 3;
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[b.length];
+}
+
+/**
+ * La stessa persona scritta un po' diversa in due pagine del portale (Maramonti e Miramonti, un secondo nome in
+ * più): stesse parole a meno di una o due lettere, o tutte le parole dell'una nell'altra. Con la compagnia si
+ * cerca solo lì; senza, deve essere l'unica persona così. Torna la persona solo se non ci sono dubbi.
+ */
+export function nearPerson(all: Person[], key: string, teamK = ""): Person | null {
+  const words = key.split(" ").filter(Boolean);
+  if (words.length < 2) return null;
+  const close = (a: string, b: string) => editDistance(a, b) <= (Math.min(a.length, b.length) >= 6 ? 2 : 1);
+  const score = (p: Person) => {
+    const theirs = [...p.words];
+    const used = new Set<number>();
+    let typos = 0;
+    for (const w of words) {
+      let hit = theirs.findIndex((x, i) => !used.has(i) && x === w);
+      if (hit < 0) {
+        hit = theirs.findIndex((x, i) => !used.has(i) && close(x, w));
+        if (hit >= 0) typos++;
+      }
+      if (hit >= 0) used.add(hit);
+    }
+    const matched = used.size;
+    // tutte le parole più corte nell'altro nome, al massimo un errore di battitura
+    const full = matched === Math.min(words.length, theirs.length) && matched >= 2;
+    return full && typos <= 1 ? 10 - typos - Math.abs(words.length - theirs.length) : -1;
+  };
+  const pool = teamK ? all.filter((p) => p.teamK === teamK) : all;
+  const ranked = pool.map((p) => ({ p, s: score(p) })).filter((x) => x.s >= 0).sort((a, b) => b.s - a.s);
+  if (!ranked.length) return null;
+  if (ranked.length > 1 && ranked[1].s === ranked[0].s && ranked[1].p.key !== ranked[0].p.key) return null;
+  return ranked[0].p;
+}
+
 /** chi è questo profilo tra le persone della classifica (o nessuno) */
 export function matchPerson(all: Person[], who: Who): { p: Person; linked: boolean } | null {
   const team = teamKey(who.fitastTeam || who.team || "");

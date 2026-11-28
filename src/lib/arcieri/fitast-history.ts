@@ -222,7 +222,7 @@ export async function syncHistory(opts: { onProgress: (p: HistoryProgress) => vo
     return;
   }
   diag.push(`Stagioni sul portale: ${all.length}, finite dal ${fromYear}: ${seasons.length}. Tendina: ${ss.name}${ss.press ? " (con comando)" : " (senza comando)"}. Pulsanti: ${(home.form?.buttons ?? []).map((b) => b.label || b.code).slice(0, 12).join(", ") || "nessuno"}.`);
-  let index: Awaited<ReturnType<typeof fitastHistoryIndex>> = { items: [], seasonsDone: [], cursor: null };
+  let index: Awaited<ReturnType<typeof fitastHistoryIndex>> = { items: [], seasonsDone: [], generali: [], cursor: null };
   try {
     index = await fitastHistoryIndex();
   } catch {
@@ -230,7 +230,7 @@ export async function syncHistory(opts: { onProgress: (p: HistoryProgress) => vo
   }
   const doneSeasons = new Set(index.seasonsDone);
   /** impronte delle classifiche generali già salvate (e di quella in corso): una stagione non può avere quella di un'altra */
-  const genSeen = new Map<string, Set<string>>(((index as { generali?: { fp: string; seasons: string[] }[] }).generali ?? []).map((g) => [g.fp, new Set(g.seasons)]));
+  const genSeen = new Map<string, Set<string>>((index.generali ?? []).map((g) => [g.fp, new Set(g.seasons)]));
   const have = new Set(index.items.map((i) => `${i.kind}|${i.season}|${i.garaId}`));
   /** gare già salvate per intero, qualunque stagione */
   const haveGara = new Set(index.items.filter((i) => i.kind === "gara-arcieri").map((i) => i.garaId));

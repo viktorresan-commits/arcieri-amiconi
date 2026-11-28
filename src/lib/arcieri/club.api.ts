@@ -14,7 +14,7 @@ import { fitastRankOf, loadGenerale, type GenTable } from "./fitast-rank";
 import { garaLoads, sumLoads, type GaraLoad } from "./gara-volume";
 import { champSeasonOf, seasonTag } from "./stagioni";
 import { namePattern, pastTables, trustedPast } from "./fitast-past";
-import { archersIn, championshipName, matchPerson, oursInGara, peopleOf, pzTablesFor, resultOf, stepsOf, type GaraTable, type PortalResult, type Who } from "./fitast-ours";
+import { archersIn, championshipName, matchPerson, nearPerson, oursInGara, peopleOf, pzTablesFor, resultOf, stepsOf, type GaraTable, type PortalResult, type Who } from "./fitast-ours";
 import { nameKey } from "./fitast-rank";
 import { categoryGroup, teamKey as teamKeyOf, titleName } from "./fitast-league";
 import type { TallyShot } from "./scoring";
@@ -583,7 +583,9 @@ export const listCompetitions = createServerFn({ method: "GET" })
       if (!myCard && !meOnPortal) return null;
       const results = garaId ? peopleOf(byGara.get(garaId) ?? []) : [];
       const resultFor = (key: string, team: string) => {
-        const p = results.find((x) => x.key === key && (!team || x.teamK === teamKeyOf(team))) ?? results.find((x) => x.key === key);
+        const tk = team ? teamKeyOf(team) : "";
+        // nome scritto uguale; altrimenti quasi uguale (un errore di battitura tra elenco piazzole e classifica)
+        const p = results.find((x) => x.key === key && (!tk || x.teamK === tk)) ?? results.find((x) => x.key === key) ?? (tk ? nearPerson(results, key, tk) : null) ?? nearPerson(results, key);
         return p ? resultOf(p, false) : null;
       };
       const mates = new Map<string, { name: string; team: string; lanes: { p: number; arrows: number[] }[] | null; total: number | null; spots: number | null; place: number | null; category: string; camp: number | null; size: number }>();
