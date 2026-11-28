@@ -204,9 +204,9 @@ const UA = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Geck
 const MAX_IMG = 900_000;
 
 /** legge un indirizzo con un limite di tempo e di dimensione (null se non risponde o è troppo grande) */
-async function grab(url: string, ms: number, max: number) {
+async function grab(url: string, ms: number, max: number, ua = UA, extra: Record<string, string> = {}) {
   try {
-    const res = await fetch(url, { redirect: "follow", signal: AbortSignal.timeout(ms), headers: { "user-agent": UA, accept: "text/html,image/*;q=0.9,*/*;q=0.5", "accept-language": "it-IT,it;q=0.9" } });
+    const res = await fetch(url, { redirect: "follow", signal: AbortSignal.timeout(ms), headers: { "user-agent": ua, accept: "text/html,image/*;q=0.9,*/*;q=0.5", "accept-language": "it-IT,it;q=0.9", ...extra } });
     if (!res.ok) return null;
     const len = Number(res.headers.get("content-length") || 0);
     if (len > max) return null;
@@ -458,6 +458,96 @@ export const findCompanyLogos = createServerFn({ method: "POST" })
     const total = await sql<{ n: number; real: number }>`
       select count(*)::int as n, count(*) filter (where logo_url like '/api/logo/%')::int as real from companies where source = 'fitast'`;
     return { checked, found, remaining: asNum(left[0]?.n), results, total: asNum(total[0]?.n), withLogo: asNum(total[0]?.real) };
+  });
+
+// ——— stemmi scelti a mano dal fondatore: immagini in rete, si tocca quella giusta ———
+
+const DESKTOP_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
+type ImageHit = { img: string; thumb: string; page: string };
+const unescapeHtml = (s: string) => s.replace(/&quot;/g, '"').replace(/&amp;/g, "&").replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">");
+
+/** Bing Immagini: ogni risultato ha un attributo m con il JSON di immagine (murl), miniatura (turl) e pagina (purl) */
+async function bingImages(q: string): Promise<ImageHit[]> {
+  const r = await grab(`https://www.bing.com/images/search?q=${encodeURIComponent(q)}&form=HDRSC2&first=1&setlang=it&cc=IT`, 7000, 4_000_000, DESKTOP_UA);
+  if (!r) return [];
+  const html = new TextDecoder().decode(r.body);
+  const out: ImageHit[] = [];
+  for (const m of html.matchAll(/\sm="(\{[^"]*?murl[^"]*?\})"/g)) {
+    try {
+      const j = JSON.parse(unescapeHtml(m[1])) as { murl?: string; turl?: string; purl?: string };
+      if (j.murl && /^https?:/i.test(j.murl)) out.push({ img: j.murl, thumb: j.turl && /^https?:/i.test(j.turl) ? j.turl : j.murl, page: j.purl ?? "" });
+    } catch {
+      /* risultato illeggibile: si salta */
+    }
+  }
+  return out;
+}
+
+/** DuckDuckGo Immagini: prima il gettone della ricerca (vqd), poi i risultati in JSON */
+async function ddgImages(q: string): Promise<ImageHit[]> {
+  const page = await grab(`https://duckduckgo.com/?q=${encodeURIComponent(q)}&iax=images&ia=images`, 6000, 1_500_000, DESKTOP_UA);
+  if (!page) return [];
+  const vqd = /vqd=["']?([\d-]+)["']?/.exec(new TextDecoder().decode(page.body))?.[1];
+  if (!vqd) return [];
+  const r = await grab(`https://duckduckgo.com/i.js?l=it-it&o=json&q=${encodeURIComponent(q)}&vqd=${vqd}&f=,,,,,&p=1`, 6000, 2_000_000, DESKTOP_UA, { referer: "https://duckduckgo.com/", accept: "application/json" });
+  if (!r) return [];
+  try {
+    const j = JSON.parse(new TextDecoder().decode(r.body)) as { results?: { image?: string; thumbnail?: string; url?: string }[] };
+    return (j.results ?? []).filter((x) => x.image && /^https?:/i.test(x.image)).map((x) => ({ img: x.image!, thumb: x.thumbnail && /^https?:/i.test(x.thumbnail) ? x.thumbnail : x.image!, page: x.url ?? "" }));
+  } catch {
+    return [];
+  }
+}
+
+/** indirizzo pubblico (niente indirizzi interni del server) */
+function publicUrl(u: string) {
+  try {
+    const x = new URL(u);
+    if (x.protocol !== "https:" && x.protocol !== "http:") return false;
+    const h = x.hostname.toLowerCase();
+    if (h === "localhost" || h.endsWith(".local") || h.endsWith(".internal") || h.includes(":") || h.startsWith("[")) return false;
+    if (/^(0|10|127)\./.test(h) || /^192\.168\./.test(h) || /^169\.254\./.test(h) || /^172\.(1[6-9]|2\d|3[01])\./.test(h)) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Il fondatore cerca lo stemma di una compagnia tra le immagini in rete (Bing, altrimenti DuckDuckGo). */
+export const logoImageSearch = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: unknown) => ({ q: clip((input as { q?: unknown } | null)?.q, 140) }))
+  .handler(async ({ context, data }) => {
+    const sql = await db();
+    const me = await ensureMember(sql, context.userId);
+    if (!staffLevel(me)) throw new Error("Solo il fondatore sceglie gli stemmi delle compagnie.");
+    if (!data.q) return { items: [] as ImageHit[], via: "" };
+    let items = await bingImages(data.q);
+    let via = "Bing";
+    if (items.length < 4) {
+      const more = await ddgImages(data.q);
+      if (more.length) via = items.length ? "Bing e DuckDuckGo" : "DuckDuckGo";
+      items = items.concat(more);
+    }
+    const seen = new Set<string>();
+    items = items.filter((x) => publicUrl(x.img) && !seen.has(x.img) && Boolean(seen.add(x.img))).slice(0, 15);
+    return { items, via: items.length ? via : "" };
+  });
+
+/** L'immagine scelta, letta dal server (il telefono non può leggerla da un altro sito) e resa come data URL. */
+export const logoImageData = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: unknown) => ({ url: clip((input as { url?: unknown } | null)?.url, 1200) }))
+  .handler(async ({ context, data }) => {
+    const sql = await db();
+    const me = await ensureMember(sql, context.userId);
+    if (!staffLevel(me)) throw new Error("Solo il fondatore sceglie gli stemmi delle compagnie.");
+    if (!publicUrl(data.url)) throw new Error("Indirizzo dell'immagine non valido.");
+    const r = await grab(data.url, 8000, MAX_IMG, DESKTOP_UA, { accept: "image/*,*/*;q=0.5" });
+    if (!r) throw new Error("Immagine non raggiungibile: prova un'altra.");
+    const info = imageInfo(r.body);
+    if (!info) throw new Error("Non è un'immagine che l'app sa leggere: prova un'altra.");
+    return { dataUrl: `data:${info.mime};base64,${Buffer.from(r.body).toString("base64")}` };
   });
 
 export type StandingRow = RankRow;

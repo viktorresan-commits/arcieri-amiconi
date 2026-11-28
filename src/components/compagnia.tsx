@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { Link } from "@tanstack/react-router";
 import type { listCompanies } from "@/lib/arcieri/compagnie.api";
 import { companyWelcome, createCompany, joinCompany, updateCompany } from "@/lib/arcieri/compagnie.api";
-import { findCompanyLogos, fitastTeamStats, syncFitastCompanies, type TeamStat } from "@/lib/arcieri/fitast-league.api";
+import { findCompanyLogos, fitastTeamStats, logoImageData, logoImageSearch, syncFitastCompanies, type TeamStat } from "@/lib/arcieri/fitast-league.api";
 import { useLoad } from "@/lib/arcieri/use-load";
 import { teamKey } from "@/lib/arcieri/fitast-league";
 import { Avatar, Button, Card, ErrorNote, Field, Segmented, TextInput } from "./kit";
@@ -337,6 +337,9 @@ export function CompanyLeague({ board, onJoin, busy, onSynced, part, fitastBoard
   }, []);
   // il fondatore scarica subito i loghi di tutte le compagnie senza stemma vero, e vede com'è andata
   const [logos, setLogos] = useState<{ busy: boolean; text: string; list: { name: string; found: boolean; via: string }[] }>({ busy: false, text: "", list: [] });
+  // il fondatore: solo le compagnie senza stemma vero (per sceglierli uno dopo l'altro)
+  const [onlyMissing, setOnlyMissing] = useState(false);
+  const noCrest = (co: { logoUrl: string | null }) => !co.logoUrl || co.logoUrl.startsWith("data:image/svg");
   async function downloadLogos() {
     setLogos({ busy: true, text: "Cerco i loghi…", list: [] });
     const list: { name: string; found: boolean; via: string }[] = [];
@@ -432,6 +435,8 @@ export function CompanyLeague({ board, onJoin, busy, onSynced, part, fitastBoard
           <div className="flex flex-wrap items-center gap-2">
             <button type="button" disabled={sync.busy} onClick={() => void forceSync()} className="aa-chip">{sync.busy ? "Leggo l'elenco FITAST…" : "Aggiorna l'elenco delle compagnie"}</button>
             <button type="button" disabled={logos.busy} onClick={() => void downloadLogos()} className="aa-chip">{logos.busy ? "Scarico i loghi…" : "Scarica e aggiorna i loghi"}</button>
+            <button type="button" aria-pressed={onlyMissing} onClick={() => setOnlyMissing((v) => !v)} className="aa-chip">Senza stemma ({board.companies.filter(noCrest).length})</button>
+            {onlyMissing ? <p className="w-full text-xs text-muted">Tocca una compagnia, poi «Modifica logo, sito e contatti» e «Cerca lo stemma in rete»: scegli l'immagine giusta e salva.</p> : null}
             {sync.text ? <p className="w-full break-words text-xs text-muted">{sync.text}</p> : null}
             {logos.text ? <p className="w-full break-words text-xs text-muted" aria-live="polite">{logos.text}</p> : null}
             {logos.list.length ? (
@@ -450,7 +455,7 @@ export function CompanyLeague({ board, onJoin, busy, onSynced, part, fitastBoard
           </div>
         ) : null}
         {(() => {
-          const matching = board.companies.filter((co) => !find.trim() || `${co.name} ${co.city}`.toLowerCase().includes(find.trim().toLowerCase()));
+          const matching = board.companies.filter((co) => (!onlyMissing || noCrest(co)) && (!find.trim() || `${co.name} ${co.city}`.toLowerCase().includes(find.trim().toLowerCase())));
           // dalla compagnia più numerosa (arcieri nel campionato FITAST o iscritti all'app); ne bastano 10, le altre a richiesta
           const size = (co: (typeof matching)[number]) => Math.max(statOf(co)?.archers ?? co.fitastArchers ?? 0, co.members);
           const ordered = [...matching].sort((a, b) => size(b) - size(a) || Number(b.id === board.mine) - Number(a.id === board.mine) || a.name.localeCompare(b.name, "it"));
@@ -531,7 +536,7 @@ export function CompanyLeague({ board, onJoin, busy, onSynced, part, fitastBoard
                   </button>
                   {board.isAdmin ? (
                     editCo === co.id ? (
-                      <CompanyForm co={co} onCancel={() => setEditCo(null)} onDone={() => { setEditCo(null); onSynced?.(); }} />
+                      <CompanyForm co={co} searchable onCancel={() => setEditCo(null)} onDone={() => { setEditCo(null); onSynced?.(); }} />
                     ) : (
                       <button type="button" onClick={() => setEditCo(co.id)} className="aa-chip justify-self-start">Modifica logo, sito e contatti</button>
                     )
@@ -582,7 +587,7 @@ function draftOf(co?: Co): Draft {
   };
 }
 
-export function CompanyForm({ co, onDone, onCancel }: { co?: Co; onDone: () => void; onCancel: () => void }) {
+export function CompanyForm({ co, onDone, onCancel, searchable = false }: { co?: Co; onDone: () => void; onCancel: () => void; /** il fondatore: cerca lo stemma tra le immagini in rete */ searchable?: boolean }) {
   const [d, setD] = useState<Draft>(() => draftOf(co));
   const [err, setErr] = useState("");
   const [saving, setSaving] = useState(false);
@@ -640,6 +645,7 @@ export function CompanyForm({ co, onDone, onCancel }: { co?: Co; onDone: () => v
           {logo ? <button type="button" className="text-left text-xs text-muted underline" onClick={() => setD((cur) => ({ ...cur, logoUrl: null }))}>Togli lo stemma</button> : null}
         </div>
       </div>
+      {searchable ? <LogoSearch name={d.name || co?.fitastName || ""} onPick={(dataUrl) => setD((cur) => ({ ...cur, logoUrl: dataUrl }))} /> : null}
       <Field label="Nome"><TextInput value={d.name} onChange={set("name")} placeholder="Compagnia degli Arcieri di…" maxLength={70} /></Field>
       {row(<>
         <Field label="Motto"><TextInput value={d.motto} onChange={set("motto")} placeholder="In animo iuncti" maxLength={80} /></Field>
@@ -693,6 +699,60 @@ export async function joinAndReload(id: number, reload: () => void) {
   await joinCompany({ data: { id } });
   refreshCrests();
   reload();
+}
+
+/**
+ * Lo stemma dalle immagini in rete: il server cerca (Bing, altrimenti DuckDuckGo), il fondatore tocca quello giusto.
+ * C'è anche Google Immagini (o Google Lens dal telefono): si salva l'immagine e la si carica con «Carica lo stemma».
+ */
+function LogoSearch({ name, onPick }: { name: string; onPick: (dataUrl: string) => void }) {
+  const [q, setQ] = useState(`${name} logo`);
+  const [st, setSt] = useState<{ busy: boolean; text: string; items: { img: string; thumb: string; page: string }[] }>({ busy: false, text: "", items: [] });
+  const [taking, setTaking] = useState("");
+  async function search(query: string) {
+    setQ(query);
+    setSt({ busy: true, text: "Cerco…", items: [] });
+    try {
+      const r = await logoImageSearch({ data: { q: query } });
+      setSt({ busy: false, text: r.items.length ? `Tocca lo stemma giusto (${r.via}).` : "Nessuna immagine trovata: prova con altre parole o con Google Immagini.", items: r.items });
+    } catch (e) {
+      setSt({ busy: false, text: e instanceof Error ? e.message : "Ricerca non riuscita.", items: [] });
+    }
+  }
+  async function take(hit: { img: string; thumb: string }) {
+    setTaking(hit.img);
+    try {
+      // l'immagine intera; se il suo sito non la dà, la miniatura
+      const r = await logoImageData({ data: { url: hit.img } }).catch(() => logoImageData({ data: { url: hit.thumb } }));
+      const blob = await (await fetch(r.dataUrl)).blob();
+      onPick(await shrink(new File([blob], "stemma", { type: blob.type })));
+      setSt((cur) => ({ ...cur, text: "Stemma messo: tocca «Salva» in fondo." }));
+    } catch (e) {
+      setSt((cur) => ({ ...cur, text: e instanceof Error ? e.message : "Immagine non letta: prova un'altra." }));
+    } finally {
+      setTaking("");
+    }
+  }
+  return (
+    <div className="grid gap-2 rounded-2xl bg-white/[0.03] p-2.5">
+      <div className="flex flex-wrap gap-2">
+        <button type="button" disabled={st.busy} onClick={() => void search(`${name} logo`)} className="aa-chip">{st.busy ? "Cerco…" : "Cerca lo stemma in rete"}</button>
+        <button type="button" disabled={st.busy} onClick={() => void search(`${name} stemma arcieri`)} className="aa-chip">Altre immagini</button>
+        <a href={`https://www.google.com/search?tbm=isch&q=${encodeURIComponent(`${name} logo`)}`} target="_blank" rel="noreferrer" className="aa-chip">Google Immagini</a>
+      </div>
+      {st.text ? <p className="text-xs text-muted" aria-live="polite">{st.text}</p> : null}
+      {st.items.length ? (
+        <div className="grid grid-cols-3 gap-1.5">
+          {st.items.map((hit) => (
+            <button key={hit.img} type="button" disabled={Boolean(taking)} onClick={() => void take(hit)} aria-label="Usa questa immagine" className={`grid aspect-square place-items-center overflow-hidden rounded-xl bg-white p-1 ${taking === hit.img ? "opacity-50" : ""}`}>
+              <img src={hit.thumb} alt="" loading="lazy" referrerPolicy="no-referrer" className="max-h-full max-w-full object-contain" />
+            </button>
+          ))}
+        </div>
+      ) : null}
+      {st.items.length ? <p className="text-[0.68rem] text-muted">Ricerca: «{q}». Gli stemmi sono delle compagnie: usali solo per riconoscerle nell'app.</p> : null}
+    </div>
+  );
 }
 
 function shrink(file: File) {
