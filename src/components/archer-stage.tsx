@@ -2,9 +2,9 @@ import type { ReactNode } from "react";
 import { SceneBackdrop } from "@/components/scene-2d";
 import { ArcherFront } from "@/components/archer-front";
 import { useSky } from "@/lib/arcieri/sky3d";
-import { archerBoard, listGadgets } from "@/lib/arcieri/club.api";
+import { archerBoard } from "@/lib/arcieri/club.api";
+import { usePrizes } from "@/lib/arcieri/use-prizes";
 import { bowLabel, memberLabel } from "@/lib/arcieri/labels";
-import { useLoad } from "@/lib/arcieri/use-load";
 import { Avatar } from "@/components/kit";
 import { PrizeMark, prizeTier } from "@/components/prize-mark";
 import { PiazzoleMark } from "@/components/piazzole-mark";
@@ -57,7 +57,7 @@ export function ArcherStage({ data, look: lookIn, avatar, onArcherTap, corner }:
   corner?: ReactNode;
 }) {
   const { sky } = useSky();
-  const gadgets = useLoad(`gadgets-u${data.userId}`, () => listGadgets({ data: { userId: data.userId } }));
+  const gadgets = usePrizes(`gadgets-u${data.userId}`, { userId: data.userId });
   const { name, nick } = archerName(data);
   const badges = roleBadges(data.roles);
   // gli ultimi tre premi vinti, dal più recente

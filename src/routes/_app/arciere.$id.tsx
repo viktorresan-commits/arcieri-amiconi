@@ -2,7 +2,8 @@ import { useTeamAvatars } from "@/components/avatar-hero";
 import { ArcherStage, ROLE_STYLE, archerName } from "@/components/archer-stage";
 import { InsertFor } from "@/components/insert-for";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { archerBoard, listGadgets } from "@/lib/arcieri/club.api";
+import { archerBoard } from "@/lib/arcieri/club.api";
+import { usePrizes } from "@/lib/arcieri/use-prizes";
 import { fmtAvg } from "@/lib/arcieri/scoring";
 import { useLoad } from "@/lib/arcieri/use-load";
 import { AvgLine, ScoreLine } from "@/components/charts";
@@ -29,7 +30,7 @@ function Page() {
   const looks = useTeamAvatars();
   const { id } = Route.useParams();
   const { data, error, loading } = useLoad(`archer-${id}`, () => archerBoard({ data: { id: Number(id) } }));
-  const gadgets = useLoad(`gadgets-m${id}`, () => listGadgets({ data: { memberId: Number(id) } }));
+  const gadgets = usePrizes(`gadgets-m${id}`, { memberId: Number(id) });
   if (loading) return <Loading />;
   if (error || !data) return <ErrorNote text={error || "Errore"} />;
   const { name } = archerName(data);

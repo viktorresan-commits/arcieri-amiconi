@@ -16,7 +16,8 @@ import { useLocalState } from "@/lib/arcieri/local-store";
 import { Podium } from "@/components/podium";
 import { useTeamAvatars } from "@/components/avatar-hero";
 import { createFileRoute, Link, useRouterState } from "@tanstack/react-router";
-import { listGadgets, skillBoard, squadBoard } from "@/lib/arcieri/club.api";
+import { skillBoard, squadBoard } from "@/lib/arcieri/club.api";
+import { usePrizes } from "@/lib/arcieri/use-prizes";
 import { bowLabel, memberLabel, DIVISIONS } from "@/lib/arcieri/labels";
 import type { AvatarLook } from "@/lib/arcieri/avatar";
 import { SceneBackdrop } from "@/components/scene-2d";
@@ -642,7 +643,7 @@ function SquadAnimals({ peers, looks, meId }: { peers: { userId: string; name: s
 }
 
 function GadgetShelf() {
-  const board = useLoad("gadgets", () => listGadgets({ data: {} }));
+  const board = usePrizes("gadgets");
   const prizes = (board.data?.prizes ?? []).filter((prize) => prize.holders.length > 0);
   if (!prizes.length) return null;
   return (

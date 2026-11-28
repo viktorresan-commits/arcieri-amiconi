@@ -8,7 +8,8 @@ import { forgetAccount, rememberAccount, savedAccounts, type SavedAccount } from
 import { exportMine, listRoster, updateMember } from "@/lib/arcieri/members.api";
 import { AvatarPhotoButton } from "@/components/avatar-photo";
 import { useAvatar } from "@/components/avatar-hero";
-import { archerBoard, listCompetitions, listGadgets } from "@/lib/arcieri/club.api";
+import { archerBoard, listCompetitions } from "@/lib/arcieri/club.api";
+import { usePrizes } from "@/lib/arcieri/use-prizes";
 import { ArcherStage } from "@/components/archer-stage";
 import { FitastLinkCard } from "@/components/fitast-link";
 import { MyDeadlines } from "@/components/scadenze";
@@ -74,7 +75,7 @@ function Page() {
     notifyComps: me.notifyComps,
   });
   const comps = useLoad("profile-comps", () => listCompetitions());
-  const gadgets = useLoad("gadgets", () => listGadgets({ data: {} }));
+  const gadgets = usePrizes("gadgets");
   const [accounts, setAccounts] = useState<SavedAccount[]>([]);
   const [newName, setNewName] = useState("");
   const [newUser, setNewUser] = useState("");

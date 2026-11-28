@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { deleteGoal, listGadgets, listGoals, saveGoal } from "@/lib/arcieri/club.api";
+import { deleteGoal, listGoals, saveGoal } from "@/lib/arcieri/club.api";
+import { usePrizes } from "@/lib/arcieri/use-prizes";
 import { memberLabel } from "@/lib/arcieri/labels";
 import { fmtAvg } from "@/lib/arcieri/scoring";
 import { fmtDay } from "@/lib/arcieri/time";
@@ -21,7 +22,7 @@ function Page() {
   const { me } = useMember();
   const [nonce, setNonce] = useState(0);
   const { data, error, loading } = useLoad(`g-${nonce}`, () => listGoals());
-  const gadgets = useLoad(`prizes-${nonce}`, () => listGadgets({ data: {} }));
+  const gadgets = usePrizes(`prizes-${nonce}`);
   const [title, setTitle] = useState("");
   const [metric, setMetric] = useState("arrows");
   const [target, setTarget] = useState("100");

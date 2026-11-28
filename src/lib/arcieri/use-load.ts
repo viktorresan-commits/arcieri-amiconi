@@ -153,10 +153,30 @@ export function forgetLoadCache() {
   }
 }
 
+const STALE_EV = "aa-load-stale";
+
+/**
+ * I dati con questa chiave sono cambiati sul server (per esempio medaglie nuove calcolate in sottofondo): le pagine
+ * aperte li richiedono e intanto continuano a mostrare quelli che hanno, senza schermata di caricamento.
+ */
+export function staleLoad(key: string) {
+  if (typeof window === "undefined") return;
+  stamps.delete(slot(key));
+  window.dispatchEvent(new CustomEvent(STALE_EV, { detail: key }));
+}
+
 export function useLoad<T>(key: string, fn: () => Promise<T>) {
   const [data, setData] = useState<T | null>(() => (cache.get(slot(key)) as T | undefined) ?? null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(() => !cache.has(slot(key)));
+  const [again, setAgain] = useState(0);
+  useEffect(() => {
+    const on = (e: Event) => {
+      if ((e as CustomEvent<string>).detail === key) setAgain((n) => n + 1);
+    };
+    window.addEventListener(STALE_EV, on);
+    return () => window.removeEventListener(STALE_EV, on);
+  }, [key]);
   useEffect(() => {
     let cancel = false;
     const id = slot(key);
@@ -197,8 +217,8 @@ export function useLoad<T>(key: string, fn: () => Promise<T>) {
     return () => {
       cancel = true;
     };
-    // The key is the contract: callers change it to refetch.
+    // The key is the contract: callers change it to refetch (again: the server said the data changed).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
+  }, [key, again]);
   return { data, error, loading };
 }

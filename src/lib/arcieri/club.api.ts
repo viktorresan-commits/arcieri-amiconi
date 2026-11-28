@@ -1947,26 +1947,47 @@ async function syncAllBadges(sql: Awaited<ReturnType<typeof db>>) {
     on conflict (key) do update set value = excluded.value, updated_at = now()`;
 }
 
-export const listGadgets = createServerFn({ method: "GET" })
+const prizeTarget = (input: unknown) => {
+  const raw = (input ?? {}) as { userId?: unknown; memberId?: unknown };
+  return { userId: clip(raw.userId, 80), memberId: asNum(raw.memberId) };
+};
+
+/**
+ * Premi ricalcolati in sottofondo: l'app manda questa richiesta senza aspettarla, le pagine leggono subito i premi
+ * già salvati (prima la lettura ricalcolava tutto e, a giro aperto, ogni pagina con i premi aspettava 4-5 secondi
+ * e caricava il database mentre l'arciere usava l'app). changed: medaglie nuove per chi apre o per l'arciere guardato.
+ * GET: non è un salvataggio dell'arciere, così i dati già in memoria nel telefono restano validi.
+ */
+export const refreshPrizes = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
-  .validator((input: unknown) => {
-    const raw = (input ?? {}) as { userId?: unknown; memberId?: unknown };
-    return { userId: clip(raw.userId, 80), memberId: asNum(raw.memberId) };
-  })
+  .validator(prizeTarget)
   .handler(async ({ context, data }) => {
     const sql = await db();
     await ensureMember(sql, context.userId);
-    // prima si ricalcolavano i premi di tutti a ogni apertura: con tante gare la lettura scadeva e i premi
-    // sparivano dalle schede. Ora: subito quelli di chi apre la pagina e dell'arciere guardato, gli altri a turno
-    await syncBadges(sql, context.userId).catch(() => []);
+    let fresh = (await syncBadges(sql, context.userId).catch(() => [] as string[])).length;
     if ((data.userId && data.userId !== context.userId) || data.memberId) {
       const known = data.memberId
         ? await sql<{ user_id: string }>`select user_id from members where id = ${data.memberId} and user_id is not null limit 1`
         : await sql<{ user_id: string }>`select user_id from members where user_id = ${data.userId} limit 1`;
       const uid = known[0]?.user_id;
-      if (uid && uid !== context.userId) await syncBadges(sql, uid).catch(() => []);
+      if (uid && uid !== context.userId) fresh += (await syncBadges(sql, uid).catch(() => [] as string[])).length;
     }
-    await syncAllBadges(sql).catch(() => undefined);
+    // il giro di tutti: una richiesta alla volta (se un'altra lo sta facendo da meno di 15 secondi, questa salta)
+    const turn = await sql<{ key: string }>`
+      insert into app_settings (key, value, updated_at) values ('premi_giro_turno', '{}'::jsonb, now())
+      on conflict (key) do update set updated_at = now() where app_settings.updated_at < now() - interval '15 seconds'
+      returning key`;
+    if (turn.length) await syncAllBadges(sql).catch(() => undefined);
+    return { changed: fresh > 0 };
+  });
+
+export const listGadgets = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .validator(prizeTarget)
+  .handler(async ({ context }) => {
+    const sql = await db();
+    await ensureMember(sql, context.userId);
+    // solo lettura: il ricalcolo è in refreshPrizes, in sottofondo
     const rows = await sql<{ user_id: string; code: string; given_name: string; family_name: string; nickname: string; slug: string; unlocked_at: unknown }>`
       select u.user_id, u.code, m.given_name, m.family_name, m.nickname, m.slug, u.unlocked_at
       from user_achievements u

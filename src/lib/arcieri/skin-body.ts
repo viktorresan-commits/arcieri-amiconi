@@ -31,21 +31,28 @@ export type SkinMesh = {
   nrm0: Float32Array | null;
   /** indici della testa nuova (dopo quelli del corpo): uv sferiche (× uvScale) e immagine pelle-testa.jpg */
   headStart: number | null;
-  /** per il gonfiore levigato: punti saldati (stessa posizione) e i loro vicini, fatti al primo uso */
-  weld?: { of: Int32Array; n: number; start: Int32Array; nbr: Int32Array; acc: Float32Array; tmp: Float32Array; cnt: Float32Array };
+  /**
+   * per il gonfiore levigato, fatto una volta: punti saldati (stessa posizione) e, per ogni punto, quanto lo
+   * alza ogni gruppo muscolare dopo la levigatura (la levigatura è lineare: a ogni fotogramma basta una somma)
+   */
+  weld?: { of: Int32Array; n: number; start: Int32Array; grp: Uint16Array; val: Float32Array; acc: Float32Array };
 };
 
 /**
  * Punti saldati e vicini per levigare il gonfiore: ogni vertice si gonfia con il muscolo sotto di lui (un gruppo
  * per vertice), e due vertici vicini su muscoli diversi si gonfiavano di quantità diverse: il bordo dell'avambraccio
  * diventava a dente di sega. Le copie dello stesso punto (cuciture delle uv) contano come uno solo.
+ * La levigatura (media sui saldati, poi due passate sui vicini) è lineare nel gonfiore dei gruppi: si calcola qui,
+ * gruppo per gruppo, quanto ognuno alza ogni punto; a ogni fotogramma resta una somma di 1-3 termini per punto
+ * (prima erano due passate su tutti i vicini a ogni fotogramma: sul telefono qualche millisecondo ogni volta).
  */
-function weldOf(m: SkinMesh) {
+function weldOf(m: SkinMesh, grp: Uint8Array, bg: Float32Array) {
   const of = new Int32Array(m.n);
-  const map = new Map<string, number>();
+  // chiave numerica (niente stringhe: 40 mila punti)
+  const map = new Map<number, number>();
   let n = 0;
   for (let i = 0; i < m.n; i++) {
-    const k = `${Math.round(m.pos[i * 3] * 4000)},${Math.round(m.pos[i * 3 + 1] * 4000)},${Math.round(m.pos[i * 3 + 2] * 4000)}`;
+    const k = ((Math.round(m.pos[i * 3] * 4000) + 16384) * 32768 + (Math.round(m.pos[i * 3 + 1] * 4000) + 16384)) * 32768 + (Math.round(m.pos[i * 3 + 2] * 4000) + 16384);
     let g = map.get(k);
     if (g == null) {
       g = n++;
@@ -53,32 +60,119 @@ function weldOf(m: SkinMesh) {
     }
     of[i] = g;
   }
-  const sets: Set<number>[] = Array.from({ length: n }, () => new Set<number>());
+  // vicini: lati dei triangoli del corpo, contati per punto e messi in fila (senza doppioni)
   const end = m.headStart ?? m.idx.length;
+  const deg = new Int32Array(n + 1);
+  const ea: number[] = [];
   for (let t = 0; t + 2 < end; t += 3) {
     const a = of[m.idx[t]], b = of[m.idx[t + 1]], c = of[m.idx[t + 2]];
-    if (a !== b) {
-      sets[a].add(b);
-      sets[b].add(a);
-    }
-    if (b !== c) {
-      sets[b].add(c);
-      sets[c].add(b);
-    }
-    if (a !== c) {
-      sets[a].add(c);
-      sets[c].add(a);
-    }
+    if (a !== b) ea.push(a, b, b, a);
+    if (b !== c) ea.push(b, c, c, b);
+    if (a !== c) ea.push(a, c, c, a);
   }
+  for (let e = 0; e < ea.length; e += 2) deg[ea[e] + 1]++;
+  for (let g = 0; g < n; g++) deg[g + 1] += deg[g];
+  const fill = deg.slice(0, n);
+  const raw = new Int32Array(ea.length / 2);
+  for (let e = 0; e < ea.length; e += 2) raw[fill[ea[e]]++] = ea[e + 1];
   const start = new Int32Array(n + 1);
-  for (let g = 0; g < n; g++) start[g + 1] = start[g] + sets[g].size;
-  const nbr = new Int32Array(start[n]);
+  const nbr = new Int32Array(raw.length);
+  let o = 0;
   for (let g = 0; g < n; g++) {
-    let o = start[g];
-    for (const x of sets[g]) nbr[o++] = x;
+    start[g] = o;
+    const row = raw.subarray(deg[g], deg[g + 1]).sort();
+    for (let q = 0; q < row.length; q++) if (q === 0 || row[q] !== row[q - 1]) nbr[o++] = row[q];
   }
-  return { of, n, start, nbr, acc: new Float32Array(n), tmp: new Float32Array(n), cnt: new Float32Array(n) };
+  start[n] = o;
+  // gruppo per gruppo: media sui saldati, due passate sui vicini. Solo attorno al gruppo (il gruppo e due giri di
+  // vicini, dove la levigatura arriva): in tutto come una levigatura sola, non una per gruppo su tutta la pelle
+  let G = 0;
+  for (let i = 0; i < m.n; i++) if (grp[i] + 1 > G) G = grp[i] + 1;
+  const cnt = new Float32Array(n);
+  for (let i = 0; i < m.n; i++) cnt[of[i]] += 1;
+  const gs0 = new Int32Array(G + 1);
+  for (let i = 0; i < m.n; i++) if (bg[i] !== 0) gs0[grp[i] + 1]++;
+  for (let gi = 0; gi < G; gi++) gs0[gi + 1] += gs0[gi];
+  const gat = gs0.slice(0, G);
+  const gv = new Int32Array(gs0[G]);
+  for (let i = 0; i < m.n; i++) if (bg[i] !== 0) gv[gat[grp[i]]++] = i;
+  const a0 = new Float32Array(n), t1 = new Float32Array(n), t2 = new Float32Array(n);
+  const seen = new Int32Array(n);
+  const list = new Int32Array(n);
+  const ks: number[] = [], gs: number[] = [], vs: number[] = [];
+  const pass = (src: Float32Array, dst: Float32Array, upto: number) => {
+    for (let j = 0; j < upto; j++) {
+      const k = list[j];
+      const s0 = start[k], s1 = start[k + 1];
+      if (s1 === s0) {
+        dst[k] = src[k];
+        continue;
+      }
+      let sum = 0;
+      for (let q = s0; q < s1; q++) sum += src[nbr[q]];
+      dst[k] = 0.5 * src[k] + (0.5 * sum) / (s1 - s0);
+    }
+  };
+  for (let gi = 0; gi < G; gi++) {
+    if (gs0[gi + 1] === gs0[gi]) continue;
+    const stamp = gi + 1;
+    let len = 0;
+    for (let q = gs0[gi]; q < gs0[gi + 1]; q++) {
+      const i = gv[q];
+      const k = of[i];
+      if (seen[k] !== stamp) {
+        seen[k] = stamp;
+        list[len++] = k;
+      }
+      a0[k] += bg[i];
+    }
+    const L0 = len;
+    for (let j = 0; j < L0; j++) a0[list[j]] /= cnt[list[j]];
+    for (let ring = 0; ring < 2; ring++) {
+      const upto = len;
+      for (let j = 0; j < upto; j++) {
+        const k = list[j];
+        for (let q = start[k]; q < start[k + 1]; q++) {
+          const x = nbr[q];
+          if (seen[x] !== stamp) {
+            seen[x] = stamp;
+            list[len++] = x;
+          }
+        }
+      }
+      if (ring === 0) {
+        // primo giro: dove arriva la prima passata
+        pass(a0, t1, len);
+      }
+    }
+    pass(t1, t2, len);
+    for (let j = 0; j < len; j++) {
+      const k = list[j];
+      const v = t2[k];
+      if (v > 1e-7 || v < -1e-7) {
+        ks.push(k);
+        gs.push(gi);
+        vs.push(v);
+      }
+      a0[k] = 0;
+      t1[k] = 0;
+      t2[k] = 0;
+    }
+  }
+  // in fila per punto
+  const rs = new Int32Array(n + 1);
+  for (const k of ks) rs[k + 1]++;
+  for (let k = 0; k < n; k++) rs[k + 1] += rs[k];
+  const at = rs.slice(0, n);
+  const lg = new Uint16Array(ks.length), lv = new Float32Array(ks.length);
+  for (let e = 0; e < ks.length; e++) {
+    const q = at[ks[e]]++;
+    lg[q] = gs[e];
+    lv[q] = vs[e];
+  }
+  return { of, n, start: rs, grp: lg, val: lv, acc: new Float32Array(n) };
 }
+
 export type SkinBody = { /** pelle mossa dai segmenti dell'atlante, come muscoli e ossa (vedi atlasSkinBones) */ atlasRig: boolean; restInv: Aff[] | null; body: SkinMesh; eyes: SkinMesh; names: string[]; heads: V3[]; parent: number[]; image: HTMLImageElement | null; eyeImage: HTMLImageElement | null; meanLuma: number; hideEyes: boolean; faceSkin: [number, number, number]; /** testa nuova (foto del viso) */ headImage: HTMLImageElement | null; headUvScale: number; /** rilievo del corpo dalle tavole (normal map nello spazio delle uv) */ reliefImage: HTMLImageElement | null; /** la stoffa è nei vertici (k.z negativo): bordo liscio dei pantaloncini */ clothV: boolean };
 
 let bodyP: Promise<SkinBody | null> | null = null;
@@ -423,39 +517,27 @@ export function skinMesh(m: SkinMesh, bones: Aff[], outP: Float32Array, outN: Fl
   const bg = m.bulge;
   const fx = flex && m.delta && m.zone && m.zside && (flex[0] > 0 || flex[1] > 0) ? flex : null;
   const { pos, nrm, wt, jo, delta, zone, zside, nrm0 } = m;
-  // gonfiore dei muscoli: per vertice, poi levigato due volte sui vicini (niente dente di sega tra muscoli diversi)
+  // gonfiore dei muscoli, già levigato: per ogni punto saldato la somma dei suoi gruppi (vedi weldOf)
   let bSmooth: Float32Array | null = null;
+  let wOf: Int32Array | null = null;
   if (g) {
-    const W = (m.weld ??= weldOf(m));
-    const { acc, tmp, cnt, of, start, nbr } = W;
-    acc.fill(0);
-    cnt.fill(0);
-    for (let i = 0; i < m.n; i++) {
-      acc[of[i]] += bul![g[i]] * bg![i];
-      cnt[of[i]] += 1;
-    }
-    for (let k = 0; k < W.n; k++) acc[k] = cnt[k] ? acc[k] / cnt[k] : 0;
-    for (let pass = 0; pass < 2; pass++) {
-      for (let k = 0; k < W.n; k++) {
-        const s0 = start[k], s1 = start[k + 1];
-        if (s1 === s0) {
-          tmp[k] = acc[k];
-          continue;
-        }
-        let sum = 0;
-        for (let q = s0; q < s1; q++) sum += acc[nbr[q]];
-        tmp[k] = 0.5 * acc[k] + (0.5 * sum) / (s1 - s0);
-      }
-      acc.set(tmp);
+    const W = (m.weld ??= weldOf(m, g, bg!));
+    const { acc, start, grp: lg, val } = W;
+    const B = bul!;
+    for (let k = 0; k < W.n; k++) {
+      let sum = 0;
+      for (let q = start[k], q1 = start[k + 1]; q < q1; q++) sum += B[lg[q]] * val[q];
+      acc[k] = sum;
     }
     bSmooth = acc;
+    wOf = W.of;
   }
   for (let i = 0; i < m.n; i++) {
     const i3 = i * 3;
     let nx = nrm[i3];
     let ny = nrm[i3 + 1];
     let nz = nrm[i3 + 2];
-    const b = bSmooth && m.weld ? bSmooth[m.weld.of[i]] : 0;
+    const b = bSmooth && wOf ? bSmooth[wOf[i]] : 0;
     let x = pos[i3] + nx * b;
     let y = pos[i3 + 1] + ny * b;
     let z = pos[i3 + 2] + nz * b;
