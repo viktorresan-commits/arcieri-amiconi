@@ -1,18 +1,21 @@
-"""Fascia liscia sopra il pube e l'inguine, come nelle tavole anatomiche per tutti (anche per i minori).
+"""Copertura del pube e dell'inguine, come nelle tavole anatomiche per tutti (anche per i minori).
 
 Tra il legamento inguinale e l'interno delle cosce l'atlante lasciava un vuoto: l'osso del pube scoperto, i
-nervi e i vasi del triangolo femorale e, in mezzo alle cosce, il fondo scuro. Nelle tavole quella parte è coperta
-da una fascia bianco crema, liscia, senza organi: dal legamento inguinale (la «V») fino all'inforcatura.
+nervi e i vasi del triangolo femorale e, in mezzo alle cosce, il fondo scuro. Nelle tavole quella parte è il
+basso ventre senza organi: il retto dell'addome (e il piramidale) scende rosso fino al pube restringendosi a
+«V», con una fascia color crema stretta lungo il legamento inguinale ai due lati e un piccolo tratto crema
+arrotondato sul pube. Una fascia tutta bianca, larga, sembrava una mutanda.
 
-La fascia non viene da nessun modello del corpo: è una superficie costruita qui, appena davanti a muscoli e ossa
-visti di fronte, con una palla di 5 cm fatta rotolare sopra (copre solchi e fessure come una membrana tesa), poi
-levigata. In basso, tra le cosce, si ripiega indietro e si arrotonda. Ogni punto segue i segmenti del muscolo più
-vicino (bacino e cosce): si muove con il corpo. Nei dati è un muscolo con il canale dei tendini pieno (colore delle
-fasce).
+La superficie non viene da nessun modello del corpo: è costruita qui, appena davanti a muscoli e ossa visti di
+fronte, con una palla di 5 cm fatta rotolare sopra (copre solchi e fessure come una membrana tesa), poi levigata.
+In basso, tra le cosce, si ripiega indietro e si arrotonda. Ogni punto segue i segmenti del muscolo più vicino
+(bacino e cosce): si muove con il corpo. Nei dati è un muscolo del gruppo «addome»: rosso con le fibre che
+scendono verso il pube nel mezzo, canale dei tendini pieno (crema) lungo i lati, sul pube e sulla linea alba.
 
     python3 add_pube.py ../../public/anatomia/corpo-hd ../../public/anatomia/corpo ../../public/anatomia/corpo-leggero
 
-(il primo corpo, il più fitto, dà la forma; tutti ricevono la stessa fascia)
+(il primo corpo, il più fitto, dà la forma; tutti ricevono la stessa copertura). Con --rifai si toglie prima
+quella già aggiunta (l'ultimo pezzo dei dati) e la si rifà.
 """
 import gzip
 import json
@@ -127,19 +130,50 @@ def surface(meta, raw):
     for k_ in range(3):
         np.add.at(N, I[:, k_], fn)
     N /= np.maximum(np.linalg.norm(N, axis=1, keepdims=True), 1e-9)
-    # coordinate delle fibre: lungo l'altezza e di traverso (trama appena accennata)
-    t = (V[:, 1] - V[:, 1].min()) / max(1e-6, np.ptp(V[:, 1]))
-    a = (V[:, 0] - V[:, 0].min()) / max(1e-6, np.ptp(V[:, 0]))
-    print('fascia del pube: vertici', len(V), 'triangoli', len(I))
-    return V, N, I, t, a
+    # fibre del basso ventre: scendono verso il pube e si stringono a «V» tra i due legamenti inguinali
+    xs = np.clip(0.034 + (V[:, 1] - 0.776) * (0.084 / 0.206), 0.02, 0.118)
+    t = np.clip((V[:, 1] - 0.77) / (0.985 - 0.77), 0, 1)
+    a = np.clip((V[:, 0] + xs) / (2 * xs), 0, 1)
+    # crema (fascia, tendine) dove serve: lungo i legamenti inguinali ai lati, sul pube in basso, la linea alba
+    def seg_d(P, A, B):
+        A, B = np.array(A), np.array(B)
+        ab = B - A
+        tt = np.clip(((P - A) @ ab) / (ab @ ab), 0, 1)
+        return np.linalg.norm(P - (A + tt[:, None] * ab), axis=1)
+    P2 = V[:, :2]
+    side = np.minimum(seg_d(P2, OUTLINE[0], OUTLINE[5]), seg_d(P2, OUTLINE[2], OUTLINE[3]))
+    sm = lambda e0, e1, x: np.clip((x - e0) / (e1 - e0), 0, 1) ** 2 * (3 - 2 * np.clip((x - e0) / (e1 - e0), 0, 1))
+    band = 1 - sm(0.016, 0.025, side)
+    pubis = 1 - sm(0.79, 0.812, V[:, 1])
+    alba = (1 - sm(0.0018, 0.0042, np.abs(V[:, 0]))) * sm(0.83, 0.86, V[:, 1]) * 0.85
+    tend = np.clip(np.maximum(np.maximum(band, pubis), alba), 0, 1)
+    print('copertura del pube: vertici', len(V), 'triangoli', len(I), 'crema', round(float((tend > 0.5).mean()), 2))
+    return V, N, I, t, a, tend
 
 
-def main(base, shape):
+ADDOME = 38  # gruppo «addome» (retto dell'addome): colore e lavoro dei muscoli come il resto del ventre
+
+
+def drop_old(meta, raw):
+    """toglie la copertura già aggiunta: è l'ultimo pezzo dei dati, un muscolo che arriva fino in fondo"""
+    b = meta['batches'][-1]
+    end = b['iOffset'] + b['indices'] * 2
+    if b['layer'] != 'muscle' or end + 3 < meta['bytes'] - 3 or (b.get('parte') not in (None, 'pube')):
+        raise SystemExit('la copertura del pube non è l\'ultimo pezzo dei dati: non la tolgo')
+    meta['batches'].pop()
+    meta['ritocchi'].remove('pube')
+    meta['bytes'] = b['vOffset']
+    return raw[:b['vOffset']]
+
+
+def main(base, shape, redo=False):
     meta, raw = load(base)
     if 'pube' in meta.get('ritocchi', []):
-        print(os.path.basename(base), 'ha già la fascia del pube')
-        return
-    V, N, I, t, a = shape
+        if not redo:
+            print(os.path.basename(base), 'ha già la copertura del pube')
+            return
+        raw = drop_old(meta, raw)
+    V, N, I, t, a, tend = shape
     lo, hi = np.array(meta['lo']), np.array(meta['hi'])
     # segmenti e gruppo dal muscolo più vicino
     mp, mj = [], []
@@ -160,9 +194,10 @@ def main(base, shape):
     R[:, 0:6] = np.ascontiguousarray(q).view(np.uint8).reshape(-1, 6)
     R[:, 6:9] = np.ascontiguousarray(nq).view(np.uint8).reshape(-1, 3)
     R[:, 9:13] = mj[k]
+    R[:, 12] = ADDOME
     R[:, 13] = np.round(t * 255)
     R[:, 14] = np.round(a * 255)
-    R[:, 15] = 255
+    R[:, 15] = np.round(tend * 255)
     blob = bytearray(raw.tobytes())
     while len(blob) % 4:
         blob.append(0)
@@ -172,10 +207,10 @@ def main(base, shape):
         blob.append(0)
     io = len(blob)
     blob.extend(I.astype(np.uint16).tobytes())
-    meta['batches'].append(dict(layer='muscle', vertices=int(n), indices=int(I.size), vOffset=vo, iOffset=io))
+    meta['batches'].append(dict(layer='muscle', vertices=int(n), indices=int(I.size), vOffset=vo, iOffset=io, parte='pube'))
     meta['bytes'] = len(blob)
     meta.setdefault('ritocchi', []).append('pube')
-    print(os.path.basename(base), 'fascia del pube aggiunta')
+    print(os.path.basename(base), 'copertura del pube aggiunta')
     plain = base + '.bin'
     if os.path.exists(plain):
         open(plain, 'wb').write(blob)
@@ -186,7 +221,11 @@ def main(base, shape):
 
 
 if __name__ == '__main__':
-    m0, r0 = load(sys.argv[1])
+    redo = '--rifai' in sys.argv
+    bases = [x for x in sys.argv[1:] if x != '--rifai']
+    m0, r0 = load(bases[0])
+    if redo and 'pube' in m0.get('ritocchi', []):
+        r0 = drop_old(m0, r0)
     shape = surface(m0, r0)
-    for base in sys.argv[1:]:
-        main(base, shape)
+    for base in bases:
+        main(base, shape, redo)
