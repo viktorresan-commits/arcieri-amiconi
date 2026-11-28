@@ -31,36 +31,35 @@ export type SkinMesh = {
   nrm0: Float32Array | null;
   /** indici della testa nuova (dopo quelli del corpo): uv sferiche (× uvScale) e immagine pelle-testa.jpg */
   headStart: number | null;
-  /**
-   * per il gonfiore levigato, fatto una volta: punti saldati (stessa posizione) e, per ogni punto, quanto lo
-   * alza ogni gruppo muscolare dopo la levigatura (la levigatura è lineare: a ogni fotogramma basta una somma)
-   */
-  weld?: { of: Int32Array; n: number; start: Int32Array; grp: Uint16Array; val: Float32Array; acc: Float32Array };
+  /** punti saldati (stessa posizione) e i loro vicini, fatti al primo uso */
+  weld?: Weld;
+  /** gonfiore levigato: per ogni punto quanto lo alza ogni gruppo muscolare (vedi bulgeLin) */
+  lin?: { start: Int32Array; grp: Uint16Array; val: Float32Array; acc: Float32Array };
+  /** ascelle, spalle e gomiti: zona dove la pelle si distende dopo la posa (vedi foldOf); null se non serve */
+  fold?: Fold | null;
 };
 
+type Weld = { of: Int32Array; n: number; nstart: Int32Array; nbr: Int32Array; /** un vertice per punto saldato */ rep: Int32Array };
+
 /**
- * Punti saldati e vicini per levigare il gonfiore: ogni vertice si gonfia con il muscolo sotto di lui (un gruppo
- * per vertice), e due vertici vicini su muscoli diversi si gonfiavano di quantità diverse: il bordo dell'avambraccio
- * diventava a dente di sega. Le copie dello stesso punto (cuciture delle uv) contano come uno solo.
- * La levigatura (media sui saldati, poi due passate sui vicini) è lineare nel gonfiore dei gruppi: si calcola qui,
- * gruppo per gruppo, quanto ognuno alza ogni punto; a ogni fotogramma resta una somma di 1-3 termini per punto
- * (prima erano due passate su tutti i vicini a ogni fotogramma: sul telefono qualche millisecondo ogni volta).
+ * Punti saldati e vicini: le copie dello stesso punto (cuciture delle uv) contano come uno solo, e i vicini sono
+ * i lati dei triangoli del corpo (senza doppioni). Chiave numerica e liste in fila: 40 mila punti in pochi ms.
  */
-function weldOf(m: SkinMesh, grp: Uint8Array, bg: Float32Array) {
+function weldOf(m: SkinMesh): Weld {
   const of = new Int32Array(m.n);
-  // chiave numerica (niente stringhe: 40 mila punti)
   const map = new Map<number, number>();
   let n = 0;
+  const repL: number[] = [];
   for (let i = 0; i < m.n; i++) {
     const k = ((Math.round(m.pos[i * 3] * 4000) + 16384) * 32768 + (Math.round(m.pos[i * 3 + 1] * 4000) + 16384)) * 32768 + (Math.round(m.pos[i * 3 + 2] * 4000) + 16384);
     let g = map.get(k);
     if (g == null) {
       g = n++;
       map.set(k, g);
+      repL.push(i);
     }
     of[i] = g;
   }
-  // vicini: lati dei triangoli del corpo, contati per punto e messi in fila (senza doppioni)
   const end = m.headStart ?? m.idx.length;
   const deg = new Int32Array(n + 1);
   const ea: number[] = [];
@@ -75,15 +74,27 @@ function weldOf(m: SkinMesh, grp: Uint8Array, bg: Float32Array) {
   const fill = deg.slice(0, n);
   const raw = new Int32Array(ea.length / 2);
   for (let e = 0; e < ea.length; e += 2) raw[fill[ea[e]]++] = ea[e + 1];
-  const start = new Int32Array(n + 1);
+  const nstart = new Int32Array(n + 1);
   const nbr = new Int32Array(raw.length);
   let o = 0;
   for (let g = 0; g < n; g++) {
-    start[g] = o;
+    nstart[g] = o;
     const row = raw.subarray(deg[g], deg[g + 1]).sort();
     for (let q = 0; q < row.length; q++) if (q === 0 || row[q] !== row[q - 1]) nbr[o++] = row[q];
   }
-  start[n] = o;
+  nstart[n] = o;
+  return { of, n, nstart, nbr: nbr.slice(0, o), rep: Int32Array.from(repL) };
+}
+
+/**
+ * Gonfiore levigato: ogni vertice si gonfia con il muscolo sotto di lui (un gruppo per vertice), e due vertici
+ * vicini su muscoli diversi si gonfiavano di quantità diverse: il bordo dell'avambraccio diventava a dente di
+ * sega. La levigatura (media sui saldati, poi due passate sui vicini) è lineare nel gonfiore dei gruppi: si
+ * calcola qui, gruppo per gruppo e solo attorno al gruppo, quanto ognuno alza ogni punto; a ogni fotogramma resta
+ * una somma di 1-3 termini per punto (prima erano due passate su tutti i vicini a ogni fotogramma).
+ */
+function bulgeLin(m: SkinMesh, W: Weld, grp: Uint8Array, bg: Float32Array) {
+  const { of, n, nstart: start, nbr } = W;
   // gruppo per gruppo: media sui saldati, due passate sui vicini. Solo attorno al gruppo (il gruppo e due giri di
   // vicini, dove la levigatura arriva): in tutto come una levigatura sola, non una per gruppo su tutta la pelle
   let G = 0;
@@ -170,7 +181,419 @@ function weldOf(m: SkinMesh, grp: Uint8Array, bg: Float32Array) {
     lg[q] = gs[e];
     lv[q] = vs[e];
   }
-  return { of, n, start: rs, grp: lg, val: lv, acc: new Float32Array(n) };
+  return { start: rs, grp: lg, val: lv, acc: new Float32Array(n) };
+}
+
+/**
+ * Pieghe a braccia alzate (piena trazione): tra torace, spalla e braccio la pelle segue la media delle ossa e
+ * all'ascella e sopra la spalla si accartocciava in lembi. Nella zona (coppie torace-clavicola, clavicola-omero,
+ * omero-avambraccio e una sfera attorno a spalla e gomito, sfumata ai bordi) dopo la posa la pelle si distende:
+ * si leviga e le si ridà il rilievo che aveva a riposo, girato con le sue ossa (come il "delta mush" dei film).
+ */
+type Fold = {
+  /** punti saldati della zona, la loro forza (0..1) e il rilievo del riposo (riposo meno riposo levigato) */
+  zone: Int32Array;
+  s: Float32Array;
+  d: Float32Array;
+  /** zona e un giro di vicini (letti dalla posa) */
+  ring: Int32Array;
+  /** vertici della zona (per riscriverli) e triangoli che la toccano (per le normali): per ogni triangolo i tre
+   * vertici (×3, nelle posizioni) e i tre punti saldati (×3) */
+  verts: Int32Array;
+  tv: Int32Array;
+  tw: Int32Array;
+  /** forza per punto saldato (per le normali) */
+  sw: Float32Array;
+  /** dove la pelle si è rovesciata in questo fotogramma (0..1, per punto saldato) */
+  bad: Float32Array;
+  bad2: Float32Array;
+  mark: Uint8Array;
+  /** verso dei triangoli sulla pelle levigata, a ogni fotogramma */
+  tref: Float32Array;
+  /** rotazione media delle ossa per ogni punto della zona (9 per punto), a ogni fotogramma */
+  Mz: Float32Array;
+  P: Float32Array;
+  Q: Float32Array;
+  N: Float32Array;
+  /**
+   * una volta sì e una no si ricalcola tutto; nell'altra si riusa lo spostamento e le normali dell'ultima volta
+   * sopra la posa nuova (le pose di fila si muovono poco): metà del lavoro mentre il video scorre
+   */
+  off: Float32Array;
+  nrm: Float32Array;
+  age: number;
+};
+const FOLD_PAIRS = [3, 4, 9, 10];
+const FOLD_IT = 6;
+
+function smoothZone(W: Weld, zone: Int32Array, P: Float32Array, Q: Float32Array, it: number) {
+  const { nstart, nbr } = W;
+  for (let r = 0; r < it; r++) {
+    for (let j = 0; j < zone.length; j++) {
+      const k = zone[j];
+      const s0 = nstart[k], s1 = nstart[k + 1];
+      const k3 = k * 3;
+      if (s1 === s0) {
+        Q[k3] = P[k3];
+        Q[k3 + 1] = P[k3 + 1];
+        Q[k3 + 2] = P[k3 + 2];
+        continue;
+      }
+      let x = 0, y = 0, z = 0;
+      for (let q = s0; q < s1; q++) {
+        const o = nbr[q] * 3;
+        x += P[o];
+        y += P[o + 1];
+        z += P[o + 2];
+      }
+      const f = 1 / (s1 - s0);
+      Q[k3] = 0.35 * P[k3] + 0.65 * x * f;
+      Q[k3 + 1] = 0.35 * P[k3 + 1] + 0.65 * y * f;
+      Q[k3 + 2] = 0.35 * P[k3 + 2] + 0.65 * z * f;
+    }
+    for (let j = 0; j < zone.length; j++) {
+      const k3 = zone[j] * 3;
+      P[k3] = Q[k3];
+      P[k3 + 1] = Q[k3 + 1];
+      P[k3 + 2] = Q[k3 + 2];
+    }
+  }
+}
+
+function foldOf(m: SkinMesh, W: Weld): Fold | null {
+  const { of, n, nstart, nbr, rep } = W;
+  const NB = 21 + 65;
+  const per = NQ - 1;
+  // forza: sfere attorno a spalla e gomito (centro: media dei vertici pesati sulla coppia di quel giunto)
+  const seed = new Float32Array(n);
+  const cen = FOLD_PAIRS.map(() => [0, 0, 0, 0]);
+  for (let i = 0; i < m.n; i++) {
+    for (let j = 0; j < 4; j++) {
+      const b = m.jo[i * 4 + j];
+      const w = m.wt[i * 4 + j];
+      if (b < NB || w <= 0) continue;
+      const pi = FOLD_PAIRS.indexOf(Math.floor((b - NB) / per));
+      if (pi < 0) continue;
+      if (w > 0.2) {
+        const c = cen[pi];
+        c[0] += m.pos[i * 3];
+        c[1] += m.pos[i * 3 + 1];
+        c[2] += m.pos[i * 3 + 2];
+        c[3]++;
+      }
+    }
+  }
+  // sfere: spalla (clavicola-omero) 11 cm, gomito 7 cm
+  const R = [0.11, 0.07, 0.11, 0.07];
+  for (let pi = 0; pi < FOLD_PAIRS.length; pi++) {
+    const c = cen[pi];
+    if (!R[pi] || c[3] < 20) continue;
+    const cx = c[0] / c[3], cy = c[1] / c[3], cz = c[2] / c[3];
+    for (let k = 0; k < n; k++) {
+      const i = rep[k];
+      const dx = m.pos[i * 3] - cx, dy = m.pos[i * 3 + 1] - cy, dz = m.pos[i * 3 + 2] - cz;
+      const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      if (d >= R[pi]) continue;
+      const t = Math.min(1, (R[pi] - d) / (R[pi] * 0.5));
+      seed[k] = Math.max(seed[k], t * t * (3 - 2 * t));
+    }
+  }
+  // sfumata: due giri di vicini
+  for (let r = 0; r < 2; r++) {
+    const nx = seed.slice();
+    for (let k = 0; k < n; k++) {
+      if (seed[k] >= 0.999) continue;
+      let mx = 0;
+      for (let q = nstart[k]; q < nstart[k + 1]; q++) mx = Math.max(mx, seed[nbr[q]]);
+      nx[k] = Math.max(seed[k], mx * 0.6);
+    }
+    seed.set(nx);
+  }
+  const zl: number[] = [];
+  for (let k = 0; k < n; k++) if (seed[k] > 0.02) zl.push(k);
+  if (!zl.length) return null;
+  const zone = Int32Array.from(zl);
+  const inZ = new Uint8Array(n);
+  for (const k of zl) inZ[k] = 1;
+  const rl: number[] = [...zl];
+  const seen = inZ.slice();
+  for (const k of zl) for (let q = nstart[k]; q < nstart[k + 1]; q++) if (!seen[nbr[q]]) {
+    seen[nbr[q]] = 1;
+    rl.push(nbr[q]);
+  }
+  const ring = Int32Array.from(rl);
+  const vl: number[] = [];
+  for (let i = 0; i < m.n; i++) if (inZ[of[i]]) vl.push(i);
+  const end = m.headStart ?? m.idx.length;
+  const tl: number[] = [];
+  for (let t = 0; t + 2 < end; t += 3) if (inZ[of[m.idx[t]]] || inZ[of[m.idx[t + 1]]] || inZ[of[m.idx[t + 2]]]) tl.push(t);
+  // rilievo del riposo
+  const P = new Float32Array(n * 3), Q = new Float32Array(n * 3);
+  for (const k of rl) {
+    const i = rep[k];
+    P[k * 3] = m.pos[i * 3];
+    P[k * 3 + 1] = m.pos[i * 3 + 1];
+    P[k * 3 + 2] = m.pos[i * 3 + 2];
+  }
+  smoothZone(W, zone, P, Q, FOLD_IT);
+  const d = new Float32Array(zone.length * 3);
+  const s = new Float32Array(zone.length);
+  for (let j = 0; j < zone.length; j++) {
+    const k = zone[j];
+    const i = rep[k];
+    const ex = m.pos[i * 3] - P[k * 3], ey = m.pos[i * 3 + 1] - P[k * 3 + 1], ez = m.pos[i * 3 + 2] - P[k * 3 + 2];
+    // i rilievi del corpo (muscoli, solchi) restano; le tasche profonde del riposo (pelle schiacciata tra braccio
+    // e torace) no: ripresentate a braccio alzato diventano fossette scure
+    const dl = Math.sqrt(ex * ex + ey * ey + ez * ez);
+    const sc = dl > 0.009 ? 0.009 / dl : 1;
+    d[j * 3] = ex * sc;
+    d[j * 3 + 1] = ey * sc;
+    d[j * 3 + 2] = ez * sc;
+    s[j] = Math.min(1, seed[k]);
+  }
+  const sw = new Float32Array(n);
+  for (let j = 0; j < zone.length; j++) sw[zone[j]] = s[j];
+  const tv = new Int32Array(tl.length * 3), tw = new Int32Array(tl.length * 3);
+  tl.forEach((t, q) => {
+    for (let e = 0; e < 3; e++) {
+      tv[q * 3 + e] = m.idx[t + e] * 3;
+      tw[q * 3 + e] = of[m.idx[t + e]] * 3;
+    }
+  });
+  return { zone, s, d, ring, verts: Int32Array.from(vl), tv, tw, sw, bad: new Float32Array(n), bad2: new Float32Array(n), mark: new Uint8Array(n), tref: new Float32Array(tl.length * 3), Mz: new Float32Array(zl.length * 9), P, Q, N: new Float32Array(n * 3), off: new Float32Array(vl.length * 3), nrm: new Float32Array(vl.length * 3), age: 0 };
+}
+
+/**
+ * Quanto è alzato il braccio più alzato (0 a braccia basse, 1 da circa 50 gradi tra clavicola e omero): le
+ * coppie 3 e 9 (clavicola-omero) dicono quali segmenti guardare (matrici F in fila, 3x4).
+ */
+const ROT9 = [0, 1, 2, 4, 5, 6, 8, 9, 10];
+function shoulderRaise(F: Float32Array) {
+  let best = 0;
+  for (const p of [3, 9]) {
+    const pr = pairIdx[p];
+    if (!pr || pr[0] < 0 || pr[1] < 0) continue;
+    const a = pr[0] * 12, b = pr[1] * 12;
+    let dot = 0, na = 0, nb = 0;
+    for (const o of ROT9) {
+      dot += F[a + o] * F[b + o];
+      na += F[a + o] * F[a + o];
+      nb += F[b + o] * F[b + o];
+    }
+    const tr = (3 * dot) / (Math.sqrt(na * nb) || 1);
+    const ang = Math.acos(Math.max(-1, Math.min(1, (tr - 1) / 2)));
+    best = Math.max(best, ang);
+  }
+  const t = Math.max(0, Math.min(1, (best - 0.5) / 0.37));
+  return t * t * (3 - 2 * t);
+}
+
+/** triangoli rovesciati rispetto alla pelle levigata (T): segna i loro punti saldati in mark, dice quanti */
+function flips(C: Fold, outP: Float32Array, mark: Uint8Array | Float32Array) {
+  const { tv, tw, tref: T } = C;
+  let nb = 0;
+  for (let q = 0; q < tv.length; q += 3) {
+    const a = tv[q], b = tv[q + 1], c = tv[q + 2];
+    const ux = outP[b] - outP[a], uy = outP[b + 1] - outP[a + 1], uz = outP[b + 2] - outP[a + 2];
+    const vx = outP[c] - outP[a], vy = outP[c + 1] - outP[a + 1], vz = outP[c + 2] - outP[a + 2];
+    if ((uy * vz - uz * vy) * T[q] + (uz * vx - ux * vz) * T[q + 1] + (ux * vy - uy * vx) * T[q + 2] < 0) {
+      mark[tw[q] / 3] = 1;
+      mark[tw[q + 1] / 3] = 1;
+      mark[tw[q + 2] / 3] = 1;
+      nb++;
+    }
+  }
+  return nb;
+}
+
+/** dopo la posa: la zona si leviga e riprende il suo rilievo girato con le ossa (matrici F in fila, 3x4) */
+function relaxFolds(m: SkinMesh, W: Weld, C: Fold, F: Float32Array, outP: Float32Array, outN: Float32Array, gate: number) {
+  const { of, rep, nstart, nbr } = W;
+  const { zone, s, d, ring, verts, tv, tw, sw, bad, bad2, mark, P, Q, N, tref: T, off, nrm } = C;
+  if (C.age++ % 2 === 1) {
+    for (let v = 0; v < verts.length; v++) {
+      const i3 = verts[v] * 3;
+      const v3 = v * 3;
+      outP[i3] += off[v3];
+      outP[i3 + 1] += off[v3 + 1];
+      outP[i3 + 2] += off[v3 + 2];
+      outN[i3] = nrm[v3];
+      outN[i3 + 1] = nrm[v3 + 1];
+      outN[i3 + 2] = nrm[v3 + 2];
+    }
+    return;
+  }
+  for (let v = 0; v < verts.length; v++) {
+    const i3 = verts[v] * 3;
+    off[v * 3] = -outP[i3];
+    off[v * 3 + 1] = -outP[i3 + 1];
+    off[v * 3 + 2] = -outP[i3 + 2];
+  }
+  for (let j = 0; j < ring.length; j++) {
+    const k3 = ring[j] * 3;
+    const i3 = rep[ring[j]] * 3;
+    P[k3] = outP[i3];
+    P[k3 + 1] = outP[i3 + 1];
+    P[k3 + 2] = outP[i3 + 2];
+  }
+  smoothZone(W, zone, P, Q, FOLD_IT);
+  // rotazione media delle ossa di ogni punto della zona (parte 3x3)
+  const { wt, jo } = m;
+  const { Mz } = C;
+  for (let j = 0; j < zone.length; j++) {
+    const i = rep[zone[j]];
+    let m0 = 0, m1 = 0, m2 = 0, m3 = 0, m4 = 0, m5 = 0, m6 = 0, m7 = 0, m8 = 0;
+    for (let q = 0; q < 4; q++) {
+      const w = wt[i * 4 + q];
+      if (w <= 0) continue;
+      const o = jo[i * 4 + q] * 12;
+      m0 += F[o] * w;
+      m1 += F[o + 1] * w;
+      m2 += F[o + 2] * w;
+      m3 += F[o + 4] * w;
+      m4 += F[o + 5] * w;
+      m5 += F[o + 6] * w;
+      m6 += F[o + 8] * w;
+      m7 += F[o + 9] * w;
+      m8 += F[o + 10] * w;
+    }
+    const o9 = j * 9;
+    Mz[o9] = m0;
+    Mz[o9 + 1] = m1;
+    Mz[o9 + 2] = m2;
+    Mz[o9 + 3] = m3;
+    Mz[o9 + 4] = m4;
+    Mz[o9 + 5] = m5;
+    Mz[o9 + 6] = m6;
+    Mz[o9 + 7] = m7;
+    Mz[o9 + 8] = m8;
+  }
+  // verso di ogni triangolo sulla pelle levigata: dove la posa lo rovescia la pelle si piega su sé stessa
+  // (lembi all'ascella). Lì niente rilievo del riposo, che riporterebbe la piega, solo pelle distesa
+  for (let q = 0; q < tw.length; q += 3) {
+    const a = tw[q], b = tw[q + 1], c = tw[q + 2];
+    const ux = P[b] - P[a], uy = P[b + 1] - P[a + 1], uz = P[b + 2] - P[a + 2];
+    const vx = P[c] - P[a], vy = P[c + 1] - P[a + 1], vz = P[c + 2] - P[a + 2];
+    T[q] = uy * vz - uz * vy;
+    T[q + 1] = uz * vx - ux * vz;
+    T[q + 2] = ux * vy - uy * vx;
+  }
+  for (let j = 0; j < ring.length; j++) bad[ring[j]] = 0;
+  const nb0 = flips(C, outP, bad);
+  if (nb0) {
+    for (let r = 0; r < 3; r++) {
+      for (let j = 0; j < zone.length; j++) {
+        const k = zone[j];
+        let mx = bad[k];
+        for (let q = nstart[k]; q < nstart[k + 1]; q++) if (bad[nbr[q]] * 0.7 > mx) mx = bad[nbr[q]] * 0.7;
+        bad2[k] = mx;
+      }
+      for (let j = 0; j < zone.length; j++) bad[zone[j]] = bad2[zone[j]];
+    }
+  }
+  for (let j = 0; j < zone.length; j++) {
+    const k = zone[j];
+    const i = rep[k];
+    const o9 = j * 9;
+    const m0 = Mz[o9], m1 = Mz[o9 + 1], m2 = Mz[o9 + 2], m3 = Mz[o9 + 3], m4 = Mz[o9 + 4], m5 = Mz[o9 + 5], m6 = Mz[o9 + 6], m7 = Mz[o9 + 7], m8 = Mz[o9 + 8];
+    const keep = 1 - bad[k];
+    bad[k] *= gate;
+    const dx = d[j * 3] * keep, dy = d[j * 3 + 1] * keep, dz = d[j * 3 + 2] * keep;
+    const k3 = k * 3;
+    const i3 = i * 3;
+    const f = Math.max(s[j] * gate, bad[k]);
+    // P: posizione levigata più rilievo; Q: nuova posizione (fra la posa e quella distesa, con la forza f)
+    Q[k3] = outP[i3] + (P[k3] + m0 * dx + m1 * dy + m2 * dz - outP[i3]) * f;
+    Q[k3 + 1] = outP[i3 + 1] + (P[k3 + 1] + m3 * dx + m4 * dy + m5 * dz - outP[i3 + 1]) * f;
+    Q[k3 + 2] = outP[i3 + 2] + (P[k3 + 2] + m6 * dx + m7 * dy + m8 * dz - outP[i3 + 2]) * f;
+  }
+  for (let v = 0; v < verts.length; v++) {
+    const i3 = verts[v] * 3;
+    const k3 = of[verts[v]] * 3;
+    outP[i3] = Q[k3];
+    outP[i3 + 1] = Q[k3 + 1];
+    outP[i3 + 2] = Q[k3 + 2];
+  }
+  // dove resta qualche triangolo rovesciato: ancora pelle distesa, solo lì e un giro attorno
+  for (let round = 0; nb0 && round < 2; round++) {
+    for (let j = 0; j < ring.length; j++) mark[ring[j]] = 0;
+    if (!flips(C, outP, mark)) break;
+    const L: number[] = [];
+    for (let j = 0; j < zone.length; j++) {
+      const k = zone[j];
+      let on = mark[k] === 1;
+      for (let q = nstart[k]; !on && q < nstart[k + 1]; q++) on = mark[nbr[q]] === 1;
+      if (on) L.push(k);
+    }
+    if (!L.length) break;
+    for (let j = 0; j < ring.length; j++) {
+      const k3 = ring[j] * 3;
+      const i3 = rep[ring[j]] * 3;
+      P[k3] = outP[i3];
+      P[k3 + 1] = outP[i3 + 1];
+      P[k3 + 2] = outP[i3 + 2];
+    }
+    for (const k of L) mark[k] = 2;
+    smoothZone(W, Int32Array.from(L), P, Q, 6);
+    for (let v = 0; v < verts.length; v++) {
+      const k = of[verts[v]];
+      if (mark[k] !== 2) continue;
+      const i3 = verts[v] * 3;
+      outP[i3] = P[k * 3];
+      outP[i3 + 1] = P[k * 3 + 1];
+      outP[i3 + 2] = P[k * 3 + 2];
+    }
+  }
+  // normali della zona dalla forma nuova, sfumate con quelle delle ossa
+  for (let j = 0; j < ring.length; j++) {
+    const k3 = ring[j] * 3;
+    N[k3] = 0;
+    N[k3 + 1] = 0;
+    N[k3 + 2] = 0;
+  }
+  for (let q = 0; q < tv.length; q += 3) {
+    const a = tv[q], b = tv[q + 1], c = tv[q + 2];
+    const ux = outP[b] - outP[a], uy = outP[b + 1] - outP[a + 1], uz = outP[b + 2] - outP[a + 2];
+    const vx = outP[c] - outP[a], vy = outP[c + 1] - outP[a + 1], vz = outP[c + 2] - outP[a + 2];
+    const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+    const ka = tw[q], kb = tw[q + 1], kc = tw[q + 2];
+    N[ka] += nx;
+    N[ka + 1] += ny;
+    N[ka + 2] += nz;
+    N[kb] += nx;
+    N[kb + 1] += ny;
+    N[kb + 2] += nz;
+    N[kc] += nx;
+    N[kc + 1] += ny;
+    N[kc + 2] += nz;
+  }
+  for (let v = 0; v < verts.length; v++) {
+    const i3 = verts[v] * 3;
+    const k = of[verts[v]];
+    const k3 = k * 3;
+    const l = Math.sqrt(N[k3] * N[k3] + N[k3 + 1] * N[k3 + 1] + N[k3 + 2] * N[k3 + 2]);
+    if (!l) continue;
+    // l'orientamento dei triangoli: la normale della pelle guarda fuori come quella delle ossa
+    const sg = N[k3] * outN[i3] + N[k3 + 1] * outN[i3 + 1] + N[k3 + 2] * outN[i3 + 2] < 0 ? -1 / l : 1 / l;
+    const f = Math.max(sw[k] * gate, bad[k]);
+    const x = outN[i3] + (N[k3] * sg - outN[i3]) * f;
+    const y = outN[i3 + 1] + (N[k3 + 1] * sg - outN[i3 + 1]) * f;
+    const z = outN[i3 + 2] + (N[k3 + 2] * sg - outN[i3 + 2]) * f;
+    const ll = 1 / (Math.sqrt(x * x + y * y + z * z) || 1);
+    outN[i3] = x * ll;
+    outN[i3 + 1] = y * ll;
+    outN[i3 + 2] = z * ll;
+  }
+  for (let v = 0; v < verts.length; v++) {
+    const i3 = verts[v] * 3;
+    const v3 = v * 3;
+    off[v3] += outP[i3];
+    off[v3 + 1] += outP[i3 + 1];
+    off[v3 + 2] += outP[i3 + 2];
+    nrm[v3] = outN[i3];
+    nrm[v3 + 1] = outN[i3 + 1];
+    nrm[v3 + 2] = outN[i3 + 2];
+  }
 }
 
 export type SkinBody = { /** pelle mossa dai segmenti dell'atlante, come muscoli e ossa (vedi atlasSkinBones) */ atlasRig: boolean; restInv: Aff[] | null; body: SkinMesh; eyes: SkinMesh; names: string[]; heads: V3[]; parent: number[]; image: HTMLImageElement | null; eyeImage: HTMLImageElement | null; meanLuma: number; hideEyes: boolean; faceSkin: [number, number, number]; /** testa nuova (foto del viso) */ headImage: HTMLImageElement | null; headUvScale: number; /** rilievo del corpo dalle tavole (normal map nello spazio delle uv) */ reliefImage: HTMLImageElement | null; /** la stoffa è nei vertici (k.z negativo): bordo liscio dei pantaloncini */ clothV: boolean };
@@ -521,8 +944,9 @@ export function skinMesh(m: SkinMesh, bones: Aff[], outP: Float32Array, outN: Fl
   let bSmooth: Float32Array | null = null;
   let wOf: Int32Array | null = null;
   if (g) {
-    const W = (m.weld ??= weldOf(m, g, bg!));
-    const { acc, start, grp: lg, val } = W;
+    const W = (m.weld ??= weldOf(m));
+    const L = (m.lin ??= bulgeLin(m, W, g, bg!));
+    const { acc, start, grp: lg, val } = L;
     const B = bul!;
     for (let k = 0; k < W.n; k++) {
       let sum = 0;
@@ -581,6 +1005,14 @@ export function skinMesh(m: SkinMesh, bones: Aff[], outP: Float32Array, outN: Fl
     outN[i3 + 1] = qy * l;
     outN[i3 + 2] = qz * l;
   }
+  // ascelle, spalle e gomiti distesi dopo la posa (solo la pelle mossa dall'atlante, che ha le coppie), quando
+  // un braccio è alzato: a braccia basse la pelle non si piega e il lavoro si risparmia
+  const gate = bones.length > 21 + 65 ? shoulderRaise(F) : 0;
+  if (m.fold !== null && gate > 0.01) {
+    const W = (m.weld ??= weldOf(m));
+    if (m.fold === undefined) m.fold = foldOf(m, W);
+    if (m.fold) relaxFolds(m, W, m.fold, F, outP, outN, gate);
+  } else if (m.fold) m.fold.age = 0;
 }
 
 /**

@@ -1065,6 +1065,7 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
       if (!b || disposed) return;
       skinBody = b;
       bodyGpu = { body: meshGpu(b.body), eyes: meshGpu(b.eyes) };
+      poseN = 0;
       // dall'occhio dell'arciere la testa non si disegna: i triangoli della testa (osso Head) si tolgono
       const hi = b.names.indexOf("Head");
       const m = b.body;
@@ -1118,8 +1119,18 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
       }
     });
-  /** la pelle in posa si carica una volta per fotogramma anche se si disegna in più passate */
-  let uploaded: MeshGpu | null = null;
+  /** la pelle in posa si carica solo quando è cambiata (una volta anche se si disegna in più passate) */
+  const dirty = new Set<MeshGpu>();
+  /**
+   * la posa dell'ultima pelle calcolata (segmenti, mani, gonfiore, gomiti): se non cambia (video fermo e si gira
+   * attorno, o la stessa immagine del video per più fotogrammi dello schermo) la pelle non si ricalcola né si
+   * ricarica. Prima si ricalcolava e si ricaricava (quasi 800 kB) a ogni fotogramma.
+   */
+  let poseSig = new Float32Array(0);
+  let poseN = 0;
+  let poseScratch = new Float32Array(2048);
+  let samePose = false;
+  let poseMeta: BodyMeta | null = null;
   const drawMesh = (g: MeshGpu, tex: WebGLTexture | null, texOn: boolean, raw: boolean, meanL: number, noHead = false, /** solo questi indici (inizio, quanti) e uv × scala */ range?: [number, number, number], relief = false) => {
     gl.uniform1f(hl.uUvScale, range ? range[2] : 1);
     gl.uniform1f(hl.uRilOn, relief && reliefOn ? 1 : 0);
@@ -1135,8 +1146,7 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.uniform1i(hl.uTex, 0);
-    const up = uploaded !== g;
-    uploaded = g;
+    const up = dirty.delete(g);
     gl.bindBuffer(gl.ARRAY_BUFFER, g.pos);
     if (up) gl.bufferSubData(gl.ARRAY_BUFFER, 0, g.p);
     gl.enableVertexAttribArray(hl.aP);
@@ -1165,7 +1175,6 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
   const flexBuf: [number, number] = [0, 0];
   const drawSkinBody = (meta: BodyMeta, skinMats: Float32Array, hands: RigPose[], VP: Float32Array, eye: V3, J: Record<number, V3>, /** sopra muscoli e ossa: trasparenza al centro (0 = pelle piena) */ veil = 0, /** muscoli e ossa segnati nello stencil (1) */ masked = false) => {
     if (!skinBody || !bodyGpu) return false;
-    uploaded = null;
     // gomito chiuso (la mano della corda alla bocca): quel braccio torna alla forma del personaggio, che si piega bene
     for (const [k, [a, b, c]] of [[0, [11, 13, 15]], [1, [12, 14, 16]]] as const) {
       const sh = J[a];
@@ -1181,11 +1190,44 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
       flexBuf[k] = t * t * (3 - 2 * t);
     }
     const hp = hands.map((h) => ({ side: h.side, pl: h.pl, bones: h.bones }));
-    // pelle mossa dall'atlante: gli stessi segmenti (e matrici) di muscoli e ossa, così resta sopra di loro
-    const bones = skinBody.atlasRig ? atlasSkinBones(meta, skinBody, skinMats, hp) : bodyBones(meta, skinBody, skinMats, hp);
-    // la pelle si gonfia con i muscoli che lavorano (gli stessi valori del corpo dell'atlante)
-    skinMesh(bodyGpu.body.m, bones, bodyGpu.body.p, bodyGpu.body.n, bul, skinBody.atlasRig ? null : flexBuf);
-    if (!skinBody.hideEyes) skinMesh(bodyGpu.eyes.m, skinBody.atlasRig ? bodyBones(meta, skinBody, skinMats, hp) : bones, bodyGpu.eyes.p, bodyGpu.eyes.n);
+    // la posa in fila, per vedere se è cambiata
+    let n = 0;
+    const put = (v: number) => {
+      if (n >= poseScratch.length) {
+        const g = new Float32Array(poseScratch.length * 2);
+        g.set(poseScratch);
+        poseScratch = g;
+      }
+      poseScratch[n++] = v;
+    };
+    for (let i = 0; i < skinMats.length; i++) put(skinMats[i]);
+    for (let i = 0; i < bul.length; i++) put(bul[i]);
+    put(flexBuf[0]);
+    put(flexBuf[1]);
+    for (const h of hp) {
+      put(h.side === "L" ? 1 : 2);
+      for (const v of h.pl.m) put(v);
+      for (const v of h.pl.t) put(v);
+      for (const b of h.bones) {
+        for (const v of b.r) put(v);
+        for (const v of b.t) put(v);
+      }
+    }
+    samePose = n === poseN && poseSig.length >= n && meta === poseMeta;
+    for (let i = 0; samePose && i < n; i++) if (poseSig[i] !== poseScratch[i]) samePose = false;
+    if (!samePose) {
+      if (poseSig.length < n) poseSig = new Float32Array(poseScratch.length);
+      poseSig.set(poseScratch.subarray(0, n));
+      poseN = n;
+      poseMeta = meta;
+      dirty.add(bodyGpu.body);
+      dirty.add(bodyGpu.eyes);
+      // pelle mossa dall'atlante: gli stessi segmenti (e matrici) di muscoli e ossa, così resta sopra di loro
+      const bones = skinBody.atlasRig ? atlasSkinBones(meta, skinBody, skinMats, hp) : bodyBones(meta, skinBody, skinMats, hp);
+      // la pelle si gonfia con i muscoli che lavorano (gli stessi valori del corpo dell'atlante)
+      skinMesh(bodyGpu.body.m, bones, bodyGpu.body.p, bodyGpu.body.n, bul, skinBody.atlasRig ? null : flexBuf);
+      if (!skinBody.hideEyes) skinMesh(bodyGpu.eyes.m, skinBody.atlasRig ? bodyBones(meta, skinBody, skinMats, hp) : bones, bodyGpu.eyes.p, bodyGpu.eyes.n);
+    }
     gl.useProgram(hprog);
     gl.uniformMatrix4fv(hl.uVP, false, VP);
     gl.uniform3fv(hl.uEye, eye);
