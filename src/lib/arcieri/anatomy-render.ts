@@ -426,11 +426,22 @@ function torusMesh(R = 1, r = 0.07, seg = 32, tube = 6) {
 }
 
 /* mani vere (personaggio Quaternius): già piegate e messe nel mondo dalla CPU, pelle come quella vera del corpo */
+/** velo: quanto la pelle si allarga e quanto si avvicina all'occhio per la profondità (metri) */
+const VEIL_INFLATE = 0.002;
+const VEIL_BIAS = 0.02;
 const HVS = `
 attribute vec3 aP; attribute vec3 aN; attribute vec2 aUV; attribute vec3 aK;
 uniform mat4 uVP; uniform float uUvScale;
+// velo sopra i muscoli: la pelle un poco più fuori (uInflate) e, solo per la profondità, più vicina all'occhio
+// lungo il suo raggio (uBias): sullo schermo resta dov'è e copre i muscoli che la passano di poco
+uniform vec3 uEyeV; uniform float uBias; uniform float uInflate;
 varying vec3 vW; varying vec3 vN; varying vec2 vUV; varying vec3 vK;
-void main(){ vW = aP; vN = aN; vUV = aUV * uUvScale; vK = aK; gl_Position = uVP * vec4(aP, 1.0); }`;
+void main(){
+  vW = aP; vN = aN; vUV = aUV * uUvScale; vK = aK;
+  vec3 p = aP + aN * uInflate;
+  if (uBias > 0.0) p += normalize(uEyeV - p) * uBias;
+  gl_Position = uVP * vec4(p, 1.0);
+}`;
 const HFS = `${PREC}
 varying vec3 vW; varying vec3 vN; varying vec2 vUV;
 // x: occlusione (pieghe, solchi tra i muscoli; 1 = all'aperto), y: quanto conta il chiaroscuro dipinto,
@@ -716,8 +727,10 @@ void main(){
 const GEAR_KIND: Partial<Record<GearMesh, number>> = { sbRiser: 1, sbDark: 6, sbLight: 2, lbWood: 2, lbGrip: 0, arTrim: 2, arShaft: 5, arFletch: 3, arPoint: 4, tgStraw: 8, tgWood: 8, tgMetal: 8, tgFlag: 0, tgFace: 8, ground: 7 };
 
 export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
-  const gl = canvas.getContext("webgl", { antialias: true, premultipliedAlpha: false, alpha: true, preserveDrawingBuffer: keep });
+  const gl = canvas.getContext("webgl", { antialias: true, premultipliedAlpha: false, alpha: true, preserveDrawingBuffer: keep, stencil: true });
   if (!gl) return null;
+  // stencil per il velo della pelle (dove non c'è, il velo resta com'era)
+  const hasStencil = Boolean(gl.getContextAttributes()?.stencil);
   const sh = (type: number, src: string) => {
     const s = gl.createShader(type)!;
     gl.shaderSource(s, src);
@@ -958,6 +971,9 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     uDetOn: gl.getUniformLocation(hprog, "uDetOn"),
     uDetK: gl.getUniformLocation(hprog, "uDetK"),
     uVeil: gl.getUniformLocation(hprog, "uVeil"),
+    uEyeV: gl.getUniformLocation(hprog, "uEyeV"),
+    uBias: gl.getUniformLocation(hprog, "uBias"),
+    uInflate: gl.getUniformLocation(hprog, "uInflate"),
   };
   // grana della pelle (pacchetto pelle): due immagini piccole che si ripetono, con le mipmap
   const detTex = gl.createTexture();
@@ -1133,7 +1149,7 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
   };
   /** pelle vera chiusa: il corpo del personaggio mosso dai segmenti e dalle mani vere */
   const flexBuf: [number, number] = [0, 0];
-  const drawSkinBody = (meta: BodyMeta, skinMats: Float32Array, hands: RigPose[], VP: Float32Array, eye: V3, J: Record<number, V3>, /** sopra muscoli e ossa: trasparenza al centro (0 = pelle piena) */ veil = 0) => {
+  const drawSkinBody = (meta: BodyMeta, skinMats: Float32Array, hands: RigPose[], VP: Float32Array, eye: V3, J: Record<number, V3>, /** sopra muscoli e ossa: trasparenza al centro (0 = pelle piena) */ veil = 0, /** muscoli e ossa segnati nello stencil (1) */ masked = false) => {
     if (!skinBody || !bodyGpu) return false;
     uploaded = null;
     // gomito chiuso (la mano della corda alla bocca): quel braccio torna alla forma del personaggio, che si piega bene
@@ -1159,6 +1175,9 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     gl.useProgram(hprog);
     gl.uniformMatrix4fv(hl.uVP, false, VP);
     gl.uniform3fv(hl.uEye, eye);
+    gl.uniform3fv(hl.uEyeV, eye);
+    gl.uniform1f(hl.uBias, 0);
+    gl.uniform1f(hl.uInflate, 0);
     gl.uniform3fv(hl.uSkin, skinLin);
     gl.uniform4fv(hl.uCut, cutNow);
     gl.disable(gl.BLEND);
@@ -1186,7 +1205,24 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
       gl.enable(gl.BLEND);
       gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
       gl.uniform1f(hl.uVeil, veil);
-      skinPass();
+      // la pelle segue i muscoli a meno di qualche millimetro: dove un muscolo la passa (spalla in trazione,
+      // gomito chiuso) il velo lo copre lo stesso. Solo sopra muscoli e ossa (stencil 1): arco, freccia e corda
+      // vicini alla pelle restano davanti
+      gl.uniform1f(hl.uInflate, VEIL_INFLATE);
+      if (masked) {
+        gl.enable(gl.STENCIL_TEST);
+        gl.stencilMask(0);
+        gl.stencilOp(gl.KEEP, gl.KEEP, gl.KEEP);
+        gl.stencilFunc(gl.EQUAL, 1, 0xff);
+        gl.uniform1f(hl.uBias, VEIL_BIAS);
+        skinPass();
+        gl.uniform1f(hl.uBias, 0);
+        gl.stencilFunc(gl.NOTEQUAL, 1, 0xff);
+        skinPass();
+        gl.disable(gl.STENCIL_TEST);
+        gl.stencilMask(0xff);
+      } else skinPass();
+      gl.uniform1f(hl.uInflate, 0);
       gl.uniform1f(hl.uVeil, 0);
       gl.depthFunc(gl.LESS);
       gl.depthMask(true);
@@ -1491,13 +1527,22 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
       bound = "";
       return;
     }
+    // con la pelle a velo: dove si vedono muscoli e ossa si segna lo stencil (lì il velo li copre anche se la passano)
+    const masked = hasStencil && L.pelle && style === 2 && (L.muscolo || L.osso);
+    if (masked) {
+      gl.enable(gl.STENCIL_TEST);
+      gl.stencilMask(0xff);
+      gl.stencilFunc(gl.ALWAYS, 1, 0xff);
+      gl.stencilOp(gl.KEEP, gl.KEEP, gl.REPLACE);
+    }
     if (L.osso) drawBodyLayer("bone", 1, 1);
     if (L.muscolo) drawBodyLayer("muscle", 2, 1);
+    if (masked) gl.disable(gl.STENCIL_TEST);
     if (L.pelle && style === 2 && hands.length && skinBody && bodyGpu) {
       // pelle vera chiusa: il corpo intero del personaggio con le sue mani
       for (const a of bodyAttribs) if (a >= 0) gl.disableVertexAttribArray(a);
       // con muscoli o scheletro accesi la pelle vera diventa un velo sopra di loro: si vede che li riveste
-      drawSkinBody(meta, skinMats, hands, VP, eye, J, L.muscolo || L.osso ? 0.4 : 0);
+      drawSkinBody(meta, skinMats, hands, VP, eye, J, L.muscolo || L.osso ? 0.4 : 0, masked);
       gl.useProgram(bprog);
       for (const a of bodyAttribs) if (a >= 0) gl.enableVertexAttribArray(a);
     } else if (L.pelle && style === 2) {
@@ -1590,7 +1635,7 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
       if (!body || !model.J || !model.hand) return null;
       gl.viewport(0, 0, W, H);
       gl.clearColor(0, 0, 0, 0);
-      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT | gl.STENCIL_BUFFER_BIT);
       drawBody(model, VP, eye, { pelle: true, muscolo: false, osso: false }, null, 0, true);
       const px = new Uint8Array(W * H * 4);
       gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, px);
@@ -1604,7 +1649,7 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     clear(W: number, H: number) {
       gl.viewport(0, 0, W, H);
       gl.clearColor(0, 0, 0, 0);
-      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT | gl.STENCIL_BUFFER_BIT);
     },
     /** focus: id dei muscoli da mettere in evidenza (gli altri si spengono) */
     draw(model: Model, VP: Float32Array, eye: V3, time: number, L: Layers, focus?: Set<string> | null, fast = false, /** sfera attorno all'occhio da non disegnare (visuale dell'arciere) */ cut?: [number, number, number, number] | null) {
