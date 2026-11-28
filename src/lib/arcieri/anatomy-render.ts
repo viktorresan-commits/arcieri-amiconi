@@ -256,9 +256,9 @@ void main(){
     // fasci appena accennati e la lucentezza a seta lungo le fibre (come nei preparati anatomici),
     // tendini e aponeurosi bianco perla e lucidi
     float h = hash(vGrp);
-    // rosso del muscolo dei preparati e delle tavole anatomiche: rosso carne (prima un rosa mattone che, con le
-    // fasce chiare e la luce, sembrava spento), appena diverso da un gruppo all'altro
-    vec3 alb = vec3(0.24, 0.012, 0.016) * (0.93 + 0.14 * h) * vec3(1.0, 1.0 + (hash(vGrp + 3.0) - 0.5) * 0.2, 1.0 + (hash(vGrp + 7.0) - 0.5) * 0.2);
+    // rosso cremisi delle animazioni anatomiche (misurato sui video di riferimento: rosso con un filo di blu,
+    // mai arancio), appena diverso da un gruppo all'altro
+    vec3 alb = vec3(0.22, 0.024, 0.035) * (0.93 + 0.14 * h) * vec3(1.0, 1.0 + (hash(vGrp + 3.0) - 0.5) * 0.2, 1.0 + (hash(vGrp + 7.0) - 0.5) * 0.2);
     alb *= 0.88 + 0.14 * sin(3.14159 * vF.x);
     float fy = vF.y * 34.0 + 0.18 * sin(vF.x * 9.0) + 0.22 * sin(vF.x * 2.7 + vF.y * 4.1);
     float id = floor(fy);
@@ -275,7 +275,9 @@ void main(){
     float groove = 1.0 - smoothstep(0.03, 0.12 + fw, dl);
     float crown = sin(fr * 3.14159);
     // solchi appena accennati: la grana del muscolo, non righe di legno
-    float fib = 1.0 - amp * (0.07 * groove - 0.025 * crown + (hh - 0.5) * 0.05);
+    float fib = 1.0 - amp * (0.04 * groove - 0.025 * crown + (hh - 0.5) * 0.05);
+    // righe chiare sottili lungo le fibre (come nelle animazioni: la luce che corre sui fasci)
+    float streak = groove * amp * (0.55 + 0.45 * hh);
     // con l'immagine dei fasci: rilievo vero dei fasci lungo le fibre (luce che scorre sui fasci) e il
     // chiaroscuro del tessuto; le fasce connettivali tra i fasci appena più chiare
     float fascia = 0.0;
@@ -305,18 +307,18 @@ void main(){
     float on = smoothstep(0.32, 0.8, act);
     // muscolo che lavora: rosso acceso tendente all'arancio, ben distinto ma non giallo
     // muscolo che lavora: rosso vivo (stessa famiglia di colore, solo più acceso), non arancio
-    vec3 work = vec3(0.46, 0.03, 0.015);
+    vec3 work = vec3(0.48, 0.03, 0.04);
     alb = mix(alb, work, on * 0.85);
-    if (vFoc > 0.5) { alb = vec3(0.44, 0.06, 0.02); on = 1.0; }
+    if (vFoc > 0.5) { alb = vec3(0.46, 0.04, 0.05); on = 1.0; }
     else if (vFoc < -0.5) { alb = mix(alb, vec3(0.12, 0.09, 0.09), 0.5); on = 0.0; }
     // tendini e fasce: bianco avorio caldo (come nei preparati), lucidi
-    vec3 tend = vec3(0.47, 0.39, 0.35);
-    alb = mix(alb * fib, vec3(0.34, 0.11, 0.09), fascia);
+    vec3 tend = vec3(0.56, 0.50, 0.50);
+    alb = mix(alb * fib, vec3(0.50, 0.24, 0.27), clamp(fascia * 2.6 + streak * 0.16, 0.0, 1.0));
     alb = mix(alb, tend, vTend * 0.9);
     // luce morbida (la carne lascia passare un po' di luce), bordi che si scuriscono tra un muscolo e l'altro
     ndv = clamp(dot(N, V), 0.0, 1.0);
     vec3 light = C1 * wrapL(N, L1, 0.45) + C2 * wrapL(N, L2, 0.5) + amb;
-    float edge = mix(1.0, 0.32, pow(1.0 - ndv, 1.6));
+    float edge = mix(1.0, 0.5, pow(1.0 - ndv, 1.6));
     col = alb * light * edge;
     // lucentezza a seta lungo le fibre: la riga di luce corre di traverso al fascio
     float silk = 0.0;
@@ -335,13 +337,13 @@ void main(){
 #endif
     float wet = pow(max(dot(N, H), 0.0), 64.0) * 0.12;
     // riflessi della carne rossi (bianchi sembravano una patina rosata sul muscolo); bianchi solo sui tendini
-    vec3 sheen = mix(vec3(1.0, 0.5, 0.42), vec3(1.0), vTend);
+    vec3 sheen = mix(vec3(1.0, 0.56, 0.62), vec3(1.0), vTend);
     col += C1 * sheen * (silk * (1.0 - 0.5 * vTend) + wet + vTend * pow(max(dot(N, H), 0.0), 24.0) * 0.12);
     // controluce: stacca il corpo dallo sfondo
-    col += C3 * mix(vec3(1.0, 0.55, 0.5), vec3(1.0), vTend) * pow(1.0 - ndv, 3.0) * max(0.0, dot(N, L3) + 0.2) * 0.22;
+    col += C3 * mix(vec3(1.0, 0.56, 0.62), vec3(1.0), vTend) * pow(1.0 - ndv, 3.0) * max(0.0, dot(N, L3) + 0.2) * 0.22;
     // muscolo che lavora: si accende dall'interno, piano
     float pulse = 0.85 + 0.15 * sin(uTime * 4.4);
-    col += vec3(0.55, 0.05, 0.02) * on * (0.04 + 0.12 * pow(ndv, 2.0)) * pulse * (1.0 - vTend);
+    col += vec3(0.55, 0.04, 0.06) * on * (0.04 + 0.12 * pow(ndv, 2.0)) * pulse * (1.0 - vTend);
     // superficie stirata dove due segmenti tirano: più scura e senza luce (niente schegge luccicanti)
     col *= 1.0 - 0.4 * vStr;
   }
@@ -572,7 +574,14 @@ void main(){
   // dove la pelle è più ruvida il lucido si spegne, dove è liscia brilla un poco di più
   sp *= clamp(1.0 - dS * 1.5, 0.4, 1.7) * ao;
   float va = uVeil > 0.0 ? clamp(uVeil + (1.0 - uVeil) * pow(1.0 - ndv, 2.4), 0.0, 1.0) : 1.0;
-  gl_FragColor = vec4(tone(alb * light + C1 * sp), va);
+  vec3 oc = alb * light + C1 * sp;
+  if (uVeil > 0.0) {
+    // sopra muscoli e ossa la pelle diventa vetro grigio chiaro, come nelle animazioni anatomiche: disegna la
+    // forma del corpo senza tingere di arancio il rosso dei muscoli
+    float lum = dot(light, vec3(0.3, 0.5, 0.2));
+    oc = mix(oc, vec3(0.40, 0.43, 0.48) * (0.35 + 0.45 * lum) + C3 * pow(1.0 - ndv, 3.0) * 0.4 + C1 * sp, 0.85);
+  }
+  gl_FragColor = vec4(tone(oc), va);
 }`;
 
 export function perspective(fov: number, aspect: number, near: number, far: number) {

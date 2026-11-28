@@ -209,6 +209,9 @@ export function skinWithMuscles(data: BodyData, skin: BodyBatch): Uint8Array {
  * attacchi → più spesso (volume costante), si allunga → più sottile; se lavora un poco più gonfio.
  * act: quanto lavora ogni gruppo (0..1, per indice di gruppo).
  */
+/** massa in più nel ventre di ogni muscolo, in frazioni del suo spessore */
+const MASS = 0.3;
+
 export function flexValues(info: FlexInfo, J: Record<number, V3>, act: Float32Array, out: Float32Array) {
   out.fill(0);
   const P = (i: number) => J[i];
@@ -226,7 +229,9 @@ export function flexValues(info: FlexInfo, J: Record<number, V3>, act: Float32Ar
     const a = Math.max(0, Math.min(1, act[g] ?? 0));
     // allungato si assottiglia di poco (i muscoli piatti come pettorale e dorsale sono sottili: oltre
     // si rovescerebbero), accorciato si gonfia di più
-    const d = k >= 1 ? (k - 1) * def.r * 1.6 : (k - 1) * def.r * 0.7;
-    out[g] = Math.max(-0.14 * def.r, Math.min(0.55 * def.r, d + a * 0.1 * def.r));
+    const d = k >= 1 ? (k - 1) * def.r * 1.9 : (k - 1) * def.r * 0.85;
+    // più massa nel ventre di ogni muscolo (come il corpo atletico delle animazioni anatomiche); la pelle che
+    // gli sta sopra lo segue con la stessa spinta
+    out[g] = Math.max(-0.18 * def.r, Math.min(0.7 * def.r, d + a * 0.12 * def.r)) + MASS * def.r;
   }
 }
