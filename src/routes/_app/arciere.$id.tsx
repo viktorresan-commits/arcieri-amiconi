@@ -250,7 +250,7 @@ function SeasonsCard({ st, firstName }: { st: Stats; firstName: string }) {
   return (
     <Card className="grid gap-3" style={{ boxShadow: `inset 0 -3px 0 ${KINDS.campionato.color}55` }}>
       <KindHeading kind="campionato" title="Stagione per stagione" sub={`${seasons.length} ${seasons.length === 1 ? "stagione" : "stagioni"} di ${firstName}${st.since ? `, dal ${st.since}` : ""}`} />
-      <Chips value={names[index]} options={names} onChange={(v) => { setPick(v); setAll(false); }} />
+      <Chips value={names[index]} options={names} onChange={(v) => setPick(v)} />
       <div className="grid grid-cols-4 gap-1.5 text-center">
         {tiles.map(([k, v]) => (
           <div key={k} className="rounded-xl bg-white/[0.05] py-2">

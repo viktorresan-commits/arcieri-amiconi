@@ -59,7 +59,7 @@ if (typeof document !== "undefined") {
 async function startScan() {
   if (running()) return;
   stopFlag = false;
-  emit({ step: "Apro il portale", pages: 0, saved: 0, pct: 0, seasons: 0, seasonsDone: 0, gare: 0, startedAt: Date.now() });
+  emit({ step: "Inizio", pages: 0, saved: 0, pct: 0, seasons: 0, seasonsDone: 0, gare: 0, startedAt: Date.now() });
   await keepAwake();
   try {
     await syncHistory({ onProgress: (p) => emit({ ...p }), stop: () => stopFlag });
@@ -171,7 +171,7 @@ function ScanPanel({ p, busy, complete, started }: { p: HistoryProgress | null; 
         </details>
       ) : null}
       {complete ? (
-        <button type="button" className="justify-self-start text-xs text-muted underline underline-offset-2" onClick={() => void startScan()}>Cerca stagioni nuove sul portale</button>
+        <button type="button" className="justify-self-start text-xs text-muted underline underline-offset-2" onClick={() => void startScan()}>Cerca stagioni nuove</button>
       ) : (
         <>
           <button type="button" className="aa-press flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(180deg,#f1cf8a,#c99a35)] px-4 text-sm font-semibold text-[#2a1c05] shadow-[0_10px_24px_-12px_rgba(224,177,90,0.9)]" onClick={() => void startScan()}>
@@ -179,7 +179,7 @@ function ScanPanel({ p, busy, complete, started }: { p: HistoryProgress | null; 
             {started ? "Riprendi la scansione" : "Scansiona tutto dal 2019"}
           </button>
           <p className="text-[0.7rem] leading-snug text-muted">
-            Legge dal portale FITAST ogni stagione finita: classifiche generali di compagnie e arcieri, e di ogni gara tutti gli arcieri per categoria e le compagnie. Ci vuole tempo (anche un'ora): una volta fatto, i dati restano salvati per tutti e non si rileggono più.
+            Legge ogni stagione finita: classifiche generali di compagnie e arcieri e, per ogni gara, arcieri per categoria e compagnie. Ci vuole tempo (anche un'ora); poi i dati restano salvati per tutti.
           </p>
         </>
       )}
@@ -360,7 +360,7 @@ function CompanyTrend({ teams, name }: { teams: string[]; name: string }) {
   if (seasons.length < 2) return null;
   const sel = seasons.find((s) => s.season === pick) ?? seasons[seasons.length - 1];
   const W = 320;
-  const pad = { l: 22, r: 10 };
+  const pad = { l: 22, r: 16 };
   const step = (W - pad.l - pad.r) / Math.max(1, seasons.length - 1);
   const xAt = (i: number) => pad.l + i * step;
   // posto: il primo in alto; la scala va fino al posto peggiore toccato (almeno 5)

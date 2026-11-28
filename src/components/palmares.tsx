@@ -268,7 +268,7 @@ export function ArcherPalmares({ memberId, firstName }: { memberId: number; firs
           {pods.slice(0, 12).map((p, i) => <PodiumRow key={`${p.competition}-${p.day}-${i}`} p={p} />)}
         </ul>
       ) : data ? (
-        <p className="text-sm text-muted">Ancora nessun podio per {firstName}. Le posizioni arrivano dalle gare del calendario (anche quelle prese dal portale FITAST).</p>
+        <p className="text-sm text-muted">Ancora nessun podio per {firstName}. Le posizioni arrivano dalle gare del calendario (anche quelle FITAST).</p>
       ) : null}
     </Card>
   );

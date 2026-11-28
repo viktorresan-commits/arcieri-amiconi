@@ -72,7 +72,7 @@ export function FitastLinkCard({ onChanged, crestOf = noCrest, always = false }:
         </button>
       ) : null}
       {mates ? (
-        <Sheet title={data.founder ? "Nomi FITAST degli arcieri" : "Nomi FITAST dei compagni"} sub={data.founder ? "Scegli il nome con cui il portale conosce ognuno. Nessun avviso all'arciere: il collegamento lo vedi solo tu." : "Scegli il nome con cui il portale conosce ognuno."} onClose={() => setMates(false)}>
+        <Sheet title={data.founder ? "Nomi FITAST degli arcieri" : "Nomi FITAST dei compagni"} sub={data.founder ? "Scegli il nome di ognuno nelle classifiche FITAST. Nessun avviso all'arciere: il collegamento lo vedi solo tu." : "Scegli il nome di ognuno nelle classifiche FITAST."} onClose={() => setMates(false)}>
           <ol className="grid gap-1.5">
             {[...unlinked, ...data.mates.filter((m) => m.fitastName.trim() || m.reserved)].map((m) => (
               <li key={m.userId} className="flex items-center gap-2.5 rounded-xl bg-white/[0.035] px-2.5 py-2">
@@ -123,7 +123,7 @@ function LinkSheet({ target, crestOf, onClose, onDone }: { target: Target; crest
   return (
     <Sheet
       title={target.self ? "Il tuo nome su FITAST" : `Il nome FITAST di ${target.label}`}
-      sub={target.self ? "Scegli il tuo nome nelle classifiche del portale: le gare del campionato si riempiono da sole con i tuoi risultati." : "Scegli il suo nome nelle classifiche del portale: le sue gare del campionato si riempiono da sole."}
+      sub={target.self ? "Scegli il tuo nome nelle classifiche FITAST: le gare del campionato si riempiono da sole con i tuoi risultati." : "Scegli il suo nome nelle classifiche FITAST: le sue gare del campionato si riempiono da sole."}
       onClose={onClose}
     >
       <div className="grid gap-3">
@@ -136,7 +136,7 @@ function LinkSheet({ target, crestOf, onClose, onDone }: { target: Target; crest
         {error ? <ErrorNote text={error} /> : loading && !data ? <Loading /> : data?.empty ? (
           <p className="text-sm text-muted">Le classifiche non sono ancora state lette. Aprile da Compagnie con «Aggiorna», poi torna qui.</p>
         ) : !results.length ? (
-          <p className="text-sm text-muted">{q ? "Nessun nome trovato. Prova con il solo cognome." : "Scrivi il tuo nome o il tuo cognome come lo usa il portale."}</p>
+          <p className="text-sm text-muted">{q ? "Nessun nome trovato. Prova con il solo cognome." : "Scrivi il tuo nome o il tuo cognome come compare nelle classifiche."}</p>
         ) : (
           <>
             {!q ? <p className="text-xs text-muted">Nomi che somigliano al profilo:</p> : null}

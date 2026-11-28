@@ -1337,7 +1337,7 @@ function SaveScore({ nums, row, m, comps, userId, onDone, onCancel }: { nums: { 
       {(() => {
         const prev = comps.find((x) => x.id === compId)?.entries.find((e) => e.userId === userId);
         return prev?.piazzole.length ? (
-          <p className="text-xs text-muted">In questa gara hai già {prev.piazzole.length} piazzole ({prev.piazzole.reduce((a, l) => a + l.score, 0)} punti): restano, e dal portale si aggiungono posto, categoria e punti campionato.</p>
+          <p className="text-xs text-muted">In questa gara hai già {prev.piazzole.length} piazzole ({prev.piazzole.reduce((a, l) => a + l.score, 0)} punti): restano, e si aggiungono posto, categoria e punti campionato.</p>
         ) : null;
       })()}
       {err ? <ErrorNote text={err} /> : null}

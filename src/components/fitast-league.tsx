@@ -258,7 +258,7 @@ export function useFitastLeague(companies: Crest[]) {
   /** `full`: rilegge tutto da capo; altrimenti solo le novità (gare nuove, risultati non ancora definitivi, prossime piazzole) */
   async function refresh(full = false) {
     stop.current = false;
-    setSync({ step: full ? "Apro il portale · rileggo tutto" : "Apro il portale · cerco le novità", pages: 0, saved: 0 });
+    setSync({ step: full ? "Rileggo tutto" : "Cerco le novità", pages: 0, saved: 0 });
     try {
       await syncStandings({
         onProgress: (p) => setSync({ ...p }),
@@ -334,7 +334,7 @@ export function FitastHeader({ league }: { league: FitastLeagueState }) {
             <a href="#albo" className="text-xs text-muted underline underline-offset-2" onClick={(e) => { e.preventDefault(); document.getElementById("albo")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>Albo d'oro dal 2019</a>
           </>
         )}
-        {sync ? <span className="text-xs text-muted">{running ? `${sync.step} · ${sync.pages} pagine lette` : sync.error ? sync.error : sync.saved ? `Aggiornate ${sync.saved} classifiche in ${sync.pages} pagine.` : `Nessuna novità sul portale (${sync.pages} pagine controllate).`}</span> : null}
+        {sync ? <span className="text-xs text-muted">{running ? `${sync.step} · ${sync.pages} pagine lette` : sync.error ? sync.error : sync.saved ? `Aggiornate ${sync.saved} classifiche in ${sync.pages} pagine.` : `Nessuna novità (${sync.pages} pagine controllate).`}</span> : null}
       </div>
       {sync?.done && sync.note ? <p className="break-words text-xs text-muted">{sync.note}</p> : null}
       {sync?.done && sync.diag?.length && !sync.saved ? (

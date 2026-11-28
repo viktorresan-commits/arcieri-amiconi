@@ -331,7 +331,7 @@ export function GareBody({ embedded = false, league }: { embedded?: boolean; /**
                   sub={[comp.group?.piazzola ? `piazzola ${comp.group.piazzola}` : "", mates.length ? `${mates.length} ${past ? "con te" : "con cui tirerai"}` : "", past && lanesSet ? `${lanesSet} segnate` : ""].filter(Boolean).join(" · ") || "con chi eri, punti e cartellino"}
                   {...fold("piazzole", true)}
                 >
-                  <Fold icon="team" title={past ? "Con te in piazzola" : "Tirerai con"} sub={mates.length ? mates.map((m) => m.name.split(" ")[0]).slice(0, 4).join(", ") + (mates.length > 4 ? "…" : "") : "dal portale o dal cartellino"} inner {...fold("mates", true)}>
+                  <Fold icon="team" title={past ? "Con te in piazzola" : "Tirerai con"} sub={mates.length ? mates.map((m) => m.name.split(" ")[0]).slice(0, 4).join(", ") + (mates.length > 4 ? "…" : "") : "dagli iscritti o dal cartellino"} inner {...fold("mates", true)}>
                     {mates.length ? (
                       <PiazzolaMates group={comp.group as { piazzola: number; mates: Mate[] }} past={past} compId={comp.id} onChanged={() => setNonce((n) => n + 1)} />
                     ) : (
@@ -368,7 +368,7 @@ export function GareBody({ embedded = false, league }: { embedded?: boolean; /**
               ) : null}
               {portalCode ? (
                 <Button className="w-full text-sm" variant="ghost" onClick={() => { setPortal({ code: portalCode }); window.setTimeout(() => document.getElementById("fitast")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60); }}>
-                  {tab === "next" ? "Piazzole e iscritti sul portale" : "Cerca sul portale FITAST"}
+                  {tab === "next" ? "Piazzole e iscritti" : "Cerca su FITAST"}
                 </Button>
               ) : null}
               {/* la scelta resta segnata (pieno = scelto) e si può cambiare quando si vuole */}
@@ -538,7 +538,7 @@ const noCrest = (): Crest | null => null;
 function pzWhy(comp: Comp) {
   const pz = comp.pzInfo;
   const mine = comp.group?.piazzola || null;
-  if (!comp.fitast?.garaId && !pz) return "Questa gara non è collegata a una gara del portale FITAST: fotografa il cartellino qui sotto, oppure collegala dalla gara.";
+  if (!comp.fitast?.garaId && !pz) return "Questa gara non è collegata a una gara FITAST: fotografa il cartellino qui sotto, oppure collegala dalla gara.";
   if (!pz?.read) {
     // l'ultimo aggiornamento dal portale, se c'è stato: cosa ha trovato (serve per capire cosa manca)
     let last = "";
@@ -551,10 +551,10 @@ function pzWhy(comp: Comp) {
     // quali elenchi sono già arrivati (numero e giorno): se c'è quello di questa gara con un altro numero si vede subito
     const dd = (d: string) => (d ? d.split("-").reverse().slice(0, 2).join("/") : "senza data");
     const known = pz?.known?.length ? ` Elenchi già letti: ${pz.known.map((k) => `gara ${k.id} del ${dd(k.day)} (${k.n} arcieri)`).join(", ")}; questa gara è la ${comp.fitast?.garaId || "—"} del ${dd(comp.startsOn)}.` : "";
-    return `L'elenco delle piazzole di questa gara non è ancora arrivato dal portale. In Compagnie premi «Aggiorna». Intanto puoi fotografare il cartellino qui sotto.${known}${last}`;
+    return `L'elenco delle piazzole di questa gara non c'è ancora. In Compagnie premi «Aggiorna». Intanto puoi fotografare il cartellino qui sotto.${known}${last}`;
   }
   if (pz.mine == null && !mine) return `Elenco delle piazzole letto (${pz.people} arcieri, ${pz.lanes} piazzole), ma non trovo il tuo nome. Se hai tirato da ospite scegli qui sotto un compagno della tua piazzola: ti metto nella sua. Altrimenti collega il tuo nome FITAST nel Profilo.`;
-  return `Elenco delle piazzole letto (${pz.people} arcieri, ${pz.lanes} piazzole): nella piazzola ${pz.mine ?? mine} non risulta nessun altro.${pz.mine != null && mine && pz.mine !== mine ? ` Sul cartellino hai la ${mine}, sul portale la ${pz.mine}.` : ""}`;
+  return `Elenco delle piazzole letto (${pz.people} arcieri, ${pz.lanes} piazzole): nella piazzola ${pz.mine ?? mine} non risulta nessun altro.${pz.mine != null && mine && pz.mine !== mine ? ` Sul cartellino hai la ${mine}, su FITAST la ${pz.mine}.` : ""}`;
 }
 
 function PiazzolaMates({ group, past, compId, onChanged }: { group: { piazzola: number; mates: Mate[] }; past: boolean; compId: number; onChanged: () => void }) {
