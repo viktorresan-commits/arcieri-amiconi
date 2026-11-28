@@ -7,8 +7,14 @@
 
 type RGB = [number, number, number];
 
-/** il colore che domina il bordo, se c'è (tre quarti del bordo pieno e dello stesso colore circa) */
-function borderColor(d: Uint8ClampedArray, w: number, h: number): { bg: RGB; tol: number } | null {
+type Bg = { c: RGB; tol: number };
+
+/**
+ * I colori dello sfondo, presi dal bordo dell'immagine: fino a tre (lo sfondo a scacchi grigio e bianco delle
+ * finte trasparenze, due toni, una sfumatura leggera), ognuno con la sua tolleranza. Servono almeno metà del
+ * bordo pieno di questi colori; un bordo quasi tutto trasparente vuol dire stemma già scontornato.
+ */
+function borderPalette(d: Uint8ClampedArray, w: number, h: number): Bg[] | null {
   const idx: number[] = [];
   for (let x = 0; x < w; x++) idx.push(x, (h - 1) * w + x);
   for (let y = 1; y < h - 1; y++) idx.push(y * w, y * w + w - 1);
@@ -25,36 +31,65 @@ function borderColor(d: Uint8ClampedArray, w: number, h: number): { bg: RGB; tol
     if (list) list.push(i);
     else buckets.set(key, [i]);
   }
-  // già scontornato
-  if (transparent > idx.length * 0.6) return null;
-  // il gruppo più numeroso con i vicini (la grana del JPEG sparge lo sfondo su più gruppi vicini)
-  let best: number[] = [];
-  for (const [key, list] of buckets) {
-    const r = key >> 8, g = (key >> 4) & 15, b = key & 15;
-    const near: number[] = [...list];
-    for (const [k2, l2] of buckets) {
-      if (k2 === key) continue;
-      if (Math.abs((k2 >> 8) - r) <= 1 && Math.abs(((k2 >> 4) & 15) - g) <= 1 && Math.abs((k2 & 15) - b) <= 1) near.push(...l2);
+  const opaque = idx.length - transparent;
+  if (transparent > idx.length * 0.6 || opaque < 8) return null;
+  const near = (a: number, b: number) => Math.abs((a >> 8) - (b >> 8)) <= 1 && Math.abs(((a >> 4) & 15) - ((b >> 4) & 15)) <= 1 && Math.abs((a & 15) - (b & 15)) <= 1;
+  const left = new Map(buckets);
+  const out: Bg[] = [];
+  let covered = 0;
+  while (out.length < 3 && left.size) {
+    // il gruppo più numeroso con i suoi vicini (la grana del JPEG sparge un colore su più gruppi)
+    let bestKey = -1;
+    let bestN = 0;
+    for (const [key] of left) {
+      let n = 0;
+      for (const [k2, l2] of left) if (k2 === key || near(k2, key)) n += l2.length;
+      if (n > bestN) {
+        bestN = n;
+        bestKey = key;
+      }
     }
-    if (near.length > best.length) best = near;
+    if (bestKey < 0 || bestN < opaque * 0.1) break;
+    const members: number[] = [];
+    for (const [k2, l2] of [...left]) {
+      if (k2 === bestKey || near(k2, bestKey)) {
+        members.push(...l2);
+        left.delete(k2);
+      }
+    }
+    let sr = 0, sg = 0, sb = 0;
+    for (const i of members) {
+      sr += d[i * 4];
+      sg += d[i * 4 + 1];
+      sb += d[i * 4 + 2];
+    }
+    const c: RGB = [sr / members.length, sg / members.length, sb / members.length];
+    let v = 0;
+    for (const i of members) v += dist(d, i, c) ** 2;
+    const std = Math.sqrt(v / members.length);
+    out.push({ c, tol: Math.max(26, Math.min(60, std * 3 + 14)) });
+    covered += members.length;
   }
-  if (best.length < (idx.length - transparent) * 0.7) return null;
-  let sr = 0, sg = 0, sb = 0;
-  for (const i of best) {
-    sr += d[i * 4];
-    sg += d[i * 4 + 1];
-    sb += d[i * 4 + 2];
-  }
-  const bg: RGB = [sr / best.length, sg / best.length, sb / best.length];
-  let v = 0;
-  for (const i of best) v += dist(d, i, bg) ** 2;
-  const std = Math.sqrt(v / best.length);
-  return { bg, tol: Math.max(26, Math.min(60, std * 3 + 14)) };
+  return out.length && covered >= opaque * 0.5 ? out : null;
 }
 
 function dist(d: Uint8ClampedArray, i: number, c: RGB) {
   const o = i * 4;
   return Math.hypot(d[o] - c[0], d[o + 1] - c[1], d[o + 2] - c[2]);
+}
+
+/** il colore dello sfondo più vicino a un punto e quanto è lontano (rispetto alla sua tolleranza) */
+function nearestBg(d: Uint8ClampedArray, i: number, pal: Bg[]) {
+  let best = pal[0];
+  let bd = Infinity;
+  for (const p of pal) {
+    const dd = dist(d, i, p.c) / p.tol;
+    if (dd < bd) {
+      bd = dd;
+      best = p;
+    }
+  }
+  return { bg: best, r: bd };
 }
 
 /**
@@ -68,10 +103,8 @@ export function cutoutCanvas(canvas: HTMLCanvasElement): { x: number; y: number;
   if (w < 8 || h < 8) return null;
   const img = ctx.getImageData(0, 0, w, h);
   const d = img.data;
-  const found = borderColor(d, w, h);
-  if (!found) return null;
-  const { bg, tol } = found;
-  const soft = tol * 1.7;
+  const pal = borderPalette(d, w, h);
+  if (!pal) return null;
   // riempimento dai bordi: 1 = sfondo
   const mask = new Uint8Array(w * h);
   const queue = new Int32Array(w * h);
@@ -79,7 +112,7 @@ export function cutoutCanvas(canvas: HTMLCanvasElement): { x: number; y: number;
   const seed = (i: number) => {
     if (mask[i]) return;
     // già trasparente o del colore dello sfondo: è sfondo
-    if (d[i * 4 + 3] < 40 || dist(d, i, bg) <= tol) {
+    if (d[i * 4 + 3] < 40 || nearestBg(d, i, pal).r <= 1) {
       mask[i] = 1;
       queue[qt++] = i;
     }
@@ -116,11 +149,11 @@ export function cutoutCanvas(canvas: HTMLCanvasElement): { x: number; y: number;
       if (mask[i]) continue;
       const nb = (x > 0 && mask[i - 1]) || (x < w - 1 && mask[i + 1]) || (y > 0 && mask[i - w]) || (y < h - 1 && mask[i + w]);
       if (!nb) continue;
-      const dd = dist(d, i, bg);
-      if (dd >= soft) continue;
-      const a = Math.max(0.15, Math.min(1, (dd - tol * 0.5) / (soft - tol * 0.5)));
+      const { bg, r } = nearestBg(d, i, pal);
+      if (r >= 1.7) continue;
+      const a = Math.max(0.15, Math.min(1, (r - 0.5) / 1.2));
       const o = i * 4;
-      for (let c = 0; c < 3; c++) d[o + c] = Math.max(0, Math.min(255, (d[o + c] - bg[c] * (1 - a)) / a));
+      for (let c = 0; c < 3; c++) d[o + c] = Math.max(0, Math.min(255, (d[o + c] - bg.c[c] * (1 - a)) / a));
       d[o + 3] = Math.round(d[o + 3] * a);
     }
   }
