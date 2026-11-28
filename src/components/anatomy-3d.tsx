@@ -979,8 +979,8 @@ export function Anatomy3D({
     // e niente batteria consumata a vuoto
     let lastTarget: Landmark[] | null = null;
     let lastCal: BoneCal | null = null;
-    // play fluido: l'immagine preparata mostrata ora
-    let shown: { i: number; bmp: ImageBitmap; key: string } | null = null;
+    // play fluido: le immagini preparate già decodificate (della preparazione bmpKey)
+    let bmpKey = "";
     let decoding = false;
     /** immagini dei fotogrammi successivi, già decodificate */
     const ahead = new Map<number, ImageBitmap>();
@@ -1084,13 +1084,24 @@ export function Anatomy3D({
             if (cache.t[mid] <= tNow) lo = mid;
             else hi = mid;
           }
-          const i = Math.abs(cache.t[hi] - tNow) < Math.abs(cache.t[lo] - tNow) ? hi : lo;
+          // tra due fotogrammi preparati si sfuma dall'uno all'altro: al rallentatore (0,5× e 0,25×) le immagini
+          // cambiavano a scatti, 15 o 7 volte al secondo; ora il passaggio scorre
+          const gap = cache.t[hi] - cache.t[lo];
+          const frac = hi > lo && gap > 1e-4 ? Math.max(0, Math.min(1, (tNow - cache.t[lo]) / gap)) : 0;
+          const i = lo;
           const blob = cache.blobs[i];
-          // le immagini dei prossimi fotogrammi si preparano prima: quando servono sono già pronte
+          if (cache.key !== bmpKey) {
+            for (const b of ahead.values()) b.close();
+            ahead.clear();
+            bmpKey = cache.key;
+            // un'altra preparazione (altra vista o stile): si ridisegna da capo, mai un'immagine della vecchia
+            drawnI = -1;
+          }
+          // le immagini di questo fotogramma e dei prossimi si decodificano prima: quando servono sono già pronte
           if (typeof createImageBitmap === "function" && !decoding) {
-            for (const j of [i, i + 1, i + 2, i + 3]) {
+            for (const j of [i, i + 1, i + 2, i + 3, i + 4]) {
               const bj = cache.blobs[j];
-              if (!bj || ahead.has(j) || (shown?.i === j && shown.key === cache.key)) continue;
+              if (!bj || ahead.has(j)) continue;
               decoding = true;
               const key = cache.key;
               void createImageBitmap(bj)
@@ -1105,29 +1116,39 @@ export function Anatomy3D({
               break;
             }
           }
-          const ready = ahead.get(i);
-          if (blob && ready && shown?.i !== i) {
-            const prev = shown;
-            ahead.delete(i);
-            shown = { i, bmp: ready, key: cache.key };
-            prev?.bmp.close();
-          }
-          // quelle rimaste indietro (o di un'altra preparazione) si liberano
+          // quelle rimaste indietro (o troppo avanti) si liberano
           for (const [j, bmp] of ahead) {
-            if (j < i || j > i + 4) {
+            if (j < i - 1 || j > i + 6) {
               bmp.close();
               ahead.delete(j);
             }
           }
-          if (blob && shown && shown.key === cache.key) {
-            if (drawnI !== shown.i) {
-              drawnI = shown.i;
-              if (cc.width !== shown.bmp.width || cc.height !== shown.bmp.height) {
-                cc.width = shown.bmp.width;
-                cc.height = shown.bmp.height;
+          const a = ahead.get(i);
+          const b = frac > 0.03 ? ahead.get(hi) : undefined;
+          if (blob && a) {
+            // si ridisegna solo se cambia il fotogramma o la sfumatura (a sedicesimi)
+            const step = b ? Math.round(frac * 16) : 0;
+            const tag = i * 32 + step;
+            if (drawnI !== tag) {
+              drawnI = tag;
+              if (cc.width !== a.width || cc.height !== a.height) {
+                cc.width = a.width;
+                cc.height = a.height;
               }
-              cc.getContext("2d")?.drawImage(shown.bmp, 0, 0);
+              const g = cc.getContext("2d");
+              if (g) {
+                g.globalAlpha = 1;
+                g.drawImage(a, 0, 0);
+                if (b && b.width === a.width && b.height === a.height) {
+                  g.globalAlpha = step / 16;
+                  g.drawImage(b, 0, 0);
+                  g.globalAlpha = 1;
+                }
+              }
             }
+            used = true;
+          } else if (drawnI >= 0 && Math.floor(drawnI / 32) >= i - 2 && Math.floor(drawnI / 32) <= i + 2) {
+            // l'immagine giusta non è ancora pronta: resta quella di prima (vicina), niente salto al 3D dal vivo
             used = true;
           }
         }
@@ -1151,8 +1172,9 @@ export function Anatomy3D({
       }
       const aimKey = am.on ? `${am.mode}|${am.D}|${ac.zoom.toFixed(3)}|${ac.yaw.toFixed(4)}|${ac.pitch.toFixed(4)}|${R.targetReady()}|${am.setup.drawLb},${am.setup.drawIn},${am.setup.grains},${am.setup.lengthIn},${am.setup.bowType}` : "";
       const key = `${aimKey}|${ready}|${styleRef.current}|${c.yaw.toFixed(4)}|${c.pitch.toFixed(4)}|${c.zoom.toFixed(3)}|${v2 ? `${v2.z},${v2.x},${v2.y}` : ""}|${L0.pelle}${L0.muscolo}${L0.osso}${L0.nervo}${L0.punti}${L0.quote}${realRef.current ? 1 : 0}${fixRef.current ? 1 : 0}|${canvas.clientWidth}x${canvas.clientHeight}|${scale}|${bodyTick}|${R.gearReady()}`;
-      // dopo un movimento si disegna ancora un attimo con il corpo leggero, poi una volta con quello pieno
-      const fast = now - lastChange < 450 || dragging.current;
+      // dopo un movimento si disegna ancora un attimo con il corpo leggero, poi una volta con quello pieno; durante il
+      // play dal vivo (vista girata) sempre quello leggero: sul telefono il pieno andava a 8-12 immagini al secondo
+      const fast = now - lastChange < 450 || dragging.current || playing || Boolean(input.current.playing);
       if (!moving && key === lastKey && !playing && fast === lastFast) return;
       // fermo: alla risoluzione piena dello schermo (fino a 3×), nitido come una tavola anatomica;
       // in movimento a 2× e, se il telefono non sta al passo, un po' meno

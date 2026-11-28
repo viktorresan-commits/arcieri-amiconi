@@ -45,27 +45,22 @@ const MEMBER_SKY: Sky = { tod: "pomeriggio", weather: "sereno", clouds: 0.25, se
 
 export const Route = createFileRoute("/_app/squadra")({ component: Page });
 
-type Section = "arcieri" | "classifiche" | "gare" | "podi" | "altro";
-type Other = "bersaglio" | "mercatino" | "compagnie";
+type Section = "arcieri" | "classifiche" | "gare" | "compagnie";
 /**
- * le schede della Compagnia, una cosa per scheda e la più usata prima: chi c'è, chi va meglio, le gare (con la
- * prossima e le sue piazzole), cosa abbiamo vinto; bersaglio, mercatino e le altre compagnie stanno in «Altro»
+ * le schede della Compagnia, quattro e ognuna con le sue cose insieme: chi c'è; classifiche e podi; gare e
+ * bersaglio (dove arrivano le frecce); compagnie e mercatino
  */
 const SECTIONS: { id: Section; label: string; icon: IconName; lede: string }[] = [
   { id: "arcieri", label: "Arcieri", icon: "team", lede: "Chi tira con noi: il podio e le schede, per divisione e tipo d'arco." },
-  { id: "classifiche", label: "Classifiche", icon: "chart", lede: "Chi va meglio in compagnia e nel campionato FITAST." },
-  { id: "gare", label: "Gare", icon: "flag", lede: "La prossima gara con le piazzole della compagnia, poi tutte le gare della stagione." },
-  { id: "podi", label: "Podi", icon: "trophy", lede: "La bacheca della compagnia: podi, piazzamenti di squadra e premi dell'app." },
-  { id: "altro", label: "Altro", icon: "grid", lede: "Il bersaglio della compagnia, il mercatino dell'usato e le altre compagnie." },
+  { id: "classifiche", label: "Classifiche e podi", icon: "trophy", lede: "Chi va meglio in compagnia e nel campionato FITAST, e la bacheca dei podi." },
+  { id: "gare", label: "Gare e bersaglio", icon: "flag", lede: "La prossima gara con le piazzole della compagnia, le gare della stagione e dove arrivano le frecce." },
+  { id: "compagnie", label: "Compagnie e mercatino", icon: "shield", lede: "Le compagnie in cui entrare o da fondare e il mercatino dell'usato." },
 ];
-const OTHERS: { id: Other; label: string; icon: IconName }[] = [
-  { id: "bersaglio", label: "Bersaglio", icon: "target" },
-  { id: "mercatino", label: "Mercatino", icon: "bag" },
-  { id: "compagnie", label: "Compagnie", icon: "shield" },
-];
+type RankSub = "compagnia" | "campionato" | "podi";
+type GareSub = "gare" | "bersaglio";
+type CoSub = "compagnie" | "mercatino";
 /** le schede salvate dalle versioni di prima */
-const OLD_SECTION: Record<string, Section> = { bacheca: "altro", mercatino: "altro", bersaglio: "altro", compagnie: "altro", compagnia: "arcieri", statistiche: "classifiche", classifica: "classifiche", fitast: "classifiche", sfida: "classifiche" };
-const OLD_OTHER: Record<string, Other> = { bacheca: "mercatino", mercatino: "mercatino", bersaglio: "bersaglio", compagnie: "compagnie" };
+const OLD_SECTION: Record<string, Section> = { bacheca: "compagnie", mercatino: "compagnie", bersaglio: "gare", podi: "classifiche", compagnia: "arcieri", statistiche: "classifiche", classifica: "classifiche", fitast: "classifiche", sfida: "classifiche" };
 
 type Archer = Awaited<ReturnType<typeof squadBoard>>["people"][number] & { name: string; color: string; mark: string; skill: number };
 
@@ -206,19 +201,22 @@ export function CompagniaPage({ initial }: { initial?: Section } = {}) {
   const [sectionRaw, setStored] = useLocalState<string>("aa-compagnia-tab", "arcieri");
   // aperta da /gare si parte da Gare; un tocco sulle schede sceglie e ricorda
   // da un avviso del mercatino in Bacheca (#mercatino-12) si apre il Mercatino con l'annuncio
-  const [opened, setOpened] = useState<Section | undefined>(() => (typeof window !== "undefined" && /^#mercatino(-\d+)?$/.test(window.location.hash) ? "altro" : initial));
-  const [otherRaw, setOther] = useLocalState<string>("aa-compagnia-altro", typeof window !== "undefined" && /^#mercatino(-\d+)?$/.test(window.location.hash) ? "mercatino" : OLD_OTHER[sectionRaw] ?? "bersaglio");
-  const other: Other = OTHERS.some((x) => x.id === otherRaw) ? (otherRaw as Other) : "bersaglio";
-  // Classifiche: quelle della compagnia (dall'app) o il campionato FITAST (dal portale)
-  const [rankScope, setRankScope] = useLocalState<"compagnia" | "campionato">("aa-compagnia-classifiche", "compagnia");
+  const [opened, setOpened] = useState<Section | undefined>(() => (typeof window !== "undefined" && /^#mercatino(-\d+)?$/.test(window.location.hash) ? "compagnie" : initial));
+  // dentro le schede: classifiche (compagnia, campionato, podi), gare (gare, bersaglio), compagnie (elenco, mercatino)
+  const [rankRaw, setRankSub] = useLocalState<string>("aa-compagnia-classifiche", sectionRaw === "podi" ? "podi" : "compagnia");
+  const rankScope: RankSub = rankRaw === "campionato" || rankRaw === "podi" ? rankRaw : "compagnia";
+  const [gareRaw, setGareSub] = useLocalState<string>("aa-compagnia-gare", sectionRaw === "bersaglio" || (sectionRaw === "altro" && typeof window !== "undefined" && window.localStorage?.getItem("aa-compagnia-altro")?.includes("bersaglio")) ? "bersaglio" : "gare");
+  const gareSub: GareSub = gareRaw === "bersaglio" ? "bersaglio" : "gare";
+  const [coRaw, setCoSub] = useLocalState<string>("aa-compagnia-elenco", typeof window !== "undefined" && /^#mercatino(-\d+)?$/.test(window.location.hash) ? "mercatino" : sectionRaw === "mercatino" || sectionRaw === "bacheca" ? "mercatino" : "compagnie");
+  const coSub: CoSub = coRaw === "mercatino" ? "mercatino" : "compagnie";
   // dal Menu (Compagnia › Mercatino) o da un avviso, anche con la pagina già aperta: si apre il Mercatino e ci si arriva
   const hash = useRouterState({ select: (st) => st.location.hash });
   const wasMarket = useRef(false);
   useEffect(() => {
     const isMarket = /^#?mercatino(-\d+)?$/.test(hash ?? "");
     if (isMarket) {
-      setOpened("altro");
-      setOther("mercatino");
+      setOpened("compagnie");
+      setCoSub("mercatino");
       const t = window.setTimeout(() => document.getElementById("mercatino")?.scrollIntoView({ block: "start", behavior: "smooth" }), 120);
       wasMarket.current = true;
       return () => window.clearTimeout(t);
@@ -230,7 +228,7 @@ export function CompagniaPage({ initial }: { initial?: Section } = {}) {
     setOpened(undefined);
     setStored(x);
   };
-  const stored: Section = SECTIONS.some((x) => x.id === sectionRaw) ? (sectionRaw as Section) : OLD_SECTION[sectionRaw] ?? "arcieri";
+  const stored: Section = SECTIONS.some((x) => x.id === sectionRaw) ? (sectionRaw as Section) : sectionRaw === "altro" ? (gareSub === "bersaglio" ? "gare" : "compagnie") : OLD_SECTION[sectionRaw] ?? "arcieri";
   const section: Section = opened ?? stored;
   const [editing, setEditing] = useState<"none" | "edit" | "new">("none");
   const [busy, setBusy] = useState<number | null>(null);
@@ -322,6 +320,7 @@ export function CompagniaPage({ initial }: { initial?: Section } = {}) {
 
   const goGare = () => {
     setSection("gare");
+    setGareSub("gare");
     window.setTimeout(() => document.getElementById("compagnia-schede")?.scrollIntoView({ block: "start", behavior: "smooth" }), 60);
   };
   return (
@@ -329,7 +328,7 @@ export function CompagniaPage({ initial }: { initial?: Section } = {}) {
       {linkFor ? <JoinLinkSheet team={linkFor.team} companyName={linkFor.name} onClose={() => { setLinkFor(null); setNonce((n) => n + 1); }} /> : null}
       {company ? <CompanyHero co={company} canEdit={Boolean(companies.data?.canEdit)} onEdit={() => setEditing("edit")} /> : <PageHead title="Compagnia" />}
       {/* la prossima gara in una riga, sempre in vista: chi dei nostri e da quale piazzola (scheda Gare) */}
-      {section !== "gare" ? <NextGaraCard compact meId={me.userId ?? ""} looks={looks} onOpen={goGare} /> : null}
+      {section !== "gare" || gareSub !== "gare" ? <NextGaraCard compact meId={me.userId ?? ""} looks={looks} onOpen={goGare} /> : null}
       {editing !== "none" ? (
         <CompanyForm
           co={editing === "edit" && company ? company : undefined}
@@ -342,11 +341,11 @@ export function CompagniaPage({ initial }: { initial?: Section } = {}) {
         />
       ) : null}
       <nav id="compagnia-schede" aria-label="Sezioni della compagnia" className="aa-club-tabs sticky top-[calc(env(safe-area-inset-top)+3.6rem)] z-20 -mx-1 scroll-mt-[calc(env(safe-area-inset-top)+3.6rem)] px-1">
-        <div className="grid grid-cols-5 gap-1 rounded-2xl p-1">
+        <div className="grid grid-cols-4 gap-1 rounded-2xl p-1">
           {SECTIONS.map((x) => (
-            <button key={x.id} type="button" aria-pressed={section === x.id} onClick={() => setSection(x.id)} className="aa-club-tab grid min-h-14 place-items-center gap-0.5 rounded-xl px-0 py-1 text-[0.62rem] font-semibold leading-tight tracking-tight">
+            <button key={x.id} type="button" aria-pressed={section === x.id} onClick={() => setSection(x.id)} className="aa-club-tab grid min-h-[3.9rem] place-items-center content-center gap-0.5 rounded-xl px-1 py-1.5 text-center text-[0.64rem] font-semibold leading-[1.1] tracking-tight">
               <Glyph name={x.icon} size={18} />
-              <span className="max-w-full truncate">{x.label}</span>
+              <span className="max-w-full text-balance">{x.label}</span>
             </button>
           ))}
         </div>
@@ -401,8 +400,8 @@ export function CompagniaPage({ initial }: { initial?: Section } = {}) {
       {section === "classifiche" ? (
         <>
           <div className="aa-subtabs" role="group" aria-label="Quali classifiche">
-            {([["compagnia", "In compagnia", "team"], ["campionato", "Campionato FITAST", "trophy"]] as const).map(([id, label, icon]) => (
-              <button key={id} type="button" aria-pressed={rankScope === id} onClick={() => setRankScope(id)} className="aa-subtab">
+            {([["compagnia", "In compagnia", "team"], ["campionato", "Campionato", "chart"], ["podi", "Podi", "trophy"]] as const).map(([id, label, icon]) => (
+              <button key={id} type="button" aria-pressed={rankScope === id} onClick={() => setRankSub(id)} className="aa-subtab">
                 <Glyph name={icon} size={15} />
                 {label}
               </button>
@@ -435,7 +434,7 @@ export function CompagniaPage({ initial }: { initial?: Section } = {}) {
             <div className="-mx-1 overflow-x-auto px-1 [scrollbar-width:none]">
               <Segmented value={stat} onChange={setStat} options={[{ id: "frecce", label: "Frecce" }, { id: "allenamenti", label: "Allenamenti" }, { id: "distanze", label: "Distanze" }, { id: "gare", label: "Gare" }]} />
             </div>
-            {stat === "frecce" ? <RankBars rows={inDivision.map((row) => rankRow(row, row.arrows, { sub: `${row.trainArrows} in allenamento · ${row.garaArrows} in gara` }))} unit="frecce" tint="#e07a2f" empty="Ancora nessuna freccia." /> : null}
+            {stat === "frecce" ? <RankBars rows={inDivision.map((row) => rankRow(row, row.arrows, row.trainArrows != null && row.garaArrows != null ? { sub: `${row.trainArrows} in allenamento · ${row.garaArrows} in gara` } : {}))} unit="frecce" tint="#e07a2f" empty="Ancora nessuna freccia." /> : null}
             {stat === "allenamenti" ? <RankBars rows={inDivision.map((row) => ({ ...rankRow(row, row.sessions), color: "#3d8f5f" }))} unit="allenamenti" tint="#3d8f5f" empty="Ancora nessun allenamento." /> : null}
             {stat === "distanze" ? <RankBars rows={inDivision.map((row) => ({ ...rankRow(row, row.bestDistance ?? 0), color: "#4b8fd1" }))} unit="m" tint="#4b8fd1" empty="Ancora nessuna distanza segnata." /> : null}
             {stat === "gare" ? <RankBars rows={inDivision.map((row) => ({ ...rankRow(row, row.gare, { sub: row.compAvg != null ? `media gara ${fmtAvg(row.compAvg)}` : undefined }), color: "#d6a72a" }))} unit="gare" tint="#d6a72a" empty="Ancora nessuna gara segnata." /> : null}
@@ -492,6 +491,15 @@ export function CompagniaPage({ initial }: { initial?: Section } = {}) {
             )}
           </Card>
             </>
+          ) : rankScope === "podi" ? (
+            company ? (
+              <>
+                <CompanyTrophies companyId={company.id} companyName={company.name} />
+                <GadgetShelf />
+              </>
+            ) : (
+              <Empty title="Nessuna compagnia" text="Entra in una compagnia (Compagnie e mercatino) per vedere la sua bacheca." />
+            )
           ) : companies.data ? (
             <CampionatoTab board={companies.data} onJoin={(id) => void join(id)} busy={busy} />
           ) : companies.error ? (
@@ -503,41 +511,41 @@ export function CompagniaPage({ initial }: { initial?: Section } = {}) {
       ) : null}
 
       {section === "gare" ? (
+        <div className="aa-subtabs" role="group" aria-label="Gare e bersaglio">
+          {([["gare", "Gare", "flag"], ["bersaglio", "Bersaglio", "target"]] as const).map(([id, label, icon]) => (
+            <button key={id} type="button" aria-pressed={gareSub === id} onClick={() => setGareSub(id)} className="aa-subtab">
+              <Glyph name={icon} size={15} />
+              {label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      {section === "gare" && gareSub === "gare" ? (
         <>
           <NextGaraCard meId={me.userId ?? ""} looks={looks} />
           <GareTab companies={companies.data?.companies ?? NO_COMPANIES} />
         </>
       ) : null}
 
-      {section === "podi" ? (
-        company ? (
-          <>
-            <CompanyTrophies companyId={company.id} companyName={company.name} />
-            <GadgetShelf />
-          </>
-        ) : (
-          <Empty title="Nessuna compagnia" text="Entra in una compagnia (Altro › Compagnie) per vedere la sua bacheca." />
-        )
-      ) : null}
-
-      {section === "altro" ? (
-        <div className="aa-subtabs" role="group" aria-label="Altro della compagnia">
-          {OTHERS.map((x) => (
-            <button key={x.id} type="button" aria-pressed={other === x.id} onClick={() => setOther(x.id)} className="aa-subtab">
-              <Glyph name={x.icon} size={15} />
-              {x.label}
+      {section === "compagnie" ? (
+        <div className="aa-subtabs" role="group" aria-label="Compagnie e mercatino">
+          {([["compagnie", "Compagnie", "shield"], ["mercatino", "Mercatino", "bag"]] as const).map(([id, label, icon]) => (
+            <button key={id} type="button" aria-pressed={coSub === id} onClick={() => setCoSub(id)} className="aa-subtab">
+              <Glyph name={icon} size={15} />
+              {label}
             </button>
           ))}
         </div>
       ) : null}
 
-      {section === "altro" && other === "mercatino" ? (
+      {section === "compagnie" && coSub === "mercatino" ? (
         <div id="mercatino" className="scroll-mt-[calc(env(safe-area-inset-top)+8.5rem)]">
           <MarketTab />
         </div>
       ) : null}
 
-      {section === "altro" && other === "compagnie" ? (
+      {section === "compagnie" && coSub === "compagnie" ? (
         <>
           {companies.data ? <CompanyLeague part="directory" board={companies.data} onJoin={(id) => void join(id)} busy={busy} onSynced={() => setNonce((n) => n + 1)} /> : companies.error ? <ErrorNote text={companies.error} /> : <Loading />}
           {editing === "none" ? (
@@ -550,7 +558,7 @@ export function CompagniaPage({ initial }: { initial?: Section } = {}) {
         </>
       ) : null}
 
-      {section === "altro" && other === "bersaglio" ? (
+      {section === "gare" && gareSub === "bersaglio" ? (
         <>
           {/* un solo pannello: di chi, poi un solo grafico che passa da padiglione a sagome, termica e piana */}
           <Card className="grid gap-3">

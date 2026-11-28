@@ -914,8 +914,8 @@ export function solveMotion(frames: SolveFrame[], aspect: number, hand: Hand, ca
    * deve essere fedele: cercarlo sul cerchio delle due lunghezze lo spostava di 10-15 cm rispetto al video); si
    * cerca solo quanto sta davanti o dietro, con braccio e avambraccio il più possibile della loro lunghezza.
    * Le due soluzioni a specchio (davanti / dietro) costavano quasi uguale e il gomito saltava dall'una all'altra:
-   * decidono il piano verticale della freccia (in trazione il gomito sta in linea con la freccia) e la vicinanza
-   * al gomito del fotogramma prima.
+   * decide soprattutto la profondità della spalla (la «T»: gomito, spalle e freccia in linea), poi il piano della
+   * freccia e la vicinanza al gomito del fotogramma prima.
    */
   const drawElbow = (sh: V3, W: V3, el: V3, A: V3, B: V3, prevEl: V3 | null): V3 | null => {
     const a = drawArm;
@@ -928,7 +928,10 @@ export function solveMotion(frames: SolveFrame[], aspect: number, hand: Hand, ca
       const eu = v3.len(v3.sub(q, sh)) - a.ua;
       const ef = v3.len(v3.sub(q, W)) - a.fa;
       const pl = nH[0] * (q[0] - A[0]) + nH[2] * (q[2] - A[2]);
-      let c = eu * eu + ef * ef + 0.15 * pl * pl;
+      // il gomito sta all'altezza (in profondità) della spalla, come nella «T» dell'arciere: dal video le due
+      // lunghezze spesso non tornano (il gomito sul bordo della manica) e cercandole il gomito finiva 20-25 cm
+      // davanti al petto, visto dall'alto storto. Il piano della freccia decide solo fra davanti e dietro
+      let c = eu * eu + ef * ef + 2 * (z - sh[2]) ** 2 + 0.2 * pl * pl;
       if (prevEl) c += 0.5 * (z - prevEl[2]) ** 2;
       return c;
     };
@@ -975,7 +978,9 @@ export function solveMotion(frames: SolveFrame[], aspect: number, hand: Hand, ca
       const along = clamp01((t + 0.35) / 0.15) * clamp01((0.85 - t) / 0.15);
       const off = Math.abs((Fp[0] - A[0]) * ab[1] - (Fp[1] - A[1]) * ab[0]) / Math.sqrt(l2);
       const near = clamp01((0.2 - off) / 0.08);
-      const wd = raisedW[i] * along * near;
+      // dove la mano tocca il viso decide il contatto (qui sotto): il piano della freccia vale solo per la mano
+      // staccata dal viso (con la mano al viso spingeva il polso 10 cm dietro la faccia, visto dall'alto storto)
+      const wd = raisedW[i] * along * near * (1 - contact[drawAi][i]);
       if (wd <= 0) continue;
       // piano verticale della freccia per A e B: la profondità che porta le dita nel piano
       const d = v3.sub(B, A);
@@ -999,17 +1004,24 @@ export function solveMotion(frames: SolveFrame[], aspect: number, hand: Hand, ca
   // gomito si mette dietro, con l'avambraccio intero (l'omero si adatta di quel poco che serve)
   for (const [ai, a] of arms.entries()) {
     for (let i = 0; i < n; i++) {
-      // la mano della corda con l'arco alzato è sulla corda: la sua profondità l'ha già data il piano della
-      // freccia (qui sopra), quella del rilevatore la riportava davanti al viso; all'ancoraggio la mette a posto
-      // l'aggancio alla bocca (qui sotto)
-      const ct = contact[ai][i] * (a === drawArm ? 1 - clamp01((raisedW[i] - 0.15) / 0.35) : 1);
-      const zw = absZ[a.wr][i];
+      // la mano della corda che tocca il viso sta alla profondità del viso (della bocca): quella del rilevatore
+      // a volte la portava davanti al viso, il piano della freccia dietro la faccia
+      const ct = contact[ai][i];
       const Jf = J[i];
+      const face = a === drawArm && Jf[9] && Jf[10] ? (Jf[9][2] + Jf[10][2]) / 2 + 0.01 : null;
+      const zw = face ?? absZ[a.wr][i];
       if (ct <= 0 || zw == null || !Jf[a.el] || !Jf[a.wr]) continue;
       const wz = Jf[a.wr][2] + (zw - Jf[a.wr][2]) * ct;
       const dzw = wz - Jf[a.wr][2];
       Jf[a.wr] = [Jf[a.wr][0], Jf[a.wr][1], wz];
       moveHand(Jf, a, dzw);
+      // il gomito della corda: in linea con la freccia e senza salti (drawElbow); quello dell'arco come prima
+      const Bw = Jf[bowArm.wr];
+      const elD = a === drawArm && Jf[a.sh] && Bw && Jf[9] && Jf[10] ? drawElbow(Jf[a.sh], Jf[a.wr], Jf[a.el], anchorOf(Jf), Bw, i > 0 ? J[i - 1][a.el] ?? null : null) : null;
+      if (elD) {
+        Jf[a.el] = v3.add(Jf[a.el], v3.mul(v3.sub(elD, Jf[a.el]), ct));
+        continue;
+      }
       const r = roots(Jf[a.wr], Jf[a.el], a.fa);
       const ez = Math.abs(r[0] - Jf[a.el][2]) < Math.abs(r[1] - Jf[a.el][2]) ? r[0] : r[1];
       Jf[a.el] = [Jf[a.el][0], Jf[a.el][1], Jf[a.el][2] + (ez - Jf[a.el][2]) * ct];
