@@ -403,6 +403,18 @@ export function cardsFromLines(page: FitastPage): PortalCompany[] {
 
 export type RankRow = { place: number | null; name: string; team: string; score: number | null; camp: number | null };
 
+/**
+ * Impronta di una classifica generale (tipo, quante righe, le prime cinque con i punti): due stagioni con la stessa
+ * impronta vogliono dire che il portale ha dato due volte la stessa classifica (aperta una stagione passata, a volte
+ * dà quella di oggi). Uguale sul server e nella scansione.
+ */
+export function generaleFp(kind: string, rows: RankRow[], total: number) {
+  return `${kind}#${total}#${rows
+    .slice(0, 5)
+    .map((r) => `${String(r.name ?? "").replace(/\s+/g, " ").trim().toUpperCase()}|${r.camp ?? r.score ?? ""}`)
+    .join(";")}`;
+}
+
 /** le righe di una classifica (arcieri o compagnie): posto, nome, compagnia, punti e punti campionato */
 export function rankingRows(page: FitastPage, kind: "arcieri" | "squadre", limit = 20): RankRow[] {
   for (const t of [...page.tables].sort((a, b) => b.rows.length - a.rows.length)) {

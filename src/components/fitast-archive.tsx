@@ -106,6 +106,10 @@ export function FitastArchiveCard({ crestOf, isOurs, ourName, ourTeams = [] }: {
   const seasons = useMemo(() => data?.seasons ?? [], [data]);
   const [pick, setPick] = useState("");
   const season = seasons.find((s) => s.season === pick) ?? seasons[0];
+  // cambiando stagione restano la scheda e la categoria scelte (si confrontano gli stessi arcieri anno per anno)
+  const [view, setView] = useState<View>("compagnie");
+  const [arSel, setArSel] = useState<Sel>({ g: "", t: "" });
+  const [sqSel, setSqSel] = useState<Sel>({ g: "", t: "" });
   // tutto letto: lo dice l'ultima scansione di questa sessione o il segno salvato alla fine di una scansione intera
   const complete = p?.done ? p.pct >= 1 : Boolean(data?.complete);
 
@@ -132,7 +136,7 @@ export function FitastArchiveCard({ crestOf, isOurs, ourName, ourTeams = [] }: {
       {seasons.length ? (
         <>
           <Chips value={season?.seasonName || season?.season || ""} options={seasons.map((s) => s.seasonName || s.season)} onChange={(v) => setPick(seasons.find((s) => (s.seasonName || s.season) === v)?.season ?? "")} />
-          {season ? <SeasonView key={season.season} nonce={nonce} season={season.season} partial={!season.done} crestOf={crestOf} isOurs={isOurs} ourName={ourName} /> : null}
+          {season ? <SeasonView key={season.season} nonce={nonce} season={season.season} partial={!season.done} crestOf={crestOf} isOurs={isOurs} ourName={ourName} view={view} setView={setView} arSel={arSel} setArSel={setArSel} sqSel={sqSel} setSqSel={setSqSel} /> : null}
         </>
       ) : null}
     </Card>
@@ -189,9 +193,9 @@ function ScanPanel({ p, busy, complete, started }: { p: HistoryProgress | null; 
 
 type View = "compagnie" | "arcieri" | "gare";
 
-function SeasonView({ season, nonce, partial, crestOf, isOurs, ourName }: { season: string; nonce: number; partial: boolean; crestOf: (t: string) => Crest | null; isOurs: (team: string) => boolean; ourName: string }) {
+type Sel = { g: string; t: string };
+function SeasonView({ season, nonce, partial, crestOf, isOurs, ourName, view, setView, arSel, setArSel, sqSel, setSqSel }: { season: string; nonce: number; partial: boolean; crestOf: (t: string) => Crest | null; isOurs: (team: string) => boolean; ourName: string; view: View; setView: (v: View) => void; arSel: Sel; setArSel: (s: Sel) => void; sqSel: Sel; setSqSel: (s: Sel) => void }) {
   const { data, error, loading } = useLoad(`albo-stagione-${season}-${nonce}`, () => fitastArchiveSeason({ data: { season } }));
-  const [view, setView] = useState<View>("compagnie");
   const genSq = useMemo(() => (data?.genSq ?? []).map((b) => toStanding(b, "generale-squadre")), [data]);
   const genAr = useMemo(() => (data?.genAr ?? []).map((b) => toStanding(b, "generale-arcieri")), [data]);
   const gare = data?.gare ?? [];
@@ -225,9 +229,24 @@ function SeasonView({ season, nonce, partial, crestOf, isOurs, ourName }: { seas
         ))}
       </div>
       {view === "compagnie" ? (
-        genSq.length ? <TeamsBoard items={genSq} crestOf={crestOf} mark={markTeam} /> : <p className="text-sm text-muted">Classifica generale delle compagnie non ancora salvata.</p>
+        genSq.length ? (
+          <TeamsBoard items={genSq} crestOf={crestOf} mark={markTeam} sel={sqSel} setSel={setSqSel} />
+        ) : (
+          <p className="text-sm text-muted">{data.hidden?.sq ? "La classifica generale delle compagnie salvata per questa stagione era quella di un'altra stagione: resta nascosta finché la scansione non legge quella giusta." : "Classifica generale delle compagnie non ancora salvata."}</p>
+        )
       ) : view === "arcieri" ? (
-        genAr.length ? <ArchersBoard items={genAr} crestOf={crestOf} mark={markArcher} note="Classifica generale della stagione: i primi tre di ogni categoria." /> : <p className="text-sm text-muted">Classifica generale degli arcieri non ancora salvata.</p>
+        genAr.length ? (
+          <ArchersBoard
+            items={genAr}
+            crestOf={crestOf}
+            mark={markArcher}
+            sel={arSel}
+            setSel={setArSel}
+            note={data.rebuilt ? "Classifica rifatta sommando i punti campionato delle gare salvate di questa stagione: i primi tre di ogni categoria." : "Classifica generale della stagione: i primi tre di ogni categoria."}
+          />
+        ) : (
+          <p className="text-sm text-muted">{data.hidden?.ar ? "La classifica generale degli arcieri salvata per questa stagione era quella di un'altra stagione: resta nascosta finché la scansione non legge quella giusta." : "Classifica generale degli arcieri non ancora salvata."}</p>
+        )
       ) : gare.length ? (
         <GareStrip gare={gare} crestOf={crestOf} isOurs={isOurs} markTeam={markTeam} markArcher={markArcher} />
       ) : (
@@ -238,13 +257,13 @@ function SeasonView({ season, nonce, partial, crestOf, isOurs, ourName }: { seas
 }
 
 /** la generale delle compagnie: categoria, podio con gli stemmi e il resto della classifica */
-function TeamsBoard({ items, crestOf, mark }: { items: Standing[]; crestOf: (t: string) => Crest | null; mark: (r: StandingRow) => "nostro" | null }) {
+function TeamsBoard({ items, crestOf, mark, sel, setSel }: { items: Standing[]; crestOf: (t: string) => Crest | null; mark: (r: StandingRow) => "nostro" | null; sel: Sel; setSel: (s: Sel) => void }) {
   const { groups, order } = useSplit(items);
-  const [g, setG] = useState("");
-  const group = order.includes(g) ? g : order[0] ?? "";
+  const group = order.includes(sel.g) ? sel.g : order[0] ?? "";
   const tips = [...(groups.get(group)?.keys() ?? [])];
-  const [t, setT] = useState("");
-  const tip = tips.includes(t) ? t : tips[0] ?? "";
+  const tip = tips.includes(sel.t) ? sel.t : tips[0] ?? "";
+  const setG = (g: string) => setSel({ g, t: sel.t });
+  const setT = (t: string) => setSel({ g: group, t });
   const it = groups.get(group)?.get(tip);
   const rows = it?.rows ?? [];
   const top = rows.slice(0, 3).map((r) => {
@@ -264,13 +283,16 @@ function TeamsBoard({ items, crestOf, mark }: { items: Standing[]; crestOf: (t: 
 }
 
 /** i podi degli arcieri di una classifica, categoria per categoria */
-function ArchersBoard({ items, crestOf, mark, note }: { items: Standing[]; crestOf: (t: string) => Crest | null; mark: (r: StandingRow) => "nostro" | null; note?: string }) {
+function ArchersBoard({ items, crestOf, mark, note, sel: shared, setSel: setShared }: { items: Standing[]; crestOf: (t: string) => Crest | null; mark: (r: StandingRow) => "nostro" | null; note?: string; sel?: Sel; setSel?: (s: Sel) => void }) {
   const { groups, order } = useSplit(items);
-  const [g, setG] = useState("");
-  const group = order.includes(g) ? g : order[0] ?? "";
+  const [own, setOwn] = useState<Sel>({ g: "", t: "" });
+  const sel = shared ?? own;
+  const setSel = setShared ?? setOwn;
+  const group = order.includes(sel.g) ? sel.g : order[0] ?? "";
   const tips = [...(groups.get(group)?.keys() ?? [])];
-  const [t, setT] = useState("");
-  const tip = tips.includes(t) ? t : tips[0] ?? "";
+  const tip = tips.includes(sel.t) ? sel.t : tips[0] ?? "";
+  const setG = (g: string) => setSel({ g, t: sel.t });
+  const setT = (t: string) => setSel({ g: group, t });
   const it = groups.get(group)?.get(tip);
   return (
     <div className="grid gap-2">

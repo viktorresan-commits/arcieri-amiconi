@@ -18,7 +18,7 @@ import { FITAST_HOME, fitastRead } from "./fitast.api";
 import type { FitastPage } from "./fitast-parse";
 import { classificaUrl, cleanTitle, findGare, garaDateOf, garaIdOf, garaTitleOf, seasonRange, seasonSelect } from "./fitast-gare";
 import { currentTexts, filterCombos, FILTER_BUTTON, pressReq, type Req } from "./fitast-nav";
-import { rankingRows, SQUADRE_PAGES, type RankRow } from "./fitast-league";
+import { generaleFp, rankingRows, SQUADRE_PAGES, type RankRow } from "./fitast-league";
 import { ALL_DONE, fitastHistoryIndex, markHistorySeason, saveFitastHistory, setHistoryCursor } from "./fitast-history.api";
 import type { SyncProgress } from "./fitast-sync";
 import { fitastStandings } from "./fitast-league.api";
@@ -64,9 +64,15 @@ function mentionsSeason(p: FitastPage, s: Season, other: Season | null) {
   const text = plain([p.title, ...p.lines.slice(0, 60)].join(" "));
   const y1 = s.from.slice(0, 4);
   const y2 = s.to.slice(0, 4);
-  const mine = text.includes(`${y1}/${y2}`) || text.includes(`${y1}-${y2}`) || (y1 === y2 && text.includes(y1)) || text.includes(plain(short(s.text)));
-  if (mine) return "si";
-  if (other && (text.includes(plain(short(other.text))) || text.includes(`${other.from.slice(0, 4)}/${other.to.slice(0, 4)}`))) return "no";
+  const pair = (a: string, b: string) => a !== b && (text.includes(`${a}/${b}`) || text.includes(`${a}-${b}`));
+  const mine = pair(y1, y2) || text.includes(plain(short(s.text)));
+  const o1 = other?.from.slice(0, 4) ?? "";
+  const o2 = other?.to.slice(0, 4) ?? "";
+  const theirs = Boolean(other && other.key !== s.key && (pair(o1, o2) || text.includes(plain(short(other.text)))));
+  if (mine && !theirs) return "si";
+  if (theirs && !mine) return "no";
+  // stagione di un anno solo: basta l'anno, se la pagina non cita la stagione di oggi
+  if (!theirs && y1 === y2 && text.includes(y1)) return "si";
   return "forse";
 }
 
@@ -149,14 +155,30 @@ export async function syncHistory(opts: { onProgress: (p: HistoryProgress) => vo
 
   /** una classifica con tutte le sue categorie: la pagina aperta e poi ogni combinazione. Torna le righe lette e se è intera */
   const board = async (p0: FitastPage | null, r0: Req | null, kind: Kind, season: Season, gara: GaraRef = { id: "", title: "", day: "" }) => {
-    if (!p0 || !r0) return { rows: 0, complete: false };
+    if (!p0 || !r0) return { rows: 0, complete: false, rejected: 0 };
     const list: Item[] = [];
     let complete = true;
+    let rejected = 0;
+    const generale = kind.startsWith("generale");
     const add = (p: FitastPage, texts: string[]) => {
       const rows = rankingRows(p, kind.endsWith("squadre") ? "squadre" : "arcieri", 800);
-      if (rows.length) list.push({ kind, season: season.key, seasonName: season.name, garaId: gara.id, garaTitle: gara.title, day: gara.day, category: texts.join(" · "), rows, complete: true });
+      if (!rows.length) return;
+      // una generale uguale a quella di un'altra stagione è la classifica sbagliata: non si salva
+      // (se la pagina cita gli anni della stagione si crede alla pagina: era quella copiata nelle altre)
+      if (generale && rows.length >= 2) {
+        const fp = generaleFp(kind, rows, rows.length);
+        const other = mentionsSeason(p, season, current) !== "si" && [...(genSeen.get(fp) ?? [])].some((k) => k !== season.key);
+        if (other) {
+          rejected++;
+          return;
+        }
+        genSeen.set(fp, new Set([...(genSeen.get(fp) ?? []), season.key]));
+      }
+      list.push({ kind, season: season.key, seasonName: season.name, garaId: gara.id, garaTitle: gara.title, day: gara.day, category: texts.join(" · "), rows, complete: true });
     };
     add(p0, currentTexts(p0));
+    // la prima pagina è già di un'altra stagione: le altre categorie lo sarebbero anche loro
+    if (generale && rejected && !list.length) return { rows: 0, complete: true, rejected };
     const combos = filterCombos(p0, r0);
     if (combos.length > MAX_COMBOS) complete = false;
     for (const c of combos.slice(0, MAX_COMBOS)) {
@@ -173,7 +195,7 @@ export async function syncHistory(opts: { onProgress: (p: HistoryProgress) => vo
     }
     if (!complete) for (const it of list) it.complete = false;
     if (list.length) await save(list);
-    return { rows: list.reduce((t, x) => t + x.rows.length, 0), complete };
+    return { rows: list.reduce((t, x) => t + x.rows.length, 0), complete, rejected };
   };
 
   // ——— il portale e le sue stagioni ———
@@ -207,6 +229,8 @@ export async function syncHistory(opts: { onProgress: (p: HistoryProgress) => vo
     diag.push("Indice dell'archivio non letto: si rilegge tutto.");
   }
   const doneSeasons = new Set(index.seasonsDone);
+  /** impronte delle classifiche generali già salvate (e di quella in corso): una stagione non può avere quella di un'altra */
+  const genSeen = new Map<string, Set<string>>(((index as { generali?: { fp: string; seasons: string[] }[] }).generali ?? []).map((g) => [g.fp, new Set(g.seasons)]));
   const have = new Set(index.items.map((i) => `${i.kind}|${i.season}|${i.garaId}`));
   /** gare già salvate per intero, qualunque stagione */
   const haveGara = new Set(index.items.filter((i) => i.kind === "gara-arcieri").map((i) => i.garaId));
@@ -292,14 +316,18 @@ export async function syncHistory(opts: { onProgress: (p: HistoryProgress) => vo
         notes.push(`generale ${label}: pagina persa`);
         continue;
       }
-      // senza la pagina della stagione la generale potrebbe essere quella di oggi: si controlla che sia la sua
-      const ok = opened ? "si" : mentionsSeason(p0, s, current);
+      // la generale potrebbe essere quella di oggi anche con la stagione aperta: si controlla sempre che sia la sua
+      const ok = mentionsSeason(p0, s, current);
       if (ok === "no") {
         notes.push(`generale ${label}: il portale dà un'altra stagione`);
         continue;
       }
       const got = await board(p0, r0, kind, s);
-      notes.push(`generale ${label}: ${got.rows} righe${ok === "forse" ? " (stagione non verificata)" : ""}`);
+      notes.push(
+        got.rejected && !got.rows
+          ? `generale ${label}: il portale dà la classifica di un'altra stagione`
+          : `generale ${label}: ${got.rows} righe${got.rejected ? `, ${got.rejected} categorie di un'altra stagione scartate` : ""}${ok === "forse" ? " (stagione non verificata)" : ""}`,
+      );
     }
     const gare = opened
       ? findGare(opened.page)

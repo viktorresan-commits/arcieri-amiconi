@@ -1,7 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
+import type { Sql } from "@/lib/db";
 import { asNum, clip, db, ensureMember } from "./access";
-import { teamKey, teamWords, type RankRow } from "./fitast-league";
+import { generaleFp, teamKey, teamWords, type RankRow } from "./fitast-league";
 
 /**
  * Storico FITAST dal 2019: le classifiche delle stagioni finite lette dal portale dall'app di chi preme
@@ -84,6 +85,47 @@ export const saveFitastHistory = createServerFn({ method: "POST" })
   });
 
 /** cosa c'è già, letto per intero: per stagione le gare (arcieri e squadre) e le generali; le stagioni finite */
+type GenFp = { id: number | null; kind: string; season: string; season_name: string | null; total: number; top: RankRow[] | null };
+/**
+ * Classifiche generali da non credere: la stessa classifica (tipo, righe, prime cinque con i punti) salvata per più
+ * stagioni, o uguale alla generale del campionato in corso. Aperta una stagione passata, il portale a volte dà la
+ * generale di oggi: così ogni stagione mostrava gli stessi arcieri con gli stessi punti. Non si cancella niente:
+ * si nascondono, e la scansione le rilegge (con il controllo della stagione).
+ */
+async function generalFps(sql: Sql) {
+  const hist = await sql<GenFp>`
+    select id, kind, season, season_name, jsonb_array_length(rows)::int as total, jsonb_path_query_array(rows, '$[0 to 4]') as top
+    from fitast_history where kind in ('generale-arcieri', 'generale-squadre')`.catch(() => [] as GenFp[]);
+  const cur = await sql<GenFp>`
+    select null::int as id, kind, season, season_name, jsonb_array_length(rows)::int as total, jsonb_path_query_array(rows, '$[0 to 4]') as top
+    from fitast_standings where kind in ('generale-arcieri', 'generale-squadre')`.catch(() => [] as GenFp[]);
+  const fpOf = (g: GenFp) => (Array.isArray(g.top) && g.top.length >= 2 ? generaleFp(g.kind, g.top, asNum(g.total)) : "");
+  // la stessa stagione può avere chiavi scritte in modo diverso nelle due tabelle: conta anche il nome
+  const nameOf = (g: GenFp) => String(g.season_name ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const seasonsOf = new Map<string, Set<string>>();
+  const named = new Map<string, { season: string; name: string }[]>();
+  for (const g of [...hist, ...cur]) {
+    const k = fpOf(g);
+    if (!k) continue;
+    const list = named.get(k) ?? [];
+    if (!list.some((x) => x.season === g.season || (x.name && x.name === nameOf(g)))) list.push({ season: g.season, name: nameOf(g) });
+    named.set(k, list);
+    const set = seasonsOf.get(k) ?? new Set<string>();
+    set.add(g.season);
+    seasonsOf.set(k, set);
+  }
+  const bad = new Set<number>();
+  const badSeasons = new Set<string>();
+  for (const g of hist) {
+    const k = fpOf(g);
+    if (k && (named.get(k)?.length ?? 0) > 1) {
+      bad.add(asNum(g.id));
+      badSeasons.add(g.season);
+    }
+  }
+  return { bad, badSeasons, fps: [...seasonsOf].map(([fp, ss]) => ({ fp, seasons: [...ss] })) };
+}
+
 export const fitastHistoryIndex = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .handler(async ({ context }) => {
@@ -102,14 +144,18 @@ export const fitastHistoryIndex = createServerFn({ method: "POST" })
       const rows = await sql<{ kind: string; season: string; gara_id: string }>`select distinct kind, season, gara_id from fitast_history where v >= 2`;
       const done = await sql<{ key: string; info: { id?: number; done?: boolean } | null }>`select key, info from fitast_sync where key like ${`${DONE_KEY}%`}`;
       const cur = done.find((d) => d.key === `${DONE_KEY}${CURSOR}`)?.info ?? null;
+      // stagioni con una generale dubbia: si riaprono per rileggerla (le gare già salvate restano)
+      const g = await generalFps(sql);
       return {
-        items: rows.map((r) => ({ kind: r.kind, season: r.season, garaId: r.gara_id })),
-        seasonsDone: done.map((d) => d.key.slice(DONE_KEY.length)).filter((k) => k !== CURSOR),
+        items: rows.filter((r) => !(r.kind.startsWith("generale") && g.badSeasons.has(r.season))).map((r) => ({ kind: r.kind, season: r.season, garaId: r.gara_id })),
+        seasonsDone: done.map((d) => d.key.slice(DONE_KEY.length)).filter((k) => k !== CURSOR && !g.badSeasons.has(k)),
+        /** impronte delle generali già salvate (e di quella in corso), con le loro stagioni */
+        generali: g.fps,
         /** scansione delle gare per numero: fin dove è arrivata */
         cursor: cur && Number.isFinite(Number(cur.id)) ? { id: Number(cur.id), done: Boolean(cur.done) } : null,
       };
     } catch {
-      return { items: [] as { kind: string; season: string; garaId: string }[], seasonsDone: [] as string[], cursor: null as { id: number; done: boolean } | null };
+      return { items: [] as { kind: string; season: string; garaId: string }[], seasonsDone: [] as string[], generali: [] as { fp: string; seasons: string[] }[], cursor: null as { id: number; done: boolean } | null };
     }
   });
 
@@ -181,11 +227,22 @@ export const fitastArchiveSeason = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const sql = await db();
     await ensureMember(sql, context.userId);
-    const empty = { season: data.season, seasonName: "", genSq: [] as ArchiveBoard[], genAr: [] as ArchiveBoard[], gare: [] as ArchiveGara[] };
+    const empty = {
+      season: data.season,
+      seasonName: "",
+      genSq: [] as ArchiveBoard[],
+      genAr: [] as ArchiveBoard[],
+      gare: [] as ArchiveGara[],
+      /** generali nascoste perché uguali a quelle di un'altra stagione */
+      hidden: { sq: 0, ar: 0 },
+      /** generale arcieri rifatta sommando i punti campionato delle gare salvate (quella del portale manca) */
+      rebuilt: false,
+    };
     if (!data.season) return empty;
+    const bad = (await generalFps(sql)).bad;
     // i primi tre (posto 1-3; se il posto non c'è, le prime tre righe): basta per i podi e la risposta resta leggera
-    const rows = await sql<{ kind: string; season_name: string; gara_id: string; gara_title: string; held_on: string | null; category: string; rows: RankRow[]; total: number }>`
-      select kind, season_name, gara_id, gara_title, held_on::text as held_on, category, jsonb_array_length(rows)::int as total,
+    const rows = await sql<{ id: number; kind: string; season_name: string; gara_id: string; gara_title: string; held_on: string | null; category: string; rows: RankRow[]; total: number }>`
+      select id, kind, season_name, gara_id, gara_title, held_on::text as held_on, category, jsonb_array_length(rows)::int as total,
         case when kind = 'generale-squadre' then rows
           else coalesce(nullif(jsonb_path_query_array(rows, '$[*] ? (@.place <= 3)'), '[]'::jsonb), jsonb_path_query_array(rows, '$[0 to 2]')) end as rows
       from fitast_history where season = ${data.season}
@@ -194,7 +251,10 @@ export const fitastArchiveSeason = createServerFn({ method: "POST" })
     const gare = new Map<string, ArchiveGara>();
     for (const r of rows) {
       const board: ArchiveBoard = { category: r.category, rows: Array.isArray(r.rows) ? r.rows : [], total: asNum(r.total) };
-      if (r.kind === "generale-squadre") out.genSq.push(board);
+      if (r.kind.startsWith("generale") && bad.has(asNum(r.id))) {
+        if (r.kind === "generale-squadre") out.hidden.sq++;
+        else out.hidden.ar++;
+      } else if (r.kind === "generale-squadre") out.genSq.push(board);
       else if (r.kind === "generale-arcieri") out.genAr.push(board);
       else {
         const g = gare.get(r.gara_id) ?? { id: r.gara_id, title: r.gara_title, day: r.held_on ?? "", arcieri: [], squadre: [] };
@@ -205,8 +265,43 @@ export const fitastArchiveSeason = createServerFn({ method: "POST" })
       }
     }
     out.gare = [...gare.values()].sort((a, b) => b.day.localeCompare(a.day));
+    if (!out.genAr.length) {
+      out.genAr = await rebuiltArchers(sql, data.season).catch(() => [] as ArchiveBoard[]);
+      out.rebuilt = out.genAr.length > 0;
+    }
     return out;
   });
+
+/**
+ * Generale degli arcieri rifatta dalle gare della stagione: per ogni categoria la somma dei punti campionato di ogni
+ * arciere nelle gare salvate (i primi tre, e quanti sono). Serve quando il portale non ha dato la generale vera.
+ */
+async function rebuiltArchers(sql: Sql, season: string): Promise<ArchiveBoard[]> {
+  const rows = await sql<{ category: string; name: string; team: string; pts: number; gare: number }>`
+    select h.category, x->>'name' as name, coalesce(x->>'team', '') as team, sum((x->>'camp')::numeric)::float8 as pts, count(*)::int as gare
+    from fitast_history h cross join lateral jsonb_array_elements(h.rows) as x
+    where h.season = ${season} and h.kind = 'gara-arcieri' and jsonb_typeof(x->'camp') = 'number' and coalesce(x->>'name', '') <> ''
+    group by h.category, x->>'name', coalesce(x->>'team', '')`;
+  const by = new Map<string, { name: string; team: string; pts: number }[]>();
+  for (const r of rows) {
+    const list = by.get(r.category) ?? [];
+    list.push({ name: r.name, team: r.team, pts: asNum(r.pts) });
+    by.set(r.category, list);
+  }
+  const out: ArchiveBoard[] = [];
+  for (const [category, list] of by) {
+    list.sort((a, b) => b.pts - a.pts || a.name.localeCompare(b.name, "it"));
+    const top: RankRow[] = [];
+    for (let i = 0; i < list.length; i++) {
+      // a pari punti, stesso posto
+      const place = i > 0 && list[i].pts === list[i - 1].pts ? (top[i - 1]?.place ?? i + 1) : i + 1;
+      if (place > 3) break;
+      top.push({ place, name: list[i].name, team: list[i].team, score: null, camp: Math.round(list[i].pts * 10) / 10 });
+    }
+    if (top.length) out.push({ category, rows: top, total: list.length });
+  }
+  return out.sort((a, b) => a.category.localeCompare(b.category, "it"));
+}
 
 // ——— la nostra compagnia negli anni: posto, punti, podi e arcieri di ogni stagione ———
 
@@ -232,7 +327,7 @@ export type TrendSeason = {
   gare: number;
 };
 
-type TrendRow = { kind: string; season: string; season_name: string; gara_id: string; held_on: string | null; category: string; rows: RankRow[]; total: number; cur: boolean };
+type TrendRow = { id: number | null; kind: string; season: string; season_name: string; gara_id: string; held_on: string | null; category: string; rows: RankRow[]; total: number; cur: boolean };
 
 /**
  * La nostra compagnia stagione per stagione, dall'albo d'oro (stagioni finite) e dal campionato in corso.
@@ -256,18 +351,20 @@ export const fitastArchiveTrend = createServerFn({ method: "POST" })
     const pick = (table: "h" | "s") =>
       table === "h"
         ? sql<TrendRow>`
-          select kind, season, season_name, gara_id, held_on::text as held_on, category, jsonb_array_length(rows)::int as total, false as cur,
+          select id, kind, season, season_name, gara_id, held_on::text as held_on, category, jsonb_array_length(rows)::int as total, false as cur,
             case when kind in ('generale-squadre', 'gara-squadre') then jsonb_path_query_array(rows, ${byName}::jsonpath)
               else jsonb_path_query_array(rows, ${byTeam}::jsonpath) end as rows
           from fitast_history`
         : sql<TrendRow>`
-          select kind, season, season_name, gara_id, held_on::text as held_on, category, jsonb_array_length(rows)::int as total, true as cur,
+          select null::int as id, kind, season, season_name, gara_id, held_on::text as held_on, category, jsonb_array_length(rows)::int as total, true as cur,
             case when kind in ('generale-squadre', 'gara-squadre') then jsonb_path_query_array(rows, ${byName}::jsonpath)
               else jsonb_path_query_array(rows, ${byTeam}::jsonpath) end as rows
           from fitast_standings`;
     let rows: TrendRow[] = [];
     try {
-      rows = await pick("h");
+      // le generali uguali a quelle di un'altra stagione non contano (posto e punti sarebbero di un altro anno)
+      const bad = (await generalFps(sql)).bad;
+      rows = (await pick("h")).filter((r) => !(r.kind.startsWith("generale") && bad.has(asNum(r.id))));
     } catch {
       rows = [];
     }
