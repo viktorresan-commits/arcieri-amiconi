@@ -43,7 +43,7 @@ export function FitastLinkCard({ onChanged, crestOf = noCrest, always = false }:
     <>
       {reserved ? null : !linked ? (
         <button type="button" onClick={() => setTarget(mine)} className="aa-press flex w-full items-center gap-3 rounded-[var(--radius-card)] border border-[#e0b15a]/30 bg-[#e0b15a]/[0.07] p-3 text-left">
-          <FitastLogo size={44} />
+          <FitastLogo size={56} />
           <span className="min-w-0 flex-1">
             <b className="block">Collega il tuo nome FITAST</b>
             <span className="block text-xs text-muted">Le gare del campionato si riempiono da sole con il tuo posto e i punti campionato.</span>
@@ -134,7 +134,7 @@ function LinkSheet({ target, crestOf, onClose, onDone }: { target: Target; crest
         </label>
         {err ? <ErrorNote text={err} /> : null}
         {error ? <ErrorNote text={error} /> : loading && !data ? <Loading /> : data?.empty ? (
-          <p className="text-sm text-muted">Le classifiche del portale non sono ancora state lette. Aprile da Compagnie con «Aggiorna dal portale», poi torna qui.</p>
+          <p className="text-sm text-muted">Le classifiche non sono ancora state lette. Aprile da Compagnie con «Aggiorna», poi torna qui.</p>
         ) : !results.length ? (
           <p className="text-sm text-muted">{q ? "Nessun nome trovato. Prova con il solo cognome." : "Scrivi il tuo nome o il tuo cognome come lo usa il portale."}</p>
         ) : (

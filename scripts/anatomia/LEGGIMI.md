@@ -43,7 +43,11 @@ dell'atlante dove c'è (BodyParts3D, CC BY 4.0) e la grana del pacchetto pelle d
 
 - `wrap_rest.ts` mette le ossa del personaggio nel riposo dell'atlante con il codice dell'app;
 - `wrap_skin.py` divide i triangoli, porta la pelle sulla forma dell'atlante (muscoli veri, spalle e gomiti
-  compresi; la testa prima allineata a quella dell'atlante, orecchie del personaggio tenute), riempie i buchi,
+  compresi; la testa prima allineata a quella dell'atlante, orecchie del personaggio tenute), poi la stende
+  sull'involucro di muscoli e ossa: per busto, braccia e gambe una griglia di 2,5 mm con i tessuti della stessa
+  parte (la parte di ogni punto viene dallo scheletro del personaggio, così l'interno del braccio non si attacca
+  al busto), chiusa, gonfiata di 12 mm e stretta fino a 4 mm sopra i tessuti, levigata; ogni punto della pelle va
+  su quella superficie lungo il gradiente (testa, mani e dita dei piedi restano del personaggio). Riempie i buchi,
   prende i pesi dai muscoli e dalle ossa sotto ogni punto (nell'app la pelle si muove con le loro stesse matrici e
   resta sopra di loro in ogni posa; collo e vita con rotazioni interpolate), prende il muscolo sotto ogni punto
   (la pelle si gonfia con lui) e cuoce l'occlusione;

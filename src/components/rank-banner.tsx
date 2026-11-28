@@ -134,7 +134,8 @@ export function RankBanner({ r, className = "", color }: { r: FitastRank; classN
             </span>
           ))}
           {r.points != null ? (
-            <span className="mt-1.5 rounded-full px-1.5 py-0.5 text-[0.56rem] font-bold tabular-nums text-[#2a1606]" style={{ background: `linear-gradient(180deg, ${trim.light}, ${trim.mid})` }}>
+            // i punti un poco più in basso, verso la punta del drappo
+            <span className="mt-3 rounded-full px-1.5 py-0.5 text-[0.56rem] font-bold tabular-nums text-[#2a1606]" style={{ background: `linear-gradient(180deg, ${trim.light}, ${trim.mid})` }}>
               {r.points} pt
             </span>
           ) : null}

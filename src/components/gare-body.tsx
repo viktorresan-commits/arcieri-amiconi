@@ -219,7 +219,7 @@ export function GareBody({ embedded = false, league }: { embedded?: boolean; /**
         </Card>
       ) : null}
       <FitastLinkCard crestOf={crestOf} onChanged={() => setNonce((n) => n + 1)} />
-      {league?.running ? <p className="px-1 text-xs text-muted">Aggiorno le classifiche dal portale FITAST…</p> : null}
+      {league?.running ? <p className="px-1 text-xs text-muted">Aggiorno le classifiche…</p> : null}
       <div className="grid grid-cols-2 gap-2">
         {([["past", "Passate"], ["next", "In arrivo"]] as const).map(([id, label]) => (
           <button key={id} type="button" onClick={() => { setTab(id); setShowNo(false); setNote(""); }} className={`min-h-11 rounded-xl text-sm font-semibold ${tab === id ? "bg-primary text-primary-fg" : "border border-line"}`}>{label}</button>
@@ -290,7 +290,7 @@ export function GareBody({ embedded = false, league }: { embedded?: boolean; /**
             <Card className="aa-rise grid min-w-0 gap-3">
               <GaraHead comp={comp} crestOf={crestOf} tab={tab} />
               {scored.length ? (
-                <Fold icon="team" title="I nostri" sub={`${scored.length} ${scored.length === 1 ? "arciere" : "arcieri"}${fromPortal ? " · dal portale FITAST" : ""}`} logo={fromPortal} {...fold("nostri", true)}>
+                <Fold icon="team" title="I nostri" sub={`${scored.length} ${scored.length === 1 ? "arciere" : "arcieri"}`} logo={fromPortal} {...fold("nostri", true)}>
                   {comp.teamResults?.length ? <TeamLine results={comp.teamResults} /> : null}
                   <ul className="grid min-w-0 gap-1.5">
                     {scored.map((entry) => {
@@ -551,7 +551,7 @@ function pzWhy(comp: Comp) {
     // quali elenchi sono già arrivati (numero e giorno): se c'è quello di questa gara con un altro numero si vede subito
     const dd = (d: string) => (d ? d.split("-").reverse().slice(0, 2).join("/") : "senza data");
     const known = pz?.known?.length ? ` Elenchi già letti: ${pz.known.map((k) => `gara ${k.id} del ${dd(k.day)} (${k.n} arcieri)`).join(", ")}; questa gara è la ${comp.fitast?.garaId || "—"} del ${dd(comp.startsOn)}.` : "";
-    return `L'elenco delle piazzole di questa gara non è ancora arrivato dal portale. In Campionato premi «Aggiorna dal portale». Intanto puoi fotografare il cartellino qui sotto.${known}${last}`;
+    return `L'elenco delle piazzole di questa gara non è ancora arrivato dal portale. In Compagnie premi «Aggiorna». Intanto puoi fotografare il cartellino qui sotto.${known}${last}`;
   }
   if (pz.mine == null && !mine) return `Elenco delle piazzole letto (${pz.people} arcieri, ${pz.lanes} piazzole), ma non trovo il tuo nome. Se hai tirato da ospite scegli qui sotto un compagno della tua piazzola: ti metto nella sua. Altrimenti collega il tuo nome FITAST nel Profilo.`;
   return `Elenco delle piazzole letto (${pz.people} arcieri, ${pz.lanes} piazzole): nella piazzola ${pz.mine ?? mine} non risulta nessun altro.${pz.mine != null && mine && pz.mine !== mine ? ` Sul cartellino hai la ${mine}, sul portale la ${pz.mine}.` : ""}`;
@@ -620,7 +620,7 @@ function Fold({ icon, title, sub, open, onToggle, children, inner = false, logo 
           <b className="block text-sm">{title}</b>
           {sub ? <span className="block truncate text-xs text-muted">{sub}</span> : null}
         </span>
-        {logo ? <FitastLogo size={26} /> : null}
+        {logo ? <FitastLogo size={34} /> : null}
         <Glyph name="chevron" size={15} className={cx("shrink-0 text-muted transition-transform", open ? "-rotate-90" : "rotate-90")} />
       </button>
       {open ? <div className={cx("grid min-w-0 gap-2 pb-3", inner ? "px-2" : "px-3")}>{children}</div> : null}

@@ -5,6 +5,7 @@
 import { Link } from "@tanstack/react-router";
 import { useId, useState } from "react";
 import { Button, Card, ErrorNote, Field, Select, TextInput, cx } from "@/components/kit";
+import { HPages } from "@/components/hpages";
 import { archerPodiums, companyPalmares, deleteCompanyAward, saveCompanyAward, type Award, type Podium, type TeamResult } from "@/lib/arcieri/palmares.api";
 import { useLoad } from "@/lib/arcieri/use-load";
 
@@ -301,7 +302,6 @@ export function CompanyTrophies({ companyId, companyName }: { companyId: number;
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
-  const [all, setAll] = useState(false);
   const [view, setView] = useState<"podi" | "squadra" | "trofei">("podi");
   if (error) return <ErrorNote text={error} />;
   if (!data) return null;
@@ -434,30 +434,18 @@ export function CompanyTrophies({ companyId, companyName }: { companyId: number;
       {view === "squadra" ? (
         /* un solo elenco: prima il campionato in corso (generale squadre dal portale), poi le gare */
         teamRows.length ? (
-          <ul className="grid gap-1.5">
-            {(all ? teamRows : teamRows.slice(0, 8)).map((r) => <TeamResultRow key={r.id} r={r} />)}
-            {teamRows.length > 8 ? (
-              <button type="button" className="aa-chip justify-self-start" onClick={() => setAll((v) => !v)}>{all ? "Mostra meno" : `Mostra tutti (${teamRows.length})`}</button>
-            ) : null}
-          </ul>
+          <HPages as="ul" items={teamRows} per={6} keyOf={(r) => String(r.id)} render={(r) => <TeamResultRow r={r} />} />
         ) : (
-          <p className="text-sm text-muted">Arrivano dal portale FITAST: dal campionato in corso e, con la scansione dell'Albo d'oro dal 2019 (in Compagnie), dalle stagioni passate.</p>
+          <p className="text-sm text-muted">Arrivano dal campionato in corso e, con l'Albo d'oro dal 2019 (in Compagnie), dalle stagioni passate.</p>
         )
       ) : null}
       {view === "podi" ? (
         pods.length ? (
           <>
-            <ul className="grid gap-1.5">
-              {(all ? pods : pods.slice(0, 8)).map((p, i) => <PodiumRow key={`${p.userId}-${p.competition}-${p.day}-${i}`} p={p} withName />)}
-            </ul>
-            {pods.length > 8 ? (
-              <button type="button" className="aa-chip justify-self-start" onClick={() => setAll((v) => !v)}>
-                {all ? "Mostra meno" : `Mostra tutti (${pods.length})`}
-              </button>
-            ) : null}
+            <HPages as="ul" items={pods} per={6} keyOf={(p, i) => `${p.userId}-${p.competition}-${p.day}-${i}`} render={(p) => <PodiumRow p={p} withName />} />
           </>
         ) : (
-          <p className="text-sm text-muted">Nessun podio ancora. Arrivano dalle gare del campionato in corso e, per le stagioni passate, dalla scansione dell'Albo d'oro dal 2019 (in Compagnie, in fondo alle classifiche FITAST).</p>
+          <p className="text-sm text-muted">Nessun podio ancora. Arrivano dalle gare del campionato in corso e, per le stagioni passate, dall'Albo d'oro dal 2019 (in Compagnie).</p>
         )
       ) : null}
     </Card>

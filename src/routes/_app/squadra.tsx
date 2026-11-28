@@ -557,12 +557,13 @@ function CompagnieTab({ board, onJoin, busy, onSynced }: { board: Awaited<Return
   const mine = board.companies.find((c) => c.id === board.mine);
   const ourKeys = useMemo(() => new Set([mine?.fitastTeam, mine?.fitastName, mine?.name].map((x) => teamKey(x ?? "")).filter((k) => k.length >= 3)), [mine]);
   const isOurs = useCallback((team: string) => ourKeys.has(teamKey(team)), [ourKeys]);
+  const ourTeams = useMemo(() => [...new Set([mine?.fitastTeam, mine?.fitastName, mine?.name].filter((x): x is string => Boolean(x && x.trim())))], [mine]);
   return (
     <>
       <FitastHeader league={league} />
       <CompanyLeague part="ranking" board={board} onJoin={onJoin} busy={busy} fitastBoard={<FitastCompanyBoard league={league} />} fitastMetric={(m) => <FitastTeamsBoard league={league} metric={m} />} fitastReady={league.genSq.length > 0} />
       <FitastArchersCard league={league} />
-      <FitastArchiveCard crestOf={league.crestOf} isOurs={isOurs} ourName={mine?.name ?? ""} />
+      <FitastArchiveCard crestOf={league.crestOf} isOurs={isOurs} ourName={mine?.name ?? ""} ourTeams={ourTeams} />
       <CompanyLeague part="directory" board={board} onJoin={onJoin} busy={busy} onSynced={onSynced} />
     </>
   );

@@ -9,9 +9,15 @@ pelle dell'atlante (BodyParts3D, che segue i muscoli veri) senza i suoi buchi.
    riempie dai vicini; mani e dita dei piedi restano quelle del personaggio (dita vere). La testa prima si porta
    su quella dell'atlante (scala e spostamento per asse), poi come il resto; le orecchie (l'atlante non le ha)
    seguono la pelle attorno, gli occhi si appiattiscono di fronte (arrivano dalla foto del viso);
+2a. involucro: per busto (con testa e clavicole), braccia e gambe si fa una griglia di 2,5 mm con muscoli e ossa
+   della stessa parte (la parte di ogni punto della pelle viene dai pesi dello scheletro del personaggio, così
+   l'interno del braccio non finisce sul busto), si chiude, si gonfia di 12 mm e si stringe fino a 4 mm sopra i
+   tessuti, si leviga; ogni punto va su quella superficie lungo il gradiente della distanza. Testa, mani e dita
+   dei piedi restano fuori (viso dalla foto, dita vere). WRAP_DEBUG=1 salva le griglie per controllo;
 2b. pesi: ogni punto si muove con i segmenti dei muscoli e delle ossa dell'atlante sotto di lui (le stesse matrici
-   nell'app), mano, dita e pollice dell'atlante passano alle ossa delle mani vere: in ogni posa la pelle riveste
-   i suoi muscoli e le sue ossa;
+   nell'app), presi solo dai tessuti della stessa parte; vicino alla spalla braccio e busto si dividono entro
+   5-9 cm dal giunto (niente lembi della scapola trascinati dal braccio); mano, dita e pollice dell'atlante
+   passano alle ossa delle mani vere: in ogni posa la pelle riveste i suoi muscoli e le sue ossa;
 3. dalla pelle dell'atlante si prende anche il muscolo sotto (gruppo, ventre, quanto la pelle lo segue):
    nell'app la pelle si gonfia con il muscolo che lavora, come quella dell'atlante;
 4. occlusione ambientale (pieghe, sotto i pettorali, glutei) dentro ogni parte del corpo, più la cavità
@@ -32,6 +38,7 @@ import os
 import sys
 
 import numpy as np
+from scipy.ndimage import binary_fill_holes, distance_transform_edt, gaussian_filter, map_coordinates
 from scipy.sparse import coo_matrix
 from scipy.spatial import cKDTree
 
@@ -91,6 +98,82 @@ def load_atlas_all(path):
         W.append(raw[:, 11].astype(np.float64) / 255)
         L.append(np.full(n, {"bone": 0, "muscle": 1, "skin": 2}[bt["layer"]]))
     return j["segments"], np.concatenate(P), np.concatenate(J), np.concatenate(W), np.concatenate(L)
+
+
+def load_tissue(path):
+    """ossa e muscoli dell'atlante a riposo: vertici (posizione, due segmenti, peso del primo) e triangoli"""
+    j = json.load(open(path + ".json"))
+    b = open(path + ".bin", "rb").read()
+    st = j["stride"]
+    lo, hi = np.array(j["lo"]), np.array(j["hi"])
+    P, J, W, T = [], [], [], []
+    off = 0
+    for bt in j["batches"]:
+        if bt["layer"] not in ("bone", "muscle"):
+            continue
+        n = bt["vertices"]
+        raw = np.frombuffer(b, np.uint8, n * st, bt["vOffset"]).reshape(n, st)
+        P.append(lo + raw[:, 0:6].copy().view("<u2").reshape(n, 3) / 65535.0 * (hi - lo))
+        J.append(raw[:, 9:11].astype(np.int64))
+        W.append(raw[:, 11].astype(np.float64) / 255)
+        T.append(np.frombuffer(b, "<u2", bt["indices"], bt["iOffset"]).reshape(-1, 3).astype(np.int64) + off)
+        off += n
+    return j["segments"], np.concatenate(P), np.concatenate(J), np.concatenate(W), np.concatenate(T)
+
+
+def tri_samples(P, T, step=0.002):
+    """punti fitti sui triangoli, quanti servono per ognuno (lati lunghi, più punti)"""
+    A, B, C = P[T[:, 0]], P[T[:, 1]], P[T[:, 2]]
+    L = np.maximum.reduce([np.linalg.norm(B - A, axis=1), np.linalg.norm(C - B, axis=1), np.linalg.norm(A - C, axis=1)])
+    ks = np.clip(np.ceil(L / step).astype(int), 1, 16)
+    out = [A, B, C]
+    for k in np.unique(ks):
+        m = ks == k
+        a, b_, c = A[m], B[m], C[m]
+        for i in range(k + 1):
+            for jj in range(k + 1 - i):
+                if (i, jj) in ((0, 0), (k, 0), (0, k)):
+                    continue
+                u, v = i / k, jj / k
+                out.append(a + (b_ - a) * u + (c - a) * v)
+    return np.concatenate(out)
+
+
+def envelope(points, vox=0.0025, r=0.012, t=0.004):
+    """
+    involucro dei tessuti: i punti dilatati di r e riempiti dentro, poi erosi di r - t (chiusura): la superficie
+    segue muscoli e ossa a t di distanza, i solchi più stretti di 2 r si chiudono. phi < 0 dentro, 0 sulla pelle.
+    """
+    lo = points.min(0) - (r + 0.03)
+    hi = points.max(0) + (r + 0.03)
+    shape = tuple(np.ceil((hi - lo) / vox).astype(int) + 1)
+    M = np.zeros(shape, bool)
+    ijk = np.floor((points - lo) / vox).astype(int)
+    M[ijk[:, 0], ijk[:, 1], ijk[:, 2]] = True
+    O = distance_transform_edt(~M) <= r / vox
+    del M
+    O = binary_fill_holes(O)
+    S = (distance_transform_edt(~O) - distance_transform_edt(O)).astype(np.float32) * vox
+    del O
+    phi = gaussian_filter(S + np.float32(r - t), 1.0)
+    return {"lo": lo, "vox": vox, "phi": phi}
+
+
+def env_sample(env, p):
+    idx = ((p - env["lo"]) / env["vox"]).T
+    return map_coordinates(env["phi"], idx, order=1, mode="nearest")
+
+
+def env_project(env, p, iters=6):
+    """ogni punto sulla superficie dell'involucro (lungo il gradiente)"""
+    h = env["vox"]
+    q = p.copy()
+    for _ in range(iters):
+        f = env_sample(env, q)
+        g = np.stack([(env_sample(env, q + h * e) - env_sample(env, q - h * e)) / (2 * h) for e in np.eye(3)], 1)
+        gn = np.maximum((g * g).sum(1), 0.05)
+        q = q - (f / gn)[:, None] * g
+    return q, env_sample(env, q)
 
 
 def load_muscles(path):
@@ -520,6 +603,63 @@ def main():
     disp = Df * kw[:, None]
     qn = qw + disp
 
+    # ---- la pelle sulla sagoma di muscoli e ossa: per ogni parte del corpo (busto con testa, braccia, gambe,
+    # separate perché non si faccia la membrana tra braccio e fianco o tra le cosce) l'involucro dei suoi tessuti
+    # a 4 mm; la pelle ci va sopra, la testa (viso vero), le mani e le dita dei piedi restano quelle di prima
+    tsegs, TP, TJ, TW, TT = load_tissue(anat_path)
+    part_of = {}
+    for i, nm in enumerate(tsegs):
+        part_of[i] = "torso" if nm in ("bacino", "torace", "testa", "clav_L", "clav_R") else ("arm_" + nm[-1]) if nm.split("_")[0] in ("omero", "avambr", "mano", "dita", "pollice") else ("leg_" + nm[-1])
+    parts = sorted(set(part_of.values()))
+    PW = np.zeros((len(TP), len(parts)))
+    for i, nm in part_of.items():
+        k = parts.index(nm)
+        PW[:, k] += np.where(TJ[:, 0] == i, TW, 0) + np.where(TJ[:, 1] == i, 1 - TW, 0)
+    # parti della pelle: dallo scheletro del personaggio (non dal tessuto più vicino: la pelle dell'interno del
+    # braccio, a riposo accanto al fianco, finiva sul busto e a braccio alzato restava incollata al fianco)
+    def char_part(nm):
+        if nm.startswith(("upperarm", "lowerarm") + HAND):
+            return "arm_" + nm[-1].upper()
+        if nm.startswith(("thigh", "calf", "foot", "ball")):
+            return "leg_" + nm[-1].upper()
+        return "torso"
+
+    cpart = np.array([char_part(nm) for nm in names])
+    SPW = np.stack([wsum(cpart == pn)[first] for pn in parts], 1)
+    SPW /= np.maximum(SPW.sum(1, keepdims=True), 1e-12)
+    for _ in range(2):
+        SPW = 0.5 * SPW + 0.5 * avg(SPW)
+    hw_s = head_w.copy()
+    for _ in range(4):
+        hw_s = 0.5 * hw_s + 0.5 * avg(hw_s)
+    ew = kw * (1 - smoothstep(0.25, 0.65, hw_s))
+    tgt2 = np.zeros_like(qn)
+    wsum2 = np.zeros(nw)
+    for k, pname in enumerate(parts):
+        use = (SPW[:, k] > 0.02) & (ew > 0.01)
+        if not use.any():
+            continue
+        member = PW[:, k] >= 0.25
+        tri = TT[member[TT].all(1)]
+        pts = tri_samples(TP, tri)
+        env = envelope(pts)
+        proj, res = env_project(env, qn[use])
+        ok = np.abs(res) < 0.003
+        w = SPW[use, k] * ok
+        tgt2[use] += proj * w[:, None]
+        wsum2[use] += w
+        print("involucro", pname, env["phi"].shape, "punti", int(use.sum()), "spostamento medio (mm)", round(float(np.linalg.norm(proj - qn[use], axis=1)[ok].mean() * 1000), 1), "non riusciti", int((~ok).sum()))
+        del env
+    have = wsum2 > 1e-6
+    D2 = np.zeros_like(qn)
+    D2[have] = tgt2[have] / wsum2[have, None] - qn[have]
+    D2 *= (ew * np.clip(wsum2 / np.maximum(SPW.sum(1), 1e-9), 0, 1))[:, None]
+    for lam in (0.5, -0.53, 0.5, -0.53, 0.5, -0.53):
+        D2 = D2 + lam * (avg(D2) - D2)
+    print("pelle sulla sagoma dei tessuti: spostamento medio (mm)", round(float(np.linalg.norm(D2, axis=1)[ew > 0.5].mean() * 1000), 1))
+    disp = disp + D2
+    qn = qw + disp
+
     # ---- pesi: ogni punto della pelle si muove con i segmenti dei tessuti dell'atlante sotto di lui (muscoli e ossa,
     # gli stessi che li muovono nell'app), così in ogni posa la pelle resta sopra i suoi muscoli e le sue ossa.
     # La pelle dell'atlante non conta: ha pesi a gradini (si strappa sulle spalle). Ammorbiditi sulla pelle.
@@ -527,20 +667,54 @@ def main():
     tissue = AL != 2
     AP, AJ, AW = AP[tissue], AJ[tissue], AW[tissue]
     nseg = len(segs)
+    # parte di ogni tessuto (come per l'involucro): la pelle di una parte prende i pesi dai tessuti della sua parte
+    APW = np.zeros((len(AP), len(parts)))
+    for i, nm in part_of.items():
+        k = parts.index(nm)
+        APW[:, k] += np.where(AJ[:, 0] == i, AW, 0) + np.where(AJ[:, 1] == i, 1 - AW, 0)
     KW = 24
-    dA, iA = cKDTree(AP).query(qn, KW)
-    sig = np.maximum(0.012, 1.5 * dA[:, :1])
-    gA = np.exp(-((dA / sig) ** 2))
     Wseg = np.zeros((nw, nseg))
-    rows = np.arange(nw)
-    for k in range(KW):
-        ii = iA[:, k]
-        np.add.at(Wseg, (rows, AJ[ii, 0]), gA[:, k] * AW[ii])
-        np.add.at(Wseg, (rows, AJ[ii, 1]), gA[:, k] * (1 - AW[ii]))
+    dA0 = np.full(nw, np.inf)
+    for k_p, pname in enumerate(parts):
+        use = SPW[:, k_p] > 0.01
+        mem = APW[:, k_p] >= 0.25
+        if not use.any() or not mem.any():
+            continue
+        AP_p, AJ_p, AW_p = AP[mem], AJ[mem], AW[mem]
+        dA, iA = cKDTree(AP_p).query(qn[use], KW)
+        dA0[use] = np.minimum(dA0[use], dA[:, 0])
+        sig = np.maximum(0.012, 1.5 * dA[:, :1])
+        gA = np.exp(-((dA / sig) ** 2))
+        Wp = np.zeros((int(use.sum()), nseg))
+        rows = np.arange(len(Wp))
+        for k in range(KW):
+            ii = iA[:, k]
+            np.add.at(Wp, (rows, AJ_p[ii, 0]), gA[:, k] * AW_p[ii])
+            np.add.at(Wp, (rows, AJ_p[ii, 1]), gA[:, k] * (1 - AW_p[ii]))
+        Wp /= np.maximum(Wp.sum(1, keepdims=True), 1e-12)
+        Wseg[use] += Wp * SPW[use, k_p][:, None]
     Wseg /= np.maximum(Wseg.sum(1, keepdims=True), 1e-12)
+    dA = dA0[:, None]
     for _ in range(6):
         Wseg = 0.5 * Wseg + 0.5 * avg(Wseg)
     print("tessuto dell'atlante più vicino (cm):", np.percentile(dA[:, 0] * 100, [50, 90, 99]).round(2))
+    # braccio e busto si mescolano solo vicino alla spalla: il gran dorsale e il grande rotondo vanno dal busto
+    # all'omero e davano un po' del braccio alla pelle del fianco, che a braccio alzato in trazione restava tesa
+    # come un lembo dal braccio fino alla vita
+    rest_pts = json.load(open(anat_path + ".json"))["rest"]
+    for sd, shk in (("L", "11"), ("R", "12")):
+        # anche la scapola (segmento della clavicola): la sua pelle segue il braccio solo vicino al giunto
+        torso_i = [segs.index("torace"), segs.index("bacino"), segs.index(f"clav_{sd}")]
+        arm_i = [segs.index(f"{nm}_{sd}") for nm in ("omero", "avambr", "mano", "dita", "pollice")]
+        d_sh = np.linalg.norm(qn - np.array(rest_pts[shk]), axis=1)
+        lim = 1 - smoothstep(0.05, 0.09, d_sh)
+        aw, tw = Wseg[:, arm_i].sum(1), Wseg[:, torso_i].sum(1)
+        mostly_torso = tw >= aw
+        Wseg[np.ix_(mostly_torso, arm_i)] *= lim[mostly_torso, None]
+        Wseg[np.ix_(~mostly_torso, torso_i)] *= lim[~mostly_torso, None]
+    Wseg /= np.maximum(Wseg.sum(1, keepdims=True), 1e-12)
+    for _ in range(2):
+        Wseg = 0.5 * Wseg + 0.5 * avg(Wseg)
 
     # ---- muscolo sotto la pelle (il più vicino): gruppo, ventre, tendine; la pelle lo segue quanto gli è vicina
     MP, MG, MF, MT = load_muscles(anat_path)

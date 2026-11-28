@@ -425,12 +425,28 @@ export function skinMesh(m: SkinMesh, bones: Aff[], outP: Float32Array, outN: Fl
 }
 
 /**
- * Collo (torace-testa) e vita (bacino-torace): con la testa girata di 80-90° verso il bersaglio la media delle due
- * matrici stringeva il collo (testa "a fungo"). Lì i due pesi diventano due ossa vicine tra le NQ rotazioni
- * interpolate davvero attorno al giunto (vedi atlasSkinBones): la pelle gira come una torsione, senza strozzature.
+ * Tra due segmenti la pelle gira attorno al loro giunto invece di seguire la media delle due matrici: con la
+ * media, il collo si stringeva con la testa girata verso il bersaglio e, a braccio alzato in trazione, dietro il
+ * braccio restava un lembo teso fino al fianco. I due pesi di una coppia diventano due ossa vicine tra le NQ
+ * rotazioni interpolate davvero attorno al giunto (vedi atlasSkinBones): la pelle si piega ad arco.
  */
 const NQ = 16;
-const PAIRS: [string, string][] = [["torace", "testa"], ["bacino", "torace"]];
+/** coppie di segmenti e giunto (punto del riposo dell'atlante, o come trovarlo) */
+const PAIRS: [string, string, (r: (k: string) => V3) => V3][] = [
+  ["torace", "testa", (r) => v3.lerp(r("11"), r("12"), 0.5)],
+  ["bacino", "torace", (r) => v3.lerp(v3.lerp(r("23"), r("24"), 0.5), v3.lerp(r("11"), r("12"), 0.5), 0.25)],
+  ...(["L", "R"] as const).flatMap((sd): [string, string, (r: (k: string) => V3) => V3][] => {
+    const [sh, el, hip, kn, an] = sd === "L" ? ["11", "13", "23", "25", "27"] : ["12", "14", "24", "26", "28"];
+    return [
+      ["torace", `clav_${sd}`, (r) => v3.lerp(r("notch"), r(sh), 0.15)],
+      [`clav_${sd}`, `omero_${sd}`, (r) => r(sh)],
+      [`omero_${sd}`, `avambr_${sd}`, (r) => r(el)],
+      ["bacino", `coscia_${sd}`, (r) => r(hip)],
+      [`coscia_${sd}`, `gamba_${sd}`, (r) => r(kn)],
+      [`gamba_${sd}`, `piede_${sd}`, (r) => r(an)],
+    ];
+  }),
+];
 let pairIdx: [number, number][] = [];
 function neckWaist(m: SkinMesh, segs: string[]) {
   pairIdx = PAIRS.map(([a, b]) => [segs.indexOf(a), segs.indexOf(b)]);
@@ -441,6 +457,7 @@ function neckWaist(m: SkinMesh, segs: string[]) {
     const o = i * 4;
     for (let p = 0; p < pairIdx.length; p++) {
       const [a, b] = pairIdx[p];
+      if (a < 0 || b < 0) continue;
       let ka = -1;
       let kb = -1;
       for (let k = 0; k < 4; k++) {
@@ -468,7 +485,8 @@ function neckWaist(m: SkinMesh, segs: string[]) {
 /**
  * Ossa della pelle vera mossa dall'atlante: i 21 segmenti con le stesse matrici di muscoli e ossa (la pelle resta
  * sopra di loro in ogni posa), le ossa del personaggio portate al riposo dell'atlante (servono solo le mani vere)
- * e le rotazioni interpolate di collo e vita.
+ * e le rotazioni interpolate attorno ai giunti (collo, vita, spalle, gomiti, anche, ginocchia, caviglie). Tra busto e
+ * omero resta la media (la pelle dell'ascella si tende come una piega, non fa un arco).
  */
 export function atlasSkinBones(meta: BodyMeta, sb: SkinBody, mats: Float32Array, hands: HandPose[]): Aff[] {
   const nSeg = 21;
@@ -476,12 +494,10 @@ export function atlasSkinBones(meta: BodyMeta, sb: SkinBody, mats: Float32Array,
   for (let s = 0; s < nSeg; s++) out.push(s < meta.segments.length ? segAff(mats, s) : { r: [1, 0, 0, 0, 1, 0, 0, 0, 1], t: [0, 0, 0] });
   const qb = bodyBones(meta, sb, mats, hands);
   for (let k = 0; k < 65; k++) out.push(k < qb.length && sb.restInv?.[k] ? affComp(qb[k], sb.restInv[k]) : { r: [1, 0, 0, 0, 1, 0, 0, 0, 1], t: [0, 0, 0] });
-  const rest = (k: string) => meta.rest[k] as V3;
-  const shM = v3.lerp(rest("11"), rest("12"), 0.5);
-  const hipM = v3.lerp(rest("23"), rest("24"), 0.5);
-  const pivots: V3[] = [shM, v3.lerp(hipM, shM, 0.25)];
+  const rest = (k: string) => (meta.rest[k] ?? [0, 0, 0]) as V3;
   pairIdx.forEach(([a, b], p) => {
-    for (let q = 1; q < NQ; q++) out.push(a >= 0 && b >= 0 ? affBlend(out[a], out[b], q / NQ, pivots[p]) : out[Math.max(0, a)]);
+    const c = PAIRS[p][2](rest);
+    for (let q = 1; q < NQ; q++) out.push(a >= 0 && b >= 0 ? affBlend(out[a], out[b], q / NQ, c) : out[Math.max(0, a)]);
   });
   return out;
 }

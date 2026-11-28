@@ -1916,15 +1916,42 @@ export const setClubOrder = createServerFn({ method: "POST" })
     return { ok: true as const };
   });
 
+/**
+ * I premi di tutti gli arcieri, ricalcolati al più ogni 6 ore e un pezzo alla volta (al massimo 4 secondi per
+ * richiesta, 6 arcieri insieme): chi riprende dal punto dov'era rimasto il giro precedente.
+ */
+async function syncAllBadges(sql: Awaited<ReturnType<typeof db>>) {
+  const KEY = "premi_giro";
+  const cur = await sql<{ value: { done?: string; after?: string | null } }>`select value from app_settings where key = ${KEY} limit 1`;
+  const st = cur[0]?.value ?? {};
+  if (!st.after && st.done && Date.now() - Date.parse(st.done) < 6 * 3600_000) return;
+  const after = st.after ?? "";
+  const members = await sql<{ user_id: string }>`select user_id from members where user_id is not null and user_id > ${after} order by user_id`;
+  const t0 = Date.now();
+  let last = after;
+  for (let i = 0; i < members.length && Date.now() - t0 < 4000; i += 6) {
+    const chunk = members.slice(i, i + 6);
+    // ognuno legge solo le sue gare
+    await Promise.all(chunk.map((m) => syncBadges(sql, m.user_id).catch(() => [])));
+    last = chunk[chunk.length - 1].user_id;
+    if (i === 0 && Date.now() - t0 > 2500) break;
+  }
+  const finished = !members.length || last === members[members.length - 1].user_id;
+  const value = finished ? { done: new Date().toISOString(), after: null } : { done: st.done ?? null, after: last };
+  await sql`
+    insert into app_settings (key, value, updated_at) values (${KEY}, ${JSON.stringify(value)}::jsonb, now())
+    on conflict (key) do update set value = excluded.value, updated_at = now()`;
+}
+
 export const listGadgets = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }) => {
     const sql = await db();
     await ensureMember(sql, context.userId);
-    const members = await sql<{ user_id: string }>`select user_id from members where user_id is not null`;
-    // le gare di tutti in una lettura sola (app, portale e archivio FITAST), poi i premi di ognuno
-    const loads = await garaLoads(sql).catch(() => new Map<string, GaraLoad[]>());
-    for (const member of members) await syncBadges(sql, member.user_id, loads.get(member.user_id) ?? []);
+    // prima si ricalcolavano i premi di tutti a ogni apertura: con tante gare la lettura scadeva e i premi
+    // sparivano dalle schede. Ora: subito quelli di chi apre la pagina, gli altri a turno (vedi syncAllBadges)
+    await syncBadges(sql, context.userId).catch(() => []);
+    await syncAllBadges(sql).catch(() => undefined);
     const rows = await sql<{ user_id: string; code: string; given_name: string; family_name: string; nickname: string; slug: string; unlocked_at: unknown }>`
       select u.user_id, u.code, m.given_name, m.family_name, m.nickname, m.slug, u.unlocked_at
       from user_achievements u

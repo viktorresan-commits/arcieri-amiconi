@@ -7,6 +7,7 @@ import { fmtAvg } from "@/lib/arcieri/scoring";
 import { useLoad } from "@/lib/arcieri/use-load";
 import { AvgLine, ScoreLine } from "@/components/charts";
 import { Card, ErrorNote, Loading } from "@/components/kit";
+import { HPages } from "@/components/hpages";
 import { PrizeMark, prizeTier, topPrizes } from "@/components/prize-mark";
 import { KindEmblem, KindHeading } from "@/components/kind-emblem";
 import { KINDS } from "@/lib/arcieri/kinds";
@@ -28,7 +29,7 @@ function Page() {
   const looks = useTeamAvatars();
   const { id } = Route.useParams();
   const { data, error, loading } = useLoad(`archer-${id}`, () => archerBoard({ data: { id: Number(id) } }));
-  const gadgets = useLoad(`archer-gadgets-${id}`, () => listGadgets());
+  const gadgets = useLoad("gadgets", () => listGadgets());
   if (loading) return <Loading />;
   if (error || !data) return <ErrorNote text={error || "Errore"} />;
   const { name } = archerName(data);
@@ -235,13 +236,11 @@ const shortSeason = (label: string) => {
 function SeasonsCard({ st, firstName }: { st: Stats; firstName: string }) {
   const seasons = st.seasons;
   const [pick, setPick] = useState("");
-  const [all, setAll] = useState(false);
   if (!seasons.length || (seasons.length === 1 && seasons[0].current)) return null;
   const names = seasons.map((x) => shortSeason(x.label));
   const index = Math.max(0, names.indexOf(pick));
   const s = seasons[index];
   const g = s.general;
-  const races = all ? s.races : s.races.slice(0, 6);
   const tiles: [string, string][] = [
     ["Gare", String(s.gare)],
     ["Podi", String(s.podiums)],
@@ -275,11 +274,11 @@ function SeasonsCard({ st, firstName }: { st: Stats; firstName: string }) {
         <p className="text-xs text-muted">{s.current ? "La classifica generale di questa stagione arriva con la prossima lettura del portale." : "Classifica generale di questa stagione non salvata: si aggiunge con «Scansiona tutto dal 2019» nell'Albo d'oro."}</p>
       )}
       {s.races.length ? (
-        <div className="grid gap-1">
-          {races.map((r) => {
+        // le gare della stagione a pagine di 6 che scorrono di lato
+        <HPages as="div" className="gap-1" items={s.races} per={6} keyOf={(r, i) => `${r.day}-${r.name}-${i}`} render={(r) => {
             const [y, m, d] = r.day.split("-");
             return (
-              <div key={`${r.day}-${r.name}`} className="flex items-center gap-2.5 rounded-xl bg-white/[0.04] px-2.5 py-2">
+              <div className="flex items-center gap-2.5 rounded-xl bg-white/[0.04] px-2.5 py-2">
                 <span className="grid w-9 shrink-0 place-items-center">
                   {r.rank != null && r.rank <= 3 ? <Medal place={r.rank} size={24} /> : <span className="font-display text-lg leading-none tabular-nums text-white/85">{r.rank != null ? `${r.rank}°` : "—"}</span>}
                 </span>
@@ -290,13 +289,7 @@ function SeasonsCard({ st, firstName }: { st: Stats; firstName: string }) {
                 {r.score != null ? <span className="shrink-0 font-display text-lg tabular-nums">{fmtNum(r.score)}</span> : null}
               </div>
             );
-          })}
-          {s.races.length > 6 ? (
-            <button type="button" onClick={() => setAll((v) => !v)} className="aa-press min-h-11 rounded-xl text-sm font-semibold text-[#f1cf8a]">
-              {all ? "Mostra meno" : `Mostra tutte le ${s.races.length} gare`}
-            </button>
-          ) : null}
-        </div>
+          }} />
       ) : (
         <p className="text-sm text-muted">Nessuna gara trovata in questa stagione.</p>
       )}

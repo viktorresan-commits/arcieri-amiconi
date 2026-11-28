@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Glyph } from "@/components/icons";
 import { Card, ErrorNote, Loading, cx } from "@/components/kit";
 import { Medal } from "@/components/palmares";
 import { CrestPodium } from "@/components/podium";
 import { Insignia } from "@/components/insignia";
+import { HPages } from "@/components/hpages";
 import { useLoad } from "@/lib/arcieri/use-load";
 import { fitastGaraBoard, fitastStandingRows, fitastStandings, fitastTeamArchers, fitastTeamStats, type Standing, type StandingRow, type TeamArcher, type TeamStat } from "@/lib/arcieri/fitast-league.api";
 import { categoryGroup, cleanCategory, crestOf as drawCrest, teamKey, titleName } from "@/lib/arcieri/fitast-league";
@@ -90,32 +91,35 @@ export function useSplit(items: Standing[]) {
   }, [items]);
 }
 
-export function RankList({ rows, crestOf, team, limit, onTeam, mark }: { rows: StandingRow[]; crestOf: (t: string) => Crest | null; team?: boolean; limit: number; /** tocca una compagnia: i suoi arcieri */ onTeam?: (name: string) => void; /** i nostri arcieri (o la nostra compagnia), evidenziati */ mark?: (r: StandingRow) => "tu" | "nostro" | null }) {
-  return (
-    <ol className="grid gap-1.5">
-      {rows.slice(0, limit).map((r, i) => {
-        const m = mark?.(r) ?? null;
-        return (
-        <li
-          key={`${r.name}-${i}`}
-          className={cx("flex items-center gap-2.5 rounded-xl px-2.5 py-2", m ? "border border-[#e0b15a]/45 bg-[#e0b15a]/[0.08]" : "bg-white/[0.035]", onTeam && "aa-press cursor-pointer active:bg-white/[0.07]")}
-          {...(onTeam ? { role: "button", tabIndex: 0, onClick: () => onTeam(team ? r.name : r.team), onKeyDown: (e: { key: string }) => { if (e.key === "Enter") onTeam(team ? r.name : r.team); } } : {})}
-        >
-          <Place place={r.place} />
-          <CrestMark crest={crestOf(team ? r.name : r.team)} team={team ? r.name : r.team} />
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm font-semibold">{titleName(r.name)}{m ? <span className="ml-1.5 text-[0.68rem] font-semibold text-[#f1cf8a]">{m}</span> : null}</span>
-            {!team && r.team ? <span className="block truncate text-xs text-muted">{titleName(r.team)}</span> : null}
-          </span>
-          <span className="shrink-0 text-right">
-            <b className="block font-display text-lg leading-none tabular-nums">{num(pts(r))}</b>
-            <span className="text-[0.58rem] uppercase tracking-wider text-muted">{r.camp != null ? "pt camp." : "punti"}</span>
-          </span>
-        </li>
-        );
-      })}
-    </ol>
-  );
+export function RankList({ rows, crestOf, team, limit, onTeam, mark, per }: { rows: StandingRow[]; crestOf: (t: string) => Crest | null; team?: boolean; limit: number; /** tocca una compagnia: i suoi arcieri */ onTeam?: (name: string) => void; /** i nostri arcieri (o la nostra compagnia), evidenziati */ mark?: (r: StandingRow) => "tu" | "nostro" | null; /** righe per pagina: oltre, l'elenco si divide in pagine che scorrono di lato */ per?: number }) {
+  const list = rows.slice(0, limit);
+  const row = (r: StandingRow, i: number) => {
+    const m = mark?.(r) ?? null;
+    return (
+      <li
+        className={cx("flex items-center gap-2.5 rounded-xl px-2.5 py-2", m ? "border border-[#e0b15a]/45 bg-[#e0b15a]/[0.08]" : "bg-white/[0.035]", onTeam && "aa-press cursor-pointer active:bg-white/[0.07]")}
+        {...(onTeam ? { role: "button", tabIndex: 0, onClick: () => onTeam(team ? r.name : r.team), onKeyDown: (e: { key: string }) => { if (e.key === "Enter") onTeam(team ? r.name : r.team); } } : {})}
+        data-i={i}
+      >
+        <Place place={r.place} />
+        <CrestMark crest={crestOf(team ? r.name : r.team)} team={team ? r.name : r.team} />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-semibold">{titleName(r.name)}{m ? <span className="ml-1.5 text-[0.68rem] font-semibold text-[#f1cf8a]">{m}</span> : null}</span>
+          {!team && r.team ? <span className="block truncate text-xs text-muted">{titleName(r.team)}</span> : null}
+        </span>
+        <span className="shrink-0 text-right">
+          <b className="block font-display text-lg leading-none tabular-nums">{num(pts(r))}</b>
+          <span className="text-[0.58rem] uppercase tracking-wider text-muted">{r.camp != null ? "pt camp." : "punti"}</span>
+        </span>
+      </li>
+    );
+  };
+  if (per && list.length > per) {
+    const focus = mark ? list.findIndex((r) => mark(r)) : -1;
+    const fl = focus >= 0 ? (mark?.(list[focus]) === "tu" ? "Tu" : "Noi") : "Noi";
+    return <HPages items={list} per={per} render={row} keyOf={(r, i) => `${r.name}-${i}`} labelOf={(a, b, p) => (a.place != null && b.place != null ? `${a.place}–${b.place}` : `${p * per + 1}–${p * per + per}`)} focus={focus} focusLabel={fl} />;
+  }
+  return <ol className="grid gap-1.5">{list.map((r, i) => <Fragment key={`${r.name}-${i}`}>{row(r, i)}</Fragment>)}</ol>;
 }
 
 /** i primi della classifica e, a richiesta, tutti gli altri arcieri (letti dal server solo quando servono) */
@@ -143,7 +147,7 @@ function FullRanking({ it, crestOf, limit, onTeam }: { it: Standing; crestOf: (t
   const rows = open && all ? all : it.rows;
   return (
     <div className="grid gap-2">
-      <RankList rows={rows} crestOf={crestOf} limit={open && all ? rows.length : limit} onTeam={onTeam} />
+      <RankList rows={rows} crestOf={crestOf} limit={open && all ? rows.length : limit} onTeam={onTeam} per={10} />
       {more > 0 ? (
         <button type="button" onClick={open ? () => setOpen(false) : expand} disabled={busy} className="aa-chip justify-self-center px-4 py-2 text-sm">
           {busy ? "Carico la classifica…" : open ? `Solo i primi ${limit}` : `Mostra tutti gli arcieri (${total})`}
@@ -182,7 +186,7 @@ function SplitBoard({ items, crestOf, team, limit, empty }: { items: Standing[];
       {it && team && it.rows.length >= 3 ? (
         <>
           <TeamPodium rows={it.rows} crestOf={crestOf} onTeam={setShown} />
-          <RankList rows={it.rows.slice(3)} crestOf={crestOf} team={team} limit={limit - 3} onTeam={setShown} />
+          <RankList rows={it.rows.slice(3)} crestOf={crestOf} team={team} limit={limit - 3} onTeam={setShown} per={6} />
         </>
       ) : it && !team ? <FullRanking key={`${it.kind}|${it.garaId}|${it.season}|${it.category}`} it={it} crestOf={crestOf} limit={limit} onTeam={setShown} /> : it ? <RankList rows={it.rows} crestOf={crestOf} team={team} limit={limit} onTeam={setShown} /> : null}
       {team ? <p className="px-1 text-[0.7rem] text-muted">Tocca una compagnia per vedere tutti i suoi arcieri.</p> : null}
@@ -216,7 +220,7 @@ export function TeamArchersSheet({ team, crest, onClose }: { team: string; crest
         </header>
         <div className="-mx-1 overflow-y-auto px-1">
           {error ? <ErrorNote text={error} /> : loading ? <Loading /> : !list.length ? (
-            <p className="py-6 text-center text-sm text-muted">Nessun arciere di questa compagnia nella classifica generale. Tocca «Aggiorna dal portale» per leggerla intera.</p>
+            <p className="py-6 text-center text-sm text-muted">Nessun arciere di questa compagnia nella classifica generale. Tocca «Aggiorna» per leggerla intera.</p>
           ) : (
             <ol className="grid gap-1.5">
               {list.map((a, i) => (
@@ -312,10 +316,10 @@ export function FitastHeader({ league }: { league: FitastLeagueState }) {
   return (
     <Card className="grid gap-3 overflow-hidden">
       <div className="flex items-start gap-3">
-        <FitastLogo size={62} />
+        <FitastLogo size={82} />
         <div className="min-w-0 flex-1">
           <h2 className="font-display text-2xl leading-tight">Campionato FITAST</h2>
-          <p className="text-sm text-muted">{data?.seasonName || "Campionato in corso"} · classifiche lette dal portale FITAST e salvate per tutti.</p>
+          <p className="text-sm text-muted">{data?.seasonName || "Campionato in corso"} · classifiche salvate per tutti.</p>
           {data?.updatedAt ? <p className="mt-0.5 text-xs text-muted">Aggiornate il {new Date(data.updatedAt).toLocaleString("it-IT", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}</p> : null}
         </div>
       </div>
@@ -324,7 +328,7 @@ export function FitastHeader({ league }: { league: FitastLeagueState }) {
           <button type="button" className="aa-chip" onClick={league.stop}>Ferma</button>
         ) : (
           <>
-            <button type="button" className="aa-chip border-[#e0b15a]/50 text-[#f1cf8a]" onClick={() => void league.refresh()}>Aggiorna dal portale</button>
+            <button type="button" className="aa-chip border-[#e0b15a]/50 text-[#f1cf8a]" onClick={() => void league.refresh()}>Aggiorna</button>
             <button type="button" className="text-xs text-muted underline underline-offset-2" onClick={() => void league.refresh(true)}>Rileggi tutto</button>
             {/* lo storico delle stagioni passate (podi dal 2019) sta nell'Albo d'oro, più sotto */}
             <a href="#albo" className="text-xs text-muted underline underline-offset-2" onClick={(e) => { e.preventDefault(); document.getElementById("albo")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>Albo d'oro dal 2019</a>
@@ -346,7 +350,7 @@ export function FitastHeader({ league }: { league: FitastLeagueState }) {
 
 /** classifica generale compagnie del campionato (punti per tipologia, con stemmi e medaglie) */
 export function FitastCompanyBoard({ league }: { league: FitastLeagueState }) {
-  return <SplitBoard items={league.genSq} crestOf={league.crestOf} team limit={40} empty={league.running ? "In lettura dal portale…" : "Ancora non letta: tocca Aggiorna dal portale."} />;
+  return <SplitBoard items={league.genSq} crestOf={league.crestOf} team limit={40} empty={league.running ? "In lettura…" : "Ancora non letta: tocca Aggiorna."} />;
 }
 
 export type TeamMetric = "avg" | "members" | "gare";
@@ -362,7 +366,7 @@ export function FitastTeamsBoard({ league, metric }: { league: FitastLeagueState
   if (loading && !data) return <Loading />;
   const value = (t: TeamStat) => (metric === "avg" ? t.avg ?? 0 : metric === "members" ? t.archers : t.gare);
   const teams = (data?.teams ?? []).filter((t) => (metric === "avg" ? t.avg != null : value(t) > 0)).sort((a, b) => value(b) - value(a) || a.team.localeCompare(b.team, "it"));
-  if (!teams.length) return <p className="text-sm text-muted">{league.running ? "In lettura dal portale…" : "Ancora nessun dato: tocca «Aggiorna dal portale»."}</p>;
+  if (!teams.length) return <p className="text-sm text-muted">{league.running ? "In lettura…" : "Ancora nessun dato: tocca «Aggiorna»."}</p>;
   const fmt = (t: TeamStat) => (metric === "avg" ? (t.avg ?? 0).toFixed(1).replace(".", ",") : String(value(t)));
   const unit = metric === "avg" ? "pt per arciere" : metric === "members" ? "arcieri" : "gare";
   const max = Math.max(...teams.map(value), 1);
@@ -374,11 +378,15 @@ export function FitastTeamsBoard({ league, metric }: { league: FitastLeagueState
   return (
     <div className="grid gap-2">
       {teams.length >= 2 ? <CrestPodium rows={top} onPick={setShown} /> : null}
-      <ol className="grid gap-1.5">
-        {teams.slice(teams.length >= 2 ? 3 : 0, 40).map((t, i) => {
+      <HPages
+        items={teams.slice(teams.length >= 2 ? 3 : 0, 40)}
+        per={6}
+        keyOf={(t) => t.team}
+        labelOf={(_a, _b, p) => { const f = (teams.length >= 2 ? 4 : 1) + p * 6; return `${f}–${f + 5}`; }}
+        render={(t, i) => {
           const c = league.crestOf(t.team);
           return (
-            <li key={t.team}>
+            <li>
               <button type="button" onClick={() => setShown(t.team)} className="aa-press flex w-full items-center gap-2.5 rounded-xl bg-white/[0.035] px-2.5 py-2 text-left active:bg-white/[0.07]">
                 <Place place={(teams.length >= 2 ? 4 : 1) + i} />
                 <CrestMark crest={c} team={t.team} />
@@ -394,8 +402,8 @@ export function FitastTeamsBoard({ league, metric }: { league: FitastLeagueState
               </button>
             </li>
           );
-        })}
-      </ol>
+        }}
+      />
       <p className="px-1 text-[0.7rem] text-muted">Dati del campionato FITAST{data?.season ? ` (${data.season})` : ""}. Tocca una compagnia per vedere tutti i suoi arcieri.</p>
       {shown ? <TeamArchersSheet team={shown} crest={league.crestOf(shown)} onClose={() => setShown(null)} /> : null}
     </div>
@@ -410,7 +418,7 @@ export function FitastArchersCard({ league }: { league: FitastLeagueState }) {
         <h3 className="font-display text-xl">Classifica generale arcieri</h3>
         <p className="text-xs text-muted">I primi dieci di ogni categoria del campionato (Messeri, Madonne, Juniores, Juvenis, Pueri); sotto la lista puoi aprire tutti gli altri.</p>
       </div>
-      <SplitBoard items={league.genAr} crestOf={league.crestOf} limit={10} empty={league.running ? "In lettura dal portale…" : "Ancora non letta: tocca Aggiorna dal portale."} />
+      <SplitBoard items={league.genAr} crestOf={league.crestOf} limit={10} empty={league.running ? "In lettura…" : "Ancora non letta: tocca Aggiorna."} />
     </Card>
   );
 }
@@ -445,7 +453,7 @@ export function GaraBoard({ garaId, ours, me, crestOf, myTeam }: { garaId: strin
   const markTeam = (r: StandingRow) => (myTeamK && teamKey(r.name) === myTeamK ? ("nostro" as const) : null);
   if (loading) return <Loading />;
   if (error) return <ErrorNote text={error} />;
-  if (!arcieri.length) return <p className="text-sm text-muted">Classifica arcieri non ancora letta dal portale.</p>;
+  if (!arcieri.length) return <p className="text-sm text-muted">Classifica arcieri non ancora letta.</p>;
   const rows = it?.rows ?? [];
   const far = rows.slice(3).filter((r) => mark(r));
   return (
@@ -453,7 +461,7 @@ export function GaraBoard({ garaId, ours, me, crestOf, myTeam }: { garaId: strin
       <Chips value={group} options={order} onChange={(v) => { setG(v); setOpen(false); }} />
       <Chips value={tip} options={tips} onChange={(v) => { setT(v); setOpen(false); }} />
       {open ? (
-        <RankList rows={rows} crestOf={crestOf} limit={rows.length} onTeam={setShown} mark={mark} />
+        <RankList rows={rows} crestOf={crestOf} limit={rows.length} onTeam={setShown} mark={mark} per={8} />
       ) : (
         <>
           <RankList rows={rows} crestOf={crestOf} limit={3} onTeam={setShown} mark={mark} />
@@ -506,7 +514,7 @@ export function FitastGare({ league }: { league: FitastLeagueState }) {
       <h3 className="px-1 font-display text-xl">Gare del campionato</h3>
       {!gare.length ? (
         <Card>
-          <p className="text-sm text-muted">{running ? "In lettura dal portale…" : "Nessuna gara ancora letta. Le gare si riconoscono dopo una ricerca del proprio nome in Gare (Portale FITAST): poi Aggiorna dal portale."}</p>
+          <p className="text-sm text-muted">{running ? "In lettura…" : "Nessuna gara ancora letta. Le gare si riconoscono dopo una ricerca del proprio nome in Gare: poi Aggiorna."}</p>
         </Card>
       ) : null}
       {gare.map((g) => (
@@ -584,7 +592,7 @@ export function TeamArchersInline({ team, canClaim = false, first = 8, onClaimed
   }
   if (loading) return <p className="text-xs text-muted">Leggo gli arcieri del campionato…</p>;
   if (error) return <ErrorNote text={error} />;
-  if (!list.length) return <p className="text-xs text-muted">Nessun arciere di questa compagnia nelle classifiche del campionato salvate. Si riempie con «Aggiorna dal portale».</p>;
+  if (!list.length) return <p className="text-xs text-muted">Nessun arciere di questa compagnia nelle classifiche del campionato salvate. Si riempie con «Aggiorna».</p>;
   const shown = all ? list : list.slice(0, first);
   const inApp = list.filter((a) => a.member && "memberId" in a.member).length;
   return (
@@ -636,7 +644,7 @@ export function JoinLinkSheet({ team, companyName, onClose }: { team: string; co
     <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/60 backdrop-blur-[3px] md:items-center" role="dialog" aria-modal="true" aria-label="Collega il tuo nome FITAST">
       <div className="aa-sheet grid max-h-[88dvh] w-full max-w-lg grid-rows-[auto_minmax(0,1fr)_auto] gap-3 overflow-hidden rounded-t-3xl border-t border-hair bg-elev p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] md:rounded-3xl md:border">
         <header className="flex items-center gap-3">
-          <FitastLogo size={40} />
+          <FitastLogo size={52} />
           <div className="min-w-0 flex-1">
             <h2 className="font-display text-2xl leading-tight">{done ? "Collegato" : "Sei uno di loro?"}</h2>
             <p className="text-xs text-muted">{done ? "Profilo e avatar sono uniti al tuo nome FITAST: posti, punti e gare arrivano da soli." : `Gli arcieri di ${companyName} nel campionato FITAST. Tocca «Sono io» sul tuo nome.`}</p>

@@ -57,7 +57,7 @@ export function ArcherStage({ data, look: lookIn, avatar, onArcherTap, corner }:
   corner?: ReactNode;
 }) {
   const { sky } = useSky();
-  const gadgets = useLoad(`archer-gadgets-${data.id}`, () => listGadgets());
+  const gadgets = useLoad("gadgets", () => listGadgets());
   const { name, nick } = archerName(data);
   const badges = roleBadges(data.roles);
   // gli ultimi tre premi vinti, dal più recente
@@ -125,7 +125,7 @@ export function ArcherStage({ data, look: lookIn, avatar, onArcherTap, corner }:
               <p className="mt-0.5 line-clamp-2 text-[0.65rem] font-semibold leading-tight text-white drop-shadow">{prize.title}</p>
             </div>
           ))
-        ) : gadgets.loading ? null : (
+        ) : gadgets.loading || gadgets.error ? null : (
           <p className="rounded-2xl bg-black/40 p-2 text-center text-[0.7rem] text-white/80">Ancora nessun premio</p>
         )}
       </div>

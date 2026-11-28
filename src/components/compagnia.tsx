@@ -13,6 +13,7 @@ import { Glyph } from "./icons";
 import { Insignia } from "./insignia";
 import { RankBars } from "./rank-bars";
 import { CrestPodium } from "./podium";
+import { HPages } from "./hpages";
 import { JoinLinkSheet, TeamArchersInline, TeamArchersSheet } from "./fitast-league";
 import { crestOf as drawnCrest } from "@/lib/arcieri/fitast-league";
 
@@ -264,9 +265,6 @@ function useTeamStats() {
   return (co: { name: string; fitastName?: string; fitastTeam?: string }) => map.get(teamKey(co.fitastTeam || "")) ?? map.get(teamKey(co.fitastName || "")) ?? map.get(teamKey(co.name)) ?? null;
 }
 
-/** quante compagnie si vedono prima di "Mostra tutte" */
-const FIRST_COMPANIES = 10;
-
 /**
  * Loghi veri: il server li cerca poche compagnie per volta (portale FITAST, sito, dominio dell'e-mail);
  * qui si richiama finché ne restano, una volta per sessione, e si avvisa quando ne arrivano di nuovi.
@@ -316,7 +314,6 @@ export function CompanyLeague({ board, onJoin, busy, onSynced, part, fitastBoard
   const [metric, setMetric] = useState<Metric>(hasFitast || fitastBoard ? "fitast" : "points");
   const [open, setOpen] = useState<number | null>(null);
   const [find, setFind] = useState("");
-  const [showAll, setShowAll] = useState(false);
   const [editCo, setEditCo] = useState<number | null>(null);
   const statOf = useTeamStats();
   // gli arcieri di una compagnia nella classifica generale FITAST
@@ -398,7 +395,7 @@ export function CompanyLeague({ board, onJoin, busy, onSynced, part, fitastBoard
       <Card className="grid grid-cols-[minmax(0,1fr)] gap-3">
         <div>
           <h2 className="font-display text-2xl">Classifica compagnie</h2>
-          <p className="text-sm text-muted">{metric === "fitast" ? `Punti del campionato FITAST${season ? ` (${season})` : ""}, letti dal portale.` : fitastMetric && metric === "avg" ? "Media dei punti campionato per arciere: tutti gli arcieri di ogni compagnia nel campionato FITAST." : fitastMetric && metric === "members" ? "Arcieri di ogni compagnia che hanno tirato nel campionato FITAST." : fitastMetric && metric === "gare" ? "Gare del campionato FITAST disputate da ogni compagnia." : metric === "avg" && fitastAvgOn ? "Media dei punti campionato per arciere: tutti gli arcieri di ogni compagnia nella classifica generale FITAST." : metric === "avg" ? "Media per freccia degli arcieri di ogni compagnia, in allenamento e in gara." : "Tutte le frecce e i punti dei loro arcieri, in allenamento e in gara."}</p>
+          <p className="text-sm text-muted">{metric === "fitast" ? `Punti del campionato FITAST${season ? ` (${season})` : ""}.` : fitastMetric && metric === "avg" ? "Media dei punti campionato per arciere: tutti gli arcieri di ogni compagnia nel campionato FITAST." : fitastMetric && metric === "members" ? "Arcieri di ogni compagnia che hanno tirato nel campionato FITAST." : fitastMetric && metric === "gare" ? "Gare del campionato FITAST disputate da ogni compagnia." : metric === "avg" && fitastAvgOn ? "Media dei punti campionato per arciere: tutti gli arcieri di ogni compagnia nella classifica generale FITAST." : metric === "avg" ? "Media per freccia degli arcieri di ogni compagnia, in allenamento e in gara." : "Tutte le frecce e i punti dei loro arcieri, in allenamento e in gara."}</p>
         </div>
         <div className="-mx-1 overflow-x-auto px-1 [scrollbar-width:none]">
         <Segmented<Metric>
@@ -421,7 +418,7 @@ export function CompanyLeague({ board, onJoin, busy, onSynced, part, fitastBoard
               const top = [...rows].filter((r) => r.value > 0).sort((a, b) => b.value - a.value).slice(0, 3);
               return top.length >= 2 ? <CrestPodium rows={top.map((r) => ({ key: r.id, name: r.name, mark: r.label ? `${r.label} ${metric === "avg" && fitastAvgOn ? "pt per arciere" : "media"}` : `${Number(r.value).toLocaleString("it-IT")} ${unit[metric]}`.trim(), logo: r.logo ?? drawnCrest(r.name).logo, color: r.color }))} /> : null;
             })()}
-            <RankBars rows={rows} unit={unit[metric]} limit={12} empty={metric === "fitast" ? "Ancora nessun punto FITAST: tocca Aggiorna dal portale." : "Ancora nessun dato per questa classifica."} />
+            <RankBars rows={rows} unit={unit[metric]} limit={12} empty={metric === "fitast" ? "Ancora nessun punto FITAST: tocca Aggiorna." : "Ancora nessun dato per questa classifica."} />
           </>
         )}
       </Card>
@@ -433,7 +430,7 @@ export function CompanyLeague({ board, onJoin, busy, onSynced, part, fitastBoard
         {board.companies.length > 8 ? <input value={find} onChange={(e) => setFind(e.target.value)} placeholder="Cerca per nome o città" aria-label="Cerca una compagnia" className="min-h-11 rounded-2xl border border-line bg-white/[0.04] px-3 text-sm" /> : null}
         {board.isAdmin ? (
           <div className="flex flex-wrap items-center gap-2">
-            <button type="button" disabled={sync.busy} onClick={() => void forceSync()} className="aa-chip">{sync.busy ? "Leggo l'elenco FITAST…" : "Aggiorna l'elenco dal portale FITAST"}</button>
+            <button type="button" disabled={sync.busy} onClick={() => void forceSync()} className="aa-chip">{sync.busy ? "Leggo l'elenco FITAST…" : "Aggiorna l'elenco delle compagnie"}</button>
             <button type="button" disabled={logos.busy} onClick={() => void downloadLogos()} className="aa-chip">{logos.busy ? "Scarico i loghi…" : "Scarica e aggiorna i loghi"}</button>
             {sync.text ? <p className="w-full break-words text-xs text-muted">{sync.text}</p> : null}
             {logos.text ? <p className="w-full break-words text-xs text-muted" aria-live="polite">{logos.text}</p> : null}
@@ -457,10 +454,10 @@ export function CompanyLeague({ board, onJoin, busy, onSynced, part, fitastBoard
           // dalla compagnia più numerosa (arcieri nel campionato FITAST o iscritti all'app); ne bastano 10, le altre a richiesta
           const size = (co: (typeof matching)[number]) => Math.max(statOf(co)?.archers ?? co.fitastArchers ?? 0, co.members);
           const ordered = [...matching].sort((a, b) => size(b) - size(a) || Number(b.id === board.mine) - Number(a.id === board.mine) || a.name.localeCompare(b.name, "it"));
-          const shown = find.trim() || showAll ? ordered : ordered.slice(0, FIRST_COMPANIES);
+          // tutte, a pagine di 8 che scorrono di lato (con la ricerca resta l'elenco trovato)
           return (
             <>
-              {shown.map((co) => {
+              <HPages as="div" items={ordered} per={8} keyOf={(co) => String(co.id)} focus={ordered.findIndex((co) => co.id === board.mine)} focusLabel="La mia" render={(co) => {
           const expanded = open === co.id;
           const kinds = ["phone", "whatsapp", "email", "website", "instagram", "facebook", "youtube", "tiktok", "address"] as const;
           const links = kinds.map((kind) => ({ kind, href: hrefOf(kind, co[kind]) })).filter((item) => item.href);
@@ -543,13 +540,8 @@ export function CompanyLeague({ board, onJoin, busy, onSynced, part, fitastBoard
               ) : null}
             </div>
           );
-              })}
+              }} />
               {teamOf ? <TeamArchersSheet team={teamOf.team} crest={teamOf.crest} onClose={() => setTeamOf(null)} /> : null}
-              {!find.trim() && !showAll && ordered.length > FIRST_COMPANIES ? (
-                <button type="button" onClick={() => setShowAll(true)} className="aa-press min-h-11 rounded-2xl border border-line text-sm font-semibold">
-                  Mostra tutte le {ordered.length} compagnie
-                </button>
-              ) : null}
             </>
           );
         })()}
@@ -737,7 +729,6 @@ export function CompanyWelcome() {
   const [busy, setBusy] = useState<number | null>(null);
   const [err, setErr] = useState("");
   const [find, setFind] = useState("");
-  const [showAll, setShowAll] = useState(false);
   // appena entrato: il collegamento al nome FITAST fra gli arcieri della compagnia
   const [linkFor, setLinkFor] = useState<{ team: string; name: string } | null>(null);
   // arrivano loghi veri: si rilegge l'elenco (solo se la scelta è ancora aperta)
@@ -802,7 +793,7 @@ export function CompanyWelcome() {
   const home = w.companies.find((c) => c.id === w.homeId) ?? w.companies[0];
   const needle = find.trim().toLowerCase();
   const allOthers = w.companies.filter((c) => c.id !== home?.id);
-  const others = needle ? allOthers.filter((c) => `${c.name} ${c.city}`.toLowerCase().includes(needle)) : showAll ? allOthers : allOthers.slice(0, FIRST_COMPANIES);
+  const others = needle ? allOthers.filter((c) => `${c.name} ${c.city}`.toLowerCase().includes(needle)) : allOthers;
   return createPortal(
     <div className="fixed inset-0 z-[80] overflow-y-auto bg-[#07100b]/92 backdrop-blur-md" role="dialog" aria-modal="true" aria-label="Scegli la tua compagnia">
       <div className="mx-auto grid max-w-md gap-4 px-4 pb-10 pt-[calc(env(safe-area-inset-top)+2rem)]">
@@ -835,8 +826,8 @@ export function CompanyWelcome() {
                   <input value={find} onChange={(e) => setFind(e.target.value)} placeholder="Cerca per nome o città" aria-label="Cerca una compagnia" className="min-h-11 rounded-2xl border border-white/15 bg-white/[0.06] px-3 text-sm text-white placeholder:text-white/45" />
                 ) : null}
                 {!others.length ? <p className="px-1 text-sm text-white/60">Nessuna compagnia con «{find.trim()}».</p> : null}
-                {others.map((c) => (
-                  <div key={c.id} className="flex items-center gap-3 rounded-2xl bg-white/[0.06] p-2.5">
+                <HPages as="div" items={others} per={6} keyOf={(c) => String(c.id)} render={(c) => (
+                  <div className="flex items-center gap-3 rounded-2xl bg-white/[0.06] p-2.5">
                     <span className="h-12 w-11 shrink-0">{c.logoUrl ? <img src={c.logoUrl} alt="" className="h-full w-full object-contain" /> : <DefaultCrest color={c.color} letter={c.name.replace(/^Compagnia (degli |dei |di )?/i, "").slice(0, 1)} />}</span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate font-semibold text-white">{c.name}</span>
@@ -844,13 +835,8 @@ export function CompanyWelcome() {
                     </span>
                     <button type="button" disabled={busy != null} onClick={() => void join(c.id)} className="aa-press min-h-9 shrink-0 rounded-full border border-white/25 px-3 text-xs font-semibold text-white">{busy === c.id ? "Entro…" : "Entra"}</button>
                   </div>
-                ))}
+                )} />
               </div>
-            ) : null}
-            {!needle && !showAll && allOthers.length > FIRST_COMPANIES ? (
-              <button type="button" onClick={() => setShowAll(true)} className="aa-press min-h-11 rounded-2xl border border-white/20 bg-white/[0.04] text-sm font-semibold text-white">
-                Mostra tutte le {allOthers.length} compagnie
-              </button>
             ) : null}
             <button type="button" onClick={() => setMode("fonda")} className="aa-press min-h-12 rounded-2xl border border-dashed border-white/30 text-sm font-semibold text-white">Fonda una nuova compagnia</button>
             {err ? <p className="text-center text-sm text-red-300">{err}</p> : null}

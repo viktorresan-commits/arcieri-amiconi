@@ -4,14 +4,14 @@
  * Lo staff avvia la scansione da qui: va avanti anche cambiando pagina dell'app, tiene acceso lo schermo
  * e, se si ferma, riprende da dove era.
  */
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Glyph } from "@/components/icons";
 import { Card, ErrorNote, Loading, cx } from "@/components/kit";
 import { CrestPodium } from "@/components/podium";
 import { useMemberMaybe } from "@/components/shell";
-import { Chips, RankList, useSplit, type Crest } from "@/components/fitast-league";
+import { Chips, FitastLogo, RankList, useSplit, type Crest } from "@/components/fitast-league";
 import { crestOf as drawCrest, titleName } from "@/lib/arcieri/fitast-league";
-import { fitastArchive, fitastArchiveSeason, type ArchiveBoard, type ArchiveGara } from "@/lib/arcieri/fitast-history.api";
+import { fitastArchive, fitastArchiveSeason, fitastArchiveTrend, type ArchiveBoard, type ArchiveGara, type TrendSeason } from "@/lib/arcieri/fitast-history.api";
 import { syncHistory, type HistoryProgress } from "@/lib/arcieri/fitast-history";
 import type { Standing, StandingRow } from "@/lib/arcieri/fitast-league.api";
 import { useLoad } from "@/lib/arcieri/use-load";
@@ -90,7 +90,7 @@ function eta(p: HistoryProgress) {
   return min <= 1 ? "manca circa un minuto" : min < 90 ? `mancano circa ${min} minuti` : `mancano circa ${Math.round(min / 60)} ore`;
 }
 
-export function FitastArchiveCard({ crestOf, isOurs, ourName }: { crestOf: (t: string) => Crest | null; /** la nostra compagnia, nel nome del portale */ isOurs: (team: string) => boolean; ourName: string }) {
+export function FitastArchiveCard({ crestOf, isOurs, ourName, ourTeams = [] }: { crestOf: (t: string) => Crest | null; /** la nostra compagnia, nel nome del portale */ isOurs: (team: string) => boolean; ourName: string; /** i nomi della nostra compagnia (app e classifiche): per il grafico negli anni */ ourTeams?: string[] }) {
   const who = useMemberMaybe()?.me;
   const staff = Boolean(who && (who.canStaff || who.isSuper));
   const p = useScan();
@@ -114,20 +114,21 @@ export function FitastArchiveCard({ crestOf, isOurs, ourName }: { crestOf: (t: s
       <span id="albo" className="absolute -top-28" aria-hidden />
       <span aria-hidden className="pointer-events-none absolute -left-16 -top-24 h-56 w-56 rounded-full bg-[#e0b15a] opacity-[0.12] blur-3xl" />
       <div className="flex items-center gap-3">
-        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[#e0b15a]/20"><Glyph name="trophy" size={26} /></span>
+        <FitastLogo size={64} />
         <div className="min-w-0 flex-1">
           <h2 className="font-display text-2xl leading-tight">Albo d'oro dal 2019</h2>
           <p className="text-xs text-muted">
             {seasons.length
               ? `${seasons.length} ${seasons.length === 1 ? "stagione" : "stagioni"} · ${num(data?.gare ?? 0)} gare · ${num(data?.archers ?? 0)} piazzamenti di arcieri salvati`
-              : "Le stagioni passate del campionato FITAST, con i podi di compagnie e arcieri."}
+              : "Le stagioni passate del campionato, con i podi di compagnie e arcieri."}
           </p>
         </div>
       </div>
 
-      {staff ? <ScanPanel p={p} busy={busy} complete={complete} started={seasons.length > 0 || Boolean(p?.done)} /> : !seasons.length ? <p className="text-sm text-muted">L'albo si riempie quando lo staff avvia la scansione dello storico dal portale FITAST.</p> : null}
+      {staff ? <ScanPanel p={p} busy={busy} complete={complete} started={seasons.length > 0 || Boolean(p?.done)} /> : !seasons.length ? <p className="text-sm text-muted">L'albo si riempie quando lo staff avvia la scansione dello storico.</p> : null}
 
       {error ? <ErrorNote text={error} /> : null}
+      {seasons.length && ourTeams.length ? <CompanyTrend key={nonce} teams={ourTeams} name={ourName} /> : null}
       {seasons.length ? (
         <>
           <Chips value={season?.seasonName || season?.season || ""} options={seasons.map((s) => s.seasonName || s.season)} onChange={(v) => setPick(seasons.find((s) => (s.seasonName || s.season) === v)?.season ?? "")} />
@@ -228,9 +229,7 @@ function SeasonView({ season, nonce, partial, crestOf, isOurs, ourName }: { seas
       ) : view === "arcieri" ? (
         genAr.length ? <ArchersBoard items={genAr} crestOf={crestOf} mark={markArcher} note="Classifica generale della stagione: i primi tre di ogni categoria." /> : <p className="text-sm text-muted">Classifica generale degli arcieri non ancora salvata.</p>
       ) : gare.length ? (
-        <ul className="grid gap-1.5">
-          {gare.map((g) => <GaraRow key={g.id} g={g} crestOf={crestOf} isOurs={isOurs} markTeam={markTeam} markArcher={markArcher} />)}
-        </ul>
+        <GareStrip gare={gare} crestOf={crestOf} isOurs={isOurs} markTeam={markTeam} markArcher={markArcher} />
       ) : (
         <p className="text-sm text-muted">Nessuna gara salvata per questa stagione.</p>
       )}
@@ -247,7 +246,6 @@ function TeamsBoard({ items, crestOf, mark }: { items: Standing[]; crestOf: (t: 
   const [t, setT] = useState("");
   const tip = tips.includes(t) ? t : tips[0] ?? "";
   const it = groups.get(group)?.get(tip);
-  const [all, setAll] = useState(false);
   const rows = it?.rows ?? [];
   const top = rows.slice(0, 3).map((r) => {
     const c = crestOf(r.name);
@@ -255,17 +253,12 @@ function TeamsBoard({ items, crestOf, mark }: { items: Standing[]; crestOf: (t: 
     return { key: r.name, name: titleName(r.name), mark: `${num(r.camp ?? r.score)} ${r.camp != null ? "pt camp." : "punti"}`, logo: c?.logoUrl ?? drawn?.logo ?? null, color: c?.color ?? drawn?.color ?? "#1f7a46" };
   });
   const rest = rows.slice(3);
-  const ourFar = rest.findIndex((r) => mark(r));
   return (
     <div className="grid gap-2">
       <Chips value={group} options={order} onChange={setG} />
       <Chips value={tip} options={tips} onChange={setT} />
       {top.length >= 2 ? <CrestPodium rows={top} /> : null}
-      <RankList rows={top.length >= 2 ? rest : rows} crestOf={crestOf} team limit={all ? rows.length : 5} mark={mark} />
-      {!all && ourFar >= 5 ? <RankList rows={[rest[ourFar]]} crestOf={crestOf} team limit={1} mark={mark} /> : null}
-      {rest.length > 5 ? (
-        <button type="button" className="aa-chip justify-self-center px-4 py-2 text-sm" onClick={() => setAll((v) => !v)}>{all ? "Mostra meno" : `Tutte le compagnie (${rows.length})`}</button>
-      ) : null}
+      <RankList rows={top.length >= 2 ? rest : rows} crestOf={crestOf} team limit={rows.length} mark={mark} per={6} />
     </div>
   );
 }
@@ -289,40 +282,177 @@ function ArchersBoard({ items, crestOf, mark, note }: { items: Standing[]; crest
   );
 }
 
-/** una gara della stagione: si apre sui podi */
-function GaraRow({ g, crestOf, isOurs, markTeam, markArcher }: { g: ArchiveGara; crestOf: (t: string) => Crest | null; isOurs: (team: string) => boolean; markTeam: (r: StandingRow) => "nostro" | null; markArcher: (r: StandingRow) => "nostro" | null }) {
-  const [open, setOpen] = useState(false);
+const oursIn = (g: ArchiveGara, isOurs: (team: string) => boolean) =>
+  g.arcieri.reduce((t, b) => t + b.rows.filter((r) => onPodium(r) && isOurs(r.team)).length, 0) + g.squadre.reduce((t, b) => t + b.rows.filter((r) => onPodium(r) && isOurs(r.name)).length, 0);
+
+/** le gare della stagione in una striscia che scorre di lato; sotto, i podi della gara scelta */
+function GareStrip({ gare, crestOf, isOurs, markTeam, markArcher }: { gare: ArchiveGara[]; crestOf: (t: string) => Crest | null; isOurs: (team: string) => boolean; markTeam: (r: StandingRow) => "nostro" | null; markArcher: (r: StandingRow) => "nostro" | null }) {
+  // dalla prima gara della stagione all'ultima
+  const list = useMemo(() => [...gare].sort((a, b) => a.day.localeCompare(b.day)), [gare]);
+  const [id, setId] = useState(list[list.length - 1]?.id ?? "");
+  const g = list.find((x) => x.id === id) ?? list[list.length - 1];
+  const strip = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    // si parte dalla gara più recente, in fondo a destra
+    strip.current?.scrollTo({ left: strip.current.scrollWidth });
+  }, [list]);
+  return (
+    <div className="grid gap-2.5">
+      <div ref={strip} className="-mx-1 flex snap-x gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none]" role="tablist" aria-label="Gare della stagione">
+        {list.map((x, i) => {
+          const n = oursIn(x, isOurs);
+          const on = x.id === g?.id;
+          return (
+            <button key={x.id} type="button" role="tab" aria-selected={on} onClick={() => setId(x.id)} className={cx("relative grid w-[6.6rem] shrink-0 snap-start gap-0.5 rounded-2xl border px-2 py-2 text-left", on ? "border-[#e0b15a]/60 bg-[#e0b15a]/[0.12]" : "border-transparent bg-white/[0.04]")}>
+              <span className="text-[0.6rem] uppercase tracking-wider text-muted">Gara {i + 1}</span>
+              <b className="font-display text-base leading-none tabular-nums">{x.day ? `${x.day.slice(8, 10)} ${new Date(`${x.day}T12:00:00`).toLocaleDateString("it-IT", { month: "short" })}` : "—"}</b>
+              <span className="line-clamp-2 text-[0.68rem] leading-tight">{titleName(x.title) || `Gara ${x.id}`}</span>
+              {n ? <span className="absolute right-1.5 top-1.5 grid h-5 min-w-5 place-items-center rounded-full bg-[#e0b15a] px-1 text-[0.6rem] font-bold text-[#2a1c05]" aria-label={`${n} podi nostri`}>{n}</span> : null}
+            </button>
+          );
+        })}
+      </div>
+      {g ? <GaraPodi key={g.id} g={g} crestOf={crestOf} isOurs={isOurs} markTeam={markTeam} markArcher={markArcher} /> : null}
+    </div>
+  );
+}
+
+/** i podi di una gara: arcieri per categoria e compagnie */
+function GaraPodi({ g, crestOf, isOurs, markTeam, markArcher }: { g: ArchiveGara; crestOf: (t: string) => Crest | null; isOurs: (team: string) => boolean; markTeam: (r: StandingRow) => "nostro" | null; markArcher: (r: StandingRow) => "nostro" | null }) {
   const arcieri = useMemo(() => g.arcieri.map((b) => toStanding(b, "gara-arcieri", g)), [g]);
-  const ours = g.arcieri.reduce((t, b) => t + b.rows.filter((r) => onPodium(r) && isOurs(r.team)).length, 0) + g.squadre.reduce((t, b) => t + b.rows.filter((r) => onPodium(r) && isOurs(r.name)).length, 0);
+  const ours = oursIn(g, isOurs);
   const [c, setC] = useState("");
   const sqOpts = g.squadre.map((b) => titleName(b.category) || "Tutte");
   const sq = g.squadre[Math.max(0, sqOpts.indexOf(c))];
   return (
-    <li className="rounded-2xl bg-white/[0.035]">
-      <button type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)} className="aa-press flex w-full items-center gap-3 px-3 py-2.5 text-left">
-        <span className="grid w-11 shrink-0 text-center leading-none">
-          <b className="font-display text-lg tabular-nums">{g.day.slice(8, 10) || "—"}</b>
-          <span className="text-[0.6rem] uppercase text-muted">{g.day ? new Date(`${g.day}T12:00:00`).toLocaleDateString("it-IT", { month: "short" }) : ""}</span>
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-semibold">{titleName(g.title) || `Gara ${g.id}`}</span>
-          <span className="block text-xs text-muted">{[fmtDay(g.day), `${g.arcieri.length} categorie`].filter(Boolean).join(" · ")}</span>
-        </span>
-        {ours ? <span className="shrink-0 rounded-full bg-[#e0b15a]/20 px-2 py-0.5 text-[0.68rem] font-semibold text-[#f1cf8a]">{ours} {ours === 1 ? "podio" : "podi"} nostri</span> : null}
-        <Glyph name="chevron" size={15} className={cx("shrink-0 text-muted transition-transform", open && "rotate-90")} />
-      </button>
-      {open ? (
-        <div className="grid gap-3 px-3 pb-3">
-          {arcieri.length ? <ArchersBoard items={arcieri} crestOf={crestOf} mark={markArcher} /> : <p className="text-sm text-muted">Classifica arcieri non salvata.</p>}
-          {g.squadre.length ? (
-            <div className="grid gap-1.5">
-              <p className="text-sm font-semibold">Compagnie</p>
-              <Chips value={sqOpts[Math.max(0, sqOpts.indexOf(c))] ?? ""} options={sqOpts} onChange={setC} />
-              {sq ? <RankList rows={sq.rows.slice(0, 3)} crestOf={crestOf} team limit={3} mark={markTeam} /> : null}
-            </div>
-          ) : null}
+    <div className="grid gap-3 rounded-2xl bg-white/[0.035] p-3">
+      <div className="flex items-baseline justify-between gap-2">
+        <b className="min-w-0 truncate text-sm">{titleName(g.title) || `Gara ${g.id}`}</b>
+        <span className="shrink-0 text-xs text-muted">{fmtDay(g.day)}</span>
+      </div>
+      {ours ? <p className="text-xs text-[#f1cf8a]">{ours} {ours === 1 ? "podio nostro" : "podi nostri"} in questa gara</p> : null}
+      {arcieri.length ? <ArchersBoard items={arcieri} crestOf={crestOf} mark={markArcher} /> : <p className="text-sm text-muted">Classifica arcieri non salvata.</p>}
+      {g.squadre.length ? (
+        <div className="grid gap-1.5">
+          <p className="text-sm font-semibold">Compagnie</p>
+          <Chips value={sqOpts[Math.max(0, sqOpts.indexOf(c))] ?? ""} options={sqOpts} onChange={setC} />
+          {sq ? <RankList rows={sq.rows.slice(0, 3)} crestOf={crestOf} team limit={3} mark={markTeam} /> : null}
         </div>
       ) : null}
-    </li>
+    </div>
+  );
+}
+
+// ——— la nostra compagnia negli anni ———
+
+const medal = (p: number | null) => (p === 1 ? "#f1cf8a" : p === 2 ? "#d5dde3" : p === 3 ? "#d99a63" : "#e0b15a");
+
+/**
+ * Due piccoli grafici con le stesse stagioni (niente doppio asse): il posto nella classifica generale delle
+ * compagnie (primo in alto) e i podi in gara (arcieri e squadra). Si tocca una stagione per i suoi numeri.
+ */
+function CompanyTrend({ teams, name }: { teams: string[]; name: string }) {
+  const { data, error, loading } = useLoad(`albo-trend-${teams.join("|")}`, () => fitastArchiveTrend({ data: { teams } }));
+  const seasons = data?.seasons ?? [];
+  const [pick, setPick] = useState<string | null>(null);
+  if (error) return null;
+  if (loading && !data) return <div className="h-40 animate-pulse rounded-2xl bg-white/[0.04]" aria-label="Carico il grafico" />;
+  if (seasons.length < 2) return null;
+  const sel = seasons.find((s) => s.season === pick) ?? seasons[seasons.length - 1];
+  const W = 320;
+  const pad = { l: 22, r: 10 };
+  const step = (W - pad.l - pad.r) / Math.max(1, seasons.length - 1);
+  const xAt = (i: number) => pad.l + i * step;
+  // posto: il primo in alto; la scala va fino al posto peggiore toccato (almeno 5)
+  const places = seasons.map((s) => s.place).filter((p): p is number => p != null);
+  const worst = Math.max(5, ...places);
+  const H1 = 112;
+  const top1 = 18;
+  const bot1 = H1 - 18;
+  const yAt = (p: number) => top1 + ((p - 1) / Math.max(1, worst - 1)) * (bot1 - top1);
+  const pts = seasons.map((s, i) => (s.place == null ? null : { x: xAt(i), y: yAt(s.place), s, i }));
+  const segs: string[] = [];
+  let cur = "";
+  for (const q of pts) {
+    if (!q) {
+      if (cur) segs.push(cur);
+      cur = "";
+      continue;
+    }
+    cur += `${cur ? " L" : "M"}${q.x.toFixed(1)},${q.y.toFixed(1)}`;
+  }
+  if (cur) segs.push(cur);
+  // podi: barre sottili con il numero sopra
+  const H2 = 96;
+  const tot = (s: TrendSeason) => s.podi + s.podiSquadra;
+  const maxP = Math.max(1, ...seasons.map(tot));
+  const bw = Math.min(22, step * 0.5);
+  const base2 = H2 - 16;
+  const hOf = (v: number) => (v / maxP) * (base2 - 16);
+  const tap = (i: number) => setPick(seasons[i].season);
+  const hit = (i: number) => (
+    <rect key={`h${i}`} x={xAt(i) - step / 2} y={0} width={step} height="100%" fill="transparent" className="cursor-pointer" onClick={() => tap(i)} aria-label={`Stagione ${seasons[i].year}`} role="button" />
+  );
+  return (
+    <div className="grid gap-2 rounded-2xl border border-[#e0b15a]/25 bg-[#e0b15a]/[0.05] p-3">
+      <div className="flex items-baseline justify-between gap-2">
+        <b className="text-sm">{name || "La compagnia"} negli anni</b>
+        <span className="text-[0.68rem] text-muted">tocca un anno</span>
+      </div>
+      <figure className="grid gap-0.5">
+        <figcaption className="text-[0.68rem] text-muted">Posto nella classifica compagnie</figcaption>
+        <svg viewBox={`0 0 ${W} ${H1}`} className="w-full" role="img" aria-label="Posto della compagnia nella classifica generale, stagione per stagione">
+          {[1, Math.ceil(worst / 2), worst].map((p) => (
+            <g key={p}>
+              <line x1={pad.l} x2={W - pad.r} y1={yAt(p)} y2={yAt(p)} stroke="currentColor" strokeOpacity="0.1" />
+              <text x={pad.l - 5} y={yAt(p) + 3} textAnchor="end" fontSize="8" fill="currentColor" fillOpacity="0.5">{p}°</text>
+            </g>
+          ))}
+          {segs.map((d, k) => <path key={k} d={d} fill="none" stroke="#e0b15a" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />)}
+          {pts.map((q) =>
+            q ? (
+              <g key={q.i}>
+                <circle cx={q.x} cy={q.y} r={q.s.season === sel.season ? 6.5 : 5} fill={medal(q.s.place)} stroke="#16201b" strokeWidth="2" />
+                <text x={q.x} y={q.y - 9} textAnchor="middle" fontSize="9" fontWeight="700" fill="currentColor">{q.s.place}°</text>
+              </g>
+            ) : null,
+          )}
+          {seasons.map((_, i) => hit(i))}
+        </svg>
+      </figure>
+      <figure className="grid gap-0.5">
+        <figcaption className="text-[0.68rem] text-muted">Podi in gara (arcieri e squadra)</figcaption>
+        <svg viewBox={`0 0 ${W} ${H2}`} className="w-full" role="img" aria-label="Podi in gara della compagnia, stagione per stagione">
+          <line x1={pad.l} x2={W - pad.r} y1={base2} y2={base2} stroke="currentColor" strokeOpacity="0.15" />
+          {seasons.map((s, i) => {
+            const v = tot(s);
+            const h = hOf(v);
+            const on = s.season === sel.season;
+            return (
+              <g key={s.season}>
+                {v > 0 ? <rect x={xAt(i) - bw / 2} y={base2 - h} width={bw} height={h} rx="3" fill="var(--primary)" fillOpacity={on ? 1 : 0.7} /> : null}
+                <text x={xAt(i)} y={base2 - h - 4} textAnchor="middle" fontSize="9" fontWeight="700" fill="currentColor" fillOpacity={v ? 1 : 0.4}>{v}</text>
+                <text x={xAt(i)} y={H2 - 4} textAnchor="middle" fontSize="8.5" fill="currentColor" fillOpacity={on ? 1 : 0.6} fontWeight={on ? 700 : 400}>{s.year}{s.current ? "*" : ""}</text>
+              </g>
+            );
+          })}
+          {seasons.map((_, i) => hit(i))}
+        </svg>
+      </figure>
+      <div className="grid grid-cols-4 gap-1 text-center" aria-live="polite">
+        {[
+          [sel.place ? `${sel.place}°` : "—", sel.of ? `su ${sel.of}` : "posto"],
+          [num(sel.points), "punti"],
+          [String(sel.podi + sel.podiSquadra), `podi${sel.vittorie ? ` · ${sel.vittorie} vinte` : ""}`],
+          [String(sel.arcieri || "—"), "arcieri"],
+        ].map(([v, k]) => (
+          <span key={k} className="rounded-xl bg-white/[0.05] px-1 py-1.5">
+            <b className="block font-display text-lg leading-none tabular-nums">{v}</b>
+            <span className="block truncate text-[0.6rem] text-muted">{k}</span>
+          </span>
+        ))}
+      </div>
+      <p className="text-[0.68rem] text-muted">Stagione {sel.seasonName || sel.year}{sel.current ? " (in corso)" : ""}{sel.category ? ` · ${sel.category}` : ""}{sel.gare ? ` · ${sel.gare} gare con i nostri` : ""}</p>
+    </div>
   );
 }

@@ -861,7 +861,7 @@ export function FitastPanel({ comps, myName, userId, startCode, onSaved, onClose
     <Card className="grid gap-3">
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-3">
-          <FitastLogo size={48} />
+          <FitastLogo size={60} />
           <div className="min-w-0">
             <p className="text-[0.66rem] font-semibold uppercase tracking-[0.16em] text-[#e0b15a]">Portale FITAST</p>
             <p className="font-display text-2xl leading-tight">Gare, piazzole e classifiche</p>

@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { asNum, clip, db, ensureMember } from "./access";
-import type { RankRow } from "./fitast-league";
+import { teamKey, teamWords, type RankRow } from "./fitast-league";
 
 /**
  * Storico FITAST dal 2019: le classifiche delle stagioni finite lette dal portale dall'app di chi preme
@@ -207,3 +207,121 @@ export const fitastArchiveSeason = createServerFn({ method: "POST" })
     out.gare = [...gare.values()].sort((a, b) => b.day.localeCompare(a.day));
     return out;
   });
+
+// ——— la nostra compagnia negli anni: posto, punti, podi e arcieri di ogni stagione ———
+
+export type TrendSeason = {
+  season: string;
+  seasonName: string;
+  /** l'anno da scrivere sotto il grafico */
+  year: string;
+  /** stagione in corso (classifiche del campionato, non dell'albo) */
+  current: boolean;
+  /** il posto migliore nella generale compagnie, su quante, in quale categoria, con quanti punti */
+  place: number | null;
+  of: number;
+  category: string;
+  points: number | null;
+  /** podi degli arcieri nelle gare, vittorie, podi di squadra nelle gare, podi nella generale arcieri */
+  podi: number;
+  vittorie: number;
+  podiSquadra: number;
+  podiGenerale: number;
+  /** arcieri nella generale e gare con almeno un nostro arciere */
+  arcieri: number;
+  gare: number;
+};
+
+type TrendRow = { kind: string; season: string; season_name: string; gara_id: string; held_on: string | null; category: string; rows: RankRow[]; total: number; cur: boolean };
+
+/**
+ * La nostra compagnia stagione per stagione, dall'albo d'oro (stagioni finite) e dal campionato in corso.
+ * Dal database escono solo le righe con una delle parole del nome della compagnia (poi si confronta il nome intero).
+ */
+export const fitastArchiveTrend = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: unknown) => {
+    const raw = (input ?? {}) as { teams?: unknown };
+    return { teams: (Array.isArray(raw.teams) ? raw.teams : []).slice(0, 4).map((t) => clip(t, 110)).filter(Boolean) };
+  })
+  .handler(async ({ context, data }) => {
+    const sql = await db();
+    await ensureMember(sql, context.userId);
+    const keys = new Set(data.teams.map(teamKey).filter((k) => k.length >= 3));
+    const words = [...new Set(data.teams.flatMap(teamWords))].filter((w) => /^[A-Z0-9]{3,}$/.test(w));
+    if (!keys.size || !words.length) return { seasons: [] as TrendSeason[] };
+    const rx = words.join("|");
+    const byTeam = `$[*] ? (@.team like_regex "${rx}" flag "i")`;
+    const byName = `$[*] ? (@.name like_regex "${rx}" flag "i")`;
+    const pick = (table: "h" | "s") =>
+      table === "h"
+        ? sql<TrendRow>`
+          select kind, season, season_name, gara_id, held_on::text as held_on, category, jsonb_array_length(rows)::int as total, false as cur,
+            case when kind in ('generale-squadre', 'gara-squadre') then jsonb_path_query_array(rows, ${byName}::jsonpath)
+              else jsonb_path_query_array(rows, ${byTeam}::jsonpath) end as rows
+          from fitast_history`
+        : sql<TrendRow>`
+          select kind, season, season_name, gara_id, held_on::text as held_on, category, jsonb_array_length(rows)::int as total, true as cur,
+            case when kind in ('generale-squadre', 'gara-squadre') then jsonb_path_query_array(rows, ${byName}::jsonpath)
+              else jsonb_path_query_array(rows, ${byTeam}::jsonpath) end as rows
+          from fitast_standings`;
+    let rows: TrendRow[] = [];
+    try {
+      rows = await pick("h");
+    } catch {
+      rows = [];
+    }
+    const past = new Set(rows.map((r) => r.season));
+    try {
+      rows = rows.concat((await pick("s")).filter((r) => !past.has(r.season)));
+    } catch {
+      /* campionato in corso non letto: va bene lo stesso */
+    }
+    const isOurs = (t: string) => keys.has(teamKey(t));
+    const by = new Map<string, TrendSeason & { _days: string[]; _gare: Set<string>; _names: Set<string> }>();
+    for (const r of rows) {
+      const s = by.get(r.season) ?? { season: r.season, seasonName: r.season_name, year: "", current: r.cur, place: null, of: 0, category: "", points: null, podi: 0, vittorie: 0, podiSquadra: 0, podiGenerale: 0, arcieri: 0, gare: 0, _days: [], _gare: new Set<string>(), _names: new Set<string>() };
+      s.seasonName ||= r.season_name;
+      if (r.held_on) s._days.push(r.held_on);
+      const list = Array.isArray(r.rows) ? r.rows : [];
+      if (r.kind === "generale-squadre") {
+        for (const x of list) {
+          if (!isOurs(x.name) || x.place == null) continue;
+          if (s.place == null || x.place < s.place || (x.place === s.place && asNum(r.total) > s.of)) {
+            s.place = x.place;
+            s.of = asNum(r.total);
+            s.category = r.category;
+            s.points = x.camp ?? x.score ?? null;
+          }
+        }
+      } else if (r.kind === "gara-squadre") {
+        s.podiSquadra += list.filter((x) => isOurs(x.name) && x.place != null && x.place <= 3).length;
+      } else if (r.kind === "gara-arcieri") {
+        const ours = list.filter((x) => isOurs(x.team));
+        if (ours.length) s._gare.add(r.gara_id);
+        s.podi += ours.filter((x) => x.place != null && x.place <= 3).length;
+        s.vittorie += ours.filter((x) => x.place === 1).length;
+      } else if (r.kind === "generale-arcieri") {
+        const ours = list.filter((x) => isOurs(x.team));
+        for (const x of ours) s._names.add(nameOf(x.name));
+        s.podiGenerale += ours.filter((x) => x.place != null && x.place <= 3).length;
+      }
+      by.set(r.season, s);
+    }
+    const seasons = [...by.values()]
+      .map(({ _days, _gare, _names, ...s }) => {
+        const days = _days.sort();
+        const y = /\b(20\d{2})(?:\D+(20\d{2}))?/.exec(s.seasonName);
+        const year = y ? (y[2] ? `${y[1].slice(2)}/${y[2].slice(2)}` : y[1]) : days.length ? days[days.length - 1].slice(0, 4) : s.season;
+        return { ...s, year, arcieri: _names.size, gare: _gare.size, _last: days[days.length - 1] ?? "" };
+      })
+      .filter((s) => s.place != null || s.podi || s.arcieri || s.gare)
+      .sort((a, b) => (a._last || a.season).localeCompare(b._last || b.season))
+      .map(({ _last, ...s }) => s);
+    return { seasons };
+  });
+
+/** nome dell'arciere senza spazi doppi e maiuscole diverse: per contarli una volta sola */
+function nameOf(n: string) {
+  return n.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/\s+/g, " ").trim();
+}
