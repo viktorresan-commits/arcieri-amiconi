@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { boneCal, buildModel, depthMemo, v3, type BoneCal, type Build, type ImageFrame, type Model, type PrePose, type V3 } from "@/lib/arcieri/anatomy-model";
 import { solveMotion } from "@/lib/arcieri/motion-solve";
 import { aimScene, type AimInfo, type AimSetup } from "@/lib/arcieri/aim-view";
@@ -678,15 +678,49 @@ export function Anatomy3D({
       if (document.fullscreenElement) void document.exitFullscreen?.().catch(() => {});
     };
   }, [full]);
+  // A schermo intero il riquadro va direttamente nel body: dentro la pagina restava sotto la testata e la barra
+  // dell'app (i pannelli fanno un loro piano), quindi «schermo intero» copriva solo la scheda. Uscendo torna al suo
+  // posto; prima di togliere il componente (pulizia dell'effetto di layout, prima che React stacchi il nodo) anche
+  const home = useRef<{ parent: Node; next: Node | null } | null>(null);
+  useLayoutEffect(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    if (full && el.parentNode && el.parentNode !== document.body) {
+      home.current = { parent: el.parentNode, next: el.nextSibling };
+      document.body.appendChild(el);
+    } else if (!full && home.current) {
+      const h = home.current;
+      home.current = null;
+      h.parent.insertBefore(el, h.next && h.next.parentNode === h.parent ? h.next : null);
+    }
+  }, [full]);
+  useLayoutEffect(
+    () => () => {
+      const el = boxRef.current;
+      const h = home.current;
+      if (el && h) {
+        home.current = null;
+        h.parent.insertBefore(el, h.next && h.next.parentNode === h.parent ? h.next : null);
+      }
+    },
+    [],
+  );
   function toggleFull() {
     if (full) {
       setFull(false);
       return;
     }
     setFull(true);
-    // il vero schermo intero dove c'è; altrimenti basta il riquadro fisso sopra l'app
+    setChrome(true);
+    // il vero schermo intero dove c'è (barre del telefono nascoste); altrimenti il riquadro fisso sopra l'app
     void boxRef.current?.requestFullscreen?.({ navigationUI: "hide" }).catch(() => {});
   }
+  /** comandi a vista: un tocco sul corpo (senza trascinare) li nasconde o li rimette, per guardare la forma */
+  const [chrome, setChrome] = useState(true);
+  const tapRef = useRef<() => void>(() => {});
+  tapRef.current = () => setChrome((v) => !v);
+  /** gli strati meno usati (velo del corpo, punti, postura corretta) in una seconda riga */
+  const [more, setMore] = useState(false);
   // ---- visuale dell'arciere: dall'occhio di mira, con il paglione alla distanza scelta ----
   const archer = useArcherSetup();
   const aimSetup = useMemo<AimSetup>(() => {
@@ -1244,8 +1278,11 @@ export function Anatomy3D({
     // gira con un dito, avvicina con due
     const ptrs = new Map<number, { x: number; y: number }>();
     let pinch = 0;
+    // un tocco breve e fermo (non un giro con il dito né due dita) mostra o nasconde i comandi
+    let tap: { x: number; y: number; t: number; ok: boolean } | null = null;
     const down = (e: PointerEvent) => {
       canvas.setPointerCapture(e.pointerId);
+      tap = ptrs.size ? null : { x: e.clientX, y: e.clientY, t: performance.now(), ok: true };
       ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
       dragging.current = true;
       cam.current.auto = false;
@@ -1256,6 +1293,7 @@ export function Anatomy3D({
       const prev = ptrs.get(e.pointerId);
       if (!prev) return;
       ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (tap && (ptrs.size > 1 || Math.hypot(e.clientX - tap.x, e.clientY - tap.y) > 8)) tap.ok = false;
       const ac = aimCam.current;
       if (ptrs.size === 2) {
         const [a, b] = [...ptrs.values()];
@@ -1279,6 +1317,8 @@ export function Anatomy3D({
       ptrs.delete(e.pointerId);
       if (ptrs.size < 2) pinch = 0;
       if (!ptrs.size) dragging.current = false;
+      if (!ptrs.size && tap && tap.ok && e.type === "pointerup" && performance.now() - tap.t < 350) tapRef.current();
+      if (!ptrs.size) tap = null;
     };
     const wheel = (e: WheelEvent) => {
       e.preventDefault();
@@ -1315,6 +1355,8 @@ export function Anatomy3D({
   const pill = style ? "bg-[#22303a]/85" : "bg-black/45";
   const chipOn = style ? "bg-[#22303a] text-white ring-1 ring-[#22303a]" : "bg-white/20 text-white ring-1 ring-white/55";
   const chipOff = style ? "bg-black/10 text-[#22303a]/70" : "bg-black/40 text-white/60";
+  const iconBtn = "grid h-9 w-9 shrink-0 place-items-center rounded-full backdrop-blur";
+  const chip = "min-h-7 shrink-0 rounded-full px-2.5 text-[0.68rem] font-semibold backdrop-blur";
   return (
     <div ref={boxRef} className={cx("overflow-hidden", full ? "fixed inset-0 z-[90] h-[100dvh] w-screen" : cx("relative w-full", inBox ? "" : "rounded-2xl", className))} style={{ background: bgCss(style) }}>
       <canvas ref={stageCanvas} className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden />
@@ -1329,8 +1371,9 @@ export function Anatomy3D({
       <p className={cx("pointer-events-none absolute inset-x-0 bottom-0 truncate px-2 text-center text-[0.45rem] leading-[0.7rem]", style ? "text-black/45" : "text-white/50")}>{BODY_CREDIT}</p>
       {!bodyReady && !empty ? <p className={cx("pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 text-center text-sm", style ? "text-black/60" : "text-white/75")}>Preparo il corpo anatomico…</p> : null}
       {empty ? <p className={cx("absolute inset-x-0 top-1/2 -translate-y-1/2 text-center text-sm", style ? "text-black/70" : "text-white/80")}>In attesa della posa: avvia il video o scegli un fotogramma.</p> : null}
-      {/* in alto: Gira e la foto in alta definizione; in basso cosa si vede (corpo, muscoli, scheletro…) */}
-      <div className={cx("absolute flex flex-wrap gap-1", full ? "left-2 top-[max(0.5rem,env(safe-area-inset-top))]" : cx("top-2 w-[10.5rem]", inBox ? "left-2" : "right-2"))}>
+      {/* a sinistra, in colonna, i comandi della vista (solo icone: il corpo resta libero); in basso cosa si vede.
+          Un tocco sul corpo li nasconde tutti, un altro li rimette */}
+      <div className={cx("absolute left-2 flex flex-col gap-1.5 transition-opacity duration-200", full ? "top-[max(0.5rem,env(safe-area-inset-top))]" : "top-2", chrome ? "" : "pointer-events-none opacity-0")}>
         {!aim ? (
           <button
             type="button"
@@ -1341,9 +1384,15 @@ export function Anatomy3D({
               cam.current.home = !cam.current.auto;
               setAuto(cam.current.auto);
             }}
-            className={cx("min-h-9 rounded-full px-3 text-xs font-semibold backdrop-blur", auto ? chipOn : cx(pill, "text-white"))}
+            aria-label={auto ? "Ferma il giro" : "Fai girare il corpo"}
+            title={auto ? "Ferma" : "Gira"}
+            className={cx(iconBtn, auto ? chipOn : cx(pill, "text-white"))}
           >
-            {auto ? "Ferma" : "Gira"}
+            {auto ? (
+              <svg viewBox="0 0 24 24" width={16} height={16} aria-hidden><path d="M8 6v12M16 6v12" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" /></svg>
+            ) : (
+              <svg viewBox="0 0 24 24" width={18} height={18} aria-hidden fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 12a8 8 0 1 1-2.6-5.9" /><path d="M20 4v4.5h-4.5" /></svg>
+            )}
           </button>
         ) : null}
         <button
@@ -1358,62 +1407,66 @@ export function Anatomy3D({
             setAim(!aim);
           }}
           aria-label={aim ? "Torna alla sagoma" : "Visuale dell'arciere: il paglione visto dall'occhio di mira"}
-          className={cx("min-h-9 rounded-full px-3 text-xs font-semibold backdrop-blur disabled:opacity-50", aim ? chipOn : cx(pill, "text-white"))}
+          title={aim ? "Sagoma" : "Mira"}
+          className={cx(iconBtn, "disabled:opacity-50", aim ? chipOn : cx(pill, "text-white"))}
         >
-          {aim ? "Sagoma" : "Mira"}
+          <Glyph name={aim ? "archer" : "crosshair"} size={17} />
+        </button>
+        <button type="button" disabled={shooting || empty} onClick={() => void photoHD()} aria-label="Foto della sagoma in alta definizione" title="Foto HD" className={cx(iconBtn, "text-white disabled:opacity-50", pill)}>
+          <Glyph name="camera" size={17} className={shooting ? "animate-pulse" : ""} />
         </button>
         <button
           type="button"
-          disabled={shooting || empty}
-          onClick={() => void photoHD()}
-          aria-label="Foto della sagoma in alta definizione"
-          className={cx("min-h-9 rounded-full px-3 text-xs font-semibold text-white backdrop-blur disabled:opacity-50", pill)}
+          onClick={() => setStyle(style ? 0 : 1)}
+          aria-label={style ? "Sfondo scuro, da studio" : "Sfondo chiaro, da tavola anatomica"}
+          title={style ? "Sfondo scuro" : "Sfondo chiaro"}
+          className={cx(iconBtn, "text-white", pill)}
         >
-          {shooting ? "Foto…" : "Foto HD"}
+          {/* cerchio mezzo pieno: chiaro / scuro */}
+          <svg viewBox="0 0 24 24" width={17} height={17} aria-hidden>
+            <circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" strokeWidth="1.7" />
+            <path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor" />
+          </svg>
         </button>
-        {full ? (
-          <button type="button" onClick={toggleFull} aria-pressed aria-label="Esci dallo schermo intero" className={cx("min-h-9 rounded-full px-3 text-xs font-semibold backdrop-blur", chipOn)}>
-            Chiudi
-          </button>
-        ) : null}
-        <div className={cx("flex items-center gap-1", full ? "" : "basis-full")}>
-          {!full ? (
-            // nell'anteprima solo l'icona, sotto «Gira»: in alto a destra c'è la scelta Scheletro / Sagoma
-            <button type="button" onClick={toggleFull} aria-label="Guarda a schermo intero" title="Schermo intero" className={cx("grid h-9 w-9 shrink-0 place-items-center rounded-full text-white backdrop-blur", pill)}>
-              <Glyph name="expand" size={17} />
-            </button>
-          ) : null}
+        {turned && !auto && !aim ? (
+          // girata o avvicinata con le dita: si torna all'inquadratura del video, punto su punto
           <button
             type="button"
-            onClick={() => setStyle(style ? 0 : 1)}
-            aria-label={style ? "Sfondo scuro, da studio" : "Sfondo chiaro, da tavola anatomica"}
-            title={style ? "Sfondo scuro" : "Sfondo chiaro"}
-            className={cx("grid h-9 w-9 shrink-0 place-items-center rounded-full text-white backdrop-blur", pill)}
+            onClick={() => {
+              cam.current.auto = false;
+              cam.current.home = true;
+            }}
+            aria-label={inBox ? "Torna all'inquadratura del video" : "Torna di fronte"}
+            title={inBox ? "Come il video" : "Di fronte"}
+            className={cx(iconBtn, "text-white", pill)}
           >
-            {/* cerchio mezzo pieno: chiaro / scuro */}
-            <svg viewBox="0 0 24 24" width={17} height={17} aria-hidden>
-              <circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" strokeWidth="1.7" />
-              <path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor" />
-            </svg>
+            <svg viewBox="0 0 24 24" width={18} height={18} aria-hidden fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12a8 8 0 1 0 2.6-5.9" /><path d="M4 4v4.5h4.5" /><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none" /></svg>
           </button>
-          {turned && !auto && !aim ? (
-            // girata o avvicinata con le dita: si torna all'inquadratura del video, punto su punto
-            <button
-              type="button"
-              onClick={() => {
-                cam.current.auto = false;
-                cam.current.home = true;
-              }}
-              className={cx("min-h-9 rounded-full px-3 text-xs font-semibold text-white backdrop-blur", pill)}
-            >
-              {inBox ? "Come il video" : "Di fronte"}
-            </button>
-          ) : null}
-        </div>
+        ) : null}
       </div>
+      {/* schermo intero: in alto a destra fuori dal riquadro del video (lì c'è la scelta Scheletro / Sagoma), in
+          basso a destra nel riquadro; a schermo intero in alto a destra, sempre visibile per uscire */}
+      <button
+        type="button"
+        onClick={toggleFull}
+        aria-label={full ? "Esci dallo schermo intero" : "Guarda a schermo intero"}
+        title={full ? "Esci" : "Schermo intero"}
+        className={cx(
+          "absolute flex h-9 items-center gap-1.5 rounded-full px-2.5 text-xs font-semibold backdrop-blur transition-opacity duration-200",
+          full ? cx("right-2 top-[max(0.5rem,env(safe-area-inset-top))]", chipOn) : cx(inBox ? "bottom-12 right-2" : "right-2 top-2", pill, "text-white", chrome ? "" : "pointer-events-none opacity-0"),
+        )}
+      >
+        {full ? <Glyph name="close" size={15} /> : <Glyph name="expand" size={16} />}
+        <span>{full ? "Esci" : "Schermo intero"}</span>
+      </button>
+      {!chrome ? (
+        <p className={cx("pointer-events-none absolute inset-x-0 mx-auto w-fit rounded-full px-2.5 py-0.5 text-[0.62rem] font-semibold text-white/85", full ? "bottom-[max(0.6rem,env(safe-area-inset-bottom))]" : "bottom-3", style ? "bg-[#22303a]/60" : "bg-black/40")}>
+          Tocca il corpo per i comandi
+        </p>
+      ) : null}
       {full && transport ? (
         // a schermo intero anche il video: play, pausa, fotogramma per fotogramma e la linea del tempo
-        <div className={cx("absolute inset-x-2 bottom-[calc(max(1rem,env(safe-area-inset-bottom))+2.6rem)] flex items-center gap-1.5 rounded-full px-2 py-1 text-white backdrop-blur", pill)}>
+        <div className={cx("absolute inset-x-2 bottom-[calc(max(0.6rem,env(safe-area-inset-bottom))+2.6rem)] flex items-center gap-1.5 rounded-full px-2 py-1 text-white backdrop-blur transition-opacity duration-200", pill, chrome ? "" : "pointer-events-none opacity-0", more ? "mb-9" : "")}>
           <button type="button" onClick={() => transport.onSeek(transport.time - (transport.step ?? 1 / 30))} aria-label="Fotogramma indietro" className="grid h-9 w-9 shrink-0 place-items-center rounded-full"><TrIcon k="prev" /></button>
           <button type="button" onClick={transport.onToggle} aria-label={transport.playing ? "Pausa" : "Play"} className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white/20 text-base ring-1 ring-white/55"><TrIcon k={transport.playing ? "pause" : "play"} /></button>
           <button type="button" onClick={() => transport.onSeek(transport.time + (transport.step ?? 1 / 30))} aria-label="Fotogramma avanti" className="grid h-9 w-9 shrink-0 place-items-center rounded-full"><TrIcon k="next" /></button>
@@ -1422,9 +1475,10 @@ export function Anatomy3D({
         </div>
       ) : null}
       {aim ? <AimPanel info={aimInfo} mode={aimMode} onMode={setAimMode} known={aimSetup.known} summary={aimSetup.known ? `${archer.summary}, frecce da ${aimSetup.grains} gr` : ""} full={full} /> : null}
-      <div className={cx("absolute inset-x-2 flex flex-wrap justify-center gap-1", full ? "bottom-[max(1rem,env(safe-area-inset-bottom))]" : "bottom-4")}>
-        {aim
-          ? [18, 25, 30, 50, 70, 90].map((d) => (
+      <div className={cx("absolute inset-x-2 flex flex-col items-center gap-1 transition-opacity duration-200", full ? "bottom-[max(0.6rem,env(safe-area-inset-bottom))]" : "bottom-3", chrome ? "" : "pointer-events-none opacity-0")}>
+        {aim ? (
+          <div className="flex flex-wrap justify-center gap-1">
+            {[18, 25, 30, 50, 70, 90].map((d) => (
               <button
                 key={d}
                 type="button"
@@ -1438,25 +1492,42 @@ export function Anatomy3D({
               >
                 {d} m
               </button>
-            ))
-          : null}
-        {aim ? null : (
-          // pelle vera: il corpo chiuso, con la pelle scelta per l'avatar; spenta torna il velo sull'anatomia
-          <button type="button" aria-pressed={real} onClick={() => setReal(!real)} className={cx("min-h-8 rounded-full px-2.5 text-[0.7rem] font-semibold backdrop-blur", real ? chipOn : chipOff)}>
-            Pelle vera
-          </button>
+            ))}
+          </div>
+        ) : (
+          <>
+            {more ? (
+              <div className="flex flex-wrap justify-center gap-1">
+                {!real ? (
+                  <button type="button" aria-pressed={layers.pelle} onClick={() => toggle("pelle")} className={cx(chip, layers.pelle ? chipOn : chipOff)}>
+                    Velo del corpo
+                  </button>
+                ) : null}
+                <button type="button" aria-pressed={layers.punti} onClick={() => toggle("punti")} className={cx(chip, layers.punti ? chipOn : chipOff)}>
+                  Punti
+                </button>
+                {/* la sagoma come nelle tavole di postura: le parti fuori misura si correggono e restano segnate in oro */}
+                <button type="button" aria-pressed={fixPose} onClick={() => setFixPose(!fixPose)} className={cx(chip, fixPose ? chipOn : chipOff)}>
+                  Postura corretta
+                </button>
+              </div>
+            ) : null}
+            <div className="flex max-w-full items-center gap-1 overflow-x-auto">
+              {/* pelle vera: il corpo chiuso, con la pelle scelta per l'avatar; spenta torna il velo sull'anatomia */}
+              <button type="button" aria-pressed={real} onClick={() => setReal(!real)} className={cx(chip, real ? chipOn : chipOff)}>
+                Pelle
+              </button>
+              {([["muscolo", "Muscoli"], ["osso", "Scheletro"], ["quote", "Misure"]] as const).map(([k, label]) => (
+                <button key={k} type="button" aria-pressed={layers[k]} onClick={() => toggle(k)} className={cx(chip, layers[k] ? chipOn : chipOff)}>
+                  {label}
+                </button>
+              ))}
+              <button type="button" aria-expanded={more} aria-label={more ? "Meno strati" : "Altri strati: velo, punti, postura corretta"} onClick={() => setMore(!more)} className={cx(chip, "px-2", more ? chipOn : chipOff)}>
+                <svg viewBox="0 0 24 24" width={16} height={16} aria-hidden fill="currentColor"><circle cx="5" cy="12" r="1.9" /><circle cx="12" cy="12" r="1.9" /><circle cx="19" cy="12" r="1.9" /></svg>
+              </button>
+            </div>
+          </>
         )}
-        {aim ? null : (
-          // la sagoma come nelle tavole di postura: le parti fuori misura si correggono e restano segnate in oro
-          <button type="button" aria-pressed={fixPose} onClick={() => setFixPose(!fixPose)} className={cx("min-h-8 rounded-full px-2.5 text-[0.7rem] font-semibold backdrop-blur", fixPose ? chipOn : chipOff)}>
-            Postura corretta
-          </button>
-        )}
-        {aim ? null : ([["pelle", "Corpo"], ["muscolo", "Muscoli"], ["osso", "Scheletro"], ["punti", "Punti"], ["quote", "Misure"]] as const).filter(([k]) => !real || k !== "pelle").map(([k, label]) => (
-          <button key={k} type="button" aria-pressed={layers[k]} onClick={() => toggle(k)} className={cx("min-h-8 rounded-full px-2.5 text-[0.7rem] font-semibold backdrop-blur", layers[k] ? chipOn : chipOff)}>
-            {label}
-          </button>
-        ))}
       </div>
       {shotMsg ? <p className="pointer-events-none absolute inset-x-0 top-14 mx-auto w-fit rounded-full bg-black/60 px-3 py-1 text-xs font-semibold text-white">{shotMsg}</p> : null}
     </div>

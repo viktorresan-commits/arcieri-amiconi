@@ -285,6 +285,9 @@ for z in za_all:
     else:
         continue
     P, I = weld(za_world(z), z['I'])
+    # le parti di sinistra (".l") sono specchiate (matrice con determinante negativo): senza girare i triangoli
+    # resterebbero rovesciate, con le normali verso l'interno (fix_orient.py corregge i file già fatti)
+    if np.linalg.det(z['M'][:3, :3]) < 0: I = I[:, [0, 2, 1]]
     if len(I) < 40: continue
     # i più grandi si alleggeriscono (forma uguale, meno triangoli)
     # ZA_KEEP=1: piena definizione dell'atlante (versione per foto e video in alta definizione)

@@ -21,7 +21,18 @@ Per rigenerarli servono Python con numpy e scipy:
 
     ZA_BLEND=percorso/Z-Anatomy/Startup.blend python3 build.py ../../public/anatomia/corpo
 
-(il percorso dei modelli BodyParts3D è in `load.py`).
+(il percorso dei modelli BodyParts3D è in `load.py`). Poi, sui tre corpi:
+
+    python3 fix_orient.py ../../public/anatomia/corpo ../../public/anatomia/corpo-leggero ../../public/anatomia/corpo-hd
+    python3 mark_inner.py ../../public/anatomia/corpo ../../public/anatomia/corpo-leggero ../../public/anatomia/corpo-hd
+
+- `fix_orient.py` gira verso l'esterno i muscoli specchiati di Z-Anatomy (i ".l" hanno la matrice con
+  determinante negativo: restavano rovesciati e con le facce posteriori scartate sembravano vuoti);
+  `build.py` ora li gira già, lo script serve per i file fatti prima;
+- `mark_inner.py` segna la parete interna del guscio della pelle (fondo di carne in ombra dietro i muscoli,
+  visibile solo negli spiragli tra un muscolo e l'altro).
+
+Entrambi aggiungono una voce a `ritocchi` nel `.json`: cambia l'impronta del corpo e i telefoni lo riscaricano.
 
 - `blend.py` legge i file `.blend` di Blender 3.x senza Blender;
 - `za_blend.py` estrae ossa e muscoli di Z-Anatomy con la loro posizione nel corpo;

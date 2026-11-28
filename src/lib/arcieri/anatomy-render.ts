@@ -173,6 +173,15 @@ void main(){
   vec3 amb = mix(vec3(0.12, 0.10, 0.09), vec3(0.24, 0.26, 0.30), 0.5 + 0.5 * N.y);
   vec3 H = normalize(L1 + V);
   vec3 col; float a = uAlpha;
+  if (uLayer > 2.5) {
+    // fondo sotto i muscoli: la parete interna del guscio della pelle (segnata nei dati, canale "tendine"), solo
+    // quella lontana (le facce girate si scartano). Sta dietro i muscoli: si vede solo dove tra un muscolo e
+    // l'altro resta uno spiraglio, carne in ombra invece del fondo dello studio
+    if (vTend < 0.5 || vStr > 0.5) discard;
+    col = vec3(0.075, 0.012, 0.012) * (C1 * max(dot(N, L1), 0.0) * 0.35 + amb);
+    gl_FragColor = vec4(tone(col), 1.0);
+    return;
+  }
   if (uLayer < 0.5) {
     // pelle: un velo appena accennato che disegna il contorno del corpo, neutro (non più azzurro)
     float rim = pow(1.0 - ndv, 2.4);
@@ -247,9 +256,9 @@ void main(){
     // fasci appena accennati e la lucentezza a seta lungo le fibre (come nei preparati anatomici),
     // tendini e aponeurosi bianco perla e lucidi
     float h = hash(vGrp);
-    // rosso del muscolo dei preparati e delle tavole anatomiche (rosa mattone, non cremisi saturo),
-    // appena diverso da un gruppo all'altro
-    vec3 alb = vec3(0.17, 0.053, 0.044) * (0.93 + 0.14 * h) * vec3(1.0, 1.0 + (hash(vGrp + 3.0) - 0.5) * 0.2, 1.0 + (hash(vGrp + 7.0) - 0.5) * 0.2);
+    // rosso del muscolo dei preparati e delle tavole anatomiche: rosso carne (prima un rosa mattone che, con le
+    // fasce chiare e la luce, sembrava spento), appena diverso da un gruppo all'altro
+    vec3 alb = vec3(0.24, 0.012, 0.016) * (0.93 + 0.14 * h) * vec3(1.0, 1.0 + (hash(vGrp + 3.0) - 0.5) * 0.2, 1.0 + (hash(vGrp + 7.0) - 0.5) * 0.2);
     alb *= 0.88 + 0.14 * sin(3.14159 * vF.x);
     float fy = vF.y * 34.0 + 0.18 * sin(vF.x * 9.0) + 0.22 * sin(vF.x * 2.7 + vF.y * 4.1);
     float id = floor(fy);
@@ -296,13 +305,13 @@ void main(){
     float on = smoothstep(0.32, 0.8, act);
     // muscolo che lavora: rosso acceso tendente all'arancio, ben distinto ma non giallo
     // muscolo che lavora: rosso vivo (stessa famiglia di colore, solo più acceso), non arancio
-    vec3 work = vec3(0.40, 0.038, 0.022);
+    vec3 work = vec3(0.46, 0.03, 0.015);
     alb = mix(alb, work, on * 0.85);
     if (vFoc > 0.5) { alb = vec3(0.44, 0.06, 0.02); on = 1.0; }
     else if (vFoc < -0.5) { alb = mix(alb, vec3(0.12, 0.09, 0.09), 0.5); on = 0.0; }
     // tendini e fasce: bianco avorio caldo (come nei preparati), lucidi
     vec3 tend = vec3(0.47, 0.39, 0.35);
-    alb = mix(alb * fib, vec3(0.42, 0.24, 0.21), fascia);
+    alb = mix(alb * fib, vec3(0.34, 0.11, 0.09), fascia);
     alb = mix(alb, tend, vTend * 0.9);
     // luce morbida (la carne lascia passare un po' di luce), bordi che si scuriscono tra un muscolo e l'altro
     ndv = clamp(dot(N, V), 0.0, 1.0);
@@ -325,10 +334,11 @@ void main(){
     }
 #endif
     float wet = pow(max(dot(N, H), 0.0), 64.0) * 0.12;
-    vec3 sheen = mix(vec3(1.0, 0.8, 0.72), vec3(1.0), vTend);
+    // riflessi della carne rossi (bianchi sembravano una patina rosata sul muscolo); bianchi solo sui tendini
+    vec3 sheen = mix(vec3(1.0, 0.5, 0.42), vec3(1.0), vTend);
     col += C1 * sheen * (silk * (1.0 - 0.5 * vTend) + wet + vTend * pow(max(dot(N, H), 0.0), 24.0) * 0.12);
     // controluce: stacca il corpo dallo sfondo
-    col += C3 * pow(1.0 - ndv, 3.0) * max(0.0, dot(N, L3) + 0.2) * 0.22;
+    col += C3 * mix(vec3(1.0, 0.55, 0.5), vec3(1.0), vTend) * pow(1.0 - ndv, 3.0) * max(0.0, dot(N, L3) + 0.2) * 0.22;
     // muscolo che lavora: si accende dall'interno, piano
     float pulse = 0.85 + 0.15 * sin(uTime * 4.4);
     col += vec3(0.55, 0.05, 0.02) * on * (0.04 + 0.12 * pow(ndv, 2.0)) * pulse * (1.0 - vTend);
@@ -1499,9 +1509,10 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
   const drawBody = (model: Model, VP: Float32Array, eye: V3, L: Layers, focus: Set<string> | null | undefined, time: number, sil = false) => {
     if (!body || !model.J || !model.hand) return;
     const meta = body.meta;
-    // pelle vera: le mani vere al posto di quelle dell'atlante
-    const useRig = !sil && style === 2 && Boolean(rig) && L.pelle;
+    // le mani vere (dita piegate sull'arco e sulla corda) danno la posa anche a ossa e muscoli delle mani
+    const useRig = !sil && Boolean(rig);
     const { J, mats, skinMats, hands } = poseBody(meta, model, curlBuf, fingBuf, body.sample, useRig ? rig : null)!;
+    if (useRig && rig && hands.length) atlasHandsFromRig(meta, mats, hands, rig, curlBuf, fingBuf);
     // matrici dei segmenti come tre righe ciascuna (la quarta è sempre 0 0 0 1)
     const nSeg = Math.min(21, meta.segments.length);
     const rows = (m: Float32Array) => {
@@ -1538,8 +1549,10 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
       if (h && rig && el) {
         const w = placeApply(h.pl, rig[s].W);
         const n = v3.norm(v3.sub(w, el));
-        clip = [n[0], n[1], n[2], v3.dot(n, w) - 0.01];
         back[s] = [n[0], n[1], n[2], v3.dot(n, w) - 0.018];
+        // la mano dell'atlante si taglia solo dove si disegnano insieme la sua pelle e la mano vera (senza la pelle
+        // vera del corpo): ora ossa e muscoli delle mani seguono la mano vera e restano visibili
+        if (L.pelle && style === 2 && !(skinBody && bodyGpu)) clip = [n[0], n[1], n[2], v3.dot(n, w) - 0.01];
       }
       gl.uniform4fv(s === "L" ? bl.uArmL : bl.uArmR, [`avambr_${s}`, `mano_${s}`, `dita_${s}`, `pollice_${s}`].map((n) => meta.segments.indexOf(n)));
       gl.uniform4fv(s === "L" ? bl.uClipL : bl.uClipR, clip);
@@ -1587,7 +1600,9 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     }
     // con la pelle a velo: dove si vedono muscoli e ossa si segna lo stencil (lì il velo li copre anche se la passano)
     const masked = hasStencil && L.pelle && style === 2 && (L.muscolo || L.osso);
-    if (masked) {
+    // fondo sotto i muscoli: solo dove né muscoli né ossa coprono il punto (stencil)
+    const fill = hasStencil && L.muscolo;
+    if (masked || fill) {
       gl.enable(gl.STENCIL_TEST);
       gl.stencilMask(0xff);
       gl.stencilFunc(gl.ALWAYS, 1, 0xff);
@@ -1595,12 +1610,27 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     }
     if (L.osso) drawBodyLayer("bone", 1, 1);
     if (L.muscolo) drawBodyLayer("muscle", 2, 1);
-    if (masked) gl.disable(gl.STENCIL_TEST);
+    if (fill) {
+      // carne in ombra negli spiragli tra un muscolo e l'altro (parete interna lontana della pelle dell'atlante),
+      // invece del fondo dello studio: solo dove muscoli e ossa non ci sono, poi segnata anch'essa (il velo la copre)
+      gl.stencilFunc(gl.NOTEQUAL, 1, 0xff);
+      skinRows();
+      gl.disable(gl.BLEND);
+      drawBodyLayer("skin", 3, 1);
+      gl.enable(gl.BLEND);
+      if (skinMats !== mats) {
+        rows(mats);
+        gl.uniform4fv(bl.uSeg, segRows);
+      }
+      gl.stencilFunc(gl.ALWAYS, 1, 0xff);
+    }
+    if (masked || fill) gl.disable(gl.STENCIL_TEST);
     if (L.pelle && style === 2 && hands.length && skinBody && bodyGpu) {
       // pelle vera chiusa: il corpo intero del personaggio con le sue mani
       for (const a of bodyAttribs) if (a >= 0) gl.disableVertexAttribArray(a);
-      // con muscoli o scheletro accesi la pelle vera diventa un velo sopra di loro: si vede che li riveste
-      drawSkinBody(meta, skinMats, hands, VP, eye, J, L.muscolo || L.osso ? 0.4 : 0, masked);
+      // con muscoli o scheletro accesi la pelle vera diventa un velo sopra di loro: si vede che li riveste.
+      // Sopra i muscoli quasi trasparente al centro (il rosso della carne resta rosso), più presente sui bordi
+      drawSkinBody(meta, skinMats, hands, VP, eye, J, L.muscolo ? 0.1 : L.osso ? 0.24 : 0, masked);
       gl.useProgram(bprog);
       for (const a of bodyAttribs) if (a >= 0) gl.enableVertexAttribArray(a);
     } else if (L.pelle && style === 2) {
@@ -2042,6 +2072,156 @@ export function viewFrom(target: V3, yaw: number, pitch: number, dist: number, a
   return { eye, VP: mul4(perspective((fovDeg * Math.PI) / 180, aspect, near, 30), lookAt(eye, target)) };
 }
 
+
+/**
+ * Ossa e muscoli delle mani dell'atlante come le mani vere. La pelle ha le mani del personaggio (dita a tre
+ * falangi piegate una per una sull'arco e sulla corda), l'atlante le sue, piegate a parte: con lo scheletro o i
+ * muscoli accesi le dita delle ossa restavano dritte o aperte fuori dalla mano. Qui la mano dell'atlante si
+ * porta sulla mano vera (polso, nocche, verso dell'indice e scala), le quattro dita si piegano con gli angoli
+ * della mano vera (nocca e seconda falange, dito per dito) e il pollice segue il primo osso del pollice vero.
+ */
+function quatTwist(r: number[], ax: V3): number {
+  // rotazione (3x3 a righe, normalizzata per colonne) -> quaternione -> angolo attorno all'asse
+  const c0 = v3.norm([r[0], r[3], r[6]]);
+  const c1 = v3.norm([r[1], r[4], r[7]]);
+  const c2 = v3.norm([r[2], r[5], r[8]]);
+  const m00 = c0[0], m10 = c0[1], m20 = c0[2], m01 = c1[0], m11 = c1[1], m21 = c1[2], m02 = c2[0], m12 = c2[1], m22 = c2[2];
+  const tr = m00 + m11 + m22;
+  let x: number, y: number, z: number, w: number;
+  if (tr > 0) {
+    const k = Math.sqrt(tr + 1) * 2;
+    w = 0.25 * k;
+    x = (m21 - m12) / k;
+    y = (m02 - m20) / k;
+    z = (m10 - m01) / k;
+  } else if (m00 > m11 && m00 > m22) {
+    const k = Math.sqrt(1 + m00 - m11 - m22) * 2;
+    w = (m21 - m12) / k;
+    x = 0.25 * k;
+    y = (m01 + m10) / k;
+    z = (m02 + m20) / k;
+  } else if (m11 > m22) {
+    const k = Math.sqrt(1 + m11 - m00 - m22) * 2;
+    w = (m02 - m20) / k;
+    x = (m01 + m10) / k;
+    y = 0.25 * k;
+    z = (m12 + m21) / k;
+  } else {
+    const k = Math.sqrt(1 + m22 - m00 - m11) * 2;
+    w = (m10 - m01) / k;
+    x = (m02 + m20) / k;
+    y = (m12 + m21) / k;
+    z = 0.25 * k;
+  }
+  let a = 2 * Math.atan2(x * ax[0] + y * ax[1] + z * ax[2], w);
+  while (a > Math.PI) a -= 2 * Math.PI;
+  while (a < -Math.PI) a += 2 * Math.PI;
+  return a;
+}
+const mulR = (a: number[], b: number[]) => [0, 1, 2].flatMap((i) => [0, 1, 2].map((j) => a[i * 3] * b[j] + a[i * 3 + 1] * b[3 + j] + a[i * 3 + 2] * b[6 + j]));
+const trR = (a: number[]) => [a[0], a[3], a[6], a[1], a[4], a[7], a[2], a[5], a[8]];
+function atlasHandsFromRig(meta: BodyMeta, mats: Float32Array, hands: RigPose[], rig: HandRig, curl: Float32Array, fing: Float32Array) {
+  for (const hp of hands) {
+    const s = hp.side;
+    const h = rig[s];
+    const cf = curlFrame(meta, s);
+    const Wa = meta.rest[s === "L" ? "15" : "16"] as V3 | undefined;
+    const mI = meta.segments.indexOf(`mano_${s}`);
+    const dI = meta.segments.indexOf(`dita_${s}`);
+    const pI = meta.segments.indexOf(`pollice_${s}`);
+    if (!cf || !Wa || mI < 0) continue;
+    // dalla mano a riposo dell'atlante a quella della mano vera: polso su polso, nocche, verso dell'indice, scala
+    const e1a = v3.norm(v3.sub(cf.K, Wa));
+    const e2a = v3.norm(v3.sub(cf.X, v3.mul(e1a, v3.dot(cf.X, e1a))));
+    const e3a = v3.cross(e1a, e2a);
+    const e1r = v3.norm(v3.sub(h.K, h.W));
+    const e2r = v3.norm(v3.sub(h.X, v3.mul(e1r, v3.dot(h.X, e1r))));
+    const e3r = v3.cross(e1r, e2r);
+    const sc = v3.len(v3.sub(h.K, h.W)) / Math.max(1e-6, v3.len(v3.sub(cf.K, Wa)));
+    const T = [0, 1, 2].flatMap((i) => [0, 1, 2].map((j) => sc * (e1r[i] * e1a[j] + e2r[i] * e2a[j] + e3r[i] * e3a[j])));
+    const Tt = v3.sub(h.W, [T[0] * Wa[0] + T[1] * Wa[1] + T[2] * Wa[2], T[3] * Wa[0] + T[4] * Wa[1] + T[5] * Wa[2], T[6] * Wa[0] + T[7] * Wa[1] + T[8] * Wa[2]]);
+    const mv = (r: number[], p: V3): V3 => [r[0] * p[0] + r[1] * p[1] + r[2] * p[2], r[3] * p[0] + r[4] * p[1] + r[5] * p[2], r[6] * p[0] + r[7] * p[1] + r[8] * p[2]];
+    const sR = (r: number[], k: number) => r.map((x) => x * k);
+    /** segmento dell'atlante: x (riposo dell'atlante) -> pl(Rr x + tr), con Rr e tr nello spazio della mano vera */
+    const putRT = (seg: number, Rr: number[], tr: V3) => {
+      if (seg < 0) return;
+      const R = mulR(hp.pl.m, Rr);
+      const t = placeApply(hp.pl, tr);
+      const o = seg * 16;
+      for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) mats[o + j * 4 + i] = R[i * 3 + j];
+      mats[o + 3] = mats[o + 7] = mats[o + 11] = 0;
+      mats[o + 12] = t[0];
+      mats[o + 13] = t[1];
+      mats[o + 14] = t[2];
+      mats[o + 15] = 1;
+    };
+    const ID = { r: [1, 0, 0, 0, 1, 0, 0, 0, 1], t: [0, 0, 0] as V3 };
+    const b0 = hp.bones[0] ?? ID;
+    // palmo: posa (pl) ∘ palmo ∘ T
+    putRT(mI, mulR(b0.r, T), v3.add(mv(b0.r, Tt), b0.t));
+    // quattro dita: come il palmo, ma lunghe quanto quelle della mano vera (la mano dell'atlante ha il palmo più
+    // corto e le dita più lunghe: scalate col palmo, le ossa uscivano dalla punta delle dita), scala attorno
+    // alle nocche
+    const rigLen = [1, 2, 3, 4].reduce((a, f) => a + v3.len(v3.sub(h.tips[f], h.heads[1 + f * 3])), 0) / 4;
+    const fr = Math.max(0.75, Math.min(1.1, rigLen / Math.max(1e-6, cf.L * sc)));
+    const kIn = v3.add(mv(T, v3.mul(cf.K, 1 - fr)), Tt);
+    putRT(dI, sR(mulR(b0.r, T), fr), v3.add(mv(b0.r, kIn), b0.t));
+    // pollice: dall'articolazione alla base della prima falange fino alla punta, come quello della mano vera
+    // (prima seguiva solo il metacarpo: restava dritto e puntava fuori dalla mano)
+    const p0 = meta.rest[`pol0_${s}`] as V3 | undefined;
+    const p1 = meta.rest[`pol1_${s}`] as V3 | undefined;
+    const b2 = hp.bones[2];
+    const b3 = hp.bones[3];
+    if (pI >= 0 && p0 && p1 && b2 && b3) {
+      const A0 = v3.add(mv(T, p0), Tt);
+      const A1 = v3.add(mv(T, p1), Tt);
+      const M = v3.add(mv(b2.r, h.heads[2]), b2.t);
+      const tip = v3.add(mv(b3.r, h.tips[0]), b3.t);
+      const want = v3.sub(tip, M);
+      const have = mv(b2.r, v3.sub(A1, A0));
+      const st = Math.max(0.8, Math.min(1.25, v3.len(want) / Math.max(1e-6, v3.len(have))));
+      // rotazione minima che porta la direzione del pollice (girata con la prima falange) sulla punta vera
+      const a = v3.norm(have);
+      const b = v3.norm(want);
+      const ax = v3.cross(a, b);
+      const sn = v3.len(ax);
+      const cs = v3.dot(a, b);
+      let Q = [1, 0, 0, 0, 1, 0, 0, 0, 1];
+      if (sn > 1e-6) {
+        const [x, y, z] = v3.mul(ax, 1 / sn);
+        const C = 1 - cs;
+        Q = [cs + x * x * C, x * y * C - z * sn, x * z * C + y * sn, y * x * C + z * sn, cs + y * y * C, y * z * C - x * sn, z * x * C - y * sn, z * y * C + x * sn, cs + z * z * C];
+      }
+      const QR = sR(mulR(Q, b2.r), st);
+      putRT(pI, mulR(QR, T), v3.add(M, mv(QR, v3.sub(Tt, A0))));
+    } else {
+      const b1 = hp.bones[1] ?? ID;
+      putRT(pI, mulR(b1.r, T), v3.add(mv(b1.r, Tt), b1.t));
+    }
+    // dita: la piega della mano vera, dito per dito (indice..mignolo), nella scheda grafica. La piega media va
+    // nella piega comune (vale per tutta la mano: anche le punte, più larghe della fila delle nocche, che
+    // altrimenti non ricevevano la piega del loro dito e restavano dritte come lame); ogni dito aggiunge la sua
+    // differenza (il mignolo riceve già un quarto in più dalla piega comune)
+    const m1: number[] = [];
+    const m2: number[] = [];
+    for (let f = 0; f < 4; f++) {
+      const b = 4 + f * 3;
+      const r1 = hp.bones[b]?.r;
+      const r2 = hp.bones[b + 1]?.r;
+      m1.push(r1 ? quatTwist(r1, h.flexAx[f]) : 0);
+      m2.push(r1 && r2 ? quatTwist(mulR(trR(r1), r2), h.flexAx[f]) : 0);
+    }
+    const c1 = (m1[0] + m1[1] + m1[2] + m1[3]) / 4;
+    const c2 = (m2[0] + m2[1] + m2[2] + m2[3]) / 4;
+    const o = s === "L" ? 0 : 16;
+    curl.set([cf.K[0], cf.K[1], cf.K[2], cf.L, cf.F[0], cf.F[1], cf.F[2], c1, cf.S[0], cf.S[1], cf.S[2], c2, cf.X[0], cf.X[1], cf.X[2], 0], o);
+    const fo = s === "L" ? 0 : 8;
+    for (let f = 0; f < 4; f++) {
+      fing[fo + f] = m1[f] - c1 * (f === 3 ? 1.25 : 1);
+      fing[fo + 4 + f] = m2[f] - c2 * (f === 3 ? 1.3 : 1);
+    }
+  }
+}
 
 /** un punto di riposo portato dove lo mette la matrice del segmento (colonne, come WebGL) */
 function xf(m: Float32Array, at: number, p: V3): V3 {
