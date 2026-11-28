@@ -28,3 +28,19 @@ Per rigenerarli servono Python con numpy e scipy:
 - `za_names.py` traduce i nomi delle ossa di Z-Anatomy in quelli di BodyParts3D;
 - `za_fit2.py` allinea osso per osso e costruisce lo spostamento dei muscoli;
 - `qem.py` semplifica senza aprire buchi.
+
+## Pelle vera (`pelle.*`)
+
+Il corpo chiuso della pelle vera è il personaggio Quaternius Superhero_Male (CC0) con la forma della pelle
+dell'atlante dove c'è (BodyParts3D, CC BY 4.0) e la grana del pacchetto pelle dell'avatar:
+
+    esbuild wrap_rest.ts --bundle --platform=node --format=esm --alias:@=../../src --outfile=/tmp/wrap_rest.mjs
+    node /tmp/wrap_rest.mjs ../../public/anatomia/corpo.json <pelle originale>.json > rest-bones.json
+    python3 wrap_skin.py <pelle originale> rest-bones.json ../../public/anatomia/corpo ../../public/anatomia/pelle
+    python3 skin_detail.py <cartella del pacchetto pelle> ../../public/anatomia
+
+- `wrap_rest.ts` mette le ossa del personaggio nel riposo dell'atlante con il codice dell'app;
+- `wrap_skin.py` divide i triangoli, porta la pelle sulla forma dell'atlante (muscoli veri), riempie i buchi,
+  prende il muscolo sotto ogni punto (la pelle si gonfia con lui), cuoce l'occlusione e i dati per il braccio
+  piegato (a gomito chiuso torna la forma del personaggio, che si piega senza lembi);
+- `skin_detail.py` fa la grana della pelle (pori, rossori, rilievo, ruvidità) che si ripete.

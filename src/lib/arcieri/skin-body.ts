@@ -9,8 +9,27 @@ import { v3, type V3 } from "./anatomy-model";
 import type { BodyMeta } from "./anatomy-body";
 
 type MeshJson = { n: number; vOffset: number; iOffset: number; indices: number };
-type BodyJson = { stride: number; meshes: { corpo: MeshJson; occhi: MeshJson }; joints: { name: string; parent: number; rest: number[] }[] };
-export type SkinMesh = { n: number; pos: Float32Array; nrm: Float32Array; uv: Float32Array; jo: Uint8Array; wt: Float32Array; idx: Uint16Array };
+type BodyJson = { stride: number; meshes: { corpo: MeshJson; occhi: MeshJson }; joints: { name: string; parent: number; rest: number[] }[]; /** byte in più per vertice (scripts/anatomia/wrap_skin.py) */ extra?: { group: number; bulge: number; ao: number; paint: number; bulgeScale: number; delta?: number; zone?: number; nrm0?: number } };
+export type SkinMesh = {
+  n: number;
+  pos: Float32Array;
+  nrm: Float32Array;
+  uv: Float32Array;
+  jo: Uint8Array;
+  wt: Float32Array;
+  idx: Uint16Array;
+  /** muscolo sotto la pelle (gruppo dell'atlante) e quanto la pelle si gonfia con lui (metri per metro) */
+  grp: Uint8Array | null;
+  bulge: Float32Array | null;
+  /** occlusione (0..1, 1 = all'aperto) e quanto conta il chiaroscuro dipinto, a coppie */
+  k: Float32Array;
+  /** braccio piegato: quanto della forma dell'atlante si toglie (a gomito chiuso) e da che lato (1 sinistro, 2 destro) */
+  delta: Float32Array | null;
+  zone: Float32Array | null;
+  zside: Uint8Array | null;
+  /** normali della forma del personaggio (braccio piegato) */
+  nrm0: Float32Array | null;
+};
 export type SkinBody = { body: SkinMesh; eyes: SkinMesh; names: string[]; heads: V3[]; parent: number[]; image: HTMLImageElement | null; eyeImage: HTMLImageElement | null; meanLuma: number };
 
 let bodyP: Promise<SkinBody | null> | null = null;
@@ -39,6 +58,15 @@ export function loadSkinBody(base = "/anatomia/pelle"): Promise<SkinBody | null>
         const uv = new Float32Array(n * 2);
         const jo = new Uint8Array(n * 4);
         const wt = new Float32Array(n * 4);
+        const ex = js.extra;
+        const grp = ex ? new Uint8Array(n) : null;
+        const bulge = ex ? new Float32Array(n) : null;
+        const k = new Float32Array(n * 2).fill(1);
+        const hasD = ex?.delta != null && ex?.zone != null;
+        const delta = hasD ? new Float32Array(n * 3) : null;
+        const zone = hasD ? new Float32Array(n) : null;
+        const zside = hasD ? new Uint8Array(n) : null;
+        const nrm0 = hasD && ex?.nrm0 != null ? new Float32Array(n * 3) : null;
         for (let i = 0; i < n; i++) {
           const o = m.vOffset + i * st;
           for (let k = 0; k < 3; k++) pos[i * 3 + k] = dv.getFloat32(o + k * 4, true);
@@ -49,8 +77,21 @@ export function loadSkinBody(base = "/anatomia/pelle"): Promise<SkinBody | null>
             jo[i * 4 + k] = dv.getUint8(o + 19 + k);
             wt[i * 4 + k] = dv.getUint8(o + 23 + k) / 255;
           }
+          if (ex && grp && bulge) {
+            grp[i] = dv.getUint8(o + ex.group);
+            bulge[i] = (dv.getUint8(o + ex.bulge) / 255) * ex.bulgeScale;
+            k[i * 2] = dv.getUint8(o + ex.ao) / 255;
+            k[i * 2 + 1] = dv.getUint8(o + ex.paint) / 255;
+          }
+          if (ex && delta && zone && zside && ex.delta != null && ex.zone != null) {
+            for (let c = 0; c < 3; c++) delta[i * 3 + c] = dv.getInt16(o + ex.delta + c * 2, true) / 1e4;
+            const z = dv.getUint8(o + ex.zone);
+            zside[i] = z === 0 ? 0 : z < 128 ? 1 : 2;
+            zone[i] = (z & 127) / 127;
+            if (nrm0 && ex.nrm0 != null) for (let c = 0; c < 3; c++) nrm0[i * 3 + c] = dv.getInt8(o + ex.nrm0 + c) / 127;
+          }
         }
-        return { n, pos, nrm, uv, jo, wt, idx: new Uint16Array(bin.slice(m.iOffset, m.iOffset + m.indices * 2)) };
+        return { n, pos, nrm, uv, jo, wt, grp, bulge, k, delta, zone, zside, nrm0, idx: new Uint16Array(bin.slice(m.iOffset, m.iOffset + m.indices * 2)) };
       };
       // luminanza media della pelle (per tenere solo luci e ombre dipinte)
       let meanLuma = 0.45;
@@ -213,40 +254,84 @@ export function bodyBones(meta: BodyMeta, sb: SkinBody, skinMats: Float32Array, 
   });
 }
 
-/** pelle in posa: posizioni e normali nel mondo */
-export function skinMesh(m: SkinMesh, bones: Aff[], outP: Float32Array, outN: Float32Array) {
+/**
+ * pelle in posa: posizioni e normali nel mondo. bul: il gonfiore di ogni gruppo muscolare (come per l'atlante):
+ * la pelle sopra un muscolo che si accorcia si alza lungo la normale, quanto gli sta vicina.
+ */
+let flatB = new Float32Array(0);
+export function skinMesh(m: SkinMesh, bones: Aff[], outP: Float32Array, outN: Float32Array, bul?: Float32Array | null, /** braccio piegato, sinistro e destro: 0 disteso, 1 gomito chiuso */ flex?: [number, number] | null) {
+  // ossa in fila (3 righe da 4): sul telefono la pelle densa si muove ogni fotogramma, conta ogni accesso
+  if (flatB.length < bones.length * 12) flatB = new Float32Array(bones.length * 12);
+  const F = flatB;
+  for (let b = 0; b < bones.length; b++) {
+    const r = bones[b].r;
+    const t = bones[b].t;
+    const o = b * 12;
+    F[o] = r[0];
+    F[o + 1] = r[1];
+    F[o + 2] = r[2];
+    F[o + 3] = t[0];
+    F[o + 4] = r[3];
+    F[o + 5] = r[4];
+    F[o + 6] = r[5];
+    F[o + 7] = t[1];
+    F[o + 8] = r[6];
+    F[o + 9] = r[7];
+    F[o + 10] = r[8];
+    F[o + 11] = t[2];
+  }
+  const g = bul && m.grp && m.bulge ? m.grp : null;
+  const bg = m.bulge;
+  const fx = flex && m.delta && m.zone && m.zside && (flex[0] > 0 || flex[1] > 0) ? flex : null;
+  const { pos, nrm, wt, jo, delta, zone, zside, nrm0 } = m;
   for (let i = 0; i < m.n; i++) {
-    const x = m.pos[i * 3];
-    const y = m.pos[i * 3 + 1];
-    const z = m.pos[i * 3 + 2];
-    const nx = m.nrm[i * 3];
-    const ny = m.nrm[i * 3 + 1];
-    const nz = m.nrm[i * 3 + 2];
+    const i3 = i * 3;
+    let nx = nrm[i3];
+    let ny = nrm[i3 + 1];
+    let nz = nrm[i3 + 2];
+    const b = g ? bul![g[i]] * bg![i] : 0;
+    let x = pos[i3] + nx * b;
+    let y = pos[i3 + 1] + ny * b;
+    let z = pos[i3 + 2] + nz * b;
+    if (fx && zside![i]) {
+      const f = fx[zside![i] - 1] * zone![i];
+      x -= delta![i3] * f;
+      y -= delta![i3 + 1] * f;
+      z -= delta![i3 + 2] * f;
+      if (nrm0) {
+        nx += (nrm0[i3] - nx) * f;
+        ny += (nrm0[i3 + 1] - ny) * f;
+        nz += (nrm0[i3 + 2] - nz) * f;
+      }
+    }
     let px = 0;
     let py = 0;
     let pz = 0;
     let qx = 0;
     let qy = 0;
     let qz = 0;
+    const i4 = i * 4;
     for (let k = 0; k < 4; k++) {
-      const w = m.wt[i * 4 + k];
+      const w = wt[i4 + k];
       if (w <= 0) continue;
-      const B = bones[m.jo[i * 4 + k]];
-      const r = B.r;
-      px += (r[0] * x + r[1] * y + r[2] * z + B.t[0]) * w;
-      py += (r[3] * x + r[4] * y + r[5] * z + B.t[1]) * w;
-      pz += (r[6] * x + r[7] * y + r[8] * z + B.t[2]) * w;
-      qx += (r[0] * nx + r[1] * ny + r[2] * nz) * w;
-      qy += (r[3] * nx + r[4] * ny + r[5] * nz) * w;
-      qz += (r[6] * nx + r[7] * ny + r[8] * nz) * w;
+      const o = jo[i4 + k] * 12;
+      const a0 = F[o], a1 = F[o + 1], a2 = F[o + 2];
+      const b0 = F[o + 4], b1 = F[o + 5], b2 = F[o + 6];
+      const c0 = F[o + 8], c1 = F[o + 9], c2 = F[o + 10];
+      px += (a0 * x + a1 * y + a2 * z + F[o + 3]) * w;
+      py += (b0 * x + b1 * y + b2 * z + F[o + 7]) * w;
+      pz += (c0 * x + c1 * y + c2 * z + F[o + 11]) * w;
+      qx += (a0 * nx + a1 * ny + a2 * nz) * w;
+      qy += (b0 * nx + b1 * ny + b2 * nz) * w;
+      qz += (c0 * nx + c1 * ny + c2 * nz) * w;
     }
-    outP[i * 3] = px;
-    outP[i * 3 + 1] = py;
-    outP[i * 3 + 2] = pz;
-    const l = Math.hypot(qx, qy, qz) || 1;
-    outN[i * 3] = qx / l;
-    outN[i * 3 + 1] = qy / l;
-    outN[i * 3 + 2] = qz / l;
+    outP[i3] = px;
+    outP[i3 + 1] = py;
+    outP[i3 + 2] = pz;
+    const l = 1 / (Math.sqrt(qx * qx + qy * qy + qz * qz) || 1);
+    outN[i3] = qx * l;
+    outN[i3 + 1] = qy * l;
+    outN[i3 + 2] = qz * l;
   }
 }
 

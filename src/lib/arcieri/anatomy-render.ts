@@ -427,12 +427,14 @@ function torusMesh(R = 1, r = 0.07, seg = 32, tube = 6) {
 
 /* mani vere (personaggio Quaternius): già piegate e messe nel mondo dalla CPU, pelle come quella vera del corpo */
 const HVS = `
-attribute vec3 aP; attribute vec3 aN; attribute vec2 aUV;
+attribute vec3 aP; attribute vec3 aN; attribute vec2 aUV; attribute vec2 aK;
 uniform mat4 uVP;
-varying vec3 vW; varying vec3 vN; varying vec2 vUV;
-void main(){ vW = aP; vN = aN; vUV = aUV; gl_Position = uVP * vec4(aP, 1.0); }`;
+varying vec3 vW; varying vec3 vN; varying vec2 vUV; varying vec2 vK;
+void main(){ vW = aP; vN = aN; vUV = aUV; vK = aK; gl_Position = uVP * vec4(aP, 1.0); }`;
 const HFS = `${PREC}
 varying vec3 vW; varying vec3 vN; varying vec2 vUV;
+// x: occlusione (pieghe, solchi tra i muscoli; 1 = all'aperto), y: quanto conta il chiaroscuro dipinto
+varying vec2 vK;
 uniform vec3 uEye; uniform vec3 uSkin; uniform sampler2D uTex; uniform float uMeanL; uniform float uTexOn; uniform vec4 uCut;
 // 1 = colore dell'immagine così com'è (occhi); 0 = tono della pelle scelta con le luci dell'immagine
 uniform float uRaw;
@@ -488,7 +490,8 @@ void main(){
     } else {
       float lt = dot(tx, vec3(0.2126, 0.7152, 0.0722));
       float l = lt / uMeanL;
-      alb *= mix(1.0, clamp(l, 0.55, 1.35), 0.75);
+      // dove la forma viene dall'atlante (muscoli veri) il chiaroscuro dipinto del personaggio conta poco
+      alb *= mix(1.0, clamp(l, 0.55, 1.35), 0.75 * vK.y);
       // un poco del colore dipinto (labbra, guance) sul tono scelto
       vec3 hue = tx / max(lt, 0.05);
       alb = mix(alb, alb * clamp(hue, 0.6, 1.6), 0.35);
@@ -504,13 +507,15 @@ void main(){
   float d1 = dot(N, L1);
   vec3 w = vec3(0.6, 0.32, 0.24);
   vec3 dif = max(vec3(0.0), (vec3(d1) + w) / (1.0 + w));
-  vec3 light = C1 * dif * 0.82 + C2 * wrapL(N, L2, 0.35) + amb * 1.15;
+  // occlusione: piena sulla luce diffusa del cielo, a metà su quella diretta (le pieghe restano morbide)
+  float ao = vK.x;
+  vec3 light = C1 * dif * 0.82 * mix(1.0, ao, 0.45) + C2 * wrapL(N, L2, 0.35) * ao + amb * 1.15 * ao;
   light += C3 * vec3(1.0, 0.55, 0.42) * pow(1.0 - ndv, 3.0) * wrapL(N, L3, 0.3) * 0.5;
   float nh = max(dot(N, H), 0.0);
   float F = 0.028 + 0.972 * pow(1.0 - ndv, 5.0);
   float sp = (pow(nh, 28.0) * 0.5 + pow(nh, 110.0) * 0.7) * F * step(0.0, d1);
   // dove la pelle è più ruvida il lucido si spegne, dove è liscia brilla un poco di più
-  sp *= clamp(1.0 - dS * 1.5, 0.4, 1.7);
+  sp *= clamp(1.0 - dS * 1.5, 0.4, 1.7) * ao;
   gl_FragColor = vec4(tone(alb * light + C1 * sp), 1.0);
 }`;
 
@@ -912,6 +917,7 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     aP: gl.getAttribLocation(hprog, "aP"),
     aN: gl.getAttribLocation(hprog, "aN"),
     aUV: gl.getAttribLocation(hprog, "aUV"),
+    aK: gl.getAttribLocation(hprog, "aK"),
     uVP: gl.getUniformLocation(hprog, "uVP"),
     uEye: gl.getUniformLocation(hprog, "uEye"),
     uSkin: gl.getUniformLocation(hprog, "uSkin"),
@@ -964,7 +970,7 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
   let skinBody: SkinBody | null = null;
   const bodyTex = gl.createTexture();
   const eyeTex = gl.createTexture();
-  type MeshGpu = { pos: WebGLBuffer; nrm: WebGLBuffer; uv: WebGLBuffer; ib: WebGLBuffer; count: number; p: Float32Array; n: Float32Array; m: SkinMesh; /** senza la testa (visuale dall'occhio) */ ibNoHead?: WebGLBuffer; countNoHead?: number };
+  type MeshGpu = { pos: WebGLBuffer; nrm: WebGLBuffer; uv: WebGLBuffer; k: WebGLBuffer; ib: WebGLBuffer; count: number; p: Float32Array; n: Float32Array; m: SkinMesh; /** senza la testa (visuale dall'occhio) */ ibNoHead?: WebGLBuffer; countNoHead?: number };
   let bodyGpu: { body: MeshGpu; eyes: MeshGpu } | null = null;
   const upTex = (t: WebGLTexture | null, im: HTMLImageElement) => {
     gl.bindTexture(gl.TEXTURE_2D, t);
@@ -986,7 +992,7 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
       gl.bufferData(target, data, usage);
       return b;
     };
-    return { pos: mk(new Float32Array(m.n * 3), gl.ARRAY_BUFFER, gl.DYNAMIC_DRAW), nrm: mk(new Float32Array(m.n * 3), gl.ARRAY_BUFFER, gl.DYNAMIC_DRAW), uv: mk(m.uv, gl.ARRAY_BUFFER, gl.STATIC_DRAW), ib: mk(m.idx, gl.ELEMENT_ARRAY_BUFFER, gl.STATIC_DRAW), count: m.idx.length, p: new Float32Array(m.n * 3), n: new Float32Array(m.n * 3), m };
+    return { pos: mk(new Float32Array(m.n * 3), gl.ARRAY_BUFFER, gl.DYNAMIC_DRAW), nrm: mk(new Float32Array(m.n * 3), gl.ARRAY_BUFFER, gl.DYNAMIC_DRAW), uv: mk(m.uv, gl.ARRAY_BUFFER, gl.STATIC_DRAW), k: mk(m.k, gl.ARRAY_BUFFER, gl.STATIC_DRAW), ib: mk(m.idx, gl.ELEMENT_ARRAY_BUFFER, gl.STATIC_DRAW), count: m.idx.length, p: new Float32Array(m.n * 3), n: new Float32Array(m.n * 3), m };
   };
   const skinLoaded: Promise<unknown> = !handOk
     ? Promise.resolve()
@@ -1059,15 +1065,36 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
       gl.enableVertexAttribArray(hl.aUV);
       gl.vertexAttribPointer(hl.aUV, 2, gl.FLOAT, false, 0, 0);
     }
+    if (hl.aK >= 0) {
+      gl.bindBuffer(gl.ARRAY_BUFFER, g.k);
+      gl.enableVertexAttribArray(hl.aK);
+      gl.vertexAttribPointer(hl.aK, 2, gl.FLOAT, false, 0, 0);
+    }
     const useNo = noHead && g.ibNoHead && g.countNoHead;
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, useNo ? g.ibNoHead! : g.ib);
     gl.drawElements(gl.TRIANGLES, useNo ? g.countNoHead! : g.count, gl.UNSIGNED_SHORT, 0);
   };
   /** pelle vera chiusa: il corpo del personaggio mosso dai segmenti e dalle mani vere */
-  const drawSkinBody = (meta: BodyMeta, skinMats: Float32Array, hands: RigPose[], VP: Float32Array, eye: V3) => {
+  const flexBuf: [number, number] = [0, 0];
+  const drawSkinBody = (meta: BodyMeta, skinMats: Float32Array, hands: RigPose[], VP: Float32Array, eye: V3, J: Record<number, V3>) => {
     if (!skinBody || !bodyGpu) return false;
+    // gomito chiuso (la mano della corda alla bocca): quel braccio torna alla forma del personaggio, che si piega bene
+    for (const [k, [a, b, c]] of [[0, [11, 13, 15]], [1, [12, 14, 16]]] as const) {
+      const sh = J[a];
+      const el = J[b];
+      const wr = J[c];
+      if (!sh || !el || !wr) {
+        flexBuf[k] = 0;
+        continue;
+      }
+      const cos = v3.dot(v3.norm(v3.sub(el, sh)), v3.norm(v3.sub(wr, el)));
+      const deg = (Math.acos(Math.max(-1, Math.min(1, cos))) * 180) / Math.PI;
+      const t = Math.max(0, Math.min(1, (deg - 55) / 60));
+      flexBuf[k] = t * t * (3 - 2 * t);
+    }
     const bones = bodyBones(meta, skinBody, skinMats, hands.map((h) => ({ side: h.side, pl: h.pl, bones: h.bones })));
-    skinMesh(bodyGpu.body.m, bones, bodyGpu.body.p, bodyGpu.body.n);
+    // la pelle si gonfia con i muscoli che lavorano (gli stessi valori del corpo dell'atlante)
+    skinMesh(bodyGpu.body.m, bones, bodyGpu.body.p, bodyGpu.body.n, bul, flexBuf);
     skinMesh(bodyGpu.eyes.m, bones, bodyGpu.eyes.p, bodyGpu.eyes.n);
     gl.useProgram(hprog);
     gl.uniformMatrix4fv(hl.uVP, false, VP);
@@ -1083,6 +1110,7 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     gl.disableVertexAttribArray(hl.aP);
     gl.disableVertexAttribArray(hl.aN);
     if (hl.aUV >= 0) gl.disableVertexAttribArray(hl.aUV);
+    if (hl.aK >= 0) gl.disableVertexAttribArray(hl.aK);
     gl.enable(gl.BLEND);
     gl.useProgram(prog);
     bound = "";
@@ -1098,6 +1126,11 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     gl.uniform1f(hl.uTexOn, rig.image ? 1 : 0);
     gl.uniform1f(hl.uRaw, 0);
     bindDetail(HAND_DETAIL_K);
+    // le mani vere da sole: niente occlusione cotta, chiaroscuro dipinto pieno
+    if (hl.aK >= 0) {
+      gl.disableVertexAttribArray(hl.aK);
+      gl.vertexAttrib2f(hl.aK, 1, 1);
+    }
     gl.uniform4fv(hl.uCut, cutNow);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, handTex);
@@ -1373,7 +1406,7 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     if (L.pelle && style === 2 && hands.length && skinBody && bodyGpu) {
       // pelle vera chiusa: il corpo intero del personaggio con le sue mani
       for (const a of bodyAttribs) if (a >= 0) gl.disableVertexAttribArray(a);
-      drawSkinBody(meta, skinMats, hands, VP, eye);
+      drawSkinBody(meta, skinMats, hands, VP, eye, J);
       gl.useProgram(bprog);
       for (const a of bodyAttribs) if (a >= 0) gl.enableVertexAttribArray(a);
     } else if (L.pelle && style === 2) {
