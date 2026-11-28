@@ -8,7 +8,7 @@ import { flexInfo, flexValues, skinWithMuscles, type FlexInfo } from "./anatomy-
 import { loadGlb } from "./glb-geo";
 import { sides } from "./pose-analysis";
 import { bowGrip, drawHook, freeHand, handLength, loadHandRig, placeApply, skinHand, type HandRig, type Placement, type RigHand } from "./hand-rig";
-import { bodyBones, loadSkinBody, loadSkinDetail, skinMesh, type SkinBody, type SkinMesh } from "./skin-body";
+import { atlasSkinBones, bodyBones, loadSkinBody, loadSkinDetail, skinMesh, type SkinBody, type SkinMesh } from "./skin-body";
 /** la grana della pelle si ripete 11 volte sul lato dell'immagine del corpo (circa 12 cm di pelle) */
 const SKIN_DETAIL_K = 11;
 /** sulle mani vere: la loro immagine è un ritaglio di 0,64 lati di quella del corpo, la stessa grana */
@@ -447,6 +447,8 @@ uniform vec4 uBack;
 uniform sampler2D uDet; uniform sampler2D uDnm; uniform float uDetOn; uniform float uDetK;
 // rilievo del corpo dalle tavole (addominali, dorsali, vene): normal map nello spazio delle uv del corpo
 uniform sampler2D uRil; uniform float uRilOn;
+// pelle vera sopra muscoli e ossa: trasparente al centro, piena sul contorno (si vede dove finisce il corpo)
+uniform float uVeil;
 vec3 tone(vec3 c){ c = clamp((c * (2.51 * c + 0.03)) / (c * (2.43 * c + 0.59) + 0.14), 0.0, 1.0); return pow(c, vec3(1.0 / 2.2)); }
 float wrapL(vec3 N, vec3 L, float w){ return max(0.0, (dot(N, L) + w) / (1.0 + w)); }
 void main(){
@@ -535,7 +537,8 @@ void main(){
   float sp = (pow(nh, 28.0) * 0.5 + pow(nh, 110.0) * 0.7) * F * step(0.0, d1);
   // dove la pelle è più ruvida il lucido si spegne, dove è liscia brilla un poco di più
   sp *= clamp(1.0 - dS * 1.5, 0.4, 1.7) * ao;
-  gl_FragColor = vec4(tone(alb * light + C1 * sp), 1.0);
+  float va = uVeil > 0.0 ? clamp(uVeil + (1.0 - uVeil) * pow(1.0 - ndv, 2.4), 0.0, 1.0) : 1.0;
+  gl_FragColor = vec4(tone(alb * light + C1 * sp), va);
 }`;
 
 export function perspective(fov: number, aspect: number, near: number, far: number) {
@@ -954,6 +957,7 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     uDnm: gl.getUniformLocation(hprog, "uDnm"),
     uDetOn: gl.getUniformLocation(hprog, "uDetOn"),
     uDetK: gl.getUniformLocation(hprog, "uDetK"),
+    uVeil: gl.getUniformLocation(hprog, "uVeil"),
   };
   // grana della pelle (pacchetto pelle): due immagini piccole che si ripetono, con le mipmap
   const detTex = gl.createTexture();
@@ -1084,6 +1088,8 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
       }
     });
+  /** la pelle in posa si carica una volta per fotogramma anche se si disegna in più passate */
+  let uploaded: MeshGpu | null = null;
   const drawMesh = (g: MeshGpu, tex: WebGLTexture | null, texOn: boolean, raw: boolean, meanL: number, noHead = false, /** solo questi indici (inizio, quanti) e uv × scala */ range?: [number, number, number], relief = false) => {
     gl.uniform1f(hl.uUvScale, range ? range[2] : 1);
     gl.uniform1f(hl.uRilOn, relief && reliefOn ? 1 : 0);
@@ -1099,12 +1105,14 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.uniform1i(hl.uTex, 0);
+    const up = uploaded !== g;
+    uploaded = g;
     gl.bindBuffer(gl.ARRAY_BUFFER, g.pos);
-    gl.bufferSubData(gl.ARRAY_BUFFER, 0, g.p);
+    if (up) gl.bufferSubData(gl.ARRAY_BUFFER, 0, g.p);
     gl.enableVertexAttribArray(hl.aP);
     gl.vertexAttribPointer(hl.aP, 3, gl.FLOAT, false, 0, 0);
     gl.bindBuffer(gl.ARRAY_BUFFER, g.nrm);
-    gl.bufferSubData(gl.ARRAY_BUFFER, 0, g.n);
+    if (up) gl.bufferSubData(gl.ARRAY_BUFFER, 0, g.n);
     gl.enableVertexAttribArray(hl.aN);
     gl.vertexAttribPointer(hl.aN, 3, gl.FLOAT, false, 0, 0);
     gl.bindBuffer(gl.ARRAY_BUFFER, g.uv);
@@ -1125,8 +1133,9 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
   };
   /** pelle vera chiusa: il corpo del personaggio mosso dai segmenti e dalle mani vere */
   const flexBuf: [number, number] = [0, 0];
-  const drawSkinBody = (meta: BodyMeta, skinMats: Float32Array, hands: RigPose[], VP: Float32Array, eye: V3, J: Record<number, V3>) => {
+  const drawSkinBody = (meta: BodyMeta, skinMats: Float32Array, hands: RigPose[], VP: Float32Array, eye: V3, J: Record<number, V3>, /** sopra muscoli e ossa: trasparenza al centro (0 = pelle piena) */ veil = 0) => {
     if (!skinBody || !bodyGpu) return false;
+    uploaded = null;
     // gomito chiuso (la mano della corda alla bocca): quel braccio torna alla forma del personaggio, che si piega bene
     for (const [k, [a, b, c]] of [[0, [11, 13, 15]], [1, [12, 14, 16]]] as const) {
       const sh = J[a];
@@ -1141,10 +1150,12 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
       const t = Math.max(0, Math.min(1, (deg - 55) / 60));
       flexBuf[k] = t * t * (3 - 2 * t);
     }
-    const bones = bodyBones(meta, skinBody, skinMats, hands.map((h) => ({ side: h.side, pl: h.pl, bones: h.bones })));
+    const hp = hands.map((h) => ({ side: h.side, pl: h.pl, bones: h.bones }));
+    // pelle mossa dall'atlante: gli stessi segmenti (e matrici) di muscoli e ossa, così resta sopra di loro
+    const bones = skinBody.atlasRig ? atlasSkinBones(meta, skinBody, skinMats, hp) : bodyBones(meta, skinBody, skinMats, hp);
     // la pelle si gonfia con i muscoli che lavorano (gli stessi valori del corpo dell'atlante)
-    skinMesh(bodyGpu.body.m, bones, bodyGpu.body.p, bodyGpu.body.n, bul, flexBuf);
-    skinMesh(bodyGpu.eyes.m, bones, bodyGpu.eyes.p, bodyGpu.eyes.n);
+    skinMesh(bodyGpu.body.m, bones, bodyGpu.body.p, bodyGpu.body.n, bul, skinBody.atlasRig ? null : flexBuf);
+    if (!skinBody.hideEyes) skinMesh(bodyGpu.eyes.m, skinBody.atlasRig ? bodyBones(meta, skinBody, skinMats, hp) : bones, bodyGpu.eyes.p, bodyGpu.eyes.n);
     gl.useProgram(hprog);
     gl.uniformMatrix4fv(hl.uVP, false, VP);
     gl.uniform3fv(hl.uEye, eye);
@@ -1156,11 +1167,31 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     const fromEye = cutNow[3] > 0;
     gl.uniform3fv(hl.uFaceSkin, skinBody.faceSkin);
     const hs = bodyGpu.body.m.headStart;
-    if (hs != null && skinBody.headImage) {
-      // corpo con la sua immagine, testa nuova con la foto del viso (dall'occhio dell'arciere la testa non c'è)
-      drawMesh(bodyGpu.body, bodyTex, Boolean(skinBody.image), false, skinBody.meanLuma, fromEye, [0, hs, 1], true);
-      if (!fromEye) drawMesh(bodyGpu.body, headTex, true, false, skinBody.meanLuma, false, [hs, bodyGpu.body.count - hs, skinBody.headUvScale]);
-    } else drawMesh(bodyGpu.body, bodyTex, Boolean(skinBody.image), false, skinBody.meanLuma, fromEye, undefined, true);
+    const skinPass = () => {
+      if (hs != null && skinBody!.headImage) {
+        // corpo con la sua immagine, testa nuova con la foto del viso (dall'occhio dell'arciere la testa non c'è)
+        drawMesh(bodyGpu!.body, bodyTex, Boolean(skinBody!.image), false, skinBody!.meanLuma, fromEye, [0, hs, 1], true);
+        if (!fromEye) drawMesh(bodyGpu!.body, headTex, true, false, skinBody!.meanLuma, false, [hs, bodyGpu!.body.count - hs, skinBody!.headUvScale]);
+      } else drawMesh(bodyGpu!.body, bodyTex, Boolean(skinBody!.image), false, skinBody!.meanLuma, fromEye, undefined, true);
+    };
+    gl.uniform1f(hl.uVeil, 0);
+    if (veil > 0) {
+      // velo: prima solo la profondità della pelle, poi il colore della superficie più vicina sopra muscoli e ossa
+      // (una sola pelle, niente strati sovrapposti)
+      gl.colorMask(false, false, false, false);
+      skinPass();
+      gl.colorMask(true, true, true, true);
+      gl.depthMask(false);
+      gl.depthFunc(gl.LEQUAL);
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      gl.uniform1f(hl.uVeil, veil);
+      skinPass();
+      gl.uniform1f(hl.uVeil, 0);
+      gl.depthFunc(gl.LESS);
+      gl.depthMask(true);
+      gl.disable(gl.BLEND);
+    } else skinPass();
     // occhi del personaggio solo se la testa non ha la foto del viso
     if (!fromEye && !skinBody.hideEyes) drawMesh(bodyGpu.eyes, eyeTex, Boolean(skinBody.eyeImage), true, 0.5);
     gl.disableVertexAttribArray(hl.aP);
@@ -1184,6 +1215,7 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     bindDetail(HAND_DETAIL_K);
     gl.uniform1f(hl.uUvScale, 1);
     gl.uniform1f(hl.uRilOn, 0);
+    gl.uniform1f(hl.uVeil, 0);
     // le mani vere da sole: niente occlusione cotta, chiaroscuro dipinto pieno
     if (hl.aK >= 0) {
       gl.disableVertexAttribArray(hl.aK);
@@ -1464,7 +1496,8 @@ export function createAnatomyRenderer(canvas: HTMLCanvasElement, keep = false) {
     if (L.pelle && style === 2 && hands.length && skinBody && bodyGpu) {
       // pelle vera chiusa: il corpo intero del personaggio con le sue mani
       for (const a of bodyAttribs) if (a >= 0) gl.disableVertexAttribArray(a);
-      drawSkinBody(meta, skinMats, hands, VP, eye, J);
+      // con muscoli o scheletro accesi la pelle vera diventa un velo sopra di loro: si vede che li riveste
+      drawSkinBody(meta, skinMats, hands, VP, eye, J, L.muscolo || L.osso ? 0.4 : 0);
       gl.useProgram(bprog);
       for (const a of bodyAttribs) if (a >= 0) gl.enableVertexAttribArray(a);
     } else if (L.pelle && style === 2) {
@@ -1819,9 +1852,10 @@ export function poseBody(meta: BodyMeta, model: Model, curl: Float32Array = new 
       grips.hook.k > 0.3 ? { side: grips.hook.side, base: grips.hook.side === "L" ? 33 : 54, at: pts.nock, hole: "hook" as const } : null,
     ]);
   }
-  // ossa e muscoli restano quelli dell'atlante; la corporatura dell'arciere (aura: grasso, vestiti) è nella pelle
+  // la pelle segue ossa e muscoli: stesse matrici (la corporatura stimata dall'aura non gonfia più la sola pelle,
+  // che si staccava dai muscoli: collo e spalle grossi, testa piccola)
   let mats = bodyMatrices(meta, J, look, grips, curl, fing, undefined, model.palms);
-  let skinMats = model.build ? bodyMatrices(meta, J, look, grips, undefined, undefined, model.build, model.palms) : mats;
+  let skinMats = mats;
   // mani vere: il polso della sagoma va al polso della mano che tiene arco o corda
   let hands: RigPose[] = [];
   if (rig) {
@@ -1837,7 +1871,7 @@ export function poseBody(meta: BodyMeta, model: Model, curl: Float32Array = new 
     }
     if (moved) {
       mats = bodyMatrices(meta, J, look, grips, curl, fing, undefined, model.palms);
-      skinMats = model.build ? bodyMatrices(meta, J, look, grips, undefined, undefined, model.build, model.palms) : mats;
+      skinMats = mats;
     }
   }
   // in trazione la corda passa davanti al petto e sfiora al più bocca e mandibola: se il corpo ricostruito
@@ -1884,7 +1918,7 @@ export function poseBody(meta: BodyMeta, model: Model, curl: Float32Array = new 
       for (const i of body) if (J0[i]) J[i] = v3.add(J0[i], shift);
       for (const i of half) if (J0[i]) J[i] = v3.add(J0[i], v3.mul(shift, 0.5));
       mats = bodyMatrices(meta, J, look, grips, curl, fing, undefined, model.palms);
-      skinMats = model.build ? bodyMatrices(meta, J, look, grips, undefined, undefined, model.build, model.palms) : mats;
+      skinMats = mats;
     }
     // entrando e uscendo dalla trazione lo spostamento cresce e cala piano (niente corpo che salta)
     const k = Math.min(1, Math.max(0, ((model.grip?.draw ?? 0) - 0.3) / 0.25));
@@ -1894,7 +1928,7 @@ export function poseBody(meta: BodyMeta, model: Model, curl: Float32Array = new 
       for (const i of body) if (J0[i]) J[i] = v3.add(J0[i], v3.mul(shift, kk));
       for (const i of half) if (J0[i]) J[i] = v3.add(J0[i], v3.mul(shift, 0.5 * kk));
       mats = bodyMatrices(meta, J, look, grips, curl, fing, undefined, model.palms);
-      skinMats = model.build ? bodyMatrices(meta, J, look, grips, undefined, undefined, model.build, model.palms) : mats;
+      skinMats = mats;
     }
   }
   return { J, mats, skinMats, grips, look, hands };

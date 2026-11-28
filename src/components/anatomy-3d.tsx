@@ -295,7 +295,8 @@ function paintAimHud(ctx: CanvasRenderingContext2D, VP: Float32Array, info: AimI
 const AIM_LAYERS: Record<Layer, boolean> = { pelle: true, muscolo: false, osso: false, punti: false, quote: false };
 /** il tono di pelle scelto nell'avatar (se c'è), altrimenti quello del personaggio della prova 3D */
 /** con la pelle vera la sagoma è chiusa: dentro non si vedono muscoli e ossa, non si disegnano */
-const realLayers = (L: Record<Layer, boolean>): Record<Layer, boolean> => ({ ...L, pelle: true, muscolo: false, osso: false });
+// pelle vera: muscoli e scheletro restano come scelti, sotto la pelle che li riveste (trasparente se accesi)
+const realLayers = (L: Record<Layer, boolean>): Record<Layer, boolean> => ({ ...L, pelle: true });
 function avatarSkin(): string | null {
   try {
     const raw = localStorage.getItem(AVATAR_KEY);
@@ -1448,7 +1449,7 @@ export function Anatomy3D({
             Postura corretta
           </button>
         )}
-        {aim ? null : ([["pelle", "Corpo"], ["muscolo", "Muscoli"], ["osso", "Scheletro"], ["punti", "Punti"], ["quote", "Misure"]] as const).filter(([k]) => !real || k === "punti" || k === "quote").map(([k, label]) => (
+        {aim ? null : ([["pelle", "Corpo"], ["muscolo", "Muscoli"], ["osso", "Scheletro"], ["punti", "Punti"], ["quote", "Misure"]] as const).filter(([k]) => !real || k !== "pelle").map(([k, label]) => (
           <button key={k} type="button" aria-pressed={layers[k]} onClick={() => toggle(k)} className={cx("min-h-8 rounded-full px-2.5 text-[0.7rem] font-semibold backdrop-blur", layers[k] ? chipOn : chipOff)}>
             {label}
           </button>

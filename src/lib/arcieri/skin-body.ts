@@ -9,13 +9,13 @@ import { v3, type V3 } from "./anatomy-model";
 import type { BodyMeta } from "./anatomy-body";
 
 type MeshJson = { n: number; vOffset: number; iOffset: number; indices: number; /** dove cominciano gli indici della testa (con uv e immagine loro) */ headStart?: number };
-type BodyJson = { stride: number; meshes: { corpo: MeshJson; occhi: MeshJson }; joints: { name: string; parent: number; rest: number[] }[]; /** byte in più per vertice (scripts/anatomia/wrap_skin.py) */ extra?: { group: number; bulge: number; ao: number; paint: number; bulgeScale: number; delta?: number; zone?: number; nrm0?: number; face?: number }; /** occhi del personaggio nascosti (occhi dalla foto del viso) */ hideEyes?: boolean; /** pelle della foto del viso, colore lineare */ faceSkin?: number[]; headUvScale?: number; relief?: boolean };
+type BodyJson = { stride: number; meshes: { corpo: MeshJson; occhi: MeshJson }; joints: { name: string; parent: number; rest: number[] }[]; /** byte in più per vertice (scripts/anatomia/wrap_skin.py) */ extra?: { group: number; bulge: number; ao: number; paint: number; bulgeScale: number; delta?: number; zone?: number; nrm0?: number; face?: number }; /** occhi del personaggio nascosti (occhi dalla foto del viso) */ hideEyes?: boolean; /** "atlante": pelle a riposo nello spazio dell'atlante, mossa dai suoi segmenti (indici 0..20) e dalle ossa delle mani (21 + osso) */ rig?: string; segments?: string[]; /** per ogni osso del personaggio: dal riposo dell'atlante al suo spazio (3x3 a righe, poi traslazione) */ restInv?: number[][]; /** pelle della foto del viso, colore lineare */ faceSkin?: number[]; headUvScale?: number; relief?: boolean };
 export type SkinMesh = {
   n: number;
   pos: Float32Array;
   nrm: Float32Array;
   uv: Float32Array;
-  jo: Uint8Array;
+  jo: Uint8Array | Uint16Array;
   wt: Float32Array;
   idx: Uint16Array;
   /** muscolo sotto la pelle (gruppo dell'atlante) e quanto la pelle si gonfia con lui (metri per metro) */
@@ -32,7 +32,7 @@ export type SkinMesh = {
   /** indici della testa nuova (dopo quelli del corpo): uv sferiche (× uvScale) e immagine pelle-testa.jpg */
   headStart: number | null;
 };
-export type SkinBody = { body: SkinMesh; eyes: SkinMesh; names: string[]; heads: V3[]; parent: number[]; image: HTMLImageElement | null; eyeImage: HTMLImageElement | null; meanLuma: number; hideEyes: boolean; faceSkin: [number, number, number]; /** testa nuova (foto del viso) */ headImage: HTMLImageElement | null; headUvScale: number; /** rilievo del corpo dalle tavole (normal map nello spazio delle uv) */ reliefImage: HTMLImageElement | null };
+export type SkinBody = { /** pelle mossa dai segmenti dell'atlante, come muscoli e ossa (vedi atlasSkinBones) */ atlasRig: boolean; restInv: Aff[] | null; body: SkinMesh; eyes: SkinMesh; names: string[]; heads: V3[]; parent: number[]; image: HTMLImageElement | null; eyeImage: HTMLImageElement | null; meanLuma: number; hideEyes: boolean; faceSkin: [number, number, number]; /** testa nuova (foto del viso) */ headImage: HTMLImageElement | null; headUvScale: number; /** rilievo del corpo dalle tavole (normal map nello spazio delle uv) */ reliefImage: HTMLImageElement | null };
 
 let bodyP: Promise<SkinBody | null> | null = null;
 const img = (src: string) =>
@@ -115,8 +115,13 @@ export function loadSkinBody(base = "/anatomia/pelle"): Promise<SkinBody | null>
           meanLuma = s / (d.length / 4);
         }
       }
+      const body = dec(js.meshes.corpo);
+      const atlasRig = js.rig === "atlante" && Array.isArray(js.restInv);
+      if (atlasRig) neckWaist(body, js.segments ?? []);
       return {
-        body: dec(js.meshes.corpo),
+        atlasRig,
+        restInv: atlasRig ? js.restInv!.map((a) => ({ r: a.slice(0, 9), t: [a[9], a[10], a[11]] as V3 })) : null,
+        body,
         eyes: dec(js.meshes.occhi),
         names: js.joints.map((j) => j.name),
         heads: js.joints.map((j) => [j.rest[12], j.rest[13], j.rest[14]] as V3),
@@ -417,6 +422,68 @@ export function skinMesh(m: SkinMesh, bones: Aff[], outP: Float32Array, outN: Fl
     outN[i3 + 1] = qy * l;
     outN[i3 + 2] = qz * l;
   }
+}
+
+/**
+ * Collo (torace-testa) e vita (bacino-torace): con la testa girata di 80-90° verso il bersaglio la media delle due
+ * matrici stringeva il collo (testa "a fungo"). Lì i due pesi diventano due ossa vicine tra le NQ rotazioni
+ * interpolate davvero attorno al giunto (vedi atlasSkinBones): la pelle gira come una torsione, senza strozzature.
+ */
+const NQ = 16;
+const PAIRS: [string, string][] = [["torace", "testa"], ["bacino", "torace"]];
+let pairIdx: [number, number][] = [];
+function neckWaist(m: SkinMesh, segs: string[]) {
+  pairIdx = PAIRS.map(([a, b]) => [segs.indexOf(a), segs.indexOf(b)]);
+  const NJ = 21 + 65;
+  const jo = new Uint16Array(m.jo.length);
+  jo.set(m.jo);
+  for (let i = 0; i < m.n; i++) {
+    const o = i * 4;
+    for (let p = 0; p < pairIdx.length; p++) {
+      const [a, b] = pairIdx[p];
+      let ka = -1;
+      let kb = -1;
+      for (let k = 0; k < 4; k++) {
+        if (m.wt[o + k] <= 0) continue;
+        if (jo[o + k] === a) ka = k;
+        else if (jo[o + k] === b) kb = k;
+      }
+      if (ka < 0 || kb < 0) continue;
+      const wa = m.wt[o + ka];
+      const wb = m.wt[o + kb];
+      const f = (wb / (wa + wb)) * NQ;
+      const q = Math.min(NQ - 1, Math.floor(f));
+      const u = f - q;
+      // ossa q e q + 1 della coppia (0 = tutto a, NQ = tutto b)
+      const bone = (k: number) => (k <= 0 ? a : k >= NQ ? b : NJ + p * (NQ - 1) + (k - 1));
+      jo[o + ka] = bone(q);
+      m.wt[o + ka] = (wa + wb) * (1 - u);
+      jo[o + kb] = bone(q + 1);
+      m.wt[o + kb] = (wa + wb) * u;
+    }
+  }
+  m.jo = jo;
+}
+
+/**
+ * Ossa della pelle vera mossa dall'atlante: i 21 segmenti con le stesse matrici di muscoli e ossa (la pelle resta
+ * sopra di loro in ogni posa), le ossa del personaggio portate al riposo dell'atlante (servono solo le mani vere)
+ * e le rotazioni interpolate di collo e vita.
+ */
+export function atlasSkinBones(meta: BodyMeta, sb: SkinBody, mats: Float32Array, hands: HandPose[]): Aff[] {
+  const nSeg = 21;
+  const out: Aff[] = [];
+  for (let s = 0; s < nSeg; s++) out.push(s < meta.segments.length ? segAff(mats, s) : { r: [1, 0, 0, 0, 1, 0, 0, 0, 1], t: [0, 0, 0] });
+  const qb = bodyBones(meta, sb, mats, hands);
+  for (let k = 0; k < 65; k++) out.push(k < qb.length && sb.restInv?.[k] ? affComp(qb[k], sb.restInv[k]) : { r: [1, 0, 0, 0, 1, 0, 0, 0, 1], t: [0, 0, 0] });
+  const rest = (k: string) => meta.rest[k] as V3;
+  const shM = v3.lerp(rest("11"), rest("12"), 0.5);
+  const hipM = v3.lerp(rest("23"), rest("24"), 0.5);
+  const pivots: V3[] = [shM, v3.lerp(hipM, shM, 0.25)];
+  pairIdx.forEach(([a, b], p) => {
+    for (let q = 1; q < NQ; q++) out.push(a >= 0 && b >= 0 ? affBlend(out[a], out[b], q / NQ, pivots[p]) : out[Math.max(0, a)]);
+  });
+  return out;
 }
 
 let detailP: Promise<{ det: HTMLImageElement; nrm: HTMLImageElement } | null> | null = null;

@@ -42,9 +42,11 @@ dell'atlante dove c'è (BodyParts3D, CC BY 4.0) e la grana del pacchetto pelle d
     python3 skin_detail.py <cartella del pacchetto pelle> ../../public/anatomia
 
 - `wrap_rest.ts` mette le ossa del personaggio nel riposo dell'atlante con il codice dell'app;
-- `wrap_skin.py` divide i triangoli, porta la pelle sulla forma dell'atlante (muscoli veri), riempie i buchi,
-  prende il muscolo sotto ogni punto (la pelle si gonfia con lui), cuoce l'occlusione e i dati per il braccio
-  piegato (a gomito chiuso torna la forma del personaggio, che si piega senza lembi);
+- `wrap_skin.py` divide i triangoli, porta la pelle sulla forma dell'atlante (muscoli veri, spalle e gomiti
+  compresi; la testa prima allineata a quella dell'atlante, orecchie del personaggio tenute), riempie i buchi,
+  prende i pesi dai muscoli e dalle ossa sotto ogni punto (nell'app la pelle si muove con le loro stesse matrici e
+  resta sopra di loro in ogni posa; collo e vita con rotazioni interpolate), prende il muscolo sotto ogni punto
+  (la pelle si gonfia con lui) e cuoce l'occlusione;
 - `bake_face.py` fa la testa nuova: la foto del viso del pacchetto (occhi aperti) deformata sulla testa
   dell'atlante con punti di riferimento, capelli rasati ai lati e dietro, in `pelle-testa.jpg` (uv sferiche);
   `pelle.rest.npz` è un file di passaggio, non va nel sito;

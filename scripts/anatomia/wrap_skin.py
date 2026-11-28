@@ -5,8 +5,13 @@ pelle dell'atlante (BodyParts3D, che segue i muscoli veri) senza i suoi buchi.
 1. ogni triangolo del personaggio si divide in quattro (più punti per seguire i muscoli);
 2. il personaggio si mette nel riposo dell'atlante con le stesse ossa dell'app (rest-bones.json, da
    scripts/anatomia/wrap_rest.ts) e ogni punto va sul punto più vicino della pelle dell'atlante con la
-   normale concorde; dove l'atlante ha buchi (ascelle) o è lontano lo spostamento si riempie dai vicini;
-   testa, mani e dita dei piedi restano quelli del personaggio (occhi, dita vere), con un passaggio morbido;
+   normale concorde, spalle e gomiti compresi; dove l'atlante ha buchi (ascelle) o è lontano lo spostamento si
+   riempie dai vicini; mani e dita dei piedi restano quelle del personaggio (dita vere). La testa prima si porta
+   su quella dell'atlante (scala e spostamento per asse), poi come il resto; le orecchie (l'atlante non le ha)
+   seguono la pelle attorno, gli occhi si appiattiscono di fronte (arrivano dalla foto del viso);
+2b. pesi: ogni punto si muove con i segmenti dei muscoli e delle ossa dell'atlante sotto di lui (le stesse matrici
+   nell'app), mano, dita e pollice dell'atlante passano alle ossa delle mani vere: in ogni posa la pelle riveste
+   i suoi muscoli e le sue ossa;
 3. dalla pelle dell'atlante si prende anche il muscolo sotto (gruppo, ventre, quanto la pelle lo segue):
    nell'app la pelle si gonfia con il muscolo che lavora, come quella dell'atlante;
 4. occlusione ambientale (pieghe, sotto i pettorali, glutei) dentro ogni parte del corpo, più la cavità
@@ -14,14 +19,16 @@ pelle dell'atlante (BodyParts3D, che segue i muscoli veri) senza i suoi buchi.
 5. quanto conta il chiaroscuro dipinto: tutto su testa e mani, poco dove la forma viene dall'atlante.
 
 Uscita: pelle.bin / pelle.json con 15 byte in più per vertice (stride 42): gruppo, gonfiore, occlusione, dipinto,
-quanto togliere della forma dell'atlante a gomito chiuso (3 int16, decimi di mm), lato/peso della zona del braccio,
-la normale della forma del personaggio (3 int8) e quanto conta la foto del viso; più pelle.rest.npz per bake_face.py.
+10 byte liberi (erano il ritorno alla forma del personaggio a gomito chiuso) e quanto conta la foto del viso. Il corpo
+è a riposo nello spazio dell'atlante; giunti 0..20 = segmenti dell'atlante, 21 + k = ossa del personaggio (le mani),
+con restInv in pelle.json. Più pelle.rest.npz e pelle.body.npz per bake_face.py e bake_relief.py.
 
 Uso (vedi LEGGIMI.md):
   node /tmp/wrap_rest.mjs public/anatomia/corpo.json <pelle originale>.json > rest-bones.json
   python3 scripts/anatomia/wrap_skin.py <pelle originale senza estensione> <rest-bones.json> <corpo atlante> <uscita>
 """
 import json
+import os
 import sys
 
 import numpy as np
@@ -67,6 +74,23 @@ def load_anat(path):
     P = lo + raw[:, 0:6].copy().view("<u2").reshape(n, 3) / 65535.0 * (hi - lo)
     idx = np.frombuffer(b, "<u2", sk["indices"], sk["iOffset"]).reshape(-1, 3).astype(np.int64)
     return P, idx
+
+
+def load_atlas_all(path):
+    """tutti i vertici dell'atlante (ossa, muscoli, pelle) a riposo, con i due segmenti e il peso del primo"""
+    j = json.load(open(path + ".json"))
+    b = open(path + ".bin", "rb").read()
+    st = j["stride"]
+    lo, hi = np.array(j["lo"]), np.array(j["hi"])
+    P, J, W, L = [], [], [], []
+    for bt in j["batches"]:
+        n = bt["vertices"]
+        raw = np.frombuffer(b, np.uint8, n * st, bt["vOffset"]).reshape(n, st)
+        P.append(lo + raw[:, 0:6].copy().view("<u2").reshape(n, 3) / 65535.0 * (hi - lo))
+        J.append(raw[:, 9:11].astype(np.int64))
+        W.append(raw[:, 11].astype(np.float64) / 255)
+        L.append(np.full(n, {"bone": 0, "muscle": 1, "skin": 2}[bt["layer"]]))
+    return j["segments"], np.concatenate(P), np.concatenate(J), np.concatenate(W), np.concatenate(L)
 
 
 def load_muscles(path):
@@ -376,7 +400,9 @@ def main():
     c2 = classes[np.argmax(cw2, 1)]
     arm = np.array([("up" in a or "up" in b) for a, b in zip(c1, c2)])
     jf = np.where(arm, 1 - smoothstep(0.04, 0.3, mixing), 1 - 0.6 * smoothstep(0.08, 0.4, mixing))
-    keep = keep * jf
+    # la pelle si muove con gli stessi segmenti di muscoli e ossa (pesi dell'atlante, più sotto): anche spalla e
+    # gomito prendono la forma dell'atlante, senza il compromesso «forma del personaggio fatta per piegarsi»
+    del jf
     # braccio piegato: a braccio disteso la forma dell'atlante; quando il gomito si chiude molto (la mano della
     # corda alla bocca) nell'app avambraccio e braccio tornano verso la forma del personaggio, fatta per
     # piegarsi: i muscoli più pieni dell'atlante si compenetrerebbero facendo lembi. Qui solo quanto
@@ -397,80 +423,80 @@ def main():
     for _ in range(6):
         kw = 0.5 * kw + 0.5 * avg(kw)
 
-    # ---- punto più vicino sulla pelle dell'atlante (normale concorde)
+    # ---- testa: quella del personaggio è più alta di circa 5 cm e ha il viso 2 cm più avanti dell'atlante. Prima si
+    # porta tutta sulla testa dell'atlante con scala e spostamento per asse (stimati sui punti), poi ogni punto va
+    # sulla pelle dell'atlante come il resto del corpo: una sola regola, niente piega alle tempie (prima il viso
+    # andava solo in profondità e il cranio lungo il raggio, due superfici diverse)
     P, AI = load_anat(anat_path)
+    head_w = np.zeros(nw)
+    np.add.at(head_w, wid, wsum(is_head))
+    head_w /= np.bincount(wid, minlength=nw)
+    hb = head_w.copy()
+    for _ in range(6):
+        hb = 0.5 * hb + 0.5 * avg(hb)
+    hb = smoothstep(0.15, 0.6, hb)
+    Ah = P[P[:, 1] > 1.50]
+    hq = qw[(head_w > 0.6) & (qw[:, 1] > 1.53)]
+    sc, off = np.ones(3), np.zeros(3)
+    th = cKDTree(Ah)
+    for _ in range(40):
+        _, ii = th.query(hq * sc + off)
+        y = Ah[ii]
+        for a in range(3):
+            sc[a], off[a] = np.linalg.lstsq(np.stack([hq[:, a], np.ones(len(hq))], 1), y[:, a], rcond=None)[0]
+    qa = qw + hb[:, None] * (qw * sc + off - qw)
+    nqa = vnormals(qa, triw)
+    print("testa sulla testa dell'atlante: scala", sc.round(3), "spostamento medio (cm)", round(float(np.linalg.norm((qa - qw)[head_w > 0.6], axis=1).mean() * 100), 2))
+
+    # ---- punto più vicino sulla pelle dell'atlante (normale concorde)
     tn = np.cross(P[AI[:, 1]] - P[AI[:, 0]], P[AI[:, 2]] - P[AI[:, 0]])
     tn /= np.maximum(np.linalg.norm(tn, axis=1, keepdims=True), 1e-12)
     cen = P[AI].mean(1)
     K = 16
-    _, cand = cKDTree(cen).query(qw, K)
+    _, cand = cKDTree(cen).query(qa, K)
     best_d = np.full(nw, np.inf)
-    best_p = qw.copy()
-    best_t = np.zeros(nw, np.int64)
-    best_b = np.zeros((nw, 3))
+    best_p = qa.copy()
     for k in range(K):
         tr = cand[:, k]
-        cp, bary = closest_on_tris(qw, P[AI[tr, 0]], P[AI[tr, 1]], P[AI[tr, 2]])
-        d = np.linalg.norm(cp - qw, axis=1)
-        agree = (tn[tr] * nqw).sum(1) > 0.25
+        cp, bary = closest_on_tris(qa, P[AI[tr, 0]], P[AI[tr, 1]], P[AI[tr, 2]])
+        d = np.linalg.norm(cp - qa, axis=1)
+        agree = (tn[tr] * nqa).sum(1) > 0.25
         better = agree & (d < best_d)
-        best_d[better], best_p[better], best_t[better], best_b[better] = d[better], cp[better], tr[better], bary[better]
+        best_d[better], best_p[better] = d[better], cp[better]
     # bordi dei buchi dell'atlante (lati con un triangolo solo)
     e = np.sort(np.concatenate([AI[:, [0, 1]], AI[:, [1, 2]], AI[:, [2, 0]]]), 1)
     ue, cnt = np.unique(e, axis=0, return_counts=True)
     bverts = np.unique(ue[cnt == 1])
     db = cKDTree(P[bverts]).query(best_p)[0] if len(bverts) else np.full(nw, 1.0)
-    # la testa del personaggio è più grande di quella dell'atlante (fino a 8-9 cm sulla nuca e in cima): lì si
-    # accetta un punto più lontano, se no il cranio resta grosso sopra il viso (a fungo)
-    hw0 = np.zeros(nw)
-    np.add.at(hw0, wid, wsum(is_head))
-    hw0 /= np.bincount(wid, minlength=nw)
     dd = np.where(np.isfinite(best_d), best_d, 1)
-    valid = np.isfinite(best_d) * (1 - smoothstep(0.03 + 0.05 * hw0, 0.05 + 0.06 * hw0, dd)) * smoothstep(0.006, 0.03, db)
-    print("distanza dall'atlante (cm):", np.percentile(best_d[np.isfinite(best_d)] * 100, [50, 90, 99]).round(2), "validi", round(float((valid > 0.5).mean()), 3))
+    valid = np.isfinite(best_d) * (1 - smoothstep(0.03, 0.05, dd)) * smoothstep(0.006, 0.03, db)
+    # orecchie: l'atlante non le ha; quelle del personaggio seguono la pelle attorno (spostamento dai vicini)
+    ax_ = np.abs(qa[:, 0])
+    ear = (head_w > 0.5) & (ax_ > 0.06) & (qa[:, 1] > 1.55) & (qa[:, 1] < 1.68) & (qa[:, 2] > -0.06) & (qa[:, 2] < 0.035) & (dd > 0.004)
+    valid[ear] = 0
+    print("distanza dall'atlante (cm):", np.percentile(best_d[np.isfinite(best_d)] * 100, [50, 90, 99]).round(2), "validi", round(float((valid > 0.5).mean()), 3), "orecchie", int(ear.sum()))
 
-    # ---- viso: la pelle davanti va sulla superficie dell'atlante solo in profondità (lungo z), senza scorrere:
-    # le cavità del personaggio (occhi, narici) si appiattiscono invece di piegarsi sopra le sopracciglia
-    head_w = np.zeros(nw)
-    np.add.at(head_w, wid, wsum(is_head))
-    head_w /= np.bincount(wid, minlength=nw)
+    # ---- occhi: nell'atlante sono gallerie; lì la pelle va sulla profondità vista di fronte con le gallerie chiuse
+    # (gli occhi veri arrivano dalla foto del viso, su una superficie liscia)
     hsel = AI[P[AI][:, :, 1].min(1) > 1.45]
     zb, (fx0, fy1, ppm) = front_depth(P, hsel, -0.11, 0.11, 1.44, 1.78)
-    fx = (qw[:, 0] - fx0) * ppm
-    fy = (fy1 - qw[:, 1]) * ppm
+    fx = (qa[:, 0] - fx0) * ppm
+    fy = (fy1 - qa[:, 1]) * ppm
     ok_f = (fx >= 0) & (fx < zb.shape[1] - 1) & (fy >= 0) & (fy < zb.shape[0] - 1)
     zf = np.full(nw, -np.inf)
     ix, iy = np.clip(fx.astype(int), 0, zb.shape[1] - 1), np.clip(fy.astype(int), 0, zb.shape[0] - 1)
     zf[ok_f] = zb[iy[ok_f], ix[ok_f]]
-    # davanti: la pelle che guarda avanti, e tutto il viso (anche le pareti delle cavità degli occhi, che
-    # guardano di lato: con il punto più vicino finirebbero sulle tempie, stirate)
-    face_reg = smoothstep(0.015, 0.035, qw[:, 2]) * (1 - smoothstep(0.055, 0.07, np.abs(qw[:, 0])))
-    front = np.maximum(smoothstep(0.3, 0.65, nqw[:, 2]), face_reg) * smoothstep(0.2, 0.6, head_w) * np.isfinite(zf)
-    tgt = np.where(np.isfinite(best_d)[:, None], best_p, qw)
-    tgt = np.where(front[:, None] > 0, tgt * (1 - front[:, None]) + np.stack([qw[:, 0], qw[:, 1], np.where(np.isfinite(zf), zf, qw[:, 2])], 1) * front[:, None], tgt)
+    eyes = smoothstep(0.004, 0.012, ax_) * (1 - smoothstep(0.052, 0.062, ax_)) * smoothstep(1.572, 1.582, qa[:, 1]) * (1 - smoothstep(1.615, 1.625, qa[:, 1]))
+    front = eyes * smoothstep(0.0, 0.015, qa[:, 2]) * smoothstep(0.4, 0.7, head_w) * np.isfinite(zf)
+    tgt = np.where(np.isfinite(best_d)[:, None], best_p, qa)
+    tgt = np.where(front[:, None] > 0, tgt * (1 - front[:, None]) + np.stack([qa[:, 0], qa[:, 1], np.where(np.isfinite(zf), zf, qa[:, 2])], 1) * front[:, None], tgt)
     valid = np.maximum(valid, front)
-    print("viso proiettato di fronte:", int((front > 0.5).sum()), "punti")
-    # cranio (fuori dal viso): lungo il raggio dal centro della testa fino alla pelle dell'atlante. Con il punto più
-    # vicino la nuca finiva sul collo (un incavo sotto i capelli, testa a fungo)
-    CH0 = np.array([0.0, 1.61, -0.01])
-    hsel2 = AI[P[AI][:, :, 1].min(1) > 1.46]
-    RS = sphere_radius(P, hsel2, CH0)
-    dq = qw - CH0
-    rq = np.maximum(np.linalg.norm(dq, axis=1), 1e-9)
-    uq = ((np.arctan2(dq[:, 0], dq[:, 2]) / (2 * np.pi) + 0.5) * RS.shape[1]).astype(int) % RS.shape[1]
-    vq = np.clip((np.arccos(np.clip(dq[:, 1] / rq, -1, 1)) / np.pi * RS.shape[0]).astype(int), 0, RS.shape[0] - 1)
-    ra = RS[vq, uq]
-    # solo dove la direzione sta sopra il collo (v < 0,62: dall'alto fino sotto le orecchie)
-    vfrac = vq / RS.shape[0]
-    radial = smoothstep(0.3, 0.7, head_w) * (1 - smoothstep(0.6, 0.82, vfrac)) * (1 - front) * np.isfinite(ra)
-    rad_t = CH0 + dq / rq[:, None] * np.where(np.isfinite(ra), ra, rq)[:, None]
-    tgt = tgt * (1 - radial[:, None]) + rad_t * radial[:, None]
-    valid = np.maximum(valid, radial)
-    print("cranio lungo il raggio:", int((radial > 0.5).sum()), "punti")
+    # dove la pelle non va sull'atlante resta quella allineata (non quella di partenza)
+    tgt = np.where(valid[:, None] > 0, tgt, qa)
+    print("occhi di fronte:", int((front > 0.5).sum()), "punti")
 
     # ---- spostamento: dove l'atlante manca si riempie dai vicini, poi si ammorbidisce appena
-    D = tgt - qw
-    # le cavità appiattite lasciano triangoli rovesciati: i punti del viso si distendono sulla superficie
+    # le cavità appiattite lasciano triangoli rovesciati: i punti degli occhi si distendono sulla superficie
     # dell'atlante (media dei vicini in x, y, poi di nuovo sulla profondità vista di fronte)
     fm = front > 0.5
     xy = tgt[:, :2].copy()
@@ -482,13 +508,39 @@ def main():
         okz = fm & np.isfinite(z2)
         tgt[okz, 0], tgt[okz, 1], tgt[okz, 2] = xy[okz, 0], xy[okz, 1], z2[okz]
     D = tgt - qw
-    Df = D * valid[:, None]
+    if os.environ.get("WRAP_DEBUG"):
+        np.savez(os.environ["WRAP_DEBUG"], qw=qw, tgt=tgt, valid=valid, head_w=head_w, front=front, triw=triw, nqw=nqw)
+    # dove la pelle non va sull'atlante lo spostamento viene dai vicini; sulla testa si parte da quello
+    # dell'allineamento (orecchie comprese)
+    Df = D * valid[:, None] + (qa - qw) * (1 - valid[:, None])
     for _ in range(400):
         Df = valid[:, None] * D + (1 - valid[:, None]) * avg(Df)
     for lam in (0.5, -0.53, 0.5, -0.53):  # Taubin: liscia senza restringere
         Df = Df + lam * (avg(Df) - Df)
     disp = Df * kw[:, None]
     qn = qw + disp
+
+    # ---- pesi: ogni punto della pelle si muove con i segmenti dei tessuti dell'atlante sotto di lui (muscoli e ossa,
+    # gli stessi che li muovono nell'app), così in ogni posa la pelle resta sopra i suoi muscoli e le sue ossa.
+    # La pelle dell'atlante non conta: ha pesi a gradini (si strappa sulle spalle). Ammorbiditi sulla pelle.
+    segs, AP, AJ, AW, AL = load_atlas_all(anat_path)
+    tissue = AL != 2
+    AP, AJ, AW = AP[tissue], AJ[tissue], AW[tissue]
+    nseg = len(segs)
+    KW = 24
+    dA, iA = cKDTree(AP).query(qn, KW)
+    sig = np.maximum(0.012, 1.5 * dA[:, :1])
+    gA = np.exp(-((dA / sig) ** 2))
+    Wseg = np.zeros((nw, nseg))
+    rows = np.arange(nw)
+    for k in range(KW):
+        ii = iA[:, k]
+        np.add.at(Wseg, (rows, AJ[ii, 0]), gA[:, k] * AW[ii])
+        np.add.at(Wseg, (rows, AJ[ii, 1]), gA[:, k] * (1 - AW[ii]))
+    Wseg /= np.maximum(Wseg.sum(1, keepdims=True), 1e-12)
+    for _ in range(6):
+        Wseg = 0.5 * Wseg + 0.5 * avg(Wseg)
+    print("tessuto dell'atlante più vicino (cm):", np.percentile(dA[:, 0] * 100, [50, 90, 99]).round(2))
 
     # ---- muscolo sotto la pelle (il più vicino): gruppo, ventre, tendine; la pelle lo segue quanto gli è vicina
     MP, MG, MF, MT = load_muscles(anat_path)
@@ -557,8 +609,30 @@ def main():
     for _ in range(3):
         zw = 0.5 * zw + 0.5 * avg(zw)
     delta = np.einsum("vij,vj->vi", Minv, disp[wid] * zw[wid][:, None])
-    s = np.cbrt(np.abs(np.linalg.det(M)))
-    bulge = bk[wid] / np.maximum(s, 1e-6)
+    # pesi per ogni vertice: segmenti dell'atlante (0..20, sulla posizione a riposo) e ossa delle mani vere
+    # (21 + osso del personaggio): mano, dita e pollice dell'atlante passano alla mano vera
+    NJ = len(names)
+    Wc = np.zeros((n, nseg + NJ))
+    Wa = Wseg[wid]
+    for sd in ("L", "R"):
+        hj = nseg + names.index(f"hand_{sd.lower()}")
+        for nm in (f"mano_{sd}", f"dita_{sd}", f"pollice_{sd}"):
+            si = segs.index(nm)
+            Wa[:, si], Wc[:, hj] = 0.0, Wc[:, hj] + Wa[:, si]
+    Wc[:, :nseg] += Wa
+    Qh = np.zeros((n, NJ))
+    for k in range(4):
+        jk = Q["jo"][:, k]
+        np.add.at(Qh, (np.arange(n), jk), Q["wt"][:, k] * is_hand[jk])
+    hsum = Qh.sum(1, keepdims=True)
+    Wc *= 1 - hsum
+    Wc[:, nseg:] += Qh
+    top = np.argsort(-Wc, 1)[:, :4]
+    JO = top
+    WT = np.take_along_axis(Wc, top, 1)
+    WT /= np.maximum(WT.sum(1, keepdims=True), 1e-12)
+    print("pesi: segmenti per punto (oltre 5%):", np.bincount((WT > 0.05).sum(1)).tolist())
+    bulge = bk[wid]
     BK = 1.25
     paint = 1 - 0.75 * kw[wid]
     # viso: dove conta la foto del viso (testa, con passaggio morbido sul collo)
@@ -586,12 +660,11 @@ def main():
         return buf
 
     ex = np.stack([grp[wid], np.clip(np.round(bulge / BK * 255), 0, 255), np.round(occ[wid] * 255), np.round(paint * 255)], 1).astype(np.uint8)
-    dq = np.clip(np.round(delta * 1e4), -32767, 32767).astype("<i2").view(np.uint8).reshape(-1, 6)
-    zb = np.where(zs[wid] > 0, (zs[wid] - 1) * 128 + np.round(np.clip(zw[wid], 0, 1) * 127), 0).astype(np.uint8)[:, None]
-    # le normali della forma del personaggio, per il braccio piegato
-    n0 = np.clip(np.round(Q["nrm"] * 127), -127, 127).astype(np.int8).view(np.uint8)
+    # niente più ritorno alla forma del personaggio a gomito chiuso: la pelle segue i muscoli dell'atlante
+    dq = np.zeros((n, 6), np.uint8)
+    zb = np.zeros((n, 1), np.uint8)
+    n0 = np.zeros((n, 3), np.uint8)
     ex = np.concatenate([ex, dq, zb, n0, np.round(face * 255).astype(np.uint8)[:, None]], 1)
-    print("braccio piegato:", int((zw[wid] > 0.05).sum()), "vertici, spostamento medio (mm)", round(float(np.linalg.norm(delta, axis=1)[zw[wid] > 0.05].mean() * 1000), 2))
     # ---- testa nuova: i triangoli della testa (viso almeno a metà) vanno in coda, con punti loro (copie) e uv
     # loro, sferiche attorno al centro del cranio (davanti al centro dell'immagine, la giunta dietro, tra i
     # capelli): l'immagine è pelle-testa.jpg, cotta da bake_face.py. Così niente uv sovrapposte del personaggio
@@ -631,12 +704,14 @@ def main():
     ex_b[:, 14] = 0  # il corpo non usa la foto del viso
     ex_h = ex[allv].copy()
     ex_h[:, 14] = 255
+    # posizioni e normali a riposo nello spazio dell'atlante (le ossa delle mani ci arrivano con restInv)
+    nrest = nn[wid]
     body = dict(
-        pos=np.concatenate([pn, pn[allv]]),
-        nrm=np.concatenate([nrm, nrm[allv]]),
+        pos=np.concatenate([restU, restU[allv]]),
+        nrm=np.concatenate([nrest, nrest[allv]]),
         uv=np.concatenate([Q["uv"], np.round(alluv * 32767.0)]),
-        jo=np.concatenate([Q["jo"], Q["jo"][allv]]),
-        wt=np.concatenate([Q["wt"], Q["wt"][allv]]),
+        jo=np.concatenate([JO, JO[allv]]),
+        wt=np.concatenate([WT, WT[allv]]),
         idx=np.concatenate([btri, htri2]),
     )
     if len(body["pos"]) > 65535:
@@ -669,7 +744,13 @@ def main():
     j = dict(pj)
     j["stride"] = ST
     j["meshes"] = meshes
-    j["extra"] = {"group": 27, "bulge": 28, "ao": 29, "paint": 30, "bulgeScale": BK, "delta": 31, "zone": 37, "nrm0": 38, "face": 41}
+    j["extra"] = {"group": 27, "bulge": 28, "ao": 29, "paint": 30, "bulgeScale": BK, "face": 41}
+    # pelle mossa dai segmenti dell'atlante: indici 0..20 segmenti, 21 + k ossa del personaggio (solo le mani);
+    # restInv porta la posizione a riposo nello spazio del personaggio per le sue ossa (righe 3x3 e traslazione)
+    j["rig"] = "atlante"
+    j["segments"] = segs
+    Rinv = np.linalg.inv(R)
+    j["restInv"] = [[float(x) for x in list(Rinv[k].reshape(-1)) + list(-Rinv[k] @ T[k])] for k in range(NJ)]
     j["hideEyes"] = True
     # indici della testa (dopo quelli del corpo) e uv della testa in 0..2 (u fa un giro in più dietro)
     j["meshes"]["corpo"]["headStart"] = int(btri.size)
